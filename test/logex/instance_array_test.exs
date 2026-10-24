@@ -108,6 +108,14 @@ defmodule Logex.InstanceArrayTest do
                   "`ton lane_t[0] 5000`"}
              ]
 
+      # Whatever the list holds, a word among its literals too.
+      assert messages("var lane_t ton[2] 1 x\nvar a bool\nxic a ton lane_t[1] 500") == [
+               {1,
+                "`lane_t` is an array of 2 tons, which takes no initial values: each " <>
+                  "element's preset is the number on its `ton` instruction, as in " <>
+                  "`ton lane_t[0] 5000`"}
+             ]
+
       assert messages("var lanes seal[2] 1 2\nvar a bool\ncal lanes[1] a a", [seal()]) == [
                {1,
                 "`lanes` is an array of 2 instances of `seal`, which takes no initial values: " <>
@@ -381,6 +389,23 @@ defmodule Logex.InstanceArrayTest do
 
       {outputs, _state} = run(p, [{40, %{"slot" => 0}}], state)
       assert outputs == %{"q" => 0, "n" => 0}
+    end
+
+    test "a member of an element of two dimensions is written through its tag subscripts, the rest kept" do
+      p =
+        program(
+          "var_input go bool\nvar_input k dint\nvar grid ctu[2,2]\n" <>
+            "xic go move 7 grid[k,1].pv\nxic go move 1 grid[1,k].r"
+        )
+
+      {_, state} = run(p, [{0, %{"go" => 1, "k" => 1}}])
+      pvs = for row <- Tuple.to_list(state.env["grid"]), c <- Tuple.to_list(row), do: c["pv"]
+      cvs = for row <- Tuple.to_list(state.env["grid"]), c <- Tuple.to_list(row), do: c["r"]
+      assert pvs == [0, 0, 0, 7]
+      assert cvs == [0, 0, 0, 1]
+      {_, state} = run(p, [{10, %{"k" => 0}}], state)
+      pvs = for row <- Tuple.to_list(state.env["grid"]), c <- Tuple.to_list(row), do: c["pv"]
+      assert pvs == [0, 7, 0, 7]
     end
 
     test "a member is written where logic may write it, and its bits are read and written as a member's are" do
@@ -727,6 +752,53 @@ defmodule Logex.InstanceArrayTest do
       {_, state} = Runtime.scan(b2, state, 10)
       assert state.ons_blocked == ["lane_c[0].cu"]
       {_, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"k" => 0}), 10)
+      assert state.ons_blocked == []
+    end
+
+    test "a ctud element's two sides are each kept by its own rung, one skipped and one run" do
+      b1 = program(@lanes <> "var both ctud[2]\nxic go ctu both[1] 3\nxic go ctd both[1] 3")
+
+      b2 =
+        program(
+          @lanes <>
+            "var both ctud[2]\nxic k.0 jmp past\nxio lamp xic go ctu both[1] 3\n" <>
+            "lbl past xic go ctd both[1] 3"
+        )
+
+      {_, state} = run(b1, [{0, %{"go" => 0, "k" => 1}}])
+      {_edit, state, _} = Edit.test(accept!(b1, b2, state), state)
+      assert state.ons_blocked == ["both[1].cd", "both[1].cu"]
+      # The skipped `ctu` keeps its side blocked; the `ctd` that ran used its own up.
+      {_, state} = Runtime.scan(b2, state, 10)
+      assert state.ons_blocked == ["both[1].cu"]
+    end
+
+    test "an array of timers a plain swap left over counters does not fit, and starts again at the first test (decision 26)" do
+      v0 = program("var_input go bool\nvar t ctu[2]\nxic go ctu t[0] 3")
+      v1 = program("var_input go bool\nvar t ton[2]\nxic go move 40 t[0].pre")
+
+      v2 =
+        program("var_input go bool\nvar t ton[2]\nxic go move 40 t[0].pre\nxic go ton t[0] 300")
+
+      {_, state} = run(v0, [{0, %{"go" => 1}}])
+      {_, state} = Runtime.scan(v1, state, 10)
+      assert Map.has_key?(element(state, "t", 0), "cu")
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {_edit, state, report} = Edit.test(edit, state)
+      assert report == forecast
+      assert [{:added, "t", _}] = report
+      assert %{"pre" => 300, "acc" => 0, "en" => 0} = element(state, "t", 0)
+    end
+
+    test "a pulse timer's edge memory on an element is on the block list by its path, `horn[1].en`" do
+      b1 = program(@lanes <> "var horn tp[2]\nxic go tp horn[1] 50")
+      b2 = program(@lanes <> "var horn tp[2]\nxic go xic go tp horn[1] 50")
+      {_, state} = run(b1, [{0, %{"go" => 0}}, {10, %{}}])
+      {_edit, state, report} = Edit.test(accept!(b1, b2, state), state)
+      assert report == [{:ons_blocked, "horn[1].en", 0}]
+      # The rising rung its next scan finds starts no pulse, and the scan drops the block.
+      {_, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"go" => 1}), 10)
+      assert %{"tt" => 0, "en" => 1} = element(state, "horn", 1)
       assert state.ons_blocked == []
     end
 

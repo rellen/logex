@@ -459,17 +459,15 @@ defmodule Logex.Walk do
   defp member_paths({:bit_at, _, {:member, _, _, _} = member, _index, _width, _name}),
     do: member_paths(member)
 
-  defp member_paths(operand), do: List.wrap(member_path(operand))
-
   # A member's path, `lube.r`, and since M5-8 a bit of one, a write of its member, `t1.pre`
   # for `t1.pre.3`; a tag or a tag's bit is none.
-  defp member_path({:member, _, path}), do: Enum.join(path, ".")
-  defp member_path({:bit, _, [_, _ | _] = path, _n, _mask, _name}), do: Enum.join(path, ".")
+  defp member_paths({:member, _, path}), do: [Enum.join(path, ".")]
+  defp member_paths({:bit, _, [_, _ | _] = path, _n, _mask, _name}), do: [Enum.join(path, ".")]
 
-  defp member_path({:bit_at, _, [_, _ | _] = path, _index, _width, _name}),
-    do: Enum.join(path, ".")
+  defp member_paths({:bit_at, _, [_, _ | _] = path, _index, _width, _name}),
+    do: [Enum.join(path, ".")]
 
-  defp member_path(_tag), do: nil
+  defp member_paths(_tag), do: []
 
   # A routine's one-shots, each storage bit to its first one-shot's line and symbol.
   defp oned(instructions, _tags),

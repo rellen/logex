@@ -193,21 +193,39 @@ defmodule Logex.Edit.Plan do
       # that runs it and its type's rules (Logex.FbType.rules/1): the preset rules are every
       # built-in's, and the forecast and the resume its type's.
       timers:
-        for(
-          {name, %Tag{type: type}} <- tags,
-          {key, %FbType{body: nil} = type} <- instances_of(name, type),
-          into: %{},
-          do: {key, {preset(Map.get(presets, key)), FbType.rules(type)}}
-        ),
+        for {name, %Tag{type: type}} <- tags, reduce: %{} do
+          acc ->
+            case type do
+              %FbType{body: nil} ->
+                Map.put(acc, name, {preset(Map.get(presets, name)), FbType.rules(type)})
+
+              {:array, %FbType{body: nil}, _dims} ->
+                for {key, type} <- instances_of(name, type),
+                    into: acc,
+                    do: {key, {preset(Map.get(presets, key)), FbType.rules(type)}}
+
+              _ ->
+                acc
+            end
+        end,
       # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
       # where each block type's body has its one-shots and what it runs, by the type's name.
       blocks:
-        for(
-          {name, %Tag{type: type}} <- tags,
-          {key, %FbType{body: %Program{}} = type} <- instances_of(name, type),
-          into: %{},
-          do: {key, {type, is_map_key(called, key)}}
-        ),
+        for {name, %Tag{type: type}} <- tags, reduce: %{} do
+          acc ->
+            case type do
+              %FbType{body: %Program{}} ->
+                Map.put(acc, name, {type, is_map_key(called, name)})
+
+              {:array, %FbType{body: %Program{}}, _dims} ->
+                for {key, type} <- instances_of(name, type),
+                    into: acc,
+                    do: {key, {type, is_map_key(called, key)}}
+
+              _ ->
+                acc
+            end
+        end,
       bodies: bodies
     }
   end
@@ -215,12 +233,10 @@ defmodule Logex.Edit.Plan do
   # M5-14 (decision 154): the instances a tag holds, each by its path: an instance's own
   # name, and each element of an array of instances by its, `lane_t[2]`, in the elements'
   # order, so that every rule of an instance is an element's.
-  defp instances_of(name, %FbType{} = type), do: [{name, type}]
-
+  # (An instance's own is gathered as it was before M5-14, and the elements after it, into
+  # the same map, so that a table of no array of instances costs what it did.)
   defp instances_of(name, {:array, %FbType{} = type, dims}),
     do: for(index <- Logex.Array.indexes(dims), do: {Logex.Array.name(name, index), type})
-
-  defp instances_of(_name, _type), do: []
 
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
@@ -443,12 +459,14 @@ defmodule Logex.Edit.Plan do
     do:
       for(
         {_, %Tag{type: type}} <- tags,
-        %FbType{body: %Program{}} = type <- [element_type(type)],
+        type =
+          case type do
+            {:array, type, _dims} -> type
+            type -> type
+          end,
+        match?(%FbType{body: %Program{}}, type),
         do: type
       )
-
-  defp element_type({:array, type, _dims}), do: type
-  defp element_type(type), do: type
 
   defp body(%Program{rungs: rungs}, tags) do
     {held, called} =
@@ -516,8 +534,9 @@ defmodule Logex.Edit.Plan do
 
   # M5-14: an element of an array of counters or pulse timers, its memory by its path,
   # `lane_c[1].cu`.
-  defp edges({symbol, _line, [{:element, _, array, _index, instance} | _]}, tags, bits),
-    do: edge(of_elements(Map.get(tags, array)), symbol, instance, bits)
+  defp edges({symbol, _line, [{:element, _, array, _index, instance} | _]}, tags, bits)
+       when symbol in @runners,
+       do: edge(of_elements(Map.get(tags, array)), symbol, instance, bits)
 
   defp edges(_instruction, _tags, bits), do: bits
 
