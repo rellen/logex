@@ -163,7 +163,16 @@ confirming what was built and six changes: a bit of an array element, `faults[2]
 speeds[1]`; a forces file's integer or bool line in any spelling of a number, `level
 16#ff`; a rounded real initial value warned of, `var sp real 16777217.0`; and a literal
 too near 0.0 for an lreal, `move 1.0e-310 big`, refused by its slot naming the
-instruction and the tag.
+instruction and the tag. And the twelfth, M5-12, on 2026-10-24: a subscript held in an
+integer tag, `weights[slot]`, checked as the element is read or written, one out of its
+dimension the major fault `:index_out_of_range`, on which the runner trips (§3, M5-12),
+with its review's fixes the same day; and the maintainer's answers to M5-11's four
+follow-ups and M5-12's four questions the same day (decisions 229 to 236, §3, M5-11 and
+M5-12), three confirming what was built and five changes: `1.0e-400` refused by its
+slot; an edit reporting each element no longer driven held by name; an index fault's
+`read` a tuple, `{8}`; a write through a tag subscript beside a coil on a bool array's
+element warned; and a configuration's writer warning naming the element two writers may
+share, with four questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7094,6 +7103,16 @@ the walks' cross-type reach and the documents.
      operator sees every speed but the second keep its last value either way. The
      options: (a) as built; (b) each element no connection drives any more reported held
      by name. Logix reports no such hold (decisions 20 and 58 are logex's own).
+  **The maintainer's answers**, 2026-10-24 (decisions 229 to 232). (1) *Confirmed*: a call
+  that sets an array whole and one of its elements is refused (decision 229). (2)
+  *Confirmed*: a host's key names one element or the array whole, no row (decision 230).
+  (3) *Changed*: `1.0e-400` is refused by its slot, naming the instruction and the tag,
+  "`move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, …: it
+  would be written as 0.0", read by the lexer as the spelled leaf of 0.0, its spelling
+  the flag (decision 231), superseding provisional reading 3. (4) *Changed*: an edit that
+  replaces an array's whole driver by element drivers reports each element no longer
+  driven held by name, `{:held, "speeds[3]", v}` (decision 232), superseding provisional
+  reading 4's last clause. They landed with M5-12's four answers, below.
 - **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
   of any integer width, the run-time check where the element is read or written, the
   major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
@@ -7273,6 +7292,104 @@ the walks' cross-type reach and the documents.
      through its var_external, as `f1` does", the array named whole, since `f1` may write
      element 1. The options: (a) as built; (b) told by element, "`f2` writes `speeds[1]`
      ..., as `f1` may". Logix has no such configuration check (decision 48 is logex's own).
+  **The maintainer's answers**, 2026-10-24 (decisions 233 to 236). (1) *Changed*: an
+  index fault's `read` is a tuple of every subscript, `{8}` or `{1, 9}`, never a
+  charlist; a bit fault's stays one integer (decision 233), superseding provisional
+  reading 1's list. (2) *Confirmed*: `ote lamps[slot]` beside `ote lamps[2]` warns
+  (decision 234). (3) *Changed*: a write through a tag subscript other than a coil's
+  beside a coil on an element of a bool array, `move 0 lamps[slot]` beside `ote
+  lamps[2]`, is the second-`ote` warning in either order, as for a word array, any
+  instruction's write but a coil's counting (decision 235), superseding provisional
+  reading 3. (4) *Changed*: the configuration's writer warning names the element, "`f2`
+  writes `speeds[1]` through its var_external, as `f1` may", the other way round "`f2`
+  may write `speeds[1]` …, as `f1` does", two writers through a tag subscript "`f2` may
+  write `speeds` …, as `f1` may" (decision 236), superseding provisional reading 4.
+
+  *The eight answers landed (2026-10-24)*, in two gated commits, one of code, tests and the
+  record and one of tests, and one of documents. `466710f` records decisions 229 to 236 in §7 and lands the
+  five changes. Decision 231 in the lexer, which reads a real literal no double holds
+  but 0.0 as 0.0 with its spelling kept, the ordinary spelled leaf, so `well_formed!/1`
+  and the printer need nothing new; `Logex.Parser.underflowed?/1`, the one rule, tells
+  it from a zero by its spelling, and `is_zero_real/1`, its guard, gives each literal
+  rule a clause of its own, the compiler's five and a declaration's initial value, which
+  a literal of any other shape passes over in its head; the configuration file's reader
+  and the forces reader refuse it as the lexer did (provisional); the golden record is
+  regenerated on purpose, its diff read, the two such sources, `move 1.0e-400 aa` and
+  `move 1_0.0e-4_00 aa`, now parsing and nothing else changed, and the printer's
+  generator draws one, `:underflowed_real_lit`, with the lexer that reads it, since before
+  it none parsed. Decision 232 in `Logex.Configuration.Edit`'s held globals, where it
+  also found that an element of an array var_output at a connection's near end,
+  `m2.o[1] speeds[2]`, never counted as a driver, its program's writes keyed by the
+  array; it now drives where its program writes that element
+  (`Logex.Walk.element_writes/1`). Decision 233 in the runtime's one throw of an index
+  fault, the README's `scales.exs` now inspecting faults plainly. Decision 235 in
+  `Logex.Warnings`: a literal element's coil marks its array for the look at writes
+  through a tag subscript, and the bool exclusions are gone. Decision 236 in
+  `Logex.Configuration`'s writer warnings, each thing two writers may share, a global,
+  an element or an array written through a tag subscript, with its writers in line
+  order, each with whether it may write it; M5-12's step that counted every writer of
+  such an array whole is gone, so a connection to `speeds[2]` is told only to a writer
+  that may write it. Tests: `fault_test.exs`'s tuple and its `inspect`, `real_test.exs`'s
+  decision 231 in every slot, its leaf and the configuration's refusal,
+  `tag_subscript_test.exs`'s bool array's warnings both ways round, every kind of write,
+  the literal cases still none, and the warnings' growth, its configuration writers both
+  ways round and with two and three writers, `array_configuration_test.exs`'s held
+  elements by name and an element at a near end, and the runner walk's model restating
+  an index fault's `read` as a tuple. README's `fan.exs` re-run with `move 1.0e-400 big`
+  among its refusals, and `scales.exs` re-run, its faults reading `{8}` and `{1, 9}`
+  with no `charlists:` option.
+
+  *Cost*, against `1fe7a9b`, 29 programs (`m5/a13/cost_base.txt` and `cost_now.txt`):
+  every program scans in exactly the reductions it took; every compile is within the
+  run-to-run noise of ±10 reductions but a program of coils on bool elements beside
+  writes of elements, 6.2% dearer (275,171 to 292,175), the warnings now looking for
+  writes through a tag subscript; a program of spelled reals compiles 0.6% cheaper, and
+  lexing zeros 6% cheaper, the lexer no longer reading a zero's digits again.
+
+  *Mutation table*, each mutant judged by the full suite's exit code on `466710f`
+  (`m5/a13/mut/run.log`): 35 mutants on `466710f`: T1 (decision 233: the tuple), U1 to U12 (decision 231: the rule, its zero spellings, each of the five compiler clauses, a declaration's, the configuration's reader, the forces reader, the lexer's −0.0 and the guard), H1 to H5 (decision 232: the held elements, their order, and the near end's element, by name, through a tag subscript and spelt), W1 to W8 (decision 235: the coil's mark, its own clause, the write before it, the coil before a write, the look at writes, the wording and the plain second `ote`) and C1 to C8 (decision 236: each verb, the array's own line, the element's writers, a plain global, the connection's element and the arrays); 32 red. H4 (an element at a near end whose program writes it through a tag subscript) and H5 (one spelt `o[00]`) survived and `697eb88` pins each, tests only, after which both are red; H2 (the held elements in reverse order) is equivalent, since a report is sorted, and the record now says so.
+
+  2102 tests (11 doctests), up from 2094, and the commits `466710f` and `697eb88`.
+
+  *Provisional readings* (the answers): (1) a configuration file's `1.0e-400` is refused
+  as the lexer refused it, at its column, the only diagnostic, and a forces file's is no
+  force; (2) a write of a literal element beside a coil through a tag subscript, `move 0
+  lamps[2]` beside `ote lamps[slot]`, is warned too, the mirror of decision 235; (3) an
+  instance that writes several elements beside a writer through a tag subscript is told
+  at each, a line an element; (4) two literals compared, `eq 1.0e-400 0.0`, are 0.0 and
+  0.0, true on every scan and warned only as two literals compared are.
+
+  **Questions for the maintainer**, each taken provisionally as written:
+
+  1. *`1.0e-400` in a configuration or a forces file.* A program refuses `move 1.0e-400
+     big` naming the instruction and the tag (decision 231); a configuration file's
+     `var_global big lreal 1.0e-400` is refused as the lexer refused it before, "`1.0e-400`
+     is no number logex holds: an lreal's smallest above 0.0 is 2.2250738585072014e-308",
+     at its column, and a forces file's `big 1.0e-400` stops the runner from starting, "no
+     force". The options: (a) as built; (b) the configuration told in its global's words,
+     "`big` is an lreal: `1.0e-400` is too near 0.0 for an lreal, …", as `1.0e-310` is,
+     and the force held as 0.0, as `1.0e-310` is (decision 216's last bullet). The
+     engineer sees only a different message for the configuration; for the forces file,
+     (a) keeps the runner stopped until the line is fixed and (b) runs the fan forced to
+     0.0. IEC and Logix say nothing found of either.
+  2. *A move into one lamp beside a coil through a subscript.* `move 0 lamps[2]` beside
+     `ote lamps[slot]`: as built it is warned, "`lamps[slot]` is in `lamps`, as `lamps[2]`
+     is, which the `move` on line 4 writes", the mirror of decision 235, as `move x w[2]`
+     beside `ote w[i].1` is warned for a word array; the operator may see lamp 2 flicker
+     when `slot` is 2. The options: (a) as built; (b) none, since the `move` writes one
+     lamp only, as `move x b` beside `ote b` is not warned. No such warning was found in
+     IEC or the Logix extracts read (**unverified**).
+  3. *A feeder of two speeds beside one through a subscript.* `t1` writes `speeds[1]` and
+     `speeds[2]`, and `f1` writes `speeds[slot]`: as built `t1` is told twice, once for
+     each element, "`t1` writes `speeds[1]` …, as `f1` may" and "… `speeds[2]` …". The
+     options: (a) as built, a line an element; (b) one line naming them, "`t1` writes
+     `speeds[1]` and `speeds[2]` …"; (c) one line naming the array. Logix has no such
+     check (decision 48 is logex's own).
+  4. *`1.0e-400` compared with 0.0.* `eq 1.0e-400 0.0` is two literals, 0.0 and 0.0 as
+     the lexer reads them, so true on every scan and warned only as two literals compared
+     are; `lt 0.0 1.0e-400`, which the text says is true, is false. The options: (a) as
+     built; (b) refused as the slot refuses it beside a tag. IEC and Logix say nothing
+     found.
 - **M5-13 · Located arrays.** Decision 156's follow-up: `var_global temps real[8] at
   card.i.0` occupying `card.i.0` to `card.i.7`, in the elements' order, each element a
   point named `temps[3]`, grouped by `Logex.IO.points/1`, read, written and forced as its

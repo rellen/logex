@@ -1403,7 +1403,7 @@ IO.puts(Logex.Diagnostic.format(lexed))
     "var speed real\nvar count dint\nvar rpm int\nvar on bool\nvar big lreal\n" <>
       "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
       "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed\n" <>
-      "move 1.0e-310 big",
+      "move 1.0e-310 big\nmove 1.0e-400 big",
     name: "wrong"
   )
 
@@ -1439,6 +1439,7 @@ line 12: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a squar
 line 13: `speed.3` names a bit of `speed`, a real, which has no bits
 line 14: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
 line 15: `move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
+line 16: `move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
 line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 ```
@@ -1460,8 +1461,9 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   range, in both directions (decision 216): past the largest, and so near 0.0 that a
   write would flush it, `move 1.0e-40 speed` above, 0.0 itself taken however it is
   written, and so in an lreal for one nearer 0.0 than its smallest normal value,
-  `move 1.0e-310 big` above (decision 228); only a literal no double holds but 0.0,
-  `1.0e-400`, is no number logex holds at all, refused as it lexes.
+  `move 1.0e-310 big` above (decision 228), and so for one no double holds but 0.0,
+  `move 1.0e-400 big`, which is read as 0.0 written so and refused in the same words
+  (decision 231).
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
   `real`, a `dint` into an `lreal` only, and a `real` into an `lreal`; any other pair is
   told its conversion, `dint_to_real`. An integer literal in a real's slot is the value it
@@ -1690,7 +1692,7 @@ scan = fn state, label, inputs ->
   state = Logex.Runtime.put_inputs(scales, state, inputs)
   {outputs, state} = Logex.Runtime.scan(scales, state)
   IO.puts("#{label}  #{inspect(outputs)}  weights #{inspect(state.env["weights"])}")
-  for fault <- state.faults, do: IO.puts("    #{inspect(fault, charlists: :as_lists)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
   state
 end
 
@@ -1738,7 +1740,7 @@ IO.puts("box 730 in slot 4: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
 Logex.IO.Sim.set(panel, [1], 8)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("slot 8: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
-IO.puts("    #{inspect(Logex.Runner.status(runner).trip, charlists: :as_lists)}")
+IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
 Logex.Runner.stop(runner)
 
 {:ok, grid} =
@@ -1769,12 +1771,12 @@ gone              %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 0, 0
 box 410, slot 5   %{"heavy" => 0, "last" => 410}  weights {0, 0, 620, 0, 0, 410, 0, 0}
 gone, slot 2      %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
 slot 8            %{"heavy" => 0, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
-    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: [8]}
-    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: [8]}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: {8}}
 box 730 in slot 4: the lamp %{[0] => 1}
 slot 8: the lamp %{[0] => 0}, :tripped
-    {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: [8]}}
-grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: [1, 9]}]
+    {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}}
+grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: {1, 9}}]
 line 8: `weights[code]` takes a subscript from `code`, a word (declared on line 5), which is no integer: a subscript is a literal or a tag of an integer type, so convert it first, with `word_to_uint`
 line 9: `grid[slot,8]`'s subscript `8` is outside the second dimension of `grid`, 0 to 7: `grid` is an array of 4 by 8 ints (declared on line 2)
 line 10: `ons` keeps its storage bit in `edge[slot]`, whose subscript `slot` holds: a one-shot's storage bit is a bool, a bit with a literal number or an element with literal subscripts, as in `edge[0]`, so that it is one bit whatever the program does
@@ -1794,8 +1796,9 @@ line 11: `sloot` is not declared — did you mean `slot`?
 - A subscript outside its dimension when the instruction runs, 8 or −1 in an `int[8]`,
   is a major fault (decision 153): the instruction does nothing, writes nothing and
   passes no power, the rest of its rung runs on that, and the scan finishes, the fault in
-  the state's `faults` with every subscript it read, one a dimension, `read: [8]` or
-  `read: [1, 9]` (provisional), and its `severity: :major`. A bit of such an element has
+  the state's `faults` with every subscript it read, one a dimension, in a tuple, `read:
+  {8}` or `read: {1, 9}`, which never prints as a charlist (decision 233), and its
+  `severity: :major`. A bit of such an element has
   its element's subscripts checked before its bit's number. An instruction that runs
   without reading or writing the element checks nothing: a contact or a latch on a rung
   with no power, a rung a jump skips and a block whose `cal` is false (decision 82); a
@@ -1812,10 +1815,14 @@ line 11: `sloot` is not declared — did you mean `slot`?
   write of the array whole (provisional): a coil on `lamps[slot]` beside one on
   `lamps[sel]` or `lamps[2]`, in either order, is told as two `ote`s on one tag are, so
   is a write through one, `move 0 faults[slot]`, beside a coil on a bit of an element of
-  a word array, `ote faults[2].1`, as `move 0 w` beside `ote w.1` is, and a write beside
-  a one-shot's storage bit in the array as another write of the storage bit; an online edit blocks such a one-shot, and in a configuration an instance that so
-  writes a global array through its `var_external` writes it whole, beside any other
-  writer of it. A subscript's tag is a use of it, read, and part of its rung, so an edit
+  a word array, `ote faults[2].1`, as `move 0 w` beside `ote w.1` is, and since decision
+  235 beside a coil on an element of a bool array, `move 0 lamps[slot]` beside `ote
+  lamps[2]`, either first, any instruction's write but a coil's; and a write beside a
+  one-shot's storage bit in the array as another write of the storage bit; an online
+  edit blocks such a one-shot, and in a configuration an instance that so writes a
+  global array through its `var_external` may write any element, told by the element it
+  may share with another writer, "`f2` writes `speeds[1]` through its var_external, as
+  `f1` may" (decision 236). A subscript's tag is a use of it, read, and part of its rung, so an edit
   that changes it changes the rung.
 
 ### Two pulse coils

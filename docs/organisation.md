@@ -9435,8 +9435,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
 
      **Taken: each element no connection drives any more is reported held by its name**
      (the maintainer, 2026-10-24): the edit reports `{:held, "speeds[0]", v}`,
-     `{:held, "speeds[2]", v}` and `{:held, "speeds[3]", v}`, each with its value, in the
-     elements' order, and not `speeds`. *The reading (the record's, provisional where
+     `{:held, "speeds[2]", v}` and `{:held, "speeds[3]", v}`, each with its value, sorted
+     with the report's other rows as every row is, and not `speeds`. *The reading (the record's, provisional where
      marked):*
      - An array the stopped configuration drives whole and the started one drives none
        of is still held whole, `{:held, "speeds", value}`, as decisions 20 and 58 have it.
