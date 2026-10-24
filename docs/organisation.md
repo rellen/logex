@@ -3837,6 +3837,22 @@ by `entries!/1`, a line's read as its nearest (provisional).)*
 the lexer reads as one literal, `fan_hz 37.50`, `3.75e1` or `37`, held at its nearest
 value, the next force or unforce writing the file in the runner's spelling; an integer or
 bool point's line is still its plain decimal.)*
+*(Landed with M5-13, 2026-10-24, as written above: `var_global temps real[8] at card.i.0`
+gives `Logex.IO.points/1` eight points, `temps[0]` at `[0]` to `temps[7]` at `[7]`, each
+of the element type, read, written and forced by its name, a cycle's input keyed
+`temps[3]` and placed in its array, each output element given by its own name, the forces
+file's line `temps[3] 37.5`; a range that overlaps another point refused naming both,
+once a pair, at the first address they share; and an online edit's located-I/O refusal
+naming the range, `card.i.0` to `card.i.7`. The record's readings where it is silent,
+each provisional: an address's last field counts up, `rack.i.2.4` the first of
+`rack.i.2.4` onwards, the elements' order the rightmost subscript fastest; the array named
+whole is no point, refused as an input, a force and a forces file's line, told its
+elements, where Logix's module data is one tag; a located array takes no initial list,
+as a located global takes no initial value; an array of output points nothing drives, or
+drives only by element, is warned of the elements left at 0; one grown or moved is
+refused for its range beside its type; and `Logex.IO.Sim`'s `inputs:` and `outputs:`
+are what makes "a range past an adapter's points" a refusal at bind, an adapter's own
+`check/3` being where a real card's size would be said.)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -7578,6 +7594,7 @@ the decisions the rest settle.
      elements, each the spike's measure, provisional; a host sets an array var_input whole
      as a list and is given an array as one; a global array unlocated, its located form
      M5-13's.)*
+     *(Its located form landed with M5-13, 2026-10-24, decision 156's follow-up.)*
 152. **What may go inside the brackets (Milestone 5).** The box counter stores each box's
      weight in `weights[slot]`, `slot` stepping 0 to 7.
      - A literal only, `weights[3]`;
@@ -7715,6 +7732,10 @@ the decisions the rest settle.
      M5-8, 2026-10-23, `var_global drive_status word at drive.i.4` among them.)*
      *(Landed for the reals with M5-10, 2026-10-23, `var_global fan_hz real at drive.i.0`
      read from the sim in §4.4's plant, as §4.12's "I/O points" says.)*
+     *(Landed for arrays with M5-13, 2026-10-24, the follow-up as written:
+     `var_global temps real[8] at card.i.0` occupying `card.i.0` to `card.i.7`, each element
+     a point read, written and forced by its name, `temps[3]`, an overlap refused naming
+     both, as §4.12's "I/O points" says.)*
 
 157. **An online edit that changes a type or an array's size (Milestone 5).** The box
      counter's `usint` overflows at 255, so the programmer edits it to a `uint` while the

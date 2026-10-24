@@ -172,7 +172,10 @@ M5-12), three confirming what was built and five changes: `1.0e-400` refused by 
 slot; an edit reporting each element no longer driven held by name; an index fault's
 `read` a tuple, `{8}`; a write through a tag subscript beside a coil on a bool array's
 element warned; and a configuration's writer warning naming the element two writers may
-share, with four questions put to the maintainer.
+share, with four questions put to the maintainer. And the thirteenth, M5-13, the same
+day: a located array, `var_global temps real[8] at card.i.0`, one point an element at
+consecutive addresses, read, written and forced by its name, `temps[3]` (§3, M5-13),
+with four questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7399,6 +7402,126 @@ the walks' cross-type reach and the documents.
   `temps[3]` forced against its device and across a restart, a crash and a fresh start
   from its forces file; an overlap and a range past an adapter's points are pinned
   refusals; and the runner walk draws a located array. *Size M.*
+
+  **Status: DONE — landed 2026-10-24**, as two gated commits, code and tests and then tests only, and one
+  of documents. No syntax changed: the configuration reader already read `var_global
+  temps real[8] at card.i.0`, which M5-11 refused, so the golden record and the printer's
+  generator are unchanged; the configuration round trip's seeded draws now give located
+  arrays too. `30d6a24` lands the item; `73d946c` pins, tests only, the mutants its table
+  left alive. `Logex.Configuration.check/1` takes a located
+  array, each element a point at the next address in the elements' order, its
+  location's last field counting up (`Logex.Array.points/3`), named by its element,
+  `temps[3]`: a range that overlaps another point is refused naming both, once a pair, at
+  the first address they share, "`temps[3]` is at `card.i.3`, where `eye` already is (line
+  3): a location holds one global, and `temps` is an array of input points, `card.i.0` to
+  `card.i.7`"; a located array takes no initial list; one refused for its sizes takes no
+  address; a location named in a connection names its element; an input array driven by
+  a var_output or written through a var_external is refused naming its range; an array
+  of output points nothing drives, or drives only by element, is warned of each element
+  left at 0; and an event task's single is still a whole bool global, an element or an
+  array told so. `Logex.IO.points/1` gives a point an element, and `bind!/2`'s message for
+  an unbound device names an array's elements as their range. `Logex.Runtime` takes an
+  element as an input key, `%{"temps[3]" => 37.5}`, stored as its type's nearest value and
+  placed in its array, a few in place and more, up to every element a device reports,
+  laid over the array in one pass, so that a cycle setting k of n elements costs some
+  k + n (provisional, at 16); gives each output element by its name; keeps a located
+  input array across a restart, as an input point; and refuses, in pinned words, the
+  array named whole, an output element, an element its array lacks, `temps[8]` or
+  `temps[03]`, and an element of an unlocated array. `Logex.Runner` reads, writes and
+  forces each element by its name through the device's per-point image, the forces
+  file's line `temps[3] 150.0`, unforce and unforce_all putting back each element's last
+  value, a restart's reread and decision 143's refusal of one element's value keeping
+  the others', with no change to `Logex.Runner.Device`; a force, or a forces file's line,
+  of the array whole, an output element or an element it lacks is refused, told the
+  elements. `Logex.IO.Sim` takes `inputs:` and `outputs:`, how many points it has, its
+  `check/3` and `init/3` refusing a point past them, so that a range past an adapter's
+  points is a pinned refusal at bind. `Logex.Configuration.Edit`'s located-I/O refusal
+  names a located array's range, so one grown, moved, unlocated, added or removed is told
+  the points it took and would take; an element an edit stops driving is held by its
+  name, decision 232's rule unchanged. Found on the way and fixed: an element of a global
+  whose line was refused, `m1.l lamps[1]` under a broken `var_global lamps` line, was told
+  "`lamps` is a global …, not a global"; it is now silent, as a use of the global's name
+  is (decision 42).
+
+  *Done when*, each met: §4.4's plant, from files on disk, reads its oven card's eight zone
+  temperatures as one located array, `zone_t real[8] at card.i.0`, and lights a lamp a
+  zone through `zone_hot bool[8] at card.q.0`, through `Logex.Runner` on the manual clock
+  against an oracle of eight singles that knows nothing of logex, over 120 seeded
+  readings, printed back exactly; `zone_t[3]` is forced against its device and across a
+  restart, a crash and a fresh start from its forces file, `zone_t[3] 250.0`
+  (`end_to_end_test.exs`, "a located array in the plant (M5-13)"); an overlap, of a point
+  in a range, a range over a point and two ranges, and a range past an adapter's points,
+  a sim of six inputs under eight, are pinned refusals (`located_array_test.exs`); and the
+  runner walk draws a located array in and one out in every configuration, `pt int[3]` at
+  `panel.i.3` and `qs bool[2]` at `drive.q.2`, each element pressed, forced, unforced and
+  refused at its own address, its reach an element pressed, forced and misfit. The walk's
+  check of its own late inputs now looks over 40 seeds, its catch moved to seed 30 by the
+  draws' new stream, and names `pt[1]` among what it may catch.
+
+  The cost, measured against `a8af419` with the item's cost script
+  (`scratchpad/m5/a14/cost.exs`, configurations of 4 and 32 relays, each with a bool, a
+  dint and a real input point, an output point and an unlocated array): a cycle, its
+  outputs, `get/2` and a restart cost what they did, within the one to six reductions by
+  which the base itself varies run to run, 27,170 for a cycle of 32 against 27,169 to
+  27,171; a pinned test holds a cycle of no located array at 105.6 reductions a pair of
+  points and its outputs at 4.5 a point, as measured at `a8af419`; `check/1`, `compile/3`
+  and `points/1` are 12 to 96 reductions cheaper; `start/1` is 0.2% dearer and a
+  configuration edit's accept 0.4%, deriving the located points once more. A located
+  array's check, start, points and a cycle setting every element grow linearly, 8 times
+  the elements costing at most 9 times (measured about 8).
+
+  The mutation table, each mutant judged by the full suite's exit code on a copy of the
+  commit (`scratchpad/m5/a14/mut/run.log`): 32 mutants on `30d6a24`, 29 red at once, an
+  overlap taking its address (L1), an overlap told once for each element (L2), the
+  elements' addresses off by one (L3), the initial list taken (L4, L5), the undriven
+  warning's elements and its whole-array form (L6, L8), the refused line's element no
+  longer silent (L9), an input array driven named as a point (D1), the element inputs
+  not placed (R1), the overlay's values kept old (R2), the output elements dropped (R3),
+  an input array reset by a restart (R4), the array named whole as an input, an output
+  element, an element it lacks and the hint's ranges each in other words (R5 to R8), a
+  real element's input not held at its nearest (R9), the points at the array's first
+  address (I1), an unbound device's ranges (I2), the sim's bound, its init's check, an
+  address of more fields and its count (S1 to S4), the runner's whole-array force,
+  element it lacks and output array (N1 to N3), and the edit's range (E1, E2); three
+  survived, a program's write through its var_external not counted as driving an output
+  array (L7), an array refused for its sizes laid over other points (L10), and the fast
+  clause of a restart with no located array dropped, costing 2 reductions a global with
+  no other change (R10), each red after `73d946c`, the last by a restart's cost pinned
+  in reductions beside the cycle's.
+
+  Provisional readings, each a question for the maintainer:
+
+  1. *The array named whole, at a point.* A located array's elements are its points;
+     the oven's eight zones are `zone_t[0]` to `zone_t[7]`. As built, a host's input,
+     a force and a forces file's line naming `zone_t` whole are refused, told the
+     elements, so an operator forces one zone at a time and sees each forced zone listed
+     by itself. The options: (a) as built; (b) a whole-array input or force taken as a
+     list, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
+     element then forced; (c) a whole input taken, a whole force refused. Logix's module
+     data is one tag, `Local:0:I.Data`, an array copied whole with `cps` (1756-PM004L
+     p.21), and an alias names one point of it, `Local:2:I.Data.3` (p.46); forcing an
+     element of it was not found in the extracts read (**unverified**). IEC's directly
+     represented variables are single points (Ed 3 Table 16).
+  2. *A hierarchical address.* `rack.i.2.4` is slot 2, point 4. As built a located
+     array's elements count up in the last field, `rack.i.2.4` to `rack.i.2.11`, so a
+     range can run past what a slot holds and only the adapter's `check/3` can tell. The
+     options: (a) as built; (b) refused for an address of more than one field; (c)
+     counted up and carried into the field before at a size the adapter names. IEC
+     leaves a hierarchical address's meaning to the manufacturer (Ed 2 §2.4.1.1, p.37);
+     Logix names a slot's points within its module's tag, never across slots.
+  3. *An array of output points nothing drives.* The oven's eight lamps, of which a
+     program drives zones 2 and 5 only. As built, the warning names every element left
+     at 0, "nothing drives `lamps[0]`, `lamps[1]`, … or `lamps[7]`: they stay at 0", ten
+     then a count, and one sentence for the array whole where none is driven. The
+     options: (a) as built; (b) one warning naming the array only; (c) none where any
+     element is driven. Logix has no such check; decision 48's warnings are logex's.
+  4. *A located array grown by an edit.* The oven gains two zones, `zone_t real[10]`.
+     As built the accept is refused twice, for the global's type (decision 157) and for
+     the range its elements take, "… at `card.i.0` to `card.i.7` in the running
+     configuration and at `card.i.0` to `card.i.9` in the candidate: located I/O changes
+     only with a restart", both shown to the operator. The options: (a) as built; (b) the
+     range's refusal alone; (c) the type's alone. Logix changes an array's size offline
+     only (1756-RM094N p.85).
 - **M5-14 · Arrays of instances.** Decision 154: `var lane_t ton[4]`, `var lanes
   seal[4]`, a literal subscript on every instruction that runs one, a tag subscript on a
   member's read or write. *Done when* each refusal is pinned, the one-run rule holds per

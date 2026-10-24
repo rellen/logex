@@ -169,7 +169,10 @@ defmodule Logex.Runner do
   once, before the call returns (decisions 120 and 138), each trigger it changes, as
   `unforce_all/1` may change several, its own round, in device-name and then address
   order, as a device's changes are; one that changes nothing makes none, and a device's
-  change of a forced trigger makes none. `status/1` lists every force. The forces file is the host's to name, `forces:`,
+  change of a forced trigger makes none. Since M5-13 an element of a located array is an
+  input point of its own, forced, unforced and written in the forces file by its name,
+  `temps[3] 37.5`, the array named whole refused, told its elements (decision 156).
+  `status/1` lists every force. The forces file is the host's to name, `forces:`,
   and each force and unforce writes the whole set to it before it returns:
   one force a line, `name value`, in name order, the empty file for none, written to
   `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any

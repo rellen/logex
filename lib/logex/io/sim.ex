@@ -16,7 +16,9 @@ defmodule Logex.IO.Sim do
     (`Logex.Runner.Clock.Manual`) on which a delay passes, a delay sleeping in real time
     without one; `wait:` is how long `set/3` waits for the device that opened it to handle
     a report, 5000 ms unless set, from 1 ms to 4294967295, the longest the VM waits for an
-    answer.
+    answer. Since M5-13 `inputs:` and `outputs:` are how many points of each direction it
+    has, `[0]` to `[n - 1]`, nil for as many as it is given, so that a located array
+    past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind.
   - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
     values, unset inputs reading 0. Where the sim reports, the inputs that changed are
     sent to the device that opened it as one report, from the caller, which waits until
@@ -39,7 +41,9 @@ defmodule Logex.IO.Sim do
 
   **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the
   options it is bound with, which are `sim:` alone, a sim that is running and that no
-  other device holds open, so that `Logex.IO.bind!/2` raises them in the host's process;
+  other device holds open, and since M5-13 each point at an address past the sim's own
+  where it was started with `inputs:` or `outputs:`, the first ten and then a count, so
+  that `Logex.IO.bind!/2` raises them in the host's process;
   `init/3` refuses the same, the first of them, and opens the sim for the device's process
   that calls it, which is the one it reports to; `read/1` gives every input point of the
   device, by address; `write/2` records what it is given; `report/2` gives the input
@@ -70,7 +74,8 @@ defmodule Logex.IO.Sim do
   @doc """
   Starts a simulated device linked to the caller: `reports:` true or false, false unless
   set; `clock:` a manual clock for its delays, or nil; `wait:` ms, 5000 unless set, 1 to
-  4294967295.
+  4294967295; `inputs:` and `outputs:` how many points of each direction it has, 1 or
+  more, or nil, unless set, for as many as it is given.
   """
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
 

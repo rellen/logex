@@ -35,9 +35,10 @@ range a major fault that trips the plant (M5-9), and the reals, `real` and `lrea
 with `sqrt`, the 34 real conversions and the 16 truncations (M5-10), and arrays of an
 elementary type, one to three dimensions, each element named by literal subscripts,
 `weights[3]` and `grid[1,7]` (M5-11), and a subscript held in a tag, `weights[slot]`, an
-index out of range a major fault that trips the plant (M5-12). What does not exist yet:
-arrays of timers, counters and blocks, and located arrays, decided for Milestone 5 with
-the other data types (below). What logex is not, a safety controller first of all,
+index out of range a major fault that trips the plant (M5-12), and a located array, one
+point an element at consecutive addresses, `var_global zone_t real[8] at card.i.0`
+(M5-13). What does not exist yet: arrays of timers, counters and blocks, decided for
+Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -1645,7 +1646,8 @@ faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
   integer array's element by one guard, so that holding an `int[65536]` costs about
   0.3 ms a scan, and an `int[4096]` some 20 µs, whether or not anything writes it.
   A label is never an element, `jmp a[0]` refused.
-- In a configuration an array may be a `var_global`, not yet located (M5-13), a
+- In a configuration an array may be a `var_global`, located or not ("A located array",
+  below, M5-13), a
   `var_external` binding only to a global array of exactly its type and sizes (decision
   159), and a connection names an array whole, to a global array of its sizes, or an
   element, `m1.limits[2] 50`. A connection's far end may be an element of a global array,
@@ -3205,6 +3207,201 @@ closed: true
   its devices, a device's open made late by 100 ms tripping nothing. Every timing rule is
   tested on the manual clock.
 
+### A located array
+
+An array global may be located: `var_global zone_t real[8] at card.i.0` occupies
+`card.i.0` to `card.i.7`, one point an element in the elements' order, each named by
+its element, `zone_t[3]`. `oven.logex` reads an oven card's eight zone temperatures as
+one array and lights a lamp for each zone over its setpoint through another, beside
+`zones.ld`:
+
+```
+// oven.logex -- eight zones, their temperatures from the oven card
+task fast interval 10 priority 1
+
+var_global zone_t   real[8] at card.i.0
+var_global zone_hot bool[8] at card.q.0
+var_global zone_sp  real    180.0
+
+program oven zones with fast
+  oven.t   zone_t
+  oven.sp  zone_sp
+  oven.hot zone_hot
+```
+
+```
+var_input  t   real[8]
+var_input  sp  real
+var_output hot bool[8]
+
+// a lamp for each zone over its setpoint
+gt t[0] sp ote hot[0]
+gt t[1] sp ote hot[1]
+gt t[2] sp ote hot[2]
+gt t[3] sp ote hot[3]
+gt t[4] sp ote hot[4]
+gt t[5] sp ote hot[5]
+gt t[6] sp ote hot[6]
+gt t[7] sp ote hot[7]
+```
+
+`oven.exs` lists the card's points, runs the oven on the manual clock with a simulated
+card of eight inputs and eight outputs, forces zone 3 and kills the runner, unforces it,
+binds a card of six inputs, and compiles two points laid over the array:
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("oven.logex")
+
+for point <- Logex.IO.points(plant)["card"],
+    do:
+      IO.puts(
+        "#{point.name} #{point.type} #{point.direction} at #{inspect(point.address, charlists: :as_lists)}"
+      )
+
+{:ok, clock} = Manual.start_link()
+{:ok, card} = Sim.start_link(reports: true, inputs: 8, outputs: 8)
+File.rm("oven.forces")
+
+start = fn ->
+  Runner.start_link(
+    configuration: plant,
+    io: %{"card" => {Sim, sim: card}},
+    clock: {Manual, clock},
+    forces: "oven.forces"
+  )
+end
+
+{:ok, runner} = start.()
+
+lamps = fn -> Enum.map(0..7, &Sim.outputs(card)[[&1]]) end
+
+Sim.set(card, %{[0] => 175.5, [1] => 182, [2] => 179.9, [3] => 201.25, [5] => 190})
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t"), label: "zone_t  ")
+IO.inspect(lamps.(), label: "lamps   ")
+
+:ok = Runner.force(runner, "zone_t[3]", 150)
+Sim.set(card, [3], 205.0)
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "forced  ")
+IO.inspect(lamps.(), label: "lamps   ")
+IO.write("oven.forces: " <> File.read!("oven.forces"))
+
+for {name, value} <- [{"zone_t", 1.0}, {"zone_hot[3]", 1}, {"zone_t[8]", 1.0}] do
+  try do
+    Runner.force(runner, name, value)
+  rescue
+    error in ArgumentError -> IO.puts(Exception.message(error))
+  end
+end
+
+# Killed: a fresh runner reads its forces file.
+Logger.configure(level: :none)
+Process.flag(:trap_exit, true)
+Process.exit(runner, :kill)
+
+receive do
+  {:EXIT, ^runner, :killed} -> :ok
+end
+
+{:ok, runner} = start.()
+IO.inspect(Runner.status(runner).forces, label: "forces  ")
+:ok = Runner.unforce(runner, "zone_t[3]")
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "unforced")
+:ok = Runner.stop(runner)
+
+{:ok, short} = Sim.start_link(inputs: 6)
+
+try do
+  Runner.start_link(
+    configuration: plant,
+    io: %{"card" => {Sim, sim: short}},
+    clock: {Manual, clock}
+  )
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, diagnostics} =
+  Logex.Configuration.compile(
+    "oven",
+    File.read!("oven.logex") <>
+      "var_global door bool at card.i.5\nvar_global extra real[4] at card.i.6\n",
+    plant.programs
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run oven.exs
+zone_t[0] real input at [0]
+zone_t[1] real input at [1]
+zone_t[2] real input at [2]
+zone_t[3] real input at [3]
+zone_t[4] real input at [4]
+zone_t[5] real input at [5]
+zone_t[6] real input at [6]
+zone_t[7] real input at [7]
+zone_hot[0] bool output at [0]
+zone_hot[1] bool output at [1]
+zone_hot[2] bool output at [2]
+zone_hot[3] bool output at [3]
+zone_hot[4] bool output at [4]
+zone_hot[5] bool output at [5]
+zone_hot[6] bool output at [6]
+zone_hot[7] bool output at [7]
+zone_t  : [175.5, 182.0, 179.89999389648438, 201.25, 0.0, 190.0, 0.0, 0.0]
+lamps   : [0, 1, 0, 1, 0, 1, 0, 0]
+forced  : 150.0
+lamps   : [0, 1, 0, 0, 0, 1, 0, 0]
+oven.forces: zone_t[3] 150.0
+`zone_t` is an array of input points, `card.i.0` to `card.i.7`: a force names one element, `zone_t[0]` to `zone_t[7]`
+`zone_hot[3]` is an output point, at `card.q.3`: only an input point is forced
+`zone_t[8]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `zone_t[0]` to `zone_t[7]`
+forces  : %{"zone_t[3]" => 150.0}
+unforced: 205.0
+the device `card`'s adapter options: `zone_t[6]` is at `card.i.6`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
+the device `card`'s adapter options: `zone_t[7]` is at `card.i.7`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
+line 12: `door` is at `card.i.5`, where `zone_t[5]` already is (line 4): a location holds one global
+line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a location holds one global, and `extra` is an array of input points, `card.i.6` to `card.i.9`
+```
+
+- Each element is a point of its own at its own address, the last field of the
+  location counting up, so `zone_t[7]` is at `card.i.7` and, at `rack.i.2.4`, an
+  array's elements at `rack.i.2.4` onwards (decision 156; the hierarchical reading
+  provisional). A two-dimensional array's follow the elements' order, the rightmost
+  subscript fastest. `Logex.IO.points/1` gives the card's adapter one
+  `%Logex.IO.Point{}` an element, and the runner reads, writes and forces each by its
+  name, `zone_t[3]`; `cycle/3` takes it as an input key, `%{"zone_t[3]" => 150}`, and
+  gives each output element by its own, `"zone_hot[3]"`. The array named whole is no
+  point: a force of `zone_t`, an input `%{"zone_t" => [...]}` and a forces file's line
+  `zone_t 1.0` are each refused, told the elements (provisional).
+- A range that overlaps another point is refused, both named, once a pair: `door` at
+  `card.i.5` is told `zone_t[5]` is there. A located array takes no initial list, as a
+  located global takes no initial value, and an array of output points that nothing
+  drives, or drives only element by element, is warned of the elements left at 0. An
+  event task's single is still a whole bool global.
+- An adapter's `check/3` may refuse a range past its device's points: `Logex.IO.Sim`
+  started with `inputs:` or `outputs:` refuses each point past them at bind, so a
+  configuration that outgrows its card is told so in the host's process, before
+  anything opens.
+- A force of `zone_t[3]` is held against the card while its neighbours go on reading
+  it, kept in the forces file as `zone_t[3] 150.0`, read back by a fresh runner after a
+  crash; an unforce puts back the card's last value of that element. A restart reads the
+  card whole again, and a value one element cannot hold trips the plant at that
+  element's address, the others kept (decision 143).
+- An online edit that moves a located array, grows or shrinks it, or takes its location
+  away, is refused naming the range it took and would take, "`zone_t` is at `card.i.0`
+  to `card.i.7` in the running configuration and at `card.i.0` to `card.i.9` in the
+  candidate: located I/O changes only with a restart"; an element an edit stops driving
+  is held at its point by its name, `{:held, "zone_hot[4]", 1}`.
+
 ## Changing a running program
 
 A running instance takes a changed program without a restart, the way the conventional
@@ -3685,7 +3882,8 @@ in every cycle's outputs at the value it holds.
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
   integer widths, the four bit strings and the two reals only, arrays of those named by
-  literal subscripts or ones a tag holds, never an expression, no arrays of timers,
+  literal subscripts or ones a tag holds, never an expression, located at a device's
+  consecutive addresses or not, no arrays of timers,
   counters or blocks yet, no structures, and no NaN or infinity in a real; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
