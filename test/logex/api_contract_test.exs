@@ -10423,3 +10423,1764 @@ defmodule Logex.ApiContractTest do
     end)
   end
 end
+
+defmodule Logex.ApiContractTest.RunnerWalk do
+  @moduledoc """
+  M4-6: the runner walk (PLAN.md "M4-6 · The contract walk", `docs/organisation.md`
+  §4.11), a module of its own beside `Logex.ApiContractTest`, so that it runs beside the
+  other walks rather than after them. It runs `Logex.Runner` on the manual clock over 30
+  seeded configurations, each a fast task, now and then a slow one, an event task on a
+  panel's or a drive's input, an event task on a trigger logic writes and the continuous
+  task, with an untimed counter under it or with no task, or none, so that about three in
+  four have untimed programs, 22 of the 30 at this seed, and the rest do not; a divide by zero while the panel's dint reads 0; the
+  panel and the drive each a simulated device that reports its changes or one that is only
+  read; a forces file or none; a poll period, an idle watchdog and a share drawn. Each
+  walk takes 70 steps: random waits and presses, forces and unforces, an online edit's
+  steps (a candidate's interval, watchdog or untimed counter changed, or a task added,
+  which accept refuses), host mistakes, a crash and a fresh start from the same forces
+  file, restarts, cold and warm, each reading every device first (decision 142), one now
+  and then refused by a device that cannot be opened, for a reason drawn, or by a device
+  up whose read fails, in each way `Logex.IO.Sim` fails a read, which the restart gives
+  back, and injected faults: a task's step slow by about its watchdog or the continuous
+  task's, a host's request slower than the idle watchdog, the runner stuck for less than
+  its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
+  a third of the walks, each hang costing a real-time wait,
+  and a device's read, report or write failing in each way `Logex.IO.Sim` acts out, a
+  value that does not fit and an address that is no input point's among them. Since M5-13
+  every configuration holds a located array in and one out, the panel's `pt int[3]` at
+  `panel.i.3` and the drive's `qs bool[2]` at `drive.q.2`, each element a point pressed,
+  forced and unforced by its name, `pt[1]`, written at its own address, and refused at its
+  own, a 70000 at `panel.i.4` (decision 156, decision 143).
+
+  It is checked against two models that know nothing of the runner's code.
+
+  - The core's: the hidden seam, `steps:`, stands a module in for `Logex.Runtime`'s steps
+    that runs each step as the core does and tells the walk what the runner gave it, each
+    round's elapsed time and inputs with the clock's time as it began, and each step's
+    task and time. The model calls `Logex.Runtime.cycle/3` with those, and every round's
+    events, `{:round, now, outputs}` and resource are cycle/3's (a round that trips part
+    way, those of the steps it ran); each edit's step is `Logex.Configuration.Edit`'s at
+    the step's time on the clock, 0 while tripped (decision 139), its reply and event the
+    same; each restart `Logex.Runtime.restart/2`'s; and after every step `status/1`, every
+    `get/2` the walk reads, and each device's outputs (the last round's, 0 while tripped,
+    or as they were for a device down) are the model's, a device written nothing while
+    tripped after its 0. What the runner gave the core is checked too: each round's
+    elapsed time is the clock's since the last round, 0 for the first after a start or a
+    restart; a forced input reads its force, a reporting device's input its value now,
+    every device's its value now in the first round after a start or a restart, which
+    read it, and a read device's a value it held within two poll periods of the round,
+    and the time passed inside steps while it was read, each pass that ended within that
+    window widening it by its own time and no more, which a test of the check's own pins;
+    a scheduled round comes exactly when decision 122's back to back rounds or the next periodic due time say, never before a step it waited
+    behind, and none is left owed; and a force of a trigger makes its round at once, one
+    that changes nothing none (decisions 120 and 138).
+  - The watchdogs' and the trip's: a timed task's step longer than its watchdog trips
+    `{:watchdog, {:task, ...}}` after it, the round longer than the continuous task's
+    `{:watchdog, {:round, ...}}` with each step's time, a slow request `{:watchdog, {:idle,
+    ms}}`, a runner stuck past its devices' deadlines `{:watchdog, {:device, "drive", idle
+    + poll}}` (decision 137), each device fault `{:io, device, cause}` in its words, and
+    since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
+    gives out of range, and since M5-12 an element whose subscript it gives outside its
+    array, `{:fault, task, instance, fault}` at the step's end, no later step of its round
+    run (decisions 153 and 160), as restated from the record; a fault that
+    does not trip trips nothing; and a runner
+    stopped or crashed writes every output 0 once where it ran, and nothing where it had
+    tripped.
+
+  The walk repeats exactly from fresh processes, and asserts its reach: every event kind,
+  every trip reason but `{:internal, message}`, which the host contract makes unreachable
+  from a walk and `trip_test.exs` reaches through the seam, and each kind of round, step,
+  fault and mistake. No step reads the real clock, but the runner's waits for its devices
+  are in real time (decision 125): an open or a close waits for the idle watchdog and a
+  poll period, so the walk draws an idle watchdog of 400 or 500 ms, which a device's open
+  made late by 100 ms, as on a loaded machine, now and then at a start, must not trip,
+  and a hung device costs one such wait or less; and a round's write waits for what is left of
+  its step's deadline on the manual clock, its task's watchdog and a poll period less the
+  time a slow step passed, so a step slow by its watchdog exactly leaves its write a poll
+  period, 3 to 8 ms, of real time.
+  """
+  use ExUnit.Case, async: true
+
+  # A device or a runner the walk kills is reported by its process as it goes down.
+  @moduletag :capture_log
+
+  alias Logex.Configuration
+  alias Logex.Configuration.Edit, as: ConfigEdit
+  alias Logex.IO.Sim
+  alias Logex.Runner
+  alias Logex.Runner.Clock.Manual
+  alias Logex.Runtime
+
+  @table :logex_runner_walk
+
+  # The hidden seam's stand-in for Logex.Runtime's steps (§4.11, `steps:`): each step is
+  # the core's own, and the walk is told what the runner gave the core, the elapsed time
+  # and the inputs of each round with the clock's time as it began, and each step's task
+  # with the time it took. A step of a task the walk has made slow passes that time on the
+  # manual clock after the core has run it, as a slow program would, once.
+  defmodule Walked do
+    @table :logex_runner_walk
+
+    def cycle_steps(runtime, elapsed, inputs) do
+      {test, clock} = walk()
+      now = Manual.now_ms(clock)
+      inputs = Logex.ApiContractTest.RunnerWalk.delayed(test, now, inputs)
+      send(test, {:walked, self(), {:steps, elapsed, inputs, now}})
+      Runtime.cycle_steps(runtime, elapsed, inputs)
+    end
+
+    def cycle_step(runtime, {_kind, task, _run} = step) do
+      result = Runtime.cycle_step(runtime, step)
+      {test, clock} = walk()
+      ms = slow(:ets.take(@table, {test, :slow, task}))
+      passed(clock, ms)
+      send(test, {:walked, self(), {:step, task, ms}})
+      result
+    end
+
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    defp walk do
+      [test | _] = Process.get(:"$ancestors")
+      {test, :ets.lookup_element(@table, {test, :clock}, 2)}
+    end
+
+    defp slow([{_key, ms}]), do: ms
+    defp slow([]), do: 0
+
+    defp passed(_clock, 0), do: :ok
+
+    defp passed(clock, ms) do
+      [test | _] = Process.get(:"$ancestors")
+      Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
+    end
+  end
+
+  # The manual clock, every reading the runner makes passing `{test, :lag}` ms first where
+  # the walk has set it: a host's request that takes that long, for the idle watchdog.
+  # A device's readings, made in its own process, pass nothing; but where the walk has set
+  # `{test, :late}`, the first a device makes, inside its open, sleeps that many ms in real
+  # time first, once, as a loaded machine is late, which the runner's real-time wait for
+  # an open, the idle watchdog and a poll period, must cover.
+  defmodule Lagged do
+    @behaviour Logex.Runner.Clock
+    @table :logex_runner_walk
+
+    @impl true
+    def now_ms({clock, test}) do
+      lag(Process.get(:"$initial_call"), clock, test)
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at({clock, _test}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _test}, timer), do: Manual.cancel(clock, timer)
+
+    defp lag({Logex.Runner, :init, 1}, clock, test),
+      do: lagged(:ets.lookup(@table, {test, :lag}), clock)
+
+    defp lag({Logex.Runner.Device, :init, 1}, _clock, test),
+      do: late(:ets.take(@table, {test, :late}))
+
+    defp lag(_other, _clock, _test), do: :ok
+
+    defp late([{_key, ms}]), do: Process.sleep(ms)
+    defp late([]), do: :ok
+
+    defp lagged([{{test, :lag}, ms}], clock) when ms > 0,
+      do: Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
+
+    defp lagged(_none, _clock), do: :ok
+  end
+
+  # Time passed inside a step on the manual clock, which delivers no device's poll on the
+  # way, each pass recorded with the time it began, so that a read device's input is
+  # allowed the time passed while it was read, and no more (`passes/2`).
+  @doc false
+  def passing(test, clock, ms) do
+    :ets.insert(@table, {{test, :pass, :erlang.unique_integer()}, {Manual.now_ms(clock), ms}})
+    delaying(:ets.lookup(@table, {test, :stale}), test, ms)
+    Manual.pass(clock, ms)
+  end
+
+  # The check's own test (below): from the first time passed inside a step, a read
+  # device's change, but a trigger's or a force's, given to the core late by that time
+  # less 10 ms, as a runner that took it late would, so that it is never later than a
+  # running maximum of the time passed would allow, but later than two poll periods.
+  defp delaying([{_key, {names, poll}}], test, ms) when ms - 10 > 2 * poll + 1,
+    do: :ets.insert_new(@table, {{test, :delay}, {ms - 10, names}})
+
+  defp delaying(_stale, _test, _ms), do: true
+
+  @doc false
+  def delayed(test, now, inputs),
+    do: delayed(:ets.lookup(@table, {test, :delay}), test, now, inputs)
+
+  defp delayed([], _test, _now, inputs), do: inputs
+
+  defp delayed([{_key, {delay, names}}], test, now, inputs) do
+    {late, given} = Map.split(inputs, names)
+    held = :ets.lookup_element(@table, {test, :held}, 2, %{})
+
+    held =
+      Enum.reduce(late, held, fn {name, value}, held ->
+        Map.update(held, name, {value, now}, fn {_was, since} -> {value, since} end)
+      end)
+
+    {due, still} = Enum.split_with(held, fn {_name, {_value, since}} -> since + delay <= now end)
+    :ets.insert(@table, {{test, :held}, Map.new(still)})
+    Enum.into(for({name, {value, _since}} <- due, do: {name, value}), given)
+  end
+
+  # ---- the programs and the configurations -----------------------------------------------
+
+  @programs %{
+    "relay" => "var_input in bool\nvar_output out bool\nxic in ote out",
+    "count" => "var_output n dint\nadd n 1 n",
+    "ratio" => "var_input d dint\nvar_output q dint\ndiv 1000 d q",
+    # M5-9: a bit whose number the panel's dint gives, read while the panel's `pb` is
+    # pressed: its -4 is out of range, a major fault (decisions 153 and 160).
+    "bit" =>
+      "var_input n dint\nvar_input on bool\nvar w dint 5\nvar q bool\nxic on xic w.[n] ote q",
+    # M5-12: an element whose subscript the panel's dint gives, read and written while the
+    # panel's `pa` is pressed: its 7 and -4 are outside the array, a major fault (decision
+    # 153).
+    "index" => "var_input n dint\nvar_input on bool\nvar w dint[4]\nxic on add w[n] 1 w[n]",
+    # M5-13: a located array in and one out, each element a point of its own (decision
+    # 156): the panel's three ints at `panel.i.3` to `panel.i.5`, the drive's two lamps at
+    # `drive.q.2` and `drive.q.3`.
+    "zone" =>
+      "var_input t int[3]\nvar_output h bool[2]\ngt t[0] t[1] ote h[0]\ngt t[2] 3 ote h[1]"
+  }
+
+  defp programs,
+    do:
+      Map.new(@programs, fn {name, text} ->
+        {:ok, program} = Logex.compile(text, name: name)
+        {name, program}
+      end)
+
+  # The plant's points: the panel's and the drive's, each with bools and a dint in and out.
+  @points [
+    {"pa", "bool", "panel.i.0"},
+    {"pb", "bool", "panel.i.1"},
+    {"pd", "dint", "panel.i.2"},
+    {"pt", "int[3]", "panel.i.3"},
+    {"qa", "bool", "panel.q.0"},
+    {"qn", "dint", "panel.q.1"},
+    {"da", "bool", "drive.i.0"},
+    {"db", "bool", "drive.i.1"},
+    {"qb", "bool", "drive.q.0"},
+    {"qc", "dint", "drive.q.1"},
+    {"qs", "bool[2]", "drive.q.2"}
+  ]
+
+  @inputs %{
+    "pa" => {"panel", [0], :bool},
+    "pb" => {"panel", [1], :bool},
+    "pd" => {"panel", [2], :dint},
+    "pt[0]" => {"panel", [3], :int},
+    "pt[1]" => {"panel", [4], :int},
+    "pt[2]" => {"panel", [5], :int},
+    "da" => {"drive", [0], :bool},
+    "db" => {"drive", [1], :bool}
+  }
+
+  @outputs %{
+    "panel" => %{[0] => "qa", [1] => "qn"},
+    "drive" => %{[0] => "qb", [1] => "qc", [2] => "qs[0]", [3] => "qs[1]"}
+  }
+
+  # Everything the walk must be seen to reach: every event kind; every trip reason but
+  # {:internal, message}; each kind of round (decisions 120, 122, 123 and 138); and each
+  # step, refusal and fault.
+  @runner_reach [
+    :ran,
+    :fault,
+    :overlap,
+    :round,
+    :trip,
+    :restart,
+    :edit,
+    {:trip, :task},
+    {:trip, :round},
+    {:trip, :idle},
+    {:trip, :device},
+    {:trip, :error},
+    {:trip, :raised},
+    {:trip, :thrown},
+    {:trip, :exited},
+    {:trip, :bad_value},
+    {:trip, :unknown_address},
+    {:trip, :timeout},
+    {:trip, :down},
+    {:trip, :bit_out_of_range},
+    {:trip, :index_out_of_range},
+    :round_first,
+    :round_scheduled,
+    :round_trigger,
+    {:trigger_round, :report},
+    {:trigger_round, :poll},
+    {:trigger_round, :force},
+    :logic_round,
+    :untimed,
+    :timed_only,
+    :reporting,
+    :read_only,
+    :force,
+    :forced_trigger,
+    :forced_trigger_pressed,
+    :unforce,
+    :unforce_all,
+    :no_forces_file,
+    :misforced,
+    :accept,
+    :accept_refused,
+    :test,
+    :untest,
+    :assemble,
+    :cancel,
+    :next_due_from_step,
+    :test_refused,
+    :untest_refused,
+    :assemble_refused,
+    :cancel_refused,
+    :no_edit_held,
+    :step_tripped,
+    :untimed_added,
+    :untimed_taken,
+    :slow_injected,
+    :stuck_small,
+    :restart_cold,
+    :restart_warm,
+    :restart_init_refused,
+    :restart_read_refused,
+    :restart_running,
+    :get_mistake,
+    :crash,
+    :late_open,
+    :element_pressed,
+    :element_forced,
+    :element_misfit,
+    :array_forced,
+    :array_unforced
+  ]
+
+  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t)
+
+  # A draw: the tasks' intervals and watchdogs, an event task on a panel's or a drive's
+  # input, a trigger logic writes, the continuous task declared or not, and the untimed
+  # counter, with no task or `with main`, or none.
+  defp draw do
+    %{
+      fast: pick([2, 5, 10]),
+      slow: pick([nil, 15, 25]),
+      event: pick([nil, "pb", "db"]),
+      logic: pick([false, true]),
+      main: pick([false, true]),
+      c2: pick([nil, :none, :main, :main]),
+      wd: %{
+        "fast" => pick([nil, 20, 30, 40]),
+        "slow" => pick([20, 30, 40]),
+        "e" => pick([20, 30]),
+        "l" => pick([20, 40]),
+        "main" => pick([20, 30, 40, nil])
+      },
+      extra: false
+    }
+  end
+
+  defp text(d),
+    do:
+      Enum.join(
+        tasks(d) ++
+          Enum.map(@points, fn {name, type, at} -> "var_global #{name} #{type} at #{at}" end) ++
+          ["var_global cm dint", "var_global cs dint", "var_global g bool"] ++ instances(d),
+        "\n"
+      ) <> "\n"
+
+  defp tasks(d),
+    do:
+      ["task fast interval #{d.fast} priority 1#{watchdog(d.wd["fast"])}"] ++
+        optional(d.slow, &"task slow interval #{&1} priority 2#{watchdog(d.wd["slow"])}") ++
+        optional(d.event, &"task e single #{&1} priority 0#{watchdog(d.wd["e"])}") ++
+        optional(d.logic, fn _ -> "task l single g priority 3#{watchdog(d.wd["l"])}" end) ++
+        optional(d.main, fn _ -> "task main continuous#{watchdog(d.wd["main"])}" end) ++
+        optional(d.extra, fn _ -> "task extra interval 7 priority 9" end)
+
+  defp watchdog(nil), do: ""
+  defp watchdog(ms), do: " watchdog #{ms}"
+
+  defp optional(nil, _line), do: []
+  defp optional(false, _line), do: []
+  defp optional(value, line), do: [line.(value)]
+
+  defp instances(d),
+    do:
+      [
+        "program r1 relay with fast\n  r1.in pa\n  r1.out qa",
+        "program c1 count with fast\n  c1.n qn",
+        "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc",
+        "program b1 bit with fast\n  b1.n pd\n  b1.on pb",
+        "program x1 index with fast\n  x1.n pd\n  x1.on pa",
+        "program z1 zone with fast\n  z1.t pt\n  z1.h qs"
+      ] ++
+        optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
+        optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
+        optional(d.logic, fn _ -> "program c3 count with l\n  c3.n cs" end) ++
+        optional(d.c2, &untimed_counter(&1, d.main))
+
+  defp ratio_task(nil), do: "fast"
+  defp ratio_task(_slow), do: "slow"
+
+  defp untimed_counter(:main, true), do: "program c2 count with main\n  c2.n cm"
+  defp untimed_counter(_with, _main), do: "program c2 count\n  c2.n cm"
+
+  defp configured(d, programs) do
+    {:ok, config} = Configuration.compile("plant", text(d), programs)
+    config
+  end
+
+  # A candidate: one or two changes a running plant takes, or a task added, which it
+  # refuses.
+  defp candidate(d) do
+    changes = Enum.take_random([:fast, :fast, :slow, :wd, :c2, :c2, :refused], pick([1, 2]))
+    Enum.reduce(changes, d, &changed/2)
+  end
+
+  # An interval cut more often than lengthened, so that decision 40 moves its next due
+  # time from the step's time (decision 139).
+  defp changed(:fast, d), do: %{d | fast: pick(shorter(d.fast, [2, 5, 10]))}
+  defp changed(:slow, %{slow: nil} = d), do: d
+  defp changed(:slow, d), do: %{d | slow: pick(shorter(d.slow, [15, 25, 40]))}
+
+  defp changed(:wd, d),
+    do: %{d | wd: Map.put(d.wd, pick(["fast", "slow", "main"]), pick([20, 30, 40]))}
+
+  defp changed(:c2, %{c2: nil} = d), do: %{d | c2: pick([:none, :main])}
+  defp changed(:c2, d), do: %{d | c2: nil}
+  defp changed(:refused, d), do: %{d | extra: true}
+
+  defp shorter(interval, intervals) do
+    others = intervals -- [interval]
+    (for(i <- others, i < interval, do: i) |> List.duplicate(2) |> List.flatten()) ++ others
+  end
+
+  defp pick(list), do: Enum.at(list, :rand.uniform(length(list)) - 1)
+
+  # ---- the walk --------------------------------------------------------------------------
+
+  setup_all do
+    :ets.new(@table, [:named_table, :public, :set])
+    :ok
+  end
+
+  # At 30 walks of 70 steps every atom is reached at this seed, in about 7 s alone, most of
+  # it the hung devices' real-time waits. Over 30 other seed families every walk passed,
+  # in 5 to 11 s, and 22 reached every atom, the rest missing one, an interval cut a while
+  # after the last round (decision 139) or a step taken while tripped, each rare by its
+  # nature.
+  @tag :tmp_dir
+  test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
+         "watchdogs and the faults say, and reaches every event kind and trip reason",
+       %{tmp_dir: dir} do
+    programs = programs()
+    Process.put(:runner_reach, MapSet.new())
+
+    logs =
+      for seed <- 1..30 do
+        :rand.seed(:exsss, {2026, 10, 19 + seed})
+        walk(programs, dir, seed, 70)
+      end
+
+    # From fresh processes, the first walk again, exactly.
+    :rand.seed(:exsss, {2026, 10, 20})
+    assert walk(programs, dir, 1, 70) == hd(logs)
+
+    assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
+  end
+
+  # The walk's check of a read device's input allows the time passed inside a step while it
+  # was read, and no more: a runner that gives the core such a change late, once time has
+  # passed inside a step, by less than that time but by more than two poll periods, is
+  # caught once the time passed is behind it. A check that kept the most time ever passed
+  # would allow it for the rest of the walk.
+  @tag :tmp_dir
+  test "the walk's input check holds a read device's input to the time passed while it " <>
+         "was read",
+       %{tmp_dir: dir} do
+    programs = programs()
+    Process.put(:runner_reach, MapSet.new())
+    Process.put(:stale_mode, true)
+
+    caught =
+      Enum.find_value(1..40, fn seed ->
+        :rand.seed(:exsss, {2026, 11, seed})
+
+        try do
+          walk(programs, dir, seed, 70)
+          nil
+        rescue
+          error in ExUnit.AssertionError -> error.message
+        end
+      end)
+
+    assert is_binary(caught), "the walk's check caught no input given late"
+    assert caught =~ ~r/^(pa|pd|da|pt\[\d\]) read -?\d+ at \d+, held /
+  end
+
+  defp walk(programs, dir, seed, steps) do
+    d = draw()
+    config = configured(d, programs)
+    {:ok, manual} = Manual.start_link()
+    test = self()
+    :ets.insert(@table, {{test, :clock}, manual})
+    :ets.insert(@table, {{test, :lag}, 0})
+    :ets.match_delete(@table, {{test, :pass, :_}, :_})
+    for key <- [:delay, :held, :stale], do: :ets.delete(@table, {test, key})
+    reports = %{"panel" => pick([true, false]), "drive" => pick([true, false])}
+    sims = Map.new(reports, fn {name, r} -> {name, sim(r, manual)} end)
+    file = pick([nil, Path.join(dir, "forces-#{seed}")])
+    File.rm(file || Path.join(dir, "none"))
+
+    w = %{
+      programs: programs,
+      draws: %{running: d, original: nil, candidate: nil},
+      manual: manual,
+      reports: reports,
+      lossy: MapSet.new(),
+      sims: sims,
+      file: file,
+      poll: pick([3, 5, 8]),
+      idle: pick([400, 500]),
+      overhead: pick([10, 20, 50, 90]),
+      hangs: pick([true, false, false]),
+      forces: %{},
+      timeline: Map.new(@inputs, fn {name, _} -> {name, [{0, 0}]} end),
+      log: [],
+      fault: nil,
+      down: MapSet.new(),
+      unforcing: %{},
+      hung: %{},
+      begun: 0,
+      doing: nil,
+      crashed: false
+    }
+
+    reach(:untimed, untimed?(config))
+    reach(:timed_only, not untimed?(config))
+    reach(:reporting, reports["panel"] or reports["drive"])
+    reach(:read_only, not (reports["panel"] and reports["drive"]))
+
+    stale(Process.get(:stale_mode), test, reports, w.poll)
+    w = started(w, config)
+    w = Enum.reduce_while(1..steps, w, fn _, w -> stepped_on(step(w)) end)
+    w = ended(w)
+    for {_name, sim} <- sims, do: GenServer.stop(sim)
+    GenServer.stop(manual)
+    Enum.reverse(w.log)
+  end
+
+  # The check's own test reads only the read devices' inputs that are no trigger, and
+  # ends its walk at a trip, after which a change held back would be held for as long.
+  defp stale(nil, _test, _reports, _poll), do: :ok
+
+  defp stale(true, test, reports, poll) do
+    names =
+      for {name, {device, _, _}} <- @inputs,
+          name not in ["pb", "db"],
+          not reports[device],
+          do: name
+
+    :ets.insert(@table, {{test, :stale}, {names, poll}})
+  end
+
+  defp stepped_on(%{status: :tripped} = w), do: on(Process.get(:stale_mode), w)
+  defp stepped_on(w), do: {:cont, w}
+
+  defp on(nil, w), do: {:cont, w}
+  defp on(true, w), do: {:halt, w}
+
+  defp sim(reports, manual) do
+    {:ok, sim} = Sim.start_link(reports: reports, clock: manual)
+    sim
+  end
+
+  # A runner started on the configuration, its first round run at once before it returns,
+  # and the walk subscribed to every kind of event.
+  defp started(w, config) do
+    late = late_open()
+
+    {:ok, runner} =
+      Runner.start_link(
+        configuration: config,
+        io: Map.new(w.sims, fn {name, sim} -> {name, {Sim, sim: sim}} end),
+        clock: {Lagged, {w.manual, self()}},
+        poll: w.poll,
+        idle: w.idle,
+        overhead: w.overhead,
+        forces: w.file,
+        steps: Walked
+      )
+
+    assert :ets.lookup(@table, {self(), :late}) == []
+    reach(:late_open, late)
+    :ok = Runner.subscribe(runner, [:overlap, :fault, :trip, :restart, :edit, :ran, :round])
+    rt = Runtime.start(config)
+
+    w =
+      Map.merge(w, %{
+        runner: runner,
+        config: config,
+        rt: rt,
+        edit: nil,
+        expect: [],
+        status: :running,
+        trip: nil,
+        rounds: 0,
+        logical: 0,
+        last: nil,
+        first: true,
+        floor: nil,
+        round: nil,
+        outputs: nil,
+        written: %{},
+        zeroed: %{},
+        logic: logic_values(config, rt),
+        longest: longest(%{}, config),
+        subscribed: false,
+        down: MapSet.new(),
+        hung: %{}
+      })
+
+    # The first round's record came before the subscription: it ends with no event, and
+    # where a fresh start reads forces that make a major fault, as M5-12's element can
+    # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
+    w = consumed(w)
+    w = first_round(Runner.status(w.runner).trip, w)
+    checked(%{w | subscribed: true})
+  end
+
+  defp first_round(nil, w), do: round_ended(w, w.round.outputs)
+
+  defp first_round(reason, %{round: round} = w) do
+    expected = round.trip || ended_trip(round.steps, w, round)
+    assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
+    reach(:trip, true)
+    reach(trip_kind(reason), true)
+    w = all_steps(round.steps, w, round.took)
+    tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
+  end
+
+  # Now and then the first device opened is late, by more than an idle watchdog of 60 or
+  # 80 ms and a poll period would cover and by less than the walk's 400 or 500: a loaded
+  # machine, which must trip nothing, the runner waiting for an open in real time.
+  defp late_open do
+    late = :rand.uniform(6) == 1
+    late && :ets.insert(@table, {{self(), :late}, 100})
+    late
+  end
+
+  defp ended(w) do
+    w = settled(w)
+    before = writes(w)
+    :ok = Runner.stop(w.runner)
+    w = drained(w)
+    stopped!(w, before)
+    w
+  end
+
+  # Every output written 0 once by a runner stopped or gone while it ran, nothing by one
+  # that had tripped, and every device that was up closed.
+  defp stopped!(w, before) do
+    for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
+      assert Sim.closed?(sim)
+      after_ = Sim.writes(sim)
+      zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+      zeroed!(w.status, before[name], after_, zeros)
+    end
+  end
+
+  defp zeroed!(:running, before, after_, zeros),
+    do: assert(Enum.drop(after_, length(before)) == [zeros])
+
+  defp zeroed!(:tripped, before, after_, _zeros), do: assert(after_ == before)
+
+  defp writes(w), do: Map.new(w.sims, fn {name, sim} -> {name, Sim.writes(sim)} end)
+
+  # ---- the steps -------------------------------------------------------------------------
+
+  # A step: a tripped runner restarted, more often than not soon; otherwise a wait, a
+  # press, forcing, an edit's step, a fault, a host's mistake or a crash.
+  defp step(w), do: stepped(%{w | doing: nil})
+
+  defp stepped(%{status: :tripped} = w) do
+    case :rand.uniform(10) do
+      n when n <= 4 -> restart(w)
+      n -> running_step(n, w)
+    end
+  end
+
+  defp stepped(w), do: running_step(:rand.uniform(12), w)
+
+  defp running_step(n, w) when n <= 3, do: wait(w, :rand.uniform(26) - 1)
+  defp running_step(n, w) when n <= 5, do: press(w)
+  defp running_step(6, w), do: forcing(Process.get(:stale_mode), w)
+  defp running_step(n, w) when n in [7, 11], do: editing(w)
+  defp running_step(8, %{status: :running} = w), do: inject(w)
+  defp running_step(9, w), do: mistaken(w)
+  defp running_step(10, %{file: file, crashed: false} = w) when file != nil, do: crashed(w)
+  defp running_step(_n, w), do: wait(w, :rand.uniform(6))
+
+  defp wait(w, ms) do
+    target = now(w) + ms
+    :ok = Manual.advance(w.manual, ms)
+    checked(missed(consumed(w), target))
+  end
+
+  # A press, now and then of a trigger that is forced, whose device's change the runner
+  # reads as the force and makes no round of (decision 117).
+  defp press(w) do
+    forced = for name <- triggers(w.config), Map.has_key?(w.forces, name), do: name
+    name = pick(forced ++ forced ++ Enum.sort(Map.keys(@inputs)))
+    {device, address, type} = @inputs[name]
+    reach(:forced_trigger_pressed, name in forced)
+    reach(:element_pressed, String.contains?(name, "["))
+    set(w, name, device, address, value(type))
+  end
+
+  defp set(w, name, device, address, value) do
+    :ok = Sim.set(w.sims[device], address, value)
+    checked(consumed(timed_value(%{w | doing: :report}, name, value)))
+  end
+
+  defp timed_value(w, name, value) do
+    now = Manual.now_ms(w.manual)
+    %{w | timeline: Map.update!(w.timeline, name, &[{now, value} | &1])}
+  end
+
+  defp value(:bool), do: pick([0, 1])
+  defp value(:dint), do: pick([0, 0, 3, 7, -4])
+  defp value(:int), do: pick([0, 2, 3, 5, -1])
+
+  # ---- forcing ---------------------------------------------------------------------------
+
+  # The check's own test forces nothing, a force being read exactly.
+  defp forcing(nil, w), do: forcing(w)
+  defp forcing(true, w), do: wait(w, 1)
+
+  defp forcing(%{file: nil} = w) do
+    {name, _} = pick(Enum.sort(@inputs))
+
+    raises(
+      "the runner keeps no forces file, so a force would not survive a crash: start it " <>
+        "with forces: a path",
+      fn -> Runner.force(w.runner, name, 1) end
+    )
+
+    reach(:no_forces_file, true)
+    checked(w)
+  end
+
+  defp forcing(w) do
+    w = %{settled(w) | doing: :force}
+
+    case :rand.uniform(6) do
+      n when n <= 3 ->
+        name = pick(triggers(w.config) ++ Enum.sort(Map.keys(@inputs)))
+        {_device, _address, type} = @inputs[name]
+        value = value(type)
+        kick = kicks?(w, name, value)
+        began = w.begun
+        forces = force_drawn(w, name, value)
+        reach(:force, true)
+        reach(:forced_trigger, kick == 1)
+        reach(:element_forced, String.contains?(name, "["))
+
+        # A force that changes what a trigger reads makes its round at once, before it
+        # returns, and one that does not makes none (decisions 120 and 138).
+        w = drained(%{w | forces: Map.merge(w.forces, forces)})
+        assert w.begun - began == kick
+        forced(w)
+
+      n when n <= 5 ->
+        name = pick(Enum.sort(Map.keys(w.forces)) ++ [pick(Enum.sort(Map.keys(@inputs)))])
+        forced(%{w | forces: Map.drop(w.forces, unforce_drawn(w, name))})
+
+      6 ->
+        assert Runner.unforce_all(w.runner) == :ok
+        reach(:unforce_all, map_size(w.forces) > 0)
+        forced(%{w | forces: %{}, unforcing: w.forces})
+    end
+  end
+
+  # Decision 241: `pt[1]` drawn, the array `pt` is forced whole, each element to the value
+  # drawn, as a list of its shape, and unforced whole, every element, so that the draws'
+  # stream is the one an element's force drew; no element is a trigger.
+  defp force_drawn(w, "pt[1]", value) do
+    assert Runner.force(w.runner, "pt", [value, value, value]) == :ok
+    reach(:array_forced, true)
+    Map.new(["pt[0]", "pt[1]", "pt[2]"], &{&1, value})
+  end
+
+  defp force_drawn(w, name, value) do
+    assert Runner.force(w.runner, name, value) == :ok
+    %{name => value}
+  end
+
+  defp unforce_drawn(w, "pt[1]") do
+    assert Runner.unforce(w.runner, "pt") == :ok
+    reach(:array_unforced, Enum.any?(["pt[0]", "pt[1]", "pt[2]"], &Map.has_key?(w.forces, &1)))
+    reach(:unforce, Map.has_key?(w.forces, "pt[1]"))
+    ["pt[0]", "pt[1]", "pt[2]"]
+  end
+
+  defp unforce_drawn(w, name) do
+    assert Runner.unforce(w.runner, name) == :ok
+    reach(:unforce, Map.has_key?(w.forces, name))
+    [name]
+  end
+
+  defp kicks?(%{status: :running} = w, name, value) do
+    reads = Map.get_lazy(w.forces, name, fn -> Runtime.get!(w.rt, name) end)
+    ((name in triggers(w.config) and value != reads) && 1) || 0
+  end
+
+  defp kicks?(_tripped, _name, _value), do: 0
+
+  # The forces file holds every force, one a line, in name order (decision 140).
+  defp forced(w) do
+    text = for {name, value} <- Enum.sort(w.forces), into: "", do: "#{name} #{value}\n"
+    assert File.read!(w.file) == text
+    checked(%{consumed(w) | unforcing: %{}})
+  end
+
+  # ---- an online edit --------------------------------------------------------------------
+
+  defp editing(%{edit: nil} = w) do
+    case :rand.uniform(4) do
+      1 -> held_none(w)
+      _ -> accept(w)
+    end
+  end
+
+  defp editing(w) do
+    case :rand.uniform(5) do
+      1 -> accept(w)
+      n when n <= 3 -> edit_step(w, pick(refused(ConfigEdit.stage(w.edit))))
+      _ -> edit_step(w, onward(ConfigEdit.stage(w.edit)))
+    end
+  end
+
+  # The steps a stage refuses, each the host's mistake in Logex.Configuration.Edit's words.
+  defp refused(:testing), do: [:test, :cancel]
+  defp refused(_accepted_or_untested), do: [:untest, :assemble]
+
+  defp onward(:accepted), do: pick([:test, :test, :cancel])
+  defp onward(:testing), do: pick([:untest, :assemble])
+  defp onward(:untested), do: pick([:test, :cancel])
+
+  defp held_none(w) do
+    step = pick([:test, :untest, :assemble, :cancel])
+
+    raises(
+      "the runner holds no edit: #{step}/1 is a step of the edit accept/2 accepts",
+      fn -> apply(Runner, step, [w.runner]) end
+    )
+
+    reach(:no_edit_held, true)
+    checked(w)
+  end
+
+  # The step's time on the runner's clock, the time since the last round began, 0 while
+  # tripped (decision 139).
+  defp step_time(%{status: :running} = w), do: Manual.now_ms(w.manual) - w.last.at
+  defp step_time(_tripped), do: 0
+
+  defp accept(w) do
+    w = settled(w)
+    draw = candidate(w.draws.running)
+    candidate = configured(draw, w.programs)
+
+    case ConfigEdit.accept(w.rt, candidate, step_time(w)) do
+      {:ok, edit, forecast} ->
+        assert Runner.accept(w.runner, candidate) == {:ok, forecast}
+        reach(:accept, true)
+        w = %{w | edit: edit, expect: [{:edit, :accept, forecast}]}
+        w = put_in(w.draws.original, w.draws.running)
+        checked(consumed(put_in(w.draws.candidate, draw)))
+
+      {:error, diagnostics} ->
+        assert Runner.accept(w.runner, candidate) == {:error, diagnostics}
+        reach(:accept_refused, true)
+        checked(consumed(w))
+    end
+  end
+
+  defp edit_step(w, step) do
+    w = settled(w)
+    expected = model_step(w, step)
+    reply = reply(fn -> apply(Runner, step, [w.runner]) end)
+    edited(w, step, expected, reply)
+  end
+
+  defp model_step(w, step) when step in [:test, :untest] do
+    apply(ConfigEdit, step, [w.edit, w.rt, step_time(w)])
+  rescue
+    error in ArgumentError -> {:raise, error.message}
+  end
+
+  defp model_step(w, step) do
+    apply(ConfigEdit, step, [w.edit, w.rt])
+  rescue
+    error in ArgumentError -> {:raise, error.message}
+  end
+
+  defp reply(call) do
+    call.()
+  rescue
+    error in ArgumentError -> {:raise, error.message}
+  end
+
+  defp edited(w, step, {:raise, message}, reply) do
+    assert reply == {:raise, message}
+    reach(:"#{step}_refused", true)
+    checked(w)
+  end
+
+  defp edited(w, step, {edit, rt, report}, reply) when step in [:test, :untest] do
+    assert reply == {:ok, report}
+    reach(step, true)
+
+    reach(
+      :next_due_from_step,
+      step_time(w) > 0 and Enum.any?(report, &match?({:next_due, _, _}, &1))
+    )
+
+    reach(:step_tripped, w.status == :tripped)
+    config = ConfigEdit.running(edit)
+    running = (step == :test && w.draws.candidate) || w.draws.original
+    w = %{w | edit: edit, rt: rt, expect: [{:edit, step, report}]}
+    checked(consumed(reconfigured(put_in(w.draws.running, running), config)))
+  end
+
+  defp edited(w, step, {config, rt, report}, reply) do
+    assert reply == {:ok, report}
+    reach(step, true)
+    running = (step == :assemble && w.draws.candidate) || w.draws.original
+    w = %{w | edit: nil, rt: rt, expect: [{:edit, step, report}]}
+    checked(consumed(reconfigured(put_in(w.draws.running, running), config)))
+  end
+
+  # After a step the rounds read the configuration the resource runs, and the next is
+  # planned again from the last, never before the step (decisions 129 and 139).
+  defp reconfigured(%{status: :running} = w, config) do
+    reach(:untimed_added, untimed?(config) and not untimed?(w.config))
+    reach(:untimed_taken, untimed?(w.config) and not untimed?(config))
+    %{w | config: config, longest: longest(w.longest, config), floor: now(w)}
+  end
+
+  defp reconfigured(w, config), do: %{w | config: config, longest: longest(w.longest, config)}
+
+  defp now(w), do: Manual.now_ms(w.manual)
+
+  # ---- a host's mistakes -----------------------------------------------------------------
+
+  defp mistaken(w) do
+    w = settled(w)
+
+    case :rand.uniform(4) do
+      1 ->
+        restarted_running(w)
+
+      2 ->
+        {name, value, message} =
+          pick([
+            {"qa", 1, "`qa` is an output point, at `panel.q.0`: only an input point is forced"},
+            {"pa", 2, "`pa` is a bool, forced to 0 or 1, got: 2"}
+          ])
+
+        raises(misforced(w.file, message), fn -> Runner.force(w.runner, name, value) end)
+        reach(:misforced, w.file != nil)
+        checked(w)
+
+      3 ->
+        path = pick(["nothing", "c1.nothing", "zz"])
+        {:error, reason} = Runtime.get(w.rt, path)
+        raises(reason, fn -> Runner.get!(w.runner, path) end)
+        reach(:get_mistake, true)
+        checked(w)
+
+      4 ->
+        restarted_running(w)
+    end
+  end
+
+  # A runner with no forces file takes no force at all, which it says first.
+  defp misforced(nil, _message),
+    do:
+      "the runner keeps no forces file, so a force would not survive a crash: start it " <>
+        "with forces: a path"
+
+  defp misforced(_file, message), do: message
+
+  defp restarted_running(%{status: :running} = w) do
+    raises("the runner is running: restart/2 starts a runner again once it has tripped", fn ->
+      Runner.restart(w.runner, :cold)
+    end)
+
+    reach(:restart_running, true)
+    checked(w)
+  end
+
+  defp restarted_running(w), do: restart(w)
+
+  defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
+
+  # ---- a restart -------------------------------------------------------------------------
+
+  # A tripped runner restarted, :cold or :warm (decision 113): every device read once, in
+  # device-name order, as a start reads them (decision 142), each that went down opened
+  # again, one now and then refusing to open, or one up giving a read that fails, which
+  # leaves the runner tripped with its first reason, every device that answers written 0
+  # once more (decision 136). The device's own reason is the restart's, whatever it is.
+  defp restart(w) do
+    mode = pick([:cold, :warm])
+    down = Enum.sort(MapSet.to_list(w.down))
+    up = for name <- Enum.sort(Map.keys(w.sims)), Enum.all?(down, &(&1 > name)), do: name
+
+    refusal =
+      case {down != [] and :rand.uniform(3) == 1, up != [] and :rand.uniform(4) == 1} do
+        {true, _} ->
+          {:init, hd(down), pick([:refused, :unplugged, {:no_route, :rand.uniform(9)}])}
+
+        {false, true} ->
+          {:read, pick(up), pick(read_hows())}
+
+        {false, false} ->
+          nil
+      end
+
+    restart(refusal, mode, w)
+  end
+
+  defp restart(nil, mode, w) do
+    assert Runner.restart(w.runner, mode) == :ok
+    reach(:"restart_#{mode}", true)
+
+    # Its first round ran before it returned.
+    w = drained(w)
+    assert w.round == nil and (w.first == false or w.status == :tripped)
+    checked(consumed(w))
+  end
+
+  defp restart({callback, device, how}, mode, w) do
+    before = writes(w)
+    Sim.fail(w.sims[device], callback, refusal_how(callback, how))
+
+    assert Runner.restart(w.runner, mode) ==
+             {:error, {:io_init, device, refusal_cause(callback, device, how)}}
+
+    reach(:"restart_#{callback}_refused", true)
+    w = consumed(w)
+
+    for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
+      zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+      assert Enum.drop(Sim.writes(sim), length(before[name])) == [zeros]
+    end
+
+    checked(%{w | zeroed: %{}})
+  end
+
+  defp refusal_how(:init, reason), do: {:error, reason}
+  defp refusal_how(:read, how), do: how
+
+  defp refusal_cause(:init, _device, reason), do: reason
+  defp refusal_cause(:read, device, how), do: cause(device, :read, how)
+
+  # ---- a crash and a fresh start ---------------------------------------------------------
+
+  # The runner killed, as a machine that loses it: each device it had writes every output
+  # 0 once, where it had not, and closes (decision 115); and a runner started again from
+  # the same forces file comes back with every force (decision 127).
+  defp crashed(w) do
+    w = settled(w)
+    devices = device_pids(w.runner)
+    watched = Enum.map(devices, fn {_name, pid} -> Process.monitor(pid) end)
+    before = writes(w)
+    Process.unlink(w.runner)
+    ref = Process.monitor(w.runner)
+    Process.exit(w.runner, :kill)
+    assert_receive {:DOWN, ^ref, :process, _, :killed}, 5000
+    for ref <- watched, do: assert_receive({:DOWN, ^ref, :process, _, _}, 5000)
+    w = drained(w)
+    stopped!(w, before)
+    reach(:crash, true)
+    w = %{w | crashed: true, edit: nil}
+    started(w, w.config)
+  end
+
+  defp device_pids(runner) do
+    {:links, links} = Process.info(runner, :links)
+
+    for pid <- links,
+        {:dictionary, dictionary} <- [Process.info(pid, :dictionary)],
+        dictionary[:"$initial_call"] == {Logex.Runner.Device, :init, 1},
+        do: {:sys.get_state(pid).name, pid}
+  end
+
+  # ---- the faults ------------------------------------------------------------------------
+
+  # A kind of fault, each kind as likely as another, and then one of its kind.
+  defp inject(w) do
+    w = settled(w)
+    kinds = Enum.group_by(injections(w), &elem(&1, 0))
+    injected(pick(kinds[pick([:slow | Enum.sort(Map.keys(kinds))])]), w)
+  end
+
+  # Each way `Logex.IO.Sim` fails a read, a report or a write.
+  defp read_hows,
+    do: [
+      {:error, :eio},
+      :raise,
+      :throw,
+      :exit,
+      {:value, [0], 2},
+      {:value, [7], 1},
+      {:value, [4], 70_000}
+    ]
+
+  defp injections(w) do
+    devices = ["panel", "drive"]
+    hows = read_hows()
+
+    [{:slow, "fast"}, {:stuck, :small}, {:stuck, :big}] ++
+      optional(w.config.tasks |> Enum.find(&(&1.name == "slow")), fn _ -> {:slow, "slow"} end) ++
+      optional(continuous(w.config), &{:slow, &1}) ++
+      optional(not untimed?(w.config), fn _ -> {:idle} end) ++
+      for(device <- devices, do: {:kill, device}) ++
+      for(device <- devices, w.hangs, do: {:hang, device}) ++
+      for(device <- devices, how <- hows, do: {:read, device, how}) ++
+      for(device <- devices, how <- Enum.take(hows, 4), do: {:write, device, how}) ++
+      for(device <- devices, w.reports[device], how <- hows, do: {:report, device, how})
+  end
+
+  defp injected({:slow, task}, w) do
+    ms = slow_ms(task, w)
+    :ets.insert(@table, {{self(), :slow, task}, ms})
+    w = wait_for_slow(w, task, 60)
+    reach(:slow_injected, true)
+    checked(w)
+  end
+
+  defp injected({:idle}, w) do
+    lag = w.idle + pick([1, 1, 2, 5])
+    :ets.insert(@table, {{self(), :lag}, lag})
+    status = Runner.status(w.runner)
+    :ets.insert(@table, {{self(), :lag}, 0})
+    assert status.status == :running
+    w = %{w | fault: {:watchdog, {:idle, lag}}}
+    w = consumed(w)
+
+    # The time the request took passed inside it, the devices' polls on the way waiting
+    # for the clock's next advance, which delivers them.
+    :ok = Manual.advance(w.manual, 0)
+    tripped!(consumed(w))
+  end
+
+  defp injected({:stuck, size}, w) do
+    :ok = Manual.advance(w.manual, w.poll)
+    w = consumed(w)
+    k = stuck(size, w)
+    :sys.suspend(w.runner)
+    :ok = Manual.advance(w.manual, k)
+    :sys.resume(w.runner)
+    w = %{w | floor: now(w)}
+
+    case size do
+      :small ->
+        reach(:stuck_small, true)
+        checked(consumed(w))
+
+      :big ->
+        w = %{w | fault: {:watchdog, {:device, "drive", w.idle + w.poll}}}
+        tripped!(consumed(w))
+    end
+  end
+
+  defp injected({:kill, device}, w) do
+    [pid] = for {^device, pid} <- device_pids(w.runner), do: pid
+    Process.exit(pid, :kill)
+    w = %{w | fault: {:io, device, {:down, :killed}}, down: MapSet.put(w.down, device)}
+    tripped!(until_tripped(w))
+  end
+
+  defp injected({:hang, device}, w) do
+    [pid] = for {^device, pid} <- device_pids(w.runner), do: pid
+    :sys.suspend(pid)
+
+    w = %{
+      w
+      | fault: {:io, device, :timeout},
+        down: MapSet.put(w.down, device),
+        hung: Map.put(w.hung, device, now(w))
+    }
+
+    :ok = Manual.advance(w.manual, w.idle + 2 * w.poll + 2)
+    tripped!(consumed(w))
+  end
+
+  defp injected({callback, device, how}, w) do
+    Sim.fail(w.sims[device], callback, how)
+    w = %{w | fault: {:io, device, cause(device, callback, how)}}
+    fault_acted(callback, device, how, w)
+  end
+
+  defp fault_acted(:report, device, _how, w) do
+    w = %{w | lossy: MapSet.put(w.lossy, device)}
+
+    {name, {^device, address, _type}} =
+      pick(for {_name, {^device, _, :bool}} = input <- Enum.sort(@inputs), do: input)
+
+    {_at, was} = hd(w.timeline[name])
+    value = 1 - was
+    :ok = Sim.set(w.sims[device], address, value)
+    tripped!(consumed(timed_value(w, name, value)))
+  end
+
+  defp fault_acted(_callback, _device, _how, w) do
+    :ok = Manual.advance(w.manual, w.poll + 1)
+    tripped!(consumed(w))
+  end
+
+  defp cause(_device, _callback, {:error, reason}), do: {:error, reason}
+
+  defp cause(device, callback, :raise),
+    do:
+      {:raised,
+       "the simulated device #{inspect(device)} raised in #{callback}, as fail/3 told it"}
+
+  defp cause(_device, callback, :throw), do: {:thrown, {Sim, callback}}
+  defp cause(_device, callback, :exit), do: {:exited, {Sim, callback}}
+  defp cause(_device, _callback, {:value, [0], value}), do: {:bad_value, [0], value}
+
+  # M5-13: an element of the panel's located array, whose int 70000 does not fit, is a bad
+  # value at its own address, refused as any point's is (decision 143); the drive has no
+  # input there.
+  defp cause("panel", _callback, {:value, [4], value}) do
+    reach(:element_misfit, true)
+    {:bad_value, [4], value}
+  end
+
+  defp cause(_device, _callback, {:value, address, _value}), do: {:unknown_address, address}
+
+  # A step slow by about its task's watchdog, or the continuous task's over the round,
+  # either side of it; one whose watchdog is far longer is slow by less than the idle
+  # watchdog, so that its devices are heard throughout.
+  defp slow_ms(task, w) do
+    limits =
+      for limit <- round_limit(continuous(w.config), w) ++ [watchdog(task, w.config)],
+          limit <= 42,
+          do: limit
+
+    near(Enum.take(limits, pick([1, 1, 2])))
+  end
+
+  defp round_limit(nil, _w), do: []
+  defp round_limit(task, w), do: [watchdog(task, w.config)]
+
+  defp near([]), do: :rand.uniform(30)
+  defp near(limits), do: max(1, pick(limits) + pick([-2, -1, 0, 1, 2, 3]))
+
+  defp stuck(:small, w), do: :rand.uniform(w.idle - 1)
+  defp stuck(:big, w), do: w.idle + w.poll + :rand.uniform(20)
+
+  # A slow task's step is run within its interval, the walk moving the clock on until it is.
+  defp wait_for_slow(_w, task, 0), do: flunk("the slow #{task} never ran")
+
+  defp wait_for_slow(w, task, n) do
+    case :ets.lookup(@table, {self(), :slow, task}) do
+      [] ->
+        w
+
+      [_] when w.status == :tripped ->
+        :ets.delete(@table, {self(), :slow, task})
+        w
+
+      [_] ->
+        target = now(w) + 1
+        :ok = Manual.advance(w.manual, 1)
+        wait_for_slow(missed(consumed(w), target), task, n - 1)
+    end
+  end
+
+  # The fault tripped the runner for the reason the watchdogs and the faults' rules give.
+  defp tripped!(w) do
+    assert w.status == :tripped, "#{inspect(w.fault)} did not trip the runner"
+    assert w.fault == nil
+    checked(w)
+  end
+
+  defp until_tripped(%{status: :tripped} = w), do: w
+
+  defp until_tripped(w) do
+    receive do
+      {:walked, runner, record} when runner == w.runner -> until_tripped(record(w, record))
+      {Runner, runner, event} when runner == w.runner -> until_tripped(event(w, event))
+    after
+      5000 -> flunk("no trip came")
+    end
+  end
+
+  # ---- the model's stream ----------------------------------------------------------------
+
+  # Every message the runner has sent: a :sys call answered after them marks the end.
+  defp consumed(w) do
+    :sys.get_state(w.runner)
+    drained(w)
+  end
+
+  defp drained(w) do
+    receive do
+      {:walked, runner, record} when runner == w.runner -> drained(record(w, record))
+      {Runner, runner, event} when runner == w.runner -> drained(event(w, event))
+    after
+      0 -> w
+    end
+  end
+
+  defp logged(w, entry), do: %{w | log: [entry | w.log]}
+
+  # A round begins: the runner gave the core its elapsed time and inputs.
+  defp record(w, {:steps, elapsed, inputs, at} = record) do
+    assert w.status == :running, "a round ran while tripped: #{inspect(record)}"
+    assert w.round == nil
+    w = logged(w, record)
+    kind = round_kind(w, inputs)
+    timed!(w, kind, elapsed, at)
+    inputs!(w, inputs, at)
+    {rt, steps} = Runtime.cycle_steps(w.rt, elapsed, inputs)
+    {cycled, outputs, events} = Runtime.cycle(w.rt, elapsed, inputs)
+    reach(:"round_#{kind}", true)
+    reach({:trigger_round, w.doing || :poll}, kind == :trigger)
+
+    %{
+      w
+      | logical: w.logical + elapsed,
+        begun: w.begun + 1,
+        round: %{
+          at: at,
+          rt: rt,
+          steps: steps,
+          ran: [],
+          seen: [],
+          took: 0,
+          times: [],
+          cycled: cycled,
+          outputs: outputs,
+          expected: events,
+          trip: nil
+        }
+    }
+  end
+
+  defp record(w, {:step, task, ms} = record) do
+    w = logged(w, record)
+    %{steps: [{kind, ^task, _} = step | rest]} = round = w.round
+    assert round.trip == nil, "a step ran after #{inspect(round.trip)}"
+    {rt, events} = Runtime.cycle_step(round.rt, step)
+    limit = watchdog(task, w.config)
+    trip = major(events) || task_trip(kind == :timed and ms > limit, task, ms, limit)
+
+    %{
+      w
+      | longest: Map.update(w.longest, task, ms, &max(&1, ms)),
+        round: %{
+          round
+          | rt: rt,
+            steps: rest,
+            ran: round.ran ++ events,
+            took: round.took + ms,
+            times: round.times ++ [{task, ms}],
+            trip: trip
+        }
+    }
+  end
+
+  # M5-9, restated (decisions 153 and 160): a step whose run met a major fault trips at its
+  # end, for the first, before any later step of its round and before a watchdog.
+  defp major(events) do
+    Enum.find(events, fn
+      {:fault, _task, _instance, %Logex.Fault{severity: :major}} -> true
+      _event -> false
+    end)
+  end
+
+  defp task_trip(true, task, ms, limit), do: {:watchdog, {:task, task, ms, limit}}
+  defp task_trip(false, _task, _ms, _limit), do: nil
+
+  # The round's events as the runner published them, the steps' and then its own; and
+  # every other event, between rounds.
+  defp event(%{round: round} = w, {:round, now, outputs} = event) when round != nil do
+    w = logged(w, event)
+    reach(:round, true)
+    assert round.seen == round.expected
+    assert now == w.logical
+    assert outputs == round.outputs
+    round_ended(w, outputs)
+  end
+
+  defp event(%{round: round} = w, {:trip, reason} = event) when round != nil do
+    w = logged(w, event)
+    assert round.seen == round.ran
+    expected = round.trip || ended_trip(round.steps, w, round)
+    assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
+    reach(:trip, true)
+    reach(trip_kind(reason), true)
+    w = all_steps(round.steps, w, round.took)
+    tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
+  end
+
+  defp event(%{round: round} = w, event) when round != nil do
+    w = logged(w, event)
+    reach(elem(event, 0), true)
+    %{w | round: %{round | seen: round.seen ++ [event]}}
+  end
+
+  defp event(w, {:trip, reason} = event) do
+    w = logged(w, event)
+    assert reason == w.fault, "tripped #{inspect(reason)}, the fault was #{inspect(w.fault)}"
+    reach(:trip, true)
+    reach(trip_kind(reason), true)
+    tripped(%{w | fault: nil}, reason)
+  end
+
+  defp event(w, {:restart, mode} = event) do
+    w = logged(w, event)
+    reach(:restart, true)
+    rt = Runtime.restart(w.rt, mode)
+
+    %{
+      w
+      | rt: rt,
+        status: :running,
+        trip: nil,
+        first: true,
+        floor: nil,
+        down: MapSet.new(),
+        hung: %{},
+        zeroed: %{},
+        logic: logic_values(w.config, rt)
+    }
+  end
+
+  defp event(w, {:edit, _step, _report} = event) do
+    w = logged(w, event)
+    reach(:edit, true)
+    assert [^event | rest] = w.expect
+    %{w | expect: rest}
+  end
+
+  defp event(_w, event), do: flunk("an event outside a round: #{inspect(event)}")
+
+  # A trip after every step of a round ran: the continuous task's watchdog over the round,
+  # or a device's fault as the round's outputs were written.
+  defp ended_trip([], w, round), do: round_trip(w, round) || w.fault
+  defp ended_trip(_steps, _w, _round), do: nil
+
+  defp all_steps([], w, took), do: %{w | longest: continuous_ran(w, took)}
+  defp all_steps(_steps, w, _took), do: w
+
+  defp tripped(w, reason) do
+    written =
+      Map.new(w.sims, fn {name, _sim} ->
+        {name, zeroed_unless_down(MapSet.member?(w.down, name), name, w)}
+      end)
+
+    %{w | status: :tripped, trip: reason, written: written}
+  end
+
+  defp zeroed_unless_down(true, name, w), do: Map.get(w.written, name)
+
+  defp zeroed_unless_down(false, name, _w),
+    do: Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+
+  # Decision 233, restated: an index fault reads every subscript in a tuple, here the one
+  # subscript of the panel's dint into a `dint[4]`, outside 0 to 3.
+  defp trip_kind({:fault, _task, _instance, %Logex.Fault{kind: :index_out_of_range} = fault}) do
+    assert {i} = fault.read
+    assert i not in 0..3
+    {:trip, :index_out_of_range}
+  end
+
+  defp trip_kind({:fault, _task, _instance, %Logex.Fault{kind: kind}}), do: {:trip, kind}
+  defp trip_kind({:watchdog, {kind, _, _, _, _}}), do: {:trip, kind}
+  defp trip_kind({:watchdog, {kind, _, _, _}}), do: {:trip, kind}
+  defp trip_kind({:watchdog, {kind, _, _}}), do: {:trip, kind}
+  defp trip_kind({:watchdog, {kind, _}}), do: {:trip, kind}
+  defp trip_kind({:io, _device, cause}) when is_atom(cause), do: {:trip, cause}
+  defp trip_kind({:io, _device, cause}), do: {:trip, elem(cause, 0)}
+
+  # A round that ran whole: the resource cycle/3 gives, its outputs written to every device
+  # that is up, and the logic's triggers sampled for the next.
+  defp round_ended(w, outputs) do
+    round = w.round
+    assert round.steps == [], "a round ended with steps left: #{inspect(round.steps)}"
+    assert round.trip == nil, "no trip came where one was due: #{inspect(round.trip)}"
+    assert round_trip(w, round) == nil, "no trip came where the round outlasted its watchdog"
+    assert round.rt == round.cycled
+    {logic, changed} = logic_changed(w, round.cycled)
+    reach(:logic_round, changed)
+
+    written =
+      Map.new(@outputs, fn {device, points} ->
+        {device, Map.new(points, fn {address, global} -> {address, outputs[global]} end)}
+      end)
+
+    %{
+      w
+      | rt: round.cycled,
+        round: nil,
+        rounds: w.rounds + 1,
+        outputs: outputs,
+        written: written,
+        first: false,
+        floor: nil,
+        logic: logic,
+        last: %{at: round.at, took: round.took, again: changed},
+        longest: continuous_ran(w, round.took)
+    }
+  end
+
+  defp round_trip(w, round), do: round_over(continuous(w.config), round, w)
+
+  defp round_over(nil, _round, _w), do: nil
+
+  defp round_over(task, round, w),
+    do: over(round.took > watchdog(task, w.config), task, round, w)
+
+  defp over(false, _task, _round, _w), do: nil
+
+  defp over(true, task, round, w),
+    do: {:watchdog, {:round, task, round.took, watchdog(task, w.config), round.times}}
+
+  defp continuous_ran(w, took) do
+    case continuous(w.config) do
+      nil -> w.longest
+      task -> Map.update(w.longest, task, took, &max(&1, took))
+    end
+  end
+
+  # ---- the rules restated ----------------------------------------------------------------
+
+  defp untimed?(%Configuration{tasks: tasks, instances: instances}) do
+    timed = for %Configuration.Task{continuous: false, name: name} <- tasks, do: name
+    Enum.any?(instances, &(&1.task not in timed))
+  end
+
+  defp continuous(config), do: continuous(untimed?(config), config)
+  defp continuous(false, _config), do: nil
+
+  defp continuous(true, config),
+    do: Enum.find_value(config.tasks, :none, &(&1.continuous && &1.name))
+
+  defp watchdog(:none, _config), do: 500
+
+  defp watchdog(task, config),
+    do: Configuration.watchdog(Enum.find(config.tasks, &(&1.name == task)))
+
+  defp longest(longest, config),
+    do:
+      Map.merge(
+        Map.new(Enum.map(config.tasks, & &1.name) ++ List.wrap(continuous(config)), &{&1, 0}),
+        longest
+      )
+
+  defp triggers(config),
+    do: for(%{single: single} <- config.tasks, Map.has_key?(@inputs, single || ""), do: single)
+
+  defp logic_values(config, rt),
+    do:
+      Map.new(
+        for(
+          %{single: single} <- config.tasks,
+          single != nil,
+          not Map.has_key?(@inputs, single),
+          do: {single, Runtime.get!(rt, single)}
+        )
+      )
+
+  defp logic_changed(w, rt) do
+    now = Map.new(w.logic, fn {name, _} -> {name, Runtime.get!(rt, name)} end)
+    {now, now != w.logic}
+  end
+
+  # A round is the first after a start or a restart, a trigger's (a change of an event
+  # task's trigger, from its device or a force, at once), or the schedule's.
+  defp round_kind(%{first: true}, _inputs), do: :first
+
+  defp round_kind(w, inputs) do
+    changed =
+      Enum.any?(triggers(w.config), fn name ->
+        Map.has_key?(inputs, name) and inputs[name] != Runtime.get!(w.rt, name)
+      end)
+
+    (changed && :trigger) || :scheduled
+  end
+
+  defp timed!(_w, :first, elapsed, _at), do: assert(elapsed == 0)
+
+  defp timed!(w, kind, elapsed, at) do
+    assert elapsed == at - w.last.at, "a round's elapsed time is the time since the last"
+    scheduled!(kind, w, at)
+  end
+
+  defp scheduled!(:trigger, _w, _at), do: :ok
+
+  defp scheduled!(:scheduled, w, at),
+    do: assert(at == next_at(w), "a round at #{at}, the schedule's at #{inspect(next_at(w))}")
+
+  # When the next scheduled round comes: back to back while untimed programs exist or
+  # logic changed a trigger (decisions 122 and 123), else the next periodic due time; never
+  # before the last round ended, nor before a step it waited behind.
+  defp next_at(%{last: last} = w) do
+    again = untimed?(w.config) or last.again
+    gap = earliest(back_to_back(again, last.took), due_in(Runtime.next_due_in(w.rt)))
+    planned(gap, last, w.floor)
+  end
+
+  defp back_to_back(false, _took), do: nil
+  defp back_to_back(true, took), do: max(took, 1)
+
+  defp due_in(:infinity), do: nil
+  defp due_in(ms), do: ms
+
+  defp earliest(nil, other), do: other
+  defp earliest(one, nil), do: one
+  defp earliest(one, other), do: min(one, other)
+
+  defp planned(nil, _last, _floor), do: nil
+  defp planned(gap, last, floor), do: max(last.at + max(gap, last.took), floor || 0)
+
+  # After the clock moved, no scheduled round is left owed up to the advance's target:
+  # one due later, after time passed inside a step, waits for the next advance.
+  defp missed(%{status: :running, last: last} = w, target) when last != nil do
+    at = next_at(w)
+    assert at == nil or at > target, "a round due at #{at} had not come by #{target}"
+    w
+  end
+
+  defp missed(w, _target), do: w
+
+  # Each input point as the round reads it: a force's value, exactly; a reporting
+  # device's as it is now; and a read device's as it was within two poll periods, and the
+  # time passed inside steps while it was read, of now.
+  defp inputs!(w, inputs, at) do
+    for {name, value} <- w.forces, do: assert(inputs[name] == value)
+
+    passes = for {_key, pass} <- :ets.match_object(@table, {{self(), :pass, :_}, :_}), do: pass
+
+    for {name, {device, _address, _type}} <- @inputs, not Map.has_key?(w.forces, name) do
+      value = Map.get(inputs, name, Runtime.get!(w.rt, name))
+      to = min(at, Map.get(w.hung, device, at))
+      held = held(w.timeline[name], to - window(w, device, passes, to), to) ++ unforcing(w, name)
+      assert value in held, "#{name} read #{value} at #{at}, held #{inspect(held)}"
+    end
+  end
+
+  # Each trigger an unforce of all changes is its own round, reading those after it as
+  # they were, forced (decision 138).
+  defp unforcing(w, name), do: List.wrap(w.unforcing[name])
+
+  # A start's and a restart's first round reads every device as it is then (decision 142).
+  defp window(%{first: true}, _device, _passes, _to), do: 0
+
+  defp window(w, device, passes, to),
+    do: reported(w.reports[device] and not MapSet.member?(w.lossy, device), w, passes, to)
+
+  # A read device's last read is within a poll period, or two where a read failed, of
+  # now, and the time passed inside steps while it was read: each pass that ended within
+  # that window held its polls back for as long as it passed, which widens the window in
+  # turn.
+  defp reported(true, _w, _passes, _to), do: 0
+  defp reported(false, w, passes, to), do: allowed(2 * w.poll + 1, 2 * w.poll + 1, passes, to)
+
+  defp allowed(window, read, passes, to) do
+    passed = for {at, ms} <- passes, at + ms > to - window, reduce: 0, do: (sum -> sum + ms)
+    widened(read + passed, window, read, passes, to)
+  end
+
+  defp widened(window, window, _read, _passes, _to), do: window
+  defp widened(wider, _window, read, passes, to), do: allowed(wider, read, passes, to)
+
+  defp held(timeline, from, to) do
+    {within, before} = Enum.split_while(timeline, fn {at, _} -> at > from end)
+    {_at, then} = List.first(before, {0, 0})
+    [then | for({at, value} <- within, at <= to, do: value)]
+  end
+
+  # ---- the checks after every step -------------------------------------------------------
+
+  # A round owed is run before a host's call, which would otherwise wait for the share's
+  # slot (decision 131).
+  defp settled(%{status: :running, last: last} = w) when last != nil do
+    owed(untimed?(w.config) and next_at(w) <= now(w), w)
+  end
+
+  defp settled(w), do: w
+
+  defp owed(false, w), do: w
+
+  defp owed(true, w) do
+    :ok = Manual.advance(w.manual, 0)
+    settled(consumed(w))
+  end
+
+  defp checked(w) do
+    w = settled(w)
+    assert w.round == nil
+    assert w.expect == []
+    status = Runner.status(w.runner)
+
+    assert Map.take(status, [:status, :trip, :rounds, :now, :overlaps, :forces, :edit]) == %{
+             status: w.status,
+             trip: w.trip,
+             rounds: w.rounds,
+             now: w.logical,
+             overlaps: Runtime.overlaps(w.rt),
+             forces: w.forces,
+             edit: w.edit && ConfigEdit.stage(w.edit)
+           }
+
+    assert status.runs ==
+             Map.new(w.longest, fn {task, ms} -> {task, {ms, watchdog(task, w.config)}} end)
+
+    for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
+
+    for {name, sim} <- w.sims, Map.has_key?(w.written, name) do
+      assert Sim.outputs(sim) == w.written[name], "#{name}'s outputs"
+    end
+
+    zeroed_once(w)
+  end
+
+  # Every output written 0 once at a trip, and nothing after it until a restart.
+  defp zeroed_once(%{status: :tripped} = w) do
+    counts = Map.new(w.sims, fn {name, sim} -> {name, length(Sim.writes(sim))} end)
+
+    for {name, count} <- w.zeroed do
+      assert counts[name] == count, "#{name} was written while tripped"
+    end
+
+    %{w | zeroed: Map.merge(counts, w.zeroed)}
+  end
+
+  defp zeroed_once(w), do: w
+
+  defp reach(name, true),
+    do: Process.put(:runner_reach, MapSet.put(Process.get(:runner_reach), name))
+
+  defp reach(_name, _false), do: :ok
+end
