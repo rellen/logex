@@ -942,10 +942,18 @@ defmodule Logex.LocatedArrayTest do
         start
       )
 
-      File.write!(file, "temps 1 2 3\n")
+      File.write!(file, "temps 1 2 3\ntemps[0] 1\n")
 
       raises(
-        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 3",
+        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 3\n" <>
+          "#{file}: line 2: `temps[0]` is forced on line 1 already",
+        start
+      )
+
+      File.write!(file, "temps 1 2 3 4 5 6 7 8 9\n")
+
+      raises(
+        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 9",
         start
       )
 
@@ -1045,6 +1053,52 @@ defmodule Logex.LocatedArrayTest do
       assert Runner.status(runner).forces ==
                Map.new(tl(Enum.with_index(expected)), fn {v, i} -> {"temps[#{i}]", v} end)
 
+      Runner.stop(runner)
+    end
+
+    # Decision 241: a whole force's misfits, ten and then a count, nothing forced.
+    test "a whole force's misfits are ten and then a count", %{tmp_dir: dir} do
+      {:ok, grid} =
+        Logex.compile("var_input ti int[12]\nvar_output q bool\ngt ti[1] 0 ote q", name: "grid12")
+
+      {:ok, c} =
+        Configuration.compile(
+          "g",
+          "task fast interval 10 priority 1\nvar_global ti int[12] at card.i.0\n" <>
+            "var_global q bool at card.q.0\nprogram g grid12 with fast\ng.ti ti\ng.q q\n",
+          %{"grid12" => grid}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, card} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: c,
+          io: %{"card" => {Sim, sim: card}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      lines =
+        for i <- 0..9,
+            do: "`ti[#{i}]` is an int, forced to an integer from -32768 to 32767, got: 1.5"
+
+      for {bad, more} <- [{11, "1 more element"}, {12, "2 more elements"}] do
+        raises(
+          Enum.join(lines, "\n") <>
+            "\n`ti` is an array of 12 ints, with #{more} outside its type, not listed",
+          fn ->
+            Runner.force(runner, "ti", List.duplicate(1.5, bad) ++ List.duplicate(0, 12 - bad))
+          end
+        )
+      end
+
+      raises(Enum.join(lines, "\n"), fn ->
+        Runner.force(runner, "ti", List.duplicate(1.5, 10) ++ [0, 0])
+      end)
+
+      assert Runner.status(runner).forces == %{}
       Runner.stop(runner)
     end
 
