@@ -183,12 +183,23 @@ defmodule Logex.TagSubscriptTest do
     test "a real element is written as its nearest real, an integer widened into it" do
       p =
         program(
-          "var_input i int\nvar_input a int\nvar r real[2]\nvar_output o real[2]\n" <>
-            "move 0.1 r[i]\nmove a r[1]\nmove r[0] o[0]\nmove r[1] o[1]"
+          "var_input i int\nvar_input j int\nvar_input a int\nvar_input x real\n" <>
+            "var r real[2]\nmul x 3.0 r[i]\nmove a r[j]"
         )
 
-      {outputs, []} = scan(p, %{"i" => 0, "a" => 7})
-      assert outputs["o"] === [0.10000000149011612, 7.0]
+      state = Runtime.instance(p)
+
+      {_outputs, state} =
+        Runtime.call(p, state, %{"i" => 0, "j" => 1, "a" => 7, "x" => 0.1}, %Scan{
+          now: 0,
+          first: true
+        })
+
+      # Restated: the single nearest 0.1, times 3 in a double, held as its nearest single.
+      <<x::float-32>> = <<0.1::float-32>>
+      <<product::float-32>> = <<x * 3.0::float-32>>
+      assert product != x * 3.0
+      assert state.env["r"] === {product, 7.0}
     end
 
     test "a real literal its element's real cannot keep is warned, as a tag's is" do
@@ -951,7 +962,7 @@ defmodule Logex.TagSubscriptTest do
     # took at e00ae03, before M5-12: an instruction is caught only where its clause's head
     # sees such an element among its operands. A `cal` is caught as it was.
     # The type an arithmetic, bitwise or root instruction computes in is read from an
-    # element's array in the scan's table, with no rule asked.
+    # element's array in the scan's table, with no rule asked (`Logex.Program.destination/3`).
     test "an element a tag subscripts as a destination costs what a literal one does, and its read" do
       for {head, tagged, literal} <- [
             {"var_input i int\nvar_input a int\nvar w int[8]\n", "add a 1 w[i]", "add a 1 w[3]"},
@@ -963,7 +974,9 @@ defmodule Logex.TagSubscriptTest do
         _warm = per_rung(fixed(head), fn _ -> tagged end)
         t = per_rung(fixed(head), fn _ -> tagged end)
         l = per_rung(fixed(head), fn _ -> literal end)
-        assert t <= l + 6, "#{tagged} took #{t} a rung, #{literal} #{l}"
+        # Measured: 5 reductions a rung more, the subscript's read, its check and the
+        # instruction's catch, and no more: a type asked of the one rule would cost one.
+        assert t == l + 5, "#{tagged} took #{t} a rung, #{literal} #{l}"
       end
     end
 
