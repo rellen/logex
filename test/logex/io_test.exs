@@ -653,7 +653,10 @@ defmodule Logex.IOTest do
             {eight, &Sim.set(&1, [0, 1], 1),
              "the sim has 8 inputs, at the addresses [0] to [7], got: [0, 1]"},
             {one, &Sim.set(&1, [1], 1),
-             "the sim has 1 input, at the addresses [0] to [0], got: [1]"}
+             "the sim has 1 input, at the addresses [0] to [0], got: [1]"},
+            # The first past in order, whatever order a map of many keys gives them in.
+            {eight, &Sim.set(&1, Map.new(8..47, fn i -> {[i], 1} end)),
+             "the sim has 8 inputs, at the addresses [0] to [7], got: [8]"}
           ] do
         assert_raise ArgumentError, message, fn -> set.(sim) end
         assert GenServer.call(sim, {:inputs, [[0], [1], [7]]}) == %{[0] => 0, [1] => 0, [7] => 0}
