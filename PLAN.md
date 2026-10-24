@@ -155,7 +155,15 @@ host's array input a list of its shape; an edit refusing a size changed and repo
 initial list element by element; and in a configuration unlocated global arrays,
 `var_external` arrays bound exactly, connections whole and by element and `get/2` paths,
 with four questions put to the maintainer (§3, M5-11), and its review's fixes the same
-day, with two more (questions 5 and 6).
+day, with two more (questions 5 and 6); and the maintainer's answers to those six and to
+M5-10's three follow-ups the same day (decisions 220 to 228, §3, M5-10 and M5-11), three
+confirming what was built and six changes: a bit of an array element, `faults[2].3` and
+`faults[2].[n]`, wherever a tag's bit goes; a host setting one element of an input array,
+`%{"steps[3]" => 5}`; an element of a global array at a connection's far end, `m2.speed
+speeds[1]`; a forces file's integer or bool line in any spelling of a number, `level
+16#ff`; a rounded real initial value warned of, `var sp real 16777217.0`; and a literal
+too near 0.0 for an lreal, `move 1.0e-310 big`, refused by its slot naming the
+instruction and the tag.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6684,6 +6692,20 @@ the walks' cross-type reach and the documents.
      Logix states the LREAL range as its normal values and 0.0 (1756-RM018A p.874); what
      its editor does with such a constant is **unverified**.
 
+  **The maintainer's answers** to these three, 2026-10-23 (decisions 226 to 228), all
+  three changes, landed with M5-11's in the commits below: (1) an integer or bool point's
+  line takes any number spelling the lexer reads as one literal, `eye_1 01` and `level
+  16#ff`, held to the point's type, one outside it refused, the next force writing it in
+  plain decimal (decision 226); (2) a rounded initial value is warned of in decision 219's
+  words at the declaration's line, a program's read from the parse tree's literal, which
+  keeps its spelling where the tag table keeps its value, and a configuration line's from
+  its tokens (decision 227); (3) `move 1.0e-310 big` into an `lreal` is refused when the
+  program compiles, "`move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for
+  an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as
+  0.0", the lexer reading a literal whose double is subnormal as that double, and only one
+  no double holds but 0.0, `1.0e-400`, still a lex error (decision 228, provisional for
+  that one).
+
   In three gated commits and one of documents. `396c459` records 11 curated sources in the
   front end's golden record, real literals nearer 0.0 than an lreal's smallest normal
   value and their edges, recorded by the front end before decision 216. `770ea48` lands
@@ -6964,6 +6986,114 @@ the walks' cross-type reach and the documents.
      ten; (b) every element, a line each, as decision 171 reads; (c) a count alone with
      the first element named. IEC and Logix have no host contract of this kind
      (unverified).
+  **The maintainer's answers**, 2026-10-23 (decisions 220 to 225). (1) *Confirmed*: up
+  to 65,536 elements in all, of any shape, the cost the engineer's (decision 220). (2)
+  *Changed*: a bit of an element, `faults[2].3` and `faults[2].[n]`, wherever the same bit
+  of a plain tag is, by every rule of a tag's bit, a one-shot's storage bit a literal one
+  only (decision 221), superseding provisional reading 2. (3) *Changed*: a host may set
+  one element of an input array, `%{"steps[3]" => 5}`, the rest kept (decision 222),
+  superseding provisional reading 4; the record settles a multi-dimensional key, one
+  subscript a dimension, `"grid[1,2]"`, a subscript out of range a pinned
+  `ArgumentError`, and a whole key beside an element key in one call refused
+  (provisional). (4) *Changed*: a connection's far end may be an element of a global
+  array, `m2.speed speeds[1]`, widening by Figure 11, the writer warnings element by
+  element (decision 223), superseding provisional reading 8's last clause. (5)
+  *Confirmed*: "is more precise than a real keeps" (decision 224). (6) *Confirmed*: ten
+  bad elements, then a count (decision 225).
+
+  *The answers landed (2026-10-23), with M5-10's three follow-ups (decisions 226 to 228),
+  in three gated commits and one of documents.* `a97371e` records 16 curated sources in the
+  front end's golden record, a bit of an element in every spelling a bit takes and the
+  shapes that stay refused, recorded by the front end before the answer, which already
+  read them as one name token, and gives the printer's generator `faults[2].3` and
+  `grid[1,2].[n]` and `@required_shapes` `:element_bit_name`. `0a2d8f5` lands the nine
+  decisions with their tests: decision 221 in the compiler (an element bit's container
+  the element's own operand in the IR, told from a tag's by its container's last byte in
+  `bit_ir_of/4`'s head), the runtime, `Logex.Walk` (a new `element_writes/1`), the
+  warnings, the edit's plan (its comparison by element and number, and its block list,
+  which blocks a storage bit in an element the program that last scanned writes whole)
+  and a configuration's writers; decision 222 in `merge!/3`; decision 223 in `check/1`,
+  the runtime's wiring, `{:at, array, index}`, and the configuration edit's held
+  globals; decision 226 in the forces reader, its dead path for a subnormal removed;
+  decision 227 in `Logex.Warnings.initials/2`, the compiler and `lowered?/1`, and
+  `Logex.Configuration.Text.read_rounded/1`; and decision 228 in the lexer, the golden
+  record regenerated on purpose and its diff read, five of decision 216's eleven sources,
+  each a subnormal double, now parsing and nothing else changed, the printer's generator
+  drawing a subnormal, `:subnormal_real_lit`, with the lexer that reads it, since before
+  it no subnormal parsed. Tests: `element_bit_test.exs` (new), `array_test.exs`'s limit in
+  every shape and a host's element key, `array_configuration_test.exs`'s far end,
+  `force_test.exs`'s spelled integer lines, `real_test.exs`'s rounded initial values and
+  subnormal literals, and the contract walk's arrays drawing a bit of an element read and
+  written, a host's element key and an element of a global array at a far end, its reach
+  grown by four. Cost against `e60cc0a`, 26 programs (`a10/cost_base.txt` and
+  `a10/cost_now.txt`): every program scans in exactly what it did but one of arrays,
+  whose call with its inputs costs 5 reductions more, a reduction a key and four for the
+  look; every program of no real compiles in two reductions more, and one of reals in
+  0.4% to 3.5% more, its declaration lines read for the warning; every source tokenizes
+  in what it did. A bit of an element reads in what a tag's bit does, 27 reductions a
+  rung, and is written in one more. README's `fan.exs` and `weigh.exs` re-run, the first
+  showing a subnormal refused and a rounded declaration warned, the second an element set
+  alone, two keys refused and a bit of an element. The mutation table, each mutant judged
+  by the full suite's exit code (`a10/mut/run.log`), on `0a2d8f5`: B1 to B22
+  (decision 221: an element's bit refused as before, lowered with no element container,
+  read as 0, written over its word, its one-shot rule, use, name, write, warnings, edit
+  operand and plan, and `lowered?/1`), H1 to H8 (decision 222: the key refused, its count,
+  range and tag checks, the two clashes, a real element's rounding and the key filter),
+  C1 to C14 (decision 223: the far end refused, its count, range and tag checks, the
+  array's use, the two drivers, the writer warnings, the copy out and in, and an edit's
+  held element), S1 and S2 (decision 226), I1 to I7 (decision 227: the warning dropped, a
+  rung read as a declaration, `lowered?/1`'s, an array global's, the configuration's, and
+  only the first literal of a list) and L1 and L2 (decision 228: a subnormal still a lex
+  error, and `1.0e-400` read as 0.0), all red but six: B19 and B20 (a storage bit of an
+  element never blocked, and not kept listed on a rung a jump skips), C13 (a far end's
+  element held under its spelling), C14 (a host-built runtime's array unchecked where only
+  an element of it is read) and I2 (any rung naming a real tag second read as a
+  declaration) survived, and C10 (a real global array's element written an int from a
+  var_output) survived as an equivalent mutant, its `+ 0 * as_real(to, 0)` making 7 the
+  float 7.0; `072c914` pins each, tests only, after which B19, B20, C13, C14 and I2 are
+  red on it, and C10b, the widening dropped outright, survives on `0a2d8f5` and is red on
+  `072c914`.
+  2047 tests (10 doctests), up from 2013.
+
+  *Provisional readings* (the answers): (1) a whole key beside an element key in one call,
+  and two keys naming one element, are refused; (2) a key naming a row of a
+  multi-dimensional array, `"grid[1]"`, is refused, one subscript a dimension; (3) a real
+  literal no double holds but 0.0, `1.0e-400`, stays a lex error; (4) an edit that leaves
+  an element no connection drives any more reports it held by name and value, and one
+  that replaces a whole-array driver by element drivers reports the array held whole;
+  (5) a bit of an element's IR container is the element's own operand; (6) a printed
+  configuration spells a rounded initial value as the value held, so it reads back
+  unwarned.
+
+  **Questions for the maintainer** (the answers' open readings), each taken
+  provisionally as written, the closest reading to the record:
+
+  1. *A whole array and one of its elements in one call.* The recipe panel sends the ten
+     steps of `var_input steps int[10]` and, in the same message, `"steps[3]" => 5`. As
+     built the call is refused, "inputs `steps` and `steps[3]` each set `steps` … a call
+     sets an array whole or by its elements, not both", and so is `"steps[3]"` beside
+     `"steps[03]"`; the operator sees the HMI's write rejected and the old recipe kept.
+     The options: (a) as built; (b) the whole first and then the element, so step 3 is
+     5; (c) the element ignored. A map has no order a host can see, which is why (a) was
+     taken. Logix has no host contract of this kind (**unverified** for an HMI's writes).
+  2. *A row of a grid from a host.* `var_input grid int[4,8]` holds four lines of eight
+     settings, and an HMI sends one line, `"grid[1]" => [1, 2, 3, 4, 5, 6, 7, 8]`. As
+     built it is refused, told an element takes one subscript a dimension. The options:
+     (a) as built; (b) a row by its leading subscripts, a list of the remaining shape.
+     Logix names a row of a multi-dimensional array in some instructions' operands, not
+     as one tag (**unverified** here).
+  3. *A literal no float holds.* `move 1.0e-400 big` into an `lreal` is refused as it
+     lexes, "`1.0e-400` is no number logex holds", where `move 1.0e-310 big` is refused by
+     its slot naming the instruction and the tag (decision 228). The options: (a) as
+     built; (b) read as 0.0 with its spelling kept and refused by the slot in the same
+     words, "it would be written as 0.0". The operator never sees either run; only the
+     message differs. IEC and Logix say nothing found of such a literal.
+  4. *A driver changed from the whole array to its elements by an edit.* `m1.o speeds`
+     drives a global array whole, and an edit replaces it by `m2.s speeds[1]`. As built
+     the edit reports `speeds` held whole, though one element is driven again; the
+     operator sees every speed but the second keep its last value either way. The
+     options: (a) as built; (b) each element no connection drives any more reported held
+     by name. Logix reports no such hold (decisions 20 and 58 are logex's own).
 - **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
   of any integer width, the run-time check where the element is read or written, the
   major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
@@ -7612,7 +7742,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23, and arrays by literal subscripts, `Arr[3]`, with M5-11 the same day; a subscript held in a tag open, decided for Milestone 5 on 2026-10-21 (§3, M5-12) |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23, and arrays by literal subscripts, `Arr[3]`, with M5-11 the same day, and a bit of an element, `Arr[3].2`, with decision 221; a subscript held in a tag open, decided for Milestone 5 on 2026-10-21 (§3, M5-12) |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 

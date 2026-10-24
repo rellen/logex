@@ -160,7 +160,8 @@ file's does:
   fits it; a `var_output` drives a global of its type or one it widens into, never an
   input point, and one connection at most drives a global. An array connects whole to a
   global array of its sizes, its elements widening so, or an element by itself,
-  `m1.limits[2] 50`, an array `var_input` connected whole or at every element. Names
+  `m1.limits[2] 50`, an array `var_input` connected whole or at every element; and a far
+  end may be an element of a global array, `m2.speed speeds[1]` (decision 223). Names
   resolve over the whole file
 - `task single interval priority with program var_global at` and the type words, `bool`
   and the eight integer widths, are reserved in
@@ -1364,7 +1365,8 @@ sqrt hz root ote root_ok
 ```
 
 `fan.exs` scans it five times, gives it a frequency too big for a `real`, compiles a
-literal and nine instructions that cannot work, and one whose literal a `real` rounds:
+literal and ten instructions that cannot work, and a declaration and an instruction whose
+literal a `real` rounds:
 
 ```elixir
 {:ok, fan} = Logex.compile_file("fan.ld")
@@ -1396,16 +1398,21 @@ IO.puts(Logex.Diagnostic.format(lexed))
 
 {:error, diagnostics} =
   Logex.compile(
-    "var speed real\nvar count dint\nvar rpm int\nvar on bool\n" <>
+    "var speed real\nvar count dint\nvar rpm int\nvar on bool\nvar big lreal\n" <>
       "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
-      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed",
+      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed\n" <>
+      "move 1.0e-310 big",
     name: "wrong"
   )
 
 for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
 
 {:ok, rounded} =
-  Logex.compile("var_output speed real\nmove 16777217.0 speed\nmove 37.1 speed", name: "rounded")
+  Logex.compile(
+    "var_output speed real\nvar_output set_point real 16777217.0\nmove 16777217.0 speed\n" <>
+      "move 37.1 speed\nmove 37.1 set_point",
+    name: "rounded"
+  )
 
 for warning <- rounded.warnings, do: IO.puts(Logex.Diagnostic.format(warning))
 ```
@@ -1420,16 +1427,18 @@ $ mix run fan.exs
 16777217 Hz   %{"precise" => 1006632960.0, "root" => 4096.0, "root_ok" => 1, "rpm" => 0, "speed" => 1006632960.0, "whole" => 0}
 input `hz` is a real: 340282366920938463463374607431768211456 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38
 line 2, column 6: "1.5e+3" is no number: logex takes no `+`, so an exponent is `e3` or `e-3`
-line 5: `move` writes `16777217` into `speed`, a real: it is no value of a real, which holds integers exactly only to 2^24: the nearest it holds is 16777216.0
-line 6: `move` writes `speed`, a real, into `rpm`, an int: a real does not widen into an int, so convert it with `real_to_int`
-line 7: `gt` compares `speed`, a real (declared on line 1), with `count`, a dint (declared on line 2): a dint does not widen into a real, so convert it first, with `dint_to_real`
-line 8: `div` divides by the literal `0.0`: a zero divisor gives 0.0 and passes no power on every scan, so a literal one is refused
-line 9: `mod` reads an integer, but `speed` is a real (declared on line 1)
-line 10: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.0, passes no power and raises a minor fault on every scan, so a literal one is refused
-line 11: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
-line 12: `speed.3` names a bit of `speed`, a real, which has no bits
-line 13: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
+line 6: `move` writes `16777217` into `speed`, a real: it is no value of a real, which holds integers exactly only to 2^24: the nearest it holds is 16777216.0
+line 7: `move` writes `speed`, a real, into `rpm`, an int: a real does not widen into an int, so convert it with `real_to_int`
+line 8: `gt` compares `speed`, a real (declared on line 1), with `count`, a dint (declared on line 2): a dint does not widen into a real, so convert it first, with `dint_to_real`
+line 9: `div` divides by the literal `0.0`: a zero divisor gives 0.0 and passes no power on every scan, so a literal one is refused
+line 10: `mod` reads an integer, but `speed` is a real (declared on line 1)
+line 11: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.0, passes no power and raises a minor fault on every scan, so a literal one is refused
+line 12: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
+line 13: `speed.3` names a bit of `speed`, a real, which has no bits
+line 14: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
+line 15: `move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
 line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
+line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 ```
 
 - `real` and `lreal` are IEC's 32- and 64-bit floating point, declared wherever an
@@ -1448,8 +1457,9 @@ line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   are refused when the program compiles. So is a real literal outside its real's normal
   range, in both directions (decision 216): past the largest, and so near 0.0 that a
   write would flush it, `move 1.0e-40 speed` above, 0.0 itself taken however it is
-  written; one nearer 0.0 than an lreal's smallest normal value, `1.0e-310`, is no number
-  logex holds at all, refused as it lexes.
+  written, and so in an lreal for one nearer 0.0 than its smallest normal value,
+  `move 1.0e-310 big` above (decision 228); only a literal no double holds but 0.0,
+  `1.0e-400`, is no number logex holds at all, refused as it lexes.
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
   `real`, a `dint` into an `lreal` only, and a `real` into an `lreal`; any other pair is
   told its conversion, `dint_to_real`. An integer literal in a real's slot is the value it
@@ -1458,7 +1468,9 @@ line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   real its slot computes in, so `move 37.1 sp` then `eq sp 37.1` is true in a `real`;
   one more precise than that real keeps, whose number is neither the value held nor
   the shortest text of it, compiles with a warning naming what it is held as,
-  `16777217.0` above, where `0.1` and `37.1` are not warned of (decision 219). An
+  `16777217.0` above, where `0.1` and `37.1` are not warned of (decision 219), and so is
+  a declaration's or a configuration global's initial value, `var_output set_point real
+  16777217.0` above, at its line (decision 227). An
   integer at a real point, from a host, a device or a force, is stored as its nearest
   real, and only one past the real's range is refused, or trips the plant as a bad value
   (decision 166).
@@ -1472,8 +1484,8 @@ line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   never `fan_hz 0.10000000149011612`, and read back exactly (decision 156); a forces
   file edited by hand may give a real point any number the lexer reads as one literal,
   `fan_hz 37.50`, `3.75e1` or `37`, held at its nearest value and written again in the
-  runner's spelling at the next force (decision 218), an integer point's line still its
-  plain decimal. An online edit compares an initial value exactly, so `var x real 0`
+  runner's spelling at the next force (decision 218), and since decision 226 an integer
+  or bool point any integer so, `eye_1 01` or `level 16#ff`, held to its type. An online edit compares an initial value exactly, so `var x real 0`
   changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
 - `real`, `lreal`, `sqrt`, the 34 conversions and the 16 truncations are reserved in any
   case in every `.ld` file, and the two type words in every `.logex` file too.
@@ -1505,8 +1517,9 @@ gt weights[3] 500 ote heavy
 move grid[1,7] fourth
 ```
 
-`weigh.exs` picks five loads, compiles six lines that cannot work, and sets an array
-input of the wrong length:
+`weigh.exs` picks five loads, compiles six lines that cannot work, sets an array input of
+the wrong length, then one element of it alone and two keys it refuses, and reads a bit
+of an element, by a literal number and by a tag:
 
 ```elixir
 {:ok, weigh} = Logex.compile_file("weigh.ld")
@@ -1544,6 +1557,36 @@ try do
 rescue
   error in ArgumentError -> IO.puts(Exception.message(error))
 end
+
+state = Logex.Runtime.put_inputs(buffer, Logex.Runtime.instance(buffer), %{"w" => [1, 2, 3]})
+state = Logex.Runtime.put_inputs(buffer, state, %{"w[1]" => 20})
+IO.inspect(state.env["w"], label: "w[1] set alone")
+
+for inputs <- [%{"w[3]" => 1}, %{"w" => [1, 2, 3], "w[1]" => 5}] do
+  try do
+    Logex.Runtime.put_inputs(buffer, state, inputs)
+  rescue
+    error in ArgumentError -> IO.puts(Exception.message(error))
+  end
+end
+
+{:ok, lamp} =
+  Logex.compile(
+    "var_input faults word[4]\nvar_input n int\nvar_output lamp bool\nvar_output any bool\n" <>
+      "xic faults[2].3 ote lamp\nxic faults[2].[n] ote any",
+    name: "lamp"
+  )
+
+{outputs, _} =
+  Logex.Runtime.call(
+    lamp,
+    Logex.Runtime.instance(lamp),
+    %{"faults" => [0, 0, 0b1000, 0], "n" => 3},
+    %Logex.Scan{now: 0, first: true}
+  )
+
+IO.inspect(outputs, label: "faults[2].3 and faults[2].[n]")
+
 ```
 
 ```
@@ -1566,6 +1609,10 @@ line 8: `grid[1]` names an element of `grid`, an array of 4 by 8 ints (declared 
 line 9: `weights[slot]`'s subscript `slot` is a tag's name: an element's subscript is a literal number, as in `weights[0]`, until a subscript held in a tag is supported
 line 10: `move` reads one tag, but `weights` is an array of 8 ints (declared on line 1): an instruction takes one of its elements, as in `weights[0]`
 input `w` is an array of 3 ints: its value must be a list of 3 elements, found [1, 2]
+w[1] set alone: {1, 20, 3}
+input `w[3]`'s subscript 3 is outside the elements of `w`, 0 to 2: `w` is an array of 3 ints (declared on line 1)
+inputs `w` and `w[1]` each set `w`, an array of 3 ints (declared on line 1): a call sets an array whole or by its elements, not both
+faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
 ```
 
 - An array is declared with its sizes after its elementary type, one to three
@@ -1576,13 +1623,17 @@ input `w` is an array of 3 ints: its value must be a list of 3 elements, found [
   10 20 30`; a list of another length is refused, where IEC truncates or fills.
 - An element, `weights[3]` or `grid[1,7]`, is a tag of the elements' type wherever one
   goes, read by a contact or `move`, written by a coil or an instruction, and an
-  `ons edges[0]` keeps its storage bit there (decision 154); its subscripts are literal
+  `ons edges[0]` keeps its storage bit there (decision 154); a bit of one, `faults[2].3`
+  or `faults[2].[n]`, is a bit as a tag's is, Logix's `Name[Element].Bit` (1756-PM004L
+  p.44), a one-shot's storage bit taking a literal number only (decision 221); its subscripts are literal
   numbers, checked against each dimension when the program compiles, so `weights[8]` in
   an `int[8]` is refused at its line. A subscript held in a tag, `weights[slot]`, is
   refused until M5-12 lands it; an instruction never takes an array whole. The first
   pick above shifts nothing: a one-shot never fires on a first scan.
 - A host sets an array `var_input` whole, a list of its first dimension's size, a list of
-  lists for more, each element checked as a tag's value is; an array `var_output` comes
+  lists for more, each element checked as a tag's value is, or one element alone by its
+  name, `%{"w[1]" => 20}`, every other kept, a call never setting the array both ways nor
+  an element twice (decision 222); an array `var_output` comes
   back as such a list, and so does `Logex.Runtime.get/2`, which names an element as logic
   does, `m1.weights[3]` or a global's `limits[2]`. A state holds an array as a tuple, a
   tuple of tuples for more dimensions, which every scan checks as it takes the state, an
@@ -1592,11 +1643,13 @@ input `w` is an array of 3 ints: its value must be a list of 3 elements, found [
 - In a configuration an array may be a `var_global`, not yet located (M5-13), a
   `var_external` binding only to a global array of exactly its type and sizes (decision
   159), and a connection names an array whole, to a global array of its sizes, or an
-  element, `m1.limits[2] 50`. A global is always named whole, so a connection's far end
-  or a task's single that names an element, `limits[2]`, is refused, and a single that is
-  an array is no bool. Two instances that write different elements of one global array
-  through their `var_external`s each keep theirs, and are warned only where they write
-  the same element.
+  element, `m1.limits[2] 50`. A connection's far end may be an element of a global array,
+  `m2.speed speeds[1]`, read or driven as a global of its elements' type, one connection
+  at most driving each element (decision 223); a task's single is a global named whole,
+  and a single that is an array is no bool. Two instances that write different elements
+  of one global array through their `var_external`s each keep theirs, and are warned only
+  where they write the same element, a bit of one a write of it, or where a connection
+  drives it or its array whole.
 - An online edit refuses an array whose type, dimensions or sizes change, and reports a
   changed initial list element by element, `{:initial_changed, "limits[1]", {20, 25}}`,
   the running values kept (decision 157).
@@ -2870,8 +2923,9 @@ stage: nil
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
   such force named, and the runner does not start; the file is read exactly as the runner
-  writes it, a comment or a blank line refused, and an unforce of a point not forced is
-  accepted (decision 140); with no runner, deleting the file clears every force.
+  writes it, a comment or a blank line refused, a value any number the lexer reads as
+  one literal and the point's type holds (decisions 218 and 226), and an unforce of a
+  point not forced is accepted (decision 140); with no runner, deleting the file clears every force.
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's

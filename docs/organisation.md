@@ -3729,7 +3729,12 @@ function, 917,000 reductions; a write copies besides, as the spike measured. A g
 named whole, so a connection's far end or a task's single naming an element is refused;
 two instances writing different elements of one global array through their
 `var_external`s are each a writer of their own element (decision 48's warnings by
-element).)*
+element).)* *(The maintainer's answers of 2026-10-23, decisions 220 to 225: the limit
+confirmed in every shape (220); a bit of an element, `faults[2].3` or `faults[2].[n]`,
+wherever a tag's bit goes (221); a host setting one element by its name, `"steps[3]"`
+(222); a connection's far end an element of a global array, `m2.speed speeds[1]`, which
+a task's single is not (223); and the refusals' ten lines and the warning's words
+confirmed (224, 225).)*
 
 **The major fault** (decisions 153 and 160, amending decisions 99 and 113). An index or a
 tag bit number out of range is a major fault. The instruction does nothing, each as the
@@ -8982,6 +8987,10 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
      **unverified**. IEC says nothing of a constant outside a type's range. This
      supersedes provisional reading 3's second half and M5-10's review's "a literal below
      the normal range is 0.0 in either real's slot, `eq l 1.0e-310` true of an lreal 0.0".
+     *(Changed by decision 228, 2026-10-23: a literal whose double is subnormal,
+     `1.0e-310`, lexes as that double and is refused by its slot in this decision's words,
+     "too near 0.0 for an lreal … it would be written as 0.0"; only one no double holds
+     but 0.0, `1.0e-400`, is still no number logex holds, a lex error.)*
 217. **A flushed result's power (Milestone 5),** M5-10's third question, following
      decision 150. **Taken: confirmed as built** (the maintainer, 2026-10-23): `mul a a
      speed` with `a` at 1.0e-30 writes 0.0 into a `real` `speed` and passes power, the
@@ -9014,7 +9023,8 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
      - An integer or bool point's line keeps decision 140's reading, its plain decimal
        only, so `eye_1 01` and `level 16#ff` are still no force (provisional: the answer
        named a real point); a real at an integer point, `level 37.50`, is told it does not
-       fit, as `level 37.5` was.
+       fit, as `level 37.5` was. *(Changed by decision 226, 2026-10-23: an integer or bool
+       point's line takes any number spelling the lexer reads, held to its type.)*
 
      Logix keeps forces in the project, not in a text file (1756-PM004L pp.52–53), so it
      offers no precedent for a file's spelling (**unverified** for any file form).
@@ -9055,7 +9065,9 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
        and a literal in a block's real formal, which its copy-in rounds.
      - Not looked at (provisional): two literals compared, which have no real slot, and a
        declaration's or a configuration line's initial value, since a tag table keeps no
-       literal's spelling.
+       literal's spelling. *(Changed by decision 227, 2026-10-23: an initial value is
+       warned of at its declaration's line, read from the parse tree's literal or the
+       configuration file's tokens.)*
      - *Cost:* the pass that looks at each instruction for a literal, decision 187's, tells
        an instruction that holds a real literal by its clause's guard, so a program of none
        compiles in exactly what it did at `a8a4f8f`, and one of real literals in 6% to 13%
@@ -9377,7 +9389,10 @@ built; 221, 222, 223, 226, 227 and 228 change six.
     logic and the controller goes to faulted mode);
   - *I/O and Tag Data*, 1756-PM004L, Nov 2023: pp.51–54 (a force taking effect at once,
     the FORCE status indicator, forces held by the controller and kept in the project,
-    a force overriding the physical device; decisions 127, 138 and 140);
+    a force overriding the physical device; decisions 127, 138 and 140), p.44 (the
+    tag-name format, `Name[Element].Member.Bit`, a bit's index a tag within the
+    integer's bits; decision 221) and p.45 (an alias for an element, `north_tank` for
+    `tanks[0,1]`; decision 223), each checked against the extract on 2026-10-23;
   - *ControlLogix 5570 and 5560 Controllers*, user manual, 1756-UM001Q, Dec
     2024: p.158 (the I/O connection's timeout, 100 ms at least, 160 ms at the default
     20 ms RPI; decision 134) and p.161 (where the major-fault checkbox is set);
