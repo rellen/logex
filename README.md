@@ -34,7 +34,8 @@ another type (M5-8), and a bit whose number a tag holds, `status.[n]`, its numbe
 range a major fault that trips the plant (M5-9), and the reals, `real` and `lreal`,
 with `sqrt`, the 34 real conversions and the 16 truncations (M5-10), and arrays of an
 elementary type, one to three dimensions, each element named by literal subscripts,
-`weights[3]` and `grid[1,7]` (M5-11). What does not exist yet: a subscript held in a tag,
+`weights[3]` and `grid[1,7]` (M5-11), and a subscript held in a tag, `weights[slot]`, an
+index out of range a major fault that trips the plant (M5-12). What does not exist yet:
 arrays of timers, counters and blocks, and located arrays, decided for Milestone 5 with
 the other data types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
@@ -301,9 +302,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below), and `real` and
   `lreal`, with literals `37.5` and `1.5e3`, `sqrt` and the real conversions, `real_to_int`
   and `real_trunc_int` among them (M5-10, "Reals", below), and arrays `var temps
-  real[8]`, up to three dimensions, by literal subscripts (M5-11, "Arrays", below); still
-  to land, a subscript held in a tag, `weights[slot]`, an index out of range a major
-  fault, arrays of timers and blocks, and arrays at I/O points. IEC's typed
+  real[8]`, up to three dimensions, by literal subscripts (M5-11, "Arrays", below), and by
+  a subscript held in a tag, `weights[slot]`, an index out of range a major fault (M5-12,
+  "A subscript in a tag", below); still to land, arrays of timers and blocks, and arrays
+  at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
   (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
   `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
@@ -1542,7 +1544,7 @@ IO.inspect(state.env["grid"], label: "grid")
 
 {:error, diagnostics} =
   Logex.compile(
-    "var weights int[8]\nvar grid int[4,8]\nvar slot int\nvar x int\n" <>
+    "var weights int[8]\nvar grid int[4,8]\nvar slot bool\nvar x int\n" <>
       "var cells int[2,2,2,2]\nvar short int[3] 1 2\n" <>
       "move weights[8] x\nmove grid[1] x\nmove weights[slot] x\nmove weights x",
     name: "wrong"
@@ -1606,7 +1608,7 @@ line 5: `cells` is declared with 4 dimensions, `[2,2,2,2]`: an array has one to 
 line 6: `short` is an array of 3 ints: its initial list holds 2 values, and an array's holds one for every element, 3, in the elements' order
 line 7: `weights[8]`'s subscript `8` is outside the elements of `weights`, 0 to 7: `weights` is an array of 8 ints (declared on line 1)
 line 8: `grid[1]` names an element of `grid`, an array of 4 by 8 ints (declared on line 2), by 1 subscript, where it takes 2, one a dimension, as in `grid[0,0]`
-line 9: `weights[slot]`'s subscript `slot` is a tag's name: an element's subscript is a literal number, as in `weights[0]`, until a subscript held in a tag is supported
+line 9: `weights[slot]` takes a subscript from `slot`, a bool (declared on line 3), which is no integer: a subscript is a literal or a tag of an integer type
 line 10: `move` reads one tag, but `weights` is an array of 8 ints (declared on line 1): an instruction takes one of its elements, as in `weights[0]`
 input `w` is an array of 3 ints: its value must be a list of 3 elements, found [1, 2]
 w[1] set alone: {1, 20, 3}
@@ -1625,10 +1627,11 @@ faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
   goes, read by a contact or `move`, written by a coil or an instruction, and an
   `ons edges[0]` keeps its storage bit there (decision 154); a bit of one, `faults[2].3`
   or `faults[2].[n]`, is a bit as a tag's is, Logix's `Name[Element].Bit` (1756-PM004L
-  p.44), a one-shot's storage bit taking a literal number only (decision 221); its subscripts are literal
-  numbers, checked against each dimension when the program compiles, so `weights[8]` in
-  an `int[8]` is refused at its line. A subscript held in a tag, `weights[slot]`, is
-  refused until M5-12 lands it; an instruction never takes an array whole. The first
+  p.44), a one-shot's storage bit taking a literal number only (decision 221); a literal
+  subscript is checked against its dimension when the program compiles, so `weights[8]`
+  in an `int[8]` is refused at its line, and one held in a tag, `weights[slot]`, as the
+  scan reads it ("A subscript in a tag", below); an instruction never takes an array
+  whole. The first
   pick above shifts nothing: a one-shot never fires on a first scan.
 - A host sets an array `var_input` whole, a list of its first dimension's size, a list of
   lists for more, each element checked as a tag's value is, or one element alone by its
@@ -1653,6 +1656,166 @@ faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
 - An online edit refuses an array whose type, dimensions or sizes change, and reports a
   changed initial list element by element, `{:initial_changed, "limits[1]", {20, 25}}`,
   the running values kept (decision 157).
+
+### A subscript in a tag
+
+`scales.ld` — a box counter that weighs each box the photo-eye sees into the slot the
+panel names, and shows the weight in that slot, a lamp lit while it is over 500:
+
+```
+var_input  eye    bool
+var_input  weight int
+var_input  slot   int
+var_output last   int
+var_output heavy  bool
+var weights int[8]
+var edge    bool
+var p       bool
+
+xic eye ons edge ote p
+xic p move weight weights[slot]
+move weights[slot] last
+gt weights[slot] 500 ote heavy
+```
+
+`scales.exs` scans it, a box into slot 2 and another into slot 5, then the slot moved to
+8, past the array; runs it in a plant on the manual clock and moves the slot to 8 there;
+reads a grid by one literal subscript and one held in a tag; and compiles four elements
+that cannot work:
+
+```elixir
+{:ok, scales} = Logex.compile_file("scales.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(scales, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(scales, state)
+  IO.puts("#{label}  #{inspect(outputs)}  weights #{inspect(state.env["weights"])}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault, charlists: :as_lists)}")
+  state
+end
+
+Logex.Runtime.instance(scales)
+|> scan.("slot 2          ", %{"eye" => 0, "weight" => 0, "slot" => 2})
+|> scan.("box 620, slot 2 ", %{"eye" => 1, "weight" => 620})
+|> scan.("gone            ", %{"eye" => 0})
+|> scan.("box 410, slot 5 ", %{"eye" => 1, "weight" => 410, "slot" => 5})
+|> scan.("gone, slot 2    ", %{"eye" => 0, "slot" => 2})
+|> scan.("slot 8          ", %{"slot" => 8})
+
+{:ok, plant} =
+  Logex.Configuration.compile(
+    "plant",
+    """
+    task fast interval 10 priority 1
+    var_global box_eye    bool at panel.i.0
+    var_global box_slot   int  at panel.i.1
+    var_global box_weight int  at drive.i.0
+    var_global box_heavy  bool at panel.q.0
+    program scales scales with fast
+      scales.eye    box_eye
+      scales.weight box_weight
+      scales.slot   box_slot
+      scales.heavy  box_heavy
+    """,
+    %{"scales" => scales}
+  )
+
+{:ok, clock} = Logex.Runner.Clock.Manual.start_link()
+{:ok, panel} = Logex.IO.Sim.start_link(reports: true, clock: clock)
+{:ok, drive} = Logex.IO.Sim.start_link(clock: clock)
+
+{:ok, runner} =
+  Logex.Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Logex.IO.Sim, sim: panel}, "drive" => {Logex.IO.Sim, sim: drive}},
+    clock: {Logex.Runner.Clock.Manual, clock}
+  )
+
+Logex.IO.Sim.set(drive, [0], 730)
+Logex.IO.Sim.set(panel, %{[0] => 1, [1] => 4})
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("box 730 in slot 4: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
+Logex.IO.Sim.set(panel, [1], 8)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("slot 8: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
+IO.puts("    #{inspect(Logex.Runner.status(runner).trip, charlists: :as_lists)}")
+Logex.Runner.stop(runner)
+
+{:ok, grid} =
+  Logex.compile("var_input c int\nvar grid int[4,8]\nvar_output x int\nmove grid[1,c] x", name: "grid")
+
+{_outputs, state} =
+  Logex.Runtime.scan(grid, Logex.Runtime.put_inputs(grid, Logex.Runtime.instance(grid), %{"c" => 9}))
+
+IO.puts("grid[1,c] at c 9: #{inspect(state.faults)}")
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var weights int[8]\nvar grid int[4,8]\nvar edge bool[8]\nvar slot int\nvar code word\n" <>
+      "var x int\nvar on bool\n" <>
+      "move weights[code] x\nmove grid[slot,8] x\nxic on ons edge[slot] ote on\n" <>
+      "move weights[sloot] x",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run scales.exs
+slot 2            %{"heavy" => 0, "last" => 0}  weights {0, 0, 0, 0, 0, 0, 0, 0}
+box 620, slot 2   %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 0, 0, 0}
+gone              %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 0, 0, 0}
+box 410, slot 5   %{"heavy" => 0, "last" => 410}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+gone, slot 2      %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+slot 8            %{"heavy" => 0, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: [8]}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: [8]}
+box 730 in slot 4: the lamp %{[0] => 1}
+slot 8: the lamp %{[0] => 0}, :tripped
+    {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: [8]}}
+grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: [1, 9]}]
+line 8: `weights[code]` takes a subscript from `code`, a word (declared on line 5), which is no integer: a subscript is a literal or a tag of an integer type, so convert it first, with `word_to_uint`
+line 9: `grid[slot,8]`'s subscript `8` is outside the second dimension of `grid`, 0 to 7: `grid` is an array of 4 by 8 ints (declared on line 2)
+line 10: `ons` keeps its storage bit in `edge[slot]`, whose subscript `slot` holds: a one-shot's storage bit is a bool, a bit with a literal number or an element with literal subscripts, as in `edge[0]`, so that it is one bit whatever the program does
+line 11: `sloot` is not declared — did you mean `slot`?
+```
+
+- `weights[slot]` is the element of `weights` whose subscript `slot` holds when the
+  instruction runs, as Logix writes it (`my_list[position]`, 1756-RM018A p.884), a tag of the
+  elements' type wherever one goes (decision 152). Each subscript is a literal or an
+  integer tag of any width, `grid[1,c]` both, never an expression, which logex has no
+  syntax for, nor an element; a bit string is told the conversion that makes it a
+  number, `word_to_uint`, and a literal beside a tag is still checked against its
+  dimension when the program compiles. A one-shot's storage bit and a pulse coil's pulse
+  bit take literal subscripts only, so that each is one bit, which an online edit can
+  block (decision 154); a bit of such an element, `faults[i].3` or `faults[i].[n]`, is a
+  bit as any other is.
+- A subscript outside its dimension when the instruction runs, 8 or −1 in an `int[8]`,
+  is a major fault (decision 153): the instruction does nothing, writes nothing and
+  passes no power, the rest of its rung runs on that, and the scan finishes, the fault in
+  the state's `faults` with every subscript it read, one a dimension, `read: [8]` or
+  `read: [1, 9]` (provisional), and its `severity: :major`. A bit of such an element has
+  its element's subscripts checked before its bit's number. An instruction that runs
+  without reading or writing the element checks nothing: a contact or a latch on a rung
+  with no power, a rung a jump skips and a block whose `cal` is false (decision 82); a
+  de-energised `ote` writes its 0, so it checks; a `cal` whose operand meets it runs no
+  body, as for a bit (decision 210).
+- `Logex.Runner` trips at the end of the step whose run met a round's first major fault,
+  before it writes the round's outputs, on the trip's one path, as for a bit's number:
+  every output 0 once and nothing after, the reason `{:fault, task, instance, fault}`,
+  naming the instance, the file, the line and the index. Logix raises major fault 4/20
+  "if a subscript exceeds its corresponding dimension" (1756-RM018A p.884) and halts logic
+  (1756-PM014O pp.9 and 20), where logex runs the faulting step on; the outputs are not
+  written either way.
+- A write through a tag subscript may write any element of its array, so it is told as a
+  write of the array whole (provisional): a coil on `lamps[slot]` beside one on
+  `lamps[sel]` or `lamps[2]`, in either order, is told as two `ote`s on one tag are, and
+  a write beside a one-shot's storage bit in the array as another write of the storage
+  bit; an online edit blocks such a one-shot, and in a configuration an instance that so
+  writes a global array through its `var_external` writes it whole, beside any other
+  writer of it. A subscript's tag is a use of it, read, and part of its rung, so an edit
+  that changes it changes the rung.
 
 ### Two pulse coils
 
@@ -3514,7 +3677,8 @@ in every cycle's outputs at the value it holds.
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
   integer widths, the four bit strings and the two reals only, arrays of those named by
-  literal subscripts only, no structures, and no NaN or infinity in a real; a jump forward only; no retained
+  literal subscripts or ones a tag holds, never an expression, no arrays of timers,
+  counters or blocks yet, no structures, and no NaN or infinity in a real; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
 

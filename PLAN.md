@@ -7105,6 +7105,130 @@ the walks' cross-type reach and the documents.
   false `otl weights_bits[slot]`, a skipped rung and a frozen block with `slot` at 8 raise
   nothing (decision 82); `ons edge[slot]` is a pinned refusal; `fault_test.exs` pins the
   kind; and the runner walk reaches it. *Size L.*
+
+  **Status: DONE — landed 2026-10-24**, as three gated commits and one of documents. No syntax changed: M5-11's lexer
+  already read `weights[slot]` and `grid[r,c]` as one name token, and `printer_test.exs`'s
+  generator already gave a tag's name as a subscript (`:element_name`), so the golden
+  record is unchanged. `cc6e9d8` lands the item; `866460b` and `ecb277b` pin, tests only, the mutants its table left alive. The compiler takes a subscript that is a
+  tag of the routine of any integer width, beside literal ones, which are judged when the
+  program compiles as before, in one pass over the subscripts that gathers the tags
+  (`outside/4`, which also made a program of literal subscripts compile some 10% cheaper,
+  239,749 reductions to 215,758 for the cost script's array program); a subscript tag that
+  is no integer is refused at its line, a bit string told its conversion, `word_to_uint`,
+  an array, an instance and a reserved word each in its words, a `cal` operand's too; the
+  element lowers to `{:element_at, line, array, index, dims, name}`, each subscript a
+  literal's value or the tag's `{:name, line, tag}`, and a bit of one, `faults[i].3` or
+  `faults[i].[n]`, holds it as its container; `lowered?/1` holds a body's to the same
+  shape. A one-shot's storage bit and a pulse coil's pulse bit refuse one (decision 154),
+  "`ons` keeps its storage bit in `edge[slot]`, whose subscript `slot` holds: a one-shot's
+  storage bit is a bool, a bit with a literal number or an element with literal
+  subscripts, as in `edge[0]`". The runtime reads each subscript where the element is read
+  or written, a one-dimensional element of one tag in a clause of its own, and one outside
+  its dimension is the major fault `:index_out_of_range` on M5-9's path, thrown to the
+  instruction's catch, `read` every subscript read (provisional reading 1): the
+  instruction does nothing and passes no power, the rung and the scan run on, a `cal` whose
+  operand meets it runs no body (decision 210's rule), a de-energised `otl` checks nothing
+  and a de-energised `ote` checks as it writes its 0, a skipped rung and a frozen block
+  check nothing (decision 82), and an element's subscripts are checked before a bit's
+  number in it (provisional reading 2). `Logex.Runner` trips on it at the end of the step,
+  as on a bit's, with no change. A write through a tag subscript is a write of the array
+  whole (§4.12's routine choice): `Logex.Walk` names it by its array in `writes/1` and
+  `element_writes/1`, and a subscript's tag is a use, read; a coil on `lamps[slot]` beside
+  one on `lamps[sel]` or `lamps[2]`, or on a bit of one, in either order, is the
+  second-`ote` warning, "`lamps[2]` is in `lamps`, which the `ote` on line 5 may write
+  through a tag subscript" (provisional reading 3), and any write through one is warned
+  as a write of each storage bit kept in the array; an edit's rung compares the subscript's
+  tag by name, and blocks a one-shot on an element of an array the program writes through
+  a tag subscript; and in a configuration an instance that so writes a global array
+  through its `var_external` writes it whole, every other writer of the array then counted
+  whole, and a connection driving any element of it told (provisional reading 4).
+
+  *Done when*, each met: the box counter's `weights[slot]` runs in §4.4's plant from files
+  on disk on the manual clock against an oracle of eight weights that knows nothing of
+  logex, over 200 seeded boxes (`end_to_end_test.exs`, "a subscript held in a tag in the
+  plant (M5-12)"); a `slot` of 8 trips the runner at the fast task's step as the slow task
+  falls due, every output 0 once and nothing after, the trip naming the instance, the
+  file, the line and the index, `{:fault, "fast", "scales", %Logex.Fault{kind:
+  :index_out_of_range, file: ".../scales.ld", line: 12, read: [8]}}`, the slow task's step
+  never run; a false `otl weights_bits[slot]`, a skipped rung and a frozen block with
+  `slot` at 8 raise nothing (`tag_subscript_test.exs`); `ons edge[slot]` is a pinned
+  refusal; `fault_test.exs` pins the kind, alone and as a cycle's event; and the runner
+  walk reaches `{:trip, :index_out_of_range}`, its program `index` adding to the panel's
+  dint's element of a `dint[4]` while `pa` is pressed, and since the forces file can make
+  a fresh start's first round fault, the walk's start now takes a first round that trips.
+  A new walk in `api_contract_test.exs` runs tag subscripts of four widths beside literal
+  ones at one, two and three dimensions, each drawn now and then out of range, alone,
+  across restarts and in a resource, against an oracle restated from the text. README's
+  "A subscript in a tag" is the real run of `scales.exs`, and "Arrays"'s run of
+  `weigh.exs` again, its line 9 now a bool subscript's refusal.
+
+  *Cost*, against `e00ae03` in a process the collector never visits: every program of the
+  cost script scans in exactly the reductions it took, and so does each rung
+  `tag_subscript_test.exs` pins, a `cal` too, 178.01 a rung; compiles within the run-to-run noise of ±4
+  reductions, but the array program's 10% cheaper; a one-dimensional element of one tag
+  subscript reads in 21 reductions a rung against a literal subscript's 16 and writes in 22
+  against 17, two dimensions with one tag 35 against 18.
+
+  *Mutation table*, each mutant judged by the full suite's exit code
+  (`m5/a12/mut/run.log`): 50 mutants on `cc6e9d8`, C1 to C14 (the compiler: each refusal, a literal beside a
+  tag, a `cal` operand's check, `lowered?/1`'s shape, a body's bit container and the
+  message's wording), R1 to R16 (the runtime: each bound, each catch head, the fault's
+  `read` and kind, a write's check and order, each type looked up for an element and a
+  non-integer subscript), W1 to W3 (the walk's uses and writes), N1 to N10 (the warnings),
+  P1 and P2 (an edit's rung), K1 to K4 (the configuration's writers) and G1 (the one rule
+  of a destination), 36 red. Of the 14 that survived, `866460b` pins C13 (a body's bit of
+  such an element), R10 (a bit's write checking its number before its element), R11 (the
+  arithmetic's type asked of the rule), R13 (`not`'s source type), N7 (a real literal's
+  warning) and N9 (a bit's write reaching storage bits), red there; `ecb277b` pins R12
+  (a real element's rounding), R14 and R15 (a bitwise and a root destination's type asked
+  of the rule, one reduction a rung, pinned exactly) and K4b, which replaced K4, whose
+  key left every duplicate it was meant to keep identical, red there. Four are
+  equivalent: C4 (the note for an undeclared subscript tag in a program that declares
+  nothing, which no program reaches, its array reported first; `866460b` drops the
+  clause), C11 and C12 (`lowered?/1`'s shape check of an element's subscripts and
+  dimensions, whose forgeries its lowering again refuses all the same) and R16 (a
+  subscript tag holding no integer, which no checked state holds).
+
+  2092 tests (10 doctests), up from 2047.
+
+  *Provisional readings*: (1) a fault's `read` holds every subscript, literal ones too,
+  one a dimension, `[8]` or `[1, 9]`, never the one alone that is out of range; (2) a bit
+  of an element a tag subscripts has its element's subscripts checked before its bit's
+  number, so `w[i].[n]` with both out of range is an index fault; (3) a coil on an element
+  a tag subscripts, or on a bit of one, is a coil in its array whole for the second-`ote`
+  warning, where a non-coil write through one beside a coil on a literal element,
+  `move x lamps[slot]` beside `ote lamps[2]`, is warned of nothing, as `move x b` beside
+  `ote b` is not; (4) in a configuration an instance that writes a global array through a
+  tag subscript makes every writer of the array a writer of it whole, the warnings naming
+  the array; (5) a subscript's tag is a tag of the routine, never a member, `w[t.acc]`
+  being no name the lexer reads, as M5-9's bit number is.
+
+  **Questions for the maintainer**, each taken provisionally as written:
+
+  1. *What a fault reports as read.* The box counter's `weights` is an `int[8]` and a grid
+     of setpoints `grid` an `int[4,8]` read as `grid[1,c]`; `c` reaches 9. As built the
+     trip reads `read: [1, 9]`, every subscript in order, the literal 1 among them, and
+     `weights[slot]` with `slot` at 8 `read: [8]`; an engineer at the trip sees the whole
+     element named. The options: (a) as built; (b) the subscripts a tag held alone,
+     `[9]`; (c) the one out of range alone, `9`, as a bit's `read` is a number. Logix's
+     fault 4/20 names no subscript at all (1756-RM018A p.884; **unverified** what its
+     fault log shows).
+  2. *Two lamps, one through a subscript.* `ote lamps[slot]` and `ote lamps[2]` in one
+     program: as built the second is warned "`lamps[2]` is in `lamps`, which the `ote` on
+     line 5 may write through a tag subscript: the last one in the scan decides it", in
+     either order, so the engineer is told before the plant runs that lamp 2 can be
+     decided by either rung. The options: (a) as built; (b) no warning, as two coils on
+     different elements are none. No such warning was found in IEC or in the Logix
+     extracts read (**unverified**).
+  3. *A move through a subscript beside a coil.* `move 0 lamps[slot]` and `ote lamps[2]`:
+     as built nothing is warned, since `move x b` beside `ote b` is not; the operator may
+     see lamp 2 flicker off when `slot` is 2. The options: (a) as built; (b) warned as two
+     coils are, as decision 207 does for a bit beside its word's whole write.
+  4. *Two feeders writing one array.* `f1` writes `speeds[slot]` and `f2` writes
+     `speeds[1]` through their `var_external`s: as built `f2` is told "`f2` writes `speeds`
+     through its var_external, as `f1` does", the array named whole, since `f1` may write
+     element 1. The options: (a) as built; (b) told by element, "`f2` writes `speeds[1]`
+     ..., as `f1` may". Logix has no such configuration check (decision 48 is logex's own).
 - **M5-13 · Located arrays.** Decision 156's follow-up: `var_global temps real[8] at
   card.i.0` occupying `card.i.0` to `card.i.7`, in the elements' order, each element a
   point named `temps[3]`, grouped by `Logex.IO.points/1`, read, written and forced as its
@@ -7742,7 +7866,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23, and arrays by literal subscripts, `Arr[3]`, with M5-11 the same day, and a bit of an element, `Arr[3].2`, with decision 221; a subscript held in a tag open, decided for Milestone 5 on 2026-10-21 (§3, M5-12) |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23, and arrays by literal subscripts, `Arr[3]`, with M5-11 the same day, and a bit of an element, `Arr[3].2`, with decision 221, and a subscript held in a tag, `Arr[slot]`, with M5-12 on 2026-10-24 |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 

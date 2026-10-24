@@ -3720,7 +3720,17 @@ copying about 1 ns an element, 0.2 ms into an `int[65536]` and 3 µs into an
 `int[256,256]`, so the value is a tuple of tuples and the limit 65,536 elements, both
 provisional; a connection names an element `m1.temps[3]`, an array var_input connected
 whole or at every element; `get/2` gives a whole array as a list; tag subscripts, arrays
-of instances and located arrays are M5-12's, M5-14's and M5-13's.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
+of instances and located arrays are M5-12's, M5-14's and M5-13's.)* *(M5-12, 2026-10-24:
+tag subscripts landed, `weights[slot]` and `grid[1,c]`, each read where the element is read
+or written, one outside its dimension the major fault below; a one-shot's storage bit and
+a pulse coil's pulse bit take literal subscripts. A write through a tag subscript is a
+write of the array whole, as the routine choice below has it: in the walks, for the
+second-`ote` warning, which a coil on `lamps[slot]` beside one on `lamps[2]` draws in
+either order, for a storage bit kept in the array, for an edit's block list, and in a
+configuration, where an instance that so writes a global array through its
+`var_external` writes it whole, every other writer of the array then counted whole
+(provisional). A one-dimensional element of one tag subscript reads in 21 reductions a rung
+against a literal subscript's 16; a program of none scans as it did.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
 the state is handed in, a scan's among them, so holding one costs a scan whether or not
 anything writes it: an integer, bit-string or bool array about one reduction an element,
 one guard, an `int[65536]` some 66,000 reductions and 0.3 ms, a `real[65536]` about
@@ -3762,7 +3772,8 @@ differs. The S7-1500 goes to STOP; the S7-1200 stays in RUN with a diagnostic en
 V21 *Addressing ARRAY components*); CODESYS checks only with `CheckBounds`; no vendor
 clamps or wraps an index.
 *(Landed with M5-9, 2026-10-23, for its bit kind, `:bit_out_of_range`; the index kind
-waits for M5-12. `%Logex.Fault{}` holds `severity` and `read`, the number read, nil for a
+waits for M5-12, and landed with it on 2026-10-24, `:index_out_of_range`, `read` the
+subscripts. `%Logex.Fault{}` holds `severity` and `read`, the number read, nil for a
 zero divisor (provisional, the field's name); the instruction that reads or writes the
 bit does nothing, a contact, a coil, `move`, a bitwise instruction or a shift, passing no
 power, and a `cal` whose operand is out of range runs nothing, its body's run dropped
@@ -3961,7 +3972,9 @@ long timers with M5-6, the same day, alike.)*
 - *A write through a tag subscript is a write of the whole array* in
   `Logex.Walk.writes/1`, so two coils on `lamps[slot]` and `lamps[2]` draw the
   second-`ote` warning; a literal subscript is its element's path, `lamps[2]`; over
-  writes that no rule could see.
+  writes that no rule could see. *(Landed with M5-12, 2026-10-24: the walk names the write by its
+  array, `lamps`, and a coil on `lamps[slot]` is a coil in the array whole, beside a coil
+  on `lamps[2]` in either order the second-`ote` warning.)*
 - *A bitwise instruction's power out is its power in*, since it cannot fail; over no
   power where a shift drops a 1, which IEC does not call an error. *(Amended by decision
   165: a shift or rotate whose count is a tag negative at run time passes no power.)*
@@ -7577,7 +7590,12 @@ the decisions the rest settle.
      2026-10-21), as recommended, of any integer type, each subscript of a dimension; a
      literal outside its dimension refused when the program compiles.
      *(The literal landed with M5-11, 2026-10-23, refused at its line outside its
-     dimension; a tag subscript is lexed and refused at its line until M5-12.)*
+     dimension; a tag subscript is lexed and refused at its line until M5-12.)* *(The tag
+     subscript landed with M5-12, 2026-10-24: a tag of the routine of any integer width,
+     declared and of an integer type, a bit string told its conversion, an array, an
+     instance or a reserved word refused at its line, a literal beside it judged as before,
+     `grid[1,c]`; a bit of such an element, `faults[i].3`, is a bit as any other is. As
+     Logix writes it, `my_list[position]` (1756-RM018A p.884), less the expression.)*
 153. **An index out of range while running (Milestone 5).** A rung that resets `slot` was
      edited wrongly, and `slot` reaches 8 in `weights`, an `int[8]`.
      - A major fault: the scan runs on with that instruction doing nothing, and the
@@ -7602,6 +7620,13 @@ the decisions the rest settle.
      maintainer answering that question as recorded: the runner trips at the end of the
      step that raised the round's first major fault.)* *(Landed with M5-9, 2026-10-23,
      for a tag bit number, `:bit_out_of_range`; an index out of range waits for M5-12.)*
+     *(Landed with M5-12, 2026-10-24, for an index, `:index_out_of_range`, on M5-9's path,
+     `read` every subscript read, one a dimension, `[8]` or `[1, 9]` (provisional): a false
+     `otl weights_bits[slot]`, a skipped rung and a frozen block with `slot` at 8 raise
+     nothing, a `cal` whose operand meets it runs no body (decision 210's rule), and an
+     element's index is checked before a bit's number in it. Logix: "Instructions that
+     view arrays as a collection of elements generate a major fault (type 4, code 20) if a
+     subscript exceeds its corresponding dimension" (1756-RM018A p.884).)*
 154. **Arrays of timers, counters and blocks, and one-shots on elements (Milestone 5).**
      Each lane has its own reject timer, `var lane_t ton[4]`, and its own one-shot, `var
      edge bool[4]`.
