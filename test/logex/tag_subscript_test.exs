@@ -334,6 +334,26 @@ defmodule Logex.TagSubscriptTest do
                   "subscripts, as in `e[0]`, so that it is one bit whatever the program does"}
              ]
 
+      # M5-12's review: a pulse bit in a bit of such an element, `w[i].3`, is refused too,
+      # whatever the storage bit, where its name raised.
+      for storage <- ["q", "e[1]", "w[1].2"] do
+        for symbol <- ["osr", "osf"] do
+          assert {storage,
+                  Enum.filter(
+                    messages(head <> "xic q #{symbol} #{storage} w[i].3"),
+                    &(elem(&1, 1) =~ "pulse bit in")
+                  )} ==
+                   {storage,
+                    [
+                      {6,
+                       "`#{symbol}` sets its pulse bit in `w[i].3`, whose subscript `i` holds: a " <>
+                         "pulse coil's pulse bit is a bool, a bit with a literal number or an " <>
+                         "element with literal subscripts, as in `w[0].3`, so that it is one bit " <>
+                         "whatever the program does"}
+                    ]}
+        end
+      end
+
       assert messages(
                "var g bool[4,4]\nvar_input i int\nvar_input j int\nvar q bool\nxic q ons g[i,j] ote q"
              ) ==
@@ -671,12 +691,17 @@ defmodule Logex.TagSubscriptTest do
         "var e bool[8]\nvar_input i int\nvar_input j int\nvar_input a bool\nvar s bool\n" <>
           "var_output o bool\nxic e[j] xio s ote o\n"
 
+      # M5-12's review: each told the array, `e[j]` never told it is `e[i]`, which it may
+      # not be, and a coil through a subscript after a literal one told both are in it.
       assert warnings(head <> "xic a ote e[i]\nxic a ote e[j]") == [
-               {9, "`e[j]` already has an `ote` on line 8: #{@later}"}
+               {9,
+                "`e[j]` is in `e`, which the `ote` on line 8 may write through a tag subscript: " <>
+                  @later}
              ]
 
       assert warnings(head <> "xic a ote e[0]\nxic a ote e[i]") == [
-               {9, "`e[0]` already has an `ote` on line 8: #{@later}"}
+               {9,
+                "`e[i]` is in `e`, as `e[0]` is, which already has an `ote` on line 8: #{@later}"}
              ]
 
       assert warnings(head <> "xic a ote e[i]\nxic a ote e[0]") == [
@@ -687,7 +712,9 @@ defmodule Logex.TagSubscriptTest do
 
       # A pulse coil's pulse bit is a coil too (decision 101).
       assert warnings(head <> "xic a osr s e[3]\nxic a ote e[i]") == [
-               {9, "`e[3]` is already the pulse bit of the `osr` on line 8: #{@later}"}
+               {9,
+                "`e[i]` is in `e`, as `e[3]` is, which is already the pulse bit of the `osr` on " <>
+                  "line 8: #{@later}"}
              ]
 
       # Two coils on literal elements of one array, beside none through a tag, are two
@@ -709,11 +736,65 @@ defmodule Logex.TagSubscriptTest do
              ]
 
       assert warnings(head <> "xic a ote w[1].[n]\nxic a ote w[i].[n]") == [
-               {8, "`w[1].[n]` already has an `ote` on line 7: #{@later}"}
+               {8,
+                "`w[i].[n]` is in `w`, as `w[1].[n]` is, which already has an `ote` on line 7: " <>
+                  @later}
              ]
 
       assert warnings(head <> "xic a ote w[i].3\nxic a ote w[i].4") == [
-               {8, "`w[i].4` already has an `ote` on line 7: #{@later}"}
+               {8,
+                "`w[i].4` is in `w`, which the `ote` on line 7 may write through a tag subscript: " <>
+                  @later}
+             ]
+    end
+
+    # M5-12's review: a write through a tag subscript writes its array whole (§4.12's
+    # routine choice), so beside a coil on a bit of an element of it, in either order, it
+    # is the second-`ote` warning, as a write of the element whole is (decisions 207 and
+    # 221); and a coil on a bit through a tag subscript beside a write of an element whole.
+    test "a write through a tag subscript beside a coil on a bit of an element is warned" do
+      head =
+        "var w word[4]\nvar_input i int\nvar_input n int\nvar_input a bool\nvar_input x word\n" <>
+          "var_output o bool\nxic w[0].[n] ote o\n"
+
+      later = fn shown, first, line ->
+        {line,
+         "`#{shown}` is in `w`, which the `#{first}` on line #{line - 1} may write through " <>
+           "a tag subscript: #{@later}"}
+      end
+
+      as = fn shown, other, what, line ->
+        {line, "`#{shown}` is in `w`, as `#{other}` is, which #{what}: #{@later}"}
+      end
+
+      for {rungs, warning} <- [
+            {"xic a ote w[2].1\nmove x w[i]",
+             as.("w[i]", "w[2].1", "already has an `ote` on line 8", 9)},
+            {"move x w[i]\nxic a ote w[2].1", later.("w[2].1", "move", 9)},
+            {"xic a ote w[i].1\nmove x w[2]", later.("w[2]", "ote", 9)},
+            {"move x w[2]\nxic a ote w[i].1",
+             as.("w[i].1", "w[2]", "the `move` on line 8 writes whole", 9)},
+            {"xic a ote w[i].1\nmove x w[i]", later.("w[i]", "ote", 9)},
+            {"move x w[i]\nxic a ote w[i].1", later.("w[i].1", "move", 9)},
+            {"xic a ote w[2].[n]\nmove x w[i]",
+             as.("w[i]", "w[2].[n]", "already has an `ote` on line 8", 9)},
+            {"move x w[i]\nxic a ote w[2].[n]", later.("w[2].[n]", "move", 9)},
+            {"xic a ote w[i].1\nmove a w[2].[n]", later.("w[2].[n]", "ote", 9)},
+            {"xic a ote w[2].1\nmove a w[i].[n]",
+             as.("w[i].[n]", "w[2].1", "already has an `ote` on line 8", 9)},
+            {"xic a ote w[2].1\nmove a w[i].3",
+             as.("w[i].3", "w[2].1", "already has an `ote` on line 8", 9)},
+            {"xic a osr o w[2].1\nmove x w[i]",
+             as.("w[i]", "w[2].1", "is already the pulse bit of the `osr` on line 8", 9)}
+          ] do
+        assert {rungs, Enum.filter(warnings(head <> rungs), &(elem(&1, 1) =~ "is in `w`"))} ==
+                 {rungs, [warning]}
+      end
+
+      # A write of another element whole, beside a coil on a bit of one, is two words, as
+      # before.
+      assert warnings(head <> "xic a ote w[2].1\nmove x w[3]") == [
+               {2, "`i` is declared but no rung uses it"}
              ]
     end
 
@@ -724,6 +805,21 @@ defmodule Logex.TagSubscriptTest do
                "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n" <>
                  "xic a ote l[2]\nmove a l[i]\nxic l[0] ote o"
              ) == []
+
+      # Nor a coil through one beside a write of an element of a bool array, in either
+      # order, nor beside a write through one.
+      for rungs <- [
+            "xic a ote l[i]\nmove a l[2]",
+            "move a l[2]\nxic a ote l[i]",
+            "xic a ote l[i]\nmove a l[i]",
+            "move a l[i]\nxic a ote l[i]"
+          ] do
+        assert {rungs,
+                warnings(
+                  "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n" <>
+                    rungs <> "\nxic l[0] ote o"
+                )} == {rungs, []}
+      end
     end
 
     test "a write through a tag subscript is a write of each storage bit in its array" do
@@ -889,7 +985,34 @@ defmodule Logex.TagSubscriptTest do
         )
 
       assert [message] = Enum.map(config.warnings, & &1.message)
-      assert message =~ "`f1` writes `speeds` through its var_external, and `c1.o` drives it"
+      # M5-12's review: told the element it drives, where "it" read as the array.
+      assert message ==
+               "`f1` writes `speeds` through its var_external, and `c1.o` drives `speeds[2]` " <>
+                 "(line 7): each scan reads what the other last wrote, and the later write in a " <>
+                 "cycle stands"
+    end
+
+    # M5-12's review: a member or bit of an element at a far end is told the element is a
+    # global's, as `wd.3` is told `wd` is a global, and an element out of range its range.
+    test "a bit of an element at a far end is told the element is a global's" do
+      {:ok, m} = Logex.compile("var_input speed int\nvar q bool\nxic speed.3 ote q", name: "m")
+
+      for {far, message} <- [
+            {"speeds[1].3",
+             "`speeds[1].3` names a member of `speeds[1]`, but `speeds[1]` is an element of " <>
+               "the global `speeds` (line 2), not an instance"},
+            {"speeds[4].3",
+             "`speeds[4]`'s subscript `4` is outside 0 to 3: `speeds` is a global array of 4 ints " <>
+               "(line 2)"}
+          ] do
+        assert {:error, [%Logex.Diagnostic{line: 4, message: ^message}]} =
+                 Logex.Configuration.compile(
+                   "plant",
+                   "task t interval 10 priority 1\nvar_global speeds int[4]\nprogram m1 m with t\n" <>
+                     "m1.speed #{far}",
+                   %{"m" => m}
+                 )
+      end
     end
   end
 

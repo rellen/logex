@@ -755,8 +755,9 @@ defmodule Logex.ArrayConfigurationTest do
 
       {:ok, c} = configured("var_global g int[2]\nprogram a w\nprogram x ext\na.o g\nx.go 1\n")
 
+      # M5-12's review: the connection is told what it drives, the array whole.
       assert Enum.map(c.warnings, & &1.message) == [
-               "`x` writes `g[1]` through its var_external, and `a.o` drives it (line 4): each " <>
+               "`x` writes `g[1]` through its var_external, and `a.o` drives `g` (line 4): each " <>
                  "scan reads what the other last wrote, and the later write in a cycle stands"
              ]
     end

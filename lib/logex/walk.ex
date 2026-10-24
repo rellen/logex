@@ -159,6 +159,10 @@ defmodule Logex.Walk do
   def bit_name({:bit, _, {:element, _, _, _, _} = element, n, _mask, _name}),
     do: bit_name(element) <> "." <> Integer.to_string(n)
 
+  # M5-12 (decision 154): a bit of an element a tag subscripts, `w[i].3`, names no one bit,
+  # since the element moves as the tag does: it is itself, as the element `w[i]` is.
+  def bit_name({:bit, _, {:element_at, _, _, _, _, _}, _n, _mask, _name} = bit), do: bit
+
   def bit_name({:bit, _, path, n, _mask, _name}),
     do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
 

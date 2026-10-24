@@ -2737,11 +2737,27 @@ defmodule Logex.Configuration do
        "`#{name}` names a member of `#{first}`, but `#{first}` is #{a(kind)}#{at_line(line)}, " <>
          "not an instance"}
 
+  # M5-12's review: a member or bit of an element of a global array, `speeds[1].3`, is told
+  # the element is a global's, as a member of a global is, or the element's own mistake.
+  defp member_held(false, nil, :error, {name, first, type}, world)
+       when binary_part(first, byte_size(first) - 1, 1) == "]",
+       do: element_member(global_held(nil, first, type, world), name, first)
+
   defp member_held(false, nil, :error, {name, first, _type}, world),
     do:
       {:error,
        "`#{name}` names a member of an instance, and there is no instance `#{first}`" <>
          Declarations.suggest(first, world.instances, & &1, "names")}
+
+  defp element_member({:ok, %Global{} = element}, name, first) do
+    [array | _] = String.split(first, "[")
+
+    {:error,
+     "`#{name}` names a member of `#{first}`, but `#{first}` is an element of the global " <>
+       "`#{array}`#{where(element)}, not an instance"}
+  end
+
+  defp element_member(error, _name, _first), do: error
 
   # A var_output: to a global of its type, never an input point, and the only connection
   # that drives that global.
@@ -3202,9 +3218,15 @@ defmodule Logex.Configuration do
       warning(
         instance.line,
         "`#{instance.name}` writes `#{global}` through its var_external, and " <>
-          "#{own(name == instance.name)}`#{name}.#{connection.member}` drives it" <>
-          "#{where(connection)}: " <> driven_stands(bit, name == instance.name, global)
+          "#{own(name == instance.name)}`#{name}.#{connection.member}` " <>
+          "#{drives(connection.to, global)}#{where(connection)}: " <>
+          driven_stands(bit, name == instance.name, global)
       )
+
+  # M5-12's review: a connection that drives an element of the array written, or the array
+  # an element written is of, is told what it drives, `ins[2]`, as written.
+  defp drives(global, global), do: "drives it"
+  defp drives(to, _global), do: "drives `#{to}`"
 
   defp own(true), do: "its own "
   defp own(false), do: ""
