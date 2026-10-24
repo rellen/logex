@@ -175,7 +175,8 @@ element warned; and a configuration's writer warning naming the element two writ
 share, with four questions put to the maintainer. And the thirteenth, M5-13, the same
 day: a located array, `var_global temps real[8] at card.i.0`, one point an element at
 consecutive addresses, read, written and forced by its name, `temps[3]` (§3, M5-13),
-with four questions put to the maintainer.
+with four questions put to the maintainer, and its review's fixes the same day, with
+three more.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7171,8 +7172,8 @@ the walks' cross-type reach and the documents.
   plant (M5-12)"); a `slot` of 8 trips the runner at the fast task's step as the slow task
   falls due, every output 0 once and nothing after, the trip naming the instance, the
   file, the line and the index, `{:fault, "fast", "scales", %Logex.Fault{kind:
-  :index_out_of_range, file: ".../scales.ld", line: 12, read: [8]}}`, the slow task's step
-  never run; a false `otl weights_bits[slot]`, a skipped rung and a frozen block with
+  :index_out_of_range, file: ".../scales.ld", line: 12, read: [8]}}`, a tuple, `read:
+  {8}`, since decision 233, the slow task's step never run; a false `otl weights_bits[slot]`, a skipped rung and a frozen block with
   `slot` at 8 raise nothing (`tag_subscript_test.exs`); `ons edge[slot]` is a pinned
   refusal; `fault_test.exs` pins the kind, alone and as a cycle's event; and the runner
   walk reaches `{:trip, :index_out_of_range}`, its program `index` adding to the panel's
@@ -7347,7 +7348,15 @@ the walks' cross-type reach and the documents.
   run-to-run noise of ±10 reductions but a program of coils on bool elements beside
   writes of elements, 6.2% dearer (275,171 to 292,175), the warnings now looking for
   writes through a tag subscript; a program of spelled reals compiles 0.6% cheaper, and
-  lexing zeros 6% cheaper, the lexer no longer reading a zero's digits again.
+  lexing zeros 6% cheaper, the lexer no longer reading a zero's digits again. *Restated
+  after M5-13's review*, which measured smaller programs the 29 left out, each against
+  `1fe7a9b` again (`m5/r13/cost2.exs`): eight coils on literal elements of a bool array
+  beside eight literal moves into another array, with no tag subscript anywhere, compile
+  7.0% dearer (15,336 to 16,402 reductions), and `ote lamps[slot]` beside eight literal
+  moves 5.3% (9,047 to 9,522), each now looked at for writes through a tag subscript, as
+  decision 235's *Cost* says; lexing a real zero is 406 to 388; the scans are the same.
+  So "every compile within noise but one" understated it: a program of coils on a bool
+  array's elements compiles some 5% to 7% dearer.
 
   *Mutation table*, each mutant judged by the full suite's exit code on `466710f`
   (`m5/a13/mut/run.log`): 35 mutants on `466710f`: T1 (decision 233: the tuple), U1 to U12 (decision 231: the rule, its zero spellings, each of the five compiler clauses, a declaration's, the configuration's reader, the forces reader, the lexer's −0.0 and the guard), H1 to H5 (decision 232: the held elements, their order, and the near end's element, by name, through a tag subscript and spelt), W1 to W8 (decision 235: the coil's mark, its own clause, the write before it, the coil before a write, the look at writes, the wording and the plain second `ote`) and C1 to C8 (decision 236: each verb, the array's own line, the element's writers, a plain global, the connection's element and the arrays); 32 red. H4 (an element at a near end whose program writes it through a tag subscript) and H5 (one spelt `o[00]`) survived and `697eb88` pins each, tests only, after which both are red; H2 (the held elements in reverse order) is equivalent, since a report is sorted, and the record now says so.
@@ -7423,8 +7432,8 @@ the walks' cross-type reach and the documents.
   an unbound device names an array's elements as their range. `Logex.Runtime` takes an
   element as an input key, `%{"temps[3]" => 37.5}`, stored as its type's nearest value and
   placed in its array, a few in place and more, up to every element a device reports,
-  laid over the array in one pass, so that a cycle setting k of n elements costs some
-  k + n (provisional, at 16); gives each output element by its name; keeps a located
+  laid over the array in one pass (provisional, at 16; restated by M5-13's review: up to
+  16 copies of the array's words in place, or one pass); gives each output element by its name; keeps a located
   input array across a restart, as an input point; and refuses, in pinned words, the
   array named whole, an output element, an element its array lacks, `temps[8]` or
   `temps[03]`, and an element of an unlocated array. `Logex.Runner` reads, writes and
@@ -7499,16 +7508,25 @@ the walks' cross-type reach and the documents.
      list, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
      element then forced; (c) a whole input taken, a whole force refused. Logix's module
      data is one tag, `Local:0:I.Data`, an array copied whole with `cps` (1756-PM004L
-     p.21), and an alias names one point of it, `Local:2:I.Data.3` (p.46); forcing an
-     element of it was not found in the extracts read (**unverified**). IEC's directly
-     represented variables are single points (Ed 3 Table 16).
+     p.21), and an alias names one point of it, `Local:2:I.Data.3` (p.46); and Logix
+     forces within a tag, by element: "If the tag is an array or structure, such as an
+     I/O tag, force a BOOL, SINT, INT, DINT, or REAL element or member" (p.53), forces
+     enabled "for a specific module, tag collection, or tag element" (p.51), "expand the
+     tag to show the value to force (that is, BOOL value of a DINT tag)" (p.54), which
+     supports (a) (corrected by M5-13's review, which found these pages; it was
+     **unverified** here). IEC's directly represented variables are single points (Ed 3
+     Table 16).
   2. *A hierarchical address.* `rack.i.2.4` is slot 2, point 4. As built a located
      array's elements count up in the last field, `rack.i.2.4` to `rack.i.2.11`, so a
      range can run past what a slot holds and only the adapter's `check/3` can tell. The
      options: (a) as built; (b) refused for an address of more than one field; (c)
      counted up and carried into the field before at a size the adapter names. IEC
      leaves a hierarchical address's meaning to the manufacturer (Ed 2 §2.4.1.1, p.37);
-     Logix names a slot's points within its module's tag, never across slots.
+     Logix names a module's data by its slot, `Location:Slot:Type.Member.SubMember.Bit`,
+     a bit "depends on the size of the I/O module (0–31 for a 32-point module)"
+     (1756-PM004L pp.18-19), so a module's points are within its own tag; no address
+     that runs across slots was found in the extracts read (**unverified** that none
+     exists).
   3. *An array of output points nothing drives.* The oven's eight lamps, of which a
      program drives zones 2 and 5 only. As built, the warning names every element left
      at 0, "nothing drives `lamps[0]`, `lamps[1]`, … or `lamps[7]`: they stay at 0", ten
@@ -7522,6 +7540,89 @@ the walks' cross-type reach and the documents.
      only with a restart", both shown to the operator. The options: (a) as built; (b) the
      range's refusal alone; (c) the type's alone. Logix changes an array's size offline
      only (1756-RM094N p.85).
+
+  *The review of M5-13 (2026-10-24)*, which found no wrong value at a point, answered in
+  three gated commits, `aa2c5f2`, of code and tests, `bf23c7e`, of tests only, and one of
+  documents. (1) No test read the
+  outputs of an output array of more dimensions, so a mutant reading each element's
+  subscripts reversed lived: `located_array_test.exs` now cycles `tq dint[2,3] at
+  card.q.0` and runs it through the runner, each element by its name and at its address,
+  the rightmost subscript fastest. (2) No test had exactly eleven undriven elements: the
+  warning is pinned at ten named, eleven as ten and 1 more, and twelve. (3) The cost of
+  placing elements was claimed as "some k + n, never k times n"; but a write in place
+  copies the tuple of each dimension it passes through, so 16 elements of an
+  `int[65536]` copy 16 times its words, which the BEAM counts as about one reduction
+  each. Measured in a process that drops each cycle's runtime, as a runner does
+  (`m5/rv13/wall.exs`, 200 cycles): one element 0.43 ms a cycle, two 0.76 ms, 16 in place
+  4.1 ms and 17 in one pass 6.1 ms, in place the cheaper up to about 24; an
+  `int[256,256]`, whose write copies 512 words, 16 in place 0.24 ms and 129 in one pass
+  9 ms. The review's 4.5, 20.3 and 6.6 ms kept every cycle's runtime alive in a list, so
+  its collector copied each array again and again; the switch at 16 is kept and the claim
+  restated in words copied, here, in CLAUDE.md and in `placed/4` (provisional). (4) A
+  program's write through its `var_external` into an array of output points drove the
+  array whole, where a connection to one element drove only it: it now drives each
+  element it writes, `ote lq[1]` that element alone, and the array whole only through a
+  tag subscript, as decision 236 counts a writer (provisional, Question 5). (5) The very
+  element through the very tag subscript, `ote l[slot]` beside `otl l[slot]` or `move 0
+  l[slot]`, is warned since decision 235, where `ote l[2]` beside `otl l[2]` is not: it is
+  kept, as `ote w.[n]` beside `otl w.[n]` has been warned since M5-9, pinned with a
+  latch's and an `otu`'s, and recorded under decision 235 (provisional, Question 6). (6)
+  The answers' cost was understated, restated above under them. (7) Question 1's Logix
+  claim is now cited, 1756-PM004L pp.51, 53 and 54. (8) An input key that is an element
+  was quoted with `inspect`, `"tb[9]"`, beside a misfit's `` `ti[1,1]` `` in one message:
+  a key the lexer reads as one name is now quoted as a name, and anything else as the
+  host gave it, `"temps[1, 2]"`; M5-12's Done-when notes the tuple; Question 2 cites
+  PM004L pp.18-19; and the three older points: a scalar refused for its initial value,
+  `var r int 40000`, made every use of `r` "not declared", and is now declared with none,
+  its uses checked, as an array refused for its list is (provisional, Question 7);
+  `Logex.IO.Sim.start_link(inputs: 3, inputs: 4)` was told `:inputs` is not an option,
+  and it and the manual clock now refuse a key given twice in the runner's words, "takes
+  each option once, got :inputs more than once"; and `Sim.set/2,3` refuses an address past
+  `inputs:`, "the sim has 8 inputs, at the addresses [0] to [7], got: [8]", nothing set.
+  Every program of the review's cost script compiles and scans in the reductions it took
+  at `463b4ae`, and a configuration of no located array cycles as before, the pinned
+  growth test unchanged. README's `oven.exs`, three times, and `scales.exs` re-run from
+  its text: identical. *Mutation table* (`m5/rv13/mut/run.log`), each mutant judged by the
+  full suite's exit code on `aa2c5f2`: 11 mutants, 10 red at once, the review's X16 (the
+  cap at eleven) and X17 (an output element's subscripts reversed), V1 and V2 (a
+  var_external's write counted as its array's, and the element filter dropped), Q1 (an
+  element key quoted as given), S1 to S3 (a sim's set past its inputs taken, a key twice
+  taken, a key twice told it is unknown), M1 (the manual clock's key twice taken) and D1
+  (a scalar refused for its initial value declaring nothing); S4 (the addresses past the
+  inputs unsorted, the first told in a map's own order) survived, since a map of 32 keys
+  or fewer gives them sorted, and `bf23c7e` pins it with 40, after which it is red. The
+  review's X5 (always one pass) moves only cost, and is left alive, as the review says.
+  2133 tests (11 doctests), up from 2130.
+
+  **Questions for the maintainer from the review**, each taken provisionally as written:
+
+  5. *What a program's write drives.* The oven's eight zone lamps, `zone_hot bool[8] at
+     card.q.0`, are written by one program through its `var_external`, `ote zone_hot[2]`
+     only. As built that drives `zone_hot[2]` alone, so the configuration is warned that
+     nothing drives `zone_hot[0]`, `zone_hot[1]` and the rest, which stay at 0, as when a
+     connection drives one element; a write through a tag subscript, `ote zone_hot[z]`,
+     drives every lamp. Until the review any write through a var_external drove the array
+     whole and nothing was warned. The options: (a) as built, by element; (b) any write
+     drives the array whole, so the engineer is warned only of an array no program
+     writes. Logix has no such check; decision 48's warnings are logex's own.
+  6. *A coil and a latch on one lamp through one subscript.* `ote lamps[slot]` and `otl
+     lamps[slot]` in one program: as built warned, "`lamps[slot]` is in `lamps`, which the
+     `ote` on line 5 may write through a tag subscript: the last one in the scan decides
+     it", as `ote w.[n]` beside `otl w.[n]` is (M5-9), where `ote lamps[2]` beside `otl
+     lamps[2]`, and `ote b` beside `otl b`, are not. The operator sees lamp `slot` set by
+     whichever rung comes last, as with `lamps[2]`. The options: (a) as built, since a
+     write through a tag subscript is a write of the array whole (§4.12); (b) none where
+     both name the same element through the same tag, as for a literal element, and the
+     same for `w.[n]`. No such warning was found in IEC or the Logix extracts read
+     (**unverified**).
+  7. *A tag refused for its initial value.* `var r int 40000`: an int cannot hold 40000.
+     As built since the review the line is refused once and `r` is declared with no
+     initial value, so a rung `xic r ote lamp` is told what is wrong with that rung, an
+     int read as a bool, and not that `r` is undeclared; until then each use of `r` was
+     told "`r` is not declared", one more message a use. The options: (a) as built, as an
+     array refused for its initial list is (M5-11); (b) as before, the line declaring
+     nothing. A line broken after its value, `var r int 5 7`, still declares nothing. IEC
+     says nothing found; Logix's editor checks a value as it is typed (**unverified**).
 - **M5-14 · Arrays of instances.** Decision 154: `var lane_t ton[4]`, `var lanes
   seal[4]`, a literal subscript on every instruction that runs one, a tag subscript on a
   member's read or write. *Done when* each refusal is pinned, the one-run rule holds per

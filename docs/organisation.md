@@ -3853,6 +3853,15 @@ drives only by element, is warned of the elements left at 0; one grown or moved 
 refused for its range beside its type; and `Logex.IO.Sim`'s `inputs:` and `outputs:`
 are what makes "a range past an adapter's points" a refusal at bind, an adapter's own
 `check/3` being where a real card's size would be said.)*
+*(Changed by M5-13's review, 2026-10-24, each provisional: a program's write through its
+`var_external` drives what it writes of an array of output points, `ote lamps[2]` that
+element alone and a write through a tag subscript the array whole, as decision 236
+counts a writer, where any such write drove the array whole; and a cycle's elements
+placed in their array, up to 16 in place and more in one pass, are said in words copied,
+up to 16 times the array's words in place or one pass, measured in a process that drops
+each cycle's runtime, the switch at 16 kept. Forcing one element is Logix's own form: "If
+the tag is an array or structure, such as an I/O tag, force a BOOL, SINT, INT, DINT, or
+REAL element or member" (1756-PM004L p.53, and p.51, p.54).)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -9522,6 +9531,11 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      No such warning was found in IEC or in the Logix extracts read; Logix's editor's
      duplicate destructive bit check is **unverified** here. This supersedes M5-12's
      provisional reading 3.
+     *(M5-13's review, 2026-10-24, provisional: the very element through the very tag
+     subscript, `ote lamps[slot]` beside `otl lamps[slot]` or `move 0 lamps[slot]`, is
+     warned, either first, as `ote w.[n]` beside `otl w.[n]` is (M5-9), a write through a
+     tag subscript being a write of its array whole, where the literal `ote lamps[2]`
+     beside `otl lamps[2]` is not; a question for the maintainer.)*
 236. **Two feeders writing one array (Milestone 5),** M5-12's fourth question, changing
      its provisional reading 4. `f1` writes `speeds[slot]` and `f2` writes `speeds[1]`
      through their `var_external`s; `f2` was told "`f2` writes `speeds` through its

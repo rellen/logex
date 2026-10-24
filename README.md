@@ -3385,12 +3385,14 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
 - A range that overlaps another point is refused, both named, once a pair: `door` at
   `card.i.5` is told `zone_t[5]` is there. A located array takes no initial list, as a
   located global takes no initial value, and an array of output points that nothing
-  drives, or drives only element by element, is warned of the elements left at 0. An
+  drives, or drives only element by element, is warned of the elements left at 0, a
+  program writing `ote zone_hot[2]` through its `var_external` driving that element
+  alone and one writing `ote zone_hot[z]` the array whole (provisional). An
   event task's single is still a whole bool global.
 - An adapter's `check/3` may refuse a range past its device's points: `Logex.IO.Sim`
   started with `inputs:` or `outputs:` refuses each point past them at bind, so a
   configuration that outgrows its card is told so in the host's process, before
-  anything opens.
+  anything opens; a test's `Logex.IO.Sim.set/3` past its inputs is refused too.
 - A force of `zone_t[3]` is held against the card while its neighbours go on reading
   it, kept in the forces file as `zone_t[3] 150.0`, read back by a fresh runner after a
   crash; an unforce puts back the card's last value of that element. A restart reads the
