@@ -625,6 +625,7 @@ defmodule Logex.ArrayConfigurationTest do
           "wide" => "var_input speed dint\nvar_output out dint\nmove speed out",
           "w" => "var_output o int[2]\nvar_output s int\nmove 1 o[0]\nmove 2 s",
           "w4" => "var_output o int[4]\nmove 1 o[0]\nmove 3 o[3]",
+          "w4i" => "var_input k int\nvar_output o int[4]\nmove 1 o[k]",
           "ext" => "var_external g int[2]\nvar_input go bool\nxic go move 5 g[1]",
           "e" => "var_input e int[2]\nvar_output o int\nadd e[0] e[1] o",
           "iw" => "var_output o int\nmove 7 o"
@@ -820,6 +821,20 @@ defmodule Logex.ArrayConfigurationTest do
 
       assert for({:held, name, value} <- forecast, do: {name, value}) ==
                [{"g[0]", 1}, {"g[2]", 0}, {"g[3]", 3}]
+
+      # Spelt any way, the element at the near end is the one its program writes; and one of
+      # an array its program writes through a tag subscript drives, since it may be any.
+      for text <- [
+            "var_global g int[4]\nprogram a w4\nprogram b w\nb.s g[1]\nb.o[00] g[2]\n",
+            "var_global g int[4]\nprogram a w4\nprogram b w\nprogram c w4i\nb.s g[1]\n" <>
+              "c.o[2] g[2]\nc.k 2\n"
+          ] do
+        {:ok, spelt} = configured(text)
+        {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, spelt)
+
+        assert {text, for({:held, name, value} <- forecast, do: {name, value})} ==
+                 {text, [{"g[0]", 1}, {"g[3]", 3}]}
+      end
 
       # Driven by no connection at all, the array is held whole, as before.
       {:ok, none} = configured("var_global g int[4]\nprogram a w4\n")

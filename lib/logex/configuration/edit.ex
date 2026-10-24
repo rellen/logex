@@ -647,8 +647,8 @@ defmodule Logex.Configuration.Edit do
   #
   # Since decision 232 an array the stopped configuration drives whole, where the started
   # one drives some of its elements, holds each element it no longer drives, each by its
-  # name, `speeds[3]`, in the elements' order; one it drives none of holds whole, as
-  # before.
+  # name, `speeds[3]`, the report sorting them with its other rows; one it drives none of
+  # holds whole, as before.
   defp held(from, to) do
     driven = drives(to)
     keep = by_name(to.globals)
