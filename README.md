@@ -1341,8 +1341,9 @@ status.[16#4] of 16#0010: %{"on" => 1}
 - A coil on a bit a tag numbers may set any bit of its word, so it is told as a write of
   the word whole: two of them, one beside a coil on a bit of the word, or one beside any
   write of the word whole, `move panel lamps` beside `ote lamps.[sel]`, in either order,
-  are told as two `ote`s on one tag are, and one beside a one-shot's storage bit in the
-  word as another write of the storage bit (provisional).
+  are told as two `ote`s on one tag are, but not a latch on the very bit through the very
+  tag, `otl lamps.[sel]` beside `ote lamps.[sel]` (decision 246), and one beside a
+  one-shot's storage bit in the word as another write of the storage bit (provisional).
 
 ### Reals
 
@@ -1464,7 +1465,9 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   written, and so in an lreal for one nearer 0.0 than its smallest normal value,
   `move 1.0e-310 big` above (decision 228), and so for one no double holds but 0.0,
   `move 1.0e-400 big`, which is read as 0.0 written so and refused in the same words
-  (decision 231).
+  (decision 231), beside another literal too, `eq 1.0e-400 0.0` (decision 240), and in a
+  configuration's line in its global's words, "`big` is an lreal: `1.0e-400` is too near
+  0.0 for an lreal, …", where a forces file holds it as 0.0, as `1.0e-310` (decision 237).
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
   `real`, a `dint` into an `lreal` only, and a `real` into an `lreal`; any other pair is
   told its conversion, `dint_to_real`. An integer literal in a real's slot is the value it
@@ -1819,12 +1822,15 @@ line 11: `sloot` is not declared — did you mean `slot`?
   is a write through one, `move 0 faults[slot]`, beside a coil on a bit of an element of
   a word array, `ote faults[2].1`, as `move 0 w` beside `ote w.1` is, and since decision
   235 beside a coil on an element of a bool array, `move 0 lamps[slot]` beside `ote
-  lamps[2]`, either first, any instruction's write but a coil's; and a write beside a
+  lamps[2]`, either first, any instruction's write but a coil's, though not beside a coil
+  on the very element through the very tag, `otl lamps[slot]` beside `ote lamps[slot]`,
+  as `otl lamps[2]` beside `ote lamps[2]` is not (decision 246); and a write beside a
   one-shot's storage bit in the array as another write of the storage bit; an online
   edit blocks such a one-shot, and in a configuration an instance that so writes a
   global array through its `var_external` may write any element, told by the element it
   may share with another writer, "`f2` writes `speeds[1]` through its var_external, as
-  `f1` may" (decision 236). A subscript's tag is a use of it, read, and part of its rung, so an edit
+  `f1` may" (decision 236), an instance writing several named on one line, "`t1` writes
+  `speeds[1]`, `speeds[2]` and `speeds[3]` …", ten and then a count (decision 239). A subscript's tag is a use of it, read, and part of its rung, so an edit
   that changes it changes the rung.
 
 ### Two pulse coils
@@ -3247,7 +3253,8 @@ gt t[7] sp ote hot[7]
 
 `oven.exs` lists the card's points, runs the oven on the manual clock with a simulated
 card of eight inputs and eight outputs, forces zone 3 and kills the runner, unforces it,
-binds a card of six inputs, and compiles two points laid over the array:
+forces and unforces the array whole, binds a card of six inputs, and compiles two points
+laid over the array:
 
 ```elixir
 alias Logex.Runner
@@ -3313,6 +3320,14 @@ IO.inspect(Runner.status(runner).forces, label: "forces  ")
 :ok = Runner.unforce(runner, "zone_t[3]")
 Manual.advance(clock, 10)
 IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "unforced")
+
+:ok = Runner.force(runner, "zone_t", [170, 170, 170, 170, 190, 190, 190, 190])
+Manual.advance(clock, 10)
+IO.inspect(lamps.(), label: "whole   ")
+IO.write("oven.forces:\n" <> File.read!("oven.forces"))
+:ok = Runner.unforce(runner, "zone_t")
+Manual.advance(clock, 10)
+IO.inspect(lamps.(), label: "unforced")
 :ok = Runner.stop(runner)
 
 {:ok, short} = Sim.start_link(inputs: 6)
@@ -3361,11 +3376,22 @@ lamps   : [0, 1, 0, 1, 0, 1, 0, 0]
 forced  : 150.0
 lamps   : [0, 1, 0, 0, 0, 1, 0, 0]
 oven.forces: zone_t[3] 150.0
-`zone_t` is an array of input points, `card.i.0` to `card.i.7`: a force names one element, `zone_t[0]` to `zone_t[7]`
+`zone_t` is an array of 8 reals, forced to a list of 8 elements in the elements' order, got: 1.0
 `zone_hot[3]` is an output point, at `card.q.3`: only an input point is forced
 `zone_t[8]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `zone_t[0]` to `zone_t[7]`
 forces  : %{"zone_t[3]" => 150.0}
 unforced: 205.0
+whole   : [0, 0, 0, 0, 1, 1, 1, 1]
+oven.forces:
+zone_t[0] 170.0
+zone_t[1] 170.0
+zone_t[2] 170.0
+zone_t[3] 170.0
+zone_t[4] 190.0
+zone_t[5] 190.0
+zone_t[6] 190.0
+zone_t[7] 190.0
+unforced: [0, 1, 0, 1, 0, 1, 0, 0]
 the device `card`'s adapter options: `zone_t[6]` is at `card.i.6`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
 the device `card`'s adapter options: `zone_t[7]` is at `card.i.7`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
 line 12: `door` is at `card.i.5`, where `zone_t[5]` already is (line 4): a location holds one global
@@ -3374,20 +3400,25 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
 
 - Each element is a point of its own at its own address, the last field of the
   location counting up, so `zone_t[7]` is at `card.i.7` and, at `rack.i.2.4`, an
-  array's elements at `rack.i.2.4` onwards (decision 156; the hierarchical reading
-  provisional). A two-dimensional array's follow the elements' order, the rightmost
+  array's elements at `rack.i.2.4` onwards (decisions 156 and 242). A two-dimensional array's follow the elements' order, the rightmost
   subscript fastest. `Logex.IO.points/1` gives the card's adapter one
   `%Logex.IO.Point{}` an element, and the runner reads, writes and forces each by its
   name, `zone_t[3]`; `cycle/3` takes it as an input key, `%{"zone_t[3]" => 150}`, and
-  gives each output element by its own, `"zone_hot[3]"`. The array named whole is no
-  point: a force of `zone_t`, an input `%{"zone_t" => [...]}` and a forces file's line
-  `zone_t 1.0` are each refused, told the elements (provisional).
+  gives each output element by its own, `"zone_hot[3]"`. Named whole, an array of input
+  points takes a list of its shape, as a program's array `var_input` does (decision
+  241): an input `%{"zone_t" => [...]}`, a force of `zone_t` to a list, each element then
+  forced, an unforce of `zone_t`, each element back to the card's last value, and a forces
+  file's line `zone_t 170.0 170.0 …`, read as each element forced; the file the runner
+  writes keeps one element a line, as `status/1` lists them, so it reads back to the very
+  forces it holds. A list of the wrong shape, or with an element that does not fit, is
+  refused, every misfit told, ten and then a count, and nothing is forced.
 - A range that overlaps another point is refused, both named, once a pair: `door` at
   `card.i.5` is told `zone_t[5]` is there. A located array takes no initial list, as a
   located global takes no initial value, and an array of output points that nothing
-  drives, or drives only element by element, is warned of the elements left at 0, a
+  drives, or drives only element by element, is warned of the elements left at 0, ten
+  and then a count (decision 243), a
   program writing `ote zone_hot[2]` through its `var_external` driving that element
-  alone and one writing `ote zone_hot[z]` the array whole (provisional). An
+  alone and one writing `ote zone_hot[z]` the array whole (decision 245). An
   event task's single is still a whole bool global.
 - An adapter's `check/3` may refuse a range past its device's points: `Logex.IO.Sim`
   started with `inputs:` or `outputs:` refuses each point past them at bind, so a
@@ -3399,9 +3430,10 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
   card whole again, and a value one element cannot hold trips the plant at that
   element's address, the others kept (decision 143).
 - An online edit that moves a located array, grows or shrinks it, or takes its location
-  away, is refused naming the range it took and would take, "`zone_t` is at `card.i.0`
-  to `card.i.7` in the running configuration and at `card.i.0` to `card.i.9` in the
-  candidate: located I/O changes only with a restart"; an element an edit stops driving
+  away, is refused once, naming the range it took and would take, "`zone_t` is at
+  `card.i.0` to `card.i.7` in the running configuration and at `card.i.0` to `card.i.9`
+  in the candidate: located I/O changes only with a restart" (decision 244), where an
+  unlocated array grown is told its type; an element an edit stops driving
   is held at its point by its name, `{:held, "zone_hot[4]", 1}`.
 
 ## Changing a running program

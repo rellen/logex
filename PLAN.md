@@ -176,7 +176,14 @@ share, with four questions put to the maintainer. And the thirteenth, M5-13, the
 day: a located array, `var_global temps real[8] at card.i.0`, one point an element at
 consecutive addresses, read, written and forced by its name, `temps[3]` (§3, M5-13),
 with four questions put to the maintainer, and its review's fixes the same day, with
-three more.
+three more; and the maintainer's answers to those seven and M5-12's four follow-ups the
+same day (decisions 237 to 247, §3, M5-12 and M5-13), five confirming what was built and
+six changes: `1.0e-400` refused in a configuration line in its global's words and held at
+0.0 in the forces file; the elements an instance writes named on one warning line;
+`eq 1.0e-400 0.0` refused; a located array named whole taking a list, as an input, a
+force, an unforce and a forces file's line; a located array grown refused once, for its
+range; and a coil beside another write of the very element through the very tag warned of
+nothing, with three questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7402,6 +7409,15 @@ the walks' cross-type reach and the documents.
      are; `lt 0.0 1.0e-400`, which the text says is true, is false. The options: (a) as
      built; (b) refused as the slot refuses it beside a tag. IEC and Logix say nothing
      found.
+  **The maintainer's answers**, 2026-10-24 (decisions 237 to 240). (1) *Changed*: a
+  configuration line's `1.0e-400` is refused in its global's or member's words, "`big` is
+  an lreal: `1.0e-400` is too near 0.0 for an lreal, …", as `1.0e-310` is, and a forces
+  file's is held at 0.0 (decision 237). (2) *Confirmed*: `move 0 lamps[2]` beside `ote
+  lamps[slot]` is warned (decision 238). (3) *Changed*: an instance writing several
+  elements beside one other writer is told once, "`t1` writes `speeds[1]`, `speeds[2]` and
+  `speeds[3]` through its var_external, as `f1` may", ten and then a count (decision 239).
+  (4) *Changed*: `eq 1.0e-400 0.0` refuses the literal as every other slot does (decision
+  240). They landed with M5-13's seven answers, below.
 - **M5-13 · Located arrays.** Decision 156's follow-up: `var_global temps real[8] at
   card.i.0` occupying `card.i.0` to `card.i.7`, in the elements' order, each element a
   point named `temps[3]`, grouped by `Logex.IO.points/1`, read, written and forced as its
@@ -7623,6 +7639,84 @@ the walks' cross-type reach and the documents.
      array refused for its initial list is (M5-11); (b) as before, the line declaring
      nothing. A line broken after its value, `var r int 5 7`, still declares nothing. IEC
      says nothing found; Logix's editor checks a value as it is typed (**unverified**).
+
+  **The maintainer's answers**, 2026-10-24 (decisions 237 to 247, the eleven questions
+  of M5-12's follow-ups, M5-13 and its review), **landed the same day** as one gated commit
+  of code and tests, `cfc78c6`, one of tests, `31401c2`, and one of documents. Five confirm what was built:
+  `move 0 lamps[2]` beside `ote lamps[slot]` warned (decision 238); a hierarchical
+  address's last field counting up (242); the undriven warning naming each element, ten
+  then a count (243); a program's write through its `var_external` driving each element
+  it writes, a tag subscript the array whole (245); and a scalar refused for its initial
+  value declared with none (247). Six change it:
+  - *`1.0e-400` in a configuration and the forces file* (decision 237): refused in its
+    global's or member's words, as `1.0e-310` is, through a subnormal stand-in no other
+    literal of the text holds, `Logex.Configuration.Text.read_rounded/1`, quoted back as
+    written in every message, a connection's constant and a task's interval among them;
+    held at 0.0 in a forces file. Found on the way: `var_global g dint 1.5`, which a line
+    can say since M5-10, raised from `compile/3` as the host's mistake; a float initial
+    value is now judged by the literal rules, "`g` is a dint: `1.5` is a real, and a dint
+    holds only integers", from Elixir too.
+  - *The elements named together* (239): "`t1` writes `speeds[1]`, `speeds[2]` and
+    `speeds[3]` through its var_external, as `f1` may (line 4): …", in the elements' order,
+    ten and then a count.
+  - *`eq 1.0e-400 0.0`* (240): "`eq` reads a number or a bit string, and compares two
+    literals as lreals: `1.0e-400` is too near 0.0 for an lreal, …".
+  - *A located array named whole* (241): a list of its shape in a cycle's inputs,
+    `%{"zone_t" => [...]}`, in `Logex.Runner.force/3` and `unforce/2`, each element forced
+    or unforced, and in a forces file's line, `zone_t 170.0 170.0 …`, its name and one
+    value an element in the elements' order; the shape and every element checked, misfits
+    ten then a count, a whole key beside an element key refused; the runner keeps each
+    element's last device value for an unforce, as for each point; and the file is
+    written element by element, one line an element, as the runner holds its forces, so
+    that what it writes reads back to the very forces it holds. No element is a trigger
+    (an event task's single is a whole bool global), so a whole force makes no round of
+    its own.
+  - *A located array grown by an edit* (244): refused once, for its range; one whose range
+    is kept and whose elements' type changes is told its type; an unlocated array grown is
+    still told its type (decision 157).
+  - *The very element through the very tag* (246): `ote lamps[slot]` beside `otl
+    lamps[slot]`, any write but a coil's, either first, and `ote w.[n]` beside `otl
+    w.[n]`, superseding M5-9's reading, are warned of nothing; through other tags, `l[i]`
+    beside `l[j]` or `w.[n]` beside `w.[m]`, still warned, and so is the very element's
+    write beside a coil on another element or bit, whichever came first.
+
+  The runner walk forces and unforces `pt` whole where it draws `pt[1]`, keeping its
+  draws' stream, its reach the array forced and unforced whole. The cost, measured against
+  `7deac11` (`scratchpad/m5/a15/cost_p.exs` and `cost_c.exs`): every program of the cost
+  script compiles and scans in the reductions it took, but those with a coil on an
+  element, 0.3% to 1.8% dearer to compile; a configuration's `compile/3` is cheaper, 1.1%
+  at 4 relays and 32, its tokens looked at once for an underflowed literal where they were
+  looked at through a call each; `check/1`, `start/1` and `points/1` five reductions dearer
+  whatever the size, the writer warnings' empty case; and a cycle, its outputs, `get/2`
+  and a restart cost what they did, a configuration of no located array looking for no
+  whole key. *Mutation table* (`m5/a15/mut/run.log`), each mutant judged by the full
+  suite's exit code on `cfc78c6`: 37 mutants, 35 red at once: C1 to C6 (decision 237: no stand-in, no respelling, the held literals not looked at, a float initial raised again, the initial rule's old guard, an array element's), F1 (the forces file refusing `1.0e-400` again), P1 (decision 240's refusal dropped), W1 to W5 (decision 239: each element its own line, the elements unsorted, the cap at a hundred, "or" for "and", every line of an instance merged), X1 to X9 (decision 246: the exception taken nowhere, at a tag-subscript write first, at a bit's write after its coil, at a coil after a bit's write, the first through other tags never kept, the subscripts or the bit's tag left out of the identity, the coil after an array coil, a tag subscript's name left out), E1 and E2 (decision 244's range alone dropped, the type of a kept range dropped), R1 to R4 (a whole input taken unchecked, not placed, the clash taken, a real element not held at its nearest) and N1, N2, N4 and N6 to N9 (a whole force's shape unchecked, an unforce of one element only, a whole line's elements not looked for twice, a whole force and a whole line not held at their nearest, the line's elements not kept for later lines, a line of several values naming no array taken as a point's); two survived, a whole line of more values than elements taken (N3) and a whole force's misfits uncapped (N5), and `31401c2` pins each, tests only, after which both are red.
+
+  2138 tests (11 doctests), up from 2133.
+
+  *Provisional readings* (the answers'), each a question for the maintainer:
+
+  8. *The forces file's form for a whole array.* The oven's eight zones forced whole,
+     `force(r, "zone_t", [170, …])`: as built the file holds eight lines, `zone_t[0]
+     170.0` to `zone_t[7] 170.0`, as the runner holds the forces and `status/1` lists them,
+     and a line `zone_t 170.0 …` written by hand is read as each element forced and written
+     back by element at the next force; an operator unforcing zone 3 alone sees the other
+     seven still listed. The options: (a) as built; (b) a whole line where every element is
+     forced, `zone_t 170.0 170.0 …`, and element lines otherwise, so the file reads as the
+     operator forced it. Logix forces within a tag, by element (1756-PM004L pp.51, 53, 54);
+     no forces file of Logix's was found in the extracts read (**unverified**).
+  9. *Two instances writing the same elements.* `t1` and `t2` both write `speeds[1]` and
+     `speeds[3]`, neither through a tag subscript: as built `t2` is told once, "`t2` writes
+     `speeds[1]` and `speeds[3]` through its var_external, as `t1` does", as decision 239
+     tells an instance beside a writer through a tag subscript. The options: (a) as built;
+     (b) a line an element, as before decision 239, which asked only of a tag subscript.
+     Logix has no such check (decision 48 is logex's own).
+  10. *A subnormal literal beside a literal.* `gt 1.0e-310 0.0`: as built it compiles and is
+     true on every scan, the double it lexes as, warned only as two literals compared are,
+     where decision 240 refuses `eq 1.0e-400 0.0`; beside a tag it is refused (decision
+     228). The options: (a) as built, since its text and its value agree; (b) refused as
+     beside a tag, "too near 0.0 for an lreal", as any literal a write would flush. IEC
+     and Logix say nothing found.
 - **M5-14 · Arrays of instances.** Decision 154: `var lane_t ton[4]`, `var lanes
   seal[4]`, a literal subscript on every instruction that runs one, a tag subscript on a
   member's read or write. *Done when* each refusal is pinned, the one-run rule holds per
