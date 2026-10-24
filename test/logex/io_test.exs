@@ -573,12 +573,19 @@ defmodule Logex.IOTest do
            "with its message" do
       for {opts, message} <- [
             {:fast,
-             "Logex.IO.Sim takes a keyword list of options, reports:, clock: and wait:, got: " <>
-               ":fast"},
+             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: " <>
+               "and outputs:, got: :fast"},
             {[1],
-             "Logex.IO.Sim takes a keyword list of options, reports:, clock: and wait:, got: " <>
-               "[1]"},
-            {[loud: true], "Logex.IO.Sim takes reports:, clock: and wait:, got: :loud"},
+             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: " <>
+               "and outputs:, got: [1]"},
+            {[loud: true],
+             "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: :loud"},
+            {[inputs: 0],
+             "Logex.IO.Sim's inputs: is how many points it has, 1 or more, or nil for as many " <>
+               "as it is given, got: 0"},
+            {[outputs: 2.0],
+             "Logex.IO.Sim's outputs: is how many points it has, 1 or more, or nil for as many " <>
+               "as it is given, got: 2.0"},
             {[reports: :yes], "Logex.IO.Sim's reports: is true or false, got: :yes"},
             {[clock: :nope],
              "expected a manual clock from Logex.Runner.Clock.Manual.start_link/1, got: :nope"},

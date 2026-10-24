@@ -61,7 +61,7 @@ defmodule Logex.IO.Sim do
   alias Logex.IO.Point
   alias Logex.Runner.Clock.Manual
 
-  @options [:reports, :clock, :wait]
+  @options [:reports, :clock, :wait, :inputs, :outputs]
   @callbacks [:init, :read, :write, :report, :close]
 
   # The longest a process waits for an answer, 2^32 - 1 ms: a call refuses a longer one.
@@ -134,12 +134,13 @@ defmodule Logex.IO.Sim do
         ":sys once it has handled what it was sent"
 
   @impl Logex.IO
-  def check(_device, _points, opts), do: misbound(opts)
+  def check(device, points, opts), do: misbound(opts, {device, points})
 
   @impl Logex.IO
   def init(device, points, opts) do
-    sim = bound!(opts)
+    sim = bound!(opts, {device, []})
     points = points!(points)
+    first!(past(GenServer.call(sim, :sizes), {device, points}), sim)
     act(take(sim, :init), :init, %{device: device}, fn _given -> opened(sim, device, points) end)
   end
 
@@ -274,6 +275,7 @@ defmodule Logex.IO.Sim do
     do: opening(holder(state), pid, device, state)
 
   def handle_call(:holder, _from, state), do: {:reply, holder(state), state}
+  def handle_call(:sizes, _from, state), do: {:reply, state.sizes, state}
 
   def handle_call({:inputs, addresses}, _from, state),
     do: {:reply, Map.new(addresses, &{&1, Map.get(state.inputs, &1, 0)}), state}
@@ -325,20 +327,39 @@ defmodule Logex.IO.Sim do
     %{
       reports: reports!(Keyword.get(opts, :reports, false)),
       clock: clock!(Keyword.get(opts, :clock)),
-      wait: wait!(Keyword.get(opts, :wait, 5000))
+      wait: wait!(Keyword.get(opts, :wait, 5000)),
+      sizes: %{
+        input: size!(Keyword.get(opts, :inputs), :inputs),
+        output: size!(Keyword.get(opts, :outputs), :outputs)
+      }
     }
   end
 
+  # M5-13: how many points of a direction the sim has, nil for as many as it is given.
+  defp size!(nil, _key), do: nil
+  defp size!(n, _key) when is_integer(n) and n >= 1, do: n
+
+  defp size!(other, key),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim's #{key}: is how many points it has, 1 or more, or nil for as many " <>
+          "as it is given, got: " <> inspect(other)
+      )
+
   defp takes(opts),
     do:
-      "Logex.IO.Sim takes a keyword list of options, reports:, clock: and wait:, got: " <>
-        inspect(opts)
+      "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: and " <>
+        "outputs:, got: " <> inspect(opts)
 
   defp known!([]), do: :ok
 
   defp known!([key | _]),
     do:
-      raise(ArgumentError, "Logex.IO.Sim takes reports:, clock: and wait:, got: #{inspect(key)}")
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: #{inspect(key)}"
+      )
 
   defp reports!(reports) when is_boolean(reports), do: reports
 
@@ -385,28 +406,69 @@ defmodule Logex.IO.Sim do
   defp first!([mistake | _rest], _value), do: raise(ArgumentError, mistake)
 
   # The options it is bound with, `sim:` alone, a sim that is running and that no other
-  # device holds open: each mistake in them, the sim's first, and then each other key.
-  defp misbound(opts) when is_list(opts),
-    do: bound(Keyword.keyword?(opts) and Keyword.has_key?(opts, :sim), opts)
+  # device holds open: each mistake in them, the sim's first, and then each other key; and
+  # since M5-13 each point past the sim's own, where it was started with `inputs:` or
+  # `outputs:`.
+  defp misbound(opts, device) when is_list(opts),
+    do: bound(Keyword.keyword?(opts) and Keyword.has_key?(opts, :sim), opts, device)
 
-  defp misbound(opts), do: bound(false, opts)
+  defp misbound(opts, device), do: bound(false, opts, device)
 
-  defp bound(true, opts) do
+  defp bound(true, opts, device) do
     sim = Keyword.fetch!(opts, :sim)
 
-    simulated(unsimulated(sim), sim) ++
+    simulated(unsimulated(sim), sim, device) ++
       for key <- Enum.uniq(Keyword.keys(opts)) -- [:sim],
           do: "Logex.IO.Sim is bound with sim: alone, got: #{inspect(key)}"
   end
 
-  defp bound(false, opts),
+  defp bound(false, opts, _device),
     do: [
       "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
         inspect(opts)
     ]
 
-  defp simulated([], sim), do: free(GenServer.call(sim, :holder), sim)
-  defp simulated(mistakes, _sim), do: mistakes
+  defp simulated([], sim, device),
+    do: free(GenServer.call(sim, :holder), sim) ++ past(GenServer.call(sim, :sizes), device)
+
+  defp simulated(mistakes, _sim, _device), do: mistakes
+
+  # M5-13: a point the sim has no point for, an address past its last of that direction or
+  # of more than one field, each told with the sim's own range, the first ten and then a
+  # count of the rest (`Logex.Array.capped/2`), so that a located array past the sim's
+  # points, `temps real[10] at card.i.0` on a sim of 8 inputs, is told at each element past.
+  defp past(sizes, {device, points}),
+    do:
+      Logex.Array.capped(
+        for(
+          %Point{direction: direction, address: address} = point <- points,
+          size = Map.fetch!(sizes, direction),
+          not within?(address, size),
+          do: beyond(point, device, size)
+        ),
+        &"and #{&1} more point#{plural(&1)} past the sim's"
+      )
+
+  defp within?(_address, nil), do: true
+  defp within?([n], size), do: n < size
+  defp within?(_fields, _size), do: false
+
+  defp beyond(%Point{name: name, direction: direction, address: address}, device, size),
+    do:
+      "`#{name}` is at `#{at(device, direction, address)}`, past the sim's #{size} " <>
+        "#{noun(direction, size)}, `#{at(device, direction, [0])}` to " <>
+        "`#{at(device, direction, [size - 1])}`"
+
+  defp at(device, :input, address), do: Enum.join([device, "i" | address], ".")
+  defp at(device, :output, address), do: Enum.join([device, "q" | address], ".")
+
+  defp noun(:input, 1), do: "input"
+  defp noun(:input, _size), do: "inputs"
+  defp noun(:output, 1), do: "output"
+  defp noun(:output, _size), do: "outputs"
+
+  defp plural(1), do: ""
+  defp plural(_n), do: "s"
 
   # Held by none, or by the very process that asks, which may open it again.
   defp free(nil, _sim), do: []
@@ -414,7 +476,7 @@ defmodule Logex.IO.Sim do
   defp free({pid, device}, sim), do: [holding(sim, pid, device)]
 
   # The sim init/3 opens, its options' first mistake raised.
-  defp bound!(opts), do: Keyword.fetch!(first!(misbound(opts), opts), :sim)
+  defp bound!(opts, device), do: Keyword.fetch!(first!(misbound(opts, device), opts), :sim)
 
   defp points!(points), do: each_point!(points?(points), points)
 

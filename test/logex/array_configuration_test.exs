@@ -2,8 +2,8 @@ defmodule Logex.ArrayConfigurationTest do
   @moduledoc """
   PLAN M5-11 in a configuration (`docs/organisation.md` §4.12, "Arrays", decisions 151,
   157 and 159): an unlocated array global from a configuration file's line and from
-  Elixir, its sizes and initial list judged as a declaration's, printed back exactly; a
-  located one refused, which is M5-13's; a `var_external` array bound only to a global
+  Elixir, its sizes and initial list judged as a declaration's, printed back exactly (a
+  located one is `located_array_test.exs`'s, M5-13's); a `var_external` array bound only to a global
   array of exactly its element type and every dimension's size; a connection naming an
   array var_input or var_output whole, to a global array of its sizes whose elements
   widen, or an element by literal subscripts, `m1.temps[3]`; a cycle copying each in and
@@ -199,7 +199,7 @@ defmodule Logex.ArrayConfigurationTest do
       assert Configuration.initial(Enum.at(configuration.globals, 4)) == {{0, 0}, {0, 0}}
     end
 
-    test "meets every rule a declared array meets, at its line, and is not located yet" do
+    test "meets every rule a declared array meets, at its line" do
       tail =
         "var_global ws int[3]\nvar_global s dint\nvar_global g real[2,2]\nprogram m1 m\nm1.w ws\nm1.s s\nm1.e[0] 1\nm1.e[1] 2\n"
 
@@ -223,16 +223,7 @@ defmodule Logex.ArrayConfigurationTest do
                "`w[1]` is an int: `70000` is outside -32768 to 32767"
              ]
 
-      assert refused("var_global w int[3] at panel.i.0\n" <> tail) == [
-               "`w` is an array at `panel.i.0`: an array global is not located yet, so declare it with no `at`, or a global at each point"
-             ]
-
-      # A located array is no point, so a point at its location is no second one there.
-      assert refused("var_global w int[3] at panel.i.0\nvar_global b bool at panel.i.0\n" <> tail) ==
-               [
-                 "`w` is an array at `panel.i.0`: an array global is not located yet, so declare it with no `at`, or a global at each point"
-               ]
-
+      # Since M5-13 an array may be located (located_array_test.exs).
       assert refused("var_global w[2] int\n" <> tail) == [
                "`w[2]` cannot name a global: brackets are kept for an element's subscripts, as in `m1.temps[3]`"
              ]

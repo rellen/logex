@@ -6223,4 +6223,180 @@ defmodule Logex.EndToEndTest do
       Runner.stop(runner)
     end
   end
+
+  # PLAN M5-13's Done-when: §4.4's plant reads its oven card's eight zone temperatures as
+  # one located array, `var_global zone_t real[8] at card.i.0`, each element a point at
+  # its own address (decision 156), and lights a lamp for each zone over its setpoint
+  # through a located array of output points, `zone_hot bool[8] at card.q.0`, from files
+  # on disk through `Logex.Runner` on the manual clock, against an oracle that knows
+  # nothing of logex: eight singles in a list, restated through the BEAM's 32-bit encoding.
+  # `zone_t[3]` is forced against its device, across a restart, a crash and a fresh start
+  # from its forces file; a sim of seven inputs is refused for the range past it.
+  describe "a located array in the plant (M5-13)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration.Text
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @zones_ld """
+    var_input  t   real[8]
+    var_input  sp  real
+    var_output hot bool[8]
+    var_output t0  real
+    // a lamp for each zone over its setpoint
+    gt t[0] sp ote hot[0]
+    gt t[1] sp ote hot[1]
+    gt t[2] sp ote hot[2]
+    gt t[3] sp ote hot[3]
+    gt t[4] sp ote hot[4]
+    gt t[5] sp ote hot[5]
+    gt t[6] sp ote hot[6]
+    gt t[7] sp ote hot[7]
+    move t[0] t0
+    """
+
+    @zones_lines """
+
+    var_global zone_t   real[8] at card.i.0
+    var_global zone_hot bool[8] at card.q.0
+    var_global zone_sp  real    180.0
+    var_global zone_t0  real
+
+    program oven zones with fast
+      oven.t   zone_t
+      oven.sp  zone_sp
+      oven.hot zone_hot
+      oven.t0  zone_t0
+    """
+
+    defp one_single(x) do
+      <<y::float-32>> = <<x::float-32>>
+      y
+    end
+
+    defp oven_runner(plant, dir, card) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{
+            "panel" => {Sim, sim: panel},
+            "drive" => {Sim, sim: drive},
+            "card" => {Sim, sim: card}
+          },
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      {runner, clock}
+    end
+
+    # The runner killed is reported by its devices as they go down.
+    @tag :capture_log
+    test "M5-13's Done-when: the oven card's eight zones are one located array", %{tmp_dir: dir} do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"zones.ld", @zones_ld},
+        {"plant.logex", whole_plant() <> @zones_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert plant.warnings == []
+
+      # Printed back exactly; and its points, the card's, one an element.
+      text = Text.print(plant)
+      assert text =~ "var_global zone_t real[8] at card.i.0\n"
+
+      assert Logex.Configuration.compile("plant", text, plant.programs) ==
+               {:ok, %{plant | file: nil}}
+
+      assert for(
+               p <- Map.fetch!(Logex.IO.points(plant), "card"),
+               do: {p.name, p.direction, p.address}
+             ) ==
+               for(i <- 0..7, do: {"zone_t[#{i}]", :input, [i]}) ++
+                 for(i <- 0..7, do: {"zone_hot[#{i}]", :output, [i]})
+
+      # A card of seven inputs is refused for the range past it, at start, in the caller.
+      {:ok, short} = Sim.start_link(inputs: 7)
+
+      assert_raise ArgumentError,
+                   "the device `card`'s adapter options: `zone_t[7]` is at `card.i.7`, past the sim's 7 inputs, `card.i.0` to `card.i.6`",
+                   fn -> oven_runner(plant, dir, short) end
+
+      {:ok, card} = Sim.start_link(reports: true, inputs: 8, outputs: 8)
+      {runner, clock} = oven_runner(plant, dir, card)
+      :rand.seed(:exsss, {5, 13, 156})
+
+      # The oracle: eight singles, each zone's lamp lit while its temperature is over 180.
+      temps =
+        Enum.reduce(1..120, List.duplicate(0.0, 8), fn _, temps ->
+          changed =
+            for zone <- Enum.take_random(0..7, Enum.random(1..8)),
+                into: %{},
+                do: {zone, Enum.random([Enum.random(0..400), :rand.uniform() * 400])}
+
+          Sim.set(card, Map.new(changed, fn {zone, t} -> {[zone], t} end))
+          Manual.advance(clock, 10)
+
+          temps =
+            Enum.reduce(changed, temps, fn {zone, t}, temps ->
+              List.replace_at(temps, zone, one_single(t * 1.0))
+            end)
+
+          assert Runner.get!(runner, "zone_t") == temps
+          assert Runner.get!(runner, "zone_t0") === hd(temps)
+
+          assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
+                   for(t <- temps, do: if(t > 180.0, do: 1, else: 0))
+
+          temps
+        end)
+
+      # Zone 3 forced over its setpoint against a card that says it is cold: its lamp
+      # lit, the zones beside it still the card's, its line in the forces file by name.
+      Sim.set(card, %{[3] => 20, [4] => 20})
+      assert :ok = Runner.force(runner, "zone_t[3]", 250)
+      Manual.advance(clock, 10)
+      temps = temps |> List.replace_at(3, 250.0) |> List.replace_at(4, 20.0)
+      assert Runner.get!(runner, "zone_t") == temps
+      assert Sim.outputs(card)[[3]] == 1 and Sim.outputs(card)[[4]] == 0
+      assert File.read!(Path.join(dir, "forces")) == "zone_t[3] 250.0\n"
+
+      # A zone past a real's range trips the plant; put right, a restart reads the card
+      # again, the force still on.
+      Sim.set(card, [6], Integer.pow(2, 128))
+      assert Runner.status(runner).trip == {:io, "card", {:bad_value, [6], Integer.pow(2, 128)}}
+      Sim.set(card, [6], 190.5)
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 10)
+      temps = List.replace_at(temps, 6, 190.5)
+      assert Runner.get!(runner, "zone_t") == temps
+      assert Sim.outputs(card)[[3]] == 1 and Sim.outputs(card)[[6]] == 1
+
+      # Killed: a fresh runner from the same file comes back with zone 3 forced.
+      Process.flag(:trap_exit, true)
+      Process.exit(runner, :kill)
+      assert_receive {:EXIT, ^runner, :killed}
+      {runner, clock} = oven_runner(plant, dir, card)
+      assert %{forces: %{"zone_t[3]" => 250.0}} = Runner.status(runner)
+      assert Runner.get!(runner, "zone_t[3]") === 250.0
+
+      # Unforced: the card's last value, 20.
+      assert :ok = Runner.unforce(runner, "zone_t[3]")
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "zone_t") == List.replace_at(temps, 3, 20.0)
+      assert Sim.outputs(card)[[3]] == 0
+      assert File.read!(Path.join(dir, "forces")) == ""
+      Runner.stop(runner)
+    end
+  end
 end

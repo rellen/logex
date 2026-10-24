@@ -135,6 +135,20 @@ defmodule Logex.Array do
     do: for(i <- 0..(count - 1)//1, rest <- indexes(dims), do: [i | rest])
 
   @doc false
+  # M5-13 (decision 156): the points a located array occupies, one an element at
+  # consecutive addresses in the elements' order from the address it is at, its last field
+  # counting up, `temps real[8] at card.i.0` occupying `card.i.0` to `card.i.7` and one at
+  # `rack.i.2.4` `rack.i.2.4` onwards (provisional): `{index, name, fields}` each.
+  def points(array, dims, fields) do
+    {first, [last]} = Enum.split(fields, -1)
+
+    dims
+    |> indexes()
+    |> Enum.with_index()
+    |> Enum.map(fn {index, offset} -> {index, name(array, index), first ++ [last + offset]} end)
+  end
+
+  @doc false
   # The lines a message gives for an array's elements, at most the first 10, then one line
   # that counts the rest, `more.(count)` (provisional): an array of 65,536 elements every one
   # outside its type would otherwise give a message of megabytes.

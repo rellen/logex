@@ -822,10 +822,34 @@ defmodule Logex.Runner do
   defp input_of(:error, name, state),
     do: {:error, not_input(Map.fetch(state.located, name), name, state)}
 
-  defp not_input({:ok, at}, name, _state),
+  defp not_input({:ok, {:point, at}}, name, _state),
     do: "`#{name}` is an output point, at `#{at}`: only an input point is forced"
 
-  defp not_input(:error, name, %{configuration: configuration, types: types}),
+  # M5-13 (decision 156): a located array is forced element by element, each its own point.
+  defp not_input({:ok, {:array, :input, {first, from}, {last, to}}}, name, _state),
+    do:
+      "`#{name}` is an array of input points, `#{from}` to `#{to}`: a force names one " <>
+        "element, `#{first}` to `#{last}`"
+
+  defp not_input({:ok, {:array, :output, {_first, from}, {_last, to}}}, name, _state),
+    do:
+      "`#{name}` is an array of output points, `#{from}` to `#{to}`: only an input point " <>
+        "is forced"
+
+  defp not_input(:error, name, %{configuration: configuration, types: types} = state),
+    do: unheld(element_of(Logex.Array.split(name), state.located), name, {types, configuration})
+
+  defp element_of({array, _subscripts}, located), do: Map.get(located, array)
+  defp element_of(nil, _located), do: nil
+
+  # M5-13: an element a located array of input points does not hold, as written.
+  defp unheld({:array, :input, {first, _from}, {last, _to}}, name, {_types, configuration}),
+    do:
+      "`#{name}` is no input point of `#{configuration.name}`: its array is one of input " <>
+        "points, each element forced by its name as its subscripts' values, `#{first}` to " <>
+        "`#{last}`"
+
+  defp unheld(_other, name, {types, configuration}),
     do: no_input(Map.keys(types), name, configuration)
 
   defp no_input([], name, configuration),
@@ -837,6 +861,40 @@ defmodule Logex.Runner do
     do:
       "`#{name}` is no input point of `#{configuration.name}`" <>
         Declarations.suggest(name, Enum.sort(names), & &1, "names")
+
+  # Every located global's point by its name, an element of a located array by its own,
+  # `temps[3]`, at its own location, and a located array whole by its name with the range
+  # its elements occupy: what a force naming no input point is told.
+  defp located(configuration, devices) do
+    points =
+      for {device, _module, _opts, points} <- devices,
+          %Point{name: name, direction: direction, address: address} <- points,
+          do: {name, {direction, spelled(device, direction, address)}}
+
+    arrays =
+      for %Configuration.Global{name: name, type: {:array, _type, dims}, at: at} <-
+            configuration.globals,
+          at != nil,
+          do: {name, ranged(name, dims, Configuration.location(at))}
+
+    Map.new(for({name, {_direction, at}} <- points, do: {name, {:point, at}}) ++ arrays)
+  end
+
+  defp ranged(name, dims, {:ok, {device, io, fields}}) do
+    direction = direction(io)
+    points = Logex.Array.points(name, dims, fields)
+    {_index, first, from} = hd(points)
+    {_index, last, to} = List.last(points)
+
+    {:array, direction, {first, spelled(device, direction, from)},
+     {last, spelled(device, direction, to)}}
+  end
+
+  defp direction("i"), do: :input
+  defp direction("q"), do: :output
+
+  defp spelled(device, :input, address), do: Enum.join([device, "i" | address], ".")
+  defp spelled(device, :output, address), do: Enum.join([device, "q" | address], ".")
 
   defp input!({:ok, type}), do: type
   defp input!({:error, message}), do: raise(ArgumentError, message)
@@ -2041,14 +2099,7 @@ defmodule Logex.Runner do
               %Point{direction: :input} = point <- points,
               do: {point.name, point.type}
         ),
-      located:
-        Map.new(
-          for(
-            %Configuration.Global{at: at, name: name} <- configuration.globals,
-            at != nil,
-            do: {name, at}
-          )
-        )
+      located: located(configuration, devices)
     }
 
     {%{

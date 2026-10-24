@@ -97,8 +97,11 @@ defmodule Logex.IO do
   [%Logex.IO.Point{}]}`, each device's points in the order the configuration declares
   them: what each device's adapter is opened with. A global with `at` is a point, its
   device the location's first part and its address its integer fields
-  (`Logex.Configuration.location/1`). A configuration with no located global has no
-  device.
+  (`Logex.Configuration.location/1`). Since M5-13 a located array is a point an element,
+  at consecutive addresses in the elements' order, its last field counting up, each named
+  by its element, `var_global temps real[8] at card.i.0` giving `temps[0]` at `[0]` to
+  `temps[7]` at `[7]`, each of the array's element type (decision 156). A configuration
+  with no located global has no device.
 
   The configuration is checked as `Logex.Runtime.start/1` checks it, and one it refuses
   raises `ArgumentError` in the same words.
@@ -112,6 +115,14 @@ defmodule Logex.IO do
   end
 
   defp point(%Global{at: nil}), do: []
+
+  defp point(%Global{name: name, at: at, type: {:array, type, dims}}) do
+    {:ok, {device, io, fields}} = Configuration.location(at)
+
+    for {_index, element, address} <- Logex.Array.points(name, dims, fields),
+        do:
+          {device, %Point{name: element, direction: direction(io), address: address, type: type}}
+  end
 
   defp point(%Global{name: name, at: at, type: type}) do
     {:ok, {device, io, address}} = Configuration.location(at)
@@ -211,13 +222,43 @@ defmodule Logex.IO do
 
   defp device(name, {:ok, points}, {:ok, binding}, _sorted), do: adapter(name, binding, points)
 
-  # Each point named with its location, as the configuration spells it.
+  # Each point named with its location, as the configuration spells it, and since M5-13 a
+  # located array's elements as the range they occupy, `temps[0]` to `temps[7]` (card.i.0
+  # to card.i.7).
   defp at(device, [%Point{} = point]), do: "#{shown(device, point)} is at"
-  defp at(device, points), do: listed(Enum.map(points, &shown(device, &1))) <> " are at"
 
-  defp shown(device, %Point{name: name, direction: direction, address: address}),
+  defp at(device, points),
     do:
-      "`#{name}` (#{Enum.join([device, letter(direction) | Enum.map(address, &Integer.to_string/1)], ".")})"
+      points
+      |> Enum.chunk_by(&array_of(&1.name))
+      |> Enum.flat_map(&ranged(device, &1))
+      |> are_at()
+
+  defp are_at([one]), do: one <> " are at"
+  defp are_at(shown), do: listed(shown) <> " are at"
+
+  defp ranged(device, [first, _ | _] = points) do
+    last = List.last(points)
+    ranged(array_of(first.name), first, last, device, points)
+  end
+
+  defp ranged(device, points), do: Enum.map(points, &shown(device, &1))
+
+  defp ranged(nil, _first, _last, device, points), do: Enum.map(points, &shown(device, &1))
+
+  defp ranged(_array, first, last, device, _points),
+    do: [
+      "`#{first.name}` to `#{last.name}` (#{located_at(device, first)} to #{located_at(device, last)})"
+    ]
+
+  defp array_of(name), do: array_named(:binary.split(name, "["))
+  defp array_named([array, _subscripts]), do: array
+  defp array_named([_name]), do: nil
+
+  defp shown(device, %Point{name: name} = point), do: "`#{name}` (#{located_at(device, point)})"
+
+  defp located_at(device, %Point{direction: direction, address: address}),
+    do: Enum.join([device, letter(direction) | Enum.map(address, &Integer.to_string/1)], ".")
 
   defp letter(:input), do: "i"
   defp letter(:output), do: "q"

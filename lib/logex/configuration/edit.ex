@@ -39,7 +39,9 @@ defmodule Logex.Configuration.Edit do
   with no task and one `with` the continuous task being in one place, so that `with main`
   added or taken away moves nothing, and the continuous task named where it is declared; a global's type; located I/O, a located global
   added, removed or moved, or a location added to or taken from a global, a device being
-  only its points' prefix; and, in each program type an instance runs as that type in
+  only its points' prefix, since M5-13 a located array's by the range its elements occupy,
+  `card.i.0` to `card.i.7`, so that one grown or shrunk is refused for its range as well as
+  its type (decision 156, provisional); and, in each program type an instance runs as that type in
   both, every type change `Logex.Edit` refuses, a member's by its path. The configuration's
   own refusals come first, each in the candidate's `file` at its element's line, in line
   order, an element only the running configuration has last, with no line, its line in the
@@ -515,11 +517,11 @@ defmodule Logex.Configuration.Edit do
 
   defp global(nil, %Configuration.Global{at: nil}), do: []
 
-  defp global(nil, %Configuration.Global{name: name, at: at}),
-    do: ["`#{name}` at `#{at}` is added: #{located()}"]
+  defp global(nil, %Configuration.Global{name: name} = global),
+    do: ["`#{name}` at #{span(global)} is added: #{located()}"]
 
   defp global(%Configuration.Global{} = was, %Configuration.Global{} = global),
-    do: typed(was.type, global.type, global.name) ++ located(was.at, global.at, global.name)
+    do: typed(was.type, global.type, global.name) ++ located(span(was), span(global), global.name)
 
   defp typed(same, same, _name), do: []
 
@@ -538,17 +540,36 @@ defmodule Logex.Configuration.Edit do
     ]
 
   defp where(nil, at),
-    do: "has no location in the running configuration and is at `#{at}`"
+    do: "has no location in the running configuration and is at #{at}"
 
   defp where(was, nil),
-    do: "is at `#{was}` in the running configuration and has no location"
+    do: "is at #{was} in the running configuration and has no location"
 
-  defp where(was, at), do: "is at `#{was}` in the running configuration and at `#{at}`"
+  defp where(was, at), do: "is at #{was} in the running configuration and at #{at}"
+
+  # Where a global is, as an edit's refusal names it: its location, or, for a located
+  # array (M5-13, decision 156), the range its elements occupy, `card.i.0` to `card.i.7`,
+  # so that an array grown or moved is told the points it would take; nil for none.
+  defp span(%Configuration.Global{at: nil}), do: nil
+
+  defp span(%Configuration.Global{at: at, type: {:array, _type, dims}}),
+    do: ranged(Configuration.location(at), dims, at)
+
+  defp span(%Configuration.Global{at: at}), do: "`#{at}`"
+
+  defp ranged({:ok, {device, io, fields}}, dims, _at) do
+    points = Logex.Array.points("", dims, fields)
+    {_, _, from} = hd(points)
+    {_, _, to} = List.last(points)
+    "`#{Enum.join([device, io | from], ".")}` to `#{Enum.join([device, io | to], ".")}`"
+  end
+
+  defp ranged(:error, _dims, at), do: "`#{at}`"
 
   defp located, do: "located I/O changes only with a restart"
 
-  defp removed_point(%Configuration.Global{name: name, at: at, line: line}),
-    do: "`#{name}` at `#{at}`#{running_line(line)} is removed: #{located()}"
+  defp removed_point(%Configuration.Global{name: name, line: line} = global),
+    do: "`#{name}` at #{span(global)}#{running_line(line)} is removed: #{located()}"
 
   # An instance both configurations run as one program type, on another task. One retyped
   # is a new instance, which may run on any task (decision 61). Decision 129: an instance

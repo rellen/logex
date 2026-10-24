@@ -9901,7 +9901,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
   a third of the walks, each hang costing a real-time wait,
   and a device's read, report or write failing in each way `Logex.IO.Sim` acts out, a
-  value that does not fit and an address that is no input point's among them.
+  value that does not fit and an address that is no input point's among them. Since M5-13
+  every configuration holds a located array in and one out, the panel's `pt int[3]` at
+  `panel.i.3` and the drive's `qs bool[2]` at `drive.q.2`, each element a point pressed,
+  forced and unforced by its name, `pt[1]`, written at its own address, and refused at its
+  own, a 70000 at `panel.i.4` (decision 156, decision 143).
 
   It is checked against two models that know nothing of the runner's code.
 
@@ -10098,7 +10102,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # M5-12: an element whose subscript the panel's dint gives, read and written while the
     # panel's `pa` is pressed: its 7 and -4 are outside the array, a major fault (decision
     # 153).
-    "index" => "var_input n dint\nvar_input on bool\nvar w dint[4]\nxic on add w[n] 1 w[n]"
+    "index" => "var_input n dint\nvar_input on bool\nvar w dint[4]\nxic on add w[n] 1 w[n]",
+    # M5-13: a located array in and one out, each element a point of its own (decision
+    # 156): the panel's three ints at `panel.i.3` to `panel.i.5`, the drive's two lamps at
+    # `drive.q.2` and `drive.q.3`.
+    "zone" =>
+      "var_input t int[3]\nvar_output h bool[2]\ngt t[0] t[1] ote h[0]\ngt t[2] 3 ote h[1]"
   }
 
   defp programs,
@@ -10113,23 +10122,31 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {"pa", "bool", "panel.i.0"},
     {"pb", "bool", "panel.i.1"},
     {"pd", "dint", "panel.i.2"},
+    {"pt", "int[3]", "panel.i.3"},
     {"qa", "bool", "panel.q.0"},
     {"qn", "dint", "panel.q.1"},
     {"da", "bool", "drive.i.0"},
     {"db", "bool", "drive.i.1"},
     {"qb", "bool", "drive.q.0"},
-    {"qc", "dint", "drive.q.1"}
+    {"qc", "dint", "drive.q.1"},
+    {"qs", "bool[2]", "drive.q.2"}
   ]
 
   @inputs %{
     "pa" => {"panel", [0], :bool},
     "pb" => {"panel", [1], :bool},
     "pd" => {"panel", [2], :dint},
+    "pt[0]" => {"panel", [3], :int},
+    "pt[1]" => {"panel", [4], :int},
+    "pt[2]" => {"panel", [5], :int},
     "da" => {"drive", [0], :bool},
     "db" => {"drive", [1], :bool}
   }
 
-  @outputs %{"panel" => %{[0] => "qa", [1] => "qn"}, "drive" => %{[0] => "qb", [1] => "qc"}}
+  @outputs %{
+    "panel" => %{[0] => "qa", [1] => "qn"},
+    "drive" => %{[0] => "qb", [1] => "qc", [2] => "qs[0]", [3] => "qs[1]"}
+  }
 
   # Everything the walk must be seen to reach: every event kind; every trip reason but
   # {:internal, message}; each kind of round (decisions 120, 122, 123 and 138); and each
@@ -10198,10 +10215,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :restart_running,
     :get_mistake,
     :crash,
-    :late_open
+    :late_open,
+    :element_pressed,
+    :element_forced,
+    :element_misfit
   ]
 
-  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing)
+  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t)
 
   # A draw: the tasks' intervals and watchdogs, an event task on a panel's or a drive's
   # input, a trigger logic writes, the continuous task declared or not, and the untimed
@@ -10257,7 +10277,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         "program c1 count with fast\n  c1.n qn",
         "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc",
         "program b1 bit with fast\n  b1.n pd\n  b1.on pb",
-        "program x1 index with fast\n  x1.n pd\n  x1.on pa"
+        "program x1 index with fast\n  x1.n pd\n  x1.on pa",
+        "program z1 zone with fast\n  z1.t pt\n  z1.h qs"
       ] ++
         optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
         optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
@@ -10348,7 +10369,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     Process.put(:stale_mode, true)
 
     caught =
-      Enum.find_value(1..20, fn seed ->
+      Enum.find_value(1..40, fn seed ->
         :rand.seed(:exsss, {2026, 11, seed})
 
         try do
@@ -10360,7 +10381,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       end)
 
     assert is_binary(caught), "the walk's check caught no input given late"
-    assert caught =~ ~r/^(pa|pd|da) read -?\d+ at \d+, held /
+    assert caught =~ ~r/^(pa|pd|da|pt\[\d\]) read -?\d+ at \d+, held /
   end
 
   defp walk(programs, dir, seed, steps) do
@@ -10579,6 +10600,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     name = pick(forced ++ forced ++ Enum.sort(Map.keys(@inputs)))
     {device, address, type} = @inputs[name]
     reach(:forced_trigger_pressed, name in forced)
+    reach(:element_pressed, String.contains?(name, "["))
     set(w, name, device, address, value(type))
   end
 
@@ -10594,6 +10616,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp value(:bool), do: pick([0, 1])
   defp value(:dint), do: pick([0, 0, 3, 7, -4])
+  defp value(:int), do: pick([0, 2, 3, 5, -1])
 
   # ---- forcing ---------------------------------------------------------------------------
 
@@ -10627,6 +10650,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         assert Runner.force(w.runner, name, value) == :ok
         reach(:force, true)
         reach(:forced_trigger, kick == 1)
+        reach(:element_forced, String.contains?(name, "["))
 
         # A force that changes what a trigger reads makes its round at once, before it
         # returns, and one that does not makes none (decisions 120 and 138).
@@ -10946,7 +10970,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # Each way `Logex.IO.Sim` fails a read, a report or a write.
   defp read_hows,
-    do: [{:error, :eio}, :raise, :throw, :exit, {:value, [0], 2}, {:value, [7], 1}]
+    do: [
+      {:error, :eio},
+      :raise,
+      :throw,
+      :exit,
+      {:value, [0], 2},
+      {:value, [7], 1},
+      {:value, [4], 70_000}
+    ]
 
   defp injections(w) do
     devices = ["panel", "drive"]
@@ -11061,6 +11093,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp cause(_device, callback, :throw), do: {:thrown, {Sim, callback}}
   defp cause(_device, callback, :exit), do: {:exited, {Sim, callback}}
   defp cause(_device, _callback, {:value, [0], value}), do: {:bad_value, [0], value}
+
+  # M5-13: an element of the panel's located array, whose int 70000 does not fit, is a bad
+  # value at its own address, refused as any point's is (decision 143); the drive has no
+  # input there.
+  defp cause("panel", _callback, {:value, [4], value}) do
+    reach(:element_misfit, true)
+    {:bad_value, [4], value}
+  end
+
   defp cause(_device, _callback, {:value, address, _value}), do: {:unknown_address, address}
 
   # A step slow by about its task's watchdog, or the continuous task's over the round,

@@ -106,8 +106,13 @@ defmodule Logex.Configuration do
   runs is never seen, and the pulse a coil sets stays on until the task's next run.
 
   **Arrays** (M5-11, `docs/organisation.md` §4.12, decisions 151 and 159). A global may be
-  an array of an elementary type, `var_global temps int[8] 1 2 3 4 5 6 7 8`, never located
-  yet (M5-13's), its sizes and initial list judged as a declaration line's; a
+  an array of an elementary type, `var_global temps int[8] 1 2 3 4 5 6 7 8`, its sizes
+  and initial list judged as a declaration line's, and since M5-13 (decision 156) located,
+  `var_global temps real[8] at card.i.0`, each element a point at consecutive addresses in
+  the elements' order, its last field counting up, `temps[0]` at `card.i.0` to `temps[7]`
+  at `card.i.7`, which overlaps no other point, both told where one would, and takes no
+  initial list, an array of output points that nothing drives told the elements it
+  leaves at 0, each named so in a location's message; a
   `var_external` array binds only to a global array of exactly its element type and every
   dimension's size; and a connection names an array var_input or var_output whole, to a
   global array of its sizes whose elements widen as a value does, or an element by literal
@@ -215,7 +220,8 @@ defmodule Logex.Configuration do
     the elements' order, and
     `at`, a location such as `"panel.i.0"`, or nil. A global located at an `i` address is
     an input point, set by the host; one at a `q` address an output point, given back to
-    the host after every cycle.
+    the host after every cycle. Since M5-13 a located array is a point an element, at
+    consecutive addresses from `at`, each named by its element, `temps[3]`.
     """
     @enforce_keys [:name, :type]
     defstruct [:name, :type, initial: nil, at: nil, line: nil]
@@ -1675,28 +1681,64 @@ defmodule Logex.Configuration do
     do: initial(global, location(global.at))
 
   # M5-11 (decision 151): an array global meets every rule a declared array meets, its
-  # dimensions, sizes and initial list, each a diagnostic at its line, and is never located
-  # yet, which is M5-13's (decision 156).
+  # dimensions, sizes and initial list, each a diagnostic at its line. Since M5-13
+  # (decision 156) it may be located, each element a point at consecutive addresses, and
+  # then takes no initial list, as a located global takes no initial value.
+  defp global(%Global{at: nil, type: type} = global) when is_array(type), do: misfits(global)
+
   defp global(%Global{type: type} = global) when is_array(type),
+    do: located_array(location(global.at), global)
+
+  defp global(%Global{}), do: []
+
+  defp misfits(%Global{type: type} = global),
     do:
       Enum.map(
         Declarations.array_misfits(global.name, type, global.initial),
         &diagnostic(global.line, &1)
-      ) ++
-        located_array(global)
-
-  defp global(%Global{}), do: []
-
-  defp located_array(%Global{at: nil}), do: []
-
-  defp located_array(%Global{name: name, at: at, line: line}),
-    do: [
-      diagnostic(
-        line,
-        "`#{name}` is an array at `#{at}`: an array global is not located yet, so declare " <>
-          "it with no `at`, or a global at each point"
       )
-    ]
+
+  defp located_array(_location, %Global{initial: nil} = global), do: misfits(global)
+
+  # Its sizes judged as an unlocated array's; its list not, since it takes none, and told
+  # so only where its sizes give it a range.
+  defp located_array(location, %Global{} = global),
+    do: listed_located(misfits(%{global | initial: nil}), location, global)
+
+  defp listed_located([], location, %Global{name: name, line: line} = global),
+    do: [diagnostic(line, "`#{name}` is #{a_point(location, global)}: " <> no_list(location))]
+
+  defp listed_located(misfits, _location, _global), do: misfits
+
+  defp no_list({:ok, {_device, "i", _fields}}),
+    do: "their values come from the input image, so it takes no initial list"
+
+  defp no_list({:ok, {_device, "q", _fields}}),
+    do: "it takes no initial list, and each element is 0 until its driver writes it"
+
+  defp no_list(:error), do: "a located array takes no initial list"
+
+  # M5-13: how a message names a located global, a point or an array of points with the
+  # range its elements occupy, `an array of input points, `card.i.0` to `card.i.7``.
+  defp a_point({:ok, {_device, "i", _fields}}, %Global{type: type}) when not is_array(type),
+    do: "an input point"
+
+  defp a_point({:ok, {_device, "q", _fields}}, %Global{type: type}) when not is_array(type),
+    do: "an output point"
+
+  defp a_point({:ok, {device, io, fields}}, %Global{type: {:array, _type, dims}}) do
+    points = Logex.Array.points("", dims, fields)
+    {_, _, from} = hd(points)
+    {_, _, to} = List.last(points)
+
+    "an array of #{direction_word(io)} points, `#{spelling({device, io, from})}` to " <>
+      "`#{spelling({device, io, to})}`"
+  end
+
+  defp a_point(:error, _global), do: "located"
+
+  defp direction_word("i"), do: "input"
+  defp direction_word("q"), do: "output"
 
   # A located global takes no initial value: an input point's value is the host's, and an
   # output point starts at 0, the safe value, until the instance that drives it first
@@ -1910,8 +1952,6 @@ defmodule Logex.Configuration do
   end
 
   defp at(false, _global, _keeps, acc), do: acc
-  # M5-11: an array global at a location is refused by global/1, and is no point.
-  defp at(true, %Global{type: type}, _keeps, acc) when is_array(type), do: acc
   defp at(true, global, keeps, acc), do: at_spelled(spelled(global.at), global, keeps, acc)
 
   defp at_spelled(:error, global, _keeps, acc),
@@ -1937,17 +1977,40 @@ defmodule Logex.Configuration do
   defp at_spelled({:ok, {device, _io, _fields} = address}, global, true, {_, devices, _} = acc),
     do: device(Map.get(devices, String.downcase(device)), address, global, acc)
 
+  defp device(
+         nil,
+         {device, _io, _fields} = address,
+         %Global{type: type} = global,
+         {points, devices, problems}
+       )
+       when not is_array(type),
+       do:
+         address(
+           Map.get(points, address),
+           address,
+           global,
+           {points, Map.put(devices, String.downcase(device), {device, global}), problems}
+         )
+
   defp device(nil, {device, _io, _fields} = address, global, {points, devices, problems}),
     do:
-      address(
-        Map.get(points, address),
+      occupied(
         address,
         global,
         {points, Map.put(devices, String.downcase(device), {device, global}), problems}
       )
 
+  defp device(
+         {device, _first},
+         {device, _io, _fields} = address,
+         %Global{type: type} = global,
+         acc
+       )
+       when not is_array(type),
+       do: address(Map.get(elem(acc, 0), address), address, global, acc)
+
   defp device({device, _first}, {device, _io, _fields} = address, global, acc),
-    do: address(Map.get(elem(acc, 0), address), address, global, acc)
+    do: occupied(address, global, acc)
 
   defp device({other, first}, {device, _io, _fields}, global, acc),
     do:
@@ -1957,6 +2020,50 @@ defmodule Logex.Configuration do
         "the device `#{device}` and the device `#{other}` of `#{first.name}`#{where(first)} " <>
           "differ only in case: device names are case-sensitive, so these would be two devices"
       )
+
+  # M5-13 (decision 156): a located array occupies an address an element, each element a
+  # point of its own, a global named by the element's name, `temps[3]`, at its own address,
+  # so that a location in a connection names the element, and an element that overlaps
+  # another point is told both names, once for each point it overlaps: an array laid over
+  # another is one message, at the first element they share, naming the range it takes.
+  # An array whose sizes are refused takes no address: one mistake, one message.
+  defp occupied(address, %Global{type: type} = global, acc),
+    do: sized(Declarations.array_misfits(global.name, type, nil), address, global, acc)
+
+  defp sized([], {device, io, fields}, %Global{type: {:array, type, dims}} = global, acc) do
+    {acc, _told} =
+      Logex.Array.points(global.name, dims, fields)
+      |> Enum.reduce({acc, MapSet.new()}, fn {_index, name, at}, {acc, told} ->
+        address = {device, io, at}
+        element = %Global{global | name: name, type: type, at: spelling(address)}
+        overlapping(Map.get(elem(acc, 0), address), address, {element, global}, {acc, told})
+      end)
+
+    acc
+  end
+
+  defp sized(_misfits, _address, _global, acc), do: acc
+
+  defp overlapping(nil, address, {element, _global}, {{points, devices, problems}, told}),
+    do: {{Map.put(points, address, element), devices, problems}, told}
+
+  defp overlapping(first, _address, {element, global}, {acc, told}),
+    do: overlapped(MapSet.member?(told, owner(first)), first, {element, global}, {acc, told})
+
+  defp overlapped(true, _first, _element, state), do: state
+
+  defp overlapped(false, first, {element, global}, {acc, told}),
+    do:
+      {noted(
+         acc,
+         global.line,
+         "`#{element.name}` is at `#{element.at}`, where `#{first.name}` already is" <>
+           "#{where(first)}: a location holds one global, and `#{global.name}` is " <>
+           "#{a_point(location(global.at), global)}"
+       ), MapSet.put(told, owner(first))}
+
+  # The global a point belongs to, an element's its array's.
+  defp owner(%Global{name: name}), do: hd(:binary.split(name, "["))
 
   defp address(nil, address, global, {points, devices, problems}),
     do: {Map.put(points, address, global), devices, problems}
@@ -2606,10 +2713,17 @@ defmodule Logex.Configuration do
   defp global_held(nil, name, type, world), do: {:error, no_named(:global, name, world, type)}
 
   defp element_global([array, _subscripts], name, type, world),
-    do: global_element(Map.get(world.names, array), name, type, world)
+    do: element_silent(MapSet.member?(world.silent, array), array, name, type, world)
 
   defp element_global([_whole], name, type, world),
     do: {:error, no_named(:global, name, world, type)}
+
+  # M5-13: an element of a global whose line was refused names what that line declares,
+  # and is silent, as a use of the global's own name is (decision 42).
+  defp element_silent(true, _array, _name, _type, _world), do: :skip
+
+  defp element_silent(false, array, name, type, world),
+    do: global_element(Map.get(world.names, array), name, type, world)
 
   defp global_element(
          {:global, _line, %Global{type: {:array, etype, dims}} = global},
@@ -2785,12 +2899,12 @@ defmodule Logex.Configuration do
   defp sink({:error, message}, connection, _tag, acc), do: problem(acc, connection, message)
   defp sink(:skip, _connection, _tag, acc), do: acc
 
-  defp drives({:ok, {_device, "i", _address}}, global, connection, _tag, acc),
+  defp drives({:ok, {_device, "i", _address}} = location, global, connection, _tag, acc),
     do:
       problem(
         acc,
         connection,
-        "`#{global.name}` is an input point#{where(global)}: " <>
+        "`#{global.name}` is #{a_point(location, global)}#{where(global)}: " <>
           "`#{connection.instance}.#{connection.member}`, a var_output, cannot drive it"
       )
 
@@ -3076,11 +3190,17 @@ defmodule Logex.Configuration do
   defp no_global(suggestion, tag, program),
     do: "#{declares(tag, program)}, but there is no global `#{tag.name}`" <> suggestion
 
-  defp written_point({:ok, {_device, "i", _address}}, {:ok, [line | _]}, global, {tag, program}),
-    do: [
-      "`#{program.name}` writes its var_external `#{tag.name}`#{in_type(line, program)}, but " <>
-        "`#{global.name}` is an input point#{where(global)}: nothing writes an input point"
-    ]
+  defp written_point(
+         {:ok, {_device, "i", _address}} = location,
+         {:ok, [line | _]},
+         global,
+         {tag, program}
+       ),
+       do: [
+         "`#{program.name}` writes its var_external `#{tag.name}`#{in_type(line, program)}, but " <>
+           "`#{global.name}` is #{a_point(location, global)}#{where(global)}: nothing writes an " <>
+           "input point"
+       ]
 
   defp written_point(_location, _written, _global, _tag), do: []
 
@@ -3464,6 +3584,20 @@ defmodule Logex.Configuration do
   defp doubt(false, global, _seen),
     do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]
 
+  # M5-13: an array of output points driven element by element is told the elements
+  # nothing drives, each at 0; one a connection drives whole, or a program writes through
+  # its var_external, is driven (provisional).
+  defp doubt(true, %Global{type: {:array, _type, dims}, at: at} = global, {wiring, externals})
+       when at != nil,
+       do:
+         elements_undriven(
+           output_point?(location(at)) and not Map.has_key?(wiring.driven, global.name) and
+             not MapSet.member?(externals.driving, global.name),
+           global,
+           dims,
+           wiring
+         )
+
   defp doubt(true, global, {wiring, externals}),
     do:
       undriven(
@@ -3474,6 +3608,54 @@ defmodule Logex.Configuration do
 
   defp output_point?({:ok, {_device, "q", _fields}}), do: true
   defp output_point?(_location), do: false
+
+  defp elements_undriven(false, _global, _dims, _wiring), do: []
+
+  defp elements_undriven(true, global, dims, wiring),
+    do:
+      undriven_elements(
+        for(
+          index <- Logex.Array.indexes(dims),
+          name = Logex.Array.name(global.name, index),
+          not Map.has_key?(wiring.driven, name),
+          do: name
+        ),
+        Logex.Array.size(dims),
+        global
+      )
+
+  defp undriven_elements([], _size, _global), do: []
+
+  defp undriven_elements(names, size, global) when length(names) == size,
+    do: [
+      warning(
+        global.line,
+        "`#{global.name}` is #{a_point(location(global.at), global)}, but nothing drives " <>
+          "it: each element stays at 0"
+      )
+    ]
+
+  defp undriven_elements(names, _size, global),
+    do: [
+      warning(
+        global.line,
+        "`#{global.name}` is #{a_point(location(global.at), global)}, but nothing drives " <>
+          "#{elements_listed(names)}: #{it_they(names)} at 0"
+      )
+    ]
+
+  defp elements_listed(names) when length(names) > 10,
+    do: Enum.map_join(Enum.take(names, 10), ", ", &"`#{&1}`") <> " and #{length(names) - 10} more"
+
+  defp elements_listed([one]), do: "`#{one}`"
+
+  defp elements_listed(names) do
+    {rest, [last]} = Enum.split(names, -1)
+    Enum.map_join(rest, ", ", &"`#{&1}`") <> " or `#{last}`"
+  end
+
+  defp it_they([_one]), do: "it stays"
+  defp it_they(_names), do: "they stay"
 
   defp undriven(false, _global), do: []
 

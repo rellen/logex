@@ -29,7 +29,10 @@ defmodule Logex.Runtime do
   1. `now` advances by `elapsed_ms`.
   2. `inputs`, keyed by input-point name, merge into the input points, which keep their
      values between cycles: a host sends only what changed, and every scan of the cycle
-     sees the one sample.
+     sees the one sample. Since M5-13 an element of a located array is an input point of
+     its own, keyed by its element's name, `%{"temps[3]" => 37.5}`, the rest of its array
+     kept, and the array named whole is refused; the outputs give each element of a
+     located array of output points by its name, `"lamps[2]"` (decision 156).
   3. Each task's `single`, its trigger, if it has one (M2-6), is sampled once, after the
      merge and before any scan, so a trigger logic writes takes effect in the next cycle
      and a 1, 0, 1 inside one host step is not seen. A periodic task is due when its next
@@ -586,8 +589,18 @@ defmodule Logex.Runtime do
 
   @doc false
   # The output points, every one, after a cycle's last step.
-  def cycle_outputs(%__MODULE__{wiring: wiring, globals: globals}),
+  def cycle_outputs(%__MODULE__{wiring: %{element_outputs: nil} = wiring, globals: globals}),
     do: Map.new(wiring.outputs, &{&1, Map.fetch!(globals, &1)})
+
+  # M5-13 (decision 156): a located array's output points, each element by its name.
+  def cycle_outputs(%__MODULE__{wiring: wiring, globals: globals}),
+    do:
+      Map.new(
+        Enum.map(wiring.outputs, &{&1, Map.fetch!(globals, &1)}) ++
+          Enum.map(wiring.element_outputs, fn {name, {array, index, _offset}} ->
+            {name, Logex.Array.fetch(Map.fetch!(globals, array), index)}
+          end)
+      )
 
   @doc """
   The milliseconds until a periodic due time next comes, or `:infinity` when no task has
@@ -644,7 +657,27 @@ defmodule Logex.Runtime do
     do: input_kept(Map.has_key?(runtime.wiring.inputs, name), global, runtime)
 
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
+
+  defp input_kept(false, global, %__MODULE__{wiring: %{located: nil}}),
+    do: Configuration.initial(global)
+
+  # M5-13: a located input array keeps its input image as an input point does.
+  defp input_kept(
+         false,
+         %Configuration.Global{type: {:array, _, _}, name: name} = global,
+         runtime
+       ),
+       do: array_kept(located_array(runtime.wiring.located, name), global, runtime)
+
   defp input_kept(false, global, _runtime), do: Configuration.initial(global)
+
+  defp located_array(nil, _name), do: nil
+  defp located_array(located, name), do: Map.get(located, name)
+
+  defp array_kept({"i", _first, _last}, global, runtime),
+    do: Map.fetch!(runtime.globals, global.name)
+
+  defp array_kept(_other, global, _runtime), do: Configuration.initial(global)
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
@@ -1891,6 +1924,7 @@ defmodule Logex.Runtime do
       )
 
     points = Enum.map(config.globals, &{&1, Configuration.location(&1.at)})
+    {elements, arrays} = located_points(points)
     by_name = Map.new(config.globals, &{&1.name, &1})
 
     %{
@@ -1913,14 +1947,33 @@ defmodule Logex.Runtime do
           config.instances,
           Enum.map(Map.get(sections, :var_output, []), &widened_out(&1, config, {types, by_name}))
         ),
-      inputs: Map.new(for {global, {:ok, {_, "i", _}}} <- points, do: {global.name, global.type}),
+      inputs:
+        Map.new(
+          for(
+            {%Configuration.Global{type: type} = global, {:ok, {_, "i", _}}}
+            when is_atom(type) <- points,
+            do: {global.name, type}
+          ) ++
+            for({"i", name, _element, type} <- elements, do: {name, type})
+        ),
       reals:
         some(
-          for {global, {:ok, {_, "i", _}}} <- points,
-              global.type in @reals,
-              do: {global.name, global.type}
+          for(
+            {global, {:ok, {_, "i", _}}} <- points,
+            global.type in @reals,
+            do: {global.name, global.type}
+          ) ++
+            for({"i", name, _element, type} <- elements, type in @reals, do: {name, type})
         ),
-      outputs: for({global, {:ok, {_, "q", _}}} <- points, do: global.name),
+      outputs:
+        for(
+          {%Configuration.Global{type: type} = global, {:ok, {_, "q", _}}}
+          when is_atom(type) <- points,
+          do: global.name
+        ),
+      elements: some(for({"i", name, element, _type} <- elements, do: {name, element})),
+      element_outputs: listed(for({"q", name, element, _type} <- elements, do: {name, element})),
+      located: some(located_arrays(arrays)),
       globals: by_name,
       externals:
         Map.new(config.instances, &{&1.name, externals(Map.fetch!(config.programs, &1.type))})
@@ -1938,6 +1991,43 @@ defmodule Logex.Runtime do
 
   defp some([]), do: nil
   defp some(pairs), do: Map.new(pairs)
+
+  defp listed([]), do: nil
+  defp listed(pairs), do: pairs
+
+  # Each element of a located array a point (M5-13, decision 156), `{"i" | "q", name,
+  # {array, index}, type}`, `temps[3]` at the fourth address from the array's, and the
+  # located arrays with their locations: a configuration of no located array finds none.
+  defp located_points(points) do
+    arrays =
+      for {%Configuration.Global{type: {:array, _, _}}, {:ok, _}} = array <- points, do: array
+
+    elements =
+      for {%Configuration.Global{name: array, type: {:array, type, dims}}, {:ok, {_, io, fields}}} <-
+            arrays,
+          {{index, name, _address}, offset} <-
+            Enum.with_index(Logex.Array.points(array, dims, fields)),
+          do: {io, name, {array, index, offset}, type}
+
+    {elements, arrays}
+  end
+
+  # Each located array by name with the range its elements occupy, for a message: its
+  # direction, and its first and last elements with their locations.
+  defp located_arrays(arrays) do
+    for {%Configuration.Global{name: array, type: {:array, _type, dims}},
+         {:ok, {device, io, fields}}} <-
+          arrays,
+        do: {array, ranged(io, device, Logex.Array.points(array, dims, fields))}
+  end
+
+  defp ranged(io, device, points) do
+    {_, first, from} = hd(points)
+    {_, last, to} = List.last(points)
+    {io, {first, at_of(device, io, from)}, {last, at_of(device, io, to)}}
+  end
+
+  defp at_of(device, io, fields), do: Enum.join([device, io | fields], ".")
 
   # M5-10: a connection's copy-out of an integer into a real global, decision 159's widening,
   # which writes the real's nearest value, marked with the real's type; every other kept as
@@ -2089,14 +2179,55 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
-  defp imaged([], {globals, %{reals: nil}}, inputs), do: Map.merge(globals, inputs)
+  defp imaged([], {globals, %{reals: nil, elements: nil}}, inputs), do: Map.merge(globals, inputs)
 
   # M5-10 (decision 166): a real input point's value is the real's nearest value.
-  defp imaged([], {globals, %{reals: reals}}, inputs),
+  defp imaged([], {globals, %{reals: reals, elements: nil}}, inputs),
     do: Map.merge(globals, Map.new(inputs, &as_input(&1, reals)))
+
+  # M5-13 (decision 156): an element of a located array is a point of its own, set by its
+  # name, `temps[3]`, into its array, the rest of the array kept: a few elements of an
+  # array each written in place, and more, up to every element a device reports changed,
+  # laid over the array's elements in one pass, so that a cycle setting k elements of an
+  # array of n costs some k + n, never k times n (provisional, at 16).
+  defp imaged([], {globals, %{reals: reals, elements: elements} = wiring}, inputs) do
+    {placed, points} = Enum.split_with(inputs, fn {key, _value} -> is_map_key(elements, key) end)
+    reals = as_map(reals)
+
+    placed
+    |> Enum.group_by(
+      fn {key, _value} -> elem(Map.fetch!(elements, key), 0) end,
+      fn {key, value} ->
+        {_array, index, offset} = Map.fetch!(elements, key)
+        {index, offset, elem(as_input({key, value}, reals), 1)}
+      end
+    )
+    |> Enum.reduce(Map.merge(globals, Map.new(points, &as_input(&1, reals))), fn
+      {array, set}, globals -> Map.update!(globals, array, &placed(&1, set, array, wiring))
+    end)
+  end
 
   defp imaged(problems, _globals, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
+
+  defp placed(value, set, _array, _wiring) when length(set) <= 16,
+    do:
+      Enum.reduce(set, value, fn {index, _offset, v}, value ->
+        Logex.Array.put(value, index, v)
+      end)
+
+  defp placed(value, set, array, wiring) do
+    %Configuration.Global{type: {:array, _type, dims}} = Map.fetch!(wiring.globals, array)
+
+    value
+    |> Logex.Array.to_flat(dims)
+    |> overlaid(Enum.sort(for {_index, offset, v} <- set, do: {offset, v}), 0)
+    |> Logex.Array.from_flat(dims)
+  end
+
+  defp overlaid(values, [], _i), do: values
+  defp overlaid([_old | values], [{i, v} | set], i), do: [v | overlaid(values, set, i + 1)]
+  defp overlaid([old | values], set, i), do: [old | overlaid(values, set, i + 1)]
 
   defp point_problem(key, _value, _runtime) when not is_binary(key),
     do:
@@ -2109,6 +2240,16 @@ defmodule Logex.Runtime do
   # An input point's value fits its type as a var_input's does, with the same messages.
   defp point({:ok, type}, _global, key, value, _runtime),
     do: fit(%Tag{name: key, type: type, section: :var_input}, value)
+
+  # M5-13 (decision 156): a located array is set element by element, each its own point.
+  defp point(
+         :error,
+         {:ok, %Configuration.Global{type: {:array, _, _}} = global},
+         key,
+         _value,
+         runtime
+       ),
+       do: whole_array(located_array(runtime.wiring.located, key), global, key)
 
   defp point(:error, {:ok, global}, key, _value, _runtime),
     do:
@@ -2144,7 +2285,68 @@ defmodule Logex.Runtime do
       "input #{label(key)} is the configuration's name, not an input point: " <>
         "only an input point is set from outside"
 
-  defp named_point(:none, key, runtime), do: no_point(key, runtime.wiring)
+  defp named_point(:none, key, runtime), do: element_point(Logex.Array.split(key), key, runtime)
+
+  defp whole_array({"i", {first, from}, {last, to}}, _global, key),
+    do:
+      "input #{label(key)} is an array of input points, `#{from}` to `#{to}`, each element " <>
+        "a point set by its name, `#{first}` to `#{last}`: set its elements, as in " <>
+        ~s|%{"#{first}" => 0}|
+
+  defp whole_array({"q", {_first, from}, {_last, to}}, _global, key),
+    do:
+      "input #{label(key)} is an array of output points, `#{from}` to `#{to}`, not an " <>
+        "input point: only an input point is set from outside"
+
+  defp whole_array(nil, _global, key),
+    do:
+      "input #{label(key)} is an array with no location, not an input point: only an input " <>
+        "point is set from outside"
+
+  # A name with subscripts: an element of a located array of output points, or of a global
+  # array with no location, is told what it is; any other is no input point.
+  defp element_point({array, _subscripts}, key, %__MODULE__{wiring: wiring} = runtime),
+    do: element_global(Map.fetch(wiring.globals, array), key, runtime)
+
+  defp element_point(nil, key, runtime), do: no_point(key, runtime.wiring)
+
+  defp element_global({:ok, %Configuration.Global{type: {:array, _, _}, at: nil}}, key, _runtime),
+    do:
+      "input #{label(key)} is an element of a global with no location, not an input point: " <>
+        "only an input point is set from outside"
+
+  defp element_global(
+         {:ok, %Configuration.Global{type: {:array, _, _}, name: array}},
+         key,
+         runtime
+       ),
+       do:
+         element_output(
+           output_element(runtime.wiring.element_outputs, key),
+           key,
+           {array, runtime}
+         )
+
+  defp element_global(_other, key, runtime), do: no_point(key, runtime.wiring)
+
+  defp output_element(nil, _key), do: nil
+  defp output_element(outputs, key), do: List.keyfind(outputs, key, 0)
+
+  # An element its array does not hold, as written, of a located array of input points.
+  defp element_output(nil, key, {array, runtime}),
+    do: unheld(located_array(runtime.wiring.located, array), key, {array, runtime})
+
+  defp element_output({_key, {array, index, _offset}}, key, {_array, runtime}) do
+    %Configuration.Global{at: at} = Map.fetch!(runtime.wiring.globals, array)
+    {:ok, {device, io, fields}} = Configuration.location(at)
+    {:array, _type, dims} = Map.fetch!(runtime.wiring.globals, array).type
+
+    {_, _, address} =
+      List.keyfind(Logex.Array.points(array, dims, fields), index, 0)
+
+    "input #{label(key)} is an output point (at `#{at_of(device, io, address)}`), not an " <>
+      "input point: only an input point is set from outside"
+  end
 
   defp reaching(true, head, key, _wiring),
     do:
@@ -2159,14 +2361,37 @@ defmodule Logex.Runtime do
     point_hint(
       "input #{label(key)} is not an input point",
       Declarations.suggest(key, points, & &1, "names"),
-      points
+      listed_points(wiring.elements, points, wiring.located)
     )
   end
+
+  defp unheld({"i", {first, _from}, {last, _to}}, key, {array, _runtime}),
+    do:
+      "input #{label(key)} is not an input point: `#{array}` is an array of input points, " <>
+        "each element set by its name as its subscripts' values, `#{first}` to `#{last}`"
+
+  defp unheld(_output, key, {_array, runtime}), do: no_point(key, runtime.wiring)
+
+  # The input points as a hint lists them, a located array's as the range of its
+  # elements, `temps[0]` to `temps[7]`, in name order among the rest.
+  defp listed_points(nil, points, _located), do: Enum.map(points, &"`#{&1}`")
+
+  defp listed_points(elements, points, located),
+    do:
+      Enum.sort_by(
+        for(point <- points, not is_map_key(elements, point), do: {point, "`#{point}`"}) ++
+          for(
+            {array, {"i", {first, _from}, {last, _to}}} <- located,
+            do: {array, "`#{first}` to `#{last}`"}
+          ),
+        &elem(&1, 0)
+      )
+      |> Enum.map(&elem(&1, 1))
 
   defp point_hint(line, "", []), do: line <> ": this configuration has no input point"
 
   defp point_hint(line, "", points),
-    do: {line, fn -> ": the input points are " <> and_list(Enum.map(points, &"`#{&1}`")) end}
+    do: {line, fn -> ": the input points are " <> and_list(points) end}
 
   defp point_hint(line, suggestion, _points), do: line <> suggestion
 

@@ -3514,6 +3514,12 @@ defmodule Logex.ConfigurationTest do
           type: {:array, :real, [1, 2, 1]},
           initial: Enum.random([nil, [real_value(), real_value()]])
         }
+      ],
+      # M5-13 (decision 156): located, an array of input points and one of output points,
+      # the second at a hierarchical address.
+      [
+        %Global{name: "zt", type: {:array, :real, [4]}, at: "card.i.0"},
+        %Global{name: "zl", type: {:array, :bool, [2, 2]}, at: "card.q.4.1"}
       ]
     ])
   end
