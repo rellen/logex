@@ -1810,9 +1810,10 @@ line 11: `sloot` is not declared — did you mean `slot`?
   written either way.
 - A write through a tag subscript may write any element of its array, so it is told as a
   write of the array whole (provisional): a coil on `lamps[slot]` beside one on
-  `lamps[sel]` or `lamps[2]`, in either order, is told as two `ote`s on one tag are, and
-  a write beside a one-shot's storage bit in the array as another write of the storage
-  bit; an online edit blocks such a one-shot, and in a configuration an instance that so
+  `lamps[sel]` or `lamps[2]`, in either order, is told as two `ote`s on one tag are, so
+  is a write through one, `move 0 faults[slot]`, beside a coil on a bit of an element of
+  a word array, `ote faults[2].1`, as `move 0 w` beside `ote w.1` is, and a write beside
+  a one-shot's storage bit in the array as another write of the storage bit; an online edit blocks such a one-shot, and in a configuration an instance that so
   writes a global array through its `var_external` writes it whole, beside any other
   writer of it. A subscript's tag is a use of it, read, and part of its rung, so an edit
   that changes it changes the rung.

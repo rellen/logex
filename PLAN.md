@@ -7191,6 +7191,37 @@ the walks' cross-type reach and the documents.
 
   2092 tests (10 doctests), up from 2047.
 
+  *Review of M5-12* (at `f5a3beb`), fixed in `80a47f1`, tests and code together, and recorded
+  in the commit after it: (1) a pulse coil whose pulse bit is a bit of an element a tag subscripts, `osr
+  q w[i].3`, raised `Protocol.UndefinedError` out of `Logex.compile/2`, since
+  `Logex.Walk.bit_name/1` had no clause for such a bit and joined its tuple as a path; it
+  names it as itself now, as it names `w[i]`, and the compiler's refusal is reached,
+  "`osr` sets its pulse bit in `w[i].3`, whose subscript `i` holds: …", for `osr` and `osf`
+  over three kinds of storage bit; (2) a write through a tag subscript beside a coil on a
+  bit of an element, `move x w[i]` beside `ote w[2].1`, `move x w[2]` beside `ote w[i].1`
+  and `move x w[i]` beside `ote w[i].1`, either first, was warned of nothing, against
+  §4.12's routine choice with decisions 207 and 221, and is now the second-`ote` warning,
+  a bool array's element beside a coil still warned of nothing (provisional reading 3);
+  (3) a warning that involves a tag subscript now names the array, where "`e[j]` already
+  has an `ote` on line 8" read as though `e[j]` were the element the first coil wrote:
+  "`e[j]` is in `e`, which the `ote` on line 8 may write through a tag subscript", and
+  after a literal one "`e[i]` is in `e`, as `e[0]` is, which already has an `ote` on line
+  8"; a connection's far end `speeds[1].3` is told "`speeds[1]` is an element of the
+  global `speeds` (line 2), not an instance", where it was told there is no instance
+  `speeds[1]`; and a connection beside a var_external writer is told what it drives,
+  "`c1.o` drives `speeds[2]`", where "drives it" read as the array; (4) a fault's `read`
+  is a list, which plain `inspect` shows as a charlist, `[9]` as `~c"\t"`, now part of
+  Question 1. Every program of the cost script compiles and scans in the reductions it
+  took at `f5a3beb`, within ±4 of noise, and a program of coils on element bits beside
+  whole writes compiles 1% dearer, the warnings now looking for them. *Mutation table*
+  (`m5/rv12/mut/run.log`), each mutant a part of a fix reverted and judged by the full
+  suite's exit code on `80a47f1`: 19 mutants, all red: F1 (`bit_name/1`'s clause for a bit of
+  such an element), F2a to F2n (each clause of the whole write through a tag subscript, of
+  an element's beside a coil through one, each bool exclusion, each new key and each
+  check of an earlier write) and F3a to F3d (each wording: a coil after a literal or a
+  tagged one in the array, the far end that drives an element and the element's member).
+  2094 tests (10 doctests), up from 2092.
+
   *Provisional readings*: (1) a fault's `read` holds every subscript, literal ones too,
   one a dimension, `[8]` or `[1, 9]`, never the one alone that is out of range; (2) a bit
   of an element a tag subscripts has its element's subscripts checked before its bit's
@@ -7198,7 +7229,9 @@ the walks' cross-type reach and the documents.
   a tag subscripts, or on a bit of one, is a coil in its array whole for the second-`ote`
   warning, where a non-coil write through one beside a coil on a literal element,
   `move x lamps[slot]` beside `ote lamps[2]`, is warned of nothing, as `move x b` beside
-  `ote b` is not; (4) in a configuration an instance that writes a global array through a
+  `ote b` is not, but since M5-12's review a write through one beside a coil on a bit of
+  an element, `move x faults[i]` beside `ote faults[2].1`, is warned, as `move x w` beside
+  `ote w.1` is (decision 207); (4) in a configuration an instance that writes a global array through a
   tag subscript makes every writer of the array a writer of it whole, the warnings naming
   the array; (5) a subscript's tag is a tag of the routine, never a member, `w[t.acc]`
   being no name the lexer reads, as M5-9's bit number is.
@@ -7209,8 +7242,12 @@ the walks' cross-type reach and the documents.
      of setpoints `grid` an `int[4,8]` read as `grid[1,c]`; `c` reaches 9. As built the
      trip reads `read: [1, 9]`, every subscript in order, the literal 1 among them, and
      `weights[slot]` with `slot` at 8 `read: [8]`; an engineer at the trip sees the whole
-     element named. The options: (a) as built; (b) the subscripts a tag held alone,
-     `[9]`; (c) the one out of range alone, `9`, as a bit's `read` is a number. Logix's
+     element named. A list of small integers is, to Elixir, also a charlist, so a host
+     that logs the fault with plain `inspect` sees `read: ~c"\b"` for `[8]` and
+     `~c"\t"` for `[9]` (README's runs pass `charlists: :as_lists`). The options: (a) as
+     built; (b) the subscripts a tag held alone, `[9]`; (c) the one out of range alone,
+     `9`, as a bit's `read` is a number, which no `inspect` shows as a charlist; (d) a
+     tuple, `{1, 9}`, every subscript, never a charlist. Logix's
      fault 4/20 names no subscript at all (1756-RM018A p.884; **unverified** what its
      fault log shows).
   2. *Two lamps, one through a subscript.* `ote lamps[slot]` and `ote lamps[2]` in one
@@ -7223,7 +7260,14 @@ the walks' cross-type reach and the documents.
   3. *A move through a subscript beside a coil.* `move 0 lamps[slot]` and `ote lamps[2]`:
      as built nothing is warned, since `move x b` beside `ote b` is not; the operator may
      see lamp 2 flicker off when `slot` is 2. The options: (a) as built; (b) warned as two
-     coils are, as decision 207 does for a bit beside its word's whole write.
+     coils are, as decision 207 does for a bit beside its word's whole write. Since
+     M5-12's review the bit case is warned: the fault lamps as bits of a word array,
+     `ote faults[2].1` beside `move 0 faults[slot]`, either first, is told "`faults[slot]`
+     is in `faults`, as `faults[2].1` is, which already has an `ote` on line 5", because a
+     word's whole write beside a coil on its bit is warned by decision 207 and a write
+     through a tag subscript writes the whole array (§4.12); so as built the lamp array of
+     bools is warned of nothing and the same lamps as bits of words are warned. (a) keeps
+     that difference; (b) warns both.
   4. *Two feeders writing one array.* `f1` writes `speeds[slot]` and `f2` writes
      `speeds[1]` through their `var_external`s: as built `f2` is told "`f2` writes `speeds`
      through its var_external, as `f1` does", the array named whole, since `f1` may write

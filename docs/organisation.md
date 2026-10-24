@@ -3974,7 +3974,10 @@ long timers with M5-6, the same day, alike.)*
   second-`ote` warning; a literal subscript is its element's path, `lamps[2]`; over
   writes that no rule could see. *(Landed with M5-12, 2026-10-24: the walk names the write by its
   array, `lamps`, and a coil on `lamps[slot]` is a coil in the array whole, beside a coil
-  on `lamps[2]` in either order the second-`ote` warning.)*
+  on `lamps[2]` in either order the second-`ote` warning; since M5-12's review a write
+  through a tag subscript, `move 0 faults[slot]`, beside a coil on a bit of an element of
+  the array, `ote faults[2].1`, in either order, the second-`ote` warning too, by decisions
+  207 and 221, a bool array's element beside a coil still warned of nothing, provisional.)*
 - *A bitwise instruction's power out is its power in*, since it cannot fail; over no
   power where a shift drops a 1, which IEC does not call an error. *(Amended by decision
   165: a shift or rotate whose count is a tag negative at run time passes no power.)*
