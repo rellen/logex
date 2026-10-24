@@ -37,8 +37,8 @@ elementary type, one to three dimensions, each element named by literal subscrip
 `weights[3]` and `grid[1,7]` (M5-11), and a subscript held in a tag, `weights[slot]`, an
 index out of range a major fault that trips the plant (M5-12), and a located array, one
 point an element at consecutive addresses, `var_global zone_t real[8] at card.i.0`
-(M5-13). What does not exist yet: arrays of timers, counters and blocks, decided for
-Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
+(M5-13), and arrays of timers, counters and blocks, `var lane_t ton[4]`, each element run by
+literal subscripts and its members read through a tag subscript (M5-14). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -305,8 +305,9 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   and `real_trunc_int` among them (M5-10, "Reals", below), and arrays `var temps
   real[8]`, up to three dimensions, by literal subscripts (M5-11, "Arrays", below), and by
   a subscript held in a tag, `weights[slot]`, an index out of range a major fault (M5-12,
-  "A subscript in a tag", below); still to land, arrays of timers and blocks, and arrays
-  at I/O points. IEC's typed
+  "A subscript in a tag", below), at I/O points (M5-13, "A located array", below), and
+  of timers, counters and blocks, `var lane_t ton[4]` (M5-14, "Arrays of instances",
+  below). IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
   (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
   `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
@@ -2132,6 +2133,189 @@ belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, who
 ./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```
 
+### Arrays of instances
+
+`lanes.ld` — a sorter of four lanes, each with a photo-eye. A box held in front of a lane's
+eye for 30 ms is counted in that lane. The third box in a lane pulses that lane's kicker
+through an instance of `gate.ld`, the block beside it. The panel names a lane, and the
+program shows that lane's count and whether a box is in front of it now:
+
+```
+var_input  eye    bool[4]
+var_input  lane   int
+var_output kick   bool[4]
+var_output count  int
+var_output held   bool
+var lane_t ton[4]
+var lane_c ctu_int[4]
+var gates  gate[4]
+
+xic eye[0] ton lane_t[0] 30
+xic eye[1] ton lane_t[1] 30
+xic eye[2] ton lane_t[2] 30
+xic eye[3] ton lane_t[3] 30
+xic lane_t[0].dn ctu lane_c[0] 3
+xic lane_t[1].dn ctu lane_c[1] 3
+xic lane_t[2].dn ctu lane_c[2] 3
+xic lane_t[3].dn ctu lane_c[3] 3
+cal gates[0] lane_c[0].q kick[0]
+cal gates[1] lane_c[1].q kick[1]
+cal gates[2] lane_c[2].q kick[2]
+cal gates[3] lane_c[3].q kick[3]
+move lane_c[lane].cv count
+xic lane_t[lane].dn ote held
+```
+
+```
+function_block gate
+var_input  open  bool
+var_output kick  bool
+var        edge  bool
+
+xic open ons edge ote kick
+```
+
+`lanes.exs` scans it with three boxes in lane 2 and one in lane 1, then moves the panel to
+lane 4, past the arrays. It edits lane 2's delay to 50 ms, runs the program in a
+configuration and reads two members by their paths. Last, it compiles three lines that
+cannot work:
+
+```elixir
+{:ok, lanes} = Logex.compile_file("lanes.ld")
+
+scan = fn state, label, inputs, ms ->
+  state = Logex.Runtime.put_inputs(lanes, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(lanes, state, ms)
+  counts = for c <- Tuple.to_list(state.env["lane_c"]), do: c["cv"]
+  IO.puts("#{label}  #{inspect(outputs)}  counts #{inspect(counts)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+box = fn state, lane ->
+  eye = List.replace_at([0, 0, 0, 0], lane, 1)
+
+  state
+  |> scan.("box in lane #{lane}", %{"eye" => eye, "lane" => lane}, 10)
+  |> scan.("40 ms later  ", %{}, 40)
+  |> scan.("gone         ", %{"eye" => [0, 0, 0, 0]}, 10)
+end
+
+state =
+  Logex.Runtime.instance(lanes)
+  |> box.(2)
+  |> box.(2)
+  |> box.(1)
+  |> box.(2)
+  |> scan.("lane 4       ", %{"lane" => 4}, 10)
+
+{:ok, slower} =
+  "lanes.ld"
+  |> File.read!()
+  |> String.replace("xic eye[2] ton lane_t[2] 30", "xic eye[2] ton lane_t[2] 50")
+  |> Logex.compile(name: "lanes", types: [elem(Logex.compile_file("gate.ld"), 1)])
+
+{:ok, edit, _forecast} = Logex.Edit.accept(lanes, slower, state)
+{_edit, _state, report} = Logex.Edit.test(edit, state)
+IO.puts("edit: #{inspect(report)}")
+
+{:ok, plant} =
+  Logex.Configuration.compile(
+    "plant",
+    "task fast interval 10 priority 1\nprogram m1 lanes with fast\n  m1.eye[0] 0\n  m1.eye[1] 0\n  m1.eye[2] 1\n  m1.eye[3] 0\n  m1.lane 2",
+    %{"lanes" => lanes}
+  )
+
+runtime =
+  Enum.reduce([0, 10, 10, 10], Logex.Runtime.start(plant), fn ms, runtime ->
+    {runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, ms, %{})
+    runtime
+  end)
+
+IO.puts("m1.lane_t[2].acc #{Logex.Runtime.get!(runtime, "m1.lane_t[2].acc")}, " <>
+  "m1.lane_c[2].cv #{Logex.Runtime.get!(runtime, "m1.lane_c[2].cv")}")
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var lane_t ton[4]\nvar lane_c ctu[4]\nvar i int\nvar on bool\n" <>
+      "xic on ton lane_t[i] 30\nxic on ctu lane_c[1] 3\nxic on ctu lane_c[1] 5\n" <>
+      "xic lane_t.dn ote on",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run lanes.exs
+box in lane 2  %{"count" => 0, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 0, 0, 0]
+40 ms later    %{"count" => 1, "held" => 1, "kick" => [0, 0, 0, 0]}  counts [0, 0, 1, 0]
+gone           %{"count" => 1, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 0, 1, 0]
+box in lane 2  %{"count" => 1, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 0, 1, 0]
+40 ms later    %{"count" => 2, "held" => 1, "kick" => [0, 0, 0, 0]}  counts [0, 0, 2, 0]
+gone           %{"count" => 2, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 0, 2, 0]
+box in lane 1  %{"count" => 0, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 0, 2, 0]
+40 ms later    %{"count" => 1, "held" => 1, "kick" => [0, 0, 0, 0]}  counts [0, 1, 2, 0]
+gone           %{"count" => 1, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 1, 2, 0]
+box in lane 2  %{"count" => 2, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 1, 2, 0]
+40 ms later    %{"count" => 3, "held" => 1, "kick" => [0, 0, 1, 0]}  counts [0, 1, 3, 0]
+gone           %{"count" => 3, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 1, 3, 0]
+lane 4         %{"count" => 3, "held" => 0, "kick" => [0, 0, 0, 0]}  counts [0, 1, 3, 0]
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "lanes.ld", line: 22, read: {4}}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :xic, path: nil, file: "lanes.ld", line: 23, read: {4}}
+edit: [{:preset, "lane_t[2]", {30, 50}}]
+m1.lane_t[2].acc 30, m1.lane_c[2].cv 1
+line 5: `ton` runs `lane_t[i]`, whose subscript `i` holds: an instruction that runs an instance takes an element of an array of instances by literal subscripts, as in `ton lane_t[0]`, so that each element is one instance, run by one instruction whatever the program does
+line 7: `lane_c[1]` is already run by the `ctu` on line 6: one `ctu` runs a counter's count up
+line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 tons (declared on line 1): only an instance of a function block has members
+```
+
+- `var lane_t ton[4]` declares four timers, each an instance of its own: `lane_t[2]` is
+  a `ton` wherever a `ton` goes, and its state is one element of a tuple,
+  `state.env["lane_t"]`, each element a map of the type's members (decision 154).
+- **Arrays of every instance type.** An array may hold the instances of:
+  - every timer, the long ones among them;
+  - every counter, the typed ones among them, `var lane_c ctu_int[4]` stopping each lane
+    at 32767;
+  - a user block, `var gates gate[4]`, which `Logex.compile_file/1` loads from `gate.ld`
+    beside the program as it loads a block declared alone.
+- **Literal subscripts to run an element.** An instruction that runs an instance names
+  its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
+  storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each
+  element:
+  - each element has its own preset;
+  - one instruction runs each element, so `ton lane_t[2] 30` twice is refused, however
+    the subscript is spelled;
+  - a `ctud`'s two sides agree on its preset (decision 85);
+  - a `cal lanes[1]` runs `lanes[1]` alone.
+
+  An instruction that runs an element a tag names, `ton lane_t[i] 30`, is refused and told
+  why: it would run whichever element `i` held, so no element would have one preset, one
+  run or one edge memory that a rule or an online edit could see. IEC allows arrays of
+  function block instances since Ed 3 (Table 11 feature 5, `ARRAY[1..50] OF TON`).
+  Logix allows arrays of most data types, TIMER among them (1756-RM094N p.85). It lets an
+  instruction take an element by a tag in its subscript, "If you want an instruction to
+  access different elements in an array, use a tag in the subscript" (p.86), and the
+  extracts read name no exception for a timer. So logex's refusal is its own (decision
+  154).
+- **A tag subscript to read or write a member.** A member of an element may be read or
+  written through a tag subscript: `move lane_c[lane].cv count` and `xic lane_t[lane].dn
+  ote held` here, or `move 0 lane_c[i].pv`. A subscript outside its dimension is M5-12's
+  major fault, the instruction doing nothing ("A subscript in a tag", above), shown here
+  with `lane 4`. A one-shot's storage bit may not be a member of an element, as it may not
+  be a member of an instance.
+- **An online edit by path.** An edit names each element by its path: `lane_t[2]`'s
+  preset moved, a timer resumed, `lane_c[1].cu` on the block list. An array's
+  dimensions or element type changed are refused, as an array's are.
+- **What reaches an element from outside.** The access paths of `Logex.Runtime.get/2`
+  name a member of an element, `m1.lane_t[2].acc`, and never an element or an array of
+  instances whole. An event task's warnings name each element its instance runs. An array
+  of instances is the program's own, declared with `var`: never a var_input, a
+  var_output, a global, a connection or a located point.
+- **Warnings.** An array no instruction runs every element of is warned of once, its
+  elements listed to ten and then counted: "`lane_t` is an array of 4 tons, but no `ton`
+  runs `lane_t[3]`: it never times" (provisional).
+
 ## A configuration
 
 A configuration runs instances of one or more programs as one resource: each instance on a
@@ -3917,8 +4101,8 @@ in every cycle's outputs at the value it holds.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
   integer widths, the four bit strings and the two reals only, arrays of those named by
   literal subscripts or ones a tag holds, never an expression, located at a device's
-  consecutive addresses or not, no arrays of timers,
-  counters or blocks yet, no structures, and no NaN or infinity in a real; a jump forward only; no retained
+  consecutive addresses or not, and arrays of timers, counters and blocks, each element
+  run by literal subscripts; no structures, and no NaN or infinity in a real; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
 

@@ -36,7 +36,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   handed back once, by the first program among them that holds it and compiles, a block's
   own file handing back nothing, and a chain of files that holds itself cited from each
   path as that path's `compile_file/1` cites it; `Logex.Configuration.compile_file/1`
-  loads a configuration's program types through it, one call a configuration
+  loads a configuration's program types through it, one call a configuration; since M5-14 the loader reads a block's name from a declaration with sizes, `var gates
+  gate[4]` loading `gate.ld`
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host
@@ -291,7 +292,22 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `inspect/1` shows as a charlist, the instruction doing nothing
   and passing no power, a bit of such an element its element's subscripts checked first;
   an instruction with one among its first three operands, or a bit of one, is told by its
-  clause's head, so a program of none scans in exactly what it did at `e00ae03`.
+  clause's head, so a program of none scans in exactly what it did at `e00ae03`. Since M5-14 (decision 154) it runs arrays of instances, an array of timers, counters or a
+  user block's instances a tuple of instance maps in the elements' order
+  (`Logex.FbType.started/2`, each element's preset by its index): an element an instruction
+  runs, `{:element, line, array, index, name}`, `name` by the subscripts' values, read and
+  written as M5-11's element is, a counter's edge memory and a `tp`'s blocked by that name,
+  `lane_c[1].cu`, a long timer's unit keyed by its array; a `cal` of an element running its
+  body over the element's state, written back into its array, every other element kept,
+  its `:ran` record and a fault's `path` by the element's name, `lanes[1]`, in a clause of
+  its own, so a `cal` of an instance costs what it did; a member of an element,
+  `{:member, line, element, members}`, a literal or a tag-subscripted element's, and a bit
+  of one, read and written through the element, a subscript out of range M5-12's index
+  fault, thrown to the instruction's catch, an `element_at` member's write reading its
+  subscripts once; `get/2` naming a member of an element, `m1.lane_t[2].acc`, an element or
+  the array whole refused in pinned words; and a state's array of instances checked whole,
+  a tuple of its sizes, each element its type's map, at depth in a block. A program of no
+  array of instances scans rung for rung in exactly what it did at `aa41f4d`.
 - `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
   one place an array's shape and values are read and made: its type `{:array, type,
   dims}`, one to three sizes, 65,536 elements at most (the spike's limit, provisional),
@@ -300,7 +316,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `to_list/2` and `from_list/3`, a host's form, since M5-13 `points/3`, a located
   array's elements with their addresses, `name/2`, an element's name by its
   subscripts' values, `grid[1,7]`, and `split/1` and `subscript/1`, a name's subscripts
-  as written, a tag's `{:tag, name}`, which since M5-12 a scan reads
+  as written, a tag's `{:tag, name}`, which since M5-12 a scan reads, and since M5-14 `is_instances/1`, a guard, an array whose elements are instances, and
+  `a_type/1` naming one "an array of 4 tons" or "an array of 2 instances of `seal`"
 - `lib/logex/configuration.ex` — `%Logex.Configuration{}` (M2-1, `docs/organisation.md`
   §4.4 and §4.10): the program types, tasks, globals (located at `<device>.i|q.<address>`
   or not), program instances and connections, as plain data and lists in declaration
@@ -472,7 +489,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   (decision 157) an array's type, dimensions or sizes changed are refused, elements move
   by path, a changed initial list is reported element by element, `{:initial_changed,
   "lim[1]", {20, 25}}`, and an array added or a var_input array reported as a list, as
-  `Logex.Configuration.Edit` reports a global array. Its moduledoc gives every rule, report kind and
+  `Logex.Configuration.Edit` reports a global array. Since M5-14 (decision 154) each element of an array of instances is an instance by its
+  path, `lane_t[2]`: a timer resumed and its preset moved, `{:preset, "lane_t[2]", {30, 50}}`,
+  a counter's edge memory blocked, `lane_c[1].cu`, a block's one-shot, `lanes[1].e`, a
+  member unwritten, and an array of instances' sizes or type changed refused, a user
+  block's elements by their members' kinds. Its moduledoc gives every rule, report kind and
   host mistake; §4.9 the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
   `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
@@ -648,6 +669,19 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   judge, a block's formal among them; and since decision 219 `literal_real/4` (no doc) is
   the one rule for the real a real literal's slot computes in, which the lowering reads
   over a rung's operands and `Logex.Warnings` over the IR's.
+  Since M5-14 (decision 154) a declaration's type word may be an instance type with sizes,
+  `var lane_t ton[4]`, `var lane_c ctu_int[4]` or `var gates gate[4]`, of no initial list
+  and in `var` alone; every instruction that runs an instance, a timer, a counter's side
+  and a `cal`, takes an element by literal subscripts, lowered with its name by value
+  (`by_path/1`), so the one-run rule, decision 85's preset agreement and the preset each
+  hold per element, `ton lane_t[16#2] 30` beside `ton lane_t[2] 30` refused, and one a tag
+  subscripts refused and told why (`subscripted_instance/2`), "`ton` runs `lane_t[i]`,
+  whose subscript `i` holds: …"; an array of instances named whole by `cal` told its
+  element, as in `cal lanes[0]`, and a member of it told only an instance has one; a member of an element, `lane_t[slot].dn`,
+  lowered as `{:member, line, element, members}`, its element literal or a tag's, every
+  rule of a member's holding, and refused as a one-shot's storage bit; a counter of one
+  kind told its array's declaration, "declare its array `var lane_c ctud[4]`"; and
+  `signature/2` giving a `cal` of an element its block's slots.
 - `lib/logex/warnings.ex` — the warnings a compiled program carries: a tag used by no
   rung, a `var_output` no rung writes, a second `ote` on one tag, and since M1-6 another
   write to an `ons` storage bit, a comparison of two literals, a timer no `ton` runs, and
@@ -716,7 +750,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   second-`ote` and storage-bit warnings, a write of the element whole a whole write of it
   (`container_of/1`); each instruction holding one
   told by `by_literal/2`'s guards, so a program of none compiles in exactly what it did at
-  `a8a4f8f`
+  `a8a4f8f`; and since M5-14 an array of instances whose elements some no instruction runs warned
+  once, its elements listed ten and then counted, "`lane_t` is an array of 4 tons, but no
+  `ton` runs `lane_t[3]`: it never times" (provisional), a long timer's element's preset in
+  M5-6's words, and a second coil on a member of an element the second-`ote` warning by its
+  path, a literal element's and one through a tag subscript not compared (provisional)
 - `lib/logex/walk.ex` — B5's one walk of a program's IR (M2-4): `instructions/1`, every
   instruction in rung order, groups' legs included; `uses/2`, every tag operand with its
   slot's access, a member as its instance, and since M3-4 `uses_of/2`, one instruction's;
@@ -751,7 +789,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `element_writes/1` each element a program writes, a bit's write its element's; and
   since M5-12 an element a tag subscripts is a use of its array with its slot's access and
   of each subscript's tag read, and its write a write of the array whole, named by the
-  array in `element_writes/1` (§4.12's routine choice)
+  array in `element_writes/1` (§4.12's routine choice); and since M5-14 an element of an array of instances is a fact of its own by its path,
+  `lane_t[2]`, `lanes[1].t` at depth, its member's write a write of its array, through a
+  tag subscript each element's member (`member_paths/1`, provisional)
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, the elementary types' table, and the
   function block type words of `Logex.FbType.builtins/0`); since M5-1 (`docs/organisation.md`
@@ -795,7 +835,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   literal an element, each judged as a tag's value, an array of instances or sized by a
   tag refused, every rule in `array_misfits/3` too, which a configuration's global reads;
   `a_type/1` names one "an array of 4 by 8 ints" and `a_global/1` "a global array of 8
-  ints"
+  ints"; since M5-14 (decision 154) an array of instances, `{:array, %FbType{}, dims}`, declared
+  in `var` alone with no initial list, each refused in its own words, from Elixir too
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton` or `var s1 seal`, the `%Logex.FbType{}` itself,
   one `Logex.FbType.user?/1` accepts for a user block, except in a compiled program or
@@ -842,7 +883,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   user block type below it, at any depth, once, in one table, its body's `blocks`, each
   held with no table of its own (`held/1`), so a type copied flat grows with the number of
   distinct types it holds, whatever the shape; `type_of/2` finds a member's type there,
-  read inside the table (`within/2`), so the types below it are found in turn
+  read inside the table (`within/2`), so the types below it are found in turn; since M5-14 `started/2`, an array of instances' first value, each element's preset by
+  its index, and a member holding an array of a user block's instances typed `{:array,
+  {:block, name}, dims}`
 - `lib/logex/program.ex` — `%Logex.Program{name:, source:, file:, rungs:, tags:,
   blocks:, warnings:}`, a program type, named and stateless, with `initial_env/1` for an
   instance's first env; `source` is its text, from which a block's body is compiled again
@@ -873,7 +916,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   with `units` by `settled/1` in one pass of the tag table, a body holding its own, and
   held to its tags by `edited_by_hand/1` as `units` are; and since M5-11 `arrays`, each
   array tag by name to its type, nil where the routine holds none, settled with them, a
-  real array's name among the `reals`, held to its tags by `edited_by_hand/1` too
+  real array's name among the `reals`, held to its tags by `edited_by_hand/1` too; since M5-14 an array of a user block's instances typed `{:array, {:block, name}, dims}`,
+  read inside the table by `typed_tags/1`, an array of long timers' unit keyed by its
+  name, and an array of instances in no `arrays`
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). `Logex.Parser.well_formed!/1` is the definition
@@ -1234,6 +1279,17 @@ the state check, an edit's refusals and its element-by-element reports, the walk
 edit, a seeded walk of `weights[3]` and `grid[1,7]` against an oracle, and the growth in
 reductions, an element's read and write within a measured bound of a tag's at one, two
 and three dimensions and a program of none scanning rung for rung as before,
+`instance_array_test.exs` every rule of M5-14's arrays of instances from source, the
+declaration and each refusal at its line, from Elixir too, every instruction that runs an
+element by literal subscripts and one a tag subscripts refused, the one-run rule and
+decision 85's rungs per element, members read and written by literal and tag subscripts and
+their bits, each element timed and counted as a scalar instance, a `cal` of an element and
+a fault in its body by its path, the index fault and what checks nothing, long and typed
+variants, an edit's resume, preset, block list, unwritten member and refusals by path, the
+warnings, the walks, the state check at depth, a hand edit, a configuration's refusals,
+event-task warnings and `get/2` paths, and its growth in reductions, each scalar instance's
+rung pinned exactly as at `aa41f4d`, an element within 15 reductions of it and a tag
+subscript within 5 of a literal one,
 `located_array_test.exs` every rule of M5-13's located arrays from source, the line, its
 round trip and from Elixir, each element's point and address at one and two dimensions
 and a hierarchical address, every overlap and initial list refused, a location naming
@@ -1264,7 +1320,14 @@ each real's limits, at ties, zero divisors and subnormals, alone, across a resta
 edit, and in a resource, against IEEE 754's rounding and IEC's rules restated through the
 BEAM's 32-bit encoding, every state compared exactly, its reach a saturation and a flush
 in each real, −0.0, a tie and a wrap, and the configuration round trip's real globals,
-and since M5-9 a program whose bit number is the panel's dint, out of range at its -4 while `pb` is pressed, its model tripping a step whose run met a major fault at the step's end, no later step run, its reach `{:fault, ...}` among the trip reasons, and since M5-11 a walk of arrays drawn at one, two and three dimensions of an integer type and of bools, by literal subscripts, `move` and `add` between elements, a host's list whole, a one-shot on an element, over scans, restarts, host mistakes and edits of an initial list, and in a resource connected whole or element by element, against an oracle of each array as a map of its elements by index, the rightmost subscript fastest, its reach each dimension count, a wrap, a one-shot fired, a host's refusal, a restart, an element's report and both kinds of connection, and the configuration round trip's array globals, and since decisions 221 to 223 a bit of an element read by a contact and written by a coil, a host's element key and an element of a global array at a far end among its draws and its reach, and since M5-12 a walk of elements subscripted by tags of four widths beside literal subscripts, at one, two and three dimensions, each subscript drawn now and then outside its dimension, below 0 too, `move`, `add`, coils and contacts, over scans and restarts and in a resource, against an oracle of each array as a map of its elements and each fault restated with its subscripts, its reach a read and a write fault, a contact's, a de-energised `ote`'s and a de-energised latch checking nothing, and the RunnerWalk's program whose subscript is the panel's dint, outside its array at 7 and -4 while `pa` is pressed, its trip reached, its fault's `read` the one subscript in a tuple since decision 233, a fresh start's first round among the rounds that may trip, and since M5-13 every RunnerWalk configuration holding a located array in, `pt int[3]` at `panel.i.3`, and out, `qs bool[2]` at `drive.q.2`, each element pressed, forced and unforced by name and refused at its own address, and since decision 241 `pt` forced and unforced whole, as a list, where `pt[1]` is drawn, its reach an element pressed, forced and misfit and the array forced and unforced whole
+and since M5-9 a program whose bit number is the panel's dint, out of range at its -4 while `pb` is pressed, its model tripping a step whose run met a major fault at the step's end, no later step run, its reach `{:fault, ...}` among the trip reasons, and since M5-11 a walk of arrays drawn at one, two and three dimensions of an integer type and of bools, by literal subscripts, `move` and `add` between elements, a host's list whole, a one-shot on an element, over scans, restarts, host mistakes and edits of an initial list, and in a resource connected whole or element by element, against an oracle of each array as a map of its elements by index, the rightmost subscript fastest, its reach each dimension count, a wrap, a one-shot fired, a host's refusal, a restart, an element's report and both kinds of connection, and the configuration round trip's array globals, and since decisions 221 to 223 a bit of an element read by a contact and written by a coil, a host's element key and an element of a global array at a far end among its draws and its reach, and since M5-12 a walk of elements subscripted by tags of four widths beside literal subscripts, at one, two and three dimensions, each subscript drawn now and then outside its dimension, below 0 too, `move`, `add`, coils and contacts, over scans and restarts and in a resource, against an oracle of each array as a map of its elements and each fault restated with its subscripts, its reach a read and a write fault, a contact's, a de-energised `ote`'s and a de-energised latch checking nothing, and the RunnerWalk's program whose subscript is the panel's dint, outside its array at 7 and -4 while `pa` is pressed, its trip reached, its fault's `read` the one subscript in a tuple since decision 233, a fresh start's first round among the rounds that may trip, and since M5-13 every RunnerWalk configuration holding a located array in, `pt int[3]` at `panel.i.3`, and out, `qs bool[2]` at `drive.q.2`, each element pressed, forced and unforced by name and refused at its own address, and since decision 241 `pt` forced and unforced whole, as a list, where `pt[1]` is drawn, its reach an element pressed, forced and misfit, and since M5-14 a walk of arrays of instances, a `ton` array of one or two dimensions, a
+  `ctu` or `ctud` array and an array of a user block's, each element run by literal
+  subscripts on a drawn input, members read and written through a tag subscript, now and
+  then outside its dimension, over scans, restarts, a misfit state refused and edits that
+  move an element's preset or block a counter's edge memory, and in a resource read
+  through `get/2`, against an oracle of each element as a scalar instance of its type,
+  IEC's TON, CTU and CTUD and the gate's one-shot restated, its reach every kind
+  (`@ia_reach`) and the array forced and unforced whole
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -1394,7 +1457,11 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   card.i.0`, and lighting a lamp a zone through `zone_hot bool[8] at card.q.0`, through
   the runner on the manual clock against an oracle of eight singles that knows nothing of
   logex, printed back exactly, a card of seven inputs refused, `zone_t[3]` forced against
-  its device and across a restart, a crash and a fresh start from its forces file;
+  its device and across a restart, a crash and a fresh start from its forces file; and M5-14's, a sorter of four lanes from files on disk, `lane_t ton[4]`, `lane_c
+  ctu_int[4]` and `gates gate[4]` loaded from `gate.ld`, each lane run by literal
+  subscripts and its count read through the panel's lane, over 600 seeded cycles
+  against an oracle that knows nothing of logex, the lane outside the arrays its index
+  fault;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
@@ -1428,6 +1495,7 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   access and bit-string conversions its "Bit strings", the run of `status.exs`,
   M5-10's reals its "Reals", the run of `fan.exs`, M5-12's subscripts held in tags its "A
   subscript in a tag", the run of `scales.exs`,
+  M5-14's arrays of instances its "Arrays of instances", the run of `lanes.exs`,
   and since M4-7 the plant on the real clock, `on_the_real_clock.exs`, its keyword list
   the same on every run and its figures that run's; and "What logex is not" says plainly
   what logex does not do, a safety function first, each claim checked against the code,

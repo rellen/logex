@@ -3730,7 +3730,22 @@ either order, for a storage bit kept in the array, for an edit's block list, and
 configuration, where an instance that so writes a global array through its
 `var_external` writes it whole, every other writer of the array then counted whole
 (provisional). A one-dimensional element of one tag subscript reads in 21 reductions a rung
-against a literal subscript's 16; a program of none scans as it did.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
+against a literal subscript's 16; a program of none scans as it did.)* *(M5-14, 2026-10-24: arrays
+of instances landed, of every timer and counter, the long and typed ones among them, and
+of a user block's, `var gates gate[4]`, loaded from `gate.ld` beside the program, each a
+tuple of instance maps, never a var_input, a var_output, a global, a connection or located,
+and with no initial list. Each instruction that runs one takes an element by literal
+subscripts, its name by value, so `ton lane_t[16#2] 30` beside `ton lane_t[2] 30` is the
+one-run rule's refusal; one a tag subscripts is refused and told why. A member of an
+element is read and written by literal or tag subscripts, `lane_t[slot].dn` with M5-12's
+index fault. Each element is an instance by its path, `lane_t[2]` and `lanes[1].t`, in the
+walks, the edit's plan and block list, a fault's `path`, the event task's warnings and
+`get/2`, `m1.lane_t[2].acc`. Provisional: a write through a tag subscript of a member,
+`move 0 lane_c[i].pv`, is a write of that member of every element; an array some of whose
+elements nothing runs is warned once, ten and then a count. A scalar instance's rung scans
+in exactly what it did, a `ton` 112 reductions; an element's in 9 to 14 more, a `ton`'s
+121 and a `cal`'s 302 against 288, and a member read through a tag subscript in 5 more
+than by a literal one.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
 the state is handed in, a scan's among them, so holding one costs a scan whether or not
 anything writes it: an integer, bit-string or bool array about one reduction an element,
 one guard, an `int[65536]` some 66,000 reductions and 0.3 ms, a `real[65536]` about
@@ -7688,7 +7703,12 @@ the decisions the rest settle.
      *(Landed with M5-11, 2026-10-23, for the bits: a one-shot's storage bit and a pulse
      coil's two bits on an element of a bool array, `ons edge[2]`, each by its element's
      name on the edit's block list; arrays of instances are refused at their line until M5-14
-     lands them.)*
+     lands them.)* *(Landed with M5-14, 2026-10-24, for arrays of instances: `var lane_t
+     ton[4]`, `var lane_c ctu_int[4]` and `var gates gate[4]`, a literal subscript on
+     every instruction that runs one, `ton lane_t[i] 500` refused and told why, and a tag
+     subscript on a member's read or write, `xic lane_t[slot].dn`, the maintainer
+     re-confirming the literal rule on 2026-10-24; §4.12 gives the costs and the
+     provisional readings.)*
 155. **Bit strings and bit access (Milestone 5).** Bit 3 of the drive's status word is "at
      speed", and the run lamp should follow it: `xic drive_status.3 ote run_lamp`.
      - IEC's way: `byte word dword lword` as types of their own, no arithmetic on them,

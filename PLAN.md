@@ -183,7 +183,10 @@ six changes: `1.0e-400` refused in a configuration line in its global's words an
 `eq 1.0e-400 0.0` refused; a located array named whole taking a list, as an input, a
 force, an unforce and a forces file's line; a located array grown refused once, for its
 range; and a coil beside another write of the very element through the very tag warned of
-nothing, with three questions put to the maintainer.
+nothing, with three questions put to the maintainer. And the fourteenth, M5-14, the same
+day: arrays of timers, counters and blocks, `var lane_t ton[4]`, each element run by
+literal subscripts and its members read and written through a tag subscript (§3, M5-14),
+with four questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7725,6 +7728,161 @@ the walks' cross-type reach and the documents.
   memory on an element is on the block list by its path, an event task's timer, counter
   and one-shot warnings name each element, a `cal` of an element runs only its instance,
   and the contract walk draws arrays of instances. *Size L.*
+
+  **Status: DONE — landed 2026-10-24**, as gated commits: `382777e` lands the item, code
+  and tests; `9a84ed7` holds a configuration edit's accept for a program of no array of
+  instances to its cost before the item and pins the mutants its table left alive; and a
+  third holds the documents. The syntax was recorded first, in `3519c43`: a
+  member after an element's subscripts, `lane_t[2].dn`, in the printer's generator and
+  `@required_shapes` and 13 sources of the golden record, which the front end already read.
+  The maintainer re-confirmed decision 154's literal rule on 2026-10-24. README's "Arrays of instances"
+  is the run of `lanes.exs`, a sorter of four lanes, real output re-run on the item's code.
+
+  An array of instances is the program's own: `var lane_t ton[4]`, `var lane_c
+  ctu_int[4]` and `var gates gate[4]`. It is one to three dimensions of every timer, the
+  long ones among them, every counter, the typed ones among them, or a user block, and its
+  state is a tuple of instance maps in the elements' order (`Logex.FbType.started/2`).
+  Each of the following is refused at its line, from Elixir too: an initial list; a
+  var_input, var_output or var_external; an array of a block inside that block, at any
+  depth; a configuration's global, `var_global w ton[2]`; and a connection. A host's input
+  naming one is refused too.
+
+  Each instruction that runs an instance takes an element by literal subscripts: a timer,
+  a counter's side, a `cal`, and a one-shot's storage bit or a pulse coil's pulse bit (a
+  bool element). The element is lowered with its name by value, so each rule holds per
+  element:
+  - M1-6's one-run rule, `ton lane_t[16#2] 30` beside `ton lane_t[2] 30` refused;
+  - decision 85's preset agreement of a `ctud`'s two rungs;
+  - each element's own preset;
+  - nothing after an element's instruction on its path.
+
+  An element a tag subscripts in such a slot is refused and told why: "`ton` runs
+  `lane_t[i]`, whose subscript `i` holds: an instruction that runs an instance takes an
+  element of an array of instances by literal subscripts, as in `ton lane_t[0]`, so that
+  each element is one instance, run by one instruction whatever the program does". A
+  `cal` of an array whole is told its element. A counter of one kind on the other's
+  instruction is told its array's declaration, "declare its array `var lane_c ctud[4]`".
+
+  A member of an element, `lane_t[slot].dn` or `lane_c[1].pv`, is read and written as an
+  instance's member is, by literal or tag subscripts, and so are its bits. A subscript out
+  of its dimension is M5-12's major fault, every subscript in `read`. A one-shot's storage
+  bit in a member of an element is refused, as in a member of an instance. A `cal` of an
+  element runs its body over that element's state alone. Its `:ran` record, its block
+  list and a fault's `path` are by the element's name, `lanes[1]`.
+
+  Every fact of an element is by its path: `lane_t[2]`, or `lanes[1].t` at depth. That
+  holds in:
+  - the walks;
+  - the edit's plan, which resumes a timer and moves its preset, `{:preset, "lane_t[2]",
+    {30, 50}}`, blocks a counter's edge memory, `lane_c[1].cu`, and a block's one-shot,
+    `lanes[1].e`, and reports a member unwritten;
+  - the event task's timer, counter and one-shot warnings;
+  - `Logex.Runtime.get/2`, `m1.lane_t[2].acc`, which refuses an element or an array of
+    instances named whole.
+
+  An array of instances whose sizes or element type change is refused, as an array's is,
+  and so is one whose user block's members change kind, by the first element's path. A
+  state's array of instances is checked whole, a tuple of its sizes, each element its
+  type's map, at depth in a block. The loader reads a block's name from a declaration with
+  sizes, so `var gates gate[4]` loads `gate.ld`.
+
+  *Done when*, each met:
+  - Each refusal is pinned (`instance_array_test.exs`), `ton lane_t[i] 500` told why.
+  - The one-run rule holds per element, however the subscript is spelled.
+  - Decision 85's two counter rungs hold per element.
+  - An edit resumes a lane's timer and moves its preset by its path `lane_t[2]`.
+  - A counter's edge memory on an element is on the block list by its path until a scan
+    runs it, and so is one on a rung a jump skips.
+  - The event-task warnings name each element.
+  - A `cal` of an element runs only its instance.
+  - The contract walk draws arrays of instances:
+    - a `ton` array of one or two dimensions, a `ctu` or `ctud` array and a gate block's;
+    - members through a tag subscript, now and then out of range;
+    - restarts, a misfit state refused, and edits that move a preset or block an edge;
+    - a resource read through `get/2`;
+    - against an oracle of each element as a scalar instance of its type, its reach every
+      kind in `@ia_reach`.
+  - `end_to_end_test.exs`, "arrays of instances in the plant (M5-14)", runs a sorter of four
+    lanes from files on disk, `gates gate[4]` loaded from `gate.ld`, over 600 seeded cycles
+    against an oracle that knows nothing of logex.
+
+  The cost, measured in reductions against `aa41f4d`:
+  - A program of no array of instances scans each rung in exactly what it did: a `ton` 112,
+    a `ctud` 343 and a `cal` 288. A test pins each.
+  - The compile scripts' programs compile within the one or two reductions the base varies
+    by.
+  - A configuration's check, start, cycle, outputs, restart and points cost what they did.
+  - A configuration edit's accept costs what it did within the base's own spread, 325,088
+    to 325,096 against 325,093 to 325,106 for 32 relays, after `9a84ed7` moved its new cases
+    out of the comprehensions' inner generators, where `382777e` had it 120 to 230 dearer.
+  - An element's rung scans in 9 to 14 reductions more than a scalar instance's (a `ton`
+    121, a `cal` 302), and a member read through a tag subscript in 5 more than by a
+    literal one. A test pins each.
+
+  The mutation table, each mutant judged by the full suite's exit code on a copy of the
+  commit (`scratchpad/m5/a16/mut/run.log`): 27 mutants on
+  `382777e`. 21 were red at once:
+  - the compiler's name by value, its one-run element clause, an element's preset, the
+    tag-subscript refusal, the `cal` refusal, an element member's storage bit and a
+    counter's array hint (K1 to K7);
+  - the runtime's counter block by element, a long timer's unit by array, the member of
+    an array of instances named whole and a `cal`'s write back (R1, R3, R5, R7);
+  - the plan's element instances, edges and element writes (P1, P2, P4);
+  - the walk's tag-subscripted member paths and element runs (WK1, WK2);
+  - the warnings' unrun elements and their cap (W1, W2);
+  - the section refusal (D2), the started presets (F1, once rewritten so that it
+    compiles), the units by array (PR1) and the loader's sizes (L1).
+
+  Five survived, and each is red after `9a84ed7`, which pins each in a test:
+  - a skipped rung's mark for a counter element (R2), which only a ctud whose other side
+    runs can see;
+  - the multi-dimension member write through tag subscripts (R4);
+  - a `tp` element's block by name (R6);
+  - decision 26's fit for an array of instances (P3);
+  - the declaration's refusal of an initial list holding a word (D1).
+
+  `9a84ed7`'s changed lines were mutated again (P1b, P2b), red with all five.
+
+  Provisional readings, each a question for the maintainer:
+
+  1. *A member written through a tag subscript.* The sorter writes a lane's preset
+     through the panel's lane, `xic set move 2 lane_c[k].pv`, and an edit drops that rung.
+     As built, the edit's report names each element as no longer written, `{:unwritten,
+     "lane_c[0].pv", 2}` and the rest, each keeping its value; the walks count the write as
+     one to that member of every element. The options:
+     - (a) as built;
+     - (b) the elements the running program last wrote only, which no rule records today;
+     - (c) none, as for a write no element is named by.
+     Decision 96's report is logex's own; no such report of Logix's was found in the
+     extracts read.
+  2. *An array some of whose elements nothing runs.* Four lanes declared, three run. As
+     built, one warning: "`lane_t` is an array of 4 tons, but no `ton` runs `lane_t[3]`: it
+     never times", the elements listed ten and then counted, one sentence for the array
+     whole where none is run. The options:
+     - (a) as built;
+     - (b) a warning an element, as four scalar timers would have;
+     - (c) none where any element is run.
+     IEC says nothing, and no such warning of Logix's was found in the extracts read
+     (**unverified**).
+  3. *Two coils on one member, one through a tag subscript.* `xic a ote lane_c[i].r` and
+     `xio a ote lane_c[1].r`. As built, nothing is warned. Two coils through the very tag,
+     `lane_c[i].r` twice, are the second-`ote` warning, and so are two literal elements by
+     value, `lane_c[1].r` and `lane_c[01].r`. Decision 235 warns `ote lamps[2]` beside a
+     write through `lamps[slot]` for a bool array. The options:
+     - (a) as built;
+     - (b) warned as decision 235 warns an element: "`lane_c[1].r` is in `lane_c`, which
+       the `ote` on line 8 may write through a tag subscript".
+     The warning is logex's own (decisions 207 and 235); IEC and the extracts of Logix
+     read say nothing of it.
+  4. *A block's member retyped in an array of its instances.* `var ws w[3]`, and an edit
+     changes `w`'s `x` from a bool to a dint. As built, it is refused once, by the first
+     element, "`ws[0].x` is a bool in the running program and a dint in the candidate: a
+     member's type changes only with a restart". The options:
+     - (a) as built;
+     - (b) named for the array, "`x` of each element of `ws`";
+     - (c) a refusal an element.
+     Logix changes an existing array's size or data type offline only (1756-RM094N p.85),
+     and says nothing found of how it names the change.
 - **M5-15 · The contract walk's cross-type reach.** Each item above has extended the walks
   with its own rules; this one draws the types together: programs, configurations and
   runner walks that mix every type, `@junk` and `@edges` by type (`1.0` stops being junk
