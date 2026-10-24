@@ -236,6 +236,30 @@ defmodule Logex.ElementBitTest do
     end
   end
 
+  describe "a storage bit of an element on the block list" do
+    # Decision 106 for a bit of an element: blocked, its one-shot passes no power on the
+    # scan that runs it, and on a rung a jump skips it stays listed until that scan.
+    test "is blocked once, and stays listed while a jump skips its rung" do
+      p =
+        program(
+          "var_input skip bool\nvar_input go bool\nvar_output pulse bool\nvar s word[2]\n" <>
+            "xic skip jmp done\nxic go ons s[1].3 ote pulse\nlbl done"
+        )
+
+      state = %{Runtime.instance(p) | first: false, ons_blocked: ["s[1].3"]}
+      {_out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"skip" => 1, "go" => 1}))
+      assert state.ons_blocked == ["s[1].3"]
+      {out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"skip" => 0, "go" => 1}))
+      assert out == %{"pulse" => 0}
+      assert state.ons_blocked == []
+
+      # Unblocked, the same rise pulses.
+      fresh = %{Runtime.instance(p) | first: false}
+      {out, _state} = Runtime.scan(p, Runtime.put_inputs(p, fresh, %{"skip" => 0, "go" => 1}))
+      assert out == %{"pulse" => 1}
+    end
+  end
+
   describe "a number out of range at run time: the major fault (decision 160)" do
     test "the instruction does nothing, its fault the number read, and a skipped rung checks none" do
       p =

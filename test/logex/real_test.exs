@@ -1836,6 +1836,12 @@ defmodule Logex.RealTest do
                {4, "`0.10000000149011612` is more precise than a real keeps: it is held as 0.1"}
              ]
 
+      # Only a declaration's literals are an initial value: a rung naming a real tag second
+      # is told of its literal once, by decision 219's pass.
+      assert warnings("var_output r real\nadd r r r move 16777217.0 r") == [
+               {2, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
+             ]
+
       # Late, after the first rung, it is still a declaration, reported and warned.
       assert {:error, [late]} =
                Logex.compile("var a bool\nxic a ote a\nvar r real 16777217.0", name: "p")

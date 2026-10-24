@@ -625,7 +625,8 @@ defmodule Logex.ArrayConfigurationTest do
           "wide" => "var_input speed dint\nvar_output out dint\nmove speed out",
           "w" => "var_output o int[2]\nvar_output s int\nmove 1 o[0]\nmove 2 s",
           "ext" => "var_external g int[2]\nvar_input go bool\nxic go move 5 g[1]",
-          "e" => "var_input e int[2]\nvar_output o int\nadd e[0] e[1] o"
+          "e" => "var_input e int[2]\nvar_output o int\nadd e[0] e[1] o",
+          "iw" => "var_output o int\nmove 7 o"
         })
 
     defp configured(text) do
@@ -686,6 +687,13 @@ defmodule Logex.ArrayConfigurationTest do
 
       {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
       assert Runtime.get!(runtime, "o") == -9
+
+      # An int var_output into an element of a real global array is the real's value.
+      {:ok, configuration} = configured("var_global rs real[3]\nprogram m1 iw\nm1.o rs[1]\n")
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
+      assert Runtime.get!(runtime, "rs") === [0.0, 7.0, 0.0]
+      {runtime, _outputs, _events} = Runtime.cycle(runtime, 10, %{})
+      assert Runtime.get!(runtime, "rs[1]") === 7.0
     end
 
     test "each wrong element is told at its line" do
@@ -753,6 +761,22 @@ defmodule Logex.ArrayConfigurationTest do
              ]
     end
 
+    test "an element at a far end is checked as its array, from a runtime the host built" do
+      {:ok, configuration} =
+        configured("var_global speeds int[4]\nprogram m1 line\nm1.speed speeds[1]\n")
+
+      runtime = Runtime.start(configuration)
+
+      for {value, found} <- [{{1, 2}, "{1, 2}"}, {{1, 2, 3, 70_000}, "{1, 2, 3, 70000}"}] do
+        built = %{runtime | globals: Map.put(runtime.globals, "speeds", value)}
+
+        assert_raise ArgumentError,
+                     "runtime.globals holds `speeds` outside its type: it is an array of 4 " <>
+                       "ints, and its value must be a tuple of 4 elements of ints, found #{found}",
+                     fn -> Runtime.cycle(built, 10, %{}) end
+      end
+    end
+
     test "an element no connection drives any more after an edit is held, by its name" do
       {:ok, before} = configured("var_global g int[2]\nprogram a w\na.s g[1]\n")
       {:ok, later} = configured("var_global g int[2]\nprogram a w\n")
@@ -761,6 +785,12 @@ defmodule Logex.ArrayConfigurationTest do
       assert {:held, "g[1]", 2} in forecast
       {_edit, _runtime, report} = Configuration.Edit.test(edit, runtime)
       assert {:held, "g[1]", 2} in report
+
+      # Named by its subscripts' values, however the connection spelt it.
+      {:ok, spelt} = configured("var_global g int[2]\nprogram a w\na.s g[01]\n")
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(spelt), 0, %{})
+      {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, later)
+      assert {:held, "g[1]", 2} in forecast
     end
   end
 
