@@ -375,6 +375,36 @@ defmodule Logex.LocatedArrayTest do
       refute Enum.any?(c.warnings, &(&1.message =~ "nothing drives"))
     end
 
+    test "an array of output points a program writes through its var_external is driven" do
+      {:ok, ext} =
+        Logex.compile("var_external lamps bool[8]\nvar_input a bool\nxic a ote lamps[2]\n",
+          name: "ext"
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "oven",
+          @head <>
+            "program r reader with fast\nr.ls lamps\nr.o a\nprogram e ext with fast\ne.a a\n",
+          Map.put(more(), "ext", ext)
+        )
+
+      refute Enum.any?(c.warnings, &(&1.message =~ "nothing drives")), inspect(c.warnings)
+    end
+
+    test "an array refused for its sizes takes no address, so overlaps nothing" do
+      {:error, diagnostics} =
+        checked(
+          "task fast interval 10 priority 1\nvar_global grid int[2,2,2,2] at card.i.0\n" <>
+            "var_global b bool at card.i.3\nvar_global a bool\nprogram o1 lamp with fast\n" <>
+            "o1.a b\no1.l a\n"
+        )
+
+      assert Enum.map(diagnostics, & &1.message) == [
+               "`grid` is declared with 4 dimensions, `[2,2,2,2]`: an array has one to three, as in `int[8]`, `int[4,8]` or `int[2,3,4]`"
+             ]
+    end
+
     test "an element of a global whose line is refused is silent, as its name is" do
       {:error, diagnostics} =
         checked(
@@ -906,10 +936,11 @@ defmodule Logex.LocatedArrayTest do
       for {s, l} <- Enum.zip(small, large), do: assert(l <= 9 * s, inspect({small, large}))
     end
 
-    # A configuration with no located array cycles, a point at a time, in what it did at
-    # a8af419, before M5-13: measured there with this very configuration, 105.625 a
+    # A configuration with no located array cycles and restarts, a point at a time, in what
+    # it did at a8af419, before M5-13: measured there with this very configuration, 105.625 a
     # pair of an input and an output point and 4.53 an output point's copy-out, and here
-    # within the one or two reductions a build of the BEAM moves a Map.new by.
+    # within half a reduction a point, which one more call a point would pass: runs vary by a
+    # quarter of one, as the BEAM moves a Map.new by a reduction or two from run to run.
     test "a configuration of no located array cycles as before M5-13" do
       {:ok, relay} =
         Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out\n", name: "relay")
@@ -930,13 +961,17 @@ defmodule Logex.LocatedArrayTest do
         {runtime, _, _} = Runtime.cycle(Runtime.start(c), 10, inputs)
 
         {reductions(fn -> Runtime.cycle(runtime, 10, inputs) end),
-         reductions(fn -> Runtime.cycle_outputs(runtime) end)}
+         reductions(fn -> Runtime.cycle_outputs(runtime) end),
+         reductions(fn -> Runtime.restart(runtime, :cold) end)}
       end
 
-      {c32, o32} = measure.(32)
-      {c64, o64} = measure.(64)
-      assert_in_delta (c64 - c32) / 32, 105.625, 0.1
-      assert_in_delta (o64 - o32) / 32, 4.53, 0.1
+      {c32, o32, r32} = measure.(32)
+      {c64, o64, r64} = measure.(64)
+      assert_in_delta (c64 - c32) / 32, 105.625, 0.5
+      assert_in_delta (o64 - o32) / 32, 4.53, 0.5
+      # A restart, measured there at 39.4 to 39.7 a group of four globals, an unlocated
+      # array among them, which a located array's look-up would make 2 dearer.
+      assert_in_delta (r64 - r32) / 32, 39.55, 0.5
     end
   end
 end
