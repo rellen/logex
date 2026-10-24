@@ -592,6 +592,57 @@ defmodule Logex.TagBitTest do
              ]
     end
 
+    # Decision 246, superseding M5-9's reading for this case: a coil and another write of the
+    # very bit through the very tag, `ote w.[n]` beside `otl w.[n]`, either first, are warned
+    # of nothing, as `ote w.3` beside `otl w.3` is not; through another tag, `w.[m]`, they
+    # still are, and so is another coil on the word, whichever write comes first.
+    test "a coil and a latch on the very bit through the very tag are warned of nothing" do
+      head =
+        "var w word\nvar_input n int\nvar_input m int\nvar_input a bool\nvar g word[2,3]\n" <>
+          "var_input c int\n"
+
+      later = "the last one in the scan decides it"
+      decides = fn source -> Enum.filter(warnings(head <> source), &(elem(&1, 1) =~ later)) end
+
+      for rungs <- [
+            "xic a ote w.[n]\nxic a otl w.[n]",
+            "xic a otl w.[n]\nxic a ote w.[n]",
+            "xic a ote w.[n]\nmove a w.[n]",
+            "xic a otu w.[n]\nxic a ote w.[n]",
+            "xic a ote g[1,c].[n]\nxic a otl g[1,c].[n]",
+            "xic a ote g[1,c].[n]\nxic a otl g[01,c].[n]",
+            "xic a otl g[1,c].3\nxic a ote g[1,c].3",
+            "xic a ote w.3\nxic a otl w.3"
+          ] do
+        assert {rungs, decides.(rungs)} == {rungs, []}
+      end
+
+      assert decides.("xic a ote w.[n]\nxic a otl w.[m]") == [
+               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+             ]
+
+      assert decides.("xic a otl w.[m]\nxic a ote w.[n]") == [
+               {8, "`w.[n]` is a bit of `w`, which the `otl` on line 7 writes whole: #{later}"}
+             ]
+
+      assert decides.("xic a ote g[1,c].[n]\nxic a otl g[0,c].[n]") == [
+               {8,
+                "`g[0,c].[n]` is in `g`, which the `ote` on line 7 may write through a tag " <>
+                  "subscript: #{later}"}
+             ]
+
+      # The very bit's latch beside a coil on another bit of the word is told that coil,
+      # whichever came first among the coils.
+      assert decides.("xic a ote w.[n]\nxic a ote w.3\nxic a otl w.[n]") == [
+               {8, "`w.3` is a bit of `w`, which the `ote` on line 7 writes whole: #{later}"},
+               {9, "`w.3` already has an `ote` on line 8: #{later}"}
+             ]
+
+      assert decides.("xic a otl w.[n]\nmove 0 w\nxic a ote w.[n]") == [
+               {9, "`w.[n]` is a bit of `w`, which the `move` on line 8 writes whole: #{later}"}
+             ]
+    end
+
     test "a write into a bit a tag numbers, beside a coil on a bit of its word, is a whole write" do
       assert warnings(
                "var w word\nvar_input n int\nvar_input a bool\nxic a ote w.3\nmove a w.[n]"

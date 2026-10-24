@@ -806,37 +806,36 @@ defmodule Logex.TagSubscriptTest do
     # is a write of an element beside a coil through a tag subscript; a write of the
     # element itself beside its coil is still none, as `move a b` beside `ote b` is not.
     test "a write through a tag subscript beside a coil on an element of a bool array is warned" do
-      head = "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n"
+      head =
+        "var_input a bool\nvar_input i int\nvar_input j int\nvar l bool[4]\nvar_output o bool\n"
 
       later = fn shown, first ->
-        {6,
-         "`#{shown}` is in `l`, which the `#{first}` on line 5 may write through a tag " <>
+        {7,
+         "`#{shown}` is in `l`, which the `#{first}` on line 6 may write through a tag " <>
            "subscript: #{@later}"}
       end
 
       as = fn shown, other, what ->
-        {6, "`#{shown}` is in `l`, as `#{other}` is, which #{what}: #{@later}"}
+        {7, "`#{shown}` is in `l`, as `#{other}` is, which #{what}: #{@later}"}
       end
 
       for {rungs, warning} <- [
             {"xic a ote l[2]\nmove a l[i]",
-             as.("l[i]", "l[2]", "already has an `ote` on line 5")},
+             as.("l[i]", "l[2]", "already has an `ote` on line 6")},
             {"move a l[i]\nxic a ote l[2]", later.("l[2]", "move")},
             {"xic a otl l[i]\nxic a ote l[2]", later.("l[2]", "otl")},
             {"xic a otu l[i]\nxic a ote l[2]", later.("l[2]", "otu")},
             {"and a a l[i]\nxic a ote l[2]", later.("l[2]", "and")},
-            {"xic a ote l[2]\nnot a l[i]", as.("l[i]", "l[2]", "already has an `ote` on line 5")},
+            {"xic a ote l[2]\nnot a l[i]", as.("l[i]", "l[2]", "already has an `ote` on line 6")},
             {"xic a ote l[i]\nmove a l[2]", later.("l[2]", "ote")},
-            {"move a l[2]\nxic a ote l[i]", as.("l[i]", "l[2]", "the `move` on line 5 writes")},
-            {"xic a ote l[i]\nmove a l[i]", later.("l[i]", "ote")},
-            {"move a l[i]\nxic a ote l[i]", later.("l[i]", "move")},
-            # M5-13's review (provisional): the very element through the very tag, as
-            # `ote w.[n]` beside `otl w.[n]` is warned (M5-9), and unlike `ote l[2]` beside
-            # `otl l[2]`.
-            {"xic a ote l[i]\nxic a otl l[i]", later.("l[i]", "ote")},
-            {"xic a otu l[i]\nxic a ote l[i]", later.("l[i]", "otu")},
+            {"move a l[2]\nxic a ote l[i]", as.("l[i]", "l[2]", "the `move` on line 6 writes")},
+            # Decision 246: through another tag, `l[j]`, it is still warned.
+            {"xic a ote l[i]\nmove a l[j]", later.("l[j]", "ote")},
+            {"xic a otl l[j]\nxic a ote l[i]", later.("l[i]", "otl")},
+            # Two coils through the very tag are two coils, as `ote l[2]` twice is.
+            {"xic a ote l[i]\nxic a ote l[i]", later.("l[i]", "ote")},
             {"xic a osf o l[2]\nmove a l[i]",
-             as.("l[i]", "l[2]", "is already the pulse bit of the `osf` on line 5")}
+             as.("l[i]", "l[2]", "is already the pulse bit of the `osf` on line 6")}
           ] do
         assert {rungs,
                 Enum.filter(
@@ -846,15 +845,26 @@ defmodule Logex.TagSubscriptTest do
                  {rungs, [warning]}
       end
 
-      # The element itself, and another element, beside a coil on it: none.
+      # The element itself, and another element, beside a coil on it: none; and since
+      # decision 246 the very element through the very tag, `l[i]` beside `l[i]`, any write
+      # but a coil's, in either order, as `l[2]` beside `l[2]` is not, where M5-13's review
+      # warned it.
       for rungs <- [
             "xic a ote l[2]\nmove a l[2]",
             "move a l[2]\nxic a ote l[2]",
             "xic a ote l[2]\nmove a l[3]",
-            "xic a otl l[2]\nxic a ote l[2]"
+            "xic a otl l[2]\nxic a ote l[2]",
+            "xic a ote l[i]\nmove a l[i]",
+            "move a l[i]\nxic a ote l[i]",
+            "xic a ote l[i]\nxic a otl l[i]",
+            "xic a otu l[i]\nxic a ote l[i]"
           ] do
-        assert {rungs, warnings(head <> rungs <> "\nxic l[0] ote o")} ==
-                 {rungs, [{2, "`i` is declared but no rung uses it"}]}
+        assert {rungs,
+                Enum.filter(
+                  warnings(head <> rungs <> "\nxic l[0] ote o"),
+                  &(elem(&1, 1) =~ @later)
+                )} ==
+                 {rungs, []}
       end
     end
 
@@ -1025,23 +1035,86 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    test "an instance writing two elements beside a write through a tag subscript is told each" do
+    # Decision 239, superseding decision 236's provisional reading: an instance that writes
+    # several elements beside one other writer is told once, the elements named together in
+    # the elements' order, ten and then a count.
+    test "an instance writing several elements beside a write through a tag subscript is told once" do
+      writes = fn elements ->
+        {:ok, program} =
+          Logex.compile(
+            "var_external speeds int[16]\nvar_input s int\n" <>
+              Enum.map_join(elements, "\n", &"move s speeds[#{&1}]"),
+            name: "many"
+          )
+
+        program
+      end
+
+      {:ok, feeder} =
+        Logex.compile(
+          "var_external speeds int[16]\nvar_external slot int\nvar_input s int\nmove s speeds[slot]",
+          name: "feeder"
+        )
+
+      told = fn elements ->
+        {:ok, config} =
+          Logex.Configuration.compile(
+            "plant",
+            "var_global speeds int[16]\nvar_global slot int\nvar_global s int\n" <>
+              "program f1 feeder\nf1.s s\nprogram t1 many\nt1.s s",
+            %{"feeder" => feeder, "many" => writes.(elements)}
+          )
+
+        Enum.map(config.warnings, &{&1.line, &1.message})
+      end
+
+      as_f1 = " through its var_external, as `f1` may (line 4): #{@stands}"
+
+      assert told.([2, 1]) == [{6, "`t1` writes `speeds[1]` and `speeds[2]`" <> as_f1}]
+
+      assert told.([3, 1, 2]) == [
+               {6, "`t1` writes `speeds[1]`, `speeds[2]` and `speeds[3]`" <> as_f1}
+             ]
+
+      assert told.([5]) == [{6, "`t1` writes `speeds[5]`" <> as_f1}]
+
+      ten = Enum.map_join(0..8, ", ", &"`speeds[#{&1}]`") <> " and `speeds[9]`"
+      assert told.(Enum.to_list(0..9)) == [{6, "`t1` writes " <> ten <> as_f1}]
+
+      # In the elements' order, `speeds[10]` after `speeds[9]`, and past ten a count.
+      first_ten = Enum.map_join(0..9, ", ", &"`speeds[#{&1}]`")
+
+      assert told.(Enum.to_list(11..0//-1)) == [
+               {6, "`t1` writes " <> first_ten <> " and 2 more" <> as_f1}
+             ]
+
+      assert told.(Enum.to_list(0..10)) == [
+               {6, "`t1` writes " <> first_ten <> " and 1 more" <> as_f1}
+             ]
+    end
+
+    # Decision 239 (provisional for this case, which the question did not ask): two
+    # instances that write the same elements, neither through a tag subscript, are told
+    # once too, the later naming them together.
+    test "an instance writing the elements another writes is told once, naming them" do
       {:ok, two} =
         Logex.compile(
-          "var_external speeds int[4]\nvar_input s int\nmove s speeds[1]\nmove s speeds[2]",
+          "var_external speeds int[4]\nvar_input s int\nmove s speeds[1]\nmove s speeds[3]",
           name: "two"
         )
 
       {:ok, config} =
         Logex.Configuration.compile(
           "plant",
-          @globals <> "program f1 feeder\nf1.s s\nprogram t1 two\nt1.s s",
-          %{"feeder" => feeder(), "two" => two}
+          "var_global speeds int[4]\nvar_global s int\nprogram t1 two\nt1.s s\n" <>
+            "program t2 two\nt2.s s",
+          %{"two" => two}
         )
 
-      assert Enum.map(config.warnings, & &1.message) == [
-               "`t1` writes `speeds[1]` through its var_external, as `f1` may (line 4): #{@stands}",
-               "`t1` writes `speeds[2]` through its var_external, as `f1` may (line 4): #{@stands}"
+      assert Enum.map(config.warnings, &{&1.line, &1.message}) == [
+               {5,
+                "`t2` writes `speeds[1]` and `speeds[3]` through its var_external, as `t1` does " <>
+                  "(line 3): #{@stands}"}
              ]
     end
 

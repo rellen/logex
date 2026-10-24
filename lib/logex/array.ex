@@ -158,6 +158,15 @@ defmodule Logex.Array do
   defp capped_at({shown, rest}, more), do: shown ++ [more.(length(rest))]
 
   @doc false
+  # How a message says an array's shape, as a list or a tuple of its dimensions, "8
+  # elements" or "2 lists of 3 elements": the host's form a runtime and a runner take.
+  def shape([count], _kind), do: "#{count} #{elements(count)}"
+  def shape([count | dims], kind), do: "#{count} #{kind}s of " <> shape(dims, kind)
+
+  defp elements(1), do: "element"
+  defp elements(_count), do: "elements"
+
+  @doc false
   # An element's name, by its subscripts' values, `grid[1,7]`: how the walks, the warnings,
   # an edit and a block list name it (decision 213's rule for a bit, by value).
   def name(array, index), do: "#{array}[#{Enum.join(index, ",")}]"

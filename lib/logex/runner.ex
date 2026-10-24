@@ -171,7 +171,12 @@ defmodule Logex.Runner do
   order, as a device's changes are; one that changes nothing makes none, and a device's
   change of a forced trigger makes none. Since M5-13 an element of a located array is an
   input point of its own, forced, unforced and written in the forces file by its name,
-  `temps[3] 37.5`, the array named whole refused, told its elements (decision 156).
+  `temps[3] 37.5` (decision 156); and since decision 241 an array of input points named
+  whole is forced to a list of its shape, each element then forced, every misfit told, ten
+  and then a count, and unforced whole, each element reading its device's last value
+  again; a forces file's line for it is its name and one value an element in the
+  elements' order, `temps 20.0 21.5 …`, read as each element forced, the file written
+  back element by element.
   `status/1` lists every force. The forces file is the host's to name, `forces:`,
   and each force and unforce writes the whole set to it before it returns:
   one force a line, `name value`, in name order, the empty file for none, written to
@@ -327,7 +332,6 @@ defmodule Logex.Runner do
   alias Logex.Configuration.Edit
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
-  import Logex.Parser, only: [is_zero_real: 1]
 
   # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
   # steps, the one seam through which a test reaches a fault no host can cause, an
@@ -408,7 +412,10 @@ defmodule Logex.Runner do
   the force not taken. A force that changes what an event task's trigger reads is a change
   of it, and makes its round at once, before it returns (decisions 120 and 138). A runner started
   without `forces:`, an output point, a name that is no input point and a value that does
-  not fit are the host's mistakes.
+  not fit are the host's mistakes. Since decision 241 a located array of input points
+  named whole, `"zone_t"`, is forced to a list of its shape in the elements' order, each
+  element then forced as its own point, nothing forced where its shape or any element does
+  not fit.
   """
   def force(runner, point, value), do: call(runner, {:force, point, value})
 
@@ -416,7 +423,8 @@ defmodule Logex.Runner do
   Takes the force off an input point, by its name, so that the next round reads its
   device's last value again (decision 117), the whole set of forces written to the file
   before it returns: `:ok`, or `{:error, {:forces, reason}}`, the force not taken off. A
-  trigger that reads another value makes its round at once, as a force does.
+  trigger that reads another value makes its round at once, as a force does. A located
+  array of input points named whole unforces every element (decision 241).
   """
   def unforce(runner, point), do: call(runner, {:unforce, point})
 
@@ -686,15 +694,12 @@ defmodule Logex.Runner do
   # file before it returns, a write that fails changing nothing.
   defp serve({:force, name, value}, state) do
     filed!(state)
-    type = input!(input(name, state))
-    fits!(Declarations.fits?(type, value), name, type, value)
-    kept(state, Map.put(state.forces, name, forced(type, value)), [name])
+    forcing(input(name, state), name, value, state)
   end
 
   defp serve({:unforce, name}, state) do
     filed!(state)
-    input!(input(name, state))
-    kept(state, Map.delete(state.forces, name), [name])
+    unforcing(input(name, state), name, state)
   end
 
   defp serve(:unforce_all, state) do
@@ -800,6 +805,69 @@ defmodule Logex.Runner do
   defp stage(nil), do: nil
   defp stage(edit), do: Edit.stage(edit)
 
+  defp forcing({:ok, type}, name, value, state) do
+    fits!(Declarations.fits?(type, value), name, type, value)
+    kept(state, Map.put(state.forces, name, forced(type, value)), [name])
+  end
+
+  # Decision 241: a located array of input points forced whole, a list of its shape in
+  # the elements' order, as a host sets one whole (decision 222), is each element forced,
+  # every misfit told, ten and then a count, and nothing forced where one is.
+  defp forcing({:array, {_type, _dims, names} = array}, name, value, state) do
+    values = elements!(array, name, value)
+    kept(state, Map.merge(state.forces, Map.new(Enum.zip(names, values))), names)
+  end
+
+  defp forcing({:error, message}, _name, _value, _state), do: raise(ArgumentError, message)
+
+  defp unforcing({:ok, _type}, name, state),
+    do: kept(state, Map.delete(state.forces, name), [name])
+
+  # Decision 241: the array named whole unforces every element, forced or not, each
+  # reading its device's last value again.
+  defp unforcing({:array, {_type, _dims, names}}, _name, state),
+    do: kept(state, Map.drop(state.forces, names), names)
+
+  defp unforcing({:error, message}, _name, _state), do: raise(ArgumentError, message)
+
+  # A whole array's list: of its shape, each element a value of its type, held at its
+  # nearest; the misfits, ten and then a count, one message.
+  defp elements!({_type, dims, _names} = array, name, value),
+    do: shaped!(Logex.Array.listed?(value, dims, &(not is_list(&1))), array, name, value)
+
+  defp shaped!(false, {type, dims, _names}, name, value),
+    do:
+      raise(
+        ArgumentError,
+        "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced to a list of " <>
+          "#{Logex.Array.shape(dims, "list")} in the elements' order, got: " <>
+          inspect(value, charlists: :as_lists)
+      )
+
+  defp shaped!(true, {type, dims, names}, name, value) do
+    values = List.flatten(value)
+
+    names
+    |> Enum.zip(values)
+    |> Enum.reject(fn {_element, v} -> Declarations.fits?(type, v) end)
+    |> Enum.map(fn {element, v} -> misfit(element, type, v) end)
+    |> Logex.Array.capped(&more_misfits(name, {:array, type, dims}, &1))
+    |> all_fit!()
+
+    Enum.map(values, &forced(type, &1))
+  end
+
+  defp more_misfits(name, array, count),
+    do:
+      "`#{name}` is #{Declarations.a_type(array)}, with #{count} more " <>
+        "#{plural(count, "element")} outside its type, not listed"
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
+
+  defp all_fit!([]), do: :ok
+  defp all_fit!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+
   defp filed!(%{file: nil}),
     do:
       raise(
@@ -823,16 +891,17 @@ defmodule Logex.Runner do
   defp input_of({:ok, type}, _name, _state), do: {:ok, type}
 
   defp input_of(:error, name, state),
+    do: whole_input(Map.fetch(state.arrays, name), name, state)
+
+  # Decision 241: a located array of input points, named whole, `{type, dims, names}`, its
+  # elements' type and sizes and each element's name in the elements' order.
+  defp whole_input({:ok, array}, _name, _state), do: {:array, array}
+
+  defp whole_input(:error, name, state),
     do: {:error, not_input(Map.fetch(state.located, name), name, state)}
 
   defp not_input({:ok, {:point, at}}, name, _state),
     do: "`#{name}` is an output point, at `#{at}`: only an input point is forced"
-
-  # M5-13 (decision 156): a located array is forced element by element, each its own point.
-  defp not_input({:ok, {:array, :input, {first, from}, {last, to}}}, name, _state),
-    do:
-      "`#{name}` is an array of input points, `#{from}` to `#{to}`: a force names one " <>
-        "element, `#{first}` to `#{last}`"
 
   defp not_input({:ok, {:array, :output, {_first, from}, {_last, to}}}, name, _state),
     do:
@@ -883,6 +952,20 @@ defmodule Logex.Runner do
     Map.new(for({name, {_direction, at}} <- points, do: {name, {:point, at}}) ++ arrays)
   end
 
+  # Decision 241: each located array of input points, by name, with its elements' type,
+  # its sizes and its elements' names in the elements' order, which a force names whole.
+  defp input_arrays(configuration),
+    do:
+      Map.new(
+        for %Configuration.Global{name: name, type: {:array, type, dims}, at: at} <-
+              configuration.globals,
+            {:ok, {_device, "i", fields}} <- [Configuration.location(at)],
+            do:
+              {name,
+               {type, dims,
+                for({_, element, _} <- Logex.Array.points(name, dims, fields), do: element)}}
+      )
+
   defp ranged(name, dims, {:ok, {device, io, fields}}) do
     direction = direction(io)
     points = Logex.Array.points(name, dims, fields)
@@ -898,9 +981,6 @@ defmodule Logex.Runner do
 
   defp spelled(device, :input, address), do: Enum.join([device, "i" | address], ".")
   defp spelled(device, :output, address), do: Enum.join([device, "q" | address], ".")
-
-  defp input!({:ok, type}), do: type
-  defp input!({:error, message}), do: raise(ArgumentError, message)
 
   # M5-10 (decision 166): a real point is forced to the nearest value of its type, as a
   # device's reading is stored, `fan_speed` forced to 16777217 held at 16777216.0.
@@ -998,11 +1078,22 @@ defmodule Logex.Runner do
   # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
   # or `1_000`, for a real point and since decision 226 for every point.
   # The value is the number's text and nothing else, so a comment or a tab the lexer would
-  # pass over, `1//c` or `1\t`, is no force, as before decision 218 (M5-11's review).
-  defp parsed([name, value]),
-    do: valued(number_text?(value), Logex.Lexer.tokenize(value), name)
-
+  # pass over, `1//c` or `1\t`, is no force, as before decision 218 (M5-11's review). Since
+  # decision 241 a located array of input points is forced whole on one line, its name and
+  # then one value an element in the elements' order, each separated by one space,
+  # `zone_t 20.0 21.5 …`, which the runner keeps, and writes back, element by element.
+  defp parsed([name, value]), do: one_value(value(value), name)
+  defp parsed([name, _, _ | _] = parts), do: values(Enum.map(tl(parts), &value/1), name, [])
   defp parsed(_parts), do: :error
+
+  defp one_value({:ok, number}, name), do: {:ok, name, number}
+  defp one_value(:error, _name), do: :error
+
+  defp values([], name, numbers), do: {:ok, name, {:list, Enum.reverse(numbers)}}
+  defp values([{:ok, number} | rest], name, numbers), do: values(rest, name, [number | numbers])
+  defp values([:error | _rest], _name, _numbers), do: :error
+
+  defp value(text), do: valued(number_text?(text), Logex.Lexer.tokenize(text))
 
   defp number_text?(<<c, rest::binary>>)
        when c in ?0..?9 or c in ?a..?z or c in ?A..?Z or c in [?-, ?#, ?_, ?.],
@@ -1011,27 +1102,19 @@ defmodule Logex.Runner do
   defp number_text?(<<>>), do: true
   defp number_text?(_other), do: false
 
-  defp valued(false, _tokens, _name), do: :error
+  defp valued(false, _tokens), do: :error
 
-  defp valued(true, {:ok, [{kind, _at, number}], _end_line}, name)
-       when kind in [:int_lit, :real_lit],
-       do: {:ok, name, number}
+  defp valued(true, {:ok, [{kind, _at, number}], _end_line}) when kind in [:int_lit, :real_lit],
+    do: {:ok, number}
 
   # Since decision 228 a subnormal double, `1.0e-310`, lexes as itself, and is held as 0.0
-  # (forced/2); one no float holds, `1.0e-400`, which since decision 231 lexes as 0.0 with
-  # its spelling, is still no force (provisional), as when the lexer refused it.
-  defp valued(true, {:ok, [{:real_lit, _at, _zero, _spelling} = token], _end_line}, name)
-       when is_zero_real(token),
-       do: zero_force(Logex.Parser.underflowed?(token), name)
-
-  defp valued(true, {:ok, [{kind, _at, number, _spelling}], _end_line}, name)
+  # (forced/2); and since decision 237 so is one no float holds, `1.0e-400`, which since
+  # decision 231 lexes as 0.0 with its spelling, where until then it was no force.
+  defp valued(true, {:ok, [{kind, _at, number, _spelling}], _end_line})
        when kind in [:int_lit, :real_lit],
-       do: {:ok, name, number}
+       do: {:ok, number}
 
-  defp valued(true, _other, _name), do: :error
-
-  defp zero_force(false, name), do: {:ok, name, 0.0}
-  defp zero_force(true, _name), do: :error
+  defp valued(true, _other), do: :error
 
   defp no_force,
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"
@@ -1039,27 +1122,46 @@ defmodule Logex.Runner do
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
     do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
 
-  defp force_read({:ok, name, value}, text, line, {forces, lines, problems}, points),
-    do:
-      once(
-        Map.fetch(lines, name),
-        {name, value, text},
-        line,
-        {forces, Map.put_new(lines, name, line), problems},
-        points
-      )
+  # A line of several values naming no located array is no force, as before decision 241,
+  # and an array of output points is told what it is.
+  defp force_read({:ok, name, {:list, _}}, text, line, {forces, lines, problems}, points)
+       when not is_map_key(points.located, name),
+       do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
 
-  defp once({:ok, first}, {name, _value, _text}, line, {forces, lines, problems}, _points),
+  defp force_read({:ok, name, value}, text, line, acc, points),
+    do: read_point(input(name, points), {name, value, text}, line, acc)
+
+  # A line's point: an input point's, or, since decision 241, each element of a located
+  # array of input points named whole; a line with more than one value names such an array.
+  defp read_point({:ok, _type}, {_name, {:list, _}, text}, line, {forces, lines, problems}),
+    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+
+  defp read_point({:ok, _type} = point, {name, value, _text}, line, acc),
+    do: once(first_line([name], acc), [name], line, acc, force_problem(point, name, value))
+
+  defp read_point({:array, {_type, _dims, names}} = point, {name, value, _text}, line, acc),
+    do: once(first_line(names, acc), names, line, acc, force_problem(point, name, value))
+
+  # A point forced twice is told so before its value is judged, as before decision 241.
+  defp read_point({:error, message}, {name, _value, _text}, line, acc),
+    do: once(first_line([name], acc), [name], line, acc, [message])
+
+  # A point forced on an earlier line, the first of the line's points that is.
+  defp first_line(names, {_forces, lines, _problems}),
+    do: Enum.find_value(names, &forced_on(&1, Map.fetch(lines, &1)))
+
+  defp forced_on(name, {:ok, line}), do: {name, line}
+  defp forced_on(_name, :error), do: nil
+
+  defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
     do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
 
-  defp once(:error, {name, value, _text}, line, {forces, lines, problems}, points),
+  defp once(nil, names, line, {forces, lines, problems}, problem),
     do:
       taken_from_file(
-        force_problem(input(name, points), name, value),
-        name,
-        value,
+        problem,
         line,
-        {forces, lines, problems}
+        {forces, Enum.reduce(names, lines, &Map.put_new(&2, &1, line)), problems}
       )
 
   # Decision 218: a real point's line holds any number that is a value of its type, held
@@ -1074,19 +1176,44 @@ defmodule Logex.Runner do
   defp force_problem({:ok, type}, name, value),
     do: fitting_force(Declarations.fits?(type, value), name, type, value)
 
-  defp force_problem({:error, message}, _name, _value), do: message
+  # Decision 241: a whole array's line holds one value an element, each judged as its
+  # point's, every misfit a line, ten and then a count.
+  defp force_problem({:array, {type, dims, names}}, name, {:list, values})
+       when length(values) == length(names) do
+    misfits =
+      names
+      |> Enum.zip(values)
+      |> Enum.reject(fn {_element, v} -> Declarations.fits?(type, v) end)
+      |> Enum.map(fn {element, v} -> misfit(element, type, v) end)
+      |> Logex.Array.capped(&more_misfits(name, {:array, type, dims}, &1))
 
-  defp real_force(true, _name, type, value), do: {:take, forced(type, value)}
-  defp real_force(false, name, type, value), do: misfit(name, type, value)
+    whole_force(misfits, names, Enum.map(values, &forced(type, &1)))
+  end
 
-  defp fitting_force(true, _name, _type, value), do: {:take, value}
-  defp fitting_force(false, name, type, value), do: misfit(name, type, value)
+  defp force_problem({:array, {type, dims, names}}, name, value),
+    do: [
+      "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced whole on one line, " <>
+        "its name and then #{length(names)} values in the elements' order: the line holds " <>
+        "#{count_of(value)}"
+    ]
 
-  defp taken_from_file({:take, value}, name, _read, _line, {forces, lines, problems}),
-    do: {Map.put(forces, name, value), lines, problems}
+  defp whole_force([], names, values), do: {:take, Enum.zip(names, values)}
+  defp whole_force(misfits, _names, _values), do: misfits
 
-  defp taken_from_file(problem, _name, _value, line, {forces, lines, problems}),
-    do: {forces, lines, [{line, problem} | problems]}
+  defp count_of({:list, values}), do: "#{length(values)}"
+  defp count_of(_one), do: "1"
+
+  defp real_force(true, name, type, value), do: {:take, [{name, forced(type, value)}]}
+  defp real_force(false, name, type, value), do: [misfit(name, type, value)]
+
+  defp fitting_force(true, name, _type, value), do: {:take, [{name, value}]}
+  defp fitting_force(false, name, type, value), do: [misfit(name, type, value)]
+
+  defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
+    do: {Enum.into(taken, forces), lines, problems}
+
+  defp taken_from_file(misfits, line, {forces, lines, problems}),
+    do: {forces, lines, Enum.reduce(misfits, problems, &[{line, &1} | &2])}
 
   defp forces_taken([], _path, forces), do: forces
 
@@ -2102,13 +2229,15 @@ defmodule Logex.Runner do
               %Point{direction: :input} = point <- points,
               do: {point.name, point.type}
         ),
-      located: located(configuration, devices)
+      located: located(configuration, devices),
+      arrays: input_arrays(configuration)
     }
 
     {%{
        forces: read_forces(file, points),
        types: points.types,
        located: points.located,
+       arrays: points.arrays,
        configuration: configuration,
        steps: steps,
        runtime: runtime,

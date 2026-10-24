@@ -4008,6 +4008,14 @@ defmodule Logex.Compiler do
        do:
          class_literal(value in Declarations.class_range(class), literal, class, at, diagnostics)
 
+  # Decision 240: a literal no double holds but 0.0, `1.0e-400`, beside another literal,
+  # `eq 1.0e-400 0.0`, is refused as every other slot refuses it, in decision 228's words,
+  # for the lreal two literals are compared in, where until then it was 0.0 and the
+  # comparison true on every scan.
+  defp source({:value, _class, {:literal, _zero, literal}}, {:class, class}, at, diagnostics)
+       when is_zero_real(literal),
+       do: underflowed_beside(Parser.underflowed?(literal), literal, class, at, diagnostics)
+
   # M5-10: a real literal where no type is known for it, a comparison's beside a literal,
   # held to the class, which takes it where it holds a real.
   defp source({:value, _class, {:literal, value, literal}}, {:class, class}, at, diagnostics),
@@ -4045,6 +4053,19 @@ defmodule Logex.Compiler do
             Parser.value(literal),
             "`#{Parser.spelling(literal)}`"
           )
+      )
+      | diagnostics
+    ]
+
+  defp underflowed_beside(false, literal, class, at, diagnostics),
+    do: class_literal(Declarations.class_holds?(class, 0.0), literal, class, at, diagnostics)
+
+  defp underflowed_beside(true, literal, class, {line, word}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` reads #{a_type(class)}, and compares two literals as lreals: " <>
+          Declarations.literal_misfit(:lreal, 0.0, "`#{Parser.spelling(literal)}`")
       )
       | diagnostics
     ]

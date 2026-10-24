@@ -1541,16 +1541,30 @@ defmodule Logex.RealTest do
             # as 0.0 at either real, as `1.0e-40` is at a `real` (M5-11's review).
             {"1.0e-310", 0.0},
             {"-4.9e-324", 0.0},
+            # Decision 237: and one no float holds, `1.0e-400`, as `1.0e-310` is.
+            {"1.0e-400", 0.0},
+            {"-1_0.0e-4_00", 0.0},
             {"-0.0", 0.0}
           ] do
         File.write!(file, "big #{text}\nhz #{text}\n")
         {{:ok, runner}, clock, _sim} = run_fan(file)
         forces = Runner.status(runner).forces
         assert forces["hz"] === hz, text
-        assert forces["big"] === 0.0 or text not in ["1.0e-310", "-4.9e-324"], text
+
+        assert forces["big"] === 0.0 or
+                 text not in ["1.0e-310", "-4.9e-324", "1.0e-400", "-1_0.0e-4_00"],
+               text
 
         assert forces["big"] === elem(Float.parse(String.replace(text, "_", "")), 0) * 1.0 or
-                 text in ["16#25", "-0.0", "37", "1.0e-310", "-4.9e-324"],
+                 text in [
+                   "16#25",
+                   "-0.0",
+                   "37",
+                   "1.0e-310",
+                   "-4.9e-324",
+                   "1.0e-400",
+                   "-1_0.0e-4_00"
+                 ],
                text
 
         Manual.advance(clock, 10)
@@ -1568,19 +1582,20 @@ defmodule Logex.RealTest do
     test "refuses a number outside its type, and anything that is no one number",
          %{tmp_dir: dir} do
       file = Path.join(dir, "forces")
-      File.write!(file, "hz 1.0e39\nbig 1.0e-400\n")
+      File.write!(file, "hz 1.0e39\nbig 1.0e-400 1.0\n")
 
       assert raised(fn -> run_fan(file) end) ==
                "#{file}: line 1: `hz` is a real, forced to a number from " <>
                  "-3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39\n" <>
-                 "#{file}: line 2: `big 1.0e-400` is no force: a line holds an input point's " <>
-                 "name and its value, as `eye_1 1`"
+                 "#{file}: line 2: `big 1.0e-400 1.0` is no force: a line holds an input " <>
+                 "point's name and its value, as `eye_1 1`"
 
       # Nor is a comment, a tab or a return after the number, which the lexer would pass
-      # over (M5-11's review), nor a number no float holds, `1.0e-400`.
+      # over (M5-11's review); a number no float holds, `1.0e-400`, is 0.0 since decision
+      # 237.
       for text <-
             ["1.", "1e5", "+3", "0x10", "8#7", "1.5L", "3 4", "x"] ++
-              ["1.5//c", "1.5 //c", "1.5\t", "1.5\r", "1.0e-400", "1_0.0e-400"] do
+              ["1.5//c", "1.5 //c", "1.5\t", "1.5\r", "1.0e-400 x", "1_0.0e-400//c"] do
         File.write!(file, "hz #{text}\n")
 
         assert raised(fn -> run_fan(file) end) ==
@@ -2040,33 +2055,141 @@ defmodule Logex.RealTest do
              ]
     end
 
-    test "a zero written any way is 0.0, and two literals compared are the doubles" do
+    test "a zero written any way is 0.0, and two literals compared refuse it" do
       for zero <- ["0.0e-400", "-0.0e-400", "0_0.0E-999"] do
         assert outputs("var_output l lreal 1.0\nmove #{zero} l") === %{"l" => 0.0}, zero
       end
 
-      assert warnings("var_output q bool\nlt 1.0e-400 0.0 ote q") == [
-               {2, "`lt` compares two literals, `1.0e-400` and `0.0`: its result never changes"}
+      assert warnings("var_output q bool\nlt 0.0e-400 0.0 ote q") == [
+               {2, "`lt` compares two literals, `0.0e-400` and `0.0`: its result never changes"}
              ]
 
-      assert outputs("var_output q bool\neq 1.0e-400 0.0 ote q") == %{"q" => 1}
+      # Decision 240, superseding decision 231's provisional reading: beside another literal
+      # it is refused as in every other slot, where until then `eq 1.0e-400 0.0` was true on
+      # every scan and `lt 0.0 1.0e-400` false.
+      for {rung, shown, word} <- [
+            {"eq 1.0e-400 0.0", "1.0e-400", "eq"},
+            {"lt 0.0 1.0e-400", "1.0e-400", "lt"},
+            {"ne -1_0.0e-4_00 2.5", "-1_0.0e-4_00", "ne"},
+            {"ge 5 1.0e-400", "1.0e-400", "ge"}
+          ] do
+        assert messages("var_output q bool\n#{rung} ote q") == [
+                 {2,
+                  "`#{word}` reads a number or a bit string, and compares two literals as " <>
+                    "lreals: `#{shown}` #{@too_near}"}
+               ],
+               rung
+      end
+
+      # A subnormal one beside a literal is still the double it lexes as (decision 228).
+      assert outputs("var_output q bool\ngt 1.0e-310 0.0 ote q") == %{"q" => 1}
     end
 
-    test "a configuration file refuses it as no number logex holds, at its column" do
-      for {text, line, column} <- [
-            {"var_global sp lreal 1.0e-400\n", 1, 21},
-            {"var_global sp lreal\nprogram m1 m\nm1.x -1.0e-400\n", 3, 6}
+    # Decision 237, superseding decision 231's provisional reading: a configuration file's
+    # literal no double holds is refused in its global's or member's words, as `1.0e-310`
+    # is, and read by `Logex.Configuration.Text.read/1` alone as the lexer refused it.
+    test "a configuration file refuses it in its global's or member's words" do
+      {:ok, m} =
+        Logex.compile(
+          "var_input x lreal\nvar_input y real\nvar_input a lreal[2]\nvar_input d dint\n" <>
+            "var_input b bool\nvar_output q bool\ngt x y ote q\nxic b ote q\nlt a[0] d ote q",
+          name: "m"
+        )
+
+      real =
+        "is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: " <>
+          "it would be written as 0.0"
+
+      for {text, expected} <- [
+            {"var_global sp lreal 1.0e-400\n",
+             [{1, "`sp` is an lreal: `1.0e-400` #{@too_near}"}]},
+            {"var_global sp real -1_0.0e-4_00\n",
+             [{1, "`sp` is a real: `-1_0.0e-4_00` #{real}"}]},
+            {"var_global sp lreal[3] 1.0 1.0e-400 1.0e-401\n",
+             [
+               {1, "`sp[1]` is an lreal: `1.0e-400` #{@too_near}"},
+               {1, "`sp[2]` is an lreal: `1.0e-401` #{@too_near}"}
+             ]},
+            {"var_global g dint 1.0e-400\nvar_global h bool 1.0e-400\nvar_global k int 1.5\n" <>
+               "var_global j int[2] 2.5 1\n",
+             [
+               {1, "`g` is a dint: `1.0e-400` is a real, and a dint holds only integers"},
+               {2, "`h` is a bool: `1.0e-400` is a real, and a bool holds only 0 or 1"},
+               # Found on the way: a real initial value of an integer global, which a line
+               # can say, was raised as the host's mistake.
+               {3, "`k` is an int: `1.5` is a real, and an int holds only integers"},
+               {4, "the initial value of `j[0]` must be an integer, found 2.5"}
+             ]},
+            {"program m1 m\nm1.x -1.0e-400\nm1.y 1.0e-400\nm1.a[0] 1.0\nm1.a[1] 1.0e-400\n" <>
+               "m1.d 1.0e-400\nm1.b 0\n",
+             [
+               {2, "`m1.x` is an lreal: `-1.0e-400` #{@too_near}"},
+               {3, "`m1.y` is a real: `1.0e-400` #{real}"},
+               {5, "`m1.a[1]` is an lreal: `1.0e-400` #{@too_near}"},
+               {6, "`m1.d` is a dint: `1.0e-400` is a real, and a dint holds only integers"}
+             ]},
+            {"program m1 m\nm1.a 1.0e-400\nm1.a[1] 0.0\nm1.x 0.0\nm1.y 0.0\nm1.d 0\nm1.b 0\n",
+             [
+               {2,
+                "`m1.a` is an array of 2 lreals, and the constant `1.0e-400` is one value: " <>
+                  "connect it to a global array of its sizes, or each element to a constant, as " <>
+                  "in `m1.a[0] 1.0e-400`"},
+               {3,
+                "`m1.a[1]` is already connected, by `m1.a` to `1.0e-400` (line 2): a var_input " <>
+                  "has one source, an array whole or each of its elements"}
+             ]},
+            {"task t interval 1.0e-400 priority 1\nprogram m1 m with t\nm1.x 0.0\nm1.y 0.0\n" <>
+               "m1.a[0] 0.0\nm1.a[1] 0.0\nm1.d 0\nm1.b 0\n",
+             [
+               {1,
+                "`interval` takes a number of milliseconds, as in `interval 10`, found `1.0e-400`"}
+             ]}
           ] do
-        run = text |> String.split([" ", "\n"], trim: true) |> List.last()
+        assert {:error, diagnostics} = Configuration.compile("c", text, %{"m" => m}), text
 
-        assert {:error, [%Logex.Diagnostic{stage: :lex, line: ^line, column: ^column} = d]} =
-                 Configuration.compile("c", text, %{}),
-               text
-
-        assert d.message ==
-                 "#{inspect(run)} is no number logex holds: an lreal's smallest above 0.0 is " <>
-                   "2.2250738585072014e-308"
+        assert {text,
+                for(
+                  %Logex.Diagnostic{stage: :configure, line: line, message: message} <-
+                    diagnostics,
+                  line != nil,
+                  do: {line, message}
+                )} == {text, expected}
       end
+
+      # A literal elsewhere in the text with the stand-in's value keeps its own spelling.
+      stand_in = Float.to_string(7919 * 5.0e-324)
+
+      assert {:error, diagnostics} =
+               Configuration.compile(
+                 "c",
+                 "var_global a lreal #{stand_in}\nvar_global b lreal 1.0e-400\n",
+                 %{}
+               )
+
+      assert for(%{line: line, message: m} <- diagnostics, line != nil, do: {line, m}) == [
+               {1, "`a` is an lreal: `#{stand_in}` #{@too_near}"},
+               {2, "`b` is an lreal: `1.0e-400` #{@too_near}"}
+             ]
+
+      # From a file too.
+      dir = Path.join(System.tmp_dir!(), "logex-237-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      path = Path.join(dir, "plant.logex")
+      File.write!(path, "var_global sp lreal 1.0e-400\n")
+
+      assert {:error, [%Logex.Diagnostic{line: 1, file: ^path, message: message} | _]} =
+               Configuration.compile_file(path)
+
+      assert message == "`sp` is an lreal: `1.0e-400` #{@too_near}"
+      File.rm_rf!(dir)
+
+      # `Text.read/1`, which gives values, still refuses it at its column.
+      assert {:error, [%Logex.Diagnostic{stage: :lex, line: 1, column: 21} = d], []} =
+               Configuration.Text.read("var_global sp lreal 1.0e-400\n")
+
+      assert d.message ==
+               "\"1.0e-400\" is no number logex holds: an lreal's smallest above 0.0 is " <>
+                 "2.2250738585072014e-308"
     end
   end
 end

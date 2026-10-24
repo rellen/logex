@@ -247,6 +247,7 @@ defmodule Logex.ArrayConfigurationTest do
               %Global{name: "c", type: {:array, :int, [2.0]}},
               %Global{name: "d", type: {:array, :int, [2]}, initial: 5},
               %Global{name: "e", type: {:array, :int, [2]}, initial: [1, 2.5]},
+              %Global{name: "g", type: {:array, :int, [2]}, initial: [1, :x]},
               %Global{name: "f", type: {:array, :real, [2]}, initial: [1, :x]}
             ]
           )
@@ -263,7 +264,10 @@ defmodule Logex.ArrayConfigurationTest do
             "global `b` has type {:array, :int, []}: a global is #{every}#{sizes}",
             "global `c` has type {:array, :int, [2.0]}: a global is #{every}#{sizes}",
             "the initial value of global `d`, an array, must be a list of its elements' values, found 5",
-            "the initial value of global `e`, an array of ints, must be a list of its elements' values, each an integer, found [1, 2.5]",
+            "the initial value of global `g`, an array of ints, must be a list of its elements' values, each a number, found [1, :x]",
+            # Decision 237: a float in an int array is a line's to say, judged as a
+            # declaration's initial list is.
+            "the initial value of `e[1]` must be an integer, found 2.5",
             "the initial value of global `f`, an array of reals, must be a list of its elements' values, each a number, found [1, :x]"
           ] do
         assert message.message =~ line

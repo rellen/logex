@@ -602,12 +602,109 @@ defmodule Logex.LocatedArrayTest do
       Runner.stop(runner)
     end
 
+    # Decision 241: a located array of input points set whole, a list of its shape, each
+    # element stored as its point's value is, the array replaced whole.
+    test "sets a located array of input points whole, as a list" do
+      runtime = Runtime.start(oven())
+      {runtime, _outputs} = cycled(runtime, %{"temps[2]" => 7})
+
+      {runtime, outputs} =
+        cycled(runtime, %{"temps" => [150, 0.1, 16_777_217, 1, 2, 3, 4, 5]})
+
+      assert Runtime.get!(runtime, "temps") ==
+               [150.0, 0.10000000149011612, 16_777_216.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+      assert outputs["lamps[0]"] == 1 and outputs["lamps[2]"] == 1 and outputs["lamps[1]"] == 0
+
+      # Kept from cycle to cycle, an element then set alone.
+      {runtime, _outputs} = cycled(runtime, %{"temps[7]" => 50})
+      assert Runtime.get!(runtime, "temps[2]") === 16_777_216.0
+      assert Runtime.get!(runtime, "temps[7]") === 50.0
+
+      # More dimensions: a list of lists, the rightmost subscript fastest.
+      {:ok, grid} =
+        Logex.compile("var_input ti int[2,3]\nvar_output q bool\ngt ti[1,2] 0 ote q",
+          name: "grid"
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "g",
+          "task fast interval 10 priority 1\nvar_global ti int[2,3] at card.i.0\n" <>
+            "var_global q bool at card.q.0\nprogram g grid with fast\ng.ti ti\ng.q q\n",
+          %{"grid" => grid}
+        )
+
+      {runtime, outputs, _} =
+        Runtime.cycle(Runtime.start(c), 10, %{"ti" => [[1, 2, 3], [4, 5, 6]]})
+
+      assert Runtime.get!(runtime, "ti[1,2]") == 6
+      assert outputs == %{"q" => 1}
+
+      raises(
+        "input `ti` is an array of 2 by 3 ints: its value must be a list of 2 lists of 3 elements, found [1, 2, 3, 4, 5, 6]",
+        fn -> Runtime.cycle(runtime, 10, %{"ti" => [1, 2, 3, 4, 5, 6]}) end
+      )
+
+      # Misfits ten and then a count.
+      {:ok, c} =
+        Configuration.compile(
+          "g",
+          "task fast interval 10 priority 1\nvar_global ti int[12] at card.i.0\n" <>
+            "var_global q bool at card.q.0\nprogram g grid12 with fast\ng.ti ti\ng.q q\n",
+          %{
+            "grid12" =>
+              elem(
+                Logex.compile("var_input ti int[12]\nvar_output q bool\ngt ti[1] 0 ote q",
+                  name: "grid12"
+                ),
+                1
+              )
+          }
+        )
+
+      runtime = Runtime.start(c)
+
+      for {bad, more} <- [{11, "1 more element"}, {12, "2 more elements"}] do
+        lines =
+          for i <- 0..9,
+              do: "input `ti[#{i}]` is an int: its value must be an integer, found 1.5"
+
+        raises(
+          Enum.join(lines, "\n") <>
+            "\ninput `ti` is an array of 12 ints, with #{more} outside its type, not listed",
+          fn ->
+            Runtime.cycle(runtime, 10, %{
+              "ti" => List.duplicate(1.5, bad) ++ List.duplicate(0, 12 - bad)
+            })
+          end
+        )
+      end
+
+      # Ten misfits exactly are each listed, with no count.
+      lines =
+        for i <- 0..9, do: "input `ti[#{i}]` is an int: its value must be an integer, found 1.5"
+
+      raises(Enum.join(lines, "\n"), fn ->
+        Runtime.cycle(runtime, 10, %{"ti" => List.duplicate(1.5, 10) ++ [0, 0]})
+      end)
+    end
+
     test "refuses the array named whole, an output element, an element its array lacks and a misfit" do
       runtime = Runtime.start(oven())
 
       for {inputs, message} <- [
-            {%{"temps" => List.duplicate(1.0, 8)},
-             ~s|input `temps` is an array of input points, `card.i.0` to `card.i.7`, each element a point set by its name, `temps[0]` to `temps[7]`: set its elements, as in %{"temps[0]" => 0}|},
+            # Decision 241: the array whole is a list of its shape, each element a value
+            # of its type, as a host's array var_input is (decision 222).
+            {%{"temps" => List.duplicate(1.0, 7)},
+             "input `temps` is an array of 8 reals: its value must be a list of 8 elements, found [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]"},
+            {%{"temps" => {1.0}},
+             "input `temps` is an array of 8 reals: its value must be a list of 8 elements, found {1.0}"},
+            {%{"temps" => [1.0, true, 2.0, 1.0e39, 1.0, 1.0, 1.0, 1.0]},
+             "input `temps[1]` is a real: its value must be a number, found true\n" <>
+               "input `temps[3]` is a real: 1.0e39 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38"},
+            {%{"temps" => List.duplicate(1.0, 8), "temps[3]" => 2.0, "temps[1]" => 2.0},
+             "inputs `temps` and `temps[1]` and `temps[3]` each set `temps`, an array of 8 reals (line 3): a call sets an array whole or by its elements, not both"},
             {%{"lamps" => List.duplicate(1, 8)},
              "input `lamps` is an array of output points, `card.q.0` to `card.q.7`, not an input point: only an input point is set from outside"},
             {%{"lamps[2]" => 1},
@@ -789,8 +886,15 @@ defmodule Logex.LocatedArrayTest do
       %{runner: runner} = running(dir)
 
       for {name, value, message} <- [
+            # Decision 241: the array whole is forced to a list of its shape, every element a
+            # value of its type, nothing forced where one is not.
             {"temps", 1.0,
-             "`temps` is an array of input points, `card.i.0` to `card.i.7`: a force names one element, `temps[0]` to `temps[7]`"},
+             "`temps` is an array of 8 reals, forced to a list of 8 elements in the elements' order, got: 1.0"},
+            {"temps", [[1.0]] ++ List.duplicate(1.0, 7),
+             "`temps` is an array of 8 reals, forced to a list of 8 elements in the elements' order, got: [[1.0], 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]"},
+            {"temps", [1.0, true, 1.0, 1.0e39, 1.0, 1.0, 1.0, 1.0],
+             "`temps[1]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: true\n" <>
+               "`temps[3]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39"},
             {"lamps", 1,
              "`lamps` is an array of output points, `card.q.0` to `card.q.7`: only an input point is forced"},
             {"lamps[2]", 1,
@@ -828,18 +932,119 @@ defmodule Logex.LocatedArrayTest do
         start
       )
 
-      File.write!(file, "temps 1\nlamps[0] 1\n")
+      # Decision 241: a whole array's line holds its name and one value an element.
+      File.write!(file, "temps 1\nlamps[0] 1\nlamps 1 1 1 1 1 1 1 1\n")
 
       raises(
-        "#{file}: line 1: `temps` is an array of input points, `card.i.0` to `card.i.7`: a force names one element, `temps[0]` to `temps[7]`\n" <>
-          "#{file}: line 2: `lamps[0]` is an output point, at `card.q.0`: only an input point is forced",
+        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 1\n" <>
+          "#{file}: line 2: `lamps[0]` is an output point, at `card.q.0`: only an input point is forced\n" <>
+          "#{file}: line 3: `lamps` is an array of output points, `card.q.0` to `card.q.7`: only an input point is forced",
         start
       )
+
+      File.write!(file, "temps 1 2 3\n")
+
+      raises(
+        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 3",
+        start
+      )
+
+      # Every misfit a line, and an element a whole line forces named twice either way.
+      File.write!(
+        file,
+        "temps 1 2 1.0e39 4 5 6 1.0e40 8\ntemps[2] 1\ntemps[5] 1\ntemps 1 1 1 1 1 1 1 1\n" <>
+          "eye 1 2\n"
+      )
+
+      raises(
+        "#{file}: line 1: `temps[2]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39\n" <>
+          "#{file}: line 1: `temps[6]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e40\n" <>
+          "#{file}: line 2: `temps[2]` is forced on line 1 already\n" <>
+          "#{file}: line 3: `temps[5]` is forced on line 1 already\n" <>
+          "#{file}: line 4: `temps[0]` is forced on line 1 already\n" <>
+          "#{file}: line 5: `eye 1 2` is no force: a line holds an input point's name and its value, as `eye_1 1`",
+        start
+      )
+
+      File.write!(file, "temps[5] 1\ntemps 1 1 1 1 1 1 1 1\n")
+      raises("#{file}: line 2: `temps[5]` is forced on line 1 already", start)
 
       File.write!(file, "temps[2] 37.50\n")
       {:ok, runner} = start.()
       assert Runner.status(runner).forces == %{"temps[2]" => 37.5}
       assert Runner.get!(runner, "temps[2]") === 37.5
+      Runner.stop(runner)
+    end
+
+    # Decision 241: the array named whole is forced to a list, each element then forced, and
+    # unforced whole, each element reading its device's last value again; the file keeps
+    # each element on its own line, and a whole line is read as each element forced.
+    test "a force of the array whole forces each element, an unforce of it unforces each", %{
+      tmp_dir: dir
+    } do
+      %{runner: runner, clock: clock, card: card, file: file} = running(dir, reports: true)
+      Sim.set(card, %{[1] => 11, [6] => 66})
+      Manual.advance(clock, 10)
+      assert Runner.force(runner, "temps[7]", 7) == :ok
+
+      values = [150, 0.1, 16_777_217, 0, 0, 0, 0, 0]
+      assert Runner.force(runner, "temps", values) == :ok
+
+      forced = [150.0, 0.10000000149011612, 16_777_216.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+      assert Runner.status(runner).forces ==
+               Map.new(Enum.with_index(forced), fn {v, i} -> {"temps[#{i}]", v} end)
+
+      assert File.read!(file) ==
+               "temps[0] 150.0\ntemps[1] 0.1\ntemps[2] 16777216.0\ntemps[3] 0.0\n" <>
+                 "temps[4] 0.0\ntemps[5] 0.0\ntemps[6] 0.0\ntemps[7] 0.0\n"
+
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps") == forced
+      assert lamps(card) == [1, 0, 1, 0, 0, 0, 0, 0]
+
+      # Held against the device; an unforce of one element keeps the rest forced.
+      Sim.set(card, %{[1] => 12, [6] => 67})
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps") == forced
+      assert Runner.unforce(runner, "temps[6]") == :ok
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps[6]") === 67.0
+      assert Runner.get!(runner, "temps[1]") === 0.10000000149011612
+
+      # Unforced whole: each element its device's last value.
+      assert Runner.unforce(runner, "temps") == :ok
+      assert Runner.status(runner).forces == %{}
+      assert File.read!(file) == ""
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps") == [0.0, 12.0, 0.0, 0.0, 0.0, 0.0, 67.0, 0.0]
+      Runner.stop(runner)
+
+      # A whole line, read at a start, each element forced, written back by element.
+      File.write!(file, "temps 1 2.5 16#3 4 5 6 7 8\n")
+      %{runner: runner, clock: clock} = running(dir)
+      expected = [1.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+
+      assert Runner.status(runner).forces ==
+               Map.new(Enum.with_index(expected), fn {v, i} -> {"temps[#{i}]", v} end)
+
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps") == expected
+      assert File.read!(file) == "temps 1 2.5 16#3 4 5 6 7 8\n"
+      assert Runner.unforce(runner, "temps[0]") == :ok
+
+      assert File.read!(file) ==
+               "temps[1] 2.5\ntemps[2] 3.0\ntemps[3] 4.0\ntemps[4] 5.0\ntemps[5] 6.0\n" <>
+                 "temps[6] 7.0\ntemps[7] 8.0\n"
+
+      Runner.stop(runner)
+
+      # The file the runner writes reads back to the very forces it holds.
+      %{runner: runner} = running(dir)
+
+      assert Runner.status(runner).forces ==
+               Map.new(tl(Enum.with_index(expected)), fn {v, i} -> {"temps[#{i}]", v} end)
+
       Runner.stop(runner)
     end
 
@@ -926,7 +1131,8 @@ defmodule Logex.LocatedArrayTest do
                "`temps` is at `card.i.0` to `card.i.7` in the running configuration and has no location in the candidate: located I/O changes only with a restart"
              ]
 
-      # Grown: its type and its range, each by its own rule, and the program's own.
+      # Decision 244: grown, it is refused once, for its range, and the program for its own
+      # tag; where until then the global was told its type too.
       {:ok, wider} =
         Logex.compile(String.replace(@zones, "temps real[8]", "temps real[10]"), name: "zones")
 
@@ -934,10 +1140,64 @@ defmodule Logex.LocatedArrayTest do
                "var_global temps real[10] at card.i.0\nvar_global lamps bool[8] at card.q.0\n",
                %{"zones" => wider}
              ) == [
-               "`temps` is a global array of 8 reals in the running configuration and an array of 10 reals in the candidate: a global's type changes only with a restart",
                "`temps` is at `card.i.0` to `card.i.7` in the running configuration and at `card.i.0` to `card.i.9` in the candidate: located I/O changes only with a restart",
                "`temps` is an array of 8 reals in the running program and an array of 10 reals in the candidate: a tag's type changes only with a restart"
              ]
+
+      # Grown and unlocated: its range alone.
+      for {lines, range} <- [
+            {"var_global temps real[10]\nvar_global lamps bool[8] at card.q.0\n",
+             "at `card.i.0` to `card.i.7` in the running configuration and has no location"}
+          ] do
+        {:ok, candidate} = Configuration.compile("oven", with_points(lines), %{"zones" => wider})
+        {:error, diagnostics} = Edit.accept(Runtime.start(oven()), candidate)
+        globals = Enum.filter(Enum.map(diagnostics, & &1.message), &(&1 =~ "configuration"))
+
+        assert globals == [
+                 "`temps` is #{range} in the candidate: located I/O changes only with a restart"
+               ]
+      end
+
+      # Its range kept and its elements' type changed: told its type, as before.
+      {:ok, ints} =
+        Logex.compile(
+          @zones
+          |> String.replace("temps real[8]", "temps int[8]")
+          |> String.replace("sp    real", "sp    int")
+          |> String.replace("first real", "first int"),
+          name: "zones"
+        )
+
+      {:ok, candidate} =
+        Configuration.compile(
+          "oven",
+          @oven
+          |> String.replace("temps real[8]", "temps int[8]")
+          |> String.replace("sp    real 100.0", "sp    int 100")
+          |> String.replace("first real", "first int"),
+          %{"zones" => ints}
+        )
+
+      {:error, diagnostics} = Edit.accept(Runtime.start(oven()), candidate)
+
+      assert "`temps` is a global array of 8 reals in the running configuration and an array of 8 ints in the candidate: a global's type changes only with a restart" in Enum.map(
+               diagnostics,
+               & &1.message
+             )
+
+      refute Enum.any?(diagnostics, &(&1.message =~ "located I/O"))
+
+      # An unlocated array grown is still told its type (decision 157).
+      {:ok, original} =
+        Configuration.compile("oven", @oven <> "var_global spare int[4]\n", programs())
+
+      {:ok, candidate} =
+        Configuration.compile("oven", @oven <> "var_global spare int[6]\n", programs())
+
+      {:error, [diagnostic]} = Edit.accept(Runtime.start(original), candidate)
+
+      assert diagnostic.message ==
+               "`spare` is a global array of 4 ints in the running configuration and an array of 6 ints in the candidate: a global's type changes only with a restart"
 
       assert refusals(
                "var_global temps real[8] at card.i.0\nvar_global lamps bool[8] at card.q.0\n" <>

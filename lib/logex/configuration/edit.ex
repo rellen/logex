@@ -40,8 +40,9 @@ defmodule Logex.Configuration.Edit do
   added or taken away moves nothing, and the continuous task named where it is declared; a global's type; located I/O, a located global
   added, removed or moved, or a location added to or taken from a global, a device being
   only its points' prefix, since M5-13 a located array's by the range its elements occupy,
-  `card.i.0` to `card.i.7`, so that one grown or shrunk is refused for its range as well as
-  its type (decision 156, provisional); and, in each program type an instance runs as that type in
+  `card.i.0` to `card.i.7`, so that one grown or shrunk is refused for its range, and since
+  decision 244 for its range alone, an unlocated array grown for its type (decision 157);
+  and, in each program type an instance runs as that type in
   both, every type change `Logex.Edit` refuses, a member's by its path. The configuration's
   own refusals come first, each in the candidate's `file` at its element's line, in line
   order, an element only the running configuration has last, with no line, its line in the
@@ -520,8 +521,26 @@ defmodule Logex.Configuration.Edit do
   defp global(nil, %Configuration.Global{name: name} = global),
     do: ["`#{name}` at #{span(global)} is added: #{located()}"]
 
+  # Decision 244: a located array whose range changes, grown, shrunk, moved, made a scalar
+  # or unlocated, `zone_t real[8]` to `real[10]` at `card.i.0`, is refused once, for the
+  # range its elements take, where until then it was refused for its type too; the range's
+  # refusal says it all, since a restart takes both. One whose range is kept is still told
+  # its type, `real[8]` to `int[8]`, and an unlocated array grown is told its type alone
+  # (decision 157).
   defp global(%Configuration.Global{} = was, %Configuration.Global{} = global),
-    do: typed(was.type, global.type, global.name) ++ located(span(was), span(global), global.name)
+    do: kept_global(span(was), span(global), {was, global})
+
+  defp kept_global(same, same, {was, global}), do: typed(was.type, global.type, global.name)
+
+  defp kept_global(was_at, at, {%{type: {:array, _, _}} = was, global}) when was.at != nil,
+    do: located(was_at, at, global.name)
+
+  defp kept_global(was_at, at, {_was, %{type: {:array, _, _}} = global})
+       when global.at != nil,
+       do: located(was_at, at, global.name)
+
+  defp kept_global(was_at, at, {was, global}),
+    do: typed(was.type, global.type, global.name) ++ located(was_at, at, global.name)
 
   defp typed(same, same, _name), do: []
 

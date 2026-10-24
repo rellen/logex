@@ -10218,7 +10218,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :late_open,
     :element_pressed,
     :element_forced,
-    :element_misfit
+    :element_misfit,
+    :array_forced,
+    :array_unforced
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t)
@@ -10647,28 +10649,53 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         value = value(type)
         kick = kicks?(w, name, value)
         began = w.begun
-        assert Runner.force(w.runner, name, value) == :ok
+        forces = force_drawn(w, name, value)
         reach(:force, true)
         reach(:forced_trigger, kick == 1)
         reach(:element_forced, String.contains?(name, "["))
 
         # A force that changes what a trigger reads makes its round at once, before it
         # returns, and one that does not makes none (decisions 120 and 138).
-        w = drained(%{w | forces: Map.put(w.forces, name, value)})
+        w = drained(%{w | forces: Map.merge(w.forces, forces)})
         assert w.begun - began == kick
         forced(w)
 
       n when n <= 5 ->
         name = pick(Enum.sort(Map.keys(w.forces)) ++ [pick(Enum.sort(Map.keys(@inputs)))])
-        assert Runner.unforce(w.runner, name) == :ok
-        reach(:unforce, Map.has_key?(w.forces, name))
-        forced(%{w | forces: Map.delete(w.forces, name)})
+        forced(%{w | forces: Map.drop(w.forces, unforce_drawn(w, name))})
 
       6 ->
         assert Runner.unforce_all(w.runner) == :ok
         reach(:unforce_all, map_size(w.forces) > 0)
         forced(%{w | forces: %{}, unforcing: w.forces})
     end
+  end
+
+  # Decision 241: `pt[1]` drawn, the array `pt` is forced whole, each element to the value
+  # drawn, as a list of its shape, and unforced whole, every element, so that the draws'
+  # stream is the one an element's force drew; no element is a trigger.
+  defp force_drawn(w, "pt[1]", value) do
+    assert Runner.force(w.runner, "pt", [value, value, value]) == :ok
+    reach(:array_forced, true)
+    Map.new(["pt[0]", "pt[1]", "pt[2]"], &{&1, value})
+  end
+
+  defp force_drawn(w, name, value) do
+    assert Runner.force(w.runner, name, value) == :ok
+    %{name => value}
+  end
+
+  defp unforce_drawn(w, "pt[1]") do
+    assert Runner.unforce(w.runner, "pt") == :ok
+    reach(:array_unforced, Enum.any?(["pt[0]", "pt[1]", "pt[2]"], &Map.has_key?(w.forces, &1)))
+    reach(:unforce, Map.has_key?(w.forces, "pt[1]"))
+    ["pt[0]", "pt[1]", "pt[2]"]
+  end
+
+  defp unforce_drawn(w, name) do
+    assert Runner.unforce(w.runner, name) == :ok
+    reach(:unforce, Map.has_key?(w.forces, name))
+    [name]
   end
 
   defp kicks?(%{status: :running} = w, name, value) do

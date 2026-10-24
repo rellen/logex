@@ -3862,6 +3862,15 @@ up to 16 times the array's words in place or one pass, measured in a process tha
 each cycle's runtime, the switch at 16 kept. Forcing one element is Logix's own form: "If
 the tag is an array or structure, such as an I/O tag, force a BOOL, SINT, INT, DINT, or
 REAL element or member" (1756-PM004L p.53, and p.51, p.54).)*
+*(Changed by the maintainer's answers of 2026-10-24, decisions 241 to 247: a located array
+of input points named whole takes a list of its shape, as a host's array var_input does, a
+cycle's input `%{"zone_t" => [...]}`, a force of the array whole forcing each element and
+an unforce of it unforcing each, and a forces file's line `zone_t 20.0 21.5 …`, read as
+each element forced, the file written element by element (decision 241); an edit that
+changes a located array's range is refused once, for its range, an unlocated array grown
+still for its type (decision 244); the last field's counting up, the undriven warning's
+elements and a program's write driving by element confirmed (decisions 242, 243 and
+245).)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -7745,6 +7754,8 @@ the decisions the rest settle.
      `var_global temps real[8] at card.i.0` occupying `card.i.0` to `card.i.7`, each element
      a point read, written and forced by its name, `temps[3]`, an overlap refused naming
      both, as §4.12's "I/O points" says.)*
+     *(Changed by decision 241, 2026-10-24: the array named whole takes a list, each
+     element then set or forced, the forces file's whole line read as each element.)*
 
 157. **An online edit that changes a type or an array's size (Milestone 5).** The box
      counter's `usint` overflows at 255, so the programmer edits it to a `uint` while the
@@ -7770,6 +7781,9 @@ the decisions the rest settle.
      element, each change reported by its element's name, `{:initial_changed, "lim[1]",
      {20, 25}}`, a tag's and a global's alike; an array's type, dimensions or sizes
      changed refused.)*
+     *(Decision 244, 2026-10-24: a located array whose range changes is refused once, for
+     its range, and not also for its type; an unlocated array grown is refused for its
+     type, as here.)*
 
 158. **Whether timers and counters change type (Milestone 5).** A timer longer than 24.8
      days, or a box count past 2,147,483,647.
@@ -9457,6 +9471,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      IEC and Logix say nothing found of such a literal (Logix states the LREAL range as
      its normal values and 0.0, 1756-RM018A p.874). This supersedes decision 228's "a
      literal no double holds but 0.0 … stays a lex error at its column".
+     *(Changed by decisions 237 and 240, 2026-10-24: a configuration line's is refused in
+     its global's or member's words and a forces file's held as 0.0 (237), and one beside
+     another literal, `eq 1.0e-400 0.0`, refused as in every other slot (240).)*
 232. **An edit that replaces an array's whole driver by element drivers (Milestone 5),**
      the answers' fourth question after decision 223, changing its last bullet's "an array
      driven whole held whole". `m1.o speeds` drives a global array whole, and an edit
@@ -9536,6 +9553,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      warned, either first, as `ote w.[n]` beside `otl w.[n]` is (M5-9), a write through a
      tag subscript being a write of its array whole, where the literal `ote lamps[2]`
      beside `otl lamps[2]` is not; a question for the maintainer.)*
+     *(Superseded by decision 246, 2026-10-24: the very element through the very tag is
+     warned of nothing, as a literal element is; the mirror bullet confirmed by decision
+     238.)*
 236. **Two feeders writing one array (Milestone 5),** M5-12's fourth question, changing
      its provisional reading 4. `f1` writes `speeds[slot]` and `f2` writes `speeds[1]`
      through their `var_external`s; `f2` was told "`f2` writes `speeds` through its
@@ -9561,6 +9581,206 @@ built; 221, 222, 223, 226, 227 and 228 change six.
 
      Logix has no such configuration check (decision 48 is logex's own). This supersedes
      M5-12's provisional reading 4.
+     *(Changed by decision 239, 2026-10-24: an instance that writes several elements beside
+     one other writer is told once, the elements named together, ten and then a count.)*
+
+237. **A literal no double holds, in a configuration line and in the forces file
+     (Milestone 5),** M5-12's first follow-up question after decision 231, changing its
+     fourth bullet. `var_global big lreal 1.0e-400` was refused as a lex error at its
+     column, "`1.0e-400` is no number logex holds", and a forces file's `big 1.0e-400` was
+     no force, where `1.0e-310` was told in its global's words and held as 0.0.
+
+     **Taken: the configuration told in its global's or member's words, and the force held
+     at 0.0, as `1.0e-310` is** (the maintainer, 2026-10-24): "`big` is an lreal:
+     `1.0e-400` is too near 0.0 for an lreal, whose smallest above 0.0 is
+     2.2250738585072014e-308: it would be written as 0.0". *The reading (the record's,
+     provisional where marked):*
+     - *How:* a configuration's entries hold values, and 0.0 is one no rule refuses, so
+       `Logex.Configuration.compile/3` and `compile_file/1` read the line through
+       `Logex.Configuration.Text.read_rounded/1` (internal), which stands each such
+       literal in for by a subnormal double no other literal of the text holds, the next
+       `k * 5.0e-324` from k = 7919, that every rule of `check/1` refuses as it refuses
+       `1.0e-310`, and quote it as written in each message: a global's initial value, an
+       array's element, a connection's constant, `m1.x -1.0e-400`, a constant into an
+       array whole, `m1.a 1.0e-400`, told "as in `m1.a[0] 1.0e-400`", a task's interval,
+       priority or watchdog, a dint's or a bool's value "a real". No configuration holding
+       a stand-in compiles, so none is ever handed out (provisional, the form).
+     - `Logex.Configuration.Text.read/1`, which gives entries and so values, still refuses
+       it as the lexer did, at its column (provisional).
+     - A forces file's line holds it as 0.0 at a real point, `-1_0.0e-4_00` too; at an
+       integer or bool point it is a real that does not fit, "got: 0.0", the value it
+       reads as.
+     - *Found on the way:* a float initial value of an integer or bool global, `var_global
+       g dint 1.5`, which a line can say since M5-10, raised from `compile/3` as the host's
+       mistake, "the initial value of global `g` must be an integer, found 1.5"; it is now
+       judged by the literal rules, "`g` is a dint: `1.5` is a real, and a dint holds only
+       integers", an array's element as a declaration's is, "the initial value of `j[0]`
+       must be an integer, found 2.5", and so from Elixir too, `new!/1`'s diagnostics.
+
+     IEC and Logix say nothing found of such a literal. This supersedes decision 231's
+     "a configuration file and a forces file … refuse it as the lexer did".
+238. **A move into one lamp beside a coil through a subscript (Milestone 5),** M5-12's
+     second follow-up question. **Taken: confirmed as built** (the maintainer,
+     2026-10-24): `move 0 lamps[2]` beside `ote lamps[slot]` is the second-`ote` warning,
+     in either order, "`lamps[slot]` is in `lamps`, as `lamps[2]` is, which the `move` on
+     line 4 writes: the last one in the scan decides it", the mirror of decision 235. No
+     code changed; `tag_subscript_test.exs` pins it. No such warning was found in IEC or
+     the Logix extracts read (**unverified**). Decision 235's provisional bullet for the
+     mirror case stands as confirmed.
+239. **A feeder of several speeds beside one through a subscript (Milestone 5),** M5-12's
+     third follow-up question, changing decision 236's provisional bullet. `t1` writes
+     `speeds[1]` and `speeds[2]`, `f1` writes `speeds[slot]`; `t1` was told twice, a line
+     an element.
+
+     **Taken: one line naming the elements together** (the maintainer, 2026-10-24):
+     "`t1` writes `speeds[1]`, `speeds[2]` and `speeds[3]` through its var_external, as
+     `f1` may (line 4): each scan reads what the other last wrote, and the later write in a
+     cycle stands", ten named and then a count, "… `speeds[9]` and 2 more …", as an
+     undriven array's elements are (decision 243). *The reading (the record's,
+     provisional where marked):*
+     - The elements in the elements' order, `speeds[9]` before `speeds[10]`, at the
+       instance's line.
+     - The elements an instance is told of beside one other writer in the same words are
+       one line, so two instances writing the same literal elements, neither through a tag
+       subscript, are told once too, "`t2` writes `speeds[1]` and `speeds[3]` …, as `t1`
+       does" (provisional, a case the question did not ask).
+     - An array told whole (two writers through a tag subscript), a global that is no
+       array, and an element that is a one-shot's storage bit, told so, stay a line each.
+
+     Logix has no such configuration check (decision 48 is logex's own).
+240. **`1.0e-400` compared with a literal (Milestone 5),** M5-12's fourth follow-up
+     question, changing decision 231's provisional bullet. `eq 1.0e-400 0.0` was two
+     literals, 0.0 and 0.0, true on every scan, and `lt 0.0 1.0e-400` false, which the
+     text says is true.
+
+     **Taken: refused, as in every other slot** (the maintainer, 2026-10-24): "`eq` reads
+     a number or a bit string, and compares two literals as lreals: `1.0e-400` is too near
+     0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be
+     written as 0.0", either side, its spelling quoted. *The reading (provisional):* two
+     literals compare as the doubles they lex as (decision 216), so the words name an
+     lreal; a zero written any way, `0.0e-400`, is 0.0, warned only as two literals
+     compared are; and a subnormal one beside a literal, `gt 1.0e-310 0.0`, is still the
+     double it lexes as, true, since its text and its value agree. IEC and Logix say
+     nothing found.
+241. **A located array named whole (Milestone 5),** M5-13's first question, changing its
+     provisional reading. The oven's eight zones, `zone_t real[8] at card.i.0`: a host's
+     input, a force and a forces file's line naming `zone_t` whole were refused, told the
+     elements.
+
+     **Taken: the array named whole takes a list, as a host's array var_input does
+     (decision 222)** (the maintainer, 2026-10-24). *The reading (the record's,
+     provisional where marked):*
+     - *A cycle's input:* `Logex.Runtime.cycle/3`'s `%{"zone_t" => [...]}`, a list of the
+       array's shape, a list of lists for more dimensions, the rightmost subscript
+       fastest, each element stored as its point's value is, a real's at its nearest; the
+       shape refused, "input `zone_t` is an array of 8 reals: its value must be a list of
+       8 elements, found …", and each misfit a line, ten and then a count, in decision
+       222's words. A whole key beside an element key in one call is refused, "inputs
+       `zone_t` and `zone_t[3]` each set `zone_t`, an array of 8 reals (line 3): a call
+       sets an array whole or by its elements, not both", as decision 229 has it. The
+       runner's rounds still give the core each element a device changed.
+     - *A force:* `Logex.Runner.force(r, "zone_t", list)` forces each element, its shape
+       and every element checked first, nothing forced where one does not fit, "`zone_t`
+       is an array of 8 reals, forced to a list of 8 elements in the elements' order, got:
+       …", each misfit "`zone_t[1]` is a real, forced to …, got: true", ten and then a
+       count. `unforce(r, "zone_t")` unforces every element, forced or not, each reading
+       its device's last value again, which the runner keeps for each element, as for each
+       point; an element unforced alone leaves the rest forced. An array of output points
+       named whole is still refused.
+     - *The forces file:* a whole array's line is its name and then one value an element,
+       in the elements' order, separated by single spaces, `zone_t 20.0 21.5 … 19.0`, each
+       value any number the lexer reads, held as its point's force is; a line of another
+       count is refused, "`zone_t` is an array of 8 reals, forced whole on one line, its
+       name and then 8 values in the elements' order: the line holds 3"; each misfit a line
+       at the line's number; an element a whole line forces named again on another line,
+       either first, "`zone_t[3]` is forced on line 1 already". *The file writes element by
+       element*, `zone_t[0] 20.0` a line, in name order, as the runner holds its forces and
+       `status/1` lists them; so the file the runner writes reads back to the very forces it
+       holds, the exact round trip, and a whole line written by hand is written back by
+       element at the next force, as decision 218 rewrites a spelling (provisional, a
+       question below).
+     - *Triggers:* a force or unforce that changes what a trigger reads makes that
+       trigger's round, one a trigger, element by element; but an event task's single is
+       a whole bool global, never an element nor an array (M5-13), so no element of a
+       located array is a trigger and a whole-array force makes no round of its own.
+
+     Logix forces within a tag, by element (1756-PM004L pp.51, 53 and 54), and its module
+     data is one tag, `Local:0:I.Data`, copied whole with `cps` (p.21); IEC's directly
+     represented variables are single points (Ed 3 Table 16). This supersedes M5-13's
+     provisional reading that the array named whole is no point.
+242. **A hierarchical address (Milestone 5),** M5-13's second question. **Taken: confirmed
+     as built** (the maintainer, 2026-10-24): a located array's elements count up in its
+     address's last field, `rack.i.2.4` to `rack.i.2.11`, so a range can run past what a
+     slot holds and only the adapter's `check/3` can tell. No code changed;
+     `located_array_test.exs` pins it. IEC leaves a hierarchical address's meaning to the
+     manufacturer (Ed 2 §2.4.1.1, p.37); Logix names a module's data by its slot
+     (1756-PM004L pp.18-19).
+243. **An array of output points nothing drives (Milestone 5),** M5-13's third question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-24): the warning names every
+     element left at 0, ten and then a count, and one sentence for the array whole where
+     none is driven. No code changed; `located_array_test.exs` pins it at ten, eleven and
+     twelve. Decision 48's warnings are logex's own.
+244. **A located array grown by an edit (Milestone 5),** M5-13's fourth question, changing
+     its provisional reading. The oven gains two zones, `zone_t real[10]`; the accept was
+     refused twice, for the global's type and for its range.
+
+     **Taken: refused once, for its range** (the maintainer, 2026-10-24): "`zone_t` is at
+     `card.i.0` to `card.i.7` in the running configuration and at `card.i.0` to `card.i.9`
+     in the candidate: located I/O changes only with a restart", and the program for its
+     own tag, which is its own refusal. *The reading (the record's, provisional where
+     marked):*
+     - Whenever a located array's range changes, grown, shrunk, moved with a size change,
+       unlocated, or made a scalar or an array at a location, the range's refusal alone
+       names the global, since a restart takes both changes (provisional for the shapes
+       other than growth).
+     - One whose range is kept and whose elements' type changes, `real[8]` to `int[8]` at
+       `card.i.0`, is told its type, as before.
+     - *An unlocated array grown*, `spare int[4]` to `int[6]`, is still told its type,
+       decision 157, "`spare` is a global array of 4 ints in the running configuration and
+       an array of 6 ints in the candidate: a global's type changes only with a restart",
+       since it has no range to tell.
+
+     Logix changes an array's size offline only (1756-RM094N p.85).
+245. **What a program's write drives (Milestone 5),** M5-13's review's fifth question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-24): a program's write through
+     its `var_external` drives each element of an array of output points it writes, `ote
+     zone_hot[2]` that element alone, so the others are warned of as undriven, and a
+     write through a tag subscript drives the array whole. No code changed;
+     `located_array_test.exs` pins it. Decision 48's warnings are logex's own. M5-13's
+     review's provisional reading stands as confirmed.
+246. **A coil and a latch on one lamp through one subscript (Milestone 5),** M5-13's
+     review's sixth question, changing its provisional reading and M5-9's. `ote
+     lamps[slot]` beside `otl lamps[slot]` was the second-`ote` warning, as `ote w.[n]`
+     beside `otl w.[n]` was since M5-9, where `ote lamps[2]` beside `otl lamps[2]` is not.
+
+     **Taken: no warning where both name the same element through the same tag, as for a
+     literal element, and the same for `w.[n]`** (the maintainer, 2026-10-24). *The
+     reading (the record's, provisional where marked):*
+     - "The same through the same tag": the same array or word and the same subscripts,
+       each a literal by its value or a tag by its name, `g[01,c]` the same as `g[1,c]`,
+       or the same bit number's tag; so `ote w.[n]` beside `otl w.[n]`, `ote g[1,c].[n]`
+       beside `otl g[01,c].[n]` and `ote g[1,c].3` beside `otl g[1,c].3` are warned of
+       nothing.
+     - Any write but a coil's beside a coil, either first, as decision 235 counts a write:
+       `move 0 lamps[slot]` beside `ote lamps[slot]` is warned of nothing too, as `move 0
+       lamps[2]` beside `ote lamps[2]` is not; two coils through the very tag are still two
+       coils, warned, as `ote lamps[2]` twice is.
+     - Through other tags, `lamps[i]` beside `lamps[j]`, or `w.[n]` beside `w.[m]`, still
+       warned; and the very element's write beside a coil on another element or bit of the
+       array or word is still told that coil, whichever came first (`first/4` keeps, beside
+       each first, the first through other tags).
+
+     No such warning was found in IEC or the Logix extracts read (**unverified**). This
+     supersedes M5-13's review's provisional reading under decision 235 and M5-9's
+     provisional reading that a coil on `w.[n]` beside any write of it through the very
+     tag is the second-`ote` warning.
+247. **A tag refused for its initial value (Milestone 5),** M5-13's review's seventh
+     question. **Taken: confirmed as built** (the maintainer, 2026-10-24): `var r int
+     40000` is refused once and `r` declared with no initial value, so its uses are
+     checked as they are, an int read as a bool told so, and not each told `r` is
+     undeclared; a line broken after its value, `var r int 5 7`, still declares nothing.
+     No code changed; `validation_test.exs` pins it. M5-13's review's provisional reading
+     stands as confirmed.
 
 ---
 

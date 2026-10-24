@@ -31,7 +31,9 @@ defmodule Logex.Runtime do
      values between cycles: a host sends only what changed, and every scan of the cycle
      sees the one sample. Since M5-13 an element of a located array is an input point of
      its own, keyed by its element's name, `%{"temps[3]" => 37.5}`, the rest of its array
-     kept, and the array named whole is refused; the outputs give each element of a
+     kept, and since decision 241 an array of input points named whole is a list of its
+     shape, `%{"temps" => [...]}`, as a program's array var_input is (decision 222), set
+     whole or by its elements in one call, never both; the outputs give each element of a
      located array of output points by its name, `"lamps[2]"` (decision 156).
   3. Each task's `single`, its trigger, if it has one (M2-6), is sampled once, after the
      merge and before any scan, so a trigger logic writes takes effect in the next cycle
@@ -1381,8 +1383,7 @@ defmodule Logex.Runtime do
 
   defp tuple_shape(dims), do: "a tuple of " <> shape_of(dims, "tuple")
 
-  defp shape_of([count], _kind), do: "#{count} #{elements(count)}"
-  defp shape_of([count | dims], kind), do: "#{count} #{kind}s of " <> shape_of(dims, kind)
+  defp shape_of(dims, kind), do: Logex.Array.shape(dims, kind)
 
   defp elements(1), do: "element"
   defp elements(_count), do: "elements"
@@ -2181,6 +2182,27 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
+  # Decision 241, as decision 229 has it for a program: one call sets a located array of
+  # input points whole or by its elements, never both, a line an array, in name order,
+  # looked at once every input is a point, and only where a located array is, so that a
+  # configuration of none cycles in what it did.
+  defp whole_clashes(%{located: located, elements: elements, globals: globals}, inputs),
+    do:
+      for(
+        {array, {"i", _first, _last}} <- Enum.sort(located),
+        is_map_key(inputs, array),
+        keys = for({key, {^array, _, _}} <- elements, is_map_key(inputs, key), do: key),
+        keys != [],
+        do:
+          "inputs #{Enum.map_join([array | Enum.sort(keys)], " and ", &"`#{&1}`")} each set " <>
+            "`#{array}`, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
+            "#{global_line(Map.fetch!(globals, array))}: a call sets an array whole or by its " <>
+            "elements, not both"
+      )
+
+  defp global_line(%Configuration.Global{line: nil}), do: ""
+  defp global_line(%Configuration.Global{line: line}), do: " (line #{line})"
+
   defp imaged([], {globals, %{reals: nil, elements: nil}}, inputs), do: Map.merge(globals, inputs)
 
   # M5-10 (decision 166): a real input point's value is the real's nearest value.
@@ -2191,9 +2213,19 @@ defmodule Logex.Runtime do
   # name, `temps[3]`, into its array, the rest of the array kept: a few elements of an
   # array each written in place, and more, up to every element a device reports changed,
   # laid over the array's elements in one pass (`placed/4`).
+  #
+  # Since decision 241 a located array of input points may be set whole, a list of its
+  # shape, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
+  # element stored as its point's value is.
   defp imaged([], {globals, %{reals: reals, elements: elements} = wiring}, inputs) do
+    clashed!(whole_clashes(wiring, inputs))
     {placed, points} = Enum.split_with(inputs, fn {key, _value} -> is_map_key(elements, key) end)
+
+    {wholes, points} =
+      Enum.split_with(points, fn {key, _v} -> is_map_key(wiring.located, key) end)
+
     reals = as_map(reals)
+    globals = Enum.reduce(wholes, globals, &whole_input(&1, &2, wiring))
 
     placed
     |> Enum.group_by(
@@ -2210,6 +2242,14 @@ defmodule Logex.Runtime do
 
   defp imaged(problems, _globals, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
+
+  defp clashed!([]), do: :ok
+  defp clashed!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+
+  defp whole_input({array, list}, globals, wiring) do
+    %Configuration.Global{type: {:array, type, dims}} = Map.fetch!(wiring.globals, array)
+    %{globals | array => Logex.Array.from_list(list, dims, &as_real(real_type(type), &1))}
+  end
 
   # A write in place copies the tuple of each dimension it passes through, the sum of the
   # array's sizes in words, all n of a one-dimensional array's, which the BEAM counts as
@@ -2257,10 +2297,10 @@ defmodule Logex.Runtime do
          :error,
          {:ok, %Configuration.Global{type: {:array, _, _}} = global},
          key,
-         _value,
+         value,
          runtime
        ),
-       do: whole_array(located_array(runtime.wiring.located, key), global, key)
+       do: whole_array(located_array(runtime.wiring.located, key), global, key, value)
 
   defp point(:error, {:ok, global}, key, _value, _runtime),
     do:
@@ -2298,18 +2338,18 @@ defmodule Logex.Runtime do
 
   defp named_point(:none, key, runtime), do: element_point(Logex.Array.split(key), key, runtime)
 
-  defp whole_array({"i", {first, from}, {last, to}}, _global, key),
-    do:
-      "input #{label(key)} is an array of input points, `#{from}` to `#{to}`, each element " <>
-        "a point set by its name, `#{first}` to `#{last}`: set its elements, as in " <>
-        ~s|%{"#{first}" => 0}|
+  # Decision 241: a located array of input points set whole is a list of its shape, each
+  # element fitting its type, its misfits ten and then a count, in a host's array
+  # var_input's words (decision 222), where until then it was refused, told its elements.
+  defp whole_array({"i", _first, _last}, global, key, value),
+    do: fit(%Tag{name: key, type: global.type, section: :var_input}, value)
 
-  defp whole_array({"q", {_first, from}, {_last, to}}, _global, key),
+  defp whole_array({"q", {_first, from}, {_last, to}}, _global, key, _value),
     do:
       "input #{label(key)} is an array of output points, `#{from}` to `#{to}`, not an " <>
         "input point: only an input point is set from outside"
 
-  defp whole_array(nil, _global, key),
+  defp whole_array(nil, _global, key, _value),
     do:
       "input #{label(key)} is an array with no location, not an input point: only an input " <>
         "point is set from outside"

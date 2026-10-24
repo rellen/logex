@@ -351,10 +351,10 @@ defmodule Logex.Warnings do
 
   defp coiled({:coil, _key, word, _tag, _at, _shown}, words), do: Map.put(words, word, true)
 
-  defp coiled({:coil_at, word, tag, _at, _shown}, words) when is_element(word, tag),
+  defp coiled({:coil_at, word, tag, _at, _shown, _id}, words) when is_element(word, tag),
     do: words |> Map.put(word, true) |> Map.put({:coiled_in, tag}, true)
 
-  defp coiled({:coil_at, word, _tag, _at, _shown}, words), do: Map.put(words, word, true)
+  defp coiled({:coil_at, word, _tag, _at, _shown, _id}, words), do: Map.put(words, word, true)
 
   defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
@@ -373,7 +373,7 @@ defmodule Logex.Warnings do
        when is_map_key(words, {:array, tag}),
        do: [{:element_coil, {:array, tag}, key, tag, at, shown}, coil]
 
-  defp probed([{:coil_at, word, tag, at, shown} = coil], words)
+  defp probed([{:coil_at, word, tag, at, shown, _id} = coil], words)
        when is_binary(word) and is_map_key(words, {:array, tag}),
        do: [{:element_coil, {:array, tag}, word, tag, at, shown}, coil]
 
@@ -382,10 +382,10 @@ defmodule Logex.Warnings do
   defp decides?({:coil, key, _word, tag, _at, _shown}, tags, owners),
     do: from_source?(tags, tag) and not Map.has_key?(owners, key)
 
-  defp decides?({:coil_at, word, tag, _at, _shown}, tags, owners),
+  defp decides?({:coil_at, word, tag, _at, _shown, _id}, tags, owners),
     do: from_source?(tags, tag) and not Map.has_key?(owners, word)
 
-  defp decides?({:whole, _word, tag, _at}, tags, _owners), do: from_source?(tags, tag)
+  defp decides?({:whole, _word, tag, _at, _id}, tags, _owners), do: from_source?(tags, tag)
 
   defp decides?({:element_coil, _word, key, tag, _at, _shown}, tags, owners),
     do: from_source?(tags, tag) and not Map.has_key?(owners, key)
@@ -393,7 +393,8 @@ defmodule Logex.Warnings do
   defp decides?({:element_whole, array, _at, _shown}, tags, _owners),
     do: from_source?(tags, array)
 
-  defp decides?({:whole_at, array, _at, _shown}, tags, _owners), do: from_source?(tags, array)
+  defp decides?({:whole_at, array, _at, _shown, _id}, tags, _owners),
+    do: from_source?(tags, array)
 
   # A coil on a tag or member, keyed by its name, on no word; a coil on a bit, `status.3` on
   # the word `status`, or `c.pv.3` on the member `c.pv`; a whole write of a word or member.
@@ -415,8 +416,7 @@ defmodule Logex.Warnings do
             tag,
             at,
             shown
-          ),
-          {Map.put_new(coils, key, at), wholes, Map.put_new(bitted, {:array, tag}, {shown, at})}}
+          ), {first(coils, key, at, nil), wholes, first(bitted, {:array, tag}, {shown, at}, nil)}}
 
   defp decided({:coil, key, nil, _tag, at, shown}, {coils, wholes, bitted}) do
     {warnings, coils} = later_ote(Map.fetch(coils, key), {key, shown}, at, coils)
@@ -436,8 +436,8 @@ defmodule Logex.Warnings do
          Map.fetch(wholes, {:written, tag}),
          {word, tag, at, shown}
        ),
-       {Map.put_new(coils, key, at), wholes,
-        bitted |> Map.put_new(word, {shown, at}) |> Map.put_new({:array, tag}, {shown, at})}}
+       {first(coils, key, at, nil), wholes,
+        bitted |> first(word, {shown, at}, nil) |> first({:array, tag}, {shown, at}, nil)}}
 
   # A coil on a bit a tag numbers, `ote w.[n]`, keyed by its word: after another such coil
   # on the word, after a coil on a bit of it, `ote w.3`, or after a whole write of it,
@@ -449,34 +449,37 @@ defmodule Logex.Warnings do
   # among them, and since M5-12's review after any write of the array whole through a tag
   # subscript, `move x w[i]`, or of one of its elements whole, `move x w[2]`, each the
   # second-`ote` warning, naming the array.
-  defp decided({:coil_at, {:array, array} = word, _tag, at, shown}, {coils, wholes, bitted}) do
+  defp decided(
+         {:coil_at, {:array, array} = word, _tag, at, shown, id},
+         {coils, wholes, bitted}
+       ) do
     warnings =
       array_coil(
         Map.fetch(coils, word),
         Map.fetch(bitted, word),
-        Map.fetch(wholes, {:written, array}),
+        unlike(wholes, {:written, array}, id),
         Map.fetch(wholes, {:some, array}),
         {array, at, shown}
       )
 
     {warnings,
-     {Map.put_new(coils, word, at), Map.put_new(wholes, word, at),
-      Map.put_new(bitted, word, {shown, at})}}
+     {first(coils, word, at, id), first(wholes, word, at, id),
+      first(bitted, word, {shown, at}, id)}}
   end
 
-  defp decided({:coil_at, word, tag, {line, _symbol} = at, shown}, {coils, wholes, bitted}) do
+  defp decided({:coil_at, word, tag, {line, _symbol} = at, shown, id}, {coils, wholes, bitted}) do
     warnings =
       word_after(
         Map.fetch(coils, word),
         Map.fetch(bitted, word),
-        Map.fetch(wholes, word),
+        unlike(wholes, word, id),
         Map.fetch(wholes, {:written, tag}),
         {word, tag, line, at, shown}
       )
 
     {warnings,
-     {Map.put_new(coils, word, at), Map.put_new(wholes, word, at),
-      bitted |> Map.put_new(word, {shown, at}) |> Map.put_new({:array, tag}, {shown, at})}}
+     {first(coils, word, at, id), first(wholes, word, at, id),
+      bitted |> first(word, {shown, at}, id) |> first({:array, tag}, {shown, at}, id)}}
   end
 
   # M5-12: a coil on an element, or a bit of one, of an array a coil names through a tag
@@ -485,10 +488,10 @@ defmodule Logex.Warnings do
   defp decided({:element_coil, word, _key, _tag, at, shown}, {coils, wholes, bitted}),
     do:
       {in_array(Map.fetch(wholes, word), word, at, shown),
-       {coils, wholes, Map.put_new(bitted, word, {shown, at})}}
+       {coils, wholes, first(bitted, word, {shown, at}, nil)}}
 
-  defp decided({:whole, word, _tag, at}, {coils, wholes, bitted}),
-    do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
+  defp decided({:whole, word, _tag, at, id}, {coils, wholes, bitted}),
+    do: whole_after(unlike(bitted, word, id), at, {coils, first(wholes, word, at, id), bitted})
 
   # M5-12's review: a write of an element whole, `move x w[2]`, in an array a coil names
   # through a tag subscript, `ote w[i].1`, comes after that coil as the second-`ote`
@@ -496,19 +499,59 @@ defmodule Logex.Warnings do
   defp decided({:element_whole, array, at, shown}, {coils, wholes, bitted}),
     do:
       {in_array(Map.fetch(coils, {:array, array}), {:array, array}, at, shown),
-       {coils, Map.put_new(wholes, {:some, array}, {shown, at}), bitted}}
+       {coils, first(wholes, {:some, array}, {shown, at}, nil), bitted}}
 
   # M5-12's review (§4.12's routine choice): a write through a tag subscript, `move x
   # w[i]`, writes its array whole, so it comes after any coil on a bit of an element of
   # it, a literal one's or one through a tag subscript, as the second-`ote` warning, and is
   # for what comes later a write of the array whole.
-  defp decided({:whole_at, array, at, shown}, {coils, wholes, bitted}),
+  defp decided({:whole_at, array, at, shown, id}, {coils, wholes, bitted}),
     do:
       {array_after(
-         Map.fetch(coils, {:array, array}),
-         Map.fetch(bitted, {:array, array}),
+         unlike(coils, {:array, array}, id),
+         unlike(bitted, {:array, array}, id),
          {array, at, shown}
-       ), {coils, Map.put_new(wholes, {:written, array}, at), bitted}}
+       ), {coils, first(wholes, {:written, array}, at, id), bitted}}
+
+  # Decision 246: a coil and another write of the very element or bit through the very tags,
+  # `ote lamps[slot]` beside `otl lamps[slot]` or `move 0 lamps[slot]`, and `ote w.[n]` beside
+  # `otl w.[n]`, are warned of nothing, as `ote lamps[2]` beside `otl lamps[2]` is not, where
+  # since M5-9 and M5-12 each was the second-`ote` warning; through other tags, `lamps[i]`
+  # beside `lamps[j]`, they still are. So each first a key holds keeps, beside it, the first
+  # after it through other tags or none (`first/4`), which `unlike/3` gives where a write's
+  # tags are the first's. `same/1` is an operand's tags and what they reach, its lines left
+  # out, and nil for one no tag subscripts or numbers.
+  defp first(map, key, value, id) when is_map_key(map, key),
+    do: Map.update!(map, {:same, key}, &other(&1, value, id))
+
+  defp first(map, key, value, id),
+    do: map |> Map.put(key, value) |> Map.put({:same, key}, {id, :error})
+
+  defp other({first_id, :error}, value, id) when id != first_id, do: {first_id, {:ok, value}}
+  defp other(kept, _value, _id), do: kept
+
+  defp unlike(map, key, id), do: unlike_first(Map.fetch(map, key), Map.get(map, {:same, key}), id)
+
+  defp unlike_first({:ok, _first}, {id, other}, id) when id != nil, do: other
+  defp unlike_first(found, _same, _id), do: found
+
+  defp same({:element_at, _, array, index, _dims, _name}),
+    do: {:element_at, array, Enum.map(index, &subscript_of/1)}
+
+  defp same({:bit_at, _, container, {:name, _, n}, _width, _name}),
+    do: {:bit_at, container_of_bit(container), n}
+
+  defp same({:bit, _, {:element_at, _, _, _, _, _} = element, n, _mask, _name}),
+    do: {:bit, same(element), n}
+
+  defp same(_literal), do: nil
+
+  defp container_of_bit({:element, _, array, index, _name}), do: {:element, array, index}
+  defp container_of_bit({:element_at, _, _, _, _, _} = element), do: same(element)
+  defp container_of_bit(path), do: path
+
+  defp subscript_of({:name, _, tag}), do: {:tag, tag}
+  defp subscript_of(value), do: value
 
   defp bit_after({:ok, first}, _whole, _written, {_word, _tag, {line, _symbol}, shown}),
     do: [second_ote(shown, first, line)]
@@ -640,7 +683,11 @@ defmodule Logex.Warnings do
 
   defp wholes(operand, tags, words, at),
     do:
-      for({word, tag} <- whole(operand), is_map_key(words, word), do: {:whole, word, tag, at}) ++
+      for(
+        {word, tag} <- whole(operand),
+        is_map_key(words, word),
+        do: {:whole, word, tag, at, same(operand)}
+      ) ++
         in_arrays(operand, tags, words, at)
 
   # M5-12's review: a write of an element of a word array whole, `move x w[2]`, beside a
@@ -655,19 +702,24 @@ defmodule Logex.Warnings do
   defp in_arrays({:bit_at, _, {:element, _, array, _, _}, _index, _width, shown}, _, words, at),
     do: element_whole({array, shown}, words, at)
 
-  defp in_arrays({:element_at, _, array, _index, _dims, shown}, _tags, words, at),
-    do: whole_at({array, shown}, words, at)
-
-  defp in_arrays({:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown}, _, words, at),
-    do: whole_at({array, shown}, words, at)
+  defp in_arrays({:element_at, _, array, _index, _dims, shown} = at_tag, _tags, words, at),
+    do: whole_at({array, shown, same(at_tag)}, words, at)
 
   defp in_arrays(
-         {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown},
+         {:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown} = at_tag,
          _tags,
          words,
          at
        ),
-       do: whole_at({array, shown}, words, at)
+       do: whole_at({array, shown, same(at_tag)}, words, at)
+
+  defp in_arrays(
+         {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown} = at_tag,
+         _tags,
+         words,
+         at
+       ),
+       do: whole_at({array, shown, same(at_tag)}, words, at)
 
   defp in_arrays(_operand, _tags, _words, _at), do: []
 
@@ -682,9 +734,9 @@ defmodule Logex.Warnings do
 
   defp written_at(_tag, at), do: at
 
-  defp whole_at({array, shown}, words, at)
+  defp whole_at({array, shown, id}, words, at)
        when is_map_key(words, {:array, array}) or is_map_key(words, {:coiled_in, array}),
-       do: [{:whole_at, array, at, shown}]
+       do: [{:whole_at, array, at, shown, id}]
 
   defp whole_at(_element, _words, _at), do: []
 
@@ -742,31 +794,35 @@ defmodule Logex.Warnings do
   # a bit of the word, `ote s.3`, and, since M5-9's review, any write of the word whole,
   # `move x s`, either first, as decision 207 has it for a coil on `s.3`.
   defp target(
-         {:bit_at, _, {:element, _, array, _, _} = element, _index, _width, shown},
+         {:bit_at, _, {:element, _, array, _, _} = element, _index, _width, shown} = bit,
          line,
          at
        ),
-       do: [{:coil_at, Walk.bit_name(element), array, {line, at}, shown}]
+       do: [{:coil_at, Walk.bit_name(element), array, {line, at}, shown, same(bit)}]
 
-  defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol),
-    do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown}]
+  defp target({:bit_at, _, [container | _] = path, _index, _width, shown} = bit, line, symbol),
+    do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown, same(bit)}]
 
   # M5-12 (§4.12's routine choice): a coil on an element a tag subscripts, `ote
   # lamps[slot]`, decides whichever element the subscript names, so it is a coil in the
   # array whole, keyed by the array, `{:array, "lamps"}`; and so is a coil on a bit of one,
   # `ote faults[i].3` or `ote faults[i].[n]`.
-  defp target({:element_at, _, array, _index, _dims, shown}, line, symbol),
-    do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
-
-  defp target({:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown}, line, symbol),
-    do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
+  defp target({:element_at, _, array, _index, _dims, shown} = element, line, symbol),
+    do: [{:coil_at, {:array, array}, array, {line, symbol}, shown, same(element)}]
 
   defp target(
-         {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown},
+         {:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown} = element,
          line,
          symbol
        ),
-       do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
+       do: [{:coil_at, {:array, array}, array, {line, symbol}, shown, same(element)}]
+
+  defp target(
+         {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown} = element,
+         line,
+         symbol
+       ),
+       do: [{:coil_at, {:array, array}, array, {line, symbol}, shown, same(element)}]
 
   defp target(_literal, _line, _symbol), do: []
 

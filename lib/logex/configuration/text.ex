@@ -175,13 +175,78 @@ defmodule Logex.Configuration.Text do
   # real 16777217.0`, as `{line, spelling, type, held}`, `held` the shortest text of the
   # value it is held as (`Logex.Real.held_as/3`), an array's initial list element by element:
   # the line's text keeps a value's spelling, which a global, a value, does not.
-  def read_rounded(source) when is_binary(source),
-    do: lexed_rounded(underflowed(Logex.Lexer.tokenize(source)))
+  #
+  # Since decision 237 its third element is each real literal no double holds but 0.0,
+  # `1.0e-400`, which the line holds as a stand-in, `{line, shown, spelling}`: a subnormal
+  # double no other literal of the text holds, which every rule of `check/1` refuses as it
+  # refuses a subnormal one, `1.0e-310`, in the global's or the member's words, and whose
+  # text, `shown`, `Logex.Configuration.compile/3` puts back as written in each message. No configuration holding a stand-in compiles, so none is ever handed out.
+  def read_rounded(source) when is_binary(source) do
+    {lexed, spelled} = stood_in(Logex.Lexer.tokenize(source))
+    {read, rounded} = lexed_rounded(lexed)
+    {read, rounded, spelled}
+  end
+
+  # Decision 237: each underflowed literal, in source order, stood in for by a subnormal
+  # double, the next `k * 5.0e-324`, k from 7919, that no real literal of the text holds, so
+  # that its shortest text, which a message quotes, is no other literal's.
+  # A text with none, nearly every one, is passed over at a reduction a token.
+  defp stood_in({:ok, tokens, _end_line} = lexed), do: stood_in(underflows?(tokens), lexed)
+  defp stood_in(error), do: {error, []}
+
+  defp stood_in(false, lexed), do: {lexed, []}
+
+  defp stood_in(true, {:ok, tokens, end_line}) do
+    {tokens, {_count, _held, spelled}} =
+      Enum.map_reduce(tokens, {7919, held(tokens), []}, &stand_in/2)
+
+    {{:ok, tokens, end_line}, Enum.reverse(spelled)}
+  end
+
+  defp underflows?([{:real_lit, _, zero, _} = token | rest]) when zero == 0.0,
+    do: Parser.underflowed?(token) or underflows?(rest)
+
+  defp underflows?([_token | rest]), do: underflows?(rest)
+  defp underflows?([]), do: false
+
+  defp stand_in({:real_lit, {line, _} = location, zero, spelling} = token, acc)
+       when zero == 0.0,
+       do: stand_in(Parser.underflowed?(token), token, {location, line, spelling}, acc)
+
+  defp stand_in(token, acc), do: {token, acc}
+
+  defp stand_in(true, token, {location, line, spelling} = at, {k, held, spelled}),
+    do:
+      free(
+        MapSet.member?(held, k * 5.0e-324),
+        token,
+        at,
+        {k, held, spelled},
+        {location, line, spelling}
+      )
+
+  defp stand_in(false, token, _at, acc), do: {token, acc}
+
+  # A stand-in no real literal of the text holds, so that no message quotes another
+  # literal's value as written for it.
+  defp free(true, token, at, {k, held, spelled}, _where),
+    do: stand_in(true, token, at, {k + 1, held, spelled})
+
+  defp free(false, _token, _at, {k, held, spelled}, {location, line, spelling}) do
+    value = k * 5.0e-324
+
+    {{:real_lit, location, value},
+     {k + 1, held, [{line, Float.to_string(value), spelling} | spelled]}}
+  end
+
+  defp held(tokens),
+    do: MapSet.new(for token <- tokens, elem(token, 0) == :real_lit, do: elem(token, 2))
 
   # Decision 231: a real literal no double holds but 0.0, `1.0e-400`, lexes as 0.0 with its
-  # spelling, which a program's slot refuses naming the instruction and the tag; a
-  # configuration file has no instruction, and its reader refuses it as the lexer did until
-  # then, a lex error at its column, the only diagnostic (provisional).
+  # spelling, which a program's slot refuses naming the instruction and the tag; `read/1`
+  # gives entries, which hold values, and refuses it as the lexer did until then, a lex
+  # error at its column, the only diagnostic (provisional), where `compile/3` refuses it
+  # in its global's or member's words since decision 237.
   defp underflowed({:ok, tokens, end_line} = lexed),
     do: underflow(Enum.find(tokens, &Parser.underflowed?/1), lexed, end_line)
 

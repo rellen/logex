@@ -461,8 +461,12 @@ defmodule Logex.Configuration do
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
     checked(configuration_name(name) ++ mistakes, [])
-    {read, rounded} = Text.read_rounded(source)
-    with_rounded(compiled(read, name, programs, {nil, [], MapSet.new()}), rounded)
+    {read, rounded, spelled} = Text.read_rounded(source)
+
+    read
+    |> compiled(name, programs, {nil, [], MapSet.new()})
+    |> with_rounded(rounded)
+    |> respelled(spelled)
   end
 
   def compile(_name, source, _programs),
@@ -491,6 +495,27 @@ defmodule Logex.Configuration do
   end
 
   defp with_rounded(compiled, _rounded), do: compiled
+
+  # Decision 237: a real literal no double holds but 0.0, `1.0e-400`, read as a subnormal
+  # stand-in (`Logex.Configuration.Text.read_rounded/1`), which check/1 refuses as it
+  # refuses `1.0e-310`, "`sp` is an lreal: `1.0e-400` is too near 0.0 for an lreal, …", is
+  # quoted as written in each message at its line; a configuration holding one never
+  # compiles, so only an error is respelled.
+  defp respelled({:error, diagnostics}, [_ | _] = spelled),
+    do: {:error, Enum.map(diagnostics, &respelled_at(&1, spelled))}
+
+  defp respelled(compiled, _spelled), do: compiled
+
+  # A stand-in's text may be quoted at another line, `m1.a[1]` told it is connected already
+  # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`".
+  defp respelled_at(%Diagnostic{message: message} = diagnostic, spelled),
+    do: %{
+      diagnostic
+      | message:
+          Enum.reduce(spelled, message, fn {_line, shown, spelling}, message ->
+            String.replace(message, shown, spelling)
+          end)
+    }
 
   @doc """
   A configuration from its configuration file on disk (`.logex`, decision 35), its program
@@ -586,7 +611,7 @@ defmodule Logex.Configuration do
   # The program types the `program` lines name, each loaded once from beside the file,
   # through one memo, and what is cited at the line of each one's first instance.
   defp loaded_file(name, source, path) do
-    {read, rounded} = Text.read_rounded(source)
+    {read, rounded, spelled} = Text.read_rounded(source)
     types = program_types(read)
     file = &Path.join(Path.dirname(path), &1 <> ".ld")
     {found, missing} = Enum.split_with(types, fn {type, _line} -> File.exists?(file.(type)) end)
@@ -605,10 +630,11 @@ defmodule Logex.Configuration do
 
     loaded = {path, Enum.reverse(cited, absent), uncited}
 
-    with_theirs(
-      with_rounded(compiled(read, name, programs, loaded), rounded),
-      Enum.reverse(theirs)
-    )
+    read
+    |> compiled(name, programs, loaded)
+    |> with_rounded(rounded)
+    |> respelled(spelled)
+    |> with_theirs(Enum.reverse(theirs))
   end
 
   # Each type a `program` line names that could be a file's, once, at its first line: one
@@ -1115,10 +1141,11 @@ defmodule Logex.Configuration do
   defp global_initial(%Global{initial: initial}) when is_integer(initial),
     do: []
 
-  # M5-10: a real global's initial value may be a float, as its line's real literal is.
-  defp global_initial(%Global{type: type, initial: initial})
-       when type in @reals and is_float(initial),
-       do: []
+  # M5-10: a real global's initial value may be a float, as its line's real literal is;
+  # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`, so
+  # that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and a dint
+  # holds only integers", where until then check/1 raised it as the host's.
+  defp global_initial(%Global{initial: initial}) when is_float(initial), do: []
 
   defp global_initial(%Global{name: name, type: type, initial: initial}) when type in @reals,
     do: [
@@ -1132,18 +1159,16 @@ defmodule Logex.Configuration do
 
   defp array_initial(true, _global), do: []
 
+  # Decision 237: an element's value is a number, a float in an integer array judged by the
+  # literal rules, as a line can say one.
   defp array_initial(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
     do: [
       "the initial value of global #{label(name)}, an array of #{Declarations.word(type)}s, " <>
-        "must be a list of its elements' values, each #{element_value(type)}, found " <>
+        "must be a list of its elements' values, each a number, found " <>
         inspect(initial)
     ]
 
-  defp element_said?(type, value) when type in @reals, do: is_number(value)
-  defp element_said?(_type, value), do: is_integer(value)
-
-  defp element_value(type) when type in @reals, do: "a number"
-  defp element_value(_type), do: "an integer"
+  defp element_said?(_type, value), do: is_number(value)
 
   defp global_at(%Global{at: nil}), do: []
   defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
@@ -1745,10 +1770,9 @@ defmodule Logex.Configuration do
   # scans.
   defp initial(%Global{initial: nil}, _location), do: []
 
-  # A value the host's check refused already, any but an integer, and a real's float.
-  defp initial(%Global{type: type, initial: v}, _location)
-       when not is_integer(v) and not (type in @reals and is_float(v)),
-       do: []
+  # A value the host's check refused already, any but a number (decision 237: a float in a
+  # global of an integer type is judged by the literal rules, as a line can say it).
+  defp initial(%Global{initial: v}, _location) when not is_number(v), do: []
 
   defp initial(%Global{name: name, line: line}, {:ok, {_device, "i", _address}}),
     do: [
@@ -3269,9 +3293,13 @@ defmodule Logex.Configuration do
       end)
 
     twice =
-      for {target, [first | later]} <- shared(writers, arrays),
-          {instance, may} <- later,
-          do: twice(target, {instance, may}, first, Map.get(bits, target))
+      for(
+        {target, [first | later]} <- shared(writers, arrays),
+        {instance, may} <- later,
+        do: {target, {instance, may}, first, Map.get(bits, target)}
+      )
+      |> together()
+      |> Enum.map(&twice/1)
 
     connected =
       for {written, global, instance, _bit} <- writers,
@@ -3336,13 +3364,54 @@ defmodule Logex.Configuration do
 
   defp told(element, writers), do: {element, writers}
 
-  defp twice(global, {instance, may}, {first, first_may}, bit),
+  # Decision 239: the elements of one array an instance is told of beside one other writer,
+  # in the same words, are one warning naming them in the elements' order, ten and then a
+  # count, "`t1` writes `speeds[1]`, `speeds[2]` and `speeds[3]` through its var_external,
+  # as `f1` may", where until then each was a line; an array told whole, a global that is no
+  # array, and an element that is a one-shot's storage bit, told so, stay a line each.
+  defp together([]), do: []
+
+  defp together(told) do
+    {keys, groups} =
+      Enum.reduce(told, {[], %{}}, fn {target, writer, first, bit} = one, {keys, groups} ->
+        key = together_key(Logex.Array.split(target), {target, writer, first, bit})
+        {[key | keys], Map.update(groups, key, [one], &[one | &1])}
+      end)
+
+    for key <- keys |> Enum.reverse() |> Enum.uniq(),
+        do: Enum.sort_by(Map.fetch!(groups, key), &element_order/1)
+  end
+
+  defp together_key({array, _subscripts}, {_target, {instance, may}, {first, first_may}, nil}),
+    do: {:elements, array, instance.name, may, first.name, first_may}
+
+  defp together_key(_whole_or_bit, {target, {instance, _may}, _first, _bit}),
+    do: {:one, target, instance.name}
+
+  defp element_order({target, _writer, _first, _bit}),
+    do: element_index(Logex.Array.split(target))
+
+  defp element_index({_array, subscripts}), do: Enum.map(subscripts, &String.to_integer/1)
+  defp element_index(nil), do: []
+
+  defp twice([{global, {instance, may}, {first, first_may}, bit} | _] = told),
     do:
       warning(
         instance.line,
-        "`#{instance.name}` #{writes(may)} `#{global}` through its var_external, as " <>
-          "`#{first.name}` #{does(first_may)}#{where(first)}: " <> stands(bit, global)
+        "`#{instance.name}` #{writes(may)} #{and_listed(Enum.map(told, &elem(&1, 0)))} " <>
+          "through its var_external, as `#{first.name}` #{does(first_may)}#{where(first)}: " <>
+          stands(bit, global)
       )
+
+  defp and_listed(names) when length(names) > 10,
+    do: Enum.map_join(Enum.take(names, 10), ", ", &"`#{&1}`") <> " and #{length(names) - 10} more"
+
+  defp and_listed([one]), do: "`#{one}`"
+
+  defp and_listed(names) do
+    {rest, [last]} = Enum.split(names, -1)
+    Enum.map_join(rest, ", ", &"`#{&1}`") <> " and `#{last}`"
+  end
 
   defp writes(false), do: "writes"
   defp writes(true), do: "may write"

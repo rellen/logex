@@ -1164,10 +1164,12 @@ defmodule Logex.ConfigurationTest do
       # is taken, `d`'s -1, and a bool's or a located global's told what is wrong with it.
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
                "global `a` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
-               "the initial value of global `e` must be an integer, found 1.0",
                "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
                "`c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
+               # Decision 237: a float is a line's to say, `var_global e bool 1.0`, so it is
+               # judged by the literal rules, where until then it was the host's mistake.
+               "`e` is a bool: `1.0` is a real, and a bool holds only 0 or 1",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
                  "initial value",
                "`h` is an output point: it takes no initial value, and is 0 until its driver " <>
