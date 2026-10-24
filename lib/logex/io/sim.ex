@@ -18,9 +18,11 @@ defmodule Logex.IO.Sim do
     a report, 5000 ms unless set, from 1 ms to 4294967295, the longest the VM waits for an
     answer. Since M5-13 `inputs:` and `outputs:` are how many points of each direction it
     has, `[0]` to `[n - 1]`, nil for as many as it is given, so that a located array
-    past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind.
+    past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind;
+    since M5-13's review each option is taken once, a key given twice refused.
   - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
-    values, unset inputs reading 0. Where the sim reports, the inputs that changed are
+    values, unset inputs reading 0; since M5-13's review an address past `inputs:` is
+    refused, the first in order, and nothing set. Where the sim reports, the inputs that changed are
     sent to the device that opened it as one report, from the caller, which waits until
     the device has handled it, so that a test that sets an input and then moves the clock
     finds the device's change made, by construction. A device that is down, or goes down
@@ -111,10 +113,20 @@ defmodule Logex.IO.Sim do
 
   # The inputs set, and, where they changed and the sim reports to a device, reported to
   # it from the caller, which then waits through `:sys` until the device has handled it.
-  defp setting(sim, values) do
-    {reporter, changed, wait} = GenServer.call(sim, {:set, values})
-    reported(reporter, {__MODULE__, sim, changed}, wait)
-  end
+  defp setting(sim, values), do: set!(GenServer.call(sim, {:set, values}), sim)
+
+  # M5-13's review: an address past the sim's inputs, where it was started with `inputs:`,
+  # is the test's mistake, as a point bound past them is the host's, and nothing is set.
+  defp set!({:past, address, size}, _sim),
+    do:
+      raise(
+        ArgumentError,
+        "the sim has #{size} #{noun(:input, size)}, at the addresses [0] to [#{size - 1}], " <>
+          "got: #{inspect(address, charlists: :as_lists)}"
+      )
+
+  defp set!({reporter, changed, wait}, sim),
+    do: reported(reporter, {__MODULE__, sim, changed}, wait)
 
   defp reported(nil, _report, _wait), do: :ok
 
@@ -248,16 +260,13 @@ defmodule Logex.IO.Sim do
   end
 
   @impl GenServer
-  def handle_call({:set, values}, _from, state) do
-    changed =
-      for {address, value} <- values,
-          Map.get(state.inputs, address, 0) != value,
-          into: %{},
-          do: {address, value}
-
-    {:reply, {reporter(state.reports, state.reporter, changed), changed, state.wait},
-     %{state | inputs: Map.merge(state.inputs, values)}}
-  end
+  def handle_call({:set, values}, _from, state),
+    do:
+      set_in(
+        values |> Map.keys() |> Enum.reject(&within?(&1, state.sizes.input)) |> Enum.sort(),
+        values,
+        state
+      )
 
   def handle_call(:outputs, _from, state), do: {:reply, state.outputs, state}
   def handle_call(:writes, _from, state), do: {:reply, Enum.reverse(state.writes), state}
@@ -317,17 +326,33 @@ defmodule Logex.IO.Sim do
 
   # The device a sim reports to: the one that opened it, where it reports and an input
   # changed.
+  defp set_in([address | _past], _values, state),
+    do: {:reply, {:past, address, state.sizes.input}, state}
+
+  defp set_in([], values, state) do
+    changed =
+      for {address, value} <- values,
+          Map.get(state.inputs, address, 0) != value,
+          into: %{},
+          do: {address, value}
+
+    {:reply, {reporter(state.reports, state.reporter, changed), changed, state.wait},
+     %{state | inputs: Map.merge(state.inputs, values)}}
+  end
+
   defp reporter(true, pid, changed) when is_pid(pid) and map_size(changed) > 0, do: pid
   defp reporter(_reports, _pid, _changed), do: nil
 
-  # The options, checked in order: the list, each key, then each value.
+  # The options, checked in order: the list, each key, each key once, then each value.
   defp options!(opts) when is_list(opts), do: listed!(Keyword.keyword?(opts), opts)
   defp options!(opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(false, opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(true, opts) do
-    known!(Keyword.keys(opts) -- @options)
+    keys = Keyword.keys(opts)
+    known!(Enum.reject(keys, &(&1 in @options)))
+    once!(keys -- Enum.uniq(keys))
 
     %{
       reports: reports!(Keyword.get(opts, :reports, false)),
@@ -364,6 +389,17 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: #{inspect(key)}"
+      )
+
+  # A key given twice, as `Logex.Runner.start_link/1` tells one (M5-13's review): which of
+  # two values was meant is the caller's to say.
+  defp once!([]), do: :ok
+
+  defp once!([key | _]),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim takes each option once, got #{inspect(key)} more than once"
       )
 
   defp reports!(reports) when is_boolean(reports), do: reports

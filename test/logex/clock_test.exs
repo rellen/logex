@@ -377,6 +377,10 @@ defmodule Logex.ClockTest do
              "the manual clock takes a keyword list of options, now: and wait:, got: :fast"},
             {[1], "the manual clock takes a keyword list of options, now: and wait:, got: [1]"},
             {[speed: 2], "the manual clock takes now: and wait:, got: :speed"},
+            # M5-13's review: a key twice is told so, not told it is unknown.
+            {[now: 1, now: 2],
+             "the manual clock takes each option once, got :now more than once"},
+            {[wait: 5, speed: 2, wait: 6], "the manual clock takes now: and wait:, got: :speed"},
             {[now: 1.5], "the manual clock's now: is a whole number of milliseconds, got: 1.5"},
             {[wait: 0],
              "the manual clock's wait: is a whole number of milliseconds, 1 to 4294967295, " <>

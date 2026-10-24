@@ -127,8 +127,9 @@ defmodule Logex.BitStringTest do
         assert messages("var c #{type} -1\nvar d #{type} #{high + 1}\nxic c ote d") == [
                  "`c` is #{a(type)}: #{misfit(type, "`-1`")}",
                  "`d` is #{a(type)}: #{misfit(type, "`#{high + 1}`")}",
-                 "`c` is not declared",
-                 "`d` is not declared"
+                 # Since M5-13's review each is declared with no initial value, its uses checked.
+                 "`xic` reads a bool, but `c` is #{a(type)} (declared on line 1)",
+                 "`ote` writes a bool, but `d` is #{a(type)} (declared on line 2)"
                ]
 
         assert messages("var c #{type}\nvar d #{type}\nxic c ote d") == [

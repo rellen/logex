@@ -196,14 +196,16 @@ defmodule Logex.Runner.Clock.Manual do
 
   defp taken(_not_due, _target, state), do: {:reply, :none, state}
 
-  # The options, checked in order: the list, each key, then each value.
+  # The options, checked in order: the list, each key, each key once, then each value.
   defp options!(opts) when is_list(opts), do: listed!(Keyword.keyword?(opts), opts)
   defp options!(opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(false, opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(true, opts) do
-    known!(Keyword.keys(opts) -- @options)
+    keys = Keyword.keys(opts)
+    known!(Enum.reject(keys, &(&1 in @options)))
+    once!(keys -- Enum.uniq(keys))
     %{now: now!(Keyword.get(opts, :now, 0)), wait: wait!(Keyword.get(opts, :wait, 5000))}
   end
 
@@ -214,6 +216,17 @@ defmodule Logex.Runner.Clock.Manual do
 
   defp known!([key | _]),
     do: raise(ArgumentError, "the manual clock takes now: and wait:, got: #{inspect(key)}")
+
+  # A key given twice, as `Logex.Runner.start_link/1` tells one (M5-13's review): which of
+  # two values was meant is the caller's to say.
+  defp once!([]), do: :ok
+
+  defp once!([key | _]),
+    do:
+      raise(
+        ArgumentError,
+        "the manual clock takes each option once, got #{inspect(key)} more than once"
+      )
 
   defp now!(now) when is_integer(now), do: now
 

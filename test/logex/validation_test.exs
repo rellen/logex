@@ -824,8 +824,32 @@ defmodule Logex.ValidationTest do
                "line 7: `q` is not declared",
                "line 8: `r` is not declared",
                "line 9: `retain` is not declared",
-               "line 10: `c` is not declared",
                "line 11: `d` is not declared"
+             ]
+    end
+
+    # M5-13's review (provisional): a scalar's line refused for its initial value alone
+    # declares its tag with none, as an array refused for its initial list is, so its uses
+    # are checked as any tag's, and told nothing of being undeclared.
+    test "a scalar refused for its initial value alone is declared with none, its uses checked" do
+      assert source_errors(
+               "var r int 40000\nvar f real 1.0e-40\nvar c bool 2\nvar_external e int 5\n" <>
+                 "var_output x bool\nvar_output y real\n" <>
+                 "move r y\nadd f 1.0 y\nxic c ote x\nmove e y\nxic f ote x"
+             ) == [
+               "line 1: `r` is an int: `40000` is outside -32768 to 32767",
+               "line 2: `f` is a real: `1.0e-40` is too near 0.0 for a real, whose smallest " <>
+                 "above 0.0 is 1.1754943508222875e-38: it would be written as 0.0",
+               "line 3: `c` is a bool: its initial value must be 0 or 1, found `2`",
+               "line 4: `e` is a var_external: its value is the configuration's global of " <>
+                 "that name, so it takes no initial value",
+               "line 11: `xic` reads a bool, but `f` is a real (declared on line 2)"
+             ]
+
+      # Its line broken after its value, it declares nothing, as before.
+      assert source_errors("var r int 5 7\nvar_output y int\nmove r y") == [
+               "line 1: unexpected `7` after the declaration of `r`",
+               "line 3: `r` is not declared"
              ]
     end
   end

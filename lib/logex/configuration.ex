@@ -3084,7 +3084,7 @@ defmodule Logex.Configuration do
       | types: Map.put(found.types, instance.type, facts),
         diagnostics: checked_once(first, facts, instance, program, world) ++ found.diagnostics,
         used: Enum.reduce(facts.externals, found.used, &MapSet.put(&2, &1.name)),
-        driving: Enum.reduce(writers, found.driving, &MapSet.put(&2, elem(&1, 1))),
+        driving: Enum.reduce(writers, found.driving, &MapSet.put(&2, elem(&1, 0))),
         writers: Enum.reverse(writers, found.writers)
     }
   end
@@ -3585,8 +3585,11 @@ defmodule Logex.Configuration do
     do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]
 
   # M5-13: an array of output points driven element by element is told the elements
-  # nothing drives, each at 0; one a connection drives whole, or a program writes through
-  # its var_external, is driven (provisional).
+  # nothing drives, each at 0; one a connection drives whole is driven (provisional). Since
+  # M5-13's review a program's write through its var_external drives what it writes, as
+  # decision 236 counts a writer: each element it writes, `ote lq[1]` driving `lq[1]` alone,
+  # and the array whole where it writes through a tag subscript, `ote lq[slot]`
+  # (`written_of/2`, provisional), where until then any such write drove the array whole.
   defp doubt(true, %Global{type: {:array, _type, dims}, at: at} = global, {wiring, externals})
        when at != nil,
        do:
@@ -3595,7 +3598,7 @@ defmodule Logex.Configuration do
              not MapSet.member?(externals.driving, global.name),
            global,
            dims,
-           wiring
+           {wiring, externals}
          )
 
   defp doubt(true, global, {wiring, externals}),
@@ -3611,13 +3614,13 @@ defmodule Logex.Configuration do
 
   defp elements_undriven(false, _global, _dims, _wiring), do: []
 
-  defp elements_undriven(true, global, dims, wiring),
+  defp elements_undriven(true, global, dims, {wiring, externals}),
     do:
       undriven_elements(
         for(
           index <- Logex.Array.indexes(dims),
           name = Logex.Array.name(global.name, index),
-          not Map.has_key?(wiring.driven, name),
+          not Map.has_key?(wiring.driven, name) and not MapSet.member?(externals.driving, name),
           do: name
         ),
         Logex.Array.size(dims),

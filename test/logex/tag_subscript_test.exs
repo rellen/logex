@@ -830,6 +830,11 @@ defmodule Logex.TagSubscriptTest do
             {"move a l[2]\nxic a ote l[i]", as.("l[i]", "l[2]", "the `move` on line 5 writes")},
             {"xic a ote l[i]\nmove a l[i]", later.("l[i]", "ote")},
             {"move a l[i]\nxic a ote l[i]", later.("l[i]", "move")},
+            # M5-13's review (provisional): the very element through the very tag, as
+            # `ote w.[n]` beside `otl w.[n]` is warned (M5-9), and unlike `ote l[2]` beside
+            # `otl l[2]`.
+            {"xic a ote l[i]\nxic a otl l[i]", later.("l[i]", "ote")},
+            {"xic a otu l[i]\nxic a ote l[i]", later.("l[i]", "otu")},
             {"xic a osf o l[2]\nmove a l[i]",
              as.("l[i]", "l[2]", "is already the pulse bit of the `osf` on line 5")}
           ] do

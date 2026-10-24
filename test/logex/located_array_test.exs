@@ -375,21 +375,80 @@ defmodule Logex.LocatedArrayTest do
       refute Enum.any?(c.warnings, &(&1.message =~ "nothing drives"))
     end
 
-    test "an array of output points a program writes through its var_external is driven" do
-      {:ok, ext} =
-        Logex.compile("var_external lamps bool[8]\nvar_input a bool\nxic a ote lamps[2]\n",
-          name: "ext"
-        )
+    # M5-13's review: ten elements are named, eleven are ten and then a count.
+    test "the elements nothing drives are named to ten, the rest counted" do
+      told = fn size, driven ->
+        {:ok, c} =
+          checked(
+            "task fast interval 10 priority 1\nvar_global ls bool[#{size}] at card.q.0\n" <>
+              "var_global a bool\n" <>
+              Enum.map_join(
+                driven,
+                "",
+                &"program o#{&1} lamp with fast\no#{&1}.a a\no#{&1}.l ls[#{&1}]\n"
+              )
+          )
 
-      {:ok, c} =
-        Configuration.compile(
-          "oven",
-          @head <>
-            "program r reader with fast\nr.ls lamps\nr.o a\nprogram e ext with fast\ne.a a\n",
-          Map.put(more(), "ext", ext)
-        )
+        for %{message: message} <- c.warnings, message =~ "nothing drives", do: message
+      end
 
-      refute Enum.any?(c.warnings, &(&1.message =~ "nothing drives")), inspect(c.warnings)
+      assert told.(12, [0, 1]) == [
+               "`ls` is an array of output points, `card.q.0` to `card.q.11`, but nothing drives " <>
+                 Enum.map_join(2..10, ", ", &"`ls[#{&1}]`") <> " or `ls[11]`: they stay at 0"
+             ]
+
+      assert told.(13, [0, 1]) == [
+               "`ls` is an array of output points, `card.q.0` to `card.q.12`, but nothing drives " <>
+                 Enum.map_join(2..11, ", ", &"`ls[#{&1}]`") <> " and 1 more: they stay at 0"
+             ]
+
+      assert told.(14, [0, 1]) == [
+               "`ls` is an array of output points, `card.q.0` to `card.q.13`, but nothing drives " <>
+                 Enum.map_join(2..11, ", ", &"`ls[#{&1}]`") <> " and 2 more: they stay at 0"
+             ]
+    end
+
+    # M5-13's review: a write through a var_external drives what it writes, each element by
+    # its subscripts' values, as decision 236 counts a writer, and the array whole where it
+    # writes through a tag subscript.
+    test "an array of output points a program writes through its var_external is driven by what it writes" do
+      told = fn rungs, connections ->
+        {:ok, ext} =
+          Logex.compile(
+            "var_external lamps bool[8]\nvar_input a bool\nvar_input slot dint\n" <> rungs,
+            name: "ext"
+          )
+
+        {:ok, c} =
+          Configuration.compile(
+            "oven",
+            @head <>
+              "var_global slot dint\nprogram r reader with fast\nr.ls lamps\nr.o a\n" <>
+              "program e ext with fast\ne.a a\ne.slot slot\n" <> connections,
+            Map.put(more(), "ext", ext)
+          )
+
+        for %{message: message} <- c.warnings, message =~ "nothing drives", do: message
+      end
+
+      assert told.("xic a ote lamps[2]\n", "") == [
+               "`lamps` is an array of output points, `card.q.0` to `card.q.7`, but nothing drives `lamps[0]`, `lamps[1]`, `lamps[3]`, `lamps[4]`, `lamps[5]`, `lamps[6]` or `lamps[7]`: they stay at 0"
+             ]
+
+      # A bit of the program's writes and a connection's drive the rest between them.
+      assert told.(
+               "xic a ote lamps[2]\nxic a otl lamps[0]\nmove 1 lamps[16#7]\n",
+               Enum.map_join(
+                 [1, 3, 4, 5],
+                 "",
+                 &"program o#{&1} lamp with fast\no#{&1}.a a\no#{&1}.l lamps[#{&1}]\n"
+               )
+             ) == [
+               "`lamps` is an array of output points, `card.q.0` to `card.q.7`, but nothing drives `lamps[6]`: it stays at 0"
+             ]
+
+      assert told.("xic a ote lamps[slot]\n", "") == []
+      assert told.("xic a ote lamps[2]\nxic a ote lamps[slot]\n", "") == []
     end
 
     test "an array refused for its sizes takes no address, so overlaps nothing" do
@@ -489,6 +548,60 @@ defmodule Logex.LocatedArrayTest do
       end
     end
 
+    # M5-13's review: an output array of more dimensions, each element given by its own
+    # name and, through the runner, at its own address, the rightmost subscript fastest,
+    # beside an input array of more dimensions placed the same way.
+    test "an array of more dimensions gives each output element by its own name and address" do
+      {:ok, grid} =
+        Logex.compile(
+          "var_input ti int[2,3]\nvar_output tq dint[2,3]\n" <>
+            Enum.map_join(0..1, "", fn i ->
+              Enum.map_join(0..2, "", &"add ti[#{i},#{&1}] #{10 * i + &1} tq[#{i},#{&1}]\n")
+            end),
+          name: "grid"
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "g",
+          "task fast interval 10 priority 1\nvar_global ti int[2,3] at card.i.0\n" <>
+            "var_global tq dint[2,3] at card.q.0\nprogram g grid with fast\ng.ti ti\ng.tq tq\n",
+          %{"grid" => grid}
+        )
+
+      {_runtime, outputs, _events} =
+        Runtime.cycle(Runtime.start(c), 10, %{"ti[0,1]" => 100, "ti[1,0]" => 200})
+
+      assert outputs == %{
+               "tq[0,0]" => 0,
+               "tq[0,1]" => 101,
+               "tq[0,2]" => 2,
+               "tq[1,0]" => 210,
+               "tq[1,1]" => 11,
+               "tq[1,2]" => 12
+             }
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, card} = Sim.start_link(clock: clock, inputs: 6, outputs: 6)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: c,
+          io: %{"card" => {Sim, sim: card}},
+          clock: {Manual, clock}
+        )
+
+      Sim.set(card, %{[1] => 100, [3] => 200, [5] => 300})
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "ti") == [[0, 100, 0], [200, 0, 300]]
+      assert Runner.get!(runner, "tq[1,2]") == 312
+
+      assert Sim.outputs(card) ==
+               %{[0] => 0, [1] => 101, [2] => 2, [3] => 210, [4] => 11, [5] => 312}
+
+      Runner.stop(runner)
+    end
+
     test "refuses the array named whole, an output element, an element its array lacks and a misfit" do
       runtime = Runtime.start(oven())
 
@@ -498,17 +611,29 @@ defmodule Logex.LocatedArrayTest do
             {%{"lamps" => List.duplicate(1, 8)},
              "input `lamps` is an array of output points, `card.q.0` to `card.q.7`, not an input point: only an input point is set from outside"},
             {%{"lamps[2]" => 1},
-             ~s|input "lamps[2]" is an output point (at `card.q.2`), not an input point: only an input point is set from outside|},
+             ~s|input `lamps[2]` is an output point (at `card.q.2`), not an input point: only an input point is set from outside|},
             {%{"temps[8]" => 1.0},
-             ~s|input "temps[8]" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
+             ~s|input `temps[8]` is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
             {%{"temps[03]" => 1.0},
-             ~s|input "temps[03]" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
+             ~s|input `temps[03]` is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
             {%{"temps[1]" => true},
              "input `temps[1]` is a real: its value must be a number, found true"},
             {%{"temps[1]" => 1.0e39},
              "input `temps[1]` is a real: 1.0e39 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38"},
             {%{"nope" => 1},
-             "input `nope` is not an input point: the input points are `temps[0]` to `temps[7]`"}
+             "input `nope` is not an input point: the input points are `temps[0]` to `temps[7]`"},
+            # M5-13's review: an element the lexer reads as one name is quoted as a misfit's
+            # is, beside it in one message; anything else is shown as the host gave it.
+            {%{"temps[9]" => 1.0, "temps[1]" => 1.0e39, "temps[1, 2]" => 1.0, "temps[2" => 1.0},
+             Enum.join(
+               [
+                 "input \"temps[1, 2]\" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`",
+                 "input `temps[1]` is a real: 1.0e39 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38",
+                 "input \"temps[2\" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`",
+                 "input `temps[9]` is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`"
+               ],
+               "\n"
+             )}
           ] do
         raises(message, fn -> Runtime.cycle(runtime, 10, inputs) end)
       end
@@ -524,7 +649,7 @@ defmodule Logex.LocatedArrayTest do
         )
 
       raises(
-        ~s|input "ws[0]" is an element of a global with no location, not an input point: only an input point is set from outside|,
+        ~s|input `ws[0]` is an element of a global with no location, not an input point: only an input point is set from outside|,
         fn -> Runtime.cycle(Runtime.start(c), 10, %{"ws[0]" => 1}) end
       )
 

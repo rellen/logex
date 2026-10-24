@@ -1888,11 +1888,13 @@ defmodule Logex.Runtime do
   defp shown(:boolean, value), do: inspect(value)
   defp shown(_kind, value), do: "#{value}"
 
-  # A key is quoted as a name when every `.` part of it is one, so `t1.dn` reads as written.
-  defp label(key), do: labelled(Enum.all?(String.split(key, "."), &Declarations.name?/1), key)
+  # A key is quoted as a name when the lexer reads it as one name, so `t1.dn` reads as
+  # written, and since M5-13's review so does an element, `tb[9]`, as a misfit names it,
+  # and anything else is shown as the host gave it, `"tb[1, 1]"`.
+  defp label(key), do: labelled(Logex.Lexer.tokenize(key), key)
 
-  defp labelled(true, key), do: "`#{key}`"
-  defp labelled(false, key), do: inspect(key)
+  defp labelled({:ok, [{:name, _at, key}], _lines}, key), do: "`#{key}`"
+  defp labelled(_tokens, key), do: inspect(key)
 
   defp on_line(%Tag{line: nil}), do: ""
   defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
@@ -2188,8 +2190,7 @@ defmodule Logex.Runtime do
   # M5-13 (decision 156): an element of a located array is a point of its own, set by its
   # name, `temps[3]`, into its array, the rest of the array kept: a few elements of an
   # array each written in place, and more, up to every element a device reports changed,
-  # laid over the array's elements in one pass, so that a cycle setting k elements of an
-  # array of n costs some k + n, never k times n (provisional, at 16).
+  # laid over the array's elements in one pass (`placed/4`).
   defp imaged([], {globals, %{reals: reals, elements: elements} = wiring}, inputs) do
     {placed, points} = Enum.split_with(inputs, fn {key, _value} -> is_map_key(elements, key) end)
     reals = as_map(reals)
@@ -2210,6 +2211,16 @@ defmodule Logex.Runtime do
   defp imaged(problems, _globals, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
 
+  # A write in place copies the tuple of each dimension it passes through, the sum of the
+  # array's sizes in words, all n of a one-dimensional array's, which the BEAM counts as
+  # about one reduction; one pass builds the array again, some 3n reductions. So up to 16
+  # elements are written in place, copying up to 16 times the array's words, and more are
+  # laid over it in one pass: a cycle setting k of n elements costs at most about 16n words
+  # copied in place, or one pass of n, and k more (M5-13's review, provisional, at 16).
+  # Measured on an `int[65536]` in a process that drops each cycle's runtime, as a runner
+  # does: one element 0.4 ms a cycle, 16 in place 4.1 ms and 17 in one pass 6.1 ms, so
+  # that in place stays the cheaper up to about 24 elements; on an `int[256,256]`, whose
+  # write copies 512 words, 16 in place 0.24 ms and 129 in one pass 9 ms (provisional).
   defp placed(value, set, _array, _wiring) when length(set) <= 16,
     do:
       Enum.reduce(set, value, fn {index, _offset, v}, value ->

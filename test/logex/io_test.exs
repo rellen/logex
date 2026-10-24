@@ -580,6 +580,11 @@ defmodule Logex.IOTest do
                "and outputs:, got: [1]"},
             {[loud: true],
              "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: :loud"},
+            # M5-13's review: a key twice is told so, not told it is unknown.
+            {[inputs: 3, inputs: 4],
+             "Logex.IO.Sim takes each option once, got :inputs more than once"},
+            {[reports: true, wait: 5, reports: false, wait: 6],
+             "Logex.IO.Sim takes each option once, got :reports more than once"},
             {[inputs: 0],
              "Logex.IO.Sim's inputs: is how many points it has, 1 or more, or nil for as many " <>
                "as it is given, got: 0"},
@@ -635,6 +640,29 @@ defmodule Logex.IOTest do
                        "is [1, 3], got: #{inspect(address)}",
                      fn -> Sim.set(sim, opaque(%{address => 1})) end
       end
+
+      # M5-13's review: an address past a sim's inputs is refused, and nothing is set.
+      {:ok, eight} = Sim.start_link(inputs: 8)
+      {:ok, one} = Sim.start_link(inputs: 1, outputs: 2)
+
+      for {sim, set, message} <- [
+            {eight, &Sim.set(&1, [8], 1),
+             "the sim has 8 inputs, at the addresses [0] to [7], got: [8]"},
+            {eight, &Sim.set(&1, %{[1] => 1, [9] => 1, [8] => 1}),
+             "the sim has 8 inputs, at the addresses [0] to [7], got: [8]"},
+            {eight, &Sim.set(&1, [0, 1], 1),
+             "the sim has 8 inputs, at the addresses [0] to [7], got: [0, 1]"},
+            {one, &Sim.set(&1, [1], 1),
+             "the sim has 1 input, at the addresses [0] to [0], got: [1]"}
+          ] do
+        assert_raise ArgumentError, message, fn -> set.(sim) end
+        assert GenServer.call(sim, {:inputs, [[0], [1], [7]]}) == %{[0] => 0, [1] => 0, [7] => 0}
+      end
+
+      assert Sim.set(eight, %{[0] => 1, [7] => 2}) == :ok
+      assert GenServer.call(eight, {:inputs, [[0], [7]]}) == %{[0] => 1, [7] => 2}
+      # A sim of as many points as it is given takes any address.
+      assert Sim.set(sim, [100, 3], 1) == :ok
 
       for value <- [nil, :on, "1"] do
         assert_raise ArgumentError, "a point's value is a number, got: #{inspect(value)}", fn ->

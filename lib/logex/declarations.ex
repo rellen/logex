@@ -626,8 +626,11 @@ defmodule Logex.Declarations do
   would hold the block being compiled. Such a line declares nothing, and
   `Logex.Compiler` excuses its name's uses rather than report each as undeclared: one
   mistake, one message, so a misspelled block name gives the unknown type alone. A line
-  refused for anything else, such as two names before its type, `retain` or a bad
-  initial value, excuses nothing.
+  refused for anything else, such as two names before its type or `retain`, excuses
+  nothing; since M5-13's review a scalar's line refused for its initial value alone,
+  `var r int 40000` or `var r real 1.0e-40`, declares its tag with none, so that its uses
+  are checked and not each told it is undeclared, as an array refused for its initial list
+  is (provisional).
   """
   def split(rungs, declared \\ [], types \\ %{}, checked \\ %{})
 
@@ -736,7 +739,18 @@ defmodule Logex.Declarations do
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
   defp checked(messages, tag, line, diagnostics),
-    do: {recovered(tag), Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
+    do:
+      {checked_recovered(tag),
+       Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
+
+  # M5-13's review (provisional): a scalar whose line is refused for its initial value
+  # alone is declared with none, its type plainly known, as an array refused for its list
+  # is (`recovered/1`); refused for anything else, it declares nothing, as before.
+  defp checked_recovered(%Tag{type: type, initial: initial} = tag)
+       when is_atom(type) and initial != nil,
+       do: recover(check(%{tag | initial: nil}), %{tag | initial: nil})
+
+  defp checked_recovered(tag), do: recovered(tag)
 
   # M1-6: an instance declared in the wrong section, with an initial value, or with its
   # line broken after its type word, is still plainly an instance, so it is declared as

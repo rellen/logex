@@ -354,12 +354,13 @@ defmodule Logex.TypeTableTest do
 
   describe "each message built from the table, for both types" do
     test "a declared initial value, from source and from Elixir" do
+      # Since M5-13's review `b`, refused for its initial value alone, is declared with
+      # none, so its use is no longer told it is undeclared.
       assert messages("var b bool 2\nvar d dint 2147483648\nvar e dint -2147483649\nxic b ote b") ==
                [
                  "`b` is a bool: its initial value must be 0 or 1, found `2`",
                  "`d` is a dint: `2147483648` is outside -2147483648 to 2147483647",
-                 "`e` is a dint: `-2147483649` is outside -2147483648 to 2147483647",
-                 "`b` is not declared"
+                 "`e` is a dint: `-2147483649` is outside -2147483648 to 2147483647"
                ]
 
       assert raised(fn -> Tag.new!("b", :bool, :var, 2) end) ==
