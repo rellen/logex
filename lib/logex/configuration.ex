@@ -2964,6 +2964,13 @@ defmodule Logex.Configuration do
   # in and out whole and so two instances that write different elements each keep theirs;
   # since decision 221 a write of a bit of an element is its element's, as a bit of a word
   # global is the word's.
+  #
+  # M5-12 (§4.12's routine choice): a write through a tag subscript, `move x g[i]`, may write
+  # any element, so it is a write of the array whole, `g`, which the walk names so.
+  defp written_of(%Tag{name: name, type: type}, elements)
+       when is_array(type) and is_map_key(elements, name),
+       do: [name]
+
   defp written_of(%Tag{name: name, type: type}, elements) when is_array(type),
     do: for({element, _lines} <- elements, element_of?(element, name), do: element)
 
@@ -3116,6 +3123,8 @@ defmodule Logex.Configuration do
   # element its own, so two instances that write different elements of one are told
   # nothing (`written_of/2`).
   defp writers(writers, driven) do
+    writers = in_wholes(writers)
+
     bits =
       Enum.reduce(writers, %{}, fn
         {written, _global, _instance, symbol}, bits when symbol != nil ->
@@ -3140,15 +3149,45 @@ defmodule Logex.Configuration do
     twice ++ connected
   end
 
+  # M5-12: where one instance writes a global array whole, through a tag subscript, every
+  # writer of the array writes it whole, each once, since any of its elements may be the
+  # one the other writes.
+  defp in_wholes(writers) do
+    wholes = for {global, global, _instance, _bit} <- writers, into: MapSet.new(), do: global
+
+    writers
+    |> Enum.map(fn {written, global, instance, bit} ->
+      {whole_of(MapSet.member?(wholes, global), written, global), global, instance, bit}
+    end)
+    |> Enum.uniq_by(fn {written, _global, instance, _bit} -> {written, instance.name} end)
+  end
+
+  defp whole_of(true, _written, global), do: global
+  defp whole_of(false, written, _global), do: written
+
   # Decision 223: an element a var_external writes is driven where a connection drives it or
-  # its array whole.
-  defp driven_at(driven, global, global), do: Map.fetch(driven, global)
+  # its array whole; and since M5-12 an array written whole where a connection drives it or
+  # any of its elements, the first in line order.
+  defp driven_at(driven, global, global),
+    do: or_element(Map.fetch(driven, global), driven, global)
 
   defp driven_at(driven, written, global),
     do: or_whole(Map.fetch(driven, written), driven, global)
 
   defp or_whole(:error, driven, global), do: Map.fetch(driven, global)
   defp or_whole(found, _driven, _global), do: found
+
+  defp or_element(:error, driven, global) do
+    elements =
+      for {name, connection} <- driven, element_of?(name, global), do: connection
+
+    first_connection(Enum.sort_by(elements, & &1.line))
+  end
+
+  defp or_element(found, _driven, _global), do: found
+
+  defp first_connection([]), do: :error
+  defp first_connection([connection | _]), do: {:ok, connection}
 
   defp twice(global, instance, first, bit),
     do:

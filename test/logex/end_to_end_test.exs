@@ -6070,4 +6070,157 @@ defmodule Logex.EndToEndTest do
       assert model.shifts > 50
     end
   end
+
+  # PLAN M5-12's Done-when: §4.4's plant weighs each box the photo-eye sees into the slot
+  # the panel names, `weights[slot]` (decision 152), from files on disk through
+  # `Logex.Runner` on the manual clock, against an oracle that knows nothing of logex: eight
+  # weights in a list. `slot` at 8, the rung that steps it edited wrongly, trips the runner
+  # at the end of the fast task's step as the slow task falls due, before the round's
+  # write, every output 0 once and nothing after, the trip naming the instance, the file,
+  # the line and the index (decision 153), the slow task's step of that round never run.
+  describe "a subscript held in a tag in the plant (M5-12)" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @scales_ld """
+    var_input  eye    bool
+    var_input  weight int
+    var_input  slot   int
+    var_output last   int
+    var_output heavy  bool
+    var weights int[8]
+    var edge    bool
+    var p       bool
+    // each box's weight, kept in the slot the panel names
+    xic eye ons edge ote p
+    xic p move weight weights[slot]
+    move weights[slot] last
+    gt weights[slot] 500 ote heavy
+    """
+
+    @scales_lines """
+
+    var_global box_eye    bool at panel.i.8
+    var_global box_slot   int  at panel.i.9
+    var_global box_weight int  at drive.i.4
+    var_global box_last   int  at panel.q.7
+    var_global box_heavy  bool at panel.q.6
+
+    program scales scales with fast
+      scales.eye    box_eye
+      scales.weight box_weight
+      scales.slot   box_slot
+      scales.last   box_last
+      scales.heavy  box_heavy
+    """
+
+    test "M5-12's Done-when: the box counter's `weights[slot]` runs in the plant, and `slot` at 8 trips it",
+         %{tmp_dir: dir} do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"scales.ld", @scales_ld},
+        {"plant.logex", whole_plant() <> @scales_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert plant.warnings == []
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      :rand.seed(:exsss, {5, 12, 152})
+
+      # The oracle: eight weights, a box's written into the slot named as the eye rises,
+      # the first round, which ran at start with the eye dark, counting none.
+      {weights, _eye} =
+        Enum.reduce(1..200, {List.duplicate(0, 8), 0}, fn _, {weights, last_eye} ->
+          eye = Enum.random([0, 0, 1])
+          weight = Enum.random(0..999)
+          slot = Enum.random(0..7)
+          Sim.set(drive, [4], weight)
+          Sim.set(panel, %{[8] => eye, [9] => slot})
+          Manual.advance(clock, 10)
+
+          weights =
+            case eye == 1 and last_eye == 0 do
+              true -> List.replace_at(weights, slot, weight)
+              false -> weights
+            end
+
+          last = Enum.at(weights, slot)
+          heavy = if last > 500, do: 1, else: 0
+          assert Runner.get!(runner, "scales.weights") == weights
+          assert Runner.get!(runner, "box_last") == last
+          assert Sim.outputs(panel)[[7]] == last
+          assert Sim.outputs(panel)[[6]] == heavy
+          {weights, eye}
+        end)
+
+      assert Enum.count(weights, &(&1 > 0)) >= 6
+
+      # Every output lit that can be, then `slot` at 8 as the slow task falls due: the fast
+      # task's step trips, the slow task's never runs.
+      heavy_slot = Enum.find_index(weights, &(&1 > 500))
+      Sim.set(panel, %{[0] => 1, [3] => 1, [8] => 0, [9] => heavy_slot})
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel)[[6]] == 1
+      assert Sim.outputs(panel)[[0]] == 1
+
+      %{now: now} = Runner.status(runner)
+      at = now + 50 - rem(now, 50)
+      Manual.advance(clock, at - now - 1)
+      Runner.subscribe(runner, [:ran, :fault, :trip, :round])
+      Sim.set(panel, [9], 8)
+      Manual.advance(clock, 1)
+
+      fault = %Logex.Fault{
+        severity: :major,
+        kind: :index_out_of_range,
+        instruction: :move,
+        path: nil,
+        file: Path.join(dir, "scales.ld"),
+        line: 12,
+        read: [8]
+      }
+
+      assert Runner.status(runner).trip == {:fault, "fast", "scales", fault}
+      assert_receive {Runner, ^runner, {:ran, "fast", "scales", ^at}}
+      assert_receive {Runner, ^runner, {:fault, "fast", "scales", ^fault}}
+      refute_received {Runner, ^runner, {:ran, "slow", "m2", ^at}}
+      refute_received {Runner, ^runner, {:round, ^at, _}}
+
+      # Every output 0 once, through each device, and nothing after.
+      outputs =
+        for {device, points} <- Logex.IO.points(plant),
+            %{direction: :output, address: address} <- points,
+            reduce: %{} do
+          acc -> Map.update(acc, device, %{address => 0}, &Map.put(&1, address, 0))
+        end
+
+      panel_writes = Sim.writes(panel)
+      drive_writes = Sim.writes(drive)
+      assert List.last(panel_writes) == outputs["panel"]
+      assert List.last(drive_writes) == outputs["drive"]
+      assert Map.keys(outputs["panel"]) |> Enum.member?([7])
+      Manual.advance(clock, 1000)
+      Sim.set(panel, [9], 3)
+      Manual.advance(clock, 1000)
+      assert {Sim.writes(panel), Sim.writes(drive)} == {panel_writes, drive_writes}
+      Runner.stop(runner)
+    end
+  end
 end

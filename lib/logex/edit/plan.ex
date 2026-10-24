@@ -511,9 +511,15 @@ defmodule Logex.Edit.Plan do
   defp operand({:bit, _line, {:element, _, _, _, _} = element, n, _mask, _name}),
     do: {:bit, operand(element), n}
 
+  defp operand({:bit, _line, {:element_at, _, _, _, _, _} = element, n, _mask, _name}),
+    do: {:bit, operand(element), n}
+
   defp operand({:bit, _line, path, n, _mask, _name}), do: {:bit, path, n}
   # M5-9: a bit whose number a tag holds by its path and the tag.
   defp operand({:bit_at, _line, {:element, _, _, _, _} = element, index, _width, _name}),
+    do: {:bit_at, operand(element), operand(index)}
+
+  defp operand({:bit_at, _line, {:element_at, _, _, _, _, _} = element, index, _width, _name}),
     do: {:bit_at, operand(element), operand(index)}
 
   defp operand({:bit_at, _line, path, index, _width, _name}), do: {:bit_at, path, operand(index)}
@@ -525,6 +531,14 @@ defmodule Logex.Edit.Plan do
   # M5-11: an element by its array and its subscripts' values, so that an edit that only
   # respells a subscript, `temps[16#3]` for `temps[3]`, leaves its rung the same rung.
   defp operand({:element, _line, array, index, _name}), do: {:element, array, index}
+
+  # M5-12: an element a tag subscripts by its array and its subscripts, each a literal's
+  # value or its tag's name, so a subscript's tag is a use of the rung as any operand is.
+  defp operand({:element_at, _line, array, index, _dims, _name}),
+    do: {:element_at, array, Enum.map(index, &subscript/1)}
+
+  defp subscript({:name, _line, name}), do: {:name, name}
+  defp subscript(n), do: n
 
   # ---- M2-5: the state inside a user block's instances, across a switch -----------------
 

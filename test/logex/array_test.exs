@@ -418,10 +418,11 @@ defmodule Logex.ArrayTest do
             {"var t ton\nvar x dint\nmove t[1] x",
              "line 3: `t[1]` names an element of `t`, but `t` is a ton (declared on line 1), " <>
                "no array"},
-            # A subscript held in a tag waits for M5-12 (decision 152).
-            {"var w int[8]\nvar slot dint\nvar x dint\nmove w[slot] x",
-             "line 4: `w[slot]`'s subscript `slot` is a tag's name: an element's subscript is " <>
-               "a literal number, as in `w[0]`, until a subscript held in a tag is supported"},
+            # M5-12 (decision 152): a literal beside a tag subscript is still judged when the
+            # program compiles.
+            {"var g int[4,8]\nvar slot dint\nvar x dint\nmove g[slot,8] x",
+             "line 4: `g[slot,8]`'s subscript `8` is outside the second dimension of `g`, 0 " <>
+               "to 7: `g` is an array of 4 by 8 ints (declared on line 1)"},
             {"var w int[8]\nvar x dint\nmove w x",
              "line 3: `move` reads one tag, but `w` is an array of 8 ints (declared on line 1): " <>
                "an instruction takes one of its elements, as in `w[0]`"},

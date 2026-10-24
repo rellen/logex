@@ -12,12 +12,15 @@ defmodule Logex.Fault do
     `:bit_out_of_range`, major, a bit whose number a tag holds, `status.[n]`, outside its
     word's bits when its instruction read or wrote it, which did nothing and passed no
     power (decision 160); and since M5-10 `:negative_sqrt`, minor, a `sqrt` whose source
-    was negative, which gives 0.0 and passes no power on that scan (decision 164). A
-    zero divisor of a real destination gives 0.0.
+    was negative, which gives 0.0 and passes no power on that scan (decision 164); and
+    since M5-12 `:index_out_of_range`, major, an element a tag subscripts, `weights[slot]`,
+    a subscript outside its dimension when its instruction read or wrote it, which did
+    nothing and passed no power (decision 153), as Logix's major fault 4/20 (1756-RM018A
+    p.884). A zero divisor of a real destination gives 0.0.
   - `instruction` is the mnemonic that met it, `:div` or `:mod` for a zero divisor, `:sqrt`
     for a negative root, and
-    for a bit out of range the instruction whose operand the bit is, `:xic`, `:ote`,
-    `:move`, `:and`, `:cal` and the rest.
+    for a bit or an index out of range the instruction whose operand the bit or the
+    element is, `:xic`, `:ote`, `:move`, `:and`, `:cal` and the rest.
   - `path` is where it ran inside the program instance: nil for the program's own rungs,
     or the path of the user function block instance whose body holds it, `"s1"`, or
     `"s1.inner"` a level down, as an access path names it (`docs/organisation.md` §4.7).
@@ -25,7 +28,9 @@ defmodule Logex.Fault do
     `Logex.compile_file/1` read it, or nil for one compiled from text.
   - `line` is the instruction's line in that file.
   - `read` is what the scan read that was out of range: the bit number, 16 for
-    `drive_faults.[sel]` with `sel` at 16 in a `word`; the source of a negative root,
+    `drive_faults.[sel]` with `sel` at 16 in a `word`; every subscript of the element, one
+    a dimension, literal ones among them, `[8]` for `weights[slot]` with `slot` at 8 in an
+    `int[8]`, `[1, 9]` for `grid[1,c]` with `c` at 9; the source of a negative root,
     −0.25 for `sqrt fan_var fan_dev` with `fan_var` at −0.25; nil for a zero divisor.
 
   A host sees a lone instance's in `state.faults`, every fault of the scan that returned
@@ -41,11 +46,11 @@ defmodule Logex.Fault do
 
   @type t :: %__MODULE__{
           severity: :minor | :major,
-          kind: :divide_by_zero | :bit_out_of_range | :negative_sqrt,
+          kind: :divide_by_zero | :bit_out_of_range | :negative_sqrt | :index_out_of_range,
           instruction: atom,
           path: String.t() | nil,
           file: String.t() | nil,
           line: pos_integer,
-          read: number | nil
+          read: number | [integer] | nil
         }
 end

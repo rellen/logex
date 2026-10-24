@@ -208,6 +208,10 @@ defmodule Logex.Program do
   def destination({:element, _, array, _index, _name}, tags, kind),
     do: element_destination(Map.fetch(tags, array), kind)
 
+  # M5-12: so does an element a tag subscripts.
+  def destination({:element_at, _, array, _index, _dims, _name}, tags, kind),
+    do: element_destination(Map.fetch(tags, array), kind)
+
   def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
 
   defp element_destination({:ok, %Logex.Tag{type: {:array, type, _dims}}}, kind),
@@ -625,6 +629,7 @@ defmodule Logex.Program do
   defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
   defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
   defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
+  defp shown({:element_at, _, _array, _index, _dims, name}), do: "`#{name}`"
   defp shown(other), do: "`#{inspect(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)

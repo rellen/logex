@@ -162,7 +162,7 @@ defmodule Logex.Array do
 
   @doc false
   # A subscript as written: `{:literal, n}`, the number a literal spells, `16#a` 10, or
-  # `{:tag, name}`, a tag's name, which M5-12 reads at run time (decision 152).
+  # `{:tag, name}`, a tag's name, whose value a scan reads (M5-12, decision 152).
   def subscript(<<d, _::binary>> = text) when d in ?0..?9 or d == ?-,
     do: {:literal, literal(Logex.Lexer.tokenize(text))}
 

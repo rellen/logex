@@ -9530,6 +9530,353 @@ defmodule Logex.ApiContractTest do
     jp_reached(:block_frozen)
     jp_skipped(w, "b.e")
   end
+
+  # ---- M5-12: tag subscripts and the index fault -----------------------------------------
+
+  # PLAN M5-12: a program of arrays of one, two and three dimensions whose elements are read
+  # and written through subscripts held in tags of a width drawn from four, beside literal
+  # ones, each tag's value drawn now and then outside its dimension, below 0 too: `move`
+  # and `add` between elements and literals, coils `ote`, `otl` and `otu` on a bool array's
+  # element and contacts on one, over scans and restarts, alone and in a resource, against
+  # an oracle restated from the text that knows nothing of logex: each array a map of its
+  # elements, an element whose subscript is outside its dimension the instruction's major
+  # fault, with every subscript read, the instruction doing nothing and passing no power,
+  # a de-energised `otl` or `otu` checking nothing and a de-energised `ote` checking as it
+  # writes its 0 (decision 153; 1756-RM018A pp.86-87, p.884).
+  @ts_reach [
+    :one_dimension,
+    :two_dimensions,
+    :three_dimensions,
+    :read,
+    :written,
+    :mixed,
+    :read_fault,
+    :write_fault,
+    :negative,
+    :contact_fault,
+    :ote_false_fault,
+    :latch_false_unchecked,
+    :restarted,
+    :resource_fault
+  ]
+
+  test "elements subscripted by tags run as their text says, a subscript out of range the " <>
+         "instruction's major fault, alone, across a restart and in a resource" do
+    :rand.seed(:exsss, {2026, 10, 512})
+
+    for _ <- 1..80 do
+      spec = ts_spec()
+      program = ts_program(spec)
+      ts_lone(spec, program, 10)
+      ts_resource(spec, program, 3)
+    end
+
+    assert Process.get(:ts_reach, MapSet.new()) == MapSet.new(@ts_reach)
+  end
+
+  defp ts_reached(name), do: reached(:ts_reach, name)
+
+  defp ts_spec do
+    dims = for _ <- 1..Enum.random(1..3), do: Enum.random(1..3)
+    ts_reached(Enum.at([:one_dimension, :two_dimensions, :three_dimensions], length(dims) - 1))
+    bools = [Enum.random(1..4)]
+    spec = %{index: pick([:sint, :int, :usint, :dint]), dims: %{"a" => dims, "b" => bools}}
+    Map.put(spec, :rungs, for(_ <- 1..Enum.random(1..5), do: ts_rung(spec)))
+  end
+
+  # A subscript: a literal within its dimension, or one of the three tags.
+  defp ts_subscripts(dims),
+    do:
+      for(
+        {count, at} <- Enum.with_index(dims),
+        do: pick([{:lit, Enum.random(0..(count - 1))}, {:tag, "s#{at}"}, {:tag, "s#{at}"}])
+      )
+
+  # An element with at least one tag subscript, half the time, or literal ones alone.
+  defp ts_element(spec, array) do
+    subscripts = ts_subscripts(spec.dims[array])
+    {array, subscripts}
+  end
+
+  defp ts_rung(spec) do
+    contact = pick([nil, :go, {:b, ts_element(spec, "b")}])
+
+    case :rand.uniform(4) do
+      1 ->
+        {:coil, contact, pick([:ote, :otl, :otu]), ts_element(spec, "b")}
+
+      2 ->
+        {:add, contact, ts_source(spec), ts_source(spec), ts_element(spec, "a")}
+
+      _ ->
+        {:move, contact, ts_source(spec), ts_element(spec, "a")}
+    end
+  end
+
+  defp ts_source(spec), do: pick([{:lit, Enum.random(-9..9)}, {:el, ts_element(spec, "a")}])
+
+  defp ts_name({array, subscripts}),
+    do:
+      "#{array}[#{Enum.map_join(subscripts, ",", fn
+        {:lit, n} -> Integer.to_string(n)
+        {:tag, name} -> name
+      end)}]"
+
+  defp ts_operand({:lit, n}), do: Integer.to_string(n)
+  defp ts_operand({:el, element}), do: ts_name(element)
+
+  defp ts_contact(nil), do: []
+  defp ts_contact(:go), do: ["xic go"]
+  defp ts_contact({:b, element}), do: ["xic #{ts_name(element)}"]
+
+  defp ts_text({:coil, contact, coil, element}),
+    do: Enum.join(ts_contact(contact) ++ ["#{coil} #{ts_name(element)}"], " ")
+
+  defp ts_text({:add, contact, x, y, element}),
+    do:
+      Enum.join(
+        ts_contact(contact) ++ ["add #{ts_operand(x)} #{ts_operand(y)} #{ts_name(element)}"],
+        " "
+      )
+
+  defp ts_text({:move, contact, x, element}),
+    do: Enum.join(ts_contact(contact) ++ ["move #{ts_operand(x)} #{ts_name(element)}"], " ")
+
+  @ts_head 6
+
+  defp ts_source_text(spec) do
+    a = Enum.join(spec.dims["a"], ",")
+    b = Enum.join(spec.dims["b"], ",")
+
+    Enum.join(
+      [
+        "var_input go bool",
+        "var_input s0 #{spec.index}",
+        "var_input s1 #{spec.index}",
+        "var_input s2 #{spec.index}",
+        "var a dint[#{a}]",
+        "var b bool[#{b}]"
+      ] ++ Enum.map(spec.rungs, &ts_text/1),
+      "\n"
+    )
+  end
+
+  defp ts_program(spec) do
+    {:ok, program} = Logex.compile(ts_source_text(spec), name: "ts")
+    program
+  end
+
+  # Restated: every index of an array of `dims`, the rightmost subscript fastest.
+  defp ts_indexes([n]), do: for(i <- 0..(n - 1), do: [i])
+  defp ts_indexes([n | dims]), do: for(i <- 0..(n - 1), rest <- ts_indexes(dims), do: [i | rest])
+
+  defp ts_zeros(spec),
+    do:
+      Map.new(["a", "b"], fn array -> {array, Map.new(ts_indexes(spec.dims[array]), &{&1, 0})} end)
+
+  # An element's index as the scan reads it, and whether every subscript is inside its
+  # dimension.
+  defp ts_index({array, subscripts}, model, spec) do
+    read =
+      for subscript <- subscripts do
+        case subscript do
+          {:lit, n} -> n
+          {:tag, name} -> model.inputs[name]
+        end
+      end
+
+    if Enum.any?(subscripts, &match?({:lit, _}, &1)) and
+         Enum.any?(subscripts, &match?({:tag, _}, &1)),
+       do: ts_reached(:mixed)
+
+    inside =
+      Enum.zip(read, spec.dims[array]) |> Enum.all?(fn {i, count} -> i >= 0 and i < count end)
+
+    if Enum.any?(read, &(&1 < 0)), do: ts_reached(:negative)
+    {read, inside}
+  end
+
+  # One instruction's run: `{power, model}` or a throw of its fault's subscripts.
+  defp ts_get(_model, {:lit, n}, _spec), do: n
+
+  defp ts_get(model, {:el, element}, spec) do
+    case ts_index(element, model, spec) do
+      {read, true} ->
+        ts_reached(:read)
+        model.arrays[elem(element, 0)][read]
+
+      {read, false} ->
+        ts_reached(:read_fault)
+        throw({:ts_fault, read})
+    end
+  end
+
+  defp ts_put(model, element, value, spec) do
+    case ts_index(element, model, spec) do
+      {read, true} ->
+        ts_reached(:written)
+        put_in(model, [:arrays, elem(element, 0), read], value)
+
+      {read, false} ->
+        ts_reached(:write_fault)
+        throw({:ts_fault, read})
+    end
+  end
+
+  defp ts_fault(symbol, line, read),
+    do: %Logex.Fault{
+      severity: :major,
+      kind: :index_out_of_range,
+      instruction: symbol,
+      path: nil,
+      file: nil,
+      line: line,
+      read: read
+    }
+
+  # A rung: its contact, then its instruction, each a fault recorded where its element's
+  # subscript is outside its dimension, the instruction then passing no power.
+  defp ts_scan(spec, model) do
+    spec.rungs
+    |> Enum.with_index(@ts_head + 1)
+    |> Enum.reduce(%{model | faults: []}, fn {rung, line}, model ->
+      {power, model} = ts_contact_power(elem(rung, 1), model, spec, line)
+      ts_instruction(rung, power, model, spec, line)
+    end)
+    |> then(&%{&1 | faults: Enum.reverse(&1.faults)})
+  end
+
+  defp ts_run(model, symbol, line, run) do
+    run.()
+  catch
+    {:ts_fault, read} -> {false, %{model | faults: [ts_fault(symbol, line, read) | model.faults]}}
+  end
+
+  defp ts_contact_power(nil, model, _spec, _line), do: {true, model}
+  defp ts_contact_power(:go, model, _spec, _line), do: {model.inputs["go"] == 1, model}
+
+  defp ts_contact_power({:b, element}, model, spec, line) do
+    {power, model} =
+      ts_run(model, :xic, line, fn -> {ts_get(model, {:el, element}, spec) == 1, model} end)
+
+    if model.faults != [] and hd(model.faults).line == line, do: ts_reached(:contact_fault)
+    {power, model}
+  end
+
+  defp ts_instruction({:coil, _, :ote, element}, power, model, spec, line) do
+    value = if power, do: 1, else: 0
+    before = length(model.faults)
+
+    {_power, model} =
+      ts_run(model, :ote, line, fn -> {power, ts_put(model, element, value, spec)} end)
+
+    if not power and length(model.faults) > before, do: ts_reached(:ote_false_fault)
+    model
+  end
+
+  defp ts_instruction({:coil, _, coil, element}, power, model, spec, line) do
+    if not power and elem(ts_index(element, model, spec), 1) == false,
+      do: ts_reached(:latch_false_unchecked)
+
+    case power do
+      false ->
+        model
+
+      true ->
+        value = if coil == :otl, do: 1, else: 0
+        elem(ts_run(model, coil, line, fn -> {true, ts_put(model, element, value, spec)} end), 1)
+    end
+  end
+
+  defp ts_instruction({:move, _, x, element}, true, model, spec, line),
+    do:
+      elem(
+        ts_run(model, :move, line, fn ->
+          {true, ts_put(model, element, ts_get(model, x, spec), spec)}
+        end),
+        1
+      )
+
+  defp ts_instruction({:add, _, x, y, element}, true, model, spec, line),
+    do:
+      elem(
+        ts_run(model, :add, line, fn ->
+          sum = ts_get(model, x, spec) + ts_get(model, y, spec)
+          {true, ts_put(model, element, sum, spec)}
+        end),
+        1
+      )
+
+  defp ts_instruction(_instruction, false, model, _spec, _line), do: model
+
+  defp ts_inputs(spec) do
+    counts = spec.dims["a"] ++ spec.dims["b"]
+    top = Enum.max(counts)
+    low = if spec.index == :usint, do: 0, else: -2
+
+    %{
+      "go" => Enum.random(0..1),
+      "s0" => Enum.random(low..(top + 1)),
+      "s1" => Enum.random(low..(top + 1)),
+      "s2" => Enum.random(low..(top + 1))
+    }
+  end
+
+  defp ts_tupled(elements, dims), do: ay_tupled(ay_listed(elements, dims))
+
+  defp ts_lone(spec, program, scans) do
+    model = %{arrays: ts_zeros(spec), inputs: %{}, faults: []}
+
+    Enum.reduce(1..scans, {Runtime.instance(program), model, 0}, fn _, {state, model, now} ->
+      case :rand.uniform(8) do
+        1 ->
+          ts_reached(:restarted)
+          {Runtime.restart(program, state, :cold), %{model | arrays: ts_zeros(spec)}, now}
+
+        _ ->
+          inputs = ts_inputs(spec)
+
+          {_outputs, state} =
+            Runtime.call(program, state, inputs, %Scan{now: now + 10, first: state.first})
+
+          model = ts_scan(spec, %{model | inputs: inputs})
+          source = ts_source_text(spec)
+          assert state.faults == model.faults, source
+
+          for array <- ["a", "b"],
+              do:
+                assert(
+                  state.env[array] == ts_tupled(model.arrays[array], spec.dims[array]),
+                  source
+                )
+
+          {state, model, now + 10}
+      end
+    end)
+  end
+
+  # In a resource, the subscripts and `go` connected to constants: each fault an event of
+  # its cycle just after its scan's `{:ran, ...}`.
+  defp ts_resource(spec, program, cycles) do
+    inputs = ts_inputs(spec)
+
+    text =
+      "task fast interval 10 priority 1\nprogram m1 ts with fast\n" <>
+        Enum.map_join(inputs, "\n", fn {name, value} -> "m1.#{name} #{value}" end)
+
+    {:ok, config} = Logex.Configuration.compile("c", text, %{"ts" => program})
+    model = %{arrays: ts_zeros(spec), inputs: inputs, faults: []}
+
+    Enum.reduce(1..cycles, {Runtime.start(config), model, 0}, fn _, {runtime, model, elapsed} ->
+      {runtime, _outputs, events} = Runtime.cycle(runtime, elapsed, %{})
+      model = ts_scan(spec, model)
+      [{:ran, "fast", "m1", _} | faults] = events
+      if faults != [], do: ts_reached(:resource_fault)
+      assert faults == Enum.map(model.faults, &{:fault, "fast", "m1", &1})
+      assert Runtime.get!(runtime, "m1.a") == ay_listed(model.arrays["a"], spec.dims["a"])
+      {runtime, model, 10}
+    end)
+  end
 end
 
 defmodule Logex.ApiContractTest.RunnerWalk do
@@ -9584,8 +9931,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     ms}}`, a runner stuck past its devices' deadlines `{:watchdog, {:device, "drive", idle
     + poll}}` (decision 137), each device fault `{:io, device, cause}` in its words, and
     since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
-    gives out of range, `{:fault, task, instance, fault}` at the step's end, no later step
-    of its round run (decisions 153 and 160), as restated from the record; a fault that
+    gives out of range, and since M5-12 an element whose subscript it gives outside its
+    array, `{:fault, task, instance, fault}` at the step's end, no later step of its round
+    run (decisions 153 and 160), as restated from the record; a fault that
     does not trip trips nothing; and a runner
     stopped or crashed writes every output 0 once where it ran, and nothing where it had
     tripped.
@@ -9746,7 +10094,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # M5-9: a bit whose number the panel's dint gives, read while the panel's `pb` is
     # pressed: its -4 is out of range, a major fault (decisions 153 and 160).
     "bit" =>
-      "var_input n dint\nvar_input on bool\nvar w dint 5\nvar q bool\nxic on xic w.[n] ote q"
+      "var_input n dint\nvar_input on bool\nvar w dint 5\nvar q bool\nxic on xic w.[n] ote q",
+    # M5-12: an element whose subscript the panel's dint gives, read and written while the
+    # panel's `pa` is pressed: its 7 and -4 are outside the array, a major fault (decision
+    # 153).
+    "index" => "var_input n dint\nvar_input on bool\nvar w dint[4]\nxic on add w[n] 1 w[n]"
   }
 
   defp programs,
@@ -9803,6 +10155,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {:trip, :timeout},
     {:trip, :down},
     {:trip, :bit_out_of_range},
+    {:trip, :index_out_of_range},
     :round_first,
     :round_scheduled,
     :round_trigger,
@@ -9903,7 +10256,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         "program r1 relay with fast\n  r1.in pa\n  r1.out qa",
         "program c1 count with fast\n  c1.n qn",
         "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc",
-        "program b1 bit with fast\n  b1.n pd\n  b1.on pb"
+        "program b1 bit with fast\n  b1.n pd\n  b1.on pb",
+        "program x1 index with fast\n  x1.n pd\n  x1.on pa"
       ] ++
         optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
         optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
@@ -10133,10 +10487,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         hung: %{}
       })
 
-    # The first round's record came before the subscription: it ends with no event.
+    # The first round's record came before the subscription: it ends with no event, and
+    # where a fresh start reads forces that make a major fault, as M5-12's element can
+    # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
     w = consumed(w)
-    w = round_ended(w, w.round.outputs)
+    w = first_round(Runner.status(w.runner).trip, w)
     checked(%{w | subscribed: true})
+  end
+
+  defp first_round(nil, w), do: round_ended(w, w.round.outputs)
+
+  defp first_round(reason, %{round: round} = w) do
+    expected = round.trip || ended_trip(round.steps, w, round)
+    assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
+    reach(:trip, true)
+    reach(trip_kind(reason), true)
+    w = all_steps(round.steps, w, round.took)
+    tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end
 
   # Now and then the first device opened is late, by more than an idle watchdog of 60 or

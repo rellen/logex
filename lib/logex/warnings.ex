@@ -173,6 +173,10 @@ defmodule Logex.Warnings do
   defp ir_real(_access, {:element, _, array, _index, _name}, tags),
     do: {:tag, element_real(Map.get(tags, array))}
 
+  # M5-12: so is an element a tag subscripts.
+  defp ir_real(_access, {:element_at, _, array, _index, _dims, _name}, tags),
+    do: {:tag, element_real(Map.get(tags, array))}
+
   defp ir_real(_access, _bit_or_deeper, _tags), do: {:tag, nil}
 
   defp element_real(%Tag{type: {:array, type, _dims}}) when type in @reals, do: type
@@ -334,7 +338,25 @@ defmodule Logex.Warnings do
   defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
   defp decisions(instructions, _coils, words, tags),
-    do: Enum.flat_map(instructions, &(coil_target(&1) ++ whole_writes(&1, tags, words)))
+    do:
+      Enum.flat_map(
+        instructions,
+        &(probed(coil_target(&1), words) ++ whole_writes(&1, tags, words))
+      )
+
+  # M5-12 (§4.12's routine choice): a coil on an element of an array some coil names
+  # through a tag subscript, `ote lamps[2]` beside `ote lamps[slot]`, or on a bit of one,
+  # `ote faults[2].3` beside `ote faults[i].3`, is first a coil in the array, which comes
+  # after such a coil, or before it, as the second-`ote` warning; then the coil it is.
+  defp probed([{:coil, key, _word, tag, at, shown} = coil], words)
+       when is_map_key(words, {:array, tag}),
+       do: [{:element_coil, {:array, tag}, key, tag, at, shown}, coil]
+
+  defp probed([{:coil_at, word, tag, at, shown} = coil], words)
+       when is_binary(word) and is_map_key(words, {:array, tag}),
+       do: [{:element_coil, {:array, tag}, word, tag, at, shown}, coil]
+
+  defp probed(coils, _words), do: coils
 
   defp decides?({:coil, key, _word, tag, _at, _shown}, tags, owners),
     do: from_source?(tags, tag) and not Map.has_key?(owners, key)
@@ -343,6 +365,9 @@ defmodule Logex.Warnings do
     do: from_source?(tags, tag) and not Map.has_key?(owners, word)
 
   defp decides?({:whole, _word, tag, _at}, tags, _owners), do: from_source?(tags, tag)
+
+  defp decides?({:element_coil, _word, key, tag, _at, _shown}, tags, owners),
+    do: from_source?(tags, tag) and not Map.has_key?(owners, key)
 
   # A coil on a tag or member, keyed by its name, on no word; a coil on a bit, `status.3` on
   # the word `status`, or `c.pv.3` on the member `c.pv`; a whole write of a word or member.
@@ -379,6 +404,14 @@ defmodule Logex.Warnings do
      {Map.put_new(coils, word, at), Map.put_new(wholes, word, at),
       Map.put_new(bitted, word, {shown, at})}}
   end
+
+  # M5-12: a coil on an element, or a bit of one, of an array a coil names through a tag
+  # subscript: after such a coil, `ote lamps[slot]`, the second-`ote` warning, and for what
+  # comes later a coil in the array, which such a coil after it is told.
+  defp decided({:element_coil, word, _key, _tag, at, shown}, {coils, wholes, bitted}),
+    do:
+      {in_array(Map.fetch(wholes, word), word, at, shown),
+       {coils, wholes, Map.put_new(bitted, word, {shown, at})}}
 
   defp decided({:whole, word, _tag, at}, {coils, wholes, bitted}),
     do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
@@ -420,6 +453,17 @@ defmodule Logex.Warnings do
     ]
 
   defp word_after(:error, :error, :error, _coil), do: []
+
+  defp in_array(:error, _word, _at, _shown), do: []
+
+  defp in_array({:ok, {first, symbol}}, {:array, array}, {line, _symbol}, shown),
+    do: [
+      warning(
+        line,
+        "`#{shown}` is in `#{array}`, which the `#{symbol}` #{where(first, line)} may write " <>
+          "through a tag subscript: #{last()}"
+      )
+    ]
 
   defp whole_after(:error, _at, firsts), do: {[], firsts}
 
@@ -505,6 +549,23 @@ defmodule Logex.Warnings do
   defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol),
     do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown}]
 
+  # M5-12 (§4.12's routine choice): a coil on an element a tag subscripts, `ote
+  # lamps[slot]`, decides whichever element the subscript names, so it is a coil in the
+  # array whole, keyed by the array, `{:array, "lamps"}`; and so is a coil on a bit of one,
+  # `ote faults[i].3` or `ote faults[i].[n]`.
+  defp target({:element_at, _, array, _index, _dims, shown}, line, symbol),
+    do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
+
+  defp target({:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown}, line, symbol),
+    do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
+
+  defp target(
+         {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown},
+         line,
+         symbol
+       ),
+       do: [{:coil_at, {:array, array}, array, {line, symbol}, shown}]
+
   defp target(_literal, _line, _symbol), do: []
 
   defp later_ote(:error, {key, _shown}, first, firsts), do: {[], Map.put(firsts, key, first)}
@@ -533,7 +594,7 @@ defmodule Logex.Warnings do
 
     for instruction <- instructions,
         {operand, line, symbol} <- others(instruction, written(instruction, tags)),
-        {name, shown} <- storage_names(operand, words),
+        {name, shown} <- storage_names(operand, {words, owners}),
         {:ok, first} <- [Map.fetch(owners, name)],
         from_source?(tags, word_of(name)),
         do: storage_write(symbol, shown(shown, first), first, line)
@@ -576,31 +637,56 @@ defmodule Logex.Warnings do
 
   # The storage bits a write reaches: a bool's or a bit's own name, and every bit of a word
   # written whole, in name order.
-  defp storage_names({:name, _, name}, words),
+  defp storage_names({:name, _, name}, {words, _owners}),
     do: [{name, name} | Enum.map(Enum.sort(Map.get(words, name, [])), &{&1, nil})]
 
-  defp storage_names({:bit, _, [_], _, _, shown} = bit, _words), do: [{Walk.bit_name(bit), shown}]
+  defp storage_names({:bit, _, [_], _, _, shown} = bit, _known), do: [{Walk.bit_name(bit), shown}]
 
   # Decision 221: a bit of an element, `faults[2].3`, by its name.
-  defp storage_names({:bit, _, {:element, _, _, _, _}, _, _, shown} = bit, _words),
+  defp storage_names({:bit, _, {:element, _, _, _, _}, _, _, shown} = bit, _known),
     do: [{Walk.bit_name(bit), shown}]
 
   # M5-11 (decision 154): an element kept as a storage bit, `edge[2]`, by its name, and
   # since decision 221 every storage bit kept in a bit of it, a write of the element whole.
-  defp storage_names({:element, _, _, _, shown} = element, words) do
+  defp storage_names({:element, _, _, _, shown} = element, {words, _owners}) do
     name = Walk.bit_name(element)
     [{name, shown} | Enum.map(Enum.sort(Map.get(words, name, [])), &{&1, nil})]
   end
 
   # M5-9: a bit whose number a tag holds may be any bit of its word, a storage bit's among
   # them, as a write of the word whole is, and since decision 221 so in an element.
-  defp storage_names({:bit_at, _, [word], _index, _width, _shown}, words),
+  defp storage_names({:bit_at, _, [word], _index, _width, _shown}, {words, _owners}),
     do: Enum.map(Enum.sort(Map.get(words, word, [])), &{&1, nil})
 
-  defp storage_names({:bit_at, _, {:element, _, _, _, _} = element, _index, _width, _}, words),
+  defp storage_names({:bit_at, _, {:element, _, _, _, _} = element, _, _, _}, {words, _owners}),
     do: Enum.map(Enum.sort(Map.get(words, Walk.bit_name(element), [])), &{&1, nil})
 
-  defp storage_names(_member, _words), do: []
+  # M5-12 (§4.12's routine choice): a write through a tag subscript, of an element or of a
+  # bit of one, may reach any element of its array, so every storage bit kept in the
+  # array, an element's or a bit of one's, in name order.
+  defp storage_names({:element_at, _, array, _, _, _}, {_words, owners}),
+    do: in_array(array, owners)
+
+  defp storage_names({:bit, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, owners}),
+    do: in_array(array, owners)
+
+  defp storage_names({:bit_at, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, owners}),
+    do: in_array(array, owners)
+
+  defp storage_names(_member, _known), do: []
+
+  # Each quoted as its one-shot writes it, an element's by its subscripts' values, `e[2]`,
+  # a bit of one as written (written_bits/2).
+  defp in_array(array, owners),
+    do:
+      for(
+        {name, owner} <- Enum.sort(owners),
+        String.starts_with?(name, array <> "["),
+        do: {name, own_shown(owner, name)}
+      )
+
+  defp own_shown({_line, _owner}, name), do: name
+  defp own_shown({_line, _owner, _shown}, _name), do: nil
 
   # A storage bit's tag: a bool's own name, the word a bit of one is in, or since M5-11 the
   # array an element is of.
@@ -750,6 +836,7 @@ defmodule Logex.Warnings do
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
   defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
+  defp shown({:element_at, _, _array, _index, _dims, name}), do: "`#{name}`"
   defp shown(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
@@ -765,6 +852,9 @@ defmodule Logex.Warnings do
 
   # M5-11: an element is of its array's elements' type.
   defp integer_type({:element, _, array, _index, _name}, tags),
+    do: element_integer(Map.get(tags, array))
+
+  defp integer_type({:element_at, _, array, _index, _dims, _name}, tags),
     do: element_integer(Map.get(tags, array))
 
   defp integer_type(_other, _tags), do: :error

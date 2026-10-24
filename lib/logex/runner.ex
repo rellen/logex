@@ -275,7 +275,9 @@ defmodule Logex.Runner do
     a round's write that fails trips at once, the devices after it not written;
   - `{:fault, task, instance, fault}`: since M5-9 (decisions 153 and 160), a major fault,
     a `%Logex.Fault{severity: :major}`, a bit whose number a tag holds outside its word's
-    bits, `kind: :bit_out_of_range`, with its instance, file, line and the number read:
+    bits, `kind: :bit_out_of_range`, with its instance, file, line and the number read,
+    or since M5-12 an element whose subscript a tag holds outside its dimension, `kind:
+    :index_out_of_range`, with the subscripts read:
     the round's first, at the end of the step whose run met it, one task's run or the
     untimed programs', that run having scanned every instance it holds, and before the
     round's write; no later step of the round runs, so `get/2` reads each later task's

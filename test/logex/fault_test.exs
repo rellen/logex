@@ -1,7 +1,9 @@
 defmodule Logex.FaultTest do
   @moduledoc """
   M3-3: the minor fault a zero divisor raises, reported to the host (docs/organisation.md
-  decisions 78 and 99), `severity: :minor` since M5-9 (decisions 153 and 160): in a lone instance's `state.faults` after `Logex.Runtime.call/4`,
+  decisions 78 and 99), `severity: :minor` since M5-9 (decisions 153 and 160), beside the
+  major faults of a bit and, since M5-12, an index out of range: in a lone instance's
+  `state.faults` after `Logex.Runtime.call/4`,
   `scan/2` and `scan/3`, and in a resource's events, `{:fault, task, instance, fault}`, each
   just after its scan's `{:ran, ...}`. Each rule pinned from source, a test that fails when
   the rule alone is reverted; the rest of a `div` or a `mod` is `arithmetic_test.exs`'s.
@@ -79,6 +81,50 @@ defmodule Logex.FaultTest do
 
       assert {[{_, faults}], _} = scans(p, [%{"w" => 1, "n" => 16}])
       assert [%Fault{severity: :major, kind: :bit_out_of_range, read: 16, line: 4}] = faults
+    end
+
+    # M5-12 (decision 153): an element a tag subscripts, outside its array, is a major fault,
+    # the fourth kind, with every subscript read, one a dimension, and in a resource an
+    # event of its cycle as any fault is.
+    test "an index out of range's fault is major, and reads its subscripts" do
+      p =
+        c!(
+          "var_input slot int\nvar_input c int\nvar weights int[8]\nvar grid int[2,4]\n" <>
+            "var_output q int\nmove weights[slot] q\nmove grid[1,c] q"
+        )
+
+      assert {[{_, faults}], _} = scans(p, [%{"slot" => 8, "c" => -1}])
+
+      assert [
+               %Fault{
+                 severity: :major,
+                 kind: :index_out_of_range,
+                 instruction: :move,
+                 read: [8],
+                 line: 6
+               },
+               %Fault{severity: :major, kind: :index_out_of_range, read: [1, -1], line: 7}
+             ] = faults
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [p],
+          tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          globals: [%Global{name: "slot", type: :int, at: "panel.i.0"}],
+          instances: [%Configuration.Instance{name: "w1", type: p.name, task: "fast"}],
+          connections: [
+            %Connection{instance: "w1", member: "slot", to: "slot"},
+            %Connection{instance: "w1", member: "c", to: 0}
+          ]
+        )
+
+      {_rt, _outputs, events} = Runtime.cycle(Runtime.start(config), 0, %{"slot" => 9})
+
+      assert [
+               {:ran, "fast", "w1", 0},
+               {:fault, "fast", "w1", %Fault{kind: :index_out_of_range, read: [9], line: 6}}
+             ] = events
     end
 
     # M5-10 (decision 164): a negative square root is a minor fault, the third kind, which

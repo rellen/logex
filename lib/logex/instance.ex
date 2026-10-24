@@ -38,7 +38,9 @@ defmodule Logex.Instance do
   - `faults` (M3-3, decision 99) are the faults of its last scan, each a
     `%Logex.Fault{}`, in the order they happened: a `div` or a `mod` that met a zero
     divisor, minor, and since M5-9 an instruction whose bit's number, held in a tag, was out
-    of its word's bits, major (decisions 153 and 160), which did nothing. `[]` from `Logex.Runtime.instance/1`; each scan replaces them with its own,
+    of its word's bits, major (decisions 153 and 160), and since M5-12 one whose element's
+    subscript, held in a tag, was outside its dimension, major (decision 153), each of
+    which did nothing. `[]` from `Logex.Runtime.instance/1`; each scan replaces them with its own,
     `[]` for none, so a host reads them after the scan that gave them; `put_inputs/3`,
     `restart/3` and an edit's switch keep them, since none is a scan. A resource reports
     each as an event of its cycle and keeps none: between cycles an instance's state in it

@@ -68,7 +68,8 @@ defmodule Logex.Runtime do
   fault the scan met, just after its scan's `{:ran, ...}`, in the order they happened
   (decision 99): a minor one, a zero divisor, which the plant runs on through, and since
   M5-9 a major one, a bit whose number a tag holds out of its word's bits (decisions 153
-  and 160), whose instruction did nothing, the scan and the cycle running on: a cycle runs
+  and 160), and since M5-12 an element whose subscript a tag holds outside its dimension
+  (decision 153), whose instruction did nothing, the scan and the cycle running on: a cycle runs
   every due step whatever its events, so a host driving the resource itself sees the
   event and decides, where `Logex.Runner` trips at the end of the step that met the
   round's first. They are an open set: a host tolerates a
@@ -210,7 +211,8 @@ defmodule Logex.Runtime do
   `switched`, which an edit's switch sets and a scan clears. Since M3-3 a third,
   `faults`, the faults of its last scan (decision 99), which each scan replaces and
   nothing else writes, is how a lone instance's host sees a zero divisor, and since M5-9 a
-  bit number out of range, a major fault, the scan run on: after `call/4`,
+  bit number out of range, a major fault, and since M5-12 a subscript out of range, the
+  scan run on: after `call/4`,
   `scan/2` or `scan/3`, `state.faults` is every `%Logex.Fault{}` that scan met, in order,
   `[]` for none.
 
@@ -400,8 +402,9 @@ defmodule Logex.Runtime do
   # 99), an atom too, so no tag or member name can be it.
   @faults :faults
   # M5-9: what a read or write of a bit whose number is out of range throws, to its
-  # instruction's element (element/3), never past it.
-  @out_of_range {__MODULE__, :bit_out_of_range}
+  # instruction's element (element/3), never past it, with the fault's kind and what it
+  # read; since M5-12 so does an element whose subscript is (decision 153).
+  @out_of_range {__MODULE__, :out_of_range}
 
   # M3-5: the key under which an energised `jmp` records its label until its rung is done
   # (decision 104), an atom too; and the mark a skipped rung's edge memory gets in the record
@@ -926,13 +929,15 @@ defmodule Logex.Runtime do
     ]
 
   # M5-9 (decisions 153 and 160): a bit whose number a tag holds, read out of its word's
-  # bits, a major fault, with the number read.
-  defp placed({:bit_out_of_range, symbol, line, read}, path, file)
-       when is_atom(symbol) and is_integer(line),
+  # bits, a major fault, with the number read; and since M5-12 an element a tag subscript
+  # names outside its array, with the subscripts read, one a dimension (decision 153).
+  defp placed({kind, symbol, line, read}, path, file)
+       when kind in [:bit_out_of_range, :index_out_of_range] and is_atom(symbol) and
+              is_integer(line),
        do: [
          %Fault{
            severity: :major,
-           kind: :bit_out_of_range,
+           kind: kind,
            instruction: symbol,
            path: path,
            file: file,
@@ -2717,38 +2722,89 @@ defmodule Logex.Runtime do
   # a bit among its first three operands, all any instruction but `cal` has, told from the
   # rest by its clause's head, and every `cal`, whose formals are any number. Any other
   # instruction runs as it did before M5-9.
+  #
+  # M5-12 (decision 153): so for an element a tag subscripts, `weights[slot]`, whose
+  # subscript is outside its dimension where it is read or written, and a bit of one, its
+  # element's subscripts checked first, an instruction with one among its first three
+  # operands told by its clause's head too, so that a program with none runs as before.
   defp element({_, _, [{:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
     evaluate(instruction, acc, scan)
   catch
-    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
   end
 
   defp element({_, _, [_, {:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
     evaluate(instruction, acc, scan)
   catch
-    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
   end
 
   defp element({_, _, [_, _, {:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
     evaluate(instruction, acc, scan)
   catch
-    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element({_, _, [{:element_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element({_, _, [_, {:element_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element({_, _, [_, _, {:element_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [{:bit, _, {:element_at, _, _, _, _, _}, _, _, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, {:bit, _, {:element_at, _, _, _, _, _}, _, _, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, _, {:bit, _, {:element_at, _, _, _, _, _}, _, _, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
   end
 
   defp element({:cal, _, _} = instruction, acc, scan) do
     evaluate(instruction, acc, scan)
   catch
-    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
   end
 
   defp element(instruction, acc, scan), do: evaluate(instruction, acc, scan)
 
-  defp out_of_range({symbol, line, _operands}, {_power, env}, read),
+  defp out_of_range({symbol, line, _operands}, {_power, env}, {kind, read}),
     do:
       {false,
-       Map.put(env, @faults, [
-         {:bit_out_of_range, symbol, line, read} | as_list(Map.get(env, @faults))
-       ])}
+       Map.put(env, @faults, [{kind, symbol, line, read} | as_list(Map.get(env, @faults))])}
 
   # One instruction: `(instruction, {power_flow, env}, %Scan{})` to `{power_flow, env}`, a
   # clause for an energised rung and one for a de-energised one (CLAUDE.md). An operand is
@@ -3665,6 +3721,9 @@ defmodule Logex.Runtime do
   defp type_at(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
     do: tag_type(element_tag(Map.get(tags, array)), {at, destination, tags})
 
+  defp type_at(at, {:element_at, _, array, _, _, _} = destination, %Scan{tags: tags}),
+    do: tag_type(element_tag(Map.get(tags, array)), {at, destination, tags})
+
   defp type_at(at, destination, %Scan{tags: tags}), do: refused_at({at, destination, tags})
 
   # An array's tag as the tag of one of its elements, of its elements' type, for the
@@ -3681,6 +3740,9 @@ defmodule Logex.Runtime do
     do: bits_type(Map.get(tags, name), {at, destination, tags})
 
   defp bits_at(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
+    do: bits_type(element_tag(Map.get(tags, array)), {at, destination, tags})
+
+  defp bits_at(at, {:element_at, _, array, _, _, _} = destination, %Scan{tags: tags}),
     do: bits_type(element_tag(Map.get(tags, array)), {at, destination, tags})
 
   defp bits_at(at, destination, %Scan{tags: tags}),
@@ -3709,6 +3771,9 @@ defmodule Logex.Runtime do
     do: own_bits(element_tag(:maps.get(array, tags, nil)), type)
 
   defp source_bits({:bit_at, _, _, _, _, _}, _type, _scan), do: :bool
+
+  defp source_bits({:element_at, _, array, _, _, _}, type, %Scan{tags: tags}),
+    do: own_bits(element_tag(:maps.get(array, tags, nil)), type)
 
   defp source_bits({:member, _, _} = source, type, %Scan{tags: tags}),
     do: found_bits(Program.destination(source, tags, :bitwise), type)
@@ -3740,6 +3805,9 @@ defmodule Logex.Runtime do
     do: root_of(Map.get(tags, name), {at, destination, tags})
 
   defp root_type(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
+    do: root_of(element_tag(Map.get(tags, array)), {at, destination, tags})
+
+  defp root_type(at, {:element_at, _, array, _, _, _} = destination, %Scan{tags: tags}),
     do: root_of(element_tag(Map.get(tags, array)), {at, destination, tags})
 
   defp root_type(at, destination, %Scan{tags: tags}), do: rooted_at({at, destination, tags})
@@ -4062,6 +4130,7 @@ defmodule Logex.Runtime do
   defp real_of({:name, _, name}, reals), do: :maps.get(name, reals, :none)
   # M5-11: an element of an array of reals is its elements' real, by its array's name.
   defp real_of({:element, _, array, _index, _name}, reals), do: :maps.get(array, reals, :none)
+  defp real_of({:element_at, _, array, _, _, _}, reals), do: :maps.get(array, reals, :none)
   defp real_of(_member, _reals), do: :none
 
   defp as_real(:none, value), do: value
@@ -4084,6 +4153,10 @@ defmodule Logex.Runtime do
   defp read(env, {:bit, _, {:element, _, _, _, _} = element, _n, mask, _name}),
     do: bit_set(read(env, element), mask)
 
+  # M5-12: a bit of an element a tag subscripts, its element read first.
+  defp read(env, {:bit, _, {:element_at, _, _, _, _, _} = element, _n, mask, _name}),
+    do: bit_set(read(env, element), mask)
+
   defp read(env, {:bit, _, path, _n, mask, _name}), do: bit_set(walk(env, path), mask)
   # M5-9 (decision 160): a bit whose number a tag holds, the number read first, as an
   # integer, and its mask computed from the width and top bit the compiler gave: one past
@@ -4092,6 +4165,9 @@ defmodule Logex.Runtime do
     do: bit_set(Map.get(env, name, 0), bit_mask(integer(read(env, index)), width, top))
 
   defp read(env, {:bit_at, _, {:element, _, _, _, _} = element, index, {width, top}, _name}),
+    do: bit_set(read(env, element), bit_mask(integer(read(env, index)), width, top))
+
+  defp read(env, {:bit_at, _, {:element_at, _, _, _, _, _} = element, index, {width, top}, _}),
     do: bit_set(read(env, element), bit_mask(integer(read(env, index)), width, top))
 
   defp read(env, {:bit_at, _, path, index, {width, top}, _name}),
@@ -4113,6 +4189,17 @@ defmodule Logex.Runtime do
   defp read(env, {:element, _, array, index, _name}),
     do: Logex.Array.fetch(:erlang.map_get(array, env), index)
 
+  # M5-12 (decisions 152 and 153): an element a tag subscripts, each subscript a literal's
+  # value or its tag's, read as an integer, and checked against its dimension as the element
+  # is read: one outside it is thrown to the instruction (element/3), with every subscript
+  # read, one a dimension.
+  # One dimension and one tag, `weights[slot]`, read with no list built.
+  defp read(env, {:element_at, _, array, [{:name, _, name}], [count], _name}),
+    do: elem(:erlang.map_get(array, env), one_subscript(Map.get(env, name, 0), count))
+
+  defp read(env, {:element_at, _, array, index, dims, _name}),
+    do: Logex.Array.fetch(:erlang.map_get(array, env), subscripts(env, index, dims))
+
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
   defp walk(_not_a_map, _path), do: 0
@@ -4130,6 +4217,25 @@ defmodule Logex.Runtime do
   defp write(env, {:element, _, array, index, _name}, value),
     do: %{env | array => Logex.Array.put(:erlang.map_get(array, env), index, value)}
 
+  # M5-12: an element a tag subscripts is written into its array once its subscripts are
+  # read and checked, and a bit of one into its element, the rest of its word kept.
+  defp write(env, {:element_at, _, array, [{:name, _, name}], [count], _name}, value),
+    do: %{
+      env
+      | array =>
+          put_elem(
+            :erlang.map_get(array, env),
+            one_subscript(Map.get(env, name, 0), count),
+            value
+          )
+    }
+
+  defp write(env, {:element_at, _, array, index, dims, _name}, value),
+    do: %{
+      env
+      | array => Logex.Array.put(:erlang.map_get(array, env), subscripts(env, index, dims), value)
+    }
+
   # M5-8: a bit is written into its word, the rest of the word kept: 1 sets the mask's bits
   # and 0 clears them, so a signed type's top bit, whose mask is every bit from it up, is
   # its sign, and the word stays inside its type.
@@ -4139,6 +4245,10 @@ defmodule Logex.Runtime do
   # Decision 221: a bit of an element is written into the element, the rest of its word
   # kept, and the element into its array.
   defp write(env, {:bit, _, {:element, _, _, _, _} = element, _n, mask, _name}, value),
+    do: write(env, element, with_bit(integer(read(env, element)), mask, value))
+
+  # M5-12: a bit of an element a tag subscripts.
+  defp write(env, {:bit, _, {:element_at, _, _, _, _, _} = element, _n, mask, _name}, value),
     do: write(env, element, with_bit(integer(read(env, element)), mask, value))
 
   defp write(env, {:bit, _, path, _n, mask, _name}, value),
@@ -4154,6 +4264,16 @@ defmodule Logex.Runtime do
     write(env, element, with_bit(integer(read(env, element)), mask, value))
   end
 
+  defp write(
+         env,
+         {:bit_at, _, {:element_at, _, _, _, _, _} = element, index, {width, top}, _},
+         value
+       ) do
+    word = integer(read(env, element))
+    mask = bit_mask(integer(read(env, index)), width, top)
+    write(env, element, with_bit(word, mask, value))
+  end
+
   defp write(env, {:bit_at, _, path, index, {width, top}, _name}, value) do
     mask = bit_mask(integer(read(env, index)), width, top)
     put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
@@ -4163,7 +4283,31 @@ defmodule Logex.Runtime do
   # (Logex.Compiler); a number outside 0 to width - 1 is thrown, with the number read.
   defp bit_mask(n, width, _top) when n >= 0 and n < width - 1, do: Bitwise.bsl(1, n)
   defp bit_mask(n, width, top) when n == width - 1, do: top
-  defp bit_mask(n, _width, _top), do: throw({@out_of_range, n})
+  defp bit_mask(n, _width, _top), do: throw({@out_of_range, :bit_out_of_range, n})
+
+  # M5-12: each subscript's value, a literal's own or its tag's as an integer, and the whole
+  # index checked against the array's dimensions: one outside its dimension is thrown with
+  # every subscript read.
+  defp subscripts(env, index, dims), do: in_dimensions(read_subscripts(env, index), dims)
+
+  defp one_subscript(i, count) when is_integer(i) and i >= 0 and i < count, do: i
+  defp one_subscript(i, count) when is_integer(i), do: in_dimensions([i], [count])
+  defp one_subscript(_not_an_integer, count), do: one_subscript(0, count)
+
+  defp read_subscripts(_env, []), do: []
+  defp read_subscripts(env, [i | index]) when is_integer(i), do: [i | read_subscripts(env, index)]
+
+  defp read_subscripts(env, [{:name, _, name} | index]),
+    do: [integer(Map.get(env, name, 0)) | read_subscripts(env, index)]
+
+  defp in_dimensions(read, dims), do: in_bounds(read, dims, read)
+
+  defp in_bounds([], [], read), do: read
+
+  defp in_bounds([i | index], [count | dims], read) when i >= 0 and i < count,
+    do: in_bounds(index, dims, read)
+
+  defp in_bounds(_index, _dims, read), do: throw({@out_of_range, :index_out_of_range, read})
 
   defp bit_set(value, mask) when is_integer(value), do: one(Bitwise.band(value, mask) != 0)
   defp bit_set(_not_an_integer, _mask), do: 0

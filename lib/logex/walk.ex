@@ -90,6 +90,13 @@ defmodule Logex.Walk do
   defp use({:numbered, word, index}, access, {line, symbol}, uses),
     do: [{access, word, line, symbol}, {:read, index, line, symbol} | uses]
 
+  # M5-12 (decision 152): an element a tag subscripts is a use of its array with its slot's
+  # access, and of each subscript's tag read, in its subscripts' order, and a bit of one
+  # whose number a tag holds of that tag after them.
+  defp use({:subscripted, word, reads}, access, {line, symbol}, uses),
+    do:
+      [{access, word, line, symbol} | for(read <- reads, do: {:read, read, line, symbol})] ++ uses
+
   defp use(name, access, {line, symbol}, uses), do: [{access, name, line, symbol} | uses]
 
   defp tag_of({:name, _, name}), do: name
@@ -106,11 +113,20 @@ defmodule Logex.Walk do
   defp tag_of({:bit_at, _, {:element, _, array, _, _}, {:name, _, index}, _width, _name}),
     do: {:numbered, array, index}
 
+  defp tag_of({:bit_at, _, {:element_at, _, array, at, _, _}, {:name, _, index}, _width, _name}),
+    do: {:subscripted, array, subscript_tags(at) ++ [index]}
+
   # M5-11 (decision 151): an element is a use of its array, `temps[3]` of `temps`, with its
   # slot's access, as a bit is of its word, so a write of an element is a write of its
   # array in `writes/1`; the element itself is named by `bit_name/1`, `temps[3]`, where a
   # one-shot or a coil keeps it, and in `bit_writes/1`.
   defp tag_of({:element, _, array, _index, _name}), do: array
+
+  defp tag_of({:element_at, _, array, index, _dims, _name}),
+    do: {:subscripted, array, subscript_tags(index)}
+
+  defp tag_of({:bit, _, {:element_at, _, array, index, _, _}, _n, _mask, _name}),
+    do: {:subscripted, array, subscript_tags(index)}
 
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
@@ -119,6 +135,8 @@ defmodule Logex.Walk do
   defp tag_of({:real_lit, _, _, _spelling}), do: nil
   # M3-5: a label is a name of the routine's own, never a tag (decision 105).
   defp tag_of({:label, _, _}), do: nil
+
+  defp subscript_tags(index), do: for({:name, _, name} <- index, do: name)
 
   @doc """
   The instructions that keep an edge in a storage bit, a bool of the routine they stand in,
@@ -349,7 +367,7 @@ defmodule Logex.Walk do
     |> Enum.flat_map(fn {_symbol, line, operands} = instruction ->
       for {{:write, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
           element = element_of(operand),
-          do: {bit_name(element), line}
+          do: {element_name(element), line}
     end)
     |> Enum.reduce(%{}, fn {path, line}, writes ->
       Map.update(writes, path, [line], &[line | &1])
@@ -360,7 +378,15 @@ defmodule Logex.Walk do
   defp element_of({:element, _, _, _, _} = element), do: element
   defp element_of({:bit, _, {:element, _, _, _, _} = element, _, _, _}), do: element
   defp element_of({:bit_at, _, {:element, _, _, _, _} = element, _, _, _}), do: element
+  # M5-12 (§4.12's routine choice): a write through a tag subscript is a write of the whole
+  # array, named by the array's name, since it may write any of its elements.
+  defp element_of({:element_at, _, _, _, _, _} = element), do: element
+  defp element_of({:bit, _, {:element_at, _, _, _, _, _} = element, _, _, _}), do: element
+  defp element_of({:bit_at, _, {:element_at, _, _, _, _, _} = element, _, _, _}), do: element
   defp element_of(_other), do: nil
+
+  defp element_name({:element_at, _, array, _index, _dims, _name}), do: array
+  defp element_name(element), do: bit_name(element)
 
   defp own_bit?({:bit, _, [_], _, _, _}), do: true
   defp own_bit?({:bit, _, {:element, _, _, _, _}, _, _, _}), do: true
