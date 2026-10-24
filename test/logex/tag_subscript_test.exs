@@ -179,6 +179,49 @@ defmodule Logex.TagSubscriptTest do
     end
   end
 
+  describe "an element a tag subscripts, in every type an element has" do
+    test "a real element is written as its nearest real, an integer widened into it" do
+      p =
+        program(
+          "var_input i int\nvar_input a int\nvar r real[2]\nvar_output o real[2]\n" <>
+            "move 0.1 r[i]\nmove a r[1]\nmove r[0] o[0]\nmove r[1] o[1]"
+        )
+
+      {outputs, []} = scan(p, %{"i" => 0, "a" => 7})
+      assert outputs["o"] === [0.10000000149011612, 7.0]
+    end
+
+    test "a real literal its element's real cannot keep is warned, as a tag's is" do
+      assert [{4, message}] =
+               warnings(
+                 "var_input i int\nvar r real[2]\nvar_output o real\n" <>
+                   "move 16777217.0 r[i]\nmove r[0] o"
+               )
+
+      assert message =~ "`16777217.0`"
+    end
+
+    test "`not` of an element computes in its element's type, IEC's typing (decision 214)" do
+      p =
+        program(
+          "var_input i int\nvar_input s byte[2]\nvar b byte[2]\nvar_output w word\n" <>
+            "move s[0] b[0]\nmove s[1] b[1]\nnot b[i] w"
+        )
+
+      assert scan(p, %{"i" => 1, "s" => [0, 0x0F]}) == {%{"w" => 0x00F0}, []}
+    end
+
+    test "a bit a tag numbers of an element a tag subscripts, written: the index is checked first" do
+      p =
+        program(
+          "var_input i int\nvar_input n int\nvar_input k bool\nvar w word[2]\n" <>
+            "var_output o word\nxic k ote w[i].[n]\nmove w[0] o"
+        )
+
+      assert scan(p, %{"i" => 2, "n" => 16, "k" => 1}) == {%{"o" => 0}, [fault(:ote, 6, [2])]}
+    end
+  end
+
   describe "what is refused when the program compiles (decisions 152 and 154)" do
     test "a subscript tag that is no integer, or names no tag, each at its line" do
       head = "var w int[8]\nvar q int\n"
@@ -524,6 +567,25 @@ defmodule Logex.TagSubscriptTest do
       end
     end
 
+    test "a block's body holding a bit of an element a tag subscripts is taken as given" do
+      {:ok, lamp} =
+        Logex.compile(
+          "function_block lamp\nvar_input i int\nvar_input n int\nvar_output q bool\n" <>
+            "var w word[2]\nxic w[i].3 ote q\nxic w[i].[n] ote q",
+          name: "lamp"
+        )
+
+      assert Logex.FbType.user?(lamp)
+      assert Logex.Compiler.lowered?(lamp.body)
+
+      assert {:ok, _} =
+               Logex.compile(
+                 "var_input i int\nvar_input n int\nvar_output q bool\nvar l1 lamp\ncal l1 i n q",
+                 name: "p",
+                 types: [lamp]
+               )
+    end
+
     test "every fault of one scan, in the order they happened, beside a zero divisor's and a bit's" do
       p =
         program(
@@ -644,6 +706,15 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
+    # Provisional reading 3: a write through a tag subscript other than a coil's, beside a
+    # coil on a literal element, is warned of nothing, as `move a b` beside `ote b` is not.
+    test "a `move` through a tag subscript beside a coil on an element is warned of nothing" do
+      assert warnings(
+               "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n" <>
+                 "xic a ote l[2]\nmove a l[i]\nxic l[0] ote o"
+             ) == []
+    end
+
     test "a write through a tag subscript is a write of each storage bit in its array" do
       assert warnings(
                "var e bool[4]\nvar w word[2]\nvar_input i int\nvar_input a bool\n" <>
@@ -655,6 +726,17 @@ defmodule Logex.TagSubscriptTest do
                   "fires on the wrong scans"},
                {9,
                 "`move` writes `w[01].3`, the storage bit of the `ons` on line 7: the one-shot " <>
+                  "then fires on the wrong scans"}
+             ]
+    end
+
+    test "a coil on a bit of an element a tag subscripts is a write of each storage bit in its array" do
+      assert warnings(
+               "var w word[2]\nvar_input i int\nvar_input a bool\nvar_output p bool\n" <>
+                 "xic a ons w[1].3 ote p\nxic a ote w[i].4"
+             ) == [
+               {6,
+                "`ote` writes `w[1].3`, the storage bit of the `ons` on line 5: the one-shot " <>
                   "then fires on the wrong scans"}
              ]
     end
@@ -764,6 +846,26 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
+    test "an instance writing two elements beside a write through a tag subscript is told once" do
+      {:ok, two} =
+        Logex.compile(
+          "var_external speeds int[4]\nvar_input s int\nmove s speeds[1]\nmove s speeds[2]",
+          name: "two"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          @globals <> "program f1 feeder\nf1.s s\nprogram t1 two\nt1.s s",
+          %{"feeder" => feeder(), "two" => two}
+        )
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               "`t1` writes `speeds` through its var_external, as `f1` does (line 4): each " <>
+                 "scan reads what the other last wrote, and the later write in a cycle stands"
+             ]
+    end
+
     test "an element written through a tag subscript a connection drives an element of is told it" do
       {:ok, source} =
         Logex.compile("var_output o int\nmove 7 o", name: "source")
@@ -848,6 +950,23 @@ defmodule Logex.TagSubscriptTest do
     # A program with no tag subscript scans, rung for rung, in exactly the reductions it
     # took at e00ae03, before M5-12: an instruction is caught only where its clause's head
     # sees such an element among its operands. A `cal` is caught as it was.
+    # The type an arithmetic, bitwise or root instruction computes in is read from an
+    # element's array in the scan's table, with no rule asked.
+    test "an element a tag subscripts as a destination costs what a literal one does, and its read" do
+      for {head, tagged, literal} <- [
+            {"var_input i int\nvar_input a int\nvar w int[8]\n", "add a 1 w[i]", "add a 1 w[3]"},
+            {"var_input i int\nvar_input k word\nvar u word[8]\n", "and k 1 u[i]",
+             "and k 1 u[3]"},
+            {"var_input i int\nvar_input x real\nvar r real[8]\n", "sqrt x r[i]", "sqrt x r[3]"}
+          ] do
+        # Measured once to warm what the first scan of each loads, and then counted.
+        _warm = per_rung(fixed(head), fn _ -> tagged end)
+        t = per_rung(fixed(head), fn _ -> tagged end)
+        l = per_rung(fixed(head), fn _ -> literal end)
+        assert t <= l + 6, "#{tagged} took #{t} a rung, #{literal} #{l}"
+      end
+    end
+
     test "a program of none scans as it did before M5-12" do
       assert per_rung(
                fixed("var_input a bool\nvar_input b bool\nvar_output q bool\n"),

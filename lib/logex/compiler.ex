@@ -4149,7 +4149,6 @@ defmodule Logex.Compiler do
   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
   defp how(true, :block, _name), do: ""
   defp how(true, :element, name), do: note("`var #{name} dint[8]`")
-  defp how(true, :subscript, name), do: note("`var #{name} dint`")
   defp how(true, _slot, name), do: note("in `var #{name} bool` or `var #{name} dint`")
 
   defp note(declaration),
