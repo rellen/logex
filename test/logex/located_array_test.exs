@@ -977,6 +977,14 @@ defmodule Logex.LocatedArrayTest do
       File.write!(file, "temps[5] 1\ntemps 1 1 1 1 1 1 1 1\n")
       raises("#{file}: line 2: `temps[5]` is forced on line 1 already", start)
 
+      # M5-14's review (provisional): a real element's misfit quoted as its line writes it.
+      File.write!(file, "temps[2] 1.0E39\n")
+
+      raises(
+        "#{file}: line 1: `temps[2]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0E39",
+        start
+      )
+
       File.write!(file, "temps[2] 37.50\n")
       {:ok, runner} = start.()
       assert Runner.status(runner).forces == %{"temps[2]" => 37.5}

@@ -209,6 +209,28 @@ defmodule Logex.InstanceArrayTest do
       assert_raise ArgumentError, ~r/^unknown function block type "tonx"/, fn ->
         Logex.Tag.new!("lane_t", {:array, %{ton | name: "tonx"}, [2]}, :var)
       end
+
+      # M5-14's review: an array of a user block's instances declared from Elixir holds the
+      # one version of its block the types given hold, as a scalar instance does.
+      {:ok, other} =
+        Logex.compile(String.replace(@seal, "ton t 30", "ton t 40"), name: "seal")
+
+      routine = Logex.Compiler.parse(elem(Logex.Compiler.tokenize("xic go ote q"), 1))
+      go = [Logex.Tag.new!("go", :bool, :var_input), Logex.Tag.new!("q", :bool, :var_output)]
+
+      for tag <- [
+            Logex.Tag.new!("lanes", {:array, other, [2]}, :var),
+            Logex.Tag.new!("lane", other, :var)
+          ] do
+        assert_raise ArgumentError,
+                     "a tag declared from Elixir holds a function block named `seal` other " <>
+                       "than the one of that name in the types given or in another tag: give " <>
+                       "every instance of a block the same version, compiled against the same " <>
+                       "types",
+                     fn ->
+                       Logex.Compiler.instructionize(elem(routine, 1), [tag | go], [seal()])
+                     end
+      end
     end
   end
 
@@ -897,6 +919,42 @@ defmodule Logex.InstanceArrayTest do
       {_, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"a" => 0}), 30)
       {outputs, _state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"a" => 1}), 40)
       assert outputs == %{"q" => 1, "q1" => 1}
+    end
+
+    # M5-14's review: each element of an array of user blocks is migrated member by member,
+    # a member the candidate's version adds started and reported by the element's path,
+    # and pruned by it when the edit is cancelled, as a scalar instance's is.
+    test "a member a block's new version adds starts in each element of its array, and a cancel prunes it" do
+      shot = "function_block shot\nvar_input s bool\nvar_output q bool\nvar e bool\n"
+      {:ok, v1} = Logex.compile(shot <> "xic s ons e ote q\n", name: "shot")
+
+      {:ok, v2} =
+        Logex.compile(shot <> "var n dint 7\nxic s ons e ote q\nxic s move 3 n\n",
+          name: "shot"
+        )
+
+      source =
+        "var_input go bool\nvar_output q bool\nvar_output q1 bool\nvar l shot[2]\n" <>
+          "var one shot\nxic go cal l[1] go q\nxic go cal one go q1"
+
+      b1 = program(source, [v1])
+      b2 = program(source, [v2])
+      {_, state} = run(b1, [{0, %{"go" => 1}}])
+      {edit, state, report} = Edit.test(accept!(b1, b2, state), state)
+
+      assert Enum.filter(report, &match?({:added, _, _}, &1)) ==
+               [{:added, "l[0].n", 7}, {:added, "l[1].n", 7}, {:added, "one.n", 7}]
+
+      assert element(state, "l", 1)["n"] == 7
+      assert element(state, "l", 0)["n"] == 7
+      {edit, state, _report} = Edit.untest(edit, state)
+      {_edit, state, report} = Edit.cancel(edit, state)
+
+      assert Enum.filter(report, &match?({:pruned, _, _}, &1)) ==
+               [{:pruned, "l[0].n", 7}, {:pruned, "l[1].n", 7}, {:pruned, "one.n", 7}]
+
+      refute Map.has_key?(element(state, "l", 1), "n")
+      refute Map.has_key?(state.env["one"], "n")
     end
 
     test "a timer inside a block's array of instances resumes by its path, `s1.t[1]`" do
