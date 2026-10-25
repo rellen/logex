@@ -598,7 +598,7 @@ defmodule Logex.ForceTest do
       # A real at a bool point, written any way the lexer reads one, does not fit.
       File.write!(file, "x 37.50\n")
 
-      raises("#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 37.5", fn ->
+      raises("#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 37.50", fn ->
         Runner.start_link(
           configuration: plant(),
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
@@ -635,16 +635,17 @@ defmodule Logex.ForceTest do
         Runner.stop(runner)
       end
 
-      # Held to its type: a spelling of a number outside it is refused as a plain one is.
+      # Held to its type: a spelling of a number outside it is refused as a plain one is,
+      # quoted as the line writes it (M5-14's review, provisional).
       {:ok, clock} = Manual.start_link()
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link(clock: clock)
       File.write!(file, "x 2#10\nlevel 16#ffffffff\ne 1.0\n")
 
       raises(
-        "#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 2\n" <>
+        "#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 2#10\n" <>
           "#{file}: line 2: `level` is a dint, forced to an integer from -2147483648 to " <>
-          "2147483647, got: 4294967295\n" <>
+          "2147483647, got: 16#ffffffff\n" <>
           "#{file}: line 3: `e` is a bool, forced to 0 or 1, got: 1.0",
         fn ->
           Runner.start_link(

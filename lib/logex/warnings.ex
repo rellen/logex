@@ -533,7 +533,7 @@ defmodule Logex.Warnings do
        ) do
     warnings =
       array_coil(
-        Map.fetch(coils, word),
+        very(coils, word, id),
         Map.fetch(bitted, word),
         unlike(wholes, {:written, array}, id),
         Map.fetch(wholes, {:some, array}),
@@ -610,6 +610,12 @@ defmodule Logex.Warnings do
 
   defp unlike(map, key, id), do: unlike_first(Map.fetch(map, key), Map.get(map, {:same, key}), id)
 
+  # The first a key holds, marked `:very` where it came through the very tags as `id`.
+  defp very(map, key, id), do: very_first(Map.fetch(map, key), Map.get(map, {:same, key}), id)
+
+  defp very_first({:ok, first}, {id, _other}, id) when id != nil, do: {:very, first}
+  defp very_first(found, _same, _id), do: found
+
   defp unlike_first({:ok, _first}, {id, other}, id) when id != nil, do: other
   defp unlike_first(found, _same, _id), do: found
 
@@ -678,6 +684,12 @@ defmodule Logex.Warnings do
   # of the array whole through one, is told the array the first may write; after a coil
   # on a literal element or a bit of one, or a write of an element whole, it is told that
   # element too, `w[1].3`, which it may not name, both being in the array.
+  # M5-14's review (provisional): after a coil through the very tags, `ote lamps[slot]`
+  # twice, it is told the element already has one, as `ote lamps[2]` twice and `ote w.[n]`
+  # twice are, two coils through the very tag being two coils (decision 246).
+  defp array_coil({:very, first}, _bitted, _written, _some, {_array, {line, _}, shown}),
+    do: [second_ote(shown, first, line)]
+
   defp array_coil({:ok, first}, _bitted, _written, _some, {array, at, shown}),
     do: in_array({:ok, first}, {:array, array}, at, shown)
 

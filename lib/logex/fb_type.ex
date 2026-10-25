@@ -719,21 +719,19 @@ defmodule Logex.FbType do
   defp exact(_reached, _blocks), do: :error
 
   # The names of the user block types a body's instances are of, as its tags name them.
-  # Since M5-14 an array of instances of a user block names its type too, told in the
-  # comprehension's own body, so a body of none is read in what it was.
+  # Since M5-14 an array of instances of a user block names its type too.
   defp named(%__MODULE__{body: %Program{tags: tags}}),
     do:
       for(
         {_, %Tag{type: type}} <- tags,
-        held =
-          case type do
-            {:block, held} -> held
-            {:array, {:block, held}, _dims} -> held
-            _other -> nil
-          end,
+        held = held_name(type),
         held != nil,
         do: held
       )
+
+  defp held_name({:block, name}), do: name
+  defp held_name({:array, {:block, name}, _dims}), do: name
+  defp held_name(_other), do: nil
 
   defp reach(_names, _path, _blocks, :error), do: :error
   defp reach([], _path, _blocks, ok), do: ok

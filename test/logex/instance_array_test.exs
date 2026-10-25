@@ -484,6 +484,34 @@ defmodule Logex.InstanceArrayTest do
       end)
     end
 
+    test "an element of an array of pulse timers starts no pulse on a first scan, nor without a rising edge, as a scalar tp" do
+      source =
+        "var_input a bool\nvar horn tp[2]\nvar one tp\nxic a tp horn[1] 50\nxic a tp one 50"
+
+      p = program(source)
+
+      draws = [
+        {0, %{"a" => 1}},
+        {10, %{}},
+        {20, %{"a" => 0}},
+        {30, %{"a" => 1}},
+        {40, %{}},
+        {90, %{}}
+      ]
+
+      states =
+        Enum.map_reduce(draws, Runtime.instance(p), fn {now, inputs}, state ->
+          {_outputs, state} = Runtime.call(p, state, inputs, %Scan{now: now, first: state.first})
+          # Restated: the element is the very state its scalar twin, on the same rung, keeps.
+          assert element(state, "horn", 1) == state.env["one"]
+          {element(state, "horn", 1)["tt"], state}
+        end)
+        |> elem(0)
+
+      # A first scan's high rung pulses nothing; the edge at 30 pulses for 50 ms.
+      assert states == [0, 0, 0, 1, 1, 0]
+    end
+
     test "each element counts its own rising edges, never on a first scan, and stops at its type's limits" do
       source =
         "var_input a bool\nvar_input b bool\nvar_input r bool\nvar lane_c ctu_int[2]\n" <>
@@ -646,6 +674,32 @@ defmodule Logex.InstanceArrayTest do
       assert state.faults == []
       {_outputs, state} = run(p, [{0, %{"go" => 1, "k" => 5}}])
       assert state.faults == [fault(:xic, 5, [5], "r[0]")]
+    end
+
+    test "a member through a tag subscript as any of an instruction's first three operands is checked, nothing escaping" do
+      p =
+        program(
+          @fault <>
+            "var_input x dint\nxic go add lane_c[slot].pv 1 n\nxic go add x lane_c[slot].pv n\n" <>
+            "xic go add x 1 lane_c[slot].pv\nxic go and x 3 lane_c[slot].pv\n" <>
+            "xic go shl x 1 lane_c[slot].pv\nxic go move 3 n"
+        )
+
+      {outputs, state} = run(p, [{0, %{"go" => 1, "slot" => 5, "x" => 1}}])
+      assert outputs == %{"q" => 0, "n" => 3}
+      assert Enum.map(0..2, &element(state, "lane_c", &1)["pv"]) == [0, 0, 0]
+
+      assert state.faults == [
+               fault(:add, 8, [5]),
+               fault(:add, 9, [5]),
+               fault(:add, 10, [5]),
+               fault(:and, 11, [5]),
+               fault(:shl, 12, [5])
+             ]
+
+      {_outputs, state} = run(p, [{0, %{"go" => 1, "slot" => 2, "x" => 1}}])
+      assert state.faults == []
+      assert element(state, "lane_c", 2)["pv"] == 2
     end
 
     test "an element of two dimensions is checked subscript by subscript, every subscript read" do
@@ -813,6 +867,36 @@ defmodule Logex.InstanceArrayTest do
 
       assert Enum.filter(report, &match?({:ons_blocked, _, _}, &1)) ==
                [{:ons_blocked, "lanes[0].e", 0}, {:ons_blocked, "lanes[1].e", 0}]
+    end
+
+    test "a one-shot blocked in an element of user blocks passes no power at its next run, as a scalar instance's, and the scan that runs it drops the block" do
+      shot = "function_block shot\nvar_input s bool\nvar_output q bool\nvar e bool\n"
+      {:ok, v1} = Logex.compile(shot <> "xic s ons e ote q\n", name: "shot")
+      {:ok, v2} = Logex.compile(shot <> "xic s xic s ons e ote q\n", name: "shot")
+
+      source =
+        "var_input go bool\nvar_input a bool\nvar_output q bool\nvar_output q1 bool\n" <>
+          "var l shot[2]\nvar one shot\nxic go cal l[1] a q\nxic go cal one a q1"
+
+      b1 = program(source, [v1])
+      b2 = program(source, [v2])
+      {_, state} = run(b1, [{0, %{"go" => 1, "a" => 0}}])
+      {_edit, state, report} = Edit.test(accept!(b1, b2, state), state)
+
+      assert Enum.filter(report, &match?({:ons_blocked, _, _}, &1)) ==
+               [{:ons_blocked, "l[1].e", 0}, {:ons_blocked, "one.e", 0}]
+
+      # A scan whose `cal` is false keeps both blocks; the rising rung of the next scan that
+      # runs the body passes no power, and that scan drops each block.
+      {_, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"go" => 0, "a" => 1}), 10)
+      assert Enum.sort(state.ons_blocked) == ["l[1].e", "one.e"]
+      {outputs, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"go" => 1}), 20)
+      assert outputs == %{"q" => 0, "q1" => 0}
+      assert state.ons_blocked == []
+      # Its next rising edge fires, the element's as its twin's.
+      {_, state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"a" => 0}), 30)
+      {outputs, _state} = Runtime.scan(b2, Runtime.put_inputs(b2, state, %{"a" => 1}), 40)
+      assert outputs == %{"q" => 1, "q1" => 1}
     end
 
     test "a timer inside a block's array of instances resumes by its path, `s1.t[1]`" do
@@ -1348,6 +1432,123 @@ defmodule Logex.InstanceArrayTest do
       write = per_rung(arrayed("ctu"), &"move d t[#{&1 - 1}].pv")
       tagged_write = per_rung(arrayed("ctu"), fn _ -> "move d t[k].pv" end)
       assert tagged_write <= write + 5, "#{tagged_write} against #{write}"
+    end
+  end
+
+  describe "the code" do
+    # CLAUDE.md: multiple function clauses, not conditionals. M5-14 brought seven `case`
+    # expressions into `lib/`, which its review found; the four this test names are older,
+    # the parser's three and the runner's one, and no new one joins them unseen.
+    test "lib/ holds no case, cond, if or unless but the parser's three and the runner's one" do
+      found =
+        for path <- Path.wildcard("lib/**/*.ex"),
+            {line, number} <- Enum.with_index(File.read!(path) |> String.split("\n"), 1),
+            Regex.match?(~r/^[^#"]*\b(case|cond|if|unless)\b[^#"]*\bdo\s*$/, line),
+            do: {path, number}
+
+      assert Enum.map(found, &elem(&1, 0)) |> Enum.sort() == [
+               "lib/logex/parser.ex",
+               "lib/logex/parser.ex",
+               "lib/logex/parser.ex",
+               "lib/logex/runner.ex"
+             ]
+    end
+  end
+
+  describe "growth, in the words a step allocates" do
+    # M5-14's review: an edit that moved each element by a put into its array's tuple copied
+    # the array once an element, quadratic in wall time, while the reductions, which count
+    # a tuple's copy as about one, grew linearly, so no reduction count could see it. A
+    # step's allocation can: counted here as the words its process's heap gains while the
+    # step runs, in a process given a heap the collector never visits during it, which the
+    # count checks, so each count is the same on every run. Its data are built first, and
+    # collected, in that process.
+    defp allocated(prepare, step) do
+      parent = self()
+
+      {pid, ref} =
+        :erlang.spawn_opt(
+          fn ->
+            arguments = prepare.()
+            :erlang.garbage_collect()
+            send(parent, {:ready, self()})
+            assert_receive :go, 60_000
+            result = step.(arguments)
+            send(parent, {:done, self()})
+            assert_receive :stop, 60_000
+            exit({:ok, :erlang.phash2(result)})
+          end,
+          [:monitor, min_heap_size: 6_000_000]
+        )
+
+      assert_receive {:ready, ^pid}, 60_000
+      before = heap(pid)
+      send(pid, :go)
+      assert_receive {:done, ^pid}, 60_000
+      later = heap(pid)
+      send(pid, :stop)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:ok, _hash}}, 60_000
+      # No collection came during the step, so the heap's growth is what it allocated.
+      assert elem(later, 1) == elem(before, 1), "collected during the step"
+      elem(later, 0) - elem(before, 0)
+    end
+
+    defp heap(pid) do
+      {:garbage_collection_info, info} = Process.info(pid, :garbage_collection_info)
+      {:garbage_collection, gc} = Process.info(pid, :garbage_collection)
+      {info[:heap_size], {gc[:minor_gcs], info[:heap_block_size]}}
+    end
+
+    # A user block holding an array of user blocks' instances, one instance of it.
+    defp edited("rack", n) do
+      {:ok, rack} =
+        Logex.compile("function_block rack\nvar_output q bool\nvar l seal[#{n}]\nxic q ote q",
+          name: "rack",
+          types: [seal()]
+        )
+
+      head = "var_input go bool\nvar_output q bool\nvar r rack\n"
+      running = program(head <> "xic go ote q", [rack])
+      candidate = program(head <> "xio go ote q", [rack])
+      {running, candidate}
+    end
+
+    defp edited(kind, n) do
+      head = "var_input go bool\nvar_output q bool\nvar t #{kind}[#{n}]\n"
+      running = program(head <> "xic go ote q", [seal()])
+      candidate = program(head <> "xio go ote q", [seal()])
+      {running, candidate}
+    end
+
+    # Measured, at 500 and 2,000 elements: each step's words grow some 4.1 times, as the
+    # elements do, for an array of timers and of a user block's instances; with a put into
+    # the tuple an element, accept, test and untest grew 10 to 12 times, and a prune of the
+    # blocks' members 11, and of a block holding an array of blocks the same.
+    test "accept, test, untest and assemble of an array of instances allocate linearly in its elements" do
+      for kind <- ["ton", "seal", "rack"] do
+        words =
+          for n <- [500, 2000] do
+            {running, candidate} = edited(kind, n)
+
+            prepare = fn ->
+              state = Runtime.instance(running)
+              {:ok, edit, _forecast} = Edit.accept(running, candidate, state)
+              {tested, after_test, _report} = Edit.test(edit, state)
+              {state, edit, tested, after_test}
+            end
+
+            [
+              allocated(prepare, fn {state, _, _, _} -> Edit.accept(running, candidate, state) end),
+              allocated(prepare, fn {state, edit, _, _} -> Edit.test(edit, state) end),
+              allocated(prepare, fn {_, _, tested, state} -> Edit.untest(tested, state) end),
+              allocated(prepare, fn {_, _, tested, state} -> Edit.assemble(tested, state) end)
+            ]
+          end
+
+        for {step, small, large} <- Enum.zip([[:accept, :test, :untest, :assemble] | words]) do
+          assert large < 6 * small, "#{kind} #{step}: #{large} words at 2000, #{small} at 500"
+        end
+      end
     end
   end
 end

@@ -992,10 +992,12 @@ defmodule Logex.Runner do
   defp fits!(true, _name, _type, _value), do: :ok
   defp fits!(false, name, type, value), do: raise(ArgumentError, misfit(name, type, value))
 
-  defp misfit(name, type, value),
+  defp misfit(name, type, value), do: misfit_written(name, type, inspect(value))
+
+  defp misfit_written(name, type, spelling),
     do:
       "`#{name}` is #{Declarations.a_type(type)}, forced to #{Declarations.values(type)}, " <>
-        "got: " <> inspect(value)
+        "got: " <> spelling
 
   # The new set of forces, written whole to the file before it is taken (decision 127):
   # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point
@@ -1136,15 +1138,33 @@ defmodule Logex.Runner do
   defp read_point({:ok, _type}, {_name, {:list, _}, text}, line, {forces, lines, problems}),
     do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
 
-  defp read_point({:ok, _type} = point, {name, value, _text}, line, acc),
-    do: once(first_line([name], acc), [name], line, acc, force_problem(point, name, value))
+  defp read_point({:ok, _type} = point, {name, value, text}, line, acc),
+    do:
+      once(
+        first_line([name], acc),
+        [name],
+        line,
+        acc,
+        force_problem(point, name, value, written(text))
+      )
 
-  defp read_point({:array, {_type, _dims, names}} = point, {name, value, _text}, line, acc),
-    do: once(first_line(names, acc), names, line, acc, force_problem(point, name, value))
+  defp read_point({:array, {_type, _dims, names}} = point, {name, value, text}, line, acc),
+    do:
+      once(
+        first_line(names, acc),
+        names,
+        line,
+        acc,
+        force_problem(point, name, value, written(text))
+      )
 
   # A point forced twice is told so before its value is judged, as before decision 241.
   defp read_point({:error, message}, {name, _value, _text}, line, acc),
     do: once(first_line([name], acc), [name], line, acc, [message])
+
+  # M5-14's review (provisional): each value as the line writes it, after its name, which a
+  # misfit quotes as decision 202 quotes a literal, `2#10` and `1.0e-400` as written.
+  defp written(text), do: tl(String.split(text, " "))
 
   # A point forced on an earlier line, the first of the line's points that is.
   defp first_line(names, {_forces, lines, _problems}),
@@ -1170,27 +1190,27 @@ defmodule Logex.Runner do
   # decision 226 so does an integer or bool point's, any integer the lexer reads as one
   # literal, `eye_1 01` as 1 and `level 16#ff` as 255, held to its type, one outside it
   # refused and a real told it does not fit, the next force writing it in plain decimal.
-  defp force_problem({:ok, type}, name, value) when type in [:real, :lreal],
-    do: real_force(Declarations.fits?(type, value), name, type, value)
+  defp force_problem({:ok, type}, name, value, [spelling]) when type in [:real, :lreal],
+    do: real_force(Declarations.fits?(type, value), name, type, {value, spelling})
 
-  defp force_problem({:ok, type}, name, value),
-    do: fitting_force(Declarations.fits?(type, value), name, type, value)
+  defp force_problem({:ok, type}, name, value, [spelling]),
+    do: fitting_force(Declarations.fits?(type, value), name, type, {value, spelling})
 
   # Decision 241: a whole array's line holds one value an element, each judged as its
   # point's, every misfit a line, ten and then a count.
-  defp force_problem({:array, {type, dims, names}}, name, {:list, values})
+  defp force_problem({:array, {type, dims, names}}, name, {:list, values}, spellings)
        when length(values) == length(names) do
     misfits =
-      names
-      |> Enum.zip(values)
-      |> Enum.reject(fn {_element, v} -> Declarations.fits?(type, v) end)
-      |> Enum.map(fn {element, v} -> misfit(element, type, v) end)
+      [names, values, spellings]
+      |> Enum.zip()
+      |> Enum.reject(fn {_element, v, _spelling} -> Declarations.fits?(type, v) end)
+      |> Enum.map(fn {element, _v, spelling} -> misfit_written(element, type, spelling) end)
       |> Logex.Array.capped(&more_misfits(name, {:array, type, dims}, &1))
 
     whole_force(misfits, names, Enum.map(values, &forced(type, &1)))
   end
 
-  defp force_problem({:array, {type, dims, names}}, name, value),
+  defp force_problem({:array, {type, dims, names}}, name, value, _spellings),
     do: [
       "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced whole on one line, " <>
         "its name and then #{length(names)} values in the elements' order: the line holds " <>
@@ -1203,11 +1223,13 @@ defmodule Logex.Runner do
   defp count_of({:list, values}), do: "#{length(values)}"
   defp count_of(_one), do: "1"
 
-  defp real_force(true, name, type, value), do: {:take, [{name, forced(type, value)}]}
-  defp real_force(false, name, type, value), do: [misfit(name, type, value)]
+  defp real_force(true, name, type, {value, _}), do: {:take, [{name, forced(type, value)}]}
+  defp real_force(false, name, type, {_, spelling}), do: [misfit_written(name, type, spelling)]
 
-  defp fitting_force(true, name, _type, value), do: {:take, [{name, value}]}
-  defp fitting_force(false, name, type, value), do: [misfit(name, type, value)]
+  defp fitting_force(true, name, _type, {value, _}), do: {:take, [{name, value}]}
+
+  defp fitting_force(false, name, type, {_, spelling}),
+    do: [misfit_written(name, type, spelling)]
 
   defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
     do: {Enum.into(taken, forces), lines, problems}

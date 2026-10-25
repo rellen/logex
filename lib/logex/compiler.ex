@@ -845,21 +845,19 @@ defmodule Logex.Compiler do
         "types must be function block types from Logex.compile/2, got: #{inspect(type)}"
       )
 
-  # Since M5-14 an array of instances' elements' type too, told in the comprehension's
-  # own body, so that a table of none is walked in what it was before.
+  # Since M5-14 an array of instances' elements' type too.
   defp blocks(tags),
     do:
       for(
         {_, %Tag{type: type}} <- tags,
-        block =
-          case type do
-            %FbType{body: %Program{}} -> type
-            {:array, %FbType{body: %Program{}} = block, _dims} -> block
-            _other -> nil
-          end,
+        block = block_in(type),
         block != nil,
         do: block
       )
+
+  defp block_in(%FbType{body: %Program{}} = type), do: type
+  defp block_in({:array, %FbType{body: %Program{}} = block, _dims}), do: block
+  defp block_in(_other), do: nil
 
   # Every block a given type holds, at any depth, is the one given under its name where one
   # is, and one version with every other of its name: a program holds one type of each
@@ -949,18 +947,19 @@ defmodule Logex.Compiler do
     do:
       Map.values(
         for {_, %Tag{type: type}} <- tags,
-            name =
-              (case type do
-                 {:block, name} -> name
-                 {:array, {:block, name}, _dims} -> name
-                 _other -> nil
-               end),
+            name = held_name(type),
             name != nil,
             into: %{},
             do: {name, held[name]}
       )
 
   defp nested(%FbType{body: nil}, _held), do: []
+
+  # The name of the user block type a tag's instance, or since M5-14 each element of its
+  # array of instances, is of, as a compiled body's table names it, or nil for none.
+  defp held_name({:block, name}), do: name
+  defp held_name({:array, {:block, name}, _dims}), do: name
+  defp held_name(_other), do: nil
 
   defp down(_held, nil), do: nil
   defp down(held, chain), do: [held | chain]
@@ -1706,12 +1705,7 @@ defmodule Logex.Compiler do
     table(
       for(
         {_, %Tag{type: type}} <- tags,
-        inner =
-          case type do
-            {:block, inner} -> inner
-            {:array, {:block, inner}, _dims} -> inner
-            _other -> nil
-          end,
+        inner = held_name(type),
         inner != nil,
         do: inner
       ) ++ names,

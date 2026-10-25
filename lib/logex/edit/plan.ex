@@ -25,6 +25,9 @@ defmodule Logex.Edit.Plan do
   # earlier edit (F2, F3).
   @record %{shown: %{}, pre: %{}, scanned: nil}
 
+  # M5-14's review: the mark of an array of instances opened for a switch or a prune.
+  @opened :"Logex.Edit.Plan.opened"
+
   # The instructions that run a built-in instance (Logex.FbType.rules/1, M3-1).
   @runners FbType.runners()
   @one_shots Walk.one_shots()
@@ -192,40 +195,10 @@ defmodule Logex.Edit.Plan do
       # M3-1: every built-in instance, a timer or not, with the preset of the instruction
       # that runs it and its type's rules (Logex.FbType.rules/1): the preset rules are every
       # built-in's, and the forecast and the resume its type's.
-      timers:
-        for {name, %Tag{type: type}} <- tags, reduce: %{} do
-          acc ->
-            case type do
-              %FbType{body: nil} ->
-                Map.put(acc, name, {preset(Map.get(presets, name)), FbType.rules(type)})
-
-              {:array, %FbType{body: nil}, _dims} ->
-                for {key, type} <- instances_of(name, type),
-                    into: acc,
-                    do: {key, {preset(Map.get(presets, key)), FbType.rules(type)}}
-
-              _ ->
-                acc
-            end
-        end,
+      timers: Enum.reduce(tags, %{}, &built_in(&1, &2, presets)),
       # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
       # where each block type's body has its one-shots and what it runs, by the type's name.
-      blocks:
-        for {name, %Tag{type: type}} <- tags, reduce: %{} do
-          acc ->
-            case type do
-              %FbType{body: %Program{}} ->
-                Map.put(acc, name, {type, is_map_key(called, name)})
-
-              {:array, %FbType{body: %Program{}}, _dims} ->
-                for {key, type} <- instances_of(name, type),
-                    into: acc,
-                    do: {key, {type, is_map_key(called, key)}}
-
-              _ ->
-                acc
-            end
-        end,
+      blocks: Enum.reduce(tags, %{}, &block(&1, &2, called)),
       bodies: bodies
     }
   end
@@ -237,6 +210,32 @@ defmodule Logex.Edit.Plan do
   # the same map, so that a table of no array of instances costs what it did.)
   defp instances_of(name, {:array, %FbType{} = type, dims}),
     do: for(index <- Logex.Array.indexes(dims), do: {Logex.Array.name(name, index), type})
+
+  defp built_in({name, %Tag{type: %FbType{body: nil} = type}}, acc, presets),
+    do: Map.put(acc, name, {preset(Map.get(presets, name)), FbType.rules(type)})
+
+  defp built_in({name, %Tag{type: {:array, %FbType{body: nil}, _dims} = type}}, acc, presets),
+    do:
+      for(
+        {key, type} <- instances_of(name, type),
+        into: acc,
+        do: {key, {preset(Map.get(presets, key)), FbType.rules(type)}}
+      )
+
+  defp built_in(_other, acc, _presets), do: acc
+
+  defp block({name, %Tag{type: %FbType{body: %Program{}} = type}}, acc, called),
+    do: Map.put(acc, name, {type, is_map_key(called, name)})
+
+  defp block({name, %Tag{type: {:array, %FbType{body: %Program{}}, _dims} = type}}, acc, called),
+    do:
+      for(
+        {key, type} <- instances_of(name, type),
+        into: acc,
+        do: {key, {type, is_map_key(called, key)}}
+      )
+
+  defp block(_other, acc, _called), do: acc
 
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
@@ -279,8 +278,19 @@ defmodule Logex.Edit.Plan do
       left: for(name <- Map.keys(watched), is_map_key(from.outputs, name), do: name),
       changed: changed(from, to),
       timers: timers(from, to),
-      nested: nested(from, to)
+      nested: nested(from, to),
+      opens: opens(Map.merge(from.arrays, to.arrays), from.tags, to.tags)
     }
+
+  # M5-14's review: the arrays of instances either program declares, which a switch and a
+  # prune open, looked for only where either declares an array.
+  defp opens(arrays, _from, _to) when map_size(arrays) == 0, do: []
+
+  defp opens(arrays, from, to),
+    do: for({name, _dims} <- arrays, instances?(Map.get(to, name, Map.get(from, name))), do: name)
+
+  defp instances?(%Tag{type: type}) when is_instances(type), do: true
+  defp instances?(_other), do: false
 
   # Each built-in instance either program declares, with the preset of the instruction
   # that runs it in the program stopped and in the one started, nil for none, and its
@@ -459,14 +469,14 @@ defmodule Logex.Edit.Plan do
     do:
       for(
         {_, %Tag{type: type}} <- tags,
-        type =
-          case type do
-            {:array, type, _dims} -> type
-            type -> type
-          end,
+        type = element_type(type),
         match?(%FbType{body: %Program{}}, type),
         do: type
       )
+
+  # An array of instances' elements' type, since M5-14, and any other type as it is.
+  defp element_type({:array, type, _dims}), do: type
+  defp element_type(type), do: type
 
   defp body(%Program{rungs: rungs}, tags) do
     {held, called} =
@@ -710,7 +720,8 @@ defmodule Logex.Edit.Plan do
 
     names = Map.new(type.members, &{&1.name, true})
     {gone, memo} = gone(was, names, memo)
-    plan = %{members: members ++ gone, names: names}
+    members = members ++ gone
+    plan = %{members: members, names: names, opens: opens(Enum.map(members, &elem(&1, 1)))}
     {plan, Map.put(memo, key, plan)}
   end
 
@@ -741,7 +752,7 @@ defmodule Logex.Edit.Plan do
 
   defp gone_plan(:error, type, memo) do
     {members, memo} = gone(type, %{}, memo)
-    plan = %{members: members}
+    plan = %{members: members, opens: opens(Enum.map(members, &elem(&1, 1)))}
     {plan, Map.put(memo, {:gone, type.name}, plan)}
   end
 
@@ -889,9 +900,11 @@ defmodule Logex.Edit.Plan do
     {env, inside, pre} =
       Enum.reduce(
         plan.nested,
-        {env, [], %{}},
+        {opened(env, plan.opens), [], %{}},
         &migrate(&1, fresh, {first_test?, record.pre, clock, plan.table}, &2)
       )
+
+    env = closed(env, plan.opens)
 
     {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
     blocked = blocked(scanned, plan)
@@ -912,9 +925,12 @@ defmodule Logex.Edit.Plan do
         holding(plan, shown, env)
 
     {env, timed, pre} =
-      Enum.reduce(plan.timers, {env, [], pre}, fn {name, from, to, rules}, acc ->
+      Enum.reduce(plan.timers, {opened(env, plan.opens), [], pre}, fn {name, from, to, rules},
+                                                                      acc ->
         timed({name, name, from, to, rules}, record.pre, clock, acc)
       end)
+
+    env = closed(env, plan.opens)
 
     # Decision 96: each member input no logic of the program started writes any more, with
     # the value it keeps, read once the timer rules have moved any `.pre`.
@@ -990,8 +1006,16 @@ defmodule Logex.Edit.Plan do
 
   defp migrate_in(_started_or_not_a_map, _fresh?, _plan, _rules, acc), do: acc
 
-  defp members(plan, map, prefix, rules, {reports, pre}),
-    do: Enum.reduce(plan.members, {map, reports, pre}, &moved_member(&1, prefix, rules, &2))
+  defp members(plan, map, prefix, rules, {reports, pre}) do
+    {map, reports, pre} =
+      Enum.reduce(
+        plan.members,
+        {opened(map, plan.opens), reports, pre},
+        &moved_member(&1, prefix, rules, &2)
+      )
+
+    {closed(map, plan.opens), reports, pre}
+  end
 
   defp moved_member({:leaf, name, type, initial, old, kept?}, prefix, {first?, _, _, _}, acc) do
     path = prefix <> "." <> name
@@ -1231,7 +1255,7 @@ defmodule Logex.Edit.Plan do
 
   defp key_put(map, key, value) when is_element_key(key) do
     {array, index} = element_key(key)
-    Map.put(map, array, Logex.Array.put(Map.fetch!(map, array), index, value))
+    Map.put(map, array, put_element(Map.fetch!(map, array), index, value))
   end
 
   defp key_put(map, key, value), do: Map.put(map, key, value)
@@ -1241,10 +1265,67 @@ defmodule Logex.Edit.Plan do
     {array, Enum.map(subscripts, &elem(Logex.Array.subscript(&1), 1))}
   end
 
+  defp element_fetch({:ok, {@opened, value, changes}}, index),
+    do: opened_fetch(Map.fetch(changes, index), value, index)
+
   defp element_fetch({:ok, value}, index) when is_tuple(value),
     do: {:ok, Logex.Array.fetch(value, index)}
 
   defp element_fetch(_none, _index), do: :error
+
+  defp opened_fetch({:ok, element}, _value, _index), do: {:ok, element}
+  defp opened_fetch(:error, value, index), do: {:ok, Logex.Array.fetch(value, index)}
+
+  defp put_element({@opened, value, changes}, index, element),
+    do: {@opened, value, Map.put(changes, index, element)}
+
+  defp put_element(value, index, element), do: Logex.Array.put(value, index, element)
+
+  # M5-14's review: an array of instances a switch or a prune moves element by element is
+  # opened for it, its elements' changes kept in a map beside the array as it was, and
+  # closed after, the array built again once from its elements in their order where any
+  # changed, so that moving each of n elements is linear in n, where a put into the tuple
+  # for each copied the array each time, quadratic in wall time though linear in reductions,
+  # which count a tuple's copy as about one. Only the plan's rules read an opened array,
+  # through `key_fetch/2` and `key_put/3`, between `opened/2` and `closed/2`. A plan of no
+  # array of instances opens none, and pays one empty list's match a step.
+  defp opened(map, []), do: map
+  defp opened(map, arrays), do: Enum.reduce(arrays, map, &open/2)
+
+  defp open(array, map), do: open_in(Map.fetch(map, array), array, map)
+
+  defp open_in({:ok, value}, array, map) when is_tuple(value),
+    do: Map.put(map, array, {@opened, value, %{}})
+
+  defp open_in(_none, _array, map), do: map
+
+  defp closed(map, []), do: map
+  defp closed(map, arrays), do: Enum.reduce(arrays, map, &close/2)
+
+  defp close(array, map), do: close_in(Map.fetch(map, array), array, map)
+
+  defp close_in({:ok, {@opened, value, changes}}, array, map),
+    do: Map.put(map, array, rebuilt(value, changes))
+
+  defp close_in(_not_opened, _array, map), do: map
+
+  defp rebuilt(value, changes) when map_size(changes) == 0, do: value
+
+  defp rebuilt(value, changes) do
+    dims = dims_of(value)
+
+    Logex.Array.indexes(dims)
+    |> Enum.zip_with(Logex.Array.to_flat(value, dims), &Map.get(changes, &1, &2))
+    |> Logex.Array.from_flat(dims)
+  end
+
+  # An array of instances' sizes, from its value: each element is a map, never a tuple.
+  defp dims_of(value) when is_tuple(value), do: [tuple_size(value) | dims_of(elem(value, 0))]
+  defp dims_of(_element), do: []
+
+  # The arrays a plan's entries name an element of, each once, in the order first named.
+  defp opens(names),
+    do: Enum.uniq(for(name <- names, is_element_key(name), do: held_under(name)))
 
   defp unfetched({:ok, value}), do: value
   defp unfetched(:error), do: nil
@@ -1417,7 +1498,8 @@ defmodule Logex.Edit.Plan do
   def prune(plan, record, %Instance{env: env} = state) do
     {kept, gone} = Map.split_with(env, fn {name, _value} -> is_map_key(plan.keep, name) end)
     pruned = for {name, value} <- gone, do: {:pruned, name, value}
-    {kept, inside} = Enum.reduce(plan.nested, {kept, []}, &prune_in/2)
+    {kept, inside} = Enum.reduce(plan.nested, {opened(kept, plan.opens), []}, &prune_in/2)
+    kept = closed(kept, plan.opens)
     {%{state | env: kept}, Enum.sort(holding(plan, record.shown, env) ++ pruned ++ inside)}
   end
 
@@ -1441,13 +1523,16 @@ defmodule Logex.Edit.Plan do
         [{:pruned, prefix <> "." <> name, v} | acc]
       end)
 
-    Enum.reduce(plan.members, {kept, reports}, fn
-      {:block, name, _initial, _kept?, inner}, {kept, reports} ->
-        nested_prune(key_get(kept, name), {name, prefix <> "." <> name, inner}, {kept, reports})
+    {kept, reports} =
+      Enum.reduce(plan.members, {opened(kept, plan.opens), reports}, fn
+        {:block, name, _initial, _kept?, inner}, {kept, reports} ->
+          nested_prune(key_get(kept, name), {name, prefix <> "." <> name, inner}, {kept, reports})
 
-      _member, acc ->
-        acc
-    end)
+        _member, acc ->
+          acc
+      end)
+
+    {closed(kept, plan.opens), reports}
   end
 
   defp nested_prune(%{} = inner, {name, path, plan}, {map, reports}) do

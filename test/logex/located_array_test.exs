@@ -1102,6 +1102,60 @@ defmodule Logex.LocatedArrayTest do
       Runner.stop(runner)
     end
 
+    # M5-14's review (provisional): a forces file's misfit is quoted as its line writes it,
+    # as decision 202 quotes a literal, `1.0e-400` and `16#8000` and never the 0.0 and the
+    # 32768 they are read as, an element's line and a whole line's alike.
+    test "a forces file's misfit at an int element is quoted as the line writes it", %{
+      tmp_dir: dir
+    } do
+      {:ok, grid} =
+        Logex.compile("var_input ti int[2,2]\nvar_output q bool\ngt ti[1,1] 0 ote q",
+          name: "grid22"
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "g",
+          "task fast interval 10 priority 1\nvar_global ti int[2,2] at card.i.0\n" <>
+            "var_global q bool at card.q.0\nprogram g grid22 with fast\ng.ti ti\ng.q q\n",
+          %{"grid22" => grid}
+        )
+
+      file = Path.join(dir, "forces")
+      {:ok, clock} = Manual.start_link()
+      {:ok, card} = Sim.start_link(clock: clock)
+
+      start = fn ->
+        Runner.start_link(
+          configuration: c,
+          io: %{"card" => {Sim, sim: card}},
+          clock: {Manual, clock},
+          forces: file
+        )
+      end
+
+      int = "is an int, forced to an integer from -32768 to 32767, got: "
+
+      File.write!(file, "ti[1,1] 1.0e-400\n")
+      raises("#{file}: line 1: `ti[1,1]` #{int}1.0e-400", start)
+
+      File.write!(file, "ti 1 2 3 1.0e-400\n")
+      raises("#{file}: line 1: `ti[1,1]` #{int}1.0e-400", start)
+
+      File.write!(file, "ti 16#8000 2 3.50 4\n")
+
+      raises(
+        "#{file}: line 1: `ti[0,0]` #{int}16#8000\n#{file}: line 1: `ti[1,0]` #{int}3.50",
+        start
+      )
+
+      # The host's value is quoted as the value it is, which has no other spelling.
+      File.write!(file, "")
+      {:ok, runner} = start.()
+      raises("`ti[1,1]` #{int}0.0", fn -> Runner.force(runner, "ti[1,1]", 0.0) end)
+      Runner.stop(runner)
+    end
+
     # The runner killed is reported by its devices as they go down.
     @tag :capture_log
     test "a force holds across a restart, a crash and a fresh start", %{tmp_dir: dir} do

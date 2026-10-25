@@ -832,8 +832,6 @@ defmodule Logex.TagSubscriptTest do
             # Decision 246: through another tag, `l[j]`, it is still warned.
             {"xic a ote l[i]\nmove a l[j]", later.("l[j]", "ote")},
             {"xic a otl l[j]\nxic a ote l[i]", later.("l[i]", "otl")},
-            # Two coils through the very tag are two coils, as `ote l[2]` twice is.
-            {"xic a ote l[i]\nxic a ote l[i]", later.("l[i]", "ote")},
             {"xic a osf o l[2]\nmove a l[i]",
              as.("l[i]", "l[2]", "is already the pulse bit of the `osf` on line 6")}
           ] do
@@ -844,6 +842,30 @@ defmodule Logex.TagSubscriptTest do
                 )} ==
                  {rungs, [warning]}
       end
+
+      # Two coils through the very tag are two coils, as `ote l[2]` twice is, and since
+      # M5-14's review (provisional) told so in its words, as `ote w.[n]` twice is: the
+      # element already has an `ote`, never that its array "may" be written.
+      for {rungs, warning} <- [
+            {"xic a ote l[i]\nxic a ote l[i]",
+             {7, "`l[i]` already has an `ote` on line 6: #{@later}"}}
+          ] do
+        assert {rungs,
+                Enum.filter(warnings(head <> rungs <> "\nxic l[0] ote o"), &(elem(&1, 0) == 7))} ==
+                 {rungs, [warning]}
+      end
+
+      words =
+        "var w word[4]\nvar_input i int\nvar_input n int\nvar_input a bool\n" <>
+          "var_output o bool\nxic w[0].[n] ote o\n"
+
+      assert warnings(words <> "xic a ote w[i].3\nxic a ote w[i].3") == [
+               {8, "`w[i].3` already has an `ote` on line 7: #{@later}"}
+             ]
+
+      assert warnings(words <> "xic a ote w[i].[n]\nxic a ote w[i].[n]") == [
+               {8, "`w[i].[n]` already has an `ote` on line 7: #{@later}"}
+             ]
 
       # The element itself, and another element, beside a coil on it: none; and since
       # decision 246 the very element through the very tag, `l[i]` beside `l[i]`, any write
