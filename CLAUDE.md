@@ -493,7 +493,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   path, `lane_t[2]`: a timer resumed and its preset moved, `{:preset, "lane_t[2]", {30, 50}}`,
   a counter's edge memory blocked, `lane_c[1].cu`, a block's one-shot, `lanes[1].e`, a
   member unwritten, and an array of instances' sizes or type changed refused, a user
-  block's elements by their members' kinds. Its moduledoc gives every rule, report kind and
+  block's elements by their members' kinds; and since M5-14's review a switch and a prune
+  open each array of instances, its elements' changes kept in a map beside it and the
+  array built again once, `opened/2` and `closed/2` in the plan, so an edit of n elements
+  allocates linearly in n, where a put into the tuple an element was quadratic in wall
+  time (41 s for an accept of `ton[65536]`, 1.6 s since). Its moduledoc gives every rule, report kind and
   host mistake; §4.9 the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
   `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
@@ -734,7 +738,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   coil still none, and since decision 246 neither is a coil beside another write of the
   very element or bit through the very tags, `ote lamps[slot]` beside `otl lamps[slot]` or
   `ote w.[n]` beside `otl w.[n]`, either first (`first/4`, `unlike/3`, `same/1`), other
-  tags still warned; a program with no coil on a
+  tags still warned, and since M5-14's review two coils through the very tags told "`l[k]`
+  already has an `ote` on line 4", as `ote w.[n]` twice is, where through other tags the
+  array "may" be written (`very/3`, provisional); a program with no coil on a
   bit or an element looks for no whole write, and one with no one-shot for no storage bit's write. A rung a
   jump may skip is read as any rung, so two `ote`s on one tag in sections a jump makes
   exclusive are still the second-`ote` warning (decision 107, confirmed by the maintainer
@@ -1175,7 +1181,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the next force writing plain decimal, and since M5-11's review the value its text
   alone, `n 1//c` or a tab after it no force, and one a float holds nearer 0.0 than an
   lreal's smallest normal, `1.0e-310`, a literal since decision 228, held as 0.0 at a real
-  point, and since decision 237 one no double holds, `1.0e-400`, too; a runner without
+  point, and since decision 237 one no double holds, `1.0e-400`, too, and since M5-14's
+  review a misfit quoted as its line writes it, `level 16#ffffffff` "got: 16#ffffffff"
+  and `1.0e-400` at an int point "got: 1.0e-400", a host's `force/3` value as the value
+  it is (provisional); a runner without
   `forces:` takes no force, and an output
   point or a value that does not fit is refused; since M5-13 an element of a located
   array forced, unforced and written in the file by its name, `temps[3] 37.5`, and since
@@ -1289,7 +1298,15 @@ variants, an edit's resume, preset, block list, unwritten member and refusals by
 warnings, the walks, the state check at depth, a hand edit, a configuration's refusals,
 event-task warnings and `get/2` paths, and its growth in reductions, each scalar instance's
 rung pinned exactly as at `aa41f4d`, an element within 15 reductions of it and a tag
-subscript within 5 of a literal one,
+subscript within 5 of a literal one, and since M5-14's review a `tp` element's first scan,
+a blocked one-shot in an element of blocks against its scalar twin, a member through a
+tag subscript as each of the first three operands, a member a block's new version adds
+started in each element of its array and pruned by a cancel, an array of a block's
+instances declared from Elixir with another version refused, an edit's accept, test, untest and
+assemble of `ton`, `seal` and a block holding `seal[n]` growing linearly in the words each
+allocates, counted in a process the collector does not visit during the step, and a grep
+that `lib/` holds no `case`, `cond`, `if` or `unless` but the parser's three and the
+runner's one,
 `located_array_test.exs` every rule of M5-13's located arrays from source, the line, its
 round trip and from Elixir, each element's point and address at one and two dimensions
 and a hierarchical address, every overlap and initial list refused, a location naming

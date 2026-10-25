@@ -7691,7 +7691,9 @@ the decisions the rest settle.
      - or tag indexes everywhere, the static rules weakened.
 
      IEC allows arrays of FB instances since Ed 3 (Table 11 feature 5, `ARRAY[1..50] OF
-     TON`), Logix arrays of TIMER (RM094N p.85). logex's static rules need a fixed path:
+     TON`), Logix arrays of most data types, its listed exceptions not TIMER (RM094N p.85,
+     which names no TIMER: read from the list, as M5-14's review found). logex's static
+     rules need a fixed path:
      one instruction of its type for each built-in instance (M1-6, decision 85), one
      one-shot for each storage bit (M1-6, M3-4, decision 101), and the edit's block list by
      path (decisions 32, 87 and 106); `ons edge[slot]` would fire for whichever element
@@ -9359,7 +9361,11 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      Logix keeps forces in the project (1756-PM004L pp.52–53), so it offers no precedent
      for a file (**unverified** for any file form); IEC says nothing of forcing. This
      supersedes decision 218's "an integer or bool point's line keeps decision 140's
-     reading, its plain decimal only".
+     reading, its plain decimal only". *(M5-14's review, provisional, PLAN's Question 5
+     under M5-14: a misfit is quoted as its line writes it, `level 16#ffffffff` "got:
+     16#ffffffff" and `1.0e-400` at an int point "got: 1.0e-400", where until then it
+     was quoted as the value read, 4294967295 and 0.0; a value written plainly reads as
+     before, "got: 2".)*
 227. **A rounded initial value (Milestone 5),** M5-10's follow-up second question,
      changing decision 219's "a declaration's or a configuration line's initial value is
      not looked at". `var sp real 16777217.0` declares a setpoint the `real` holds as
@@ -9793,7 +9799,11 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      No such warning was found in IEC or the Logix extracts read (**unverified**). This
      supersedes M5-13's review's provisional reading under decision 235 and M5-9's
      provisional reading that a coil on `w.[n]` beside any write of it through the very
-     tag is the second-`ote` warning.
+     tag is the second-`ote` warning. *(M5-14's review, provisional, PLAN's Question 6
+     under M5-14: two coils through the very tags on an element, `ote lamps[slot]` twice,
+     are told "`lamps[slot]` already has an `ote` on line 6", as `ote w.[n]` twice and a
+     member's `ote c[i].r` twice are, where they were told the array may be written
+     through a tag subscript; through other tags the array's words stay.)*
 247. **A tag refused for its initial value (Milestone 5),** M5-13's review's seventh
      question. **Taken: confirmed as built** (the maintainer, 2026-10-24): `var r int
      40000` is refused once and `r` declared with no initial value, so its uses are

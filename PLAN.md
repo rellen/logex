@@ -186,7 +186,10 @@ range; and a coil beside another write of the very element through the very tag 
 nothing, with three questions put to the maintainer. And the fourteenth, M5-14, the same
 day: arrays of timers, counters and blocks, `var lane_t ton[4]`, each element run by
 literal subscripts and its members read and written through a tag subscript (§3, M5-14),
-with four questions put to the maintainer.
+with four questions put to the maintainer; its review answered on 2026-10-25, M4-6's
+runner walk, which M5-14's code commit had deleted, put back, an edit of a large array of
+instances made linear in wall time, four surviving mutants pinned, and two questions put
+to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7883,6 +7886,87 @@ the walks' cross-type reach and the documents.
      - (c) a refusal an element.
      Logix changes an existing array's size or data type offline only (1756-RM094N p.85),
      and says nothing found of how it names the change.
+  *The review of M5-14 (2026-10-25)*, which found the code right against scalar twins
+  over 400 seeded programs and 300 seeded edits, answered in four gated commits,
+  `f218b2e`, of a test file only, `a9ae919`, of code and tests, `0b40fc0`, of tests only,
+  and one of documents.
+  (1) `382777e` had deleted the whole of M4-6's runner walk,
+  `Logex.ApiContractTest.RunnerWalk`, with its two tests, and said nothing of it; its
+  mutation table was judged by a suite without them. `f218b2e` puts the module back as it
+  stood at `aa41f4d`, with decision 241's whole force of `pt` and M5-12's and M5-13's
+  draws; M5-14's code passes it unchanged. (2) Four of the review's mutants lived, each
+  changing what a program does; each now has a test red with it: a `tp` element pulsing
+  on a first scan (X2); a one-shot an edit blocks in an element of user blocks firing at
+  its next run (X3), or never leaving the block list (X4), now scanned against a scalar
+  twin; and a member through a tag subscript as an instruction's third operand, `add x 1
+  c[k].pv` with `k` out of range, throwing out of the public API (X7). (3) An edit moved
+  each element of an array of instances by a put into the array's tuple, which copied the
+  array once an element: linear in reductions, which count a tuple's copy as about one,
+  but quadratic in wall time, an accept of `ton[65536]` 41 s and of `seal[65536]` 113 s.
+  A switch and a prune now open each array of instances, keep its elements' changes in a
+  map beside it and build it again once: `ton[65536]` accepts in 1.6 s, tests in 0.6 s
+  and untests in 0.6 s, `seal[65536]` in 2.7, 1.8 and 2.1 s, a block holding `ton[65536]`
+  in 3.3, 1.2 and 1.4 s (`m5/rv14/p/edit_time_big.exs`). A new growth test counts the
+  words each step allocates, in a process the collector does not visit during it: from
+  500 to 2,000 elements each step grows some 4.1 times, where the puts grew 10 to 12. (4)
+  The seven `case` expressions are function clauses, and a test holds `lib/` to the four
+  older ones, the parser's three and the runner's one. (5) README's "TIMER among them
+  (1756-RM094N p.85)" went further than the page, which lists the exceptions, ALARM_xxx,
+  AXIS_xxx, COORDINATE_SYSTEM, ENERGY_xxx, HMIBC, MESSAGE and MOTION_GROUP, and never
+  names TIMER: README and decision 154's text now say the list does not include it. (6) A
+  forces file's misfit quoted the value read, `1.0e-400` at an int point "got: 0.0": it
+  now quotes the line as written, as decision 202 quotes a literal (provisional, Question
+  5). (7) Two coils through the very tags on an element, `ote l[k]` twice, were told the
+  array "may" be written, where `ote w.[n]` twice is told "`w.[n]` already has an `ote`":
+  they are now told "`l[k]` already has an `ote` on line 6", as a member's `ote c[i].r`
+  twice already was (provisional, Question 6).
+  Cost, against `08cf605` (`m5/rv14/cost_base.txt`, `cost_now.txt`): the review's seven
+  programs of no array of instances scan in exactly the reductions they took; they
+  compile in 22 to 30 more of 7,000 to 10,600, the clauses' calls; an edit's accept takes
+  35 to 210 more of 4,300 to 8,000, within the 700 by which one run of it varies, a test,
+  untest and assemble 4 to 13 more. README's `lanes.exs` is unchanged by the review.
+  *Mutation table* (`m5/rv14/mut/run.log`, `m5/rv14/mut2/run.log`), each mutant judged by
+  the full suite's exit code on `a9ae919`: the review's four survivors, X2, X3, X4 and
+  X7, each red with its new test; and 22 of the fixes' own, 18 red at once: each of the
+  five places an array is opened dropped (Q1 to Q5), the rebuilt array ignoring its
+  changes (Q6b; Q6 as first written did not compile) or left open (Q7), no array opened
+  for a program that has any (Q8), the sizes read as one dimension (Q10), no element an
+  instance (Q11), the timer facts of an element (Q12), an element's type taken as its
+  array's (Q14), the compiler's and the type's held names of an array of blocks (C2, F1),
+  the very-tags wording (W1), and a forces file's integer and whole-line misfits quoted as
+  read (U1, U2). Three survived, and each is red after `0b40fc0`, which pins each: the
+  edit's facts of an array of user blocks (Q13), now a block's new member started in each
+  element and pruned by a cancel; the compiler's one-version check of such an array
+  declared from Elixir (C1); and a real point's misfit quoted as read (U3), `temps[2]
+  1.0E39`. Q9, an opened element read back from the array rather than from its changes,
+  is left alive as equivalent: no rule reads an element after writing it in the same
+  window. 2194 tests (11 doctests), up from 2185.
+
+  **Questions for the maintainer from the review**, each taken provisionally as written:
+
+  5. *How a forces file's bad value is quoted.* The forces file is the text file the
+     runner reads at every start, one forced input a line, `name value`. An engineer
+     writes the tank level's line in hex, `level 16#ffffffff`, which is 4294967295, too
+     large for the `dint` point, and the runner refuses to start. As built since the
+     review it says "`level` is a dint, forced to an integer from -2147483648 to
+     2147483647, got: 16#ffffffff", the value as the line writes it, and `1.0e-400` at an
+     int point "got: 1.0e-400"; until then it said "got: 4294967295" and "got: 0.0", the
+     value read. A host's `force/3` gives a value, not text, and is quoted as the value.
+     The options: (a) as built, the text as written; (b) the value read, as decision
+     226's example was pinned; (c) both, "got: 16#ffffffff, which is 4294967295". Logix
+     keeps forces in the project, not a file (1756-PM004L pp.52–53), so offers no
+     precedent; IEC says nothing of forcing.
+  6. *Two coils through one subscript tag.* A conveyor's lamps, `lamps bool[8]`, and two
+     rungs `xic a ote lamps[slot]` and `xic b ote lamps[slot]`: whichever comes last
+     sets lamp `slot`. As built since the review it is told "`lamps[slot]` already has an
+     `ote` on line 6: the last one in the scan decides it", as `ote lamps[2]` twice and
+     `ote w.[n]` twice are; until then "`lamps[slot]` is in `lamps`, which the `ote` on
+     line 6 may write through a tag subscript". Through two tags, `lamps[i]` and
+     `lamps[j]`, it is still told the array "may" be written, since they may name two
+     lamps. The options: (a) as built; (b) the array's words, as before. Decision 246 says
+     two coils through the very tag are two coils, warned, but not in which words; the
+     warning is logex's own, and no such warning of IEC's or Logix's was found
+     (**unverified**).
 - **M5-15 · The contract walk's cross-type reach.** Each item above has extended the walks
   with its own rules; this one draws the types together: programs, configurations and
   runner walks that mix every type, `@junk` and `@edges` by type (`1.0` stops being junk

@@ -2293,10 +2293,12 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   why: it would run whichever element `i` held, so no element would have one preset, one
   run or one edge memory that a rule or an online edit could see. IEC allows arrays of
   function block instances since Ed 3 (Table 11 feature 5, `ARRAY[1..50] OF TON`).
-  Logix allows arrays of most data types, TIMER among them (1756-RM094N p.85). It lets an
-  instruction take an element by a tag in its subscript, "If you want an instruction to
-  access different elements in an array, use a tag in the subscript" (p.86), and the
-  extracts read name no exception for a timer. So logex's refusal is its own (decision
+  Logix allows arrays of most data types, and the exceptions it lists, ALARM_xxx, AXIS_xxx,
+  COORDINATE_SYSTEM, ENERGY_xxx, HMIBC, MESSAGE and MOTION_GROUP, do not include TIMER
+  (1756-RM094N p.85; the page names no TIMER, so an array of TIMER is read from the list,
+  not quoted). It lets an instruction take an element by a tag in its subscript, "If you
+  want an instruction to access different elements in an array, use a tag in the
+  subscript" (p.86), and the extracts read name no exception for a timer. So logex's refusal is its own (decision
   154).
 - **A tag subscript to read or write a member.** A member of an element may be read or
   written through a tag subscript: `move lane_c[lane].cv count` and `xic lane_t[lane].dn
