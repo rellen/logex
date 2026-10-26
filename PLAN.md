@@ -200,7 +200,12 @@ cross-type reach, the same day (§3, M5-15): every pair of types through `move`,
 conversion's two slots, `add`, `and` and a connection, and programs, resources and the
 runner walk that mix every type, against oracles that restate each rule; the one defect it
 found, a truncation's misfit told the rounding conversion, fixed, with two questions put
-to the maintainer.
+to the maintainer; and its review's findings fixed the same day: four surviving mutants
+pinned, the walks' reach raised to the rules they met only by chance, which found a
+defect, `not` and the shifts of a user block's member computed in the destination's type,
+fixed, the runner walk's two failing families traced to its model and fixed, its seed back
+at `{2026, 10, n}` with its draws raised, a loosened check scoped back, and three
+questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8171,6 +8176,130 @@ the walks' cross-type reach and the documents.
      `{0.0, 1.0000000031710769e-30}`, while `var_global x real 0` still reports `0`, as
      written; the walk restates each as built. Logix has no declared initial value but the
      value a download carries, unverified.
+
+  **Review of M5-15, and its fixes** (2026-10-26, on `943c05f`). The review planted 22
+  mutants: 17 were caught by the new walks, four survived the whole suite and one more was
+  caught only by an older test; at 30 fresh seed families the runner walk failed real
+  checks in two and reached every atom in only ten; a check had been loosened. Each
+  finding became:
+  - *Four survivors, each a misbehaviour the suite let through* (Y6, Y9, Y10, Y18): each
+    is now a focused test that fails with its mutant planted. `array_configuration_test.exs`
+    holds an int var_output element at a near end, `m1.o[0] rs[2]`, into a real global
+    array as 1.0, never 1; `long_timer_test.exs` reads and writes bits 0, 31, 32, 40, 62 and
+    63 of a `ton_ltime`'s `.pre`, a scalar's, a literal element's and a tag-subscripted
+    one's, bit 63 its sign; `bit_string_test.exs` computes `not`, `shl` and `rol` of a
+    `byte[2]` element, by literal and tag subscripts, in 8 bits, and `not` of an element's
+    member in its member's type.
+  - *The new walks' reach, which had met five rules only by chance* (Y5, Y9, Y10, Y13,
+    Y20): the cross-type walk now draws `not`, `shl`, `shr`, `rol` and `ror` across the
+    widths, decision 214 restated in the source's bits and decision 165's counts, a count
+    a literal about the width or an integer tag, `s` among them, negative now and then; a
+    long timer's preset with bits above 31, 2^32 and 2^40 ms and the largest whole number
+    of milliseconds a lint holds, and a bit above 31 of its `.pre` read every rung; the
+    block's own lword output `w`, a scalar instance's member, read by bit; integers a real
+    rounds as a tie up to the even one, 2^24 + 3 and 2^53 + 3, among each wide integer
+    type's inputs, an lreal input no single holds, 16777219.0 and 0.30000000000000004, and
+    a conversion reading an input three times as often as another source; and a resource
+    whose outputs go now and then into an element of a global array of two, `m1.y0 gv0[1]`,
+    and whose output arrays go element by element into their globals', both widening.
+    Each is a reach atom, `:rounded_into_real`, `:tie_rounded_up`, `:not_wider`,
+    `:shift_wider`, `:rotated`, `:negative_count`, `:member_high_bit`, `:block_member_bit`,
+    `:element_out_into_real` and `:elements_out`, so a walk that stops meeting one fails.
+  - *A defect the extended walk found.* `not` and the shifts of a user block's member, or
+    of a member of an element of an array of them, computed in the destination's type:
+    `shr b.o 33 y`, `o` a dint at −2^31 and `y` a lint, wrote 2147483647, where decision
+    214 computes in the source's dint and writes 0. `Logex.Program.destination/3` types a
+    destination, and logic outside a block never writes a block's member, so it gave none;
+    the scan now reads the member's type in its block, in the program's one table
+    (decision 53). `bit_string_test.exs` pins it; decision 214 notes it.
+  - *The runner walk's two failing families* (`{3113, 10, n}` and `{3111, 10, n}`): both
+    were the walk's model, not the runner, each reproduced and traced. In 3113 the walk
+    told the panel's next write to fail and advanced a poll period expecting that write
+    to trip the runner, but a round tripped first on `b1`'s major fault, before its write;
+    the failure then met the trip's 0, which the device passes over (decision 135, "where
+    it still takes a write"), or, on another run, a poll's write again just before it, so
+    the panel kept its last outputs or was written 0. The model now allows either for a
+    device whose write's failure a different trip overtook. In 3111 the walk's poll period
+    before a "stuck runner" injection let a round trip the runner already, and the model
+    still expected the device's deadline to trip it; it now checks a runner tripped already
+    and moves on. `trip_test.exs` pins the runner's side: a trip's 0 that fails is passed
+    over, the first reason kept, nothing written, until a restart writes again (question
+    3 asks whether it should try again). Over the 32 families checked after the fixes, no
+    check failed, nor in the 32 run before the draws were raised.
+  - *The runner walk's fragile reach, and its seed.* The walk is back at the record's seed
+    family `{2026, 10, n}`, and its draws are raised rather than its seed moved: 45 walks
+    where there were 30; a trigger forced half the time to the other value than it reads,
+    so that the force makes its round; forced triggers and the triggers pressed more
+    often, the panel's dint more often -4, an array forced whole drawn among the forces and
+    unforced whole about as often as all its other forces together, and a continuous task's
+    slow step twice among the injections. Every atom is reached at `{2026, 10, n}`; of the
+    31 families `{2026, 10, n}` and `{3101..3130, 10, n}`, 28 reach every atom, where the
+    review found 10 of 30 at fresh families, the three misses `:next_due_from_step` (an interval cut a while after
+    the last round, rare by its nature, decision 139) and, once each, `:array_unforced`
+    and `:forced_trigger`, each a reach and no check. The walk takes about 20 s alone,
+    where it took 10, run beside the suite's other modules. Its self test of the input
+    check, which seeks the first walk to give the core a late input, now meets it at the
+    44th of its own seeds, so it searches to 80 where it searched to 40.
+  - *The loosened check* is scoped back: a real point's reading is compared by value, 0
+    from its device and 0.0 in the resource one reading, and every other point's exactly,
+    so a float at an integer or a bool point is no reading of it.
+  - *Minor.* The cross-type walk's oracle, the rules it restates and the model of a scan,
+    holds no `if`, `cond` or `case` now, each a clause; its draws keep `case` over a random
+    number, as every other walk's do, the rule's grep being `lib/`'s (question 5). Decision
+    250's words for a comparison are the maintainer's to change (question 4).
+
+  The cross-type walk passes at its seed and at each of the 30 families `{3000 + i, 10,
+  100 + 7i}`, i from 1 to 30, where before the review's run one missed `:saturated`.
+  **Cost.** The runtime's change is met only by a `not` or a shift whose source is a
+  member: a program of 300 of them, of a built-in instance and of an element, scans in one
+  reduction more each, 31111 where its parent took 30811; every other program of
+  `rv15/cost.exs`'s 34 scans exactly as at `943c05f` and compiles within its own spread,
+  over two runs each. The suite's wall time, two runs each, interleaved: 86.2 and 76.8 s
+  at `943c05f`, 78.4 and 82.9 s at the fix, within the parent's own spread; it passes 2203
+  tests (11 doctests, 2192 tests), 5 more.
+
+  **Mutation table** (`rv15/mut/run.log`, `run4.log`): the review's seven mutants the
+  suite or the new walks missed, and two of the fixes reverted, each red, in its focused
+  test and in the cross-type walk but ZF, which the runner walk meets only where a write's
+  failure is overtaken.
+
+  | Mutant | Planted | Red in |
+  |---|---|---|
+  | Y5 | a scalar into a real global array's element left unrounded | CrossTypeWalk, ArrayConfigurationTest |
+  | Y6 | an element of a var_output array into one, the same | CrossTypeWalk, ArrayConfigurationTest |
+  | Y9 | a member of an element's bit read through a 32-bit mask | CrossTypeWalk, LongTimerTest |
+  | Y10 | a scalar member's bit, the same | CrossTypeWalk, LongTimerTest |
+  | Y13 | the real conversions computing in an lreal | CrossTypeWalk, ApiContractTest, RealTest |
+  | Y18 | `not` and the shifts of an element in the destination's type | CrossTypeWalk, BitStringTest |
+  | Y20 | an integer's tie into a real no longer to even | CrossTypeWalk, ApiContractTest, RealTest |
+  | UB | the block member fix reverted | CrossTypeWalk (both tests), BitStringTest |
+  | ZF | a trip's 0 that fails raising in the device | TripTest |
+
+  **Questions for the maintainer** (M5-15's review).
+  3. *A trip's 0 that a device does not take.* A conveyor's drive card is told to stop:
+     the runner trips, on a bit number out of range say, and writes every output 0 once,
+     but the card's write fails that moment (a cable glitch, `{:error, :eio}`). Today the
+     runner passes the failure over, as decision 135's "where it still takes a write"
+     has it: the card keeps showing its last outputs, the conveyor's run bit still 1, and
+     nothing tries again until a restart. What should an operator see? (a) As built: one
+     zero, and the card's own fault behaviour is relied on; (b) the zero tried again at
+     each poll while the runner is tripped, until one is taken; (c) (b), and `status/1`
+     names each device whose outputs are not known to be 0. IEC says nothing. In Logix the
+     output module itself goes to its configured fault state when the controller faults
+     or its connection is lost, "A major fault on the controller causes the outputs to go
+     to their configured fault state" (1756-UM900B p.242) and "the output remains in the
+     Fault mode state until a connection is re-established" (1756-UM058L p.83), so the
+     module, not a write from the controller, holds the safe state.
+  4. *Decision 250's words for a comparison.* `gt 1.0e-310 0.0` is refused "…: it would be
+     written as 0.0", words decision 240 took from a write; a comparison writes nothing.
+     (a) Keep them, one message for every slot; (b) "it would be read as 0.0" in a
+     comparison's slots alone; (c) "the comparison would compare 0.0". IEC and Logix have
+     no such message; unverified for Logix's handling of a denormal constant.
+  5. *Clauses, not conditionals, in tests.* CLAUDE.md's rule is enforced on `lib/` by a
+     grep; the test files hold some 300 `if`, `cond` and `case`, most in the walks' draws
+     and harnesses. This review made the cross-type walk's oracle clauses. (a) `lib/` only,
+     as now; (b) every walk's oracle too, the draws free; (c) all test code, with the grep
+     extended. IEC and Logix have nothing to say here.
 - **M5-16 · The documents' closing pass.** Each item has brought its README sections,
   instruction table rows and stanzas; this one checks "What logex is not" (which says
   "bool and dint only, no real, no bit access, no arrays") against the code,
