@@ -10151,8 +10151,14 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      heredoc is no conditional and one in an inline `if(…, do: …)` is, and pins that every
      conditional lies in a draw its module names, and that every draw named is a function
      of its module: 320 of the 443 rewritten as clauses, the 123 left all in draws. The
-     walks run on their seeds as before: each draws what it drew, its reach the same,
-     every walk green, no assertion fewer.
+     walks run on their seeds as before, their reach the same, every walk green, no
+     assertion fewer; each draws what it drew but the RunnerWalk, which gained decision
+     262's draws, a device that will refuse a refused restart's 0, and so draws otherwise
+     on every seed (corrected after the close's review, which traced each walk's calls into
+     `:rand`). *Since that review* `clauses_test.exs` reads every form of a module's body,
+     not only a `def`, `defp` or `test`: a conditional in a `setup`, a macro, a module
+     attribute's anonymous function or the body's own code lies in no draw, and one written
+     through its module, `Kernel.if(…)`, is one.
 265. **Milestone 5's done sentence (Milestone 5),** M5-16's question, which its review
      answered for itself by building the one plant. **Taken: accepted as is; Milestone 5
      is closed** (the maintainer, 2026-10-26): `end_to_end_test.exs`, "Milestone 5's done

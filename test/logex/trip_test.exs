@@ -748,6 +748,29 @@ defmodule Logex.TripTest do
       assert length(Sim.writes(panel)) > length(written) + 1
     end
 
+    # Decision 262: a restart refused latches every device again, its 0 written once more,
+    # and status/1 names afresh the devices whose 0 that write does not take, so one named
+    # before whose new 0 is taken is named no more.
+    test "a restart refused whose 0 a device named before takes drops its name" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      fault = out_of_range("fast", "l", 4, 16)
+      assert %{status: :tripped, trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
+      written = Sim.writes(panel)
+
+      Sim.fail(panel, :read, {:value, [7], 1})
+
+      assert Runner.restart(runner, :cold) ==
+               {:error, {:io_init, "panel", {:unknown_address, [7]}}}
+
+      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert %{status: :tripped, trip: ^fault, unzeroed: []} = Runner.status(runner)
+    end
+
     test "a step that meets two major faults trips for the first, in the order its " <>
            "instances run" do
       text = """
@@ -1097,6 +1120,46 @@ defmodule Logex.TripTest do
       assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
       assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
       refute_received {Runner, ^runner, {:trip, _}}
+    end
+
+    # Decision 262: a device that latches on its own deadline and whose own 0 fails is
+    # named by status/1 once the runner trips on its notice, and its polls write its 0
+    # again, and nothing else, until one is taken.
+    test "a device latched on its deadline whose own 0 fails is named and written its 0 " <>
+           "again at its polls" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 20)
+      :sys.suspend(runner)
+      Manual.advance(clock, 109)
+      written = Sim.writes(panel)
+      assert List.last(written) == %{[0] => 1}
+
+      # Its latch at 130, the poll's 0 at 130 and the next poll's at 140 fail; 150's is taken.
+      for _ <- 1..3, do: Sim.fail(panel, :write, {:error, :eio})
+      Manual.advance(clock, 1)
+      assert Sim.writes(panel) == written
+      assert Sim.outputs(panel) == %{[0] => 1}
+      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+
+      :sys.resume(runner)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+      assert Sim.writes(panel) == written
+
+      Manual.advance(clock, 10)
+      assert %{trip: {:watchdog, {:device, "drive", 110}}, unzeroed: []} = Runner.status(runner)
+      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+
+      Manual.advance(clock, 100)
+      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+      assert Runner.status(runner).unzeroed == []
     end
 
     test "a device's wake that comes before the deadline its last refresh carried moves " <>

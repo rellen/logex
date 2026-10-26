@@ -8099,6 +8099,8 @@ the walks' cross-type reach and the documents.
      "`x` of every element of `hs[*].ws`"; (c) by the first elements, `hs[0].ws[0].x`,
      as before decision 254. Logix changes an existing array's size or data type offline
      only (1756-RM094N p.85), and says nothing found of how it names the change.
+     *Answered since* by decision 259, (b) at every level, `hs[*].ws[*].x`, which
+     supersedes the message quoted here (below, "Close").
 - **M5-15 · The contract walk's cross-type reach.** Each item above has extended the walks
   with its own rules; this one draws the types together: programs, configurations and
   runner walks that mix every type, `@junk` and `@edges` by type (`1.0` stops being junk
@@ -8599,9 +8601,15 @@ the walks' cross-type reach and the documents.
     the 123 left all in draws, each
     walk's module naming its draws in `@draws`, `end_to_end_test.exs` holding none, and
     `clauses_test.exs` reading both files' syntax trees to pin it (a conditional in a
-    string or a comment is none, one inline is one). The walks run on their seeds as before:
-    every walk green, its reach the same, and no assertion fewer (the count of `assert`,
-    `refute` and `flunk` in each test file the same or more).
+    string or a comment is none, one inline is one), since the close's review in every
+    form of a module's body, a `setup`, a macro, a module attribute's anonymous function
+    and the body's own code among them, and written through its module, `Kernel.if`. The
+    walks run on their seeds as before: every walk green, its reach the same, and no
+    assertion fewer (the count of `assert`, `refute` and `flunk` in each test file the same
+    or more); every walk but the RunnerWalk draws on its seeds exactly what it drew at
+    `453ef7b`, and the RunnerWalk, which gained decision 262's draws (a device that will
+    refuse a refused restart's 0), draws otherwise on every seed (corrected after the
+    close's review, which traced each walk's calls into `:rand`).
 
   *Mutation table* (`scratchpad/m5/close/mut/run.log`), each mutant judged by the full
   suite's exit code on a copy of the tip: 38 mutants, 37 red.
@@ -8626,12 +8634,42 @@ the walks' cross-type reach and the documents.
 
   2212 tests (11 doctests), up from 2204.
 
+  *The close's review* (`scratchpad/m5/rv257`), answered (`scratchpad/m5/rv257f`): no
+  defect that breaks behaviour; five findings, each answered.
+  1. `clauses_test.exs` read conditionals only in a `def`, `defp` or `test`, so one in a
+     `setup`, a `defmacrop`, a module attribute's anonymous function or written
+     `Kernel.if(…)` passed. Its reading now walks every form of a module's body, each
+     conditional under the function, macro or test that holds it or else under the form,
+     `setup`, `@pick` or the module's body, none a draw, and takes a conditional written
+     through `Kernel` or `Kernel.SpecialForms`; a test of the reading pins each kind. Each of
+     the review's five plants, an `if` in a `setup` of each file, one in a `defmacrop`, a
+     `case` in an attribute's function and `Kernel.if` in an oracle, is red on it, and the
+     old reading with the new test is red.
+  2. A refused restart's 0 taken by a device named before was caught only by the
+     RunnerWalk: `trip_test.exs` now pins that its name is dropped (red with `zeroed/1`'s
+     reset taken out), and that a device latched on its own deadline whose own 0 fails is
+     named once the runner trips on its notice and written its 0 again at its polls, and
+     nothing else, until one is taken (red with a failed 0 read as taken, and with a
+     latched device's zero answering `:ok`).
+  3. "Each draws what it drew" was not true of the RunnerWalk, which gained decision 262's
+     draws; decision 264 and the bullet above say so.
+  4. Question 1 below is the review's safety point, which it recommends answering (b); it
+     stays the maintainer's.
+  5. Question 9 of M5-14's answers, which quotes decision 254's message, is marked
+     answered by decision 259.
+
+  2215 tests (11 doctests), up from 2212.
+
   *Provisional readings* (the answers'), each a question for the maintainer:
   1. *A stop while a device's 0 has not been taken.* The runner tripped, the drive card's 0
      failed, and the host stops the runner before the card's next poll. As built the close
      writes nothing more, as before decision 262, so the card keeps its last outputs. The
      options: (a) as built; (b) the close tries the 0 once more, as the poll would have.
      Logix leaves the safe state to the module's own fault behaviour (1756-UM900B p.242).
+     The close's review puts this question first, as a safety point: a tripped runner
+     whose card's 0 fails at every attempt, stopped, closes the card still showing 1, with
+     no last attempt, which sits uneasily with decision 116's "every output 0 once" at a
+     stop; it recommends (b). Not settled here: it is the maintainer's.
   2. *A device down at the trip.* A drive killed or gone down when the runner trips is named
      in `status/1`'s `unzeroed` until a restart, its outputs not known to be 0; one whose 0
      was taken and that goes down later is not named. The options: (a) as built; (b) a
