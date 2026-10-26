@@ -708,6 +708,47 @@ defmodule Logex.RealTest do
       end
     end
 
+    # M5-15, found by the cross-type walk: a truncation's misfit was told the conversion that
+    # rounds, `lreal_to_int` for an lreal source of `real_trunc_int`, `real_to_dint` for a
+    # dint destination, and `move` for a real one; each is now told the truncation that
+    # does the whole job, and a real destination nothing (provisional).
+    test "a truncation's misfit is told the truncation that does its job, never a rounding" do
+      assert messages("var a lreal\nvar i int\nreal_trunc_int a i") == [
+               {3,
+                "`real_trunc_int` reads a real, but `a` is an lreal (declared on line 1): " <>
+                  "use `lreal_trunc_int`"}
+             ]
+
+      assert messages("var a real\nvar d dint\nreal_trunc_int a d") == [
+               {3,
+                "`real_trunc_int` writes an int, but `d` is a dint (declared on line 2): " <>
+                  "use `real_trunc_dint`"}
+             ]
+
+      assert messages("var a real\nvar r real\nreal_trunc_int a r") == [
+               {3, "`real_trunc_int` writes an int, but `r` is a real (declared on line 2)"}
+             ]
+
+      assert messages("var a lreal\nvar w word\nlreal_trunc_int a w") == [
+               {3, "`lreal_trunc_int` writes an int, but `w` is a word (declared on line 2)"}
+             ]
+
+      # A conversion that rounds is told the rounding one, as before.
+      assert messages("var a lreal\nvar i int\nreal_to_int a i") == [
+               {3,
+                "`real_to_int` reads a real, but `a` is an lreal (declared on line 1): " <>
+                  "use `lreal_to_int`"}
+             ]
+
+      # A source of an integer type, which a truncation leaves whole, is told its
+      # conversion.
+      assert messages("var d dint\nvar i int\nreal_trunc_int d i") == [
+               {3,
+                "`real_trunc_int` reads a real, but `d` is a dint (declared on line 1): " <>
+                  "use `dint_to_int`"}
+             ]
+    end
+
     test "`trunc_int` is no mnemonic" do
       assert messages("var a real\nvar i int\ntrunc_int a i") == [
                {3, "unknown instruction `trunc_int`"}

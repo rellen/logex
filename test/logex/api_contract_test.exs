@@ -196,6 +196,12 @@ defmodule Logex.ApiContractTest do
   what the runner gave the core and a model of the watchdogs and the trip, is
   `Logex.ApiContractTest.RunnerWalk`, below, a module of its own so that it runs beside
   this one.
+
+  M5-15: the walks' cross-type reach, every pair of types and programs and resources that
+  mix them, is `Logex.ApiContractTest.CrossTypeWalk`, below, a module of its own too; and
+  since M5-15 the runner walk's configurations mix the types, a real and a word point, a
+  uint output, a typed counter's array, a long timer's array and a real array a tag
+  subscripts among them.
   """
   use ExUnit.Case, async: true
 
@@ -10432,7 +10438,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   seeded configurations, each a fast task, now and then a slow one, an event task on a
   panel's or a drive's input, an event task on a trigger logic writes and the continuous
   task, with an untimed counter under it or with no task, or none, so that about three in
-  four have untimed programs, 22 of the 30 at this seed, and the rest do not; a divide by zero while the panel's dint reads 0; the
+  four have untimed programs, 26 of the 30 at this seed, and the rest do not; a divide by zero while the panel's dint reads 0; the
   panel and the drive each a simulated device that reports its changes or one that is only
   read; a forces file or none; a poll period, an idle watchdog and a share drawn. Each
   walk takes 70 steps: random waits and presses, forces and unforces, an online edit's
@@ -10450,7 +10456,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   every configuration holds a located array in and one out, the panel's `pt int[3]` at
   `panel.i.3` and the drive's `qs bool[2]` at `drive.q.2`, each element a point pressed,
   forced and unforced by its name, `pt[1]`, written at its own address, and refused at its
-  own, a 70000 at `panel.i.4` (decision 156, decision 143).
+  own, a 70000 at `panel.i.4` (decision 156, decision 143). Since M5-15 the types are
+  mixed: the drive's `dr real` at `drive.i.2` and `dw word` at `drive.i.3`, pressed and
+  forced, and `qu uint` at `drive.q.4`, which a program `m2` of a typed counter's array,
+  a long timer's array and a real array the panel's dint subscripts writes; a float past a
+  single's range at `drive.i.2` is a bad value as one at the panel's dint is.
 
   It is checked against two models that know nothing of the runner's code.
 
@@ -10652,7 +10662,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # 156): the panel's three ints at `panel.i.3` to `panel.i.5`, the drive's two lamps at
     # `drive.q.2` and `drive.q.3`.
     "zone" =>
-      "var_input t int[3]\nvar_output h bool[2]\ngt t[0] t[1] ote h[0]\ngt t[2] 3 ote h[1]"
+      "var_input t int[3]\nvar_output h bool[2]\ngt t[0] t[1] ote h[0]\ngt t[2] 3 ote h[1]",
+    # M5-15: the types together, the drive's real and word points read, the word's bits
+    # converted and its bit 3 read, a typed counter's array and a long timer's array run
+    # on the panel's `pb`, and a real array's element, whose subscript the panel's dint
+    # gives, written while `pa` is pressed: outside it at 7 and -4 as `x1`'s is, a major
+    # fault after `x1`'s in its step.
+    "mix" =>
+      "var_input r real\nvar_input w word\nvar_input on bool\nvar_input go bool\n" <>
+        "var_input n dint\nvar_output u uint\nvar_output q lreal\nvar_output b bool\n" <>
+        "var c ctd_udint[2]\nvar t ton_ltime[2]\nvar v real[4]\nmove r q\n" <>
+        "word_to_uint w u\nxic w.3 ote b\nxic on ctd c[0] 2\nxic on ton t[1] 3000000\n" <>
+        "xic go move r v[n]"
   }
 
   defp programs,
@@ -10674,7 +10695,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {"db", "bool", "drive.i.1"},
     {"qb", "bool", "drive.q.0"},
     {"qc", "dint", "drive.q.1"},
-    {"qs", "bool[2]", "drive.q.2"}
+    {"qs", "bool[2]", "drive.q.2"},
+    {"dr", "real", "drive.i.2"},
+    {"dw", "word", "drive.i.3"},
+    {"qu", "uint", "drive.q.4"}
   ]
 
   @inputs %{
@@ -10685,12 +10709,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     "pt[1]" => {"panel", [4], :int},
     "pt[2]" => {"panel", [5], :int},
     "da" => {"drive", [0], :bool},
-    "db" => {"drive", [1], :bool}
+    "db" => {"drive", [1], :bool},
+    "dr" => {"drive", [2], :real},
+    "dw" => {"drive", [3], :word}
   }
 
   @outputs %{
     "panel" => %{[0] => "qa", [1] => "qn"},
-    "drive" => %{[0] => "qb", [1] => "qc", [2] => "qs[0]", [3] => "qs[1]"}
+    "drive" => %{[0] => "qb", [1] => "qc", [2] => "qs[0]", [3] => "qs[1]", [4] => "qu"}
   }
 
   # Everything the walk must be seen to reach: every event kind; every trip reason but
@@ -10765,10 +10791,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :element_forced,
     :element_misfit,
     :array_forced,
-    :array_unforced
+    :array_unforced,
+    :real_pressed,
+    :word_pressed,
+    :real_forced,
+    :real_misfit
   ]
 
-  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t)
+  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1])
 
   # A draw: the tasks' intervals and watchdogs, an event task on a panel's or a drive's
   # input, a trigger logic writes, the continuous task declared or not, and the untimed
@@ -10825,7 +10855,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc",
         "program b1 bit with fast\n  b1.n pd\n  b1.on pb",
         "program x1 index with fast\n  x1.n pd\n  x1.on pa",
-        "program z1 zone with fast\n  z1.t pt\n  z1.h qs"
+        "program z1 zone with fast\n  z1.t pt\n  z1.h qs",
+        "program m2 mix with fast\n  m2.r dr\n  m2.w dw\n  m2.on pb\n  m2.go pa\n  m2.n pd\n  m2.u qu"
       ] ++
         optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
         optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
@@ -10881,7 +10912,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # it the hung devices' real-time waits. Over 30 other seed families every walk passed,
   # in 5 to 11 s, and 22 reached every atom, the rest missing one, an interval cut a while
   # after the last round (decision 139) or a step taken while tripped, each rare by its
-  # nature.
+  # nature. M5-15's mixed types changed the draws, and the family {2026, 10, n} missed
+  # `:array_unforced`, so the walk draws {2027, 10, n}, at which every atom is reached in
+  # about 10 s in the suite; of the six families {2026..2031, 10, n} three reached every
+  # atom and three missed one, each a reach and no check.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
@@ -10891,12 +10925,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     logs =
       for seed <- 1..30 do
-        :rand.seed(:exsss, {2026, 10, 19 + seed})
+        :rand.seed(:exsss, {2027, 10, 19 + seed})
         walk(programs, dir, seed, 70)
       end
 
     # From fresh processes, the first walk again, exactly.
-    :rand.seed(:exsss, {2026, 10, 20})
+    :rand.seed(:exsss, {2027, 10, 20})
     assert walk(programs, dir, 1, 70) == hd(logs)
 
     assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
@@ -10928,7 +10962,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       end)
 
     assert is_binary(caught), "the walk's check caught no input given late"
-    assert caught =~ ~r/^(pa|pd|da|pt\[\d\]) read -?\d+ at \d+, held /
+    assert caught =~ ~r/^(pa|pd|da|dr|dw|pt\[\d\]) read -?[\d.]+ at \d+, held /
   end
 
   defp walk(programs, dir, seed, steps) do
@@ -11148,6 +11182,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {device, address, type} = @inputs[name]
     reach(:forced_trigger_pressed, name in forced)
     reach(:element_pressed, String.contains?(name, "["))
+    reach(:real_pressed, type == :real)
+    reach(:word_pressed, type == :word)
     set(w, name, device, address, value(type))
   end
 
@@ -11164,6 +11200,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp value(:bool), do: pick([0, 1])
   defp value(:dint), do: pick([0, 0, 3, 7, -4])
   defp value(:int), do: pick([0, 2, 3, 5, -1])
+  defp value(:real), do: pick([0.0, 2.5, -1.25, 37.5])
+  defp value(:word), do: pick([0, 8, 65_535, 3])
 
   # ---- forcing ---------------------------------------------------------------------------
 
@@ -11198,6 +11236,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         reach(:force, true)
         reach(:forced_trigger, kick == 1)
         reach(:element_forced, String.contains?(name, "["))
+        reach(:real_forced, type == :real)
 
         # A force that changes what a trigger reads makes its round at once, before it
         # returns, and one that does not makes none (decisions 120 and 138).
@@ -11549,7 +11588,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       :exit,
       {:value, [0], 2},
       {:value, [7], 1},
-      {:value, [4], 70_000}
+      {:value, [4], 70_000},
+      {:value, [2], 1.0e39}
     ]
 
   defp injections(w) do
@@ -11672,6 +11712,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp cause("panel", _callback, {:value, [4], value}) do
     reach(:element_misfit, true)
     {:bad_value, [4], value}
+  end
+
+  # M5-15: a float past a single's range at the drive's real point, as at the panel's dint,
+  # is a bad value (decision 166).
+  defp cause(device, _callback, {:value, [2], value}) do
+    reach(:real_misfit, device == "drive")
+    {:bad_value, [2], value}
   end
 
   defp cause(_device, _callback, {:value, address, _value}), do: {:unknown_address, address}
@@ -12086,7 +12133,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       value = Map.get(inputs, name, Runtime.get!(w.rt, name))
       to = min(at, Map.get(w.hung, device, at))
       held = held(w.timeline[name], to - window(w, device, passes, to), to) ++ unforcing(w, name)
-      assert value in held, "#{name} read #{value} at #{at}, held #{inspect(held)}"
+      # By value: a real point's 0 from its device and the 0.0 the resource holds are one
+      # reading (M5-15).
+      assert Enum.any?(held, &(&1 == value)),
+             "#{name} read #{value} at #{at}, held #{inspect(held)}"
     end
   end
 
@@ -12183,4 +12233,1852 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     do: Process.put(:runner_reach, MapSet.put(Process.get(:runner_reach), name))
 
   defp reach(_name, _false), do: :ok
+end
+
+defmodule Logex.ApiContractTest.CrossTypeWalk do
+  @moduledoc """
+  M5-15: the walks' cross-type reach (PLAN.md "M5-15 · The contract walk's cross-type
+  reach", `docs/organisation.md` §4.12). Each item of Milestone 5 extended the walks with
+  its own type's rules; this module draws the types together, a module of its own so that
+  it runs beside the others.
+
+  - Every ordered pair of the fifteen elementary types through `move`, each meeting by
+    Ed 3 Figure 11 or refused naming its conversion; every one of the 182 conversions and
+    truncations given a source of each type and a destination of each type, taking exactly
+    the sources Figure 11 widens into its `from` type and its own destination, each refusal
+    in its words; `add` and `and` over every pair, taking exactly their class; and a
+    connection of each type into a var_input and out of a var_output of each other type,
+    widening by Figure 11 or refused naming its conversion (decision 159).
+  - Programs that mix every type: two to four types drawn from the fifteen, each a
+    var_input, a var_output and an array of one or two dimensions, an initial value or list
+    now and then, a var_input array of another type, a typed counter's array and a long
+    timer's array, and a block whose var_input and var_output widen; their rungs move,
+    convert, truncate, add and mask across the types, each operand a tag, an element by
+    literal or tag subscripts, a member of an element of an instance array, a bit by a
+    literal or a tag number, or a literal; over scans, a host's mistakes, restarts and
+    edits that keep every value, report a changed initial value, or change a type, which
+    accept refuses; and in a resource whose globals are each of a type Figure 11 widens
+    into the program's or from it (decision 159), located, a real array among them. Each
+    input is given its type's values either side of its edges, and junk, `1.0` a real's
+    value and junk for every other type, each judged by the host's rule restated.
+
+  The oracles know nothing of logex: each type's range, Figure 11, the wrap, the binary
+  transfer, IEEE 754's rounding, IEC's CTU and CTD and TON in nanoseconds, the index and
+  bit faults and the host's rule for each type's input, restated here. The walk repeats
+  exactly from a fresh process, and asserts its reach: every type read, written, held in
+  an element, given by a host and refused from one, and at a point; every family of
+  conversion; and each fault, edit and host refusal.
+  """
+  use ExUnit.Case, async: true
+
+  alias Logex.{Edit, Runtime, Scan}
+  alias Logex.Configuration.Edit, as: ConfigEdit
+
+  @types ~w(bool sint int dint lint usint uint udint ulint byte word dword lword real lreal)a
+
+  # IEC's widths (Ed 3 Table 10), restated.
+  @signed %{sint: 8, int: 16, dint: 32, lint: 64}
+  @unsigned %{usint: 8, uint: 16, udint: 32, ulint: 64}
+  @bit_strings %{byte: 8, word: 16, dword: 32, lword: 64}
+  @reals [:real, :lreal]
+
+  # Ed 3 Figure 11's "i" cells, restated as its edges; a type widens into every type its
+  # edges reach.
+  @figure_11 %{
+    bool: [:byte],
+    byte: [:word],
+    word: [:dword],
+    dword: [:lword],
+    lword: [],
+    sint: [:int],
+    int: [:dint, :real],
+    dint: [:lint, :lreal],
+    lint: [],
+    usint: [:uint, :int],
+    uint: [:udint, :dint, :real],
+    udint: [:ulint, :lint, :lreal],
+    ulint: [],
+    real: [:lreal],
+    lreal: []
+  }
+
+  # IEEE 754's binary32 and binary64 limits, restated: a single's largest finite value and
+  # its smallest normal one, the least magnitude that rounds to a single's infinity, and a
+  # double's largest and smallest normal.
+  @single_max 3.4028234663852886e38
+  @single_min 1.1754943508222875e-38
+  @single_past 3.4028235677973366e38
+  @double_max 1.7976931348623157e308
+  @double_min 2.2250738585072014e-308
+
+  defp pick(list), do: Enum.at(list, :rand.uniform(length(list)) - 1)
+
+  defp reached(name),
+    do: Process.put(:xt_reach, MapSet.put(Process.get(:xt_reach, MapSet.new()), name))
+
+  # ---- the types, restated ---------------------------------------------------------------
+
+  defp family(:bool), do: :bool
+  defp family(type) when is_map_key(@signed, type), do: :integer
+  defp family(type) when is_map_key(@unsigned, type), do: :integer
+  defp family(type) when is_map_key(@bit_strings, type), do: :bit_string
+  defp family(type) when type in @reals, do: :real
+
+  defp width(:bool), do: 1
+  defp width(type) when is_map_key(@signed, type), do: @signed[type]
+  defp width(type) when is_map_key(@unsigned, type), do: @unsigned[type]
+  defp width(type) when is_map_key(@bit_strings, type), do: @bit_strings[type]
+
+  defp low(type) when is_map_key(@signed, type), do: -Integer.pow(2, @signed[type] - 1)
+  defp low(_type), do: 0
+
+  defp high(type) when is_map_key(@signed, type), do: Integer.pow(2, @signed[type] - 1) - 1
+  defp high(type), do: Integer.pow(2, width(type)) - 1
+
+  defp in_range?(type, value), do: value >= low(type) and value <= high(type)
+
+  defp zero(type) when type in @reals, do: 0.0
+  defp zero(_type), do: 0
+
+  defp wider(type), do: closure([type], [type])
+
+  defp closure([], seen), do: Enum.filter(@types, &(&1 in seen))
+
+  defp closure([type | rest], seen) do
+    new = Enum.reject(@figure_11[type], &(&1 in seen))
+    closure(new ++ rest, seen ++ new)
+  end
+
+  defp widens?(from, to), do: to in wider(from)
+
+  defp article(type) when type in [:sint, :int, :lint, :lword, :lreal], do: "an"
+  defp article(_type), do: "a"
+
+  defp a(type), do: "#{article(type)} #{type}"
+
+  # The conversions IEC and logex name: between two integers or bit strings, between a
+  # real and an integer or the other real, and the truncations of a real into an integer.
+  defp conversion?(from, to) when from == to, do: false
+  defp conversion?(from, to), do: convertible?(family(from), family(to))
+
+  defp convertible?(f, t) when f in [:integer, :bit_string] and t in [:integer, :bit_string],
+    do: true
+
+  defp convertible?(:real, t) when t in [:integer, :real], do: true
+  defp convertible?(:integer, :real), do: true
+  defp convertible?(_f, _t), do: false
+
+  defp conversions,
+    do:
+      for(
+        from <- @types,
+        to <- @types,
+        conversion?(from, to),
+        do: {"#{from}_to_#{to}", from, to, false}
+      ) ++
+        for(
+          from <- @reals,
+          to <- @types,
+          family(to) == :integer,
+          do: {"#{from}_trunc_#{to}", from, to, true}
+        )
+
+  # ---- every pair, from source -----------------------------------------------------------
+
+  defp compiled(source) do
+    case Logex.compile(source, name: "p") do
+      {:ok, _program} -> :ok
+      {:error, diagnostics} -> Enum.map(diagnostics, &{&1.line, &1.message})
+    end
+  end
+
+  test "every pair of types meets by Figure 11 or is refused naming its conversion: " <>
+         "a move, each conversion's two slots, add's and and's class, and a connection" do
+    for from <- @types, to <- @types, from != to do
+      assert compiled("var_input x #{from}\nvar_output y #{to}\nmove x y") == moved(from, to)
+    end
+
+    assert length(conversions()) == 182
+
+    for {word, from, to, truncates} <- conversions(), type <- @types do
+      assert compiled("var_input x #{type}\nvar_output y #{to}\n#{word} x y") ==
+               read_by(word, from, to, truncates, type)
+
+      assert compiled("var_input x #{from}\nvar_output y #{type}\n#{word} x y") ==
+               written_by(word, from, to, truncates, type)
+    end
+
+    for from <- @types, to <- @types do
+      assert compiled("var_input x #{from}\nvar_output y #{to}\nadd x 1 y") == :ok ==
+               added?(family(from), family(to), widens?(from, to))
+
+      assert compiled("var_input x #{from}\nvar_output y #{to}\nand x 1 y") == :ok ==
+               masked?(family(from), family(to), widens?(from, to))
+    end
+
+    # Decision 159: a connection widens by Figure 11, into a var_input from its global and
+    # out of a var_output into its global, and converts nothing.
+    for type <- @types do
+      {:ok, program} =
+        Logex.compile("var_input x #{type}\nvar_output y #{type}\nmove x y", name: "q")
+
+      for global <- @types, global != type do
+        assert connected(program, global, "  m1.x gx") ==
+                 connection(widens?(global, type), {"m1.x", type}, global)
+
+        assert connected(program, global, "  m1.x 0\n  m1.y gx") ==
+                 connection(widens?(type, global), {"m1.y", type}, {global, :out})
+      end
+    end
+  end
+
+  defp connected(program, global, lines) do
+    text =
+      "task fast interval 10 priority 1\nvar_global gx #{global}\nprogram m1 q with fast\n#{lines}\n"
+
+    case Logex.Configuration.compile("c", text, %{"q" => program}) do
+      {:ok, _config} -> :ok
+      {:error, diagnostics} -> Enum.map(diagnostics, &{&1.line, &1.message})
+    end
+  end
+
+  defp connection(true, _member, _global), do: :ok
+
+  defp connection(false, {member, type}, {global, :out}),
+    do: [
+      {5,
+       "`#{member}` is #{a(type)}, but `gx` is #{a(global)} (line 2)" <>
+         connection_hint(conversion?(type, global), type, global)}
+    ]
+
+  defp connection(false, {member, type}, global),
+    do: [
+      {4,
+       "`#{member}` is #{a(type)}, but `gx` is #{a(global)} (line 2)" <>
+         connection_hint(conversion?(global, type), global, type)}
+    ]
+
+  defp connection_hint(true, from, to),
+    do:
+      ": #{a(from)} does not widen into #{a(to)}, and a connection converts nothing: convert it inside the program, with `#{from}_to_#{to}`"
+
+  defp connection_hint(false, _from, _to), do: ""
+
+  defp moved(from, to) do
+    case widens?(from, to) do
+      true ->
+        :ok
+
+      false ->
+        [
+          {3,
+           "`move` writes `x`, #{a(from)}, into `y`, #{a(to)}: #{a(from)} does not widen into " <>
+             "#{a(to)}, " <> moved_hint(conversion?(from, to), from, to)}
+        ]
+    end
+  end
+
+  defp moved_hint(true, from, to), do: "so convert it with `#{from}_to_#{to}`"
+  defp moved_hint(false, _from, _to), do: "and logex has no conversion between them"
+
+  defp read_by(word, from, to, truncates, type) do
+    case widens?(type, from) do
+      true ->
+        :ok
+
+      false ->
+        [
+          {3,
+           "`#{word}` reads #{a(from)}, but `x` is #{a(type)} (declared on line 1)" <>
+             read_hint(truncates, type, to)}
+        ]
+    end
+  end
+
+  # A truncation's source of the other real is told the truncation that does the whole
+  # job, and any other source the conversion from it, or `move` where it is the type the
+  # instruction writes (decision 148).
+  defp read_hint(true, type, to) when type in @reals, do: ": use `#{type}_trunc_#{to}`"
+  defp read_hint(_truncates, type, to), do: hint(conversion?(type, to), type, to)
+
+  defp written_by(word, from, to, truncates, type) do
+    case type == to do
+      true ->
+        :ok
+
+      false ->
+        [
+          {3,
+           "`#{word}` writes #{a(to)}, but `y` is #{a(type)} (declared on line 2)" <>
+             written_hint(truncates, from, type)}
+        ]
+    end
+  end
+
+  # A truncation's destination of another integer type is told the truncation into it, and
+  # one of a real type nothing, no instruction truncating into a real (provisional).
+  defp written_hint(true, from, type) when type not in @reals and type != :bool,
+    do: written_truncation(family(type), from, type)
+
+  defp written_hint(true, _from, _type), do: ""
+  defp written_hint(false, from, type), do: hint(conversion?(from, type), from, type)
+
+  defp written_truncation(:integer, from, type), do: ": use `#{from}_trunc_#{type}`"
+  defp written_truncation(_bits, from, type), do: hint(conversion?(from, type), from, type)
+
+  defp hint(true, from, to), do: ": use `#{from}_to_#{to}`"
+  defp hint(false, same, same), do: ": use `move`"
+  defp hint(false, _from, _to), do: ""
+
+  # `add` computes in a number's type, its sources widening into it; `and` in a bool's, a
+  # bit string's or an integer's, its sources of that class widening into it.
+  defp added?(f, t, widens) when f in [:integer, :real] and t in [:integer, :real], do: widens
+  defp added?(_f, _t, _widens), do: false
+
+  defp masked?(f, t, widens) when f in [:bool, :bit_string] and t in [:bool, :bit_string],
+    do: widens
+
+  defp masked?(:integer, :integer, widens), do: widens
+  defp masked?(_f, _t, _widens), do: false
+
+  # ---- the programs ----------------------------------------------------------------------
+
+  # What the walk must be seen to do, at least once each.
+  @reach for(
+           type <- @types,
+           what <- [:read, :written, :element, :host_taken, :host_refused, :point, :edge],
+           do: {what, type}
+         ) ++
+           for(
+             pair <- [
+               {:integer, :integer},
+               {:integer, :bit_string},
+               {:bit_string, :integer},
+               {:bit_string, :bit_string},
+               {:integer, :real},
+               {:real, :integer},
+               {:real, :real},
+               :truncated
+             ],
+             do: {:conversion, pair}
+           ) ++
+           [
+             :wrapped,
+             :saturated,
+             :rounded,
+             :widened_move,
+             :tag_subscript,
+             :two_dimensions,
+             :element_bit,
+             :tag_bit,
+             :member_through_tag,
+             :index_fault,
+             :bit_fault,
+             :contact_fault,
+             :ote_false_fault,
+             :counted,
+             :counter_limit,
+             :loaded,
+             :long_timed,
+             :long_done,
+             :called,
+             :restarted,
+             :edit_kept,
+             :edit_initial,
+             {:edit_refused, :scalar},
+             {:edit_refused, :array},
+             {:edit_refused, :instances},
+             {:edit_refused, :global},
+             :global_initial,
+             :host_array_shape,
+             :host_element_key,
+             :host_element_outside,
+             :host_whole_and_element,
+             :host_not_input,
+             :resource_widened,
+             :resource_event,
+             :repeated
+           ]
+
+  @counters ~w(ctd_int ctd_udint ctu_int ctu_udint)
+
+  defp counted_type("ctd_int"), do: :int
+  defp counted_type("ctu_int"), do: :int
+  defp counted_type(_udint), do: :udint
+
+  defp counter_side("ctd" <> _), do: :down
+  defp counter_side("ctu" <> _), do: :up
+
+  # At 400 programs every atom is reached at this seed and at each of {n, 10, 515}, n from 1
+  # to 10, in about 2 s; the rarest, a saturation, given a sum near a real's top now and
+  # then (`near_top/1`), is met some 15 times a run.
+  test "programs that mix every type run as each type's rules restated: every scan's " <>
+         "outputs, instances and faults exact, alone, across a host's mistakes, restarts " <>
+         "and edits, and in a resource whose globals widen, repeating from a fresh process" do
+    log = walks({2026, 10, 515}, 400)
+
+    fresh = Task.async(fn -> walks({2026, 10, 515}, 12) end) |> Task.await(120_000)
+    assert fresh == Enum.take(log, 12)
+    reached(:repeated)
+
+    assert MapSet.difference(MapSet.new(@reach), Process.get(:xt_reach, MapSet.new())) ==
+             MapSet.new()
+
+    assert MapSet.subset?(Process.get(:xt_reach), MapSet.new(@reach))
+  end
+
+  defp walks(seed, n) do
+    :rand.seed(:exsss, seed)
+
+    for _ <- 1..n do
+      spec = spec()
+      program = program(spec)
+      lone = lone(spec, program, 12)
+      lone ++ resource(spec, program, 4)
+    end
+  end
+
+  # ---- a draw ----------------------------------------------------------------------------
+
+  defp spec do
+    types = Enum.take_random(@types, Enum.random(2..4))
+    ks = Enum.to_list(0..(length(types) - 1))
+    dims = Map.new(ks, &{&1, pick([[2], [3], [2, 2]])})
+    block_in = pick(@types -- [:bool])
+
+    spec = %{
+      types: Map.new(Enum.with_index(types), fn {type, k} -> {k, type} end),
+      ks: ks,
+      dims: dims,
+      y_init: Map.new(ks, &{&1, pick([nil, nil, :drawn])}),
+      a_init: Map.new(ks, &{&1, pick([nil, nil, :drawn])}),
+      xa: {pick(@types), pick([2, 3])},
+      counter: pick(@counters),
+      c_pre: pick([1, 2, 3]),
+      timer: "ton_ltime",
+      t_pre: pick([0, 2_000_000, 5_000_000, 1_500_000]),
+      block: {block_in, pick(wider(block_in))}
+    }
+
+    spec = %{
+      spec
+      | y_init: Map.new(spec.y_init, fn {k, i} -> {k, initial_drawn(i, spec.types[k])} end),
+        a_init:
+          Map.new(spec.a_init, fn {k, i} ->
+            {k, initial_list(i, spec.types[k], Enum.product(dims[k]))}
+          end)
+    }
+
+    Map.put(spec, :rungs, rungs(spec, Enum.random(3..8)))
+  end
+
+  # One `cal` runs an instance, so a draw keeps the first.
+  defp rungs(spec, n) do
+    {calls, others} =
+      for(_ <- 1..n, do: rung(spec))
+      |> Enum.with_index()
+      |> Enum.split_with(&match?({{nil, {:cal, _, _}, nil}, _}, &1))
+
+    (Enum.take(calls, 1) ++ others) |> Enum.sort_by(&elem(&1, 1)) |> Enum.map(&elem(&1, 0))
+  end
+
+  defp initial_drawn(nil, _type), do: nil
+  defp initial_drawn(:drawn, type), do: literal(type)
+
+  defp initial_list(nil, _type, _n), do: nil
+  defp initial_list(:drawn, type, n), do: for(_ <- 1..n, do: literal(type))
+
+  # A literal of a type, with its spelling: a nonnegative integer now and then based, a
+  # real one as Float.to_string/1 writes it, which the lexer reads back as written.
+  @real_literals %{
+    real: [0.0, 1.5, -2.5, 0.1, 3.0e38, -3.0e38, 1.0e-30, 16_777_216, 7, -3, 0.5, 1.2e-38],
+    lreal: [0.0, 0.1, 1.0e308, -1.0e308, 1.0e-300, 2.5, 7, -3, 9_007_199_254_740_992]
+  }
+
+  defp literal(type) when type in @reals, do: spelled(pick(@real_literals[type]))
+
+  defp literal(type),
+    do: spelled(pick(Enum.uniq([0, 1, low(type), high(type), div(high(type), 3)])))
+
+  defp spelled(value) when is_float(value), do: {:lit, value, Float.to_string(value)}
+
+  defp spelled(value) when value > 1,
+    do: {:lit, value, pick([Integer.to_string(value), "16##{Integer.to_string(value, 16)}"])}
+
+  defp spelled(value), do: {:lit, value, Integer.to_string(value)}
+
+  # An element's subscripts: each a literal within its dimension or the tag `s`.
+  defp subscripts(dims),
+    do: for(n <- dims, do: pick([{:lit, Enum.random(0..(n - 1))}, {:tag, "s"}]))
+
+  defp member(instance), do: pick([{:lit, 0}, {:lit, 1}, {:tag, "s"}]) |> then(&{instance, &1})
+
+  # The operands a rung may read, each with its type, drawn afresh: the inputs, the
+  # outputs, their arrays' elements, the var_input array's, the instances' members, the
+  # bits of each integer or bit string among them, by a literal or a tag number.
+  defp readables(spec) do
+    scalars =
+      Enum.flat_map(spec.ks, fn k ->
+        type = spec.types[k]
+
+        [
+          {{:tag, "x#{k}"}, type},
+          {{:tag, "y#{k}"}, type},
+          {{:el, "a#{k}", subscripts(spec.dims[k])}, type}
+        ]
+      end) ++
+        [
+          {{:el, "xa", subscripts([elem(spec.xa, 1)])}, elem(spec.xa, 0)},
+          {{:tag, "g"}, :bool},
+          {{:tag, "s"}, :sint},
+          {mem(member("c"), "cv"), counted_type(spec.counter)},
+          {mem(member("c"), "q"), :bool},
+          {mem(member("t"), "acc"), :lint},
+          {mem(member("t"), "dn"), :bool}
+        ]
+
+    scalars ++ bits(scalars)
+  end
+
+  defp mem({instance, sub}, name), do: {:mem, instance, sub, name}
+
+  defp bits(operands),
+    do:
+      for(
+        {operand, type} <- operands,
+        family(type) in [:integer, :bit_string],
+        :rand.uniform(3) == 1,
+        do:
+          {{:bit, operand, pick([{:lit, Enum.random(0..(width(type) - 1))}, {:tag, "s"}])}, :bool}
+      )
+
+  # The operands a rung may write: the outputs, their arrays' elements, a counter's preset,
+  # the flags, and the bits of each integer or bit string among them.
+  defp writables(spec) do
+    whole =
+      Enum.flat_map(spec.ks, fn k ->
+        type = spec.types[k]
+        [{{:tag, "y#{k}"}, type}, {{:el, "a#{k}", subscripts(spec.dims[k])}, type}]
+      end) ++
+        [{mem(member("c"), "pv"), counted_type(spec.counter)}] ++
+        for(i <- 0..2, do: {{:tag, "ok#{i}"}, :bool})
+
+    whole ++ bits(Enum.reject(whole, &match?({{:mem, _, _, _}, _}, &1)))
+  end
+
+  defp rung(spec) do
+    contact = pick([nil, nil, {:xic, {:tag, "g"}}, {:xio, {:tag, "g"}}, :bool])
+    contact = contact(contact, spec)
+
+    case :rand.uniform(7) do
+      1 -> {contact, nil, coil(spec)}
+      2 -> {contact, conversion(spec), flag()}
+      3 -> {contact, conversion(spec), flag()}
+      4 -> {contact, added(spec), flag()}
+      5 -> {contact, masked(spec), flag()}
+      6 -> {nil, called(spec), nil}
+      _ -> {contact, moved_drawn(spec), flag()}
+    end
+  end
+
+  defp contact(:bool, spec) do
+    {operand, :bool} = pick(for {_operand, :bool} = r <- readables(spec), do: r)
+    {pick([:xic, :xio]), operand}
+  end
+
+  defp contact(contact, _spec), do: contact
+
+  defp flag, do: pick([nil, {:ote, {:tag, "ok#{Enum.random(0..2)}"}}])
+
+  defp coil(spec) do
+    {operand, :bool} = pick(for {_operand, :bool} = w <- writables(spec), do: w)
+    {pick([:ote, :ote, :otl, :otu]), operand}
+  end
+
+  defp sources(spec, into, rule) do
+    tags = for {operand, type} <- readables(spec), rule.(type), do: operand
+    [literal(into) | tags]
+  end
+
+  defp moved_drawn(spec) do
+    {to, type} = pick(writables(spec))
+    {:move, pick(sources(spec, type, &widens?(&1, type))), to}
+  end
+
+  defp conversion(spec) do
+    {from, source} = pick(for {_o, t} = r <- readables(spec), t != :bool, do: r)
+    into = Enum.uniq(for {_o, t} <- writables(spec), do: t)
+
+    case for({_w, f, t, _tr} = c <- conversions(), widens?(source, f), t in into, do: c) do
+      [] ->
+        moved_drawn(spec)
+
+      candidates ->
+        {word, f, t, truncates} = pick(candidates)
+        {to, ^t} = pick(for {_o, ^t} = w <- writables(spec), do: w)
+        {:conv, word, {f, t, truncates}, from, to}
+    end
+  end
+
+  defp added(spec) do
+    case for {_o, t} = w <- writables(spec), family(t) in [:integer, :real], do: w do
+      [] ->
+        moved_drawn(spec)
+
+      numbers ->
+        {to, type} = pick(numbers)
+        rule = &(family(&1) in [:integer, :real] and widens?(&1, type))
+        sources = sources(spec, type, rule) ++ near_top(type)
+        {:add, pick(sources), pick(sources), to}
+    end
+  end
+
+  # A sum into a real now and then near its type's largest magnitude, so that it saturates.
+  defp near_top(:real), do: [spelled(pick([3.0e38, -3.0e38]))]
+  defp near_top(:lreal), do: [spelled(pick([1.0e308, -1.0e308]))]
+  defp near_top(_integer), do: []
+
+  defp masked(spec) do
+    {to, type} = pick(for {_o, t} = w <- writables(spec), t not in @reals, do: w)
+    class = mask_class(family(type))
+    rule = &(family(&1) in class and widens?(&1, type))
+    op = pick([:and, :or, :xor])
+    {op, pick(sources(spec, type, rule)), pick(sources(spec, type, rule)), to}
+  end
+
+  defp mask_class(:integer), do: [:integer]
+  defp mask_class(_bits), do: [:bool, :bit_string]
+
+  # A `cal` of the block, its var_input from a tag that widens into it and its var_output
+  # into one it widens into, each a scalar or an element by literal subscripts.
+  defp called(spec) do
+    {i, o} = spec.block
+
+    from =
+      pick([
+        literal(i)
+        | for({operand, type} <- readables(spec), formal?(operand), widens?(type, i), do: operand)
+      ])
+
+    to =
+      pick([
+        {:tag, "zo"}
+        | for({operand, type} <- writables(spec), formal?(operand), widens?(o, type), do: operand)
+      ])
+
+    {:cal, from, to}
+  end
+
+  defp formal?({:el, _array, subs}), do: Enum.all?(subs, &match?({:lit, _}, &1))
+  defp formal?({:tag, _tag}), do: true
+  defp formal?(_member_or_bit), do: false
+
+  # ---- the text --------------------------------------------------------------------------
+
+  defp block_text({i, o}),
+    do: "function_block mixb\nvar_input i #{i}\nvar_output o #{o}\nmove i o"
+
+  defp declarations(spec) do
+    {xa_type, xa_n} = spec.xa
+
+    ["var_input g bool", "var_input h bool", "var_input s sint"] ++
+      for(k <- spec.ks, do: "var_input x#{k} #{spec.types[k]}") ++
+      ["var_input xa #{xa_type}[#{xa_n}]"] ++
+      for(k <- spec.ks, do: "var_output y#{k} #{spec.types[k]}#{init_text(spec.y_init[k])}") ++
+      for(
+        k <- spec.ks,
+        do:
+          "var_output a#{k} #{spec.types[k]}[#{Enum.join(spec.dims[k], ",")}]" <>
+            list_text(spec.a_init[k])
+      ) ++
+      for(i <- 0..2, do: "var_output ok#{i} bool") ++
+      ["var_output zo #{elem(spec.block, 1)}"] ++
+      ["var c #{spec.counter}[2]", "var t #{spec.timer}[2]", "var b mixb"]
+  end
+
+  defp init_text(nil), do: ""
+  defp init_text({:lit, _value, text}), do: " " <> text
+
+  defp list_text(nil), do: ""
+  defp list_text(list), do: Enum.map_join(list, "", &init_text/1)
+
+  defp fixed(spec) do
+    input = %{down: "ld", up: "r"}[counter_side(spec.counter)]
+
+    [
+      "xic h ote c[0].#{input}",
+      "xic g #{%{down: "ctd", up: "ctu"}[counter_side(spec.counter)]} c[0] #{spec.c_pre}",
+      "xic g ton t[1] #{timer_preset(spec)}"
+    ]
+  end
+
+  defp timer_preset(%{timer: "ton_ltime", t_pre: pre}), do: pre
+  defp timer_preset(%{timer: "ton", t_pre: pre}), do: div(pre, 1_000_000)
+
+  defp head(spec), do: length(declarations(spec)) + length(fixed(spec))
+
+  defp text(spec),
+    do: Enum.join(declarations(spec) ++ fixed(spec) ++ Enum.map(spec.rungs, &rung_text/1), "\n")
+
+  defp rung_text({contact, instruction, coil}),
+    do:
+      Enum.join(
+        contact_text(contact) ++ instruction_text(instruction) ++ contact_text(coil),
+        " "
+      )
+
+  defp contact_text(nil), do: []
+  defp contact_text({op, operand}), do: ["#{op} #{name(operand)}"]
+
+  defp instruction_text(nil), do: []
+  defp instruction_text({:move, from, to}), do: ["move #{name(from)} #{name(to)}"]
+  defp instruction_text({:conv, word, _rule, from, to}), do: ["#{word} #{name(from)} #{name(to)}"]
+  defp instruction_text({:cal, from, to}), do: ["cal b #{name(from)} #{name(to)}"]
+
+  defp instruction_text({op, x, y, to}),
+    do: ["#{op} #{name(x)} #{name(y)} #{name(to)}"]
+
+  defp name({:lit, _value, text}), do: text
+  defp name({:tag, tag}), do: tag
+  defp name({:el, array, subs}), do: "#{array}[#{Enum.map_join(subs, ",", &sub_text/1)}]"
+  defp name({:mem, instance, sub, member}), do: "#{instance}[#{sub_text(sub)}].#{member}"
+  defp name({:bit, container, {:lit, n}}), do: "#{name(container)}.#{n}"
+  defp name({:bit, container, {:tag, tag}}), do: "#{name(container)}.[#{tag}]"
+
+  defp sub_text({:lit, n}), do: Integer.to_string(n)
+  defp sub_text({:tag, tag}), do: tag
+
+  defp block(spec) do
+    {:ok, block} = Logex.compile(block_text(spec.block), name: "mixb")
+    block
+  end
+
+  defp program(spec) do
+    case Logex.compile(text(spec), name: "xt", types: [block(spec)]) do
+      {:ok, program} -> program
+      {:error, diagnostics} -> flunk(text(spec) <> "\n" <> inspect(diagnostics))
+    end
+  end
+
+  # ---- the oracle: each type's rules, restated -------------------------------------------
+
+  defp bit(true), do: 1
+  defp bit(false), do: 0
+
+  # A single: the nearest binary32 value to a double, by the BEAM's 32-bit encoding, below
+  # the least magnitude that rounds to infinity.
+  defp single(x) do
+    <<y::float-32>> = <<x::float-32>>
+    y
+  end
+
+  # A value stored into a real type, with its power: past a single's range saturated at its
+  # largest, the sign kept, with no power; an lreal's overflow so too; −0.0 and a magnitude
+  # below the smallest normal value 0.0 (decision 150).
+  defp stored(:real, x) when abs(x) >= @single_past do
+    reached(:saturated)
+    {false, sign(x) * @single_max}
+  end
+
+  defp stored(:real, x), do: {true, flushed(single(x), @single_min)}
+
+  defp stored(:lreal, {:overflow, s}) do
+    reached(:saturated)
+    {false, s * @double_max}
+  end
+
+  defp stored(:lreal, x), do: {true, flushed(x, @double_min)}
+
+  defp flushed(y, _min) when y === -0.0, do: 0.0
+  defp flushed(y, min) when y != 0 and abs(y) < min, do: 0.0
+  defp flushed(y, _min), do: y
+
+  defp sign(x) when x < 0, do: -1
+  defp sign(_x), do: 1
+
+  # A value written into a type it fits, a real's as its nearest value.
+  defp held(type, value) when type in @reals, do: elem(stored(type, value * 1.0), 1)
+  defp held(_type, value), do: value
+
+  # A literal as the slot computing in `into` reads it: a real one the nearest value of
+  # that real (M5-10's review), an integer the integer it spells.
+  defp literal_value(into, value) when into in @reals and is_float(value), do: held(into, value)
+  defp literal_value(_into, value), do: value
+
+  defp pattern(type, value), do: Integer.mod(value, Integer.pow(2, width(type)))
+
+  defp valued(type, p) when is_map_key(@signed, type) do
+    half = Integer.pow(2, width(type) - 1)
+    if p >= half, do: p - 2 * half, else: p
+  end
+
+  defp valued(_type, p), do: p
+
+  defp wrapped(type, value),
+    do: low(type) + Integer.mod(value - low(type), high(type) - low(type) + 1)
+
+  defp bit_at(type, value, n), do: rem(div(pattern(type, value), Integer.pow(2, n)), 2)
+
+  defp with_bit(type, value, n, b) do
+    p = pattern(type, value)
+    valued(type, p + (b - bit_at(type, value, n)) * Integer.pow(2, n))
+  end
+
+  # The nearest real to an integer, a tie to even, rounded once from the integer: a real's
+  # 24 bits of significand, an lreal's 53.
+  defp nearest(type, value) when value < 0, do: -nearest(type, -value)
+  defp nearest(type, value), do: rounded_to(value, %{real: 24, lreal: 53}[type]) * 1.0
+
+  defp rounded_to(value, bits) do
+    drop = max(length(Integer.digits(value, 2)) - bits, 0)
+    unit = Integer.pow(2, drop)
+    {q, r} = {div(value, unit), rem(value, unit)}
+    (q + up(r * 2, unit, q)) * unit
+  end
+
+  defp up(twice, unit, _q) when twice > unit, do: 1
+  defp up(twice, unit, q) when twice == unit, do: rem(q, 2)
+  defp up(_twice, _unit, _q), do: 0
+
+  # The nearest integer to a real, a tie to the even one.
+  defp even(x) do
+    f = floor(x)
+    tie(x - f, f)
+  end
+
+  defp tie(fraction, f) when fraction > 0.5, do: f + 1
+  defp tie(fraction, f) when fraction < 0.5, do: f
+
+  defp tie(_half, f) do
+    reached(:rounded)
+    f + rem(abs(f), 2)
+  end
+
+  # IEC's conversions (decisions 148, 161, 162 and 204): between two integers the value
+  # where it fits, with power, and its wrap without; with a bit string on either side the
+  # source's pattern in its `from` type, kept to the destination's width and read as its
+  # type, always with power; an integer into a real its nearest; a real into an integer
+  # rounded, a tie to even, or truncated, then wrapped, with no power where it did not fit;
+  # and between the reals the target's nearest value.
+  defp converted(from, to, truncates, value) do
+    reached({:conversion, conversion_family(family(from), family(to), truncates)})
+    convert(family(from), family(to), {from, to, truncates}, value)
+  end
+
+  defp conversion_family(_f, _t, true), do: :truncated
+  defp conversion_family(f, t, false), do: {f, t}
+
+  defp convert(:integer, :integer, {_from, to, _}, value) do
+    if not in_range?(to, value), do: reached(:wrapped)
+    {in_range?(to, value), wrapped(to, value)}
+  end
+
+  defp convert(f, t, {from, to, _}, value)
+       when f in [:integer, :bit_string] and t in [:integer, :bit_string],
+       do: {true, valued(to, Integer.mod(pattern(from, value), Integer.pow(2, width(to))))}
+
+  defp convert(:integer, :real, {_from, to, _}, value), do: {true, nearest(to, value)}
+
+  defp convert(:real, :integer, {_from, to, truncates}, value) do
+    whole = whole(truncates, value)
+    if not in_range?(to, whole), do: reached(:wrapped)
+    {in_range?(to, whole), wrapped(to, whole)}
+  end
+
+  defp convert(:real, :real, {_from, to, _}, value), do: stored(to, value)
+
+  defp whole(true, value), do: trunc(value)
+  defp whole(false, value), do: even(value)
+
+  # ---- the model of a scan ---------------------------------------------------------------
+
+  defp type_of({:tag, "x" <> k}, spec), do: spec.types[String.to_integer(k)]
+  defp type_of({:tag, "y" <> k}, spec), do: spec.types[String.to_integer(k)]
+  defp type_of({:tag, "s"}, _spec), do: :sint
+  defp type_of({:tag, "zo"}, spec), do: elem(spec.block, 1)
+  defp type_of({:tag, _bool}, _spec), do: :bool
+  defp type_of({:el, "xa", _}, spec), do: elem(spec.xa, 0)
+  defp type_of({:el, "a" <> k, _}, spec), do: spec.types[String.to_integer(k)]
+  defp type_of({:mem, "c", _, m}, spec) when m in ["cv", "pv"], do: counted_type(spec.counter)
+  defp type_of({:mem, "t", _, "acc"}, _spec), do: :lint
+  defp type_of({:mem, _, _, _}, _spec), do: :bool
+  defp type_of({:bit, _, _}, _spec), do: :bool
+  defp type_of({:lit, _, _}, _spec), do: nil
+
+  defp dims("xa", spec), do: [elem(spec.xa, 1)]
+  defp dims("a" <> k, spec), do: spec.dims[String.to_integer(k)]
+  defp dims(_instances, _spec), do: [2]
+
+  defp index(array, subs, env, spec) do
+    read = Enum.map(subs, &sub_value(&1, env))
+    reached_subs(subs, dims(array, spec))
+    inside = Enum.zip(read, dims(array, spec)) |> Enum.all?(fn {i, n} -> i >= 0 and i < n end)
+    indexed(inside, read)
+  end
+
+  defp reached_subs(subs, dims) do
+    if Enum.any?(subs, &match?({:tag, _}, &1)), do: reached(:tag_subscript)
+    if length(dims) == 2, do: reached(:two_dimensions)
+  end
+
+  defp indexed(true, read), do: {:ok, read}
+
+  defp indexed(false, read) do
+    reached(:index_fault)
+    {:fault, {:index_out_of_range, List.to_tuple(read)}}
+  end
+
+  defp sub_value({:lit, n}, _env), do: n
+  defp sub_value({:tag, tag}, env), do: env[tag]
+
+  defp bit_number({:lit, n}, _type, _env), do: {:ok, n}
+
+  defp bit_number({:tag, tag}, type, env) do
+    reached(:tag_bit)
+    n = env[tag]
+    numbered(n >= 0 and n < width(type), n)
+  end
+
+  defp numbered(true, n), do: {:ok, n}
+
+  defp numbered(false, n) do
+    reached(:bit_fault)
+    {:fault, {:bit_out_of_range, n}}
+  end
+
+  defp read({:tag, tag}, env, _spec), do: {:ok, env[tag]}
+
+  defp read({:el, array, subs}, env, spec) do
+    with {:ok, at} <- index(array, subs, env, spec), do: {:ok, env[array][at]}
+  end
+
+  defp read({:mem, instance, sub, m}, env, spec) do
+    if match?({:tag, _}, sub), do: reached(:member_through_tag)
+    with {:ok, at} <- index(instance, [sub], env, spec), do: {:ok, env[instance][at][m]}
+  end
+
+  defp read({:bit, container, number}, env, spec) do
+    type = type_of(container, spec)
+    if match?({:el, _, _}, container), do: reached(:element_bit)
+
+    with {:ok, value} <- read(container, env, spec),
+         {:ok, n} <- bit_number(number, type, env),
+         do: {:ok, bit_at(type, value, n)}
+  end
+
+  defp source({:lit, value, _text}, into, _env, _spec), do: {:ok, literal_value(into, value)}
+
+  defp source(operand, _into, env, spec) do
+    type = type_of(operand, spec)
+    reached({:read, type})
+    if match?({:el, _, _}, operand), do: reached({:element, type})
+    read(operand, env, spec)
+  end
+
+  defp write({:tag, tag}, value, env, _spec), do: {:ok, Map.put(env, tag, value)}
+
+  defp write({:el, array, subs}, value, env, spec) do
+    with {:ok, at} <- index(array, subs, env, spec),
+         do: {:ok, put_in(env, [array, at], value)}
+  end
+
+  defp write({:mem, instance, sub, m}, value, env, spec) do
+    with {:ok, at} <- index(instance, [sub], env, spec),
+         do: {:ok, put_in(env, [instance, at, m], value)}
+  end
+
+  defp write({:bit, container, number}, value, env, spec) do
+    type = type_of(container, spec)
+
+    with {:ok, was} <- read(container, env, spec),
+         {:ok, n} <- bit_number(number, type, env),
+         do: write(container, with_bit(type, was, n, value), env, spec)
+  end
+
+  defp written(operand, value, env, spec) do
+    type = type_of(operand, spec)
+    reached({:written, type})
+    if match?({:el, _, _}, operand), do: reached({:element, type})
+    write(operand, value, env, spec)
+  end
+
+  # A rung: its contact, its instruction and its coil, an operand out of range the
+  # instruction's major fault, which then does nothing and passes no power (decisions 153
+  # and 160).
+  defp rung_run({contact, instruction, coil}, {env, faults}, line, spec) do
+    {power, faults} = contact_run(contact, env, line, faults, spec)
+    {power, env, faults} = instruction_run(instruction, power, env, {line, faults}, spec)
+    coil_run(coil, power, env, {line, faults}, spec)
+  end
+
+  defp contact_run(nil, _env, _line, faults, _spec), do: {true, faults}
+
+  defp contact_run({op, operand}, env, line, faults, spec) do
+    case read(operand, env, spec) do
+      {:ok, value} ->
+        {op == :xic == (value == 1), faults}
+
+      {:fault, {kind, read}} ->
+        reached(:contact_fault)
+        {false, [{kind, op, line, read} | faults]}
+    end
+  end
+
+  defp instruction_run(nil, power, env, {_line, faults}, _spec), do: {power, env, faults}
+  defp instruction_run(_instruction, false, env, {_line, faults}, _spec), do: {false, env, faults}
+
+  defp instruction_run(instruction, true, env, {line, faults}, spec) do
+    case run(instruction, env, spec) do
+      {:ok, power, env} -> {power, env, faults}
+      {:fault, {kind, read}} -> {false, env, [{kind, symbol(instruction), line, read} | faults]}
+    end
+  end
+
+  defp symbol({:conv, word, _, _, _}), do: String.to_atom(word)
+  defp symbol(instruction), do: elem(instruction, 0)
+
+  defp run({:move, from, to}, env, spec) do
+    type = type_of(to, spec)
+    if type_of(from, spec) not in [nil, type], do: reached(:widened_move)
+
+    with {:ok, value} <- source(from, type, env, spec),
+         {:ok, env} <- written(to, held(type, value), env, spec),
+         do: {:ok, true, env}
+  end
+
+  defp run({:conv, _word, {from, to, truncates}, operand, destination}, env, spec) do
+    with {:ok, value} <- source(operand, from, env, spec) do
+      {power, value} = converted(from, to, truncates, held(from, value))
+
+      with {:ok, env} <- written(destination, value, env, spec), do: {:ok, power, env}
+    end
+  end
+
+  defp run({:add, x, y, to}, env, spec) do
+    type = type_of(to, spec)
+
+    with {:ok, a} <- source(x, type, env, spec),
+         {:ok, b} <- source(y, type, env, spec) do
+      {power, value} = sum(type, a, b)
+
+      with {:ok, env} <- written(to, value, env, spec), do: {:ok, power, env}
+    end
+  end
+
+  defp run({:cal, from, to}, env, spec) do
+    {i, o} = spec.block
+    reached(:called)
+
+    with {:ok, value} <- source(from, i, env, spec) do
+      inside = held(i, value)
+      out = held(o, inside)
+      env = Map.put(env, "b", %{"i" => inside, "o" => out})
+      called_out(to, out, env, spec)
+    end
+  end
+
+  defp run({op, x, y, to}, env, spec) when op in [:and, :or, :xor] do
+    type = type_of(to, spec)
+
+    with {:ok, a} <- source(x, type, env, spec),
+         {:ok, b} <- source(y, type, env, spec),
+         {:ok, env} <- written(to, masked_value(op, type, a, b), env, spec),
+         do: {:ok, true, env}
+  end
+
+  defp called_out(to, out, env, spec) do
+    with {:ok, env} <- written(to, held(type_of(to, spec), out), env, spec),
+         do: {:ok, true, env}
+  end
+
+  # An integer sum wrapped into its type, with no power where it did not fit (decision
+  # 146); a real one computed on floats and stored, an lreal's past a double's range an
+  # overflow of its sign.
+  defp sum(type, a, b) when type in @reals do
+    reached({:written, type})
+    stored(type, real_sum(type, a * 1.0, b * 1.0))
+  end
+
+  defp sum(type, a, b) do
+    if not in_range?(type, a + b), do: reached(:wrapped)
+    {in_range?(type, a + b), wrapped(type, a + b)}
+  end
+
+  defp real_sum(:lreal, a, b) do
+    a + b
+  rescue
+    ArithmeticError -> {:overflow, sign(a)}
+  end
+
+  defp real_sum(:real, a, b), do: a + b
+
+  defp masked_value(op, type, a, b) do
+    n = width(type)
+    pairs = Enum.zip(digits(pattern(type, a), n), digits(pattern(type, b), n))
+    bits = Enum.map(pairs, &one(op, &1))
+    valued(type, Enum.sum(for {b, i} <- Enum.with_index(bits), do: b * Integer.pow(2, i)))
+  end
+
+  defp digits(p, n), do: for(i <- 0..(n - 1), do: rem(div(p, Integer.pow(2, i)), 2))
+
+  defp one(:and, {a, b}), do: a * b
+  defp one(:or, {a, b}), do: max(a, b)
+  defp one(:xor, {a, b}), do: rem(a + b, 2)
+
+  defp coil_run(nil, _power, env, {_line, faults}, _spec), do: {env, faults}
+
+  defp coil_run({op, operand}, power, env, {line, faults}, spec) do
+    case coiled(op, power) do
+      nil ->
+        {env, faults}
+
+      value ->
+        case written(operand, value, env, spec) do
+          {:ok, env} ->
+            {env, faults}
+
+          {:fault, {kind, read}} ->
+            if not power, do: reached(:ote_false_fault)
+            {env, [{kind, op, line, read} | faults]}
+        end
+    end
+  end
+
+  defp coiled(:ote, power), do: bit(power)
+  defp coiled(:otl, true), do: 1
+  defp coiled(:otu, true), do: 0
+  defp coiled(_latch, false), do: nil
+
+  # IEC's CTD and CTU in the counter's own type, restated: a reset or a load before an
+  # edge, never on a first scan, stopping at the type's limits with `un` or `ov` latched
+  # until the load or the reset (decisions 69 to 71 and 158).
+  defp counted(counter, :down, power, {first, type}) do
+    edge = power and not first and counter["cd"] == 0
+
+    counter =
+      cond do
+        counter["ld"] == 1 ->
+          reached(:loaded)
+          %{counter | "cv" => counter["pv"], "un" => 0}
+
+        edge and counter["cv"] == low(type) ->
+          reached(:counter_limit)
+          %{counter | "un" => 1}
+
+        edge ->
+          reached(:counted)
+          %{counter | "cv" => counter["cv"] - 1}
+
+        true ->
+          counter
+      end
+
+    %{counter | "cd" => bit(power), "q" => bit(counter["cv"] <= 0)}
+  end
+
+  defp counted(counter, :up, power, {first, type}) do
+    edge = power and not first and counter["cu"] == 0
+
+    counter =
+      cond do
+        counter["r"] == 1 ->
+          %{counter | "cv" => 0, "ov" => 0}
+
+        edge and counter["cv"] == high(type) ->
+          reached(:counter_limit)
+          %{counter | "ov" => 1}
+
+        edge ->
+          reached(:counted)
+          %{counter | "cv" => counter["cv"] + 1}
+
+        true ->
+          counter
+      end
+
+    %{counter | "cu" => bit(power), "q" => bit(counter["cv"] >= counter["pv"])}
+  end
+
+  # IEC's TON with a long timer's members in nanoseconds, each millisecond of the clock
+  # adding 1,000,000 (decision 158).
+  defp timed(timer, true, now) do
+    limit = max(timer["pre"], 0)
+    elapsed = if timer["en"] == 1, do: (now - timer["last"]) * 1_000_000, else: 0
+    acc = min(max(timer["acc"], 0) + elapsed, limit)
+    if elapsed > 0, do: reached(:long_timed)
+    if acc == limit and limit > 0, do: reached(:long_done)
+
+    %{
+      timer
+      | "acc" => acc,
+        "dn" => bit(acc == limit),
+        "tt" => bit(acc != limit),
+        "en" => 1,
+        "last" => now
+    }
+  end
+
+  defp timed(timer, false, now),
+    do: %{timer | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp counter_start("ctd" <> _, pv),
+    do: %{"cd" => 0, "ld" => 0, "pv" => pv, "q" => 0, "cv" => 0, "un" => 0}
+
+  defp counter_start("ctu" <> _, pv),
+    do: %{"cu" => 0, "r" => 0, "pv" => pv, "q" => 0, "cv" => 0, "ov" => 0}
+
+  defp timer_start(pre),
+    do: %{"pre" => pre, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}
+
+  defp array_start(type, dims, nil), do: Map.new(indexes(dims), &{&1, zero(type)})
+
+  defp array_start(type, dims, list),
+    do: Map.new(Enum.zip(indexes(dims), list), fn {at, {:lit, v, _}} -> {at, held(type, v)} end)
+
+  defp indexes([]), do: [[]]
+  defp indexes([n | rest]), do: for(i <- 0..(n - 1), tail <- indexes(rest), do: [i | tail])
+
+  defp initial(spec) do
+    {xa_type, xa_n} = spec.xa
+    {i, o} = spec.block
+
+    Map.merge(
+      %{
+        "g" => 0,
+        "h" => 0,
+        "s" => 0,
+        "xa" => array_start(xa_type, [xa_n], nil),
+        "ok0" => 0,
+        "ok1" => 0,
+        "ok2" => 0,
+        "c" => %{
+          [0] => counter_start(spec.counter, spec.c_pre),
+          [1] => counter_start(spec.counter, 0)
+        },
+        "t" => %{[0] => timer_start(0), [1] => timer_start(timer_preset(spec))},
+        "b" => %{"i" => zero(i), "o" => zero(o)},
+        "zo" => zero(o)
+      },
+      Map.new(
+        Enum.flat_map(spec.ks, fn k ->
+          type = spec.types[k]
+
+          [
+            {"x#{k}", zero(type)},
+            {"y#{k}", y_start(type, spec.y_init[k])},
+            {"a#{k}", array_start(type, spec.dims[k], spec.a_init[k])}
+          ]
+        end)
+      )
+    )
+  end
+
+  defp y_start(type, nil), do: zero(type)
+  defp y_start(type, {:lit, value, _text}), do: held(type, value)
+
+  defp inputs_of(spec), do: ["g", "h", "s", "xa"] ++ for(k <- spec.ks, do: "x#{k}")
+
+  defp scan(spec, env, now, first) do
+    side = counter_side(spec.counter)
+    env = put_in(env, ["c", [0], %{down: "ld", up: "r"}[side]], env["h"])
+
+    env =
+      update_in(
+        env,
+        ["c", [0]],
+        &counted(&1, side, env["g"] == 1, {first, counted_type(spec.counter)})
+      )
+
+    env = update_in(env, ["t", [1]], &timed(&1, env["g"] == 1, now))
+
+    {env, faults} =
+      spec.rungs
+      |> Enum.with_index(head(spec) + 1)
+      |> Enum.reduce({env, []}, fn {rung, line}, acc -> rung_run(rung, acc, line, spec) end)
+
+    {env, Enum.reverse(faults)}
+  end
+
+  defp fault({kind, instruction, line, read}),
+    do: %Logex.Fault{
+      severity: :major,
+      kind: kind,
+      instruction: instruction,
+      path: nil,
+      file: nil,
+      line: line,
+      read: read
+    }
+
+  defp listed(map, [n]), do: for(i <- 0..(n - 1), do: map[[i]])
+  defp listed(map, [n, m]), do: for(i <- 0..(n - 1), do: for(j <- 0..(m - 1), do: map[[i, j]]))
+
+  defp outputs(spec, env),
+    do:
+      Map.new(
+        Enum.flat_map(spec.ks, fn k ->
+          [{"y#{k}", env["y#{k}"]}, {"a#{k}", listed(env["a#{k}"], spec.dims[k])}]
+        end) ++ for(i <- 0..2, do: {"ok#{i}", env["ok#{i}"]}) ++ [{"zo", env["zo"]}]
+      )
+
+  defp instances(env),
+    do: {{env["c"][[0]], env["c"][[1]]}, {env["t"][[0]], env["t"][[1]]}, env["b"]}
+
+  # ---- a host's inputs, and its mistakes -------------------------------------------------
+
+  @real_pool %{
+    real: [
+      0.0,
+      1.0,
+      -1.0,
+      0.1,
+      2.5,
+      -2.5,
+      32767.5,
+      40000.7,
+      1.0e20,
+      -1.0e20,
+      3.0e38,
+      @single_max,
+      -3.0e38,
+      -@single_max,
+      1.2e-38,
+      16_777_217.0,
+      3
+    ],
+    lreal: [
+      0.0,
+      1.0,
+      -0.5,
+      0.1,
+      2.5,
+      2_147_483_648.5,
+      1.0e300,
+      -1.0e300,
+      @double_max,
+      2.3e-308,
+      3.5e38,
+      1.0e-40,
+      -7
+    ]
+  }
+
+  defp value(type) when type in @reals, do: pick(@real_pool[type])
+  defp value(:bool), do: pick([0, 1])
+
+  defp value(type),
+    do: pick(Enum.uniq([0, 1, low(type), high(type), div(high(type), 3), max(low(type), -1)]))
+
+  defp inputs(spec) do
+    {xa_type, xa_n} = spec.xa
+
+    xa =
+      case :rand.uniform(2) do
+        1 -> %{"xa" => for(_ <- 1..xa_n, do: value(xa_type))}
+        2 -> %{"xa[#{Enum.random(0..(xa_n - 1))}]" => value(xa_type)}
+      end
+
+    %{"g" => pick([0, 1, 1]), "h" => pick([0, 0, 0, 1]), "s" => pick([0, 0, 1, 1, 2, -1, 5, 9])}
+    |> Map.merge(Map.new(spec.ks, &{"x#{&1}", value(spec.types[&1])}))
+    |> Map.merge(xa)
+  end
+
+  defp taken(type, value) when type in @reals, do: elem(stored(type, value * 1.0), 1)
+  defp taken(_type, value), do: value
+
+  defp take(spec, env, inputs) do
+    {xa_type, _n} = spec.xa
+
+    Enum.reduce(inputs, env, fn
+      {"xa", list}, env ->
+        put_in(
+          env["xa"],
+          Map.new(Enum.with_index(list), fn {v, i} -> {[i], taken(xa_type, v)} end)
+        )
+
+      {"xa[" <> i, v}, env ->
+        put_in(env, ["xa", [String.to_integer(String.trim_trailing(i, "]"))]], taken(xa_type, v))
+
+      {"x" <> k = name, v}, env ->
+        Map.put(env, name, taken(spec.types[String.to_integer(k)], v))
+
+      {name, v}, env ->
+        Map.put(env, name, v)
+    end)
+  end
+
+  # Each type's values either side of its edges, and junk: 1.0 a real's value and junk
+  # for every other type.
+  defp edges(:bool), do: [0, 1, 2, -1, 1.0, true, nil]
+
+  defp edges(:real),
+    do: [
+      1.0,
+      1,
+      -2.5,
+      @single_max,
+      -@single_max,
+      @single_past,
+      -@single_past,
+      Integer.pow(2, 128),
+      nil,
+      :x
+    ]
+
+  defp edges(:lreal), do: [1.0, -7, @double_max, -@double_max, Integer.pow(2, 1024), nil, "s"]
+  defp edges(type), do: [low(type), high(type), low(type) - 1, high(type) + 1, 1.0, nil, "s"]
+
+  # The host's rule for each type's input, restated: a bool 0 or 1, an integer or a bit
+  # string an integer in its range, a real any number short of the least magnitude that
+  # rounds to its infinity, an lreal any float and any integer short of 2^1024 - 2^970
+  # (decision 166).
+  defp fits?(:bool, value), do: value === 0 or value === 1
+  defp fits?(:real, value) when is_float(value), do: abs(value) < @single_past
+
+  defp fits?(:real, value) when is_integer(value),
+    do: abs(value) < Integer.pow(2, 128) - Integer.pow(2, 103)
+
+  defp fits?(:lreal, value) when is_float(value), do: true
+
+  defp fits?(:lreal, value) when is_integer(value),
+    do: abs(value) < Integer.pow(2, 1024) - Integer.pow(2, 970)
+
+  defp fits?(type, _value) when type in @reals, do: false
+  defp fits?(type, value), do: is_integer(value) and in_range?(type, value)
+
+  defp edge?(type, value) when type in @reals, do: abs(value) == max_of(type)
+  defp edge?(type, value), do: value == low(type) or value == high(type)
+
+  defp max_of(:real), do: @single_max
+  defp max_of(:lreal), do: @double_max
+
+  # A host's call that may be a mistake, and whether it is, by the rule restated.
+  defp host(spec) do
+    {xa_type, xa_n} = spec.xa
+    k = pick(spec.ks)
+    type = spec.types[k]
+
+    case :rand.uniform(7) do
+      n when n <= 2 ->
+        v = pick(edges(type))
+        {%{"x#{k}" => v}, fits?(type, v), {type, v}}
+
+      3 ->
+        v = pick(edges(xa_type))
+        {%{"xa[#{Enum.random(0..(xa_n - 1))}]" => v}, fits?(xa_type, v), {:element, xa_type, v}}
+
+      4 ->
+        list =
+          for _ <- 1..pick([xa_n, xa_n, xa_n - 1, xa_n + 1]),
+              do: pick([value(xa_type), pick(edges(xa_type))])
+
+        {%{"xa" => list}, length(list) == xa_n and Enum.all?(list, &fits?(xa_type, &1)),
+         {:list, xa_type, list}}
+
+      5 ->
+        {%{"xa[#{xa_n}]" => value(xa_type)}, false, :outside}
+
+      6 ->
+        {%{"xa" => for(_ <- 1..xa_n, do: value(xa_type)), "xa[0]" => value(xa_type)}, false,
+         :both}
+
+      7 ->
+        {%{"y#{k}" => value(type)}, false, :not_input}
+    end
+  end
+
+  defp host_reached({type, v}, ok) when is_atom(type) do
+    reached({if(ok, do: :host_taken, else: :host_refused), type})
+    if ok and edge?(type, v), do: reached({:edge, type})
+  end
+
+  defp host_reached({:element, type, _v}, true) do
+    reached(:host_element_key)
+    reached({:host_taken, type})
+  end
+
+  defp host_reached({:element, type, _v}, false), do: reached({:host_refused, type})
+  defp host_reached({:list, _type, _list}, false), do: reached(:host_array_shape)
+  defp host_reached({:list, type, _list}, true), do: reached({:host_taken, type})
+  defp host_reached(:outside, false), do: reached(:host_element_outside)
+  defp host_reached(:both, false), do: reached(:host_whole_and_element)
+  defp host_reached(:not_input, false), do: reached(:host_not_input)
+
+  defp put(program, state, inputs) do
+    {:ok, Runtime.put_inputs(program, state, inputs)}
+  rescue
+    error in ArgumentError ->
+      assert error.message =~ ~r/^(input|inputs) /, error.message
+      :refused
+  end
+
+  # ---- the walks -------------------------------------------------------------------------
+
+  # Each input's values either side of its type's edges, each judged by the host's rule
+  # restated, a call that changes nothing.
+  defp edges_swept(spec, program, state) do
+    for k <- spec.ks, v <- edges(spec.types[k]) do
+      inputs = %{"x#{k}" => v}
+      ok = fits?(spec.types[k], v)
+      assert match?({:ok, _}, put(program, state, inputs)) == ok, inspect(inputs)
+      host_reached({spec.types[k], v}, ok)
+    end
+  end
+
+  defp lone(spec, program, scans) do
+    edges_swept(spec, program, Runtime.instance(program))
+
+    {_spec, _program, _state, _model, _now, log} =
+      Enum.reduce(1..scans, {spec, program, Runtime.instance(program), initial(spec), 0, []}, fn
+        n, {spec, program, state, model, now, log} ->
+          step(n, scans, {spec, program, state, model, now, log})
+      end)
+
+    Enum.reverse(log)
+  end
+
+  defp step(n, scans, w) when n == div(scans, 2), do: edited(pick([:kept, :initial, :refused]), w)
+
+  defp step(_n, _scans, w) do
+    case :rand.uniform(12) do
+      1 -> restarted(w)
+      k when k <= 3 -> mistaken(w)
+      _ -> scanned(w)
+    end
+  end
+
+  defp scanned({spec, program, state, model, now, log}) do
+    inputs = inputs(spec)
+    dt = pick([1, 2, 5, 10])
+
+    {outputs, later} =
+      Runtime.call(program, state, inputs, %Scan{now: now + dt, first: state.first})
+
+    {model, faults} = scan(spec, take(spec, model, inputs), now + dt, state.first)
+    text = text(spec) <> "\n" <> inspect(inputs)
+    assert outputs === outputs(spec, model), text
+    assert {later.env["c"], later.env["t"], later.env["b"]} === instances(model), text
+    assert later.faults == Enum.map(faults, &fault/1), text
+    {spec, program, later, model, now + dt, [{outputs, later.faults} | log]}
+  end
+
+  defp restarted({spec, program, state, model, now, log}) do
+    state = Runtime.restart(program, state, pick([:cold, :warm]))
+    assert state.first
+    reached(:restarted)
+    model = Map.merge(initial(spec), Map.take(model, inputs_of(spec)))
+    {spec, program, state, model, now, [:restarted | log]}
+  end
+
+  defp mistaken({spec, program, state, model, now, log}) do
+    {inputs, ok, what} = host(spec)
+
+    case put(program, state, inputs) do
+      {:ok, state} ->
+        assert ok, "a host's call without a mistake was refused: #{inspect(inputs)}"
+        host_reached(what, true)
+        {spec, program, state, take(spec, model, inputs), now, [{:taken, inputs} | log]}
+
+      :refused ->
+        refute ok, "a host's mistake was accepted: #{inspect(inputs)}"
+        host_reached(what, false)
+        {spec, program, state, model, now, [{:refused, inputs} | log]}
+    end
+  end
+
+  # An edit to the same tags with other rungs keeps every value; one that changes an
+  # initial value reports it, by element in an array, and keeps the value running; one
+  # that changes a type, a size or an instance's kind is refused, each tag at its line.
+  defp edited(:kept, {spec, program, state, model, now, log}) do
+    candidate_spec = %{spec | rungs: rungs(spec, Enum.random(2..6))}
+    candidate = program(candidate_spec)
+    switched = switched(program, candidate, state)
+    reached(:edit_kept)
+    {candidate_spec, candidate, switched, model, now, [:edited | log]}
+  end
+
+  defp edited(:initial, {spec, program, state, model, now, log}) do
+    {candidate_spec, expected} = initial_change(spec)
+    candidate = program(candidate_spec)
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, switched, report} = Edit.test(edit, state)
+    {_candidate, switched, _report} = Edit.assemble(edit, switched)
+
+    assert for({:initial_changed, _, _} = r <- report, do: r) == expected,
+           text(candidate_spec) <> "\n" <> inspect({report, expected})
+
+    assert switched.env === state.env
+    reached(:edit_initial)
+    {candidate_spec, candidate, switched, model, now, [{:initial, expected} | log]}
+  end
+
+  defp edited(:refused, {spec, program, state, model, now, log}) do
+    {what, candidate_spec, names} = type_change(spec)
+    candidate = program(candidate_spec)
+    lines = declared_lines(candidate_spec)
+
+    expected =
+      for name <- names,
+          do:
+            {:edit, lines[name],
+             "`#{name}` is #{a_tag(spec, name)} in the running program and #{a_tag(candidate_spec, name)} in the candidate: a tag's type changes only with a restart"}
+
+    assert {:error, diagnostics} = Edit.accept(program, candidate, state)
+    assert Enum.map(diagnostics, &{&1.stage, &1.line, &1.message}) == expected
+    reached({:edit_refused, what})
+    {spec, program, state, model, now, [{:refused, expected} | log]}
+  end
+
+  defp switched(program, candidate, state) do
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, switched, report} = Edit.test(edit, state)
+    {_candidate, switched, _report} = Edit.assemble(edit, switched)
+    refute Enum.any?(report, &match?({:initial_changed, _, _}, &1))
+    assert switched.env === state.env
+    switched
+  end
+
+  # The report gives each initial value as declared, a real's literal as written and none
+  # its type's zero, compared exactly (decision 157); the running value is kept.
+  defp initial_change(spec) do
+    k = pick(spec.ks)
+    type = spec.types[k]
+
+    case :rand.uniform(2) do
+      1 ->
+        old = declared(type, spec.y_init[k])
+        {:lit, new, _} = literal = other_literal(type, old)
+
+        {%{spec | y_init: Map.put(spec.y_init, k, literal)},
+         [{:initial_changed, "y#{k}", {old, new}}]}
+
+      2 ->
+        dims = spec.dims[k]
+        list = spec.a_init[k] || for(_ <- indexes(dims), do: spelled(zero(type)))
+        j = Enum.random(0..(length(list) - 1))
+        old = declared(type, Enum.at(list, j))
+        {:lit, new, _} = literal = other_literal(type, old)
+        at = Enum.at(indexes(dims), j)
+
+        {%{spec | a_init: Map.put(spec.a_init, k, List.replace_at(list, j, literal))},
+         [{:initial_changed, "a#{k}[#{Enum.join(at, ",")}]", {old, new}}]}
+    end
+  end
+
+  defp declared(type, nil), do: zero(type)
+  defp declared(_type, {:lit, value, _text}), do: value
+
+  defp other_literal(type, old) do
+    {:lit, v, _} = literal = literal(type)
+    if v === old, do: other_literal(type, old), else: literal
+  end
+
+  defp type_change(spec) do
+    k = pick(spec.ks)
+
+    case :rand.uniform(3) do
+      1 ->
+        type = pick(@types -- [spec.types[k]])
+
+        {:scalar,
+         %{
+           spec
+           | types: Map.put(spec.types, k, type),
+             y_init: Map.put(spec.y_init, k, nil),
+             a_init: Map.put(spec.a_init, k, nil),
+             rungs: []
+         }, ["x#{k}", "y#{k}", "a#{k}"]}
+
+      2 ->
+        dims = pick([[2], [3], [2, 2], [3, 2]] -- [spec.dims[k]])
+
+        {:array,
+         %{
+           spec
+           | dims: Map.put(spec.dims, k, dims),
+             a_init: Map.put(spec.a_init, k, nil),
+             rungs: []
+         }, ["a#{k}"]}
+
+      3 ->
+        case :rand.uniform(2) do
+          1 ->
+            {:instances, %{spec | counter: pick(@counters -- [spec.counter]), rungs: []}, ["c"]}
+
+          2 ->
+            {:instances, %{spec | timer: "ton", rungs: []}, ["t"]}
+        end
+    end
+  end
+
+  defp declared_lines(spec),
+    do:
+      declarations(spec)
+      |> Enum.with_index(1)
+      |> Map.new(fn {line, n} -> {line |> String.split(" ") |> Enum.at(1), n} end)
+
+  defp a_tag(spec, "c"), do: "an array of 2 #{spec.counter}s"
+  defp a_tag(spec, "t"), do: "an array of 2 #{spec.timer}s"
+  defp a_tag(spec, "x" <> k), do: a(spec.types[String.to_integer(k)])
+  defp a_tag(spec, "y" <> k), do: a(spec.types[String.to_integer(k)])
+
+  defp a_tag(spec, "a" <> k) do
+    k = String.to_integer(k)
+    "an array of #{Enum.join(spec.dims[k], " by ")} #{spec.types[k]}s"
+  end
+
+  # ---- in a resource ---------------------------------------------------------------------
+
+  # The program's inputs connected to located globals of a type Figure 11 widens into
+  # theirs, its var_input array to a located global array of its size, and its outputs and
+  # arrays to globals of a type they widen into (decision 159).
+  defp resource(spec, program, cycles) do
+    {xa_type, xa_n} = spec.xa
+    narrower = fn type -> for t <- @types, widens?(t, type), do: t end
+    ins = Map.new(spec.ks, &{&1, pick(narrower.(spec.types[&1]))})
+    xa_in = pick(narrower.(xa_type))
+    outs = Map.new(spec.ks, &{&1, pick(wider(spec.types[&1]))})
+    arrays = Map.new(spec.ks, &{&1, pick(wider(spec.types[&1]))})
+
+    text =
+      Enum.join(
+        [
+          "task fast interval 10 priority 1",
+          "var_global gg bool at panel.i.0",
+          "var_global gh bool at panel.i.1",
+          "var_global gs sint at panel.i.2"
+        ] ++
+          for(k <- spec.ks, do: "var_global gx#{k} #{ins[k]} at panel.i.#{3 + k}") ++
+          ["var_global gxa #{xa_in}[#{xa_n}] at card.i.0"] ++
+          for(k <- spec.ks, do: "var_global gy#{k} #{outs[k]}") ++
+          for(k <- spec.ks, do: "var_global ga#{k} #{arrays[k]}[#{Enum.join(spec.dims[k], ",")}]") ++
+          ["program m1 xt with fast", "  m1.g gg", "  m1.h gh", "  m1.s gs", "  m1.xa gxa"] ++
+          Enum.flat_map(
+            spec.ks,
+            &["  m1.x#{&1} gx#{&1}", "  m1.y#{&1} gy#{&1}", "  m1.a#{&1} ga#{&1}"]
+          ),
+        "\n"
+      ) <> "\n"
+
+    {:ok, config} = Logex.Configuration.compile("plant", text, %{"xt" => program})
+
+    if Enum.any?(spec.ks, &(ins[&1] != spec.types[&1] or outs[&1] != spec.types[&1])),
+      do: reached(:resource_widened)
+
+    for type <- [xa_in | Map.values(ins)], do: reached({:point, type})
+
+    {rt, _model, log} =
+      Enum.reduce(0..(cycles - 1), {Runtime.start(config), initial(spec), []}, fn n,
+                                                                                  {rt, model, log} ->
+        sample = points(spec, ins, xa_in)
+        {rt, _outputs, events} = Runtime.cycle(rt, min(n, 1) * 10, sample)
+        model = take(spec, model, widened_points(spec, ins, xa_in, sample))
+        {model, faults} = scan(spec, model, n * 10, n == 0)
+
+        assert events == [
+                 {:ran, "fast", "m1", n * 10}
+                 | Enum.map(faults, &{:fault, "fast", "m1", fault(&1)})
+               ],
+               text
+
+        if faults != [], do: reached(:resource_event)
+
+        for k <- spec.ks do
+          assert Runtime.get!(rt, "gy#{k}") === held(outs[k], model["y#{k}"]), text
+          held_array = Map.new(model["a#{k}"], fn {at, v} -> {at, held(arrays[k], v)} end)
+          assert Runtime.get!(rt, "ga#{k}") === listed(held_array, spec.dims[k]), text
+        end
+
+        assert Runtime.get!(rt, "m1.c[0].cv") === model["c"][[0]]["cv"]
+        {rt, model, [events | log]}
+      end)
+
+    Enum.reverse(log) ++ [retyped(rt, {spec, program, ins, outs}, text)]
+  end
+
+  # A configuration's edit that changes a global's type, to another that still widens into
+  # the program's input, is refused at its line in its words; one that gives an output's
+  # global an initial value reports it, as declared.
+  defp retyped(rt, {spec, program, ins, outs}, text) do
+    k = pick(spec.ks)
+    narrower = for t <- @types, widens?(t, spec.types[k]), t != ins[k], do: t
+    typed = retyped_global(narrower, {k, ins[k]}, text)
+    {:ok, candidate} = Logex.Configuration.compile("plant", elem(typed, 0), %{"xt" => program})
+    assert ConfigEdit.accept(rt, candidate) |> refused() == elem(typed, 1), elem(typed, 0)
+    if elem(typed, 1) != :accepted, do: reached({:edit_refused, :global})
+
+    {:lit, value, spelling} = other_literal(outs[k], zero(outs[k]))
+
+    given =
+      String.replace(
+        text,
+        "var_global gy#{k} #{outs[k]}\n",
+        "var_global gy#{k} #{outs[k]} #{spelling}\n"
+      )
+
+    {:ok, candidate} = Logex.Configuration.compile("plant", given, %{"xt" => program})
+    {:ok, _edit, forecast} = ConfigEdit.accept(rt, candidate)
+
+    assert for({:initial_changed, _, _} = r <- forecast, do: r) == [
+             {:initial_changed, "gy#{k}", {zero(outs[k]), global_declared(outs[k], value)}}
+           ],
+           given
+
+    reached(:global_initial)
+    {:retyped, elem(typed, 1), forecast}
+  end
+
+  # A global's real literal is held as its type's nearest value as the configuration is
+  # read, an integer one as written: so a global's report gives it, where a tag's gives the
+  # literal as declared (PLAN M5-15 question 2).
+  defp global_declared(type, value) when type in @reals and is_float(value), do: held(type, value)
+  defp global_declared(_type, value), do: value
+
+  defp retyped_global([], _k_type, text), do: {text, :accepted}
+
+  defp retyped_global(narrower, {k, was}, text) do
+    type = pick(narrower)
+
+    {String.replace(text, "var_global gx#{k} #{was} at", "var_global gx#{k} #{type} at"),
+     [
+       {5 + k,
+        "`gx#{k}` is #{a(was)} global in the running configuration and #{a(type)} in the candidate: a global's type changes only with a restart"}
+     ]}
+  end
+
+  defp refused({:error, diagnostics}), do: Enum.map(diagnostics, &{&1.line, &1.message})
+  defp refused({:ok, _edit, _forecast}), do: :accepted
+
+  defp points(spec, ins, xa_in) do
+    {_xa_type, xa_n} = spec.xa
+
+    xa =
+      case :rand.uniform(2) do
+        1 -> %{"gxa" => for(_ <- 1..xa_n, do: value(xa_in))}
+        2 -> %{"gxa[#{Enum.random(0..(xa_n - 1))}]" => value(xa_in)}
+      end
+
+    %{"gg" => pick([0, 1, 1]), "gh" => pick([0, 0, 1]), "gs" => pick([0, 1, 1, 2, -1, 9])}
+    |> Map.merge(Map.new(spec.ks, &{"gx#{&1}", value(ins[&1])}))
+    |> Map.merge(xa)
+  end
+
+  # A point's value as its global holds it, then widened into the program's input by value.
+  defp widened_points(spec, ins, xa_in, sample) do
+    {xa_type, _n} = spec.xa
+
+    Map.new(sample, fn
+      {"gxa", list} ->
+        {"xa", Enum.map(list, &held(xa_type, taken(xa_in, &1)))}
+
+      {"gxa" <> at, v} ->
+        {"xa" <> at, held(xa_type, taken(xa_in, v))}
+
+      {"gx" <> k, v} ->
+        {"x" <> k, held(spec.types[String.to_integer(k)], taken(ins[String.to_integer(k)], v))}
+
+      {"g" <> name, v} ->
+        {name, v}
+    end)
+  end
 end

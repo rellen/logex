@@ -3747,7 +3747,13 @@ and 252, 2026-10-26, beside decision 253's second-`ote` warning for a member thr
 subscript and decision 254's refusal of a member retyped, for the array). A scalar instance's rung scans
 in exactly what it did, a `ton` 112 reductions; an element's in 9 to 14 more, a `ton`'s
 121 and a `cal`'s 302 against 288, and a member read through a tag subscript in 5 more
-than by a literal one.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
+than by a literal one.)* *(M5-15, 2026-10-26: the walks draw the types together, every
+pair through `move`, each conversion's two slots, `add`, `and` and a connection, and
+programs, resources and the runner walk that mix every type, arrays, element bits,
+literal and tag subscripts, typed counters and long timers in instance arrays among them,
+against oracles that restate each rule (PLAN M5-15); the one defect they found, a
+truncation's misfit told the conversion that rounds, is fixed, decision 162's note.)*
+*(M5-11's review, 2026-10-23: a state's array is checked each time
 the state is handed in, a scan's among them, so holding one costs a scan whether or not
 anything writes it: an integer, bit-string or bool array about one reduction an element,
 one guard, an `int[65536]` some 66,000 reductions and 0.3 ms, a `real[65536]` about
@@ -7955,7 +7961,16 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      strings (decision 155), each reserved in every `.ld` file and named in a family
      stanza (§4.12, "Reserved words"); `trunc_int` is no mnemonic.
      *(Landed with M5-10, 2026-10-23: the sixteen, `real_trunc_int` of −1.6 −1, and
-     `trunc_int` a pinned unknown instruction.)*
+     `trunc_int` a pinned unknown instruction.)* *(Corrected with M5-15, 2026-10-26, which
+     the cross-type walk found: a truncation's misfit was told the conversion that rounds,
+     `real_trunc_int` given an lreal told `lreal_to_int`, given a dint destination
+     `real_to_dint`, and given a real destination `move`, none of which truncates, where
+     decision 148 tells a conversion's slot the conversion that does the whole job. A
+     source of the other real is now told `lreal_trunc_int` and a destination of another
+     integer type `real_trunc_dint`; a destination of a real type is told nothing, no
+     instruction truncating into a real (provisional, PLAN M5-15 question 1); a source of
+     an integer or a bit string is still told its conversion, which truncates nothing it
+     holds.)*
 163. **`ctu_dint`, `ctd_dint` and `ctud_dint` (Milestone 5),** following decision 158.
      A programmer used to IEC's typed counters declares `var boxes ctu_dint`, beside a
      colleague's `var cases ctu`.

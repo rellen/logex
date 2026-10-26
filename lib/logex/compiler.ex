@@ -209,6 +209,11 @@ defmodule Logex.Compiler do
 
   @conversions @conversions |> Map.merge(@real_conversions) |> Map.merge(@truncations)
 
+  # M5-15: the truncations by their symbols, and the integer types they truncate into, for
+  # the conversion a misfit is told (converting/4).
+  @truncating Map.new(@truncations, fn {_word, {symbol, _slots}} -> {symbol, true} end)
+  @truncated_into Map.new(Declarations.integers(), &{&1, true})
+
   @instructions Map.merge(@instructions, @conversions)
 
   @doc """
@@ -3961,10 +3966,29 @@ defmodule Logex.Compiler do
 
   defp classless(_kind, _access, _found, _class), do: ""
 
+  # M5-15: a truncation's slot is told the truncation that does the whole job, never the
+  # conversion that rounds: a source of the other real `lreal_trunc_int`, a destination of
+  # another integer type `real_trunc_dint`, and a destination of a real type nothing, no
+  # instruction truncating into a real (provisional); a source of an integer or a bit
+  # string is told its conversion, which truncates nothing it holds.
+  defp converting({symbol, [{:value, from}, {:write, to}]}, access, found, _type)
+       when is_map_key(@truncating, symbol),
+       do: instead(truncation_of(access, found, {from, to}))
+
   defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _type),
     do: instead(conversion_of(access, found, {from, to}))
 
   defp converting(nil, _access, _found, _type), do: ""
+
+  defp truncation_of(:write, found, {from, _to}) when is_map_key(@truncated_into, found),
+    do: {"#{from}_trunc_#{found}", found, from}
+
+  defp truncation_of(:write, found, _from_to) when found in @reals, do: {nil, found, :none}
+
+  defp truncation_of(:value, found, {_from, to}) when found in @reals,
+    do: {"#{found}_trunc_#{to}", found, to}
+
+  defp truncation_of(access, found, from_to), do: conversion_of(access, found, from_to)
 
   defp conversion_of(:write, found, {from, _to}),
     do: {Declarations.conversion(from, found), found, from}
