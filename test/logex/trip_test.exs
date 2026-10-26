@@ -671,6 +671,36 @@ defmodule Logex.TripTest do
       assert Runner.get!(runner, "r.in") == 1
     end
 
+    # M5-15's review, which the runner walk met: a device whose next write fails, the
+    # round tripping on a major fault before its write, takes the failure with the trip's
+    # 0, which is passed over; the runner keeps its first reason, the device the outputs it
+    # last took, nothing written after, until a restart's first round writes it.
+    test "a trip's 0 that fails is passed over, the first reason kept, until a restart" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      written = Sim.writes(panel)
+
+      Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      fault = out_of_range("fast", "l", 4, 16)
+      assert %{status: :tripped, trip: ^fault} = Runner.status(runner)
+      assert Sim.writes(panel) == written
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+
+      Manual.advance(clock, 1000)
+      assert %{status: :tripped, trip: ^fault} = Runner.status(runner)
+      assert Sim.writes(panel) == written
+
+      Sim.set(panel, [1], 0)
+      assert Runner.restart(runner, :cold) == :ok
+      assert Runner.status(runner).status == :running
+      assert List.last(Sim.writes(panel)) == %{[0] => 0, [1] => 0}
+      assert length(Sim.writes(panel)) == length(written) + 1
+    end
+
     test "a step that meets two major faults trips for the first, in the order its " <>
            "instances run" do
       text = """

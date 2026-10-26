@@ -1952,6 +1952,54 @@ defmodule Logex.BitStringTest do
                %{"a" => 1, "t" => 1, "b" => 0, "r" => 0}
     end
 
+    # M5-15's review: an element computes in its elements' type, by literal and by tag
+    # subscripts, and a member of an element of an instance array in the member's type.
+    test "an element and a member of an element compute in their own types" do
+      p =
+        program(
+          "var_input b byte[2]\nvar_input i int\nvar a ctu_udint[2]\nvar_output w word\n" <>
+            "var_output x word\nvar_output y word\nvar_output z ulint\nvar_output e ulint\n" <>
+            "not b[0] w\nshl b[i] 4 x\nrol b[1] 1 y\nnot a[i].cv z\nnot a[0].cv e"
+        )
+
+      # In 8 bits, 2#1000_0001 inverted is 2#0111_1110, shifted left by 4 2#0001_0000 and
+      # rotated left by 1 2#0000_0011; a udint's 0 inverted is 16#ffff_ffff, widened by
+      # value.
+      assert scan(p, %{"b" => [0x81, 0x81], "i" => 1}) ==
+               %{
+                 "w" => 0x007E,
+                 "x" => 0x0010,
+                 "y" => 0x0003,
+                 "z" => 0xFFFF_FFFF,
+                 "e" => 0xFFFF_FFFF
+               }
+    end
+
+    # M5-15's review, which the cross-type walk met: a member of a user block's instance,
+    # and of an element of an array of them, computes in the member's type, a dint's here,
+    # where until then it computed in its destination's, a lint's.
+    test "a user block's member and its element's member compute in the member's type" do
+      {:ok, block} =
+        Logex.compile("function_block pass\nvar_input i dint\nvar_output o dint\nmove i o",
+          name: "pass"
+        )
+
+      {:ok, p} =
+        Logex.compile(
+          "var b pass\nvar gs pass[2]\nvar_input k int\nvar_output z dint\n" <>
+            "var_output y lint\nvar_output v lint\nvar_output r lint\nvar_output n lint\n" <>
+            "cal b -2147483648 z\ncal gs[1] 5 z\nshr b.o 33 y\nshl gs[1].o 30 v\n" <>
+            "rol gs[k].o 31 r\nnot gs[1].o n",
+          name: "p",
+          types: [block]
+        )
+
+      # In 32 bits: 2#1000…0 shifted right by 33 is 0, 5 shifted left by 30 keeps its low
+      # bit at 2^30, rotated left by 31 is 5 rotated right by 1, 2^31 + 2, and not 5 is -6.
+      assert scan(p, %{"k" => 1}) ==
+               %{"z" => 5, "y" => 0, "v" => 0x4000_0000, "r" => -0x7FFF_FFFE, "n" => -6}
+    end
+
     # One lookup of the source's type more than before decision 214: a `not` or a shift of
     # a tag costs 4 reductions more than at `a281a15`, 15 and 27 more than a `move` where
     # it took 11 and 23, and a narrower source, which a second read brings into the

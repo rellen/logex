@@ -10434,11 +10434,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   @moduledoc """
   M4-6: the runner walk (PLAN.md "M4-6 · The contract walk", `docs/organisation.md`
   §4.11), a module of its own beside `Logex.ApiContractTest`, so that it runs beside the
-  other walks rather than after them. It runs `Logex.Runner` on the manual clock over 30
-  seeded configurations, each a fast task, now and then a slow one, an event task on a
+  other walks rather than after them. It runs `Logex.Runner` on the manual clock over 45
+  seeded configurations (30 until M5-15's review), each a fast task, now and then a slow one, an event task on a
   panel's or a drive's input, an event task on a trigger logic writes and the continuous
   task, with an untimed counter under it or with no task, or none, so that about three in
-  four have untimed programs, 26 of the 30 at this seed, and the rest do not; a divide by zero while the panel's dint reads 0; the
+  four have untimed programs, 35 of the 46 walks at this seed, the first walked again among them, and the rest do not; a divide by zero while the panel's dint reads 0; the
   panel and the drive each a simulated device that reports its changes or one that is only
   read; a forces file or none; a poll period, an idle watchdog and a share drawn. Each
   walk takes 70 steps: random waits and presses, forces and unforces, an online edit's
@@ -10913,9 +10913,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # in 5 to 11 s, and 22 reached every atom, the rest missing one, an interval cut a while
   # after the last round (decision 139) or a step taken while tripped, each rare by its
   # nature. M5-15's mixed types changed the draws, and the family {2026, 10, n} missed
-  # `:array_unforced`, so the walk draws {2027, 10, n}, at which every atom is reached in
-  # about 10 s in the suite; of the six families {2026..2031, 10, n} three reached every
-  # atom and three missed one, each a reach and no check.
+  # `:array_unforced`; M5-15 moved the seed to {2027, 10, n}, and its review moved it back
+  # and raised the draws instead: 45 walks, a trigger forced half the time to the value it
+  # does not read, triggers pressed and forced more often, the panel's dint more often -4,
+  # the array unforced whole more often and a continuous task's slow step twice among the
+  # injections. Every atom is reached at this seed in about 20 s alone; of the 31 families
+  # {2026, 10, n} and {3101..3130, 10, n}, 28 reached every atom, and no check failed in any.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
@@ -10924,13 +10927,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     Process.put(:runner_reach, MapSet.new())
 
     logs =
-      for seed <- 1..30 do
-        :rand.seed(:exsss, {2027, 10, 19 + seed})
+      for seed <- 1..45 do
+        :rand.seed(:exsss, {2026, 10, 19 + seed})
         walk(programs, dir, seed, 70)
       end
 
     # From fresh processes, the first walk again, exactly.
-    :rand.seed(:exsss, {2027, 10, 20})
+    :rand.seed(:exsss, {2026, 10, 20})
     assert walk(programs, dir, 1, 70) == hd(logs)
 
     assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
@@ -10949,8 +10952,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     Process.put(:runner_reach, MapSet.new())
     Process.put(:stale_mode, true)
 
+    # Since M5-15's review's draws the first walk to meet it is the 44th (it was within
+    # 40 before), so the search runs to 80.
     caught =
-      Enum.find_value(1..40, fn seed ->
+      Enum.find_value(1..80, fn seed ->
         :rand.seed(:exsss, {2026, 11, seed})
 
         try do
@@ -10995,6 +11000,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       timeline: Map.new(@inputs, fn {name, _} -> {name, [{0, 0}]} end),
       log: [],
       fault: nil,
+      failing: nil,
       down: MapSet.new(),
       unforcing: %{},
       hung: %{},
@@ -11178,7 +11184,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # reads as the force and makes no round of (decision 117).
   defp press(w) do
     forced = for name <- triggers(w.config), Map.has_key?(w.forces, name), do: name
-    name = pick(forced ++ forced ++ Enum.sort(Map.keys(@inputs)))
+
+    name =
+      pick(
+        forced ++
+          forced ++ forced ++ triggers(w.config) ++ ["pd", "pd"] ++ Enum.sort(Map.keys(@inputs))
+      )
+
     {device, address, type} = @inputs[name]
     reach(:forced_trigger_pressed, name in forced)
     reach(:element_pressed, String.contains?(name, "["))
@@ -11198,7 +11210,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp value(:bool), do: pick([0, 1])
-  defp value(:dint), do: pick([0, 0, 3, 7, -4])
+  defp value(:dint), do: pick([0, 0, 3, 7, -4, -4])
   defp value(:int), do: pick([0, 2, 3, 5, -1])
   defp value(:real), do: pick([0.0, 2.5, -1.25, 37.5])
   defp value(:word), do: pick([0, 8, 65_535, 3])
@@ -11227,9 +11239,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     case :rand.uniform(6) do
       n when n <= 3 ->
-        name = pick(triggers(w.config) ++ Enum.sort(Map.keys(@inputs)))
+        name =
+          pick(
+            triggers(w.config) ++ triggers(w.config) ++ ["pt[1]"] ++ Enum.sort(Map.keys(@inputs))
+          )
+
         {_device, _address, type} = @inputs[name]
-        value = value(type)
+        value = forced_value(w, name, type)
         kick = kicks?(w, name, value)
         began = w.begun
         forces = force_drawn(w, name, value)
@@ -11245,7 +11261,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         forced(w)
 
       n when n <= 5 ->
-        name = pick(Enum.sort(Map.keys(w.forces)) ++ [pick(Enum.sort(Map.keys(@inputs)))])
+        name =
+          pick(
+            Enum.sort(Map.keys(w.forces)) ++
+              [pick(Enum.sort(Map.keys(@inputs)))] ++ whole_unforced(w.forces)
+          )
+
         forced(%{w | forces: Map.drop(w.forces, unforce_drawn(w, name))})
 
       6 ->
@@ -11254,6 +11275,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         forced(%{w | forces: %{}, unforcing: w.forces})
     end
   end
+
+  # A trigger forced, half the time to the other value than it reads, so that the force
+  # makes its round (M5-15's review); any other point to a value drawn.
+  defp forced_value(%{status: :running} = w, name, :bool) do
+    reads = Map.get_lazy(w.forces, name, fn -> Runtime.get!(w.rt, name) end)
+    flipped(name in triggers(w.config) and :rand.uniform(2) == 1, reads)
+  end
+
+  defp forced_value(_w, _name, type), do: value(type)
+
+  defp flipped(true, reads), do: 1 - reads
+  defp flipped(false, _reads), do: value(:bool)
 
   # Decision 241: `pt[1]` drawn, the array `pt` is forced whole, each element to the value
   # drawn, as a list of its shape, and unforced whole, every element, so that the draws'
@@ -11268,6 +11301,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert Runner.force(w.runner, name, value) == :ok
     %{name => value}
   end
+
+  # M5-15's review: an array forced, now and then whole, is unforced whole twice as often.
+  defp whole_unforced(%{"pt[1]" => _} = forces), do: List.duplicate("pt[1]", map_size(forces) + 1)
+  defp whole_unforced(_forces), do: []
 
   defp unforce_drawn(w, "pt[1]") do
     assert Runner.unforce(w.runner, "pt") == :ok
@@ -11599,6 +11636,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     [{:slow, "fast"}, {:stuck, :small}, {:stuck, :big}] ++
       optional(w.config.tasks |> Enum.find(&(&1.name == "slow")), fn _ -> {:slow, "slow"} end) ++
       optional(continuous(w.config), &{:slow, &1}) ++
+      optional(continuous(w.config), &{:slow, &1}) ++
       optional(not untimed?(w.config), fn _ -> {:idle} end) ++
       for(device <- devices, do: {:kill, device}) ++
       for(device <- devices, w.hangs, do: {:hang, device}) ++
@@ -11632,22 +11670,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp injected({:stuck, size}, w) do
     :ok = Manual.advance(w.manual, w.poll)
-    w = consumed(w)
-    k = stuck(size, w)
-    :sys.suspend(w.runner)
-    :ok = Manual.advance(w.manual, k)
-    :sys.resume(w.runner)
-    w = %{w | floor: now(w)}
-
-    case size do
-      :small ->
-        reach(:stuck_small, true)
-        checked(consumed(w))
-
-      :big ->
-        w = %{w | fault: {:watchdog, {:device, "drive", w.idle + w.poll}}}
-        tripped!(consumed(w))
-    end
+    stuck_after(size, consumed(w))
   end
 
   defp injected({:kill, device}, w) do
@@ -11674,8 +11697,43 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp injected({callback, device, how}, w) do
     Sim.fail(w.sims[device], callback, how)
-    w = %{w | fault: {:io, device, cause(device, callback, how)}}
+    fault = {:io, device, cause(device, callback, how)}
+    w = %{w | fault: fault, failing: failing(callback, fault)}
     fault_acted(callback, device, how, w)
+  end
+
+  # A write's failure told to the simulated device is acted out on its next write: a
+  # round's or a poll's write again, which trips the runner for it. Where a round's major
+  # fault trips it first, before its write, the failure meets either the trip's 0, which
+  # fails and is passed over, so that the device keeps the outputs last written, or a
+  # poll's write again just before it, the device latched by its own fault and written 0,
+  # its notice coming to a runner tripped already (M5-15's review): which of the two the
+  # walk does not know, the device's poll and the round falling in one advance.
+  defp failing(:write, fault), do: fault
+  defp failing(_callback, _fault), do: nil
+
+  # A runner stuck in its own work. A round in the poll period the walk passes first may
+  # trip it already, a major fault among its steps (M5-15's review: the panel's dint at -4
+  # while `pb` is pressed): then no deadline trips it again, a tripped runner keeping its
+  # first reason.
+  defp stuck_after(_size, %{status: :tripped} = w), do: checked(w)
+
+  defp stuck_after(size, w) do
+    k = stuck(size, w)
+    :sys.suspend(w.runner)
+    :ok = Manual.advance(w.manual, k)
+    :sys.resume(w.runner)
+    w = %{w | floor: now(w)}
+
+    case size do
+      :small ->
+        reach(:stuck_small, true)
+        checked(consumed(w))
+
+      :big ->
+        w = %{w | fault: {:watchdog, {:device, "drive", w.idle + w.poll}}}
+        tripped!(consumed(w))
+    end
   end
 
   defp fault_acted(:report, device, _how, w) do
@@ -11943,13 +12001,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp tripped(w, reason) do
     written =
       Map.new(w.sims, fn {name, _sim} ->
-        {name, zeroed_unless_down(MapSet.member?(w.down, name), name, w)}
+        {name, zeroed_unless_down(MapSet.member?(w.down, name), name, %{w | trip: reason})}
       end)
 
-    %{w | status: :tripped, trip: reason, written: written}
+    %{w | status: :tripped, trip: reason, written: written, failing: nil}
   end
 
   defp zeroed_unless_down(true, name, w), do: Map.get(w.written, name)
+
+  defp zeroed_unless_down(false, name, %{failing: {:io, name, _cause} = fault} = w)
+       when w.trip != fault,
+       do: {:either, [Map.get(w.written, name), zeroed_unless_down(false, name, nil)]}
 
   defp zeroed_unless_down(false, name, _w),
     do: Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
@@ -12129,16 +12191,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     passes = for {_key, pass} <- :ets.match_object(@table, {{self(), :pass, :_}, :_}), do: pass
 
-    for {name, {device, _address, _type}} <- @inputs, not Map.has_key?(w.forces, name) do
+    for {name, {device, _address, type}} <- @inputs, not Map.has_key?(w.forces, name) do
       value = Map.get(inputs, name, Runtime.get!(w.rt, name))
       to = min(at, Map.get(w.hung, device, at))
       held = held(w.timeline[name], to - window(w, device, passes, to), to) ++ unforcing(w, name)
-      # By value: a real point's 0 from its device and the 0.0 the resource holds are one
-      # reading (M5-15).
-      assert Enum.any?(held, &(&1 == value)),
-             "#{name} read #{value} at #{at}, held #{inspect(held)}"
+
+      assert read_as?(type, held, value),
+             "#{name} read #{inspect(value)} at #{at}, held #{inspect(held)}"
     end
   end
+
+  # A real point's reading by value, its device's 0 and the 0.0 the resource holds one
+  # reading (M5-15); every other point's exactly, so that a float at an integer or a bool
+  # point is no reading of it (M5-15's review).
+  defp read_as?(type, held, value) when type in [:real, :lreal],
+    do: Enum.any?(held, &(&1 == value))
+
+  defp read_as?(_type, held, value), do: value in held
 
   # Each trigger an unforce of all changes is its own round, reading those after it as
   # they were, forced (decision 138).
@@ -12210,11 +12279,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
 
     for {name, sim} <- w.sims, Map.has_key?(w.written, name) do
-      assert Sim.outputs(sim) == w.written[name], "#{name}'s outputs"
+      assert Sim.outputs(sim) in outputs_of(w.written[name]), "#{name}'s outputs"
     end
 
     zeroed_once(w)
   end
+
+  defp outputs_of({:either, outputs}), do: outputs
+  defp outputs_of(outputs), do: [outputs]
 
   # Every output written 0 once at a trip, and nothing after it until a restart.
   defp zeroed_once(%{status: :tripped} = w) do
@@ -12316,6 +12388,10 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp reached(name),
     do: Process.put(:xt_reach, MapSet.put(Process.get(:xt_reach, MapSet.new()), name))
 
+  # The oracle's clauses, never conditionals (M5-15's review): a reach where it holds.
+  defp reached_when(true, name), do: reached(name)
+  defp reached_when(false, _name), do: :ok
+
   # ---- the types, restated ---------------------------------------------------------------
 
   defp family(:bool), do: :bool
@@ -12392,6 +12468,48 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     end
   end
 
+  # M5-15's review: a user block's member, which logic outside its block only reads, is a
+  # source of `not` and the shifts in its own type, for every pair Figure 11 widens, an
+  # integer into an integer and a bool or a bit string into a bit string, restated by
+  # decisions 214 and 165, where until then it computed in the destination's.
+  test "a user block's member is inverted, shifted and rotated in its own width, every pair" do
+    for from <- @types,
+        to <- @types,
+        from != to,
+        widens?(from, to),
+        family(to) in [:integer, :bit_string],
+        family(from) in mask_class(family(to)) do
+      {:ok, block} =
+        Logex.compile(
+          "function_block mb\nvar_input i #{from}\nvar_output o #{from}\nmove i o",
+          name: "mb"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var b mb\nvar_input x #{from}\nvar_output z #{from}\nvar_output n #{to}\n" <>
+            "var_output l #{to}\nvar_output r #{to}\nvar_output q #{to}\ncal b x z\n" <>
+            "not b.o n\nshl b.o 1 l\nrol b.o 1 r\nshr b.o #{width(from)} q",
+          name: "p",
+          types: [block]
+        )
+
+      for x <- Enum.uniq([low(from), high(from), 1]) do
+        {outputs, _state} =
+          Runtime.call(program, Runtime.instance(program), %{"x" => x}, %Scan{now: 1, first: true})
+
+        assert outputs == %{
+                 "z" => x,
+                 "n" => valued(from, ones(from) - pattern(from, x)),
+                 "l" => elem(shift(:shl, from, x, 1), 1),
+                 "r" => elem(shift(:rol, from, x, 1), 1),
+                 "q" => 0
+               },
+               "#{from} into #{to}, #{x}"
+      end
+    end
+  end
+
   test "every pair of types meets by Figure 11 or is refused naming its conversion: " <>
          "a move, each conversion's two slots, add's and and's class, and a connection" do
     for from <- @types, to <- @types, from != to do
@@ -12464,36 +12582,31 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp connection_hint(false, _from, _to), do: ""
 
-  defp moved(from, to) do
-    case widens?(from, to) do
-      true ->
-        :ok
+  defp moved(from, to), do: moved(widens?(from, to), from, to)
 
-      false ->
-        [
-          {3,
-           "`move` writes `x`, #{a(from)}, into `y`, #{a(to)}: #{a(from)} does not widen into " <>
-             "#{a(to)}, " <> moved_hint(conversion?(from, to), from, to)}
-        ]
-    end
-  end
+  defp moved(true, _from, _to), do: :ok
+
+  defp moved(false, from, to),
+    do: [
+      {3,
+       "`move` writes `x`, #{a(from)}, into `y`, #{a(to)}: #{a(from)} does not widen into " <>
+         "#{a(to)}, " <> moved_hint(conversion?(from, to), from, to)}
+    ]
 
   defp moved_hint(true, from, to), do: "so convert it with `#{from}_to_#{to}`"
   defp moved_hint(false, _from, _to), do: "and logex has no conversion between them"
 
-  defp read_by(word, from, to, truncates, type) do
-    case widens?(type, from) do
-      true ->
-        :ok
+  defp read_by(word, from, to, truncates, type),
+    do: read_by(widens?(type, from), {word, from, to, truncates, type})
 
-      false ->
-        [
-          {3,
-           "`#{word}` reads #{a(from)}, but `x` is #{a(type)} (declared on line 1)" <>
-             read_hint(truncates, type, to)}
-        ]
-    end
-  end
+  defp read_by(true, _conversion), do: :ok
+
+  defp read_by(false, {word, from, to, truncates, type}),
+    do: [
+      {3,
+       "`#{word}` reads #{a(from)}, but `x` is #{a(type)} (declared on line 1)" <>
+         read_hint(truncates, type, to)}
+    ]
 
   # A truncation's source of the other real is told the truncation that does the whole
   # job, and any other source the conversion from it, or `move` where it is the type the
@@ -12501,19 +12614,14 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp read_hint(true, type, to) when type in @reals, do: ": use `#{type}_trunc_#{to}`"
   defp read_hint(_truncates, type, to), do: hint(conversion?(type, to), type, to)
 
-  defp written_by(word, from, to, truncates, type) do
-    case type == to do
-      true ->
-        :ok
+  defp written_by(_word, _from, to, _truncates, to), do: :ok
 
-      false ->
-        [
-          {3,
-           "`#{word}` writes #{a(to)}, but `y` is #{a(type)} (declared on line 2)" <>
-             written_hint(truncates, from, type)}
-        ]
-    end
-  end
+  defp written_by(word, from, to, truncates, type),
+    do: [
+      {3,
+       "`#{word}` writes #{a(to)}, but `y` is #{a(type)} (declared on line 2)" <>
+         written_hint(truncates, from, type)}
+    ]
 
   # A truncation's destination of another integer type is told the truncation into it, and
   # one of a real type nothing, no instruction truncating into a real (provisional).
@@ -12597,10 +12705,33 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
              :host_not_input,
              :resource_widened,
              :resource_event,
-             :repeated
+             :repeated,
+             # M5-15's review: the rules its first draws met only by chance or never.
+             :rounded_into_real,
+             :tie_rounded_up,
+             :not_wider,
+             :shift_wider,
+             :rotated,
+             :negative_count,
+             :member_high_bit,
+             :block_member_bit,
+             :element_out_into_real,
+             :elements_out
            ]
 
   @counters ~w(ctd_int ctd_udint ctu_int ctu_udint)
+
+  # A long timer's presets, in ns, some with bits set above 31, 2^32 and 2^40 ms among
+  # them, and the largest whole number of milliseconds a lint holds (M5-15's review).
+  @timer_presets [
+    0,
+    2_000_000,
+    5_000_000,
+    1_500_000,
+    4_294_967_296_000_000,
+    1_099_511_627_776_000_000,
+    9_223_372_036_854_000_000
+  ]
 
   defp counted_type("ctd_int"), do: :int
   defp counted_type("ctu_int"), do: :int
@@ -12656,7 +12787,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
       counter: pick(@counters),
       c_pre: pick([1, 2, 3]),
       timer: "ton_ltime",
-      t_pre: pick([0, 2_000_000, 5_000_000, 1_500_000]),
+      t_pre: pick(@timer_presets),
       block: {block_in, pick(wider(block_in))}
     }
 
@@ -12734,11 +12865,21 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
           {mem(member("c"), "cv"), counted_type(spec.counter)},
           {mem(member("c"), "q"), :bool},
           {mem(member("t"), "acc"), :lint},
-          {mem(member("t"), "dn"), :bool}
+          {mem(member("t"), "pre"), :lint},
+          {mem(member("t"), "dn"), :bool},
+          {{:smem, "b", "o"}, elem(spec.block, 1)},
+          {{:smem, "b", "w"}, :lword}
         ]
 
-    scalars ++ bits(scalars)
+    scalars ++ bits(scalars) ++ high_bits()
   end
+
+  # A bit above 31 of a long timer's preset and of the block's `w`, drawn every time.
+  defp high_bits,
+    do: [
+      {{:bit, mem(member("t"), "pre"), {:lit, Enum.random(32..63)}}, :bool},
+      {{:bit, {:smem, "b", "w"}, {:lit, Enum.random(32..63)}}, :bool}
+    ]
 
   defp mem({instance, sub}, name), do: {:mem, instance, sub, name}
 
@@ -12770,13 +12911,14 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     contact = pick([nil, nil, {:xic, {:tag, "g"}}, {:xio, {:tag, "g"}}, :bool])
     contact = contact(contact, spec)
 
-    case :rand.uniform(7) do
+    case :rand.uniform(8) do
       1 -> {contact, nil, coil(spec)}
       2 -> {contact, conversion(spec), flag()}
       3 -> {contact, conversion(spec), flag()}
       4 -> {contact, added(spec), flag()}
       5 -> {contact, masked(spec), flag()}
       6 -> {nil, called(spec), nil}
+      7 -> {contact, shifted(spec), flag()}
       _ -> {contact, moved_drawn(spec), flag()}
     end
   end
@@ -12806,7 +12948,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp conversion(spec) do
-    {from, source} = pick(for {_o, t} = r <- readables(spec), t != :bool, do: r)
+    sources = for {_o, t} = r <- readables(spec), t != :bool, do: r
+    inputs = Enum.filter(sources, &input?/1)
+    {from, source} = pick(sources ++ inputs ++ inputs)
     into = Enum.uniq(for {_o, t} <- writables(spec), do: t)
 
     case for({_w, f, t, _tr} = c <- conversions(), widens?(source, f), t in into, do: c) do
@@ -12828,7 +12972,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
       numbers ->
         {to, type} = pick(numbers)
         rule = &(family(&1) in [:integer, :real] and widens?(&1, type))
-        sources = sources(spec, type, rule) ++ near_top(type)
+        sources = sources(spec, type, rule) ++ near_top(type) ++ near_top(type) ++ near_top(type)
         {:add, pick(sources), pick(sources), to}
     end
   end
@@ -12848,6 +12992,42 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp mask_class(:integer), do: [:integer]
   defp mask_class(_bits), do: [:bool, :bit_string]
+
+  # `not` or a shift into an integer or a bit string, its source of that class widening
+  # into it, now and then narrower (decision 214), and a shift's count a literal about the
+  # source's width or an integer tag, `s` among them, which may be negative (decision 165).
+  defp shifted(spec) do
+    {to, type} =
+      pick(for {_o, t} = w <- writables(spec), family(t) in [:integer, :bit_string], do: w)
+
+    class = mask_class(family(type))
+    narrower = for {o, t} <- readables(spec), family(t) in class, widens?(t, type), do: o
+    wider = Enum.filter(narrower, &narrower?(&1, type, spec))
+    members = Enum.filter(wider, &match?({:smem, _, _}, &1))
+    from = pick([literal(type) | narrower ++ wider ++ members ++ members ++ members])
+
+    case pick([:not, :shl, :shr, :rol, :ror]) do
+      :not ->
+        {:not, from, to}
+
+      op ->
+        w = width(type_of(from, spec) || type)
+
+        counts =
+          for(n <- Enum.uniq([0, 1, 3, w - 1, w, w + 1]), do: {:lit, n, Integer.to_string(n)}) ++
+            for {o, t} <- readables(spec), family(t) == :integer, do: o
+
+        {op, from, pick(counts), to}
+    end
+  end
+
+  defp narrower?(operand, type, spec), do: type_of(operand, spec) not in [nil, type]
+
+  # An input, which every scan draws afresh, a tie or an integer no single holds among its
+  # values: so a conversion reads one three times as often as any other source.
+  defp input?({{:tag, "x" <> _}, _type}), do: true
+  defp input?({{:el, "xa", _}, _type}), do: true
+  defp input?(_source), do: false
 
   # A `cal` of the block, its var_input from a tag that widens into it and its var_output
   # into one it widens into, each a scalar or an element by literal subscripts.
@@ -12875,8 +13055,22 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   # ---- the text --------------------------------------------------------------------------
 
+  # The block's `w`, an lword of bits set above 31 and below, which a rung reads by bit as a
+  # scalar instance's member (M5-15's review).
+  @block_w 0xF0F0_F0F0_0F0F_0F0F
+
   defp block_text({i, o}),
-    do: "function_block mixb\nvar_input i #{i}\nvar_output o #{o}\nmove i o"
+    do:
+      "function_block mixb\nvar_input i #{i}\nvar_output o #{o}#{block_o_text(o)}\n" <>
+        "var_output w lword 16#f0f0_f0f0_0f0f_0f0f\nmove i o"
+
+  # The block's `o` starts at its type's largest value, an integer's or a bit string's, so
+  # that a rung that shifts it before any `cal` shifts bits out (M5-15's review).
+  defp block_o_text(o) when o in @reals, do: ""
+  defp block_o_text(o), do: " #{high(o)}"
+
+  defp block_o(o) when o in @reals, do: zero(o)
+  defp block_o(o), do: high(o)
 
   defp declarations(spec) do
     {xa_type, xa_n} = spec.xa
@@ -12892,7 +13086,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
             list_text(spec.a_init[k])
       ) ++
       for(i <- 0..2, do: "var_output ok#{i} bool") ++
-      ["var_output zo #{elem(spec.block, 1)}"] ++
+      ["var_output zo #{elem(spec.block, 1)}", "var_output zw lword"] ++
       ["var c #{spec.counter}[2]", "var t #{spec.timer}[2]", "var b mixb"]
   end
 
@@ -12913,7 +13107,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp timer_preset(%{timer: "ton_ltime", t_pre: pre}), do: pre
-  defp timer_preset(%{timer: "ton", t_pre: pre}), do: div(pre, 1_000_000)
+  defp timer_preset(%{timer: "ton", t_pre: pre}), do: min(div(pre, 1_000_000), 2_147_483_647)
 
   defp head(spec), do: length(declarations(spec)) + length(fixed(spec))
 
@@ -12933,7 +13127,8 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp instruction_text(nil), do: []
   defp instruction_text({:move, from, to}), do: ["move #{name(from)} #{name(to)}"]
   defp instruction_text({:conv, word, _rule, from, to}), do: ["#{word} #{name(from)} #{name(to)}"]
-  defp instruction_text({:cal, from, to}), do: ["cal b #{name(from)} #{name(to)}"]
+  defp instruction_text({:cal, from, to}), do: ["cal b #{name(from)} #{name(to)} zw"]
+  defp instruction_text({:not, from, to}), do: ["not #{name(from)} #{name(to)}"]
 
   defp instruction_text({op, x, y, to}),
     do: ["#{op} #{name(x)} #{name(y)} #{name(to)}"]
@@ -12942,6 +13137,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp name({:tag, tag}), do: tag
   defp name({:el, array, subs}), do: "#{array}[#{Enum.map_join(subs, ",", &sub_text/1)}]"
   defp name({:mem, instance, sub, member}), do: "#{instance}[#{sub_text(sub)}].#{member}"
+  defp name({:smem, instance, member}), do: "#{instance}.#{member}"
   defp name({:bit, container, {:lit, n}}), do: "#{name(container)}.#{n}"
   defp name({:bit, container, {:tag, tag}}), do: "#{name(container)}.[#{tag}]"
 
@@ -13007,12 +13203,13 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp pattern(type, value), do: Integer.mod(value, Integer.pow(2, width(type)))
 
-  defp valued(type, p) when is_map_key(@signed, type) do
-    half = Integer.pow(2, width(type) - 1)
-    if p >= half, do: p - 2 * half, else: p
-  end
+  defp valued(type, p) when is_map_key(@signed, type),
+    do: signed(p, Integer.pow(2, width(type) - 1))
 
   defp valued(_type, p), do: p
+
+  defp signed(p, half) when p >= half, do: p - 2 * half
+  defp signed(p, _half), do: p
 
   defp wrapped(type, value),
     do: low(type) + Integer.mod(value - low(type), high(type) - low(type) + 1)
@@ -13037,7 +13234,13 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp up(twice, unit, _q) when twice > unit, do: 1
-  defp up(twice, unit, q) when twice == unit, do: rem(q, 2)
+
+  defp up(twice, unit, q) when twice == unit and rem(q, 2) == 1 do
+    reached(:tie_rounded_up)
+    1
+  end
+
+  defp up(twice, unit, _q) when twice == unit, do: 0
   defp up(_twice, _unit, _q), do: 0
 
   # The nearest integer to a real, a tie to the even one.
@@ -13069,7 +13272,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp conversion_family(f, t, false), do: {f, t}
 
   defp convert(:integer, :integer, {_from, to, _}, value) do
-    if not in_range?(to, value), do: reached(:wrapped)
+    reached_when(not in_range?(to, value), :wrapped)
     {in_range?(to, value), wrapped(to, value)}
   end
 
@@ -13077,15 +13280,26 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
        when f in [:integer, :bit_string] and t in [:integer, :bit_string],
        do: {true, valued(to, Integer.mod(pattern(from, value), Integer.pow(2, width(to))))}
 
-  defp convert(:integer, :real, {_from, to, _}, value), do: {true, nearest(to, value)}
+  defp convert(:integer, :real, {_from, to, _}, value) do
+    into_real(to, value * 1.0, nearest(to, value))
+    {true, nearest(to, value)}
+  end
 
   defp convert(:real, :integer, {_from, to, truncates}, value) do
     whole = whole(truncates, value)
-    if not in_range?(to, whole), do: reached(:wrapped)
+    reached_when(not in_range?(to, whole), :wrapped)
     {in_range?(to, whole), wrapped(to, whole)}
   end
 
-  defp convert(:real, :real, {_from, to, _}, value), do: stored(to, value)
+  defp convert(:real, :real, {_from, to, _}, value) do
+    {power, held} = stored(to, value)
+    into_real(to, value, held)
+    {power, held}
+  end
+
+  # A conversion into a real whose source no single holds, so that it is rounded.
+  defp into_real(:real, value, held) when held != value, do: reached(:rounded_into_real)
+  defp into_real(_to, _value, _held), do: :ok
 
   defp whole(true, value), do: trunc(value)
   defp whole(false, value), do: even(value)
@@ -13100,7 +13314,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp type_of({:el, "xa", _}, spec), do: elem(spec.xa, 0)
   defp type_of({:el, "a" <> k, _}, spec), do: spec.types[String.to_integer(k)]
   defp type_of({:mem, "c", _, m}, spec) when m in ["cv", "pv"], do: counted_type(spec.counter)
-  defp type_of({:mem, "t", _, "acc"}, _spec), do: :lint
+  defp type_of({:mem, "t", _, m}, _spec) when m in ["acc", "pre"], do: :lint
+  defp type_of({:smem, "b", "o"}, spec), do: elem(spec.block, 1)
+  defp type_of({:smem, "b", "w"}, _spec), do: :lword
   defp type_of({:mem, _, _, _}, _spec), do: :bool
   defp type_of({:bit, _, _}, _spec), do: :bool
   defp type_of({:lit, _, _}, _spec), do: nil
@@ -13117,8 +13333,8 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp reached_subs(subs, dims) do
-    if Enum.any?(subs, &match?({:tag, _}, &1)), do: reached(:tag_subscript)
-    if length(dims) == 2, do: reached(:two_dimensions)
+    reached_when(Enum.any?(subs, &match?({:tag, _}, &1)), :tag_subscript)
+    reached_when(length(dims) == 2, :two_dimensions)
   end
 
   defp indexed(true, read), do: {:ok, read}
@@ -13153,25 +13369,34 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp read({:mem, instance, sub, m}, env, spec) do
-    if match?({:tag, _}, sub), do: reached(:member_through_tag)
+    reached_when(match?({:tag, _}, sub), :member_through_tag)
     with {:ok, at} <- index(instance, [sub], env, spec), do: {:ok, env[instance][at][m]}
   end
 
+  defp read({:smem, instance, m}, env, _spec), do: {:ok, env[instance][m]}
+
   defp read({:bit, container, number}, env, spec) do
     type = type_of(container, spec)
-    if match?({:el, _, _}, container), do: reached(:element_bit)
+    reached_when(match?({:el, _, _}, container), :element_bit)
 
     with {:ok, value} <- read(container, env, spec),
-         {:ok, n} <- bit_number(number, type, env),
-         do: {:ok, bit_at(type, value, n)}
+         {:ok, n} <- bit_number(number, type, env) do
+      member_bit(container, n, bit_at(type, value, n))
+      {:ok, bit_at(type, value, n)}
+    end
   end
+
+  # A member's bit above 31 set, of an element's member and of a scalar instance's.
+  defp member_bit({:mem, _, _, _}, n, 1) when n > 31, do: reached(:member_high_bit)
+  defp member_bit({:smem, _, _}, n, 1) when n > 31, do: reached(:block_member_bit)
+  defp member_bit(_container, _n, _bit), do: :ok
 
   defp source({:lit, value, _text}, into, _env, _spec), do: {:ok, literal_value(into, value)}
 
   defp source(operand, _into, env, spec) do
     type = type_of(operand, spec)
     reached({:read, type})
-    if match?({:el, _, _}, operand), do: reached({:element, type})
+    reached_when(match?({:el, _, _}, operand), {:element, type})
     read(operand, env, spec)
   end
 
@@ -13198,7 +13423,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp written(operand, value, env, spec) do
     type = type_of(operand, spec)
     reached({:written, type})
-    if match?({:el, _, _}, operand), do: reached({:element, type})
+    reached_when(match?({:el, _, _}, operand), {:element, type})
     write(operand, value, env, spec)
   end
 
@@ -13213,33 +13438,34 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp contact_run(nil, _env, _line, faults, _spec), do: {true, faults}
 
-  defp contact_run({op, operand}, env, line, faults, spec) do
-    case read(operand, env, spec) do
-      {:ok, value} ->
-        {op == :xic == (value == 1), faults}
+  defp contact_run({op, operand}, env, line, faults, spec),
+    do: contacted(read(operand, env, spec), {op, line, faults})
 
-      {:fault, {kind, read}} ->
-        reached(:contact_fault)
-        {false, [{kind, op, line, read} | faults]}
-    end
+  defp contacted({:ok, value}, {op, _line, faults}), do: {op == :xic == (value == 1), faults}
+
+  defp contacted({:fault, {kind, read}}, {op, line, faults}) do
+    reached(:contact_fault)
+    {false, [{kind, op, line, read} | faults]}
   end
 
   defp instruction_run(nil, power, env, {_line, faults}, _spec), do: {power, env, faults}
   defp instruction_run(_instruction, false, env, {_line, faults}, _spec), do: {false, env, faults}
 
-  defp instruction_run(instruction, true, env, {line, faults}, spec) do
-    case run(instruction, env, spec) do
-      {:ok, power, env} -> {power, env, faults}
-      {:fault, {kind, read}} -> {false, env, [{kind, symbol(instruction), line, read} | faults]}
-    end
-  end
+  defp instruction_run(instruction, true, env, {line, faults}, spec),
+    do: instructed(run(instruction, env, spec), {instruction, env, line, faults})
+
+  defp instructed({:ok, power, env}, {_instruction, _was, _line, faults}),
+    do: {power, env, faults}
+
+  defp instructed({:fault, {kind, read}}, {instruction, env, line, faults}),
+    do: {false, env, [{kind, symbol(instruction), line, read} | faults]}
 
   defp symbol({:conv, word, _, _, _}), do: String.to_atom(word)
   defp symbol(instruction), do: elem(instruction, 0)
 
   defp run({:move, from, to}, env, spec) do
     type = type_of(to, spec)
-    if type_of(from, spec) not in [nil, type], do: reached(:widened_move)
+    reached_when(type_of(from, spec) not in [nil, type], :widened_move)
 
     with {:ok, value} <- source(from, type, env, spec),
          {:ok, env} <- written(to, held(type, value), env, spec),
@@ -13272,7 +13498,10 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     with {:ok, value} <- source(from, i, env, spec) do
       inside = held(i, value)
       out = held(o, inside)
-      env = Map.put(env, "b", %{"i" => inside, "o" => out})
+
+      env =
+        Map.merge(env, %{"b" => %{"i" => inside, "o" => out, "w" => @block_w}, "zw" => @block_w})
+
       called_out(to, out, env, spec)
     end
   end
@@ -13284,6 +13513,58 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
          {:ok, b} <- source(y, type, env, spec),
          {:ok, env} <- written(to, masked_value(op, type, a, b), env, spec),
          do: {:ok, true, env}
+  end
+
+  # Decisions 214 and 165, restated: `not` and a shift in their source's own bits, a
+  # literal's the destination's and a bit's a bool's, the result widened into the
+  # destination by value; a shift of the width or more 0, a rotate by its count modulo the
+  # width, and a negative count the source unshifted with no power.
+  defp run({:not, x, to}, env, spec) do
+    type = type_of(to, spec)
+    from = type_of(x, spec) || type
+    reached_when(from != type, :not_wider)
+
+    with {:ok, a} <- source(x, type, env, spec),
+         {:ok, env} <- written(to, valued(from, ones(from) - pattern(from, a)), env, spec),
+         do: {:ok, true, env}
+  end
+
+  defp run({op, x, n, to}, env, spec) when op in [:shl, :shr, :rol, :ror] do
+    type = type_of(to, spec)
+    from = type_of(x, spec) || type
+    reached_when(from != type, :shift_wider)
+
+    with {:ok, a} <- source(x, type, env, spec),
+         {:ok, count} <- source(n, nil, env, spec) do
+      {power, value} = shift(op, from, a, count)
+      with {:ok, env} <- written(to, value, env, spec), do: {:ok, power, env}
+    end
+  end
+
+  defp ones(type), do: Integer.pow(2, width(type)) - 1
+
+  defp shift(_op, _type, a, count) when count < 0 do
+    reached(:negative_count)
+    {false, a}
+  end
+
+  defp shift(op, type, a, count),
+    do: {true, valued(type, shift_pattern(op, pattern(type, a), count, width(type)))}
+
+  defp shift_pattern(op, _p, n, w) when op in [:shl, :shr] and n >= w, do: 0
+  defp shift_pattern(:shl, p, n, w), do: Integer.mod(p * Integer.pow(2, n), Integer.pow(2, w))
+  defp shift_pattern(:shr, p, n, _w), do: div(p, Integer.pow(2, n))
+
+  defp shift_pattern(:rol, p, n, w) do
+    r = Integer.mod(n, w)
+    reached_when(r != 0 and p != 0, :rotated)
+    Integer.mod(p * Integer.pow(2, r) + div(p, Integer.pow(2, w - r)), Integer.pow(2, w))
+  end
+
+  defp shift_pattern(:ror, p, n, w) do
+    r = Integer.mod(n, w)
+    reached_when(r != 0 and p != 0, :rotated)
+    div(p, Integer.pow(2, r)) + Integer.mod(p, Integer.pow(2, r)) * Integer.pow(2, w - r)
   end
 
   defp called_out(to, out, env, spec) do
@@ -13300,7 +13581,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp sum(type, a, b) do
-    if not in_range?(type, a + b), do: reached(:wrapped)
+    reached_when(not in_range?(type, a + b), :wrapped)
     {in_range?(type, a + b), wrapped(type, a + b)}
   end
 
@@ -13327,21 +13608,19 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp coil_run(nil, _power, env, {_line, faults}, _spec), do: {env, faults}
 
-  defp coil_run({op, operand}, power, env, {line, faults}, spec) do
-    case coiled(op, power) do
-      nil ->
-        {env, faults}
+  defp coil_run({op, operand}, power, env, {line, faults}, spec),
+    do: coil_wrote(coiled(op, power), {op, operand, power}, env, {line, faults, spec})
 
-      value ->
-        case written(operand, value, env, spec) do
-          {:ok, env} ->
-            {env, faults}
+  defp coil_wrote(nil, _coil, env, {_line, faults, _spec}), do: {env, faults}
 
-          {:fault, {kind, read}} ->
-            if not power, do: reached(:ote_false_fault)
-            {env, [{kind, op, line, read} | faults]}
-        end
-    end
+  defp coil_wrote(value, {op, operand, power}, env, {line, faults, spec}),
+    do: coil_written(written(operand, value, env, spec), {op, power}, env, {line, faults})
+
+  defp coil_written({:ok, env}, _coil, _was, {_line, faults}), do: {env, faults}
+
+  defp coil_written({:fault, {kind, read}}, {op, power}, env, {line, faults}) do
+    reached_when(not power, :ote_false_fault)
+    {env, [{kind, op, line, read} | faults]}
   end
 
   defp coiled(:ote, power), do: bit(power)
@@ -13354,59 +13633,55 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   # until the load or the reset (decisions 69 to 71 and 158).
   defp counted(counter, :down, power, {first, type}) do
     edge = power and not first and counter["cd"] == 0
-
-    counter =
-      cond do
-        counter["ld"] == 1 ->
-          reached(:loaded)
-          %{counter | "cv" => counter["pv"], "un" => 0}
-
-        edge and counter["cv"] == low(type) ->
-          reached(:counter_limit)
-          %{counter | "un" => 1}
-
-        edge ->
-          reached(:counted)
-          %{counter | "cv" => counter["cv"] - 1}
-
-        true ->
-          counter
-      end
-
+    counter = down(counter, edge, low(type))
     %{counter | "cd" => bit(power), "q" => bit(counter["cv"] <= 0)}
   end
 
   defp counted(counter, :up, power, {first, type}) do
     edge = power and not first and counter["cu"] == 0
-
-    counter =
-      cond do
-        counter["r"] == 1 ->
-          %{counter | "cv" => 0, "ov" => 0}
-
-        edge and counter["cv"] == high(type) ->
-          reached(:counter_limit)
-          %{counter | "ov" => 1}
-
-        edge ->
-          reached(:counted)
-          %{counter | "cv" => counter["cv"] + 1}
-
-        true ->
-          counter
-      end
-
+    counter = up_counted(counter, edge, high(type))
     %{counter | "cu" => bit(power), "q" => bit(counter["cv"] >= counter["pv"])}
   end
+
+  defp down(%{"ld" => 1} = counter, _edge, _low) do
+    reached(:loaded)
+    %{counter | "cv" => counter["pv"], "un" => 0}
+  end
+
+  defp down(%{"cv" => low} = counter, true, low) do
+    reached(:counter_limit)
+    %{counter | "un" => 1}
+  end
+
+  defp down(counter, true, _low) do
+    reached(:counted)
+    %{counter | "cv" => counter["cv"] - 1}
+  end
+
+  defp down(counter, false, _low), do: counter
+
+  defp up_counted(%{"r" => 1} = counter, _edge, _high), do: %{counter | "cv" => 0, "ov" => 0}
+
+  defp up_counted(%{"cv" => high} = counter, true, high) do
+    reached(:counter_limit)
+    %{counter | "ov" => 1}
+  end
+
+  defp up_counted(counter, true, _high) do
+    reached(:counted)
+    %{counter | "cv" => counter["cv"] + 1}
+  end
+
+  defp up_counted(counter, false, _high), do: counter
 
   # IEC's TON with a long timer's members in nanoseconds, each millisecond of the clock
   # adding 1,000,000 (decision 158).
   defp timed(timer, true, now) do
     limit = max(timer["pre"], 0)
-    elapsed = if timer["en"] == 1, do: (now - timer["last"]) * 1_000_000, else: 0
+    elapsed = elapsed(timer, now)
     acc = min(max(timer["acc"], 0) + elapsed, limit)
-    if elapsed > 0, do: reached(:long_timed)
-    if acc == limit and limit > 0, do: reached(:long_done)
+    reached_when(elapsed > 0, :long_timed)
+    reached_when(acc == limit and limit > 0, :long_done)
 
     %{
       timer
@@ -13420,6 +13695,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   defp timed(timer, false, now),
     do: %{timer | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp elapsed(%{"en" => 1, "last" => last}, now), do: (now - last) * 1_000_000
+  defp elapsed(_timer, _now), do: 0
 
   defp counter_start("ctd" <> _, pv),
     do: %{"cd" => 0, "ld" => 0, "pv" => pv, "q" => 0, "cv" => 0, "un" => 0}
@@ -13456,8 +13734,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
           [1] => counter_start(spec.counter, 0)
         },
         "t" => %{[0] => timer_start(0), [1] => timer_start(timer_preset(spec))},
-        "b" => %{"i" => zero(i), "o" => zero(o)},
-        "zo" => zero(o)
+        "b" => %{"i" => zero(i), "o" => block_o(o), "w" => @block_w},
+        "zo" => zero(o),
+        "zw" => 0
       },
       Map.new(
         Enum.flat_map(spec.ks, fn k ->
@@ -13518,13 +13797,19 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
       Map.new(
         Enum.flat_map(spec.ks, fn k ->
           [{"y#{k}", env["y#{k}"]}, {"a#{k}", listed(env["a#{k}"], spec.dims[k])}]
-        end) ++ for(i <- 0..2, do: {"ok#{i}", env["ok#{i}"]}) ++ [{"zo", env["zo"]}]
+        end) ++
+          for(i <- 0..2, do: {"ok#{i}", env["ok#{i}"]}) ++ [{"zo", env["zo"]}, {"zw", env["zw"]}]
       )
 
   defp instances(env),
     do: {{env["c"][[0]], env["c"][[1]]}, {env["t"][[0]], env["t"][[1]]}, env["b"]}
 
   # ---- a host's inputs, and its mistakes -------------------------------------------------
+
+  # Integers a real's significand rounds as a tie, each up to the even one: 2^24 + 3 in a
+  # real, 2^53 + 3 in an lreal, and the negative of the first, drawn for each integer type
+  # that holds them beside its edges (M5-15's review).
+  @ties [16_777_219, -16_777_219, 9_007_199_254_740_995]
 
   @real_pool %{
     real: [
@@ -13559,7 +13844,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
       2.3e-308,
       3.5e38,
       1.0e-40,
-      -7
+      -7,
+      16_777_219.0,
+      0.30000000000000004
     ]
   }
 
@@ -13567,7 +13854,11 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp value(:bool), do: pick([0, 1])
 
   defp value(type),
-    do: pick(Enum.uniq([0, 1, low(type), high(type), div(high(type), 3), max(low(type), -1)]))
+    do:
+      pick(
+        Enum.uniq([0, 1, low(type), high(type), div(high(type), 3), max(low(type), -1)]) ++
+          Enum.filter(@ties ++ @ties, &in_range?(type, &1))
+      )
 
   defp inputs(spec) do
     {xa_type, xa_n} = spec.xa
@@ -13688,8 +13979,8 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   end
 
   defp host_reached({type, v}, ok) when is_atom(type) do
-    reached({if(ok, do: :host_taken, else: :host_refused), type})
-    if ok and edge?(type, v), do: reached({:edge, type})
+    reached({host_kind(ok), type})
+    reached_when(ok and edge?(type, v), {:edge, type})
   end
 
   defp host_reached({:element, type, _v}, true) do
@@ -13703,6 +13994,9 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp host_reached(:outside, false), do: reached(:host_element_outside)
   defp host_reached(:both, false), do: reached(:host_whole_and_element)
   defp host_reached(:not_input, false), do: reached(:host_not_input)
+
+  defp host_kind(true), do: :host_taken
+  defp host_kind(false), do: :host_refused
 
   defp put(program, state, inputs) do
     {:ok, Runtime.put_inputs(program, state, inputs)}
@@ -13868,10 +14162,10 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp declared(type, nil), do: zero(type)
   defp declared(_type, {:lit, value, _text}), do: value
 
-  defp other_literal(type, old) do
-    {:lit, v, _} = literal = literal(type)
-    if v === old, do: other_literal(type, old), else: literal
-  end
+  defp other_literal(type, old), do: other_literal(literal(type), type, old)
+
+  defp other_literal({:lit, v, _}, type, old) when v === old, do: other_literal(type, old)
+  defp other_literal(literal, _type, _old), do: literal
 
   defp type_change(spec) do
     k = pick(spec.ks)
@@ -13940,6 +14234,11 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     outs = Map.new(spec.ks, &{&1, pick(wider(spec.types[&1]))})
     arrays = Map.new(spec.ks, &{&1, pick(wider(spec.types[&1]))})
 
+    # M5-15's review: now and then an output into an element of a global array, `gv` of
+    # two, and an output array element by element into its global's (decision 223), each
+    # widening as a whole connection does.
+    by = Map.new(spec.ks, &{&1, {pick([:whole, :element]), pick([:whole, :elements])}})
+
     text =
       Enum.join(
         [
@@ -13952,18 +14251,21 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
           ["var_global gxa #{xa_in}[#{xa_n}] at card.i.0"] ++
           for(k <- spec.ks, do: "var_global gy#{k} #{outs[k]}") ++
           for(k <- spec.ks, do: "var_global ga#{k} #{arrays[k]}[#{Enum.join(spec.dims[k], ",")}]") ++
+          for(k <- spec.ks, do: "var_global gv#{k} #{outs[k]}[2]") ++
           ["program m1 xt with fast", "  m1.g gg", "  m1.h gh", "  m1.s gs", "  m1.xa gxa"] ++
           Enum.flat_map(
             spec.ks,
-            &["  m1.x#{&1} gx#{&1}", "  m1.y#{&1} gy#{&1}", "  m1.a#{&1} ga#{&1}"]
+            &(["  m1.x#{&1} gx#{&1}", out_line(&1, by[&1])] ++ array_lines(&1, spec, by[&1]))
           ),
         "\n"
       ) <> "\n"
 
     {:ok, config} = Logex.Configuration.compile("plant", text, %{"xt" => program})
 
-    if Enum.any?(spec.ks, &(ins[&1] != spec.types[&1] or outs[&1] != spec.types[&1])),
-      do: reached(:resource_widened)
+    reached_when(
+      Enum.any?(spec.ks, &(ins[&1] != spec.types[&1] or outs[&1] != spec.types[&1])),
+      :resource_widened
+    )
 
     for type <- [xa_in | Map.values(ins)], do: reached({:point, type})
 
@@ -13981,12 +14283,13 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
                ],
                text
 
-        if faults != [], do: reached(:resource_event)
+        reached_when(faults != [], :resource_event)
 
         for k <- spec.ks do
-          assert Runtime.get!(rt, "gy#{k}") === held(outs[k], model["y#{k}"]), text
+          out_held(rt, {k, by[k], outs[k], spec.types[k]}, model, text)
           held_array = Map.new(model["a#{k}"], fn {at, v} -> {at, held(arrays[k], v)} end)
           assert Runtime.get!(rt, "ga#{k}") === listed(held_array, spec.dims[k]), text
+          elements_reached(by[k], {arrays[k], spec.types[k]})
         end
 
         assert Runtime.get!(rt, "m1.c[0].cv") === model["c"][[0]]["cv"]
@@ -13995,6 +14298,30 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
     Enum.reverse(log) ++ [retyped(rt, {spec, program, ins, outs}, text)]
   end
+
+  defp out_line(k, {:whole, _}), do: "  m1.y#{k} gy#{k}"
+  defp out_line(k, {:element, _}), do: "  m1.y#{k} gv#{k}[1]"
+
+  defp array_lines(k, _spec, {_, :whole}), do: ["  m1.a#{k} ga#{k}"]
+
+  defp array_lines(k, spec, {_, :elements}) do
+    for at <- indexes(spec.dims[k]),
+        do: "  m1.a#{k}[#{Enum.join(at, ",")}] ga#{k}[#{Enum.join(at, ",")}]"
+  end
+
+  defp out_held(rt, {k, {:whole, _}, out, _type}, model, text),
+    do: assert(Runtime.get!(rt, "gy#{k}") === held(out, model["y#{k}"]), text)
+
+  defp out_held(rt, {k, {:element, _}, out, type}, model, text) do
+    assert Runtime.get!(rt, "gy#{k}") === zero(out), text
+    assert Runtime.get!(rt, "gv#{k}") === [zero(out), held(out, model["y#{k}"])], text
+    reached_when(out in @reals and type not in @reals, :element_out_into_real)
+  end
+
+  defp elements_reached({_, :elements}, {array, type}) when array != type,
+    do: reached(:elements_out)
+
+  defp elements_reached(_by, _types), do: :ok
 
   # A configuration's edit that changes a global's type, to another that still widens into
   # the program's input, is refused at its line in its words; one that gives an output's
@@ -14005,7 +14332,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     typed = retyped_global(narrower, {k, ins[k]}, text)
     {:ok, candidate} = Logex.Configuration.compile("plant", elem(typed, 0), %{"xt" => program})
     assert ConfigEdit.accept(rt, candidate) |> refused() == elem(typed, 1), elem(typed, 0)
-    if elem(typed, 1) != :accepted, do: reached({:edit_refused, :global})
+    reached_when(elem(typed, 1) != :accepted, {:edit_refused, :global})
 
     {:lit, value, spelling} = other_literal(outs[k], zero(outs[k]))
 

@@ -9034,6 +9034,10 @@ Decisions 210 to 212 confirm the readings built; 213 and 214 change two.
      - A literal source, judged by its slot as every literal is, computes in the
        destination's type, `shl 16#81 4 a` into a `word` giving 16#0810 (provisional); a
        bit and a bool member are bools, an integer member of its schema's type.
+       *(Since M5-15's review, 2026-10-26: so is a member of a user block's instance, or of
+       an element of an array of them, of its type in its block, `shr b.o 33 y` of a dint
+       `o` into a `lint` writing 0, where until then it computed in the destination's type
+       and wrote 2147483647 for `o` at −2^31; the cross-type walk found it.)*
      - *Cost:* a `not` or a shift looks its source's type up, 4 reductions more an
        instruction than at `a281a15`, a narrower source 3 more again; a program of neither
        scans in exactly what it did.

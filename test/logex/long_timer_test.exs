@@ -511,6 +511,39 @@ defmodule Logex.LongTimerTest do
       assert message =~ "`t.acc`"
     end
 
+    # M5-15's review: a lint member's bits above 31, its top bit by its sign, read and
+    # written as any bit is, of a scalar timer and of an element by literal and by tag
+    # subscripts; bit n restated as the integer 2^n, and bit 63 of a lint as -2^63.
+    test "a bit of a `.pre` reads and writes all 64 bits, the top one its sign" do
+      bit = fn
+        63 -> -Integer.pow(2, 63)
+        n -> Integer.pow(2, n)
+      end
+
+      for n <- [0, 31, 32, 40, 62, 63],
+          t <- ["t", "a[1]", "a[i]"] do
+        program =
+          c!(
+            "var_input v lint\nvar_input i int\nvar_input k bool\nvar_output q bool\n" <>
+              "var_output o lint\nvar t ton_ltime\nvar a ton_ltime[2]\nmove v #{t}.pre\n" <>
+              "xic #{t}.pre.#{n} ote q\nxic k otl #{t}.pre.#{n}\nmove #{t}.pre o"
+          )
+
+        state = Runtime.instance(program)
+        scan = %Scan{now: 1, first: true}
+
+        for {v, k, q, o} <- [
+              {bit.(n), 0, 1, bit.(n)},
+              {Bitwise.bxor(-1, bit.(n)), 0, 0, Bitwise.bxor(-1, bit.(n))},
+              {0, 1, 0, bit.(n)},
+              {0, 0, 0, 0}
+            ] do
+          {out, _state} = Runtime.call(program, state, %{"v" => v, "i" => 1, "k" => k}, scan)
+          assert {n, t, v, k, out} == {n, t, v, k, %{"q" => q, "o" => o}}
+        end
+      end
+    end
+
     test "the four words are reserved in every `.ld` file, in any case" do
       for kind <- @kinds, word <- ["#{kind}_ltime", String.upcase("#{kind}_ltime")] do
         assert messages("var #{word} bool\nxic #{word} ote #{word}") |> hd() ==

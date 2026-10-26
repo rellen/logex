@@ -694,6 +694,13 @@ defmodule Logex.ArrayConfigurationTest do
       assert Runtime.get!(runtime, "rs") === [0.0, 7.0, 0.0]
       {runtime, _outputs, _events} = Runtime.cycle(runtime, 10, %{})
       assert Runtime.get!(runtime, "rs[1]") === 7.0
+
+      # So is an element of an int var_output array at the near end, `m1.o[0] rs[2]`: the
+      # real holds 1.0, never the integer 1 (M5-15's review).
+      {:ok, configuration} = configured("var_global rs real[3]\nprogram m1 w\nm1.o[0] rs[2]\n")
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
+      assert Runtime.get!(runtime, "rs") === [0.0, 0.0, 1.0]
+      assert Runtime.get!(runtime, "rs[2]") === 1.0
     end
 
     test "each wrong element is told at its line" do

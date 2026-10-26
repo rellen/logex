@@ -4259,20 +4259,35 @@ defmodule Logex.Runtime do
   defp source_bits({:element_at, _, array, _, _, _}, type, %Scan{tags: tags}),
     do: own_bits(element_tag(:maps.get(array, tags, nil)), type)
 
-  defp source_bits({:member, _, _} = source, type, %Scan{tags: tags}),
-    do: found_bits(Program.destination(source, tags, :bitwise), type)
+  defp source_bits({:member, _, path} = source, type, %Scan{tags: tags} = scan),
+    do: found_bits(Program.destination(source, tags, :bitwise), {List.last(path), type, scan})
 
   # M5-14: a member of an element of an array of built-in instances, by the one rule.
-  defp source_bits({:member, _, _, _} = source, type, %Scan{tags: tags}),
-    do: found_bits(Program.destination(source, tags, :bitwise), type)
+  defp source_bits({:member, _, _, [member]} = source, type, %Scan{tags: tags} = scan),
+    do: found_bits(Program.destination(source, tags, :bitwise), {member, type, scan})
 
   defp source_bits(_literal, type, _scan), do: type
 
   defp own_bits(%Tag{type: from}, _type) when from in @bitwise_types, do: from
   defp own_bits(_neither, type), do: type
 
-  defp found_bits({:ok, from}, _type), do: from
-  defp found_bits({:error, _what}, type), do: type
+  defp found_bits({:ok, from}, _source), do: from
+
+  # M5-15's review: a member of a user block's instance, or of an element of an array of
+  # them, which logic outside the block only reads, so that no destination's rule types
+  # it, in its own type, its block's in the program's one table (decision 53).
+  defp found_bits({:error, {:instance, _instance, {:block, name}}}, {member, type, scan}),
+    do: block_bits(:maps.get(name, scan.blocks, nil), member, type)
+
+  defp found_bits({:error, _what}, {_member, type, _scan}), do: type
+
+  defp block_bits(%FbType{} = block, member, type),
+    do: member_bits(FbType.member(block, member), type)
+
+  defp block_bits(nil, _member, type), do: type
+
+  defp member_bits({:ok, %Member{type: from}}, _type) when from in @bitwise_types, do: from
+  defp member_bits(_no_member, type), do: type
 
   # The result, a pattern of the source's type, kept to its width and read as its type,
   # into the destination's, which Figure 11 widens it into, keeping its value: read once in
