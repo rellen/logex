@@ -493,7 +493,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   path, `lane_t[2]`: a timer resumed and its preset moved, `{:preset, "lane_t[2]", {30, 50}}`,
   a counter's edge memory blocked, `lane_c[1].cu`, a block's one-shot, `lanes[1].e`, a
   member unwritten, and an array of instances' sizes or type changed refused, a user
-  block's elements by their members' kinds; and since M5-14's review a switch and a prune
+  block's elements by their members' kinds, since decision 254 a member retyped refused
+  once, for the array, "`x` of every element of `ws`"; and since M5-14's review a switch and a prune
   open each array of instances, its elements' changes kept in a map beside it and the
   array built again once, `opened/2` and `closed/2` in the plan, so an edit of n elements
   allocates linearly in n, where a put into the tuple an element was quadratic in wall
@@ -758,9 +759,16 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   told by `by_literal/2`'s guards, so a program of none compiles in exactly what it did at
   `a8a4f8f`; and since M5-14 an array of instances whose elements some no instruction runs warned
   once, its elements listed ten and then counted, "`lane_t` is an array of 4 tons, but no
-  `ton` runs `lane_t[3]`: it never times" (provisional), a long timer's element's preset in
-  M5-6's words, and a second coil on a member of an element the second-`ote` warning by its
-  path, a literal element's and one through a tag subscript not compared (provisional)
+  `ton` runs `lane_t[3]`: it never times" (confirmed, decision 252), a long timer's
+  element's preset in M5-6's words, and a second coil on a member of an element the
+  second-`ote` warning by its path, and since decision 253 a member through a tag
+  subscript, a coil or any other write, `ote lane_c[i].r` or `otl lane_c[i].r`, beside a
+  coil on that member of a literal element, or a literal element's member written beside a
+  coil through one, either first, as decision 235 has it for a bool array's elements, the
+  very member through the very tags warned of nothing and two coils through them told
+  "already has an `ote`" (decision 256), keyed by the array and the member
+  (`{:member_coil, ...}`, `{:member_coil_at, ...}`), a bit of a member of an element not
+  compared (provisional)
 - `lib/logex/walk.ex` — B5's one walk of a program's IR (M2-4): `instructions/1`, every
   instruction in rung order, groups' legs included; `uses/2`, every tag operand with its
   slot's access, a member as its instance, and since M3-4 `uses_of/2`, one instruction's;
@@ -975,7 +983,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `{:real_lit, line, 0.0, "1.0e-400"}`, no new shape, `Logex.Parser.underflowed?/1` the
   one rule that tells it from a zero by its spelling and `is_zero_real/1` its guard, each
   slot refusing it in decision 228's words, since decision 240 beside another literal,
-  `eq 1.0e-400 0.0`, too, `Logex.Configuration.Text.read/1` giving it as
+  `eq 1.0e-400 0.0`, too, and since decision 250 a subnormal one beside a literal, `gt
+  1.0e-310 0.0`, in the same words (`subnormal_beside/5` in `Logex.Compiler`), `Logex.Configuration.Text.read/1` giving it as
   `{:real_small, run}` still, a configuration's `compile/3` refusing it in its global's
   words and a forces file holding it as 0.0 since decision 237, and
   `1.5L` B2's mistyped lexeme, "missing separator after a real"; `Logex.Parser` gives
@@ -1182,9 +1191,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   alone, `n 1//c` or a tab after it no force, and one a float holds nearer 0.0 than an
   lreal's smallest normal, `1.0e-310`, a literal since decision 228, held as 0.0 at a real
   point, and since decision 237 one no double holds, `1.0e-400`, too, and since M5-14's
-  review a misfit quoted as its line writes it, `level 16#ffffffff` "got: 16#ffffffff"
-  and `1.0e-400` at an int point "got: 1.0e-400", a host's `force/3` value as the value
-  it is (provisional); a runner without
+  review a misfit quoted as its line writes it and since decision 255 as it is read too,
+  `level 16#ffffffff` "got: 16#ffffffff, which is 4294967295" and `1.0e-400` at an int
+  point "got: 1.0e-400, which is 0.0", once where the two are one text, "got: 2147483648",
+  a host's `force/3` value as the value it is; a runner without
   `forces:` takes no force, and an output
   point or a value that does not fit is refused; since M5-13 an element of a located
   array forced, unforced and written in the file by its name, `temps[3] 37.5`, and since
@@ -1276,7 +1286,8 @@ since decision 231 one no double holds but 0.0 read as 0.0 spelled, a well-forme
 the printer gives back, refused in every slot in the same words, a zero written any way
 0.0, and since decisions 237 and 240 refused in a configuration line in its global's or
 member's words, quoted as written, from text and from a file, and beside another
-literal, and held as 0.0 in a forces file, `array_test.exs` every rule
+literal, and held as 0.0 in a forces file, and since decision 250 a subnormal literal
+beside another literal refused, `gt 1.0e-310 0.0`, either side, `array_test.exs` every rule
 of M5-11's arrays in a program from source, the syntax and its refusals at their columns,
 the declaration and its initial list in the elements' order, restated from Logix's text,
 since decision 220 the limit in every shape, since decision 222 a host's element key and
@@ -1306,7 +1317,10 @@ instances declared from Elixir with another version refused, an edit's accept, t
 assemble of `ton`, `seal` and a block holding `seal[n]` growing linearly in the words each
 allocates, counted in a process the collector does not visit during the step, and a grep
 that `lib/` holds no `case`, `cond`, `if` or `unless` but the parser's three and the
-runner's one,
+runner's one, and since decision 253 a member through a tag subscript beside a literal
+element's, coils and other writes, in either order, against the very tags and other tags,
+and since decision 254 a block's member retyped in an array of its instances refused once
+for the array, in a block's instance and an array of blocks holding one,
 `located_array_test.exs` every rule of M5-13's located arrays from source, the line, its
 round trip and from Elixir, each element's point and address at one and two dimensions
 and a hierarchical address, every overlap and initial list refused, a location naming

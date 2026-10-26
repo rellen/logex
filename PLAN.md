@@ -189,7 +189,13 @@ literal subscripts and its members read and written through a tag subscript (§3
 with four questions put to the maintainer; its review answered on 2026-10-25, M4-6's
 runner walk, which M5-14's code commit had deleted, put back, an edit of a large array of
 instances made linear in wall time, four surviving mutants pinned, and two questions put
-to the maintainer.
+to the maintainer; and the maintainer's answers to those six and M5-13's last three on
+2026-10-26 (decisions 248 to 256, §3, M5-13 and M5-14), five confirming what was built and
+four changes: a subnormal literal beside a literal, `gt 1.0e-310 0.0`, refused; a member
+through a tag subscript beside a literal element's, `ote lane_c[i].r` and `ote
+lane_c[1].r`, the second-`ote` warning; a block's member retyped in an array of its
+instances refused once, for the array; and a forces file's bad value quoted as written and
+as read, with three questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -7967,6 +7973,77 @@ the walks' cross-type reach and the documents.
      two coils through the very tag are two coils, warned, but not in which words; the
      warning is logex's own, and no such warning of IEC's or Logix's was found
      (**unverified**).
+  **The maintainer's answers**, 2026-10-26 (decisions 248 to 256, M5-13's questions 8 to
+  10 and M5-14's six), **landed the same day** as one gated commit of code, tests and the
+  record, `f6b4c55`, and one of documents. Five confirm what was built: the forces file one line an
+  element even where every element is forced (decision 248); two instances writing the
+  same literal elements told once, the elements named together (249); an edit dropping
+  `move 2 lane_c[k].pv` reporting every element's `pv` unwritten (251); one warning an
+  array of instances some of whose elements run, ten then a count (252); and two coils
+  through one subscript tag told "`lamps[slot]` already has an `ote` on line 6" (256).
+  Four change it:
+  - *A subnormal literal beside a literal* (250): `gt 1.0e-310 0.0` is refused, "`gt`
+    reads a number or a bit string, and compares two literals as lreals: `1.0e-310` is
+    too near 0.0 for an lreal, …", either side, as `eq 1.0e-400 0.0` is; the smallest
+    normal double beside a literal is taken.
+  - *A member through a tag subscript beside a literal element's* (253): `ote
+    lane_c[i].r` beside `ote lane_c[1].r`, either first, is the second-`ote` warning in
+    decision 235's words, "`lane_c[1].r` is in `lane_c`, which the `ote` on line 8 may
+    write through a tag subscript", and so is any other write of the member through a
+    tag subscript, `otl lane_c[i].r`, beside a coil on a literal element's, and a literal
+    element's written beside a coil through one; the very member through the very tags
+    is warned of nothing (decision 246), and through other tags, `lane_c[i].r` beside
+    `lane_c[j].r`, it is warned (provisional, Question 8).
+  - *A block's member retyped in an array of its instances* (254): refused once, "`x` of
+    every element of `ws` is a bool in the running program and a dint in the candidate: a
+    member's type changes only with a restart", in a block's instance by its path, `b.ws`,
+    and in turn in an array of blocks that hold one (provisional, Question 9).
+  - *A forces file's bad value* (255): quoted as written and as read, "got: 16#ffffffff,
+    which is 4294967295", once where the two are one text, "got: 2147483648", a line that
+    holds no number quoted as written, "is no force", as before.
+
+  README's "Reals" gains `gt 1.0e-310 0.0` in `fan.exs`'s refused program, re-run on the
+  commit; `lanes.exs` is unchanged by the answers. The cost, measured against `26d0955`
+  (`scratchpad/m5/a17/cost.exs`, three runs each): every program of the cost script
+  compiles and scans in the reductions it took, within the base's own spread of a few
+  reductions, but two that hold what the answers look at, which scan as before and compile
+  dearer: 200 comparisons of two literals, 2,298 reductions of 224,548 (1.0%), a real
+  literal's flush checked; and 50 rungs that coil and latch a member of an element, 4,055
+  of 170,250 (2.4%), the members compared. An edit's accept of 100 relays and of an array
+  of 16 blocks costs what it did, and the lexer's five scripts what they did. *Mutation
+  table* (`scratchpad/m5/a17/mut/run.log`), each mutant judged by the full suite's exit
+  code on a copy of the commit: 27 mutants on `f6b4c55`, 26 red at once: A1 and A2 (decision 250: the flush never checked, checked in a `real`), W1 to W15 (decision 253: a literal element's coil not told a coil or a write through a tag subscript before it, its member not kept for later, a tag-subscripted coil not told a literal element's coil, the very tags' exemption and wording dropped at a coil and at a write, a literal element's write not told a coil before it or not kept, the member left out of the words a coil names, a literal element's write not looked for, told as a whole write, and the member left out of either key), P1 to P4 (decision 254: the first element's path again, a leading `.`, a tag's for a member's, an array inside an element not cited in turn) and R1 to R5 (decision 255: the one-text case dropped, the value read never shown, a whole line's, a real point's or an integer point's misfit as written alone). One survived, A3, the message's value 0.0 for the literal's, which is equivalent: `Logex.Declarations.literal_misfit/3` reads only whether a float is in its type's range, and both are, so it is left alive.
+
+  2195 tests (11 doctests), up from 2194.
+
+  *Provisional readings* (the answers'), each a question for the maintainer:
+
+  7. *A bit of a member of an element, coiled twice.* A sorter's lane counter, `lane_c
+     ctu[4]`, and two rungs `xic a ote lane_c[1].pv.3` and `xic b ote lane_c[1].pv.3`:
+     whichever comes last sets bit 3 of lane 1's preset. Found on the way to decision
+     253: as built nothing is warned, where two coils on a bit of a scalar instance's
+     member, `ote c.pv.3` twice, are the second-`ote` warning (M5-8's review), and so is
+     a coil on it beside `move x c.pv`. The options: (a) as built, a bit of a member of an
+     element not compared; (b) compared as a member's bit is, by its path, `lane_c[1].pv.3`,
+     two coils on it warned and a coil beside a write of the member whole warned, and one
+     through a tag subscript, `lane_c[i].pv.3`, as decision 253 compares a member. The
+     warning is logex's own (decision 207); IEC and the Logix extracts read say nothing
+     of it.
+  8. *Two lanes' members through two tags.* `xic a ote lane_c[i].r` and `xic b ote
+     lane_c[j].r`: when `i` and `j` hold one lane, the last rung decides it, and
+     otherwise each resets its own lane. As built since decision 253 it is told "`lane_c[j].r`
+     is in `lane_c`, which the `ote` on line 8 may write through a tag subscript", as
+     `ote lamps[i]` beside `ote lamps[j]` is for a bool array (decision 246); until then
+     nothing. The options: (a) as built; (b) nothing, since the tags may name two lanes.
+     The warning is logex's own; IEC and the Logix extracts read say nothing of it.
+  9. *A member retyped in an array of blocks inside an array of blocks.* `var hs h[2]`,
+     each `h` holding `var ws w[2]`, and an edit changes `w`'s `x` from a bool to a dint.
+     As built since decision 254 it is told once, "`x` of every element of `ws` of every
+     element of `hs` is a bool in the running program and a dint in the candidate: …".
+     The options: (a) as built; (b) by the inner array's path below the outer's element,
+     "`x` of every element of `hs[*].ws`"; (c) by the first elements, `hs[0].ws[0].x`,
+     as before decision 254. Logix changes an existing array's size or data type offline
+     only (1756-RM094N p.85), and says nothing found of how it names the change.
 - **M5-15 · The contract walk's cross-type reach.** Each item above has extended the walks
   with its own rules; this one draws the types together: programs, configurations and
   runner walks that mix every type, `@junk` and `@edges` by type (`1.0` stops being junk

@@ -1406,7 +1406,7 @@ IO.puts(Logex.Diagnostic.format(lexed))
     "var speed real\nvar count dint\nvar rpm int\nvar on bool\nvar big lreal\n" <>
       "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
       "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed\n" <>
-      "move 1.0e-310 big\nmove 1.0e-400 big",
+      "move 1.0e-310 big\nmove 1.0e-400 big\ngt 1.0e-310 0.0 ote on",
     name: "wrong"
   )
 
@@ -1443,6 +1443,7 @@ line 13: `speed.3` names a bit of `speed`, a real, which has no bits
 line 14: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
 line 15: `move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
 line 16: `move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
+line 17: `gt` reads a number or a bit string, and compares two literals as lreals: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
 line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 ```
@@ -1466,7 +1467,8 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   written, and so in an lreal for one nearer 0.0 than its smallest normal value,
   `move 1.0e-310 big` above (decision 228), and so for one no double holds but 0.0,
   `move 1.0e-400 big`, which is read as 0.0 written so and refused in the same words
-  (decision 231), beside another literal too, `eq 1.0e-400 0.0` (decision 240), and in a
+  (decision 231), beside another literal too, `eq 1.0e-400 0.0` (decision 240), and so
+  is a subnormal one, `gt 1.0e-310 0.0` above (decision 250), and in a
   configuration's line in its global's words, "`big` is an lreal: `1.0e-400` is too near
   0.0 for an lreal, …", where a forces file holds it as 0.0, as `1.0e-310` (decision 237).
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
@@ -1494,7 +1496,9 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   file edited by hand may give a real point any number the lexer reads as one literal,
   `fan_hz 37.50`, `3.75e1` or `37`, held at its nearest value and written again in the
   runner's spelling at the next force (decision 218), and since decision 226 an integer
-  or bool point any integer so, `eye_1 01` or `level 16#ff`, held to its type. An online edit compares an initial value exactly, so `var x real 0`
+  or bool point any integer so, `eye_1 01` or `level 16#ff`, held to its type; a value
+  that does not fit is quoted as written and as read, "got: 16#ffffffff, which is
+  4294967295", once where they are one text (decision 255). An online edit compares an initial value exactly, so `var x real 0`
   changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
 - `real`, `lreal`, `sqrt`, the 34 conversions and the 16 truncations are reserved in any
   case in every `.ld` file, and the two type words in every `.logex` file too.
@@ -2305,10 +2309,18 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   ote held` here, or `move 0 lane_c[i].pv`. A subscript outside its dimension is M5-12's
   major fault, the instruction doing nothing ("A subscript in a tag", above), shown here
   with `lane 4`. A one-shot's storage bit may not be a member of an element, as it may not
-  be a member of an instance.
+  be a member of an instance. A write through a tag subscript may write that member of any
+  element, so a coil on it, `ote lane_c[i].r`, beside a coil on the member of a literal
+  element, `ote lane_c[1].r`, or any other write of it through a tag subscript, `otl
+  lane_c[i].r`, beside such a coil, in either order, is the second-`ote` warning, as for a
+  bool array's elements, though not the very member through the very tag (decision 253).
 - **An online edit by path.** An edit names each element by its path: `lane_t[2]`'s
   preset moved, a timer resumed, `lane_c[1].cu` on the block list. An array's
-  dimensions or element type changed are refused, as an array's are.
+  dimensions or element type changed are refused, as an array's are, and a block's member
+  retyped is refused once, for the array: "`x` of every element of `ws` is a bool in the
+  running program and a dint in the candidate: …" (decision 254). An edit that drops a
+  write through a tag subscript, `move 2 lane_c[k].pv`, reports every element's `pv`
+  unwritten (decision 251).
 - **What reaches an element from outside.** The access paths of `Logex.Runtime.get/2`
   name a member of an element, `m1.lane_t[2].acc`, and never an element or an array of
   instances whole. An event task's warnings name each element its instance runs. An array
@@ -2316,7 +2328,7 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   var_output, a global, a connection or a located point.
 - **Warnings.** An array no instruction runs every element of is warned of once, its
   elements listed to ten and then counted: "`lane_t` is an array of 4 tons, but no `ton`
-  runs `lane_t[3]`: it never times" (provisional).
+  runs `lane_t[3]`: it never times" (decision 252).
 
 ## A configuration
 
