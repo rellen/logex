@@ -373,7 +373,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   a global of exactly its type, told so (decision 159). Since M4-2
   (`docs/organisation.md` §4.11, decisions 109 to 111) a task has `watchdog`, 1 to
   2147483647 ms or nil for 500, which `watchdog/1`, the one rule for it, gives and the
-  runner will read, raising, since M4-2's review, for a watchdog out of that range as for
+  runner reads, raising, since M4-2's review, for a watchdog out of that range as for
   one that is no integer, and `continuous`, false unless set, `name` alone enforced: `check/1`
   tells a watchdog of 0 that every task has one and one out of range its range, refuses
   a second continuous task, told the first, and one given a single, an interval or a
@@ -845,8 +845,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   bool's still 0 or 1 (decision 97); since M5-13's review a scalar's line refused for its
   initial value alone declares its tag with none, its uses checked rather than each told
   it is undeclared, as an array refused for its list is (provisional). Since M2-4 `var_external` is a
-  row of `@sections`: a bool or a dint with no initial value and no instance, and no
-  configuration file's keyword (`Logex.Configuration.Text.keywords/0`) names one. Since
+  row of `@sections`: since M5-3 of any elementary type, and since M5-11 an array of one,
+  bound to a global of exactly its type and sizes (decision 159), with no initial value
+  and no instance, and no configuration file's keyword
+  (`Logex.Configuration.Text.keywords/0`) names one. Since
   M5-11 a declaration's type word may hold sizes, `int[8]`, `{:array, type, dims}`, one to
   three dimensions of one element or more, 65,536 in all, and an initial list of one
   literal an element, each judged as a tag's value, an array of instances or sized by a
@@ -854,7 +856,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `a_type/1` names one "an array of 4 by 8 ints" and `a_global/1` "a global array of 8
   ints"; since M5-14 (decision 154) an array of instances, `{:array, %FbType{}, dims}`, declared
   in `var` alone with no initial list, each refused in its own words, from Elixir too
-- `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
+- `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is an elementary type's atom, a row of
+  `Logex.Declarations.table/0`, `:bool`, `:dint` or `:real` among them, an array,
+  `{:array, type, dims}` (M5-11, M5-14), or, for an instance
   of a function block such as `var t1 ton` or `var s1 seal`, the `%Logex.FbType{}` itself,
   one `Logex.FbType.user?/1` accepts for a user block, except in a compiled program or
   block's body, where an instance of a user block names its type, `{:block, name}`, which
@@ -1032,7 +1036,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   as a fraction; `read/2`, which took only the runner's spelling, gone with decision 218. A float past a single's range has no single, the 32-bit encoding giving
   infinity's bits, so every caller holds a `real`'s value to `in_range?/2` first
 - `lib/logex/runner/clock.ex` — `Logex.Runner.Clock` (M4-1, `docs/organisation.md`
-  §4.11), the behaviour the wall-clock runner will read time through, so that a test can
+  §4.11), the behaviour the wall-clock runner reads time through, so that a test can
   move time: `now_ms/1`, `wake_at/4`, a message to a pid at an absolute time and no
   sooner, and `cancel/2`, a clock being `{module, term}`; its three checks, hidden,
   `receiver!/1`, `time!/1` and `timer!/1`, give both clocks one message a rule.
@@ -1554,10 +1558,15 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   M5-3's integer widths and conversions its "Integer widths", the run of `drive.exs`,
   M5-5's typed counters its "A counter", the run of `stock.exs`, M5-6's long timers its
   "Long timers", the run of `cure.exs`, M5-8's bit strings, bitwise instructions, bit
-  access and bit-string conversions its "Bit strings", the run of `status.exs`,
-  M5-10's reals its "Reals", the run of `fan.exs`, M5-12's subscripts held in tags its "A
-  subscript in a tag", the run of `scales.exs`,
-  M5-14's arrays of instances its "Arrays of instances", the run of `lanes.exs`,
+  access and bit-string conversions its "Bit strings", the run of `status.exs`, M5-9's
+  bit number in a tag its "A bit number in a tag", the run of `selected.exs`,
+  M5-10's reals its "Reals", the run of `fan.exs`, M5-11's arrays its "Arrays", the run
+  of `weigh.exs`, M5-12's subscripts held in tags its "A
+  subscript in a tag", the run of `scales.exs`, M5-13's located arrays its "A located
+  array", the run of `oven.exs`,
+  M5-14's arrays of instances its "Arrays of instances", the run of `lanes.exs`, and
+  M5-16's closing pass every example run again, each of the 30 `mix run` outputs as
+  printed but the real clock's figures,
   and since M4-7 the plant on the real clock, `on_the_real_clock.exs`, its keyword list
   the same on every run and its figures that run's; and "What logex is not" says plainly
   what logex does not do, a safety function first, each claim checked against the code,
@@ -1609,7 +1618,11 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   on 2026-10-23, M5-9, a bit number in a tag, and M5-10, the reals, the same day, with
   the maintainer's answers to their questions, decisions 204–209, 210–214 and 215–219,
   M5-11, arrays, and M5-12, subscripts held in tags, with the answers of 2026-10-23 and
-  2026-10-24, decisions 220–228 and 229–236, and M5-13, located arrays, with its review's fixes, the same day:
+  2026-10-24, decisions 220–228 and 229–236, and M5-13, located arrays, with its review's
+  fixes, the same day, decisions 237–247, M5-14, arrays of instances, the same day, with
+  decisions 248–256 on 2026-10-26, M5-15, the walks' cross-type reach, and M5-16, the
+  documents, the same day, so Milestone 5 has landed whole, its done sentence put to the
+  maintainer (`PLAN.md` §3, M5-16):
   IEC's integer widths,
   signed and unsigned, overflow wrapping in every width, which supersedes decision 77's
   saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and
@@ -1650,8 +1663,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   that runs several, `{:instance, ["ctu", "ctud"]}` (M3-1), a new built-in type being a row
   of `Logex.FbType.rules/1`, `:preset` for a literal number of
   milliseconds, `:label` for a label, `{:label, nil}` (M3-5), a name no tag table holds;
-  type `:bool`, `:dint` or `:any`; a tag may be a member, `t1.acc`, which
-  has its schema's type) to the `@instructions` map in
+  type an elementary type's atom, `:bool` or `:dint` among them, one of IEC's generic types
+  as data, `:any_int`, `:any_num`, `:any_real`, `:any_bitwise` or `:any_elementary`
+  (M5-4, M5-8, M5-10, `Logex.Declarations.is_class/1`), or `:any`; a tag may be a member,
+  `t1.acc`, which has its schema's type) to the `@instructions` map in
   `compiler.ex` (`cal`'s entry is the marker `{:cal, :block}` instead, M2-5: its signature
   is its block's, built per compile) **and** two
   `evaluate/3` clauses in `runtime.ex` — one for `{true, env}` and one for `{false, env}`. The map also

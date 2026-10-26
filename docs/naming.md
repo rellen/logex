@@ -216,6 +216,13 @@ as IEC's typed `ADD_<type>` does, each source widening into it where Ed 3 Figure
 the cell "i", and wraps there: 127 + 1 in an `sint` gives −128 and 0 − 1 in a `usint` 255,
 each with no power. Each stanza below carries its own amendment line.)*
 
+*(Amended 2026-10-26, M5-16: since M5-10 the arithmetic takes the reals too, IEC's ANY_NUM
+holding ANY_REAL, `add sub mul div` and `neg abs` computing a real destination's result
+on floats, its nearest value written, saturating past its range with no power (decision
+150), a zero divisor writing 0.0 as the minor fault `:divide_by_zero`; `mod` stays an
+integer's, IEC's ANY_INT. The Square root row's `sqrt` landed with M5-10, its stanza
+below, and Power, `expt`, stays deferred.)*
+
 ### Bitwise and shift
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |
@@ -243,6 +250,12 @@ code, and a stanza may still change a spelling.)*
 *(Amended 2026-10-23, M5-8: each of the eight words has its stanza below, `and` to `ror`,
 with the four bit strings `byte word dword lword` and the two families of their
 conversions, `byte_to_word` and `word_to_int`; no spelling changed.)*
+
+*(Amended 2026-10-26, M5-16: the Shift rows' *(deferred)* marks are past: `shl shr rol ror`
+landed with M5-8, `shr` filling 0 on an integer too as the row asks, and since decision 214
+each computes in its source's type, IEC's typing. The three *defer* rows, bit field
+distribute, the array bit shift register and the masked equal of the Comparison table,
+stay deferred.)*
 
 ### Data movement and conversion
 
@@ -283,6 +296,17 @@ for a real and a bit pattern, `dword_to_real` and its three siblings, since a pa
 be an infinity or a NaN. The rounding row's CODESYS cell, "half away from zero", rests on
 one example, `REAL_TO_INT(-1.5)` = −2, which ties-to-even gives too, so it is
 **unverified**. `sqrt` lands with the reals (decision 79's note).)*
+
+*(Amended 2026-10-26, M5-16, the closing pass of Milestone 5: of this table's *(deferred)*
+rows, the numeric type conversion landed, as the amendment above names it, the 56 integer
+conversions with M5-3, the 76 bit-string conversions with M5-8 and the 34 real
+conversions with the 16 truncations with M5-10, each family with its stanza below; and the
+rounding row's own instructions stay deferred but for truncation, which landed as IEC's
+typed `real_trunc_<integer>` and `lreal_trunc_<integer>`, so `round`, `ceil` and `floor`
+are still unscheduled. The BCD row, `int_to_bcd` and `bcd_to_int`, the masked move, the
+block copy, the fill, the byte swap and the exchange stay deferred, and a conversion to or
+from a bool, which IEC has as `BOOL_TO_INT` and its kin, has no name in logex: `move`
+widens a bool into a bit string, and into nothing else.)*
 
 ### Program control
 
@@ -511,6 +535,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Why:** Rule 1, and every dialect surveyed spells the keyword BOOL. logex writes its values 0 and 1, as IEC's own footnote does, and adds no TRUE/FALSE literals: `ote` already writes 1 and 0. It is reserved in any case, as IEC reserves keywords and as GX Works3 reserves type words, *"Characters are not case-sensitive"* (SH(NA)-081215ENG-AN Appendix 4).
 **Checked:** 2026-09-28. Sources: IEC 61131-3:2003 Tables 10 and 13, and IEC 61131-3:2013 Table 10, both read directly; the conventional family's general instruction reference (Sept 2025) and tag-data manual (Nov 2023); TIA V21 (11/2025); Siemens A5E02486680-AP and A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR and SH(NA)-081215ENG-AN.
 
+*(Amended 2026-10-26, M5-16, `docs/organisation.md` decisions 144, 155 and 206: `bool` is one row of the type table beside IEC's eight integer widths, four bit strings and two reals. The contacts and coils still take only a bool, now also a bit, `status.3` or `status.[n]`, and a bool element, `lamps[2]`; and since decision 206 a bool is a bitwise operand, `and left right both`, widening into a bit string by Figure 11 and into no integer. There are still no TRUE/FALSE literals.)*
+
 ### `dint` — the 32-bit signed integer type
 
 | Dialect | Name there | Notes |
@@ -527,6 +553,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Checked:** 2026-09-28. Sources: IEC 61131-3:2003 Tables 10 and 13, and IEC 61131-3:2013 Table 10, both read directly; the conventional family's general instruction reference (Sept 2025) and tag-data manual (Nov 2023); TIA V21 (11/2025); Siemens A5E02486680-AP and A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR and SH(NA)-081215ENG-AN.
 
 *(Amended 2026-10-22, M5-3, `docs/organisation.md` decisions 144, 145 and 147: `dint` is no longer logex's only integer type. The seven others, `sint int lint usint uint udint ulint`, each have their own stanza below, and `move` no longer checks that its two operands have one type: a source moves into a `dint` where IEC's Figure 11 widens it, a `sint`, `int`, `usint` or `uint`, and any other takes a conversion, `lint_to_dint` among them. The arithmetic and the comparisons still read and write dints alone until `PLAN.md`'s M5-4.)*
+
+*(Amended 2026-10-26, M5-16: the M5-3 amendment's last sentence is past, M5-4 having landed the same day: the arithmetic and the comparisons take every integer width, each computing in its destination's type (`docs/organisation.md` decision 147), and M5-10 the reals beside them. The stanza's "`move` checks ... that its two operands have one type" is superseded by Figure 11, as that amendment says.)*
 
 ### `ons` — one-shot on the rung condition
 
@@ -726,6 +754,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `at`, with the location `panel.q.0`.
 **Why:** The keyword is rule 1, IEC's lowercased. The location is where this stanza strains rule 3, and says so: IEC has a standard form, `%QX0.0`, and logex coins `panel.q.0`, a named device where IEC writes `%`. It keeps what IEC standardises: `i` and `q` are Table 15's prefixes, lowercased, and the integer fields are IEC's hierarchical address. It drops two things for stated reasons: the size letter, since the declared type carries the size and logex has no BYTE or WORD; and `%`, since a logex host binds devices by name when it starts a runner, and IEC leaves an address's meaning to the manufacturer (§2.4.1.1). It also lexes as one name under the settled `.` rule, where `%` is an illegal character and would need a lexeme of its own. The cost is real: a reader who knows `%QX0.0` must learn that `panel.q.0` is an output on the device `panel`. The fallback, `at %ix0.0` after `at` only, stays open (`docs/organisation.md` decision 6). There is no `m`: memory is an unlocated global.
 **Checked:** 2026-10-02. IEC 61131-3:2003 §2.4.1.1 and §2.4.3.1 and Table C.2, read directly; the conventional family's import/export and general instructions references, as `docs/organisation.md` §3 quotes them; CODESYS online help, *AT Declaration*; Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017; Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR. Each quotation and page number checked again against the text of its source on 2026-10-04, the CODESYS page by fetching it again.
+
+*(Amended 2026-10-26, M5-16, `docs/organisation.md` decisions 155 and 156: the **Why** line's "logex has no BYTE or WORD" is no longer true, M5-8 having landed `byte word dword lword`, located too, `var_global drive_status word at drive.i.4`; the reason for dropping the size letter stands on its first half alone, that the declared type carries the size. And since M5-13 an array global may be located, `var_global zone_t real[8] at card.i.0`, one point an element at consecutive addresses, the location's last field counting up, each named by its element, `zone_t[3]`.)*
 
 ### `task` — declare a task in a configuration
 
@@ -1494,6 +1524,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `ton_ltime`, a type word.
 **Why:** Rule 1: IEC names the timer TON_LTIME, lowercased as every IEC word logex takes (decision 158, as the maintainer took typed variants on 2026-10-21). The instruction stays `ton`, running every on-delay timer, so a rung says no unit, its preset judged in its instance's type and unit (`docs/organisation.md` §4.12's routine choice): that costs a rung whose meaning a declaration changes a million-fold, which the stanza says plainly, and which the warning for a preset that is no whole number of milliseconds catches only in part. The TIME and LTIME types themselves stay deferred, so the preset is a plain integer, ns here as ms for `ton`. A finer clock would put nanoseconds into the core's `now`, a later item; until then a long timer is a `ton` with 63 bits of range and a millisecond's resolution, as IEC leaves the timer's resolution to the implementer. It is reserved in any case in every `.ld` file, so a tag, label or instance named `ton_ltime` stops compiling (§4.12, "Reserved words").
 **Checked:** 2026-10-22. IEC 61131-3:2013 §6.6.3.5.5 and Table 46 (pp.114–115), and Table 10 and its footnote m (pp.32–33), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional rows as the `ton` stanza and decision 158 read them. The Siemens, CODESYS and Mitsubishi rows were not re-read.
+
+*(Amended 2026-10-26, M5-16, checked against the extract of 1756-RM094N-EN-P, Sept 2025: the Conventional row's LTIME on the 5x80 controllers is on p.21, the 5380 and 5580 chapter's date and time data types, and p.25 for the 5480; p.13, which the row and decision 158 cite, is the 5590 chapter's. 1756-RM018A p.111 adds a TIMER_T structure whose `.ACC` is a TIME with microsecond resolution beside the DINT-millisecond TIMER, so the row's "Whether a timer there takes an LTIME preset" stays `unverified`.)*
 
 ### `tof_ltime` — off-delay timer counted in nanoseconds: a type word
 

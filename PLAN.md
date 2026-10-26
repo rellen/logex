@@ -205,7 +205,15 @@ pinned, the walks' reach raised to the rules they met only by chance, which foun
 defect, `not` and the shifts of a user block's member computed in the destination's type,
 fixed, the runner walk's two failing families traced to its model and fixed, its seed back
 at `{2026, 10, n}` with its draws raised, a loosened check scoped back, and three
-questions put to the maintainer.
+questions put to the maintainer. And the sixteenth and last, M5-16, the documents, the
+same day (§3, M5-16): README's every example run again, its "What logex is not" and
+"Settled, not yet landed" made true, CLAUDE.md's Key Files tightened, `docs/naming.md`'s
+`bool`, `dint` and `at` stanzas and its deferred and rounding rows amended,
+`docs/organisation.md` §4.1, §4.5, §4.7, §4.8, §4.12, §5 and decisions 144 to 256 annotated
+as landed, the Logix and IEC claims of Milestone 5's record checked against the extracts, each
+citation and claim found false corrected where it stands, so every item of Milestone 5
+has landed, its done sentence checked clause by clause against the tests and put to the
+maintainer (§3, after M5-16).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -328,6 +336,19 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   inputs are forced, kept in a file across a crash; and an online edit is stepped
   through it between rounds. README's "Running a plant on the clock" runs it, and "What
   logex is not" says what it is not, a safety controller first.
+- Data types (Milestone 5, M5-1 to M5-16): IEC's eight integer widths, `sint` to
+  `ulint`, a result past its width wrapping with no power, with the 56 conversions between
+  them; based literals, `16#ff`, and `1_000`; the four bit strings, `byte word dword
+  lword`, with `and or xor not shl shr rol ror`, bit access `status.3` and `status.[n]`
+  and the 76 bit-string conversions; the reals, `real` and `lreal`, every write rounded to
+  its type's nearest value, with `sqrt`, the 34 real conversions and the 16 truncations;
+  IEC's typed counters and long timers in nanoseconds; and arrays of one to three
+  dimensions, of every elementary type and of instances, by literal subscripts or ones a
+  tag holds, located too. An index or a bit number out of range is a major fault, on
+  which the runner trips; a zero divisor and a negative square root are minor faults; a
+  mixed operand Figure 11 does not widen is refused naming its conversion; and an online
+  edit refuses a changed type or size and reports a changed initial value. README's
+  sections from "Arithmetic" to "Arrays of instances" run each.
 
 These were each verified directly:
 
@@ -999,7 +1020,9 @@ var fault bool
   declaration would silently bring the dead-rung defect back.
 - **Types.** `bool` holds 0 or 1; `dint` is 32-bit (Ed 2 Table 10). The default initial
   value is 0 (Ed 2 Table 13). Other types, arrays and STRUCT wait, each an `unknown type`
-  diagnostic. `var retain r bool` is a diagnostic until M1-5's `restart` gives a tag
+  diagnostic *(since Milestone 5, 2026-10-26, the type table's fifteen elementary types,
+  arrays of them and of instances, each its own `docs/naming.md` stanza; STRUCT still
+  waits)*. `var retain r bool` is a diagnostic until M1-5's `restart` gives a tag
   something to survive; `retain` itself stays unreserved. *(M1-5 landed `restart/3` and
   left `retain` out, for scope; the diagnostic now says a warm restart, like a cold one,
   starts every tag but the `var_input`s at its initial value.)*
@@ -1014,7 +1037,10 @@ var fault bool
   `{:read, :bool}`; `ote`/`otl`/`otu` `{:write, :bool}`; `move`
   `[{:value, :any}, {:write, :any}]`, whose two `:any` operands must agree, as IEC's MOVE is
   `IN : ANY` → `OUT : ANY` (`docs/naming.md`, Scalar move). M1-2's messages stay
-  byte-identical.
+  byte-identical. *(Since M5-3, 2026-10-22, `move`'s two operands meet by Ed 3 Figure 11,
+  the source widening into the destination's type, decision 147; and since M5-4 a slot's
+  type may be one of IEC's generic types, `:any_int`, `:any_num`, `:any_bitwise`,
+  `:any_elementary` and `:any_real`, as data.)*
 - **Data.** `%Logex.Tag{name:, type:, section:, initial:, line:}`;
   `%Logex.Program{rungs:, tags:}` (M1-5 adds `name:`, `source:`, `warnings:`);
   `Logex.Program.initial_env/1` builds the first env from the declared initial values. The
@@ -4844,7 +4870,10 @@ the walks' cross-type reach and the documents.
      On the conveyor: the box-count trim, an `sint`, put through `dint_to_int` is a
      compile error naming `sint_to_int`, rather than compiling and doing the same thing.
      Logix has no conversion instructions (MOV converts anything); MatIEC requires the
-     exact type.
+     exact type. *(Corrected by M5-16, 2026-10-26: Logix has no typed conversion between
+     two numeric types, its MOV converting by the ranking of 1756-RM018A p.870, but it has
+     TRUNC, whose destination may be any integer or real (pp.827–829), and TO_BCD and
+     BCD_TO.)*
   3. *How an unsigned value that does not fit is told.* A signed width says "`40000`
      does not fit in 16 bits", as the dint always has; for an unsigned one that wording
      misleads, since −1 fits in 8 bits as a pattern, so M5-3 says "`-1` is outside 0 to
@@ -5100,7 +5129,8 @@ the walks' cross-type reach and the documents.
      `ArgumentError` naming each destination whose type is no integer, as decision 169
      refuses a hand-edited port holding an instance, at the cost of a walk of the
      program's arithmetic on every call. IEC and Logix have no compiled program a host
-     can edit: Logix downloads a project whose tags and code are checked together.
+     can edit: Logix downloads a project whose tags and code are checked together
+     (**unverified** in the extracts read, M5-16).
 - **The maintainer's answers of 2026-10-22** to M5-4's four questions and to the three
   decision 173's answers left (`docs/organisation.md` §7, decisions 180 to 186), landed
   the same day as two commits, the code with its tests and the decisions, then the
@@ -5200,7 +5230,8 @@ the walks' cross-type reach and the documents.
      program first meets the runtime, `instance/1`, `Logex.Runtime.start/1` and an edit's
      accept, leaving a program swapped in by hand to a later scan, or keep a mark of
      programs checked, which the runtime, holding no state between calls, cannot. IEC and
-     Logix check a program once, at download.
+     Logix check a program once, at download (**unverified** in the extracts read,
+     M5-16).
 - **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
   `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
   run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its
@@ -5462,7 +5493,7 @@ the walks' cross-type reach and the documents.
      swapped in by hand is trusted there too. On the conveyor: nothing an operator sees
      changes unless a host edited the running program by hand. The other reading checks
      both, as decision 182 did, once an accept, which no scan pays. IEC and Logix check a
-     program once, at download.
+     program once, at download (**unverified** in the extracts read, M5-16).
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
   and `rto_ltime` (decision 158, its last taken as the maintainer answered §4.12's
   seventh question), run by
@@ -5554,6 +5585,10 @@ the walks' cross-type reach and the documents.
      an engineer who typed `xic eye ton lamp 500` reads both words. The other reading
      names the plain word alone, "`ton` runs a ton", as before M5-6, which hides that a
      long timer would do. IEC's overloaded TON takes either; Logix has one TIMER.
+     *(Corrected by M5-16, 2026-10-26: on the 5380, 5580 and 5590 controllers Logix's
+     timer instructions also take a TIMER_T, whose preset and accumulator are TIMEs in
+     microseconds, beside the DINT-millisecond TIMER, 1756-RM018A pp.110–111; the
+     question's options are unchanged by it.)*
   2. *A long timer's `.pre` or `.acc` written by logic* (§4.12's routine choice). A preset
      on the instruction that is no whole number of ms is warned of; a `move 1500000
      cure.pre` on a rung, the literal moved by logic, is not, nor is a comparison `ge
@@ -5613,7 +5648,9 @@ the walks' cross-type reach and the documents.
      walk, edit and hand-built program must keep in step with the tag table. Taken
      provisionally: the look-up, no change of the compiled program's data. IEC says
      nothing of a scan's cost; Logix's TIMER has one unit, the millisecond, so it makes
-     no such choice.
+     no such choice. *(Corrected by M5-16, 2026-10-26: its TIMER_T, on the 5x80 and 5590,
+     is a second, in microseconds, 1756-RM018A p.111; how its controller looks the unit up
+     is **unverified**.)*
 - **The maintainer's answers of 2026-10-22** to M5-6's four questions and to the four
   readings decisions 187–193 left (`docs/organisation.md` §7, decisions 194 to 201),
   landed the same day as two commits, the code with its tests and the decisions, then the
@@ -7546,7 +7583,7 @@ the walks' cross-type reach and the documents.
      list, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
      element then forced; (c) a whole input taken, a whole force refused. Logix's module
      data is one tag, `Local:0:I.Data`, an array copied whole with `cps` (1756-PM004L
-     p.21), and an alias names one point of it, `Local:2:I.Data.3` (p.46); and Logix
+     p.20, cited as p.21 until M5-16 corrected it), and an alias names one point of it, `Local:2:I.Data.3` (p.46); and Logix
      forces within a tag, by element: "If the tag is an array or structure, such as an
      I/O tag, force a BOOL, SINT, INT, DINT, or REAL element or member" (p.53), forces
      enabled "for a specific module, tag collection, or tag element" (p.51), "expand the
@@ -8308,6 +8345,116 @@ the walks' cross-type reach and the documents.
   `PLAN.md` M1-3 and §5's structured-addressing entry, CLAUDE.md's Key Files, and
   Milestone 5's done sentence clause by clause against the tests. *Size S.*
 
+  **Landed** (2026-10-26), as one commit of the documents, no code in `lib/` or `test/`
+  changed. README: every example run again on the tip, each of the 30 `mix run` outputs
+  the same as printed but the run on the real clock, whose keyword list is the same in
+  three runs and whose figures are now that run's, 1,229 rounds in 1,230 ms; and the
+  quoted messages beside them compiled again, of which one was stale, the unknown type's
+  list for `var s3 sael`, which lacked `real` and `lreal` since M5-10, now as the compiler
+  gives it. The intro says what the code has: forty instructions and the 182 typed
+  conversions, in thirty-two modules, where it said thirty-one and twenty-nine, and
+  Milestone 5's types landed whole; the instruction table's `neg` and `abs` write a real
+  too, where it said an integer; the dialect's syntax list names the timer and counter
+  type words, `status.[n]`, a tag subscript, a bit of an element and an array of
+  instances; "Settled, not yet landed" says nothing decided waits to land, Milestone 5
+  having landed whole; and "What logex is not" lists what Milestone 5 left deferred, the
+  TIME and LTIME types, strings, structures, enumerations, typed literals, IEC's array
+  bounds, a whole-array copy, partial access, `round`, `ceil` and `floor`, and the timers'
+  millisecond resolution, each checked against the code. `docs/naming.md`, append-only,
+  gains seven amendments: `bool`'s place in the type table and as a bitwise operand;
+  `dint`'s M5-3 amendment past; `at`'s "logex has no BYTE or WORD" no longer true, and a
+  located array; the Arithmetic, Bitwise and Data movement tables' deferred rows, which
+  landed and which stay deferred, the rounding row's truncation landed and `round`,
+  `ceil` and `floor` not; and `ton_ltime`'s conventional row's citation. 
+  `docs/organisation.md`: §4.1, §4.5, §4.7, §4.8, §4.12's head, §5's two rows and the head
+  of Milestone 5's decisions annotated as landed, decision 221's "until M5-12" annotated
+  past, and two citations corrected where they stand. This plan: its status, §1's "What
+  works", M1-3's types and signatures, and §5's structured addressing, whose bit IR has
+  carried its name since M5-8's review and whose arrays and float-literal trap are now
+  past.
+  CLAUDE.md's Key Files: the facts that went stale with Milestone 5 put right, each
+  still-true fact kept: a `var_external` of any elementary type, where it said a bool or
+  a dint; a tag's type any row of the table or an array; an instruction slot's generic
+  types; the runner that "will read" a watchdog and a clock, which it reads; README's
+  sections of M5-9, M5-11 and M5-13; and `docs/organisation.md`'s status through M5-16.
+  One code document is stale and left as it is, since no test can fail on it:
+  `Logex.Tag`'s `@type t` gives `initial` as an integer or a map, where a real's is a
+  float and an array's a list, and `type` without an array; a typespec has no reader in
+  the suite but the compiler, which does not check it, so its fix waits for an item that
+  changes `Logex.Tag`.
+
+  **The record's Logix and IEC claims, checked** (2026-10-26), against the extracts of
+  the manuals (1756-RM018A, Sept 2025; 1756-RM094N, Sept 2025; 1756-PM004L, Nov 2023;
+  1756-PM014O, Sept 2024; 1756-PM015Q, Sept 2025; 1756-UM058L; 1756-UM900B) and of IEC
+  61131-3 Ed 2:2003 and Ed 3:2013, each at its printed page: the 182 citations of a
+  Logix publication in §4.12, decisions 144 to 256, this Milestone and `docs/naming.md`'s
+  Milestone 5 stanzas, 58 distinct pages, each claim read beside its page, and the 51 IEC
+  citations with a page, each quotation found on its page or the one beside it where a
+  table runs across two. Found false and corrected: 1756-PM004L "p.21" for a module's data
+  copied whole with CPS, which is p.20 (decision 241, M5-13's first question); 1756-RM094N
+  "p.13" for LTIME on the 5x80 controllers, which is the 5590 chapter's, the 5x80's p.21
+  (§4.12's table, decision 158, `docs/naming.md`'s `ton_ltime`); "Logix has no conversion
+  instructions", where it has TRUNC, TO_BCD and BCD_TO, only no typed conversion between
+  numeric types (M5-3's second question); and "Logix has one TIMER", "one unit, the
+  millisecond", where the 5x80 and 5590 timers take a TIMER_T in microseconds too
+  (1756-RM018A pp.110–111; M5-6's questions). Marked **unverified**, having no page: that
+  Logix checks a program once, at download (decision 182, M5-4's and M5-5's questions).
+  Imprecise but true, left as they stand: IEC's Table 22 footnotes b and c, cited at
+  p.78 where the table starts, are on p.79; Table 31's "overloaded on all bit-string
+  types", cited p.89, is on p.88; Table 11 feature 4, cited p.53, is on p.35, p.53 holding
+  the examples with negative bounds; and "Logix has no bit-string types" rests on p.873's
+  list of types beside p.874's table. 1756-PM013H and 1756-PM020I, cited for STRING's 82
+  characters and DWORD as a CIP type code, are not among the extracts and are unverified
+  here, the first also given by 1756-RM094N p.90. The working table is the scratchpad's
+  `m5/a19/cl/verdicts.md`.
+
+  **Milestone 5's done sentence, checked** (2026-10-26, on M5-16's tip), clause by clause,
+  with the test that shows each; a test named here is in `test/logex/`.
+
+  | Clause | Shown by |
+  |---|---|
+  | a program and a configuration of §4.4's plant, loaded from files on disk, declare and run every type decisions 144 and 155 name | **piecewise, not as one plant.** From files on disk through `Logex.Runner` on the manual clock against an oracle that knows nothing of logex: `end_to_end_test.exs`, "M5-3's Done-when: the drive's speed read as a uint point and moved into a dint" (`uint`, `dint`), "M5-8's Done-when: the drive's status read as a word point, its bit 3 lighting the run lamp" (`word`) and "M5-10's Done-when: the fan's speed is a real read from the drive" (`real`, `lreal`, `int`). Every integer width and bit string reaches the runner on the manual clock only as a card of points, `integer_width_test.exs`, "each width's limits are read from the device, and one past them trips the runner", and `bit_string_test.exs`, "each one's values are read from the device, and one past them, -1 or a float trips the runner"; and every type runs in programs and resources in `api_contract_test.exs`, "programs that mix every type run as each type's rules restated: …", against oracles that restate each rule, through no file and no runner. **No plant declares `sint`, `lint`, `usint`, `udint`, `ulint`, `byte`, `dword` or `lword`** (question 1) |
+  | the fan's speed a `real` from the drive card | `end_to_end_test.exs`, "M5-10's Done-when: the fan's speed is a real read from the drive" |
+  | and its eight zone temperatures a located `real[8]` | `end_to_end_test.exs`, "M5-13's Done-when: the oven card's eight zones are one located array" |
+  | the box counter a typed counter | `end_to_end_test.exs`, "M5-5's Done-when: a ctud_int and a ctd_udint stop at their types' limits in a plant", from files on disk **through `cycle/3`, not the runner**; through the runner only in the runner walk's `mix` program, `ctd_udint[2]`, against a model that calls `cycle/3` (`api_contract_test.exs`, "the runner on the manual clock runs each round as cycle/3 runs it, …") (question 1) |
+  | and its weights an array indexed by a tag | `end_to_end_test.exs`, "M5-12's Done-when: the box counter's `weights[slot]` runs in the plant, and `slot` at 8 trips it", whose box counter counts by a one-shot, `ons edge`, not a typed counter |
+  | an integer result past its width wraps with no power | `arithmetic_test.exs`, "`add`, `sub`, `mul`, `div` and `mod` at each width's limits, in its own type", and the dint's "a sum past the top wraps to the bottom and passes no power on that scan …" |
+  | a real's saturates | `real_test.exs`, "a result past a real's range saturates with no power" |
+  | and no infinity, NaN or −0.0 ever reaches a state | `real_test.exs`, "no float exception leaves a scan, and no state holds −0.0 or a subnormal", "−0.0 and a subnormal are written as 0.0" and "a state's real holds one of its type's values: a float, never −0.0, no subnormal" |
+  | every mixed-type operand Figure 11 does not widen is refused naming its conversion | `integer_width_test.exs`, "move takes a source its destination's width holds, and names the conversion for every other pair"; `arithmetic_test.exs`, "a source no Figure 11 cell widens into the destination's type is refused, …"; `real_test.exs`, "a type Figure 11 does not widen is told its conversion"; and the cross-type walk's every pair through `move`, each conversion's two slots, `add`, `and` and a connection |
+  | and every conversion rounds as IEC's examples say | `real_test.exs`, "a real into an integer rounds to the nearest, a tie to the even neighbour", IEC's `REAL_TO_INT(2.5)` and `(-2.5)` among its cases, and the 34 conversions and 16 truncations against IEC's examples |
+  | an index or a bit number out of range trips the runner with every output 0 once | `end_to_end_test.exs`, "M5-9's Done-when: the run lamp follows `drive_faults.[sel]`, and `sel` at 16 trips the plant" and "M5-12's Done-when: …, and `slot` at 8 trips it", every output 0 once and nothing after; `trip_test.exs`, "a bit number out of range trips at the end of its step, before the round's …" |
+  | and a negative square root is a minor fault, `:negative_sqrt` | `real_test.exs`, "a negative source writes 0.0 with no power and the minor fault `:negative_sqrt`", alone and as a cycle's event |
+  | an online edit of a type or a size is refused | `edit_test.exs`, "refuses a type change, every one, at the candidate's line, in line order"; `integer_width_test.exs`, "a width changed is refused at its line, …"; `bit_string_test.exs`, "a bit string's type changed is refused at its line, …"; `real_test.exs`, "a type change between the reals is refused"; `array_test.exs`, "an array's type, its dimensions or its sizes change only with a restart"; `instance_array_test.exs`, "an array of instances changes its sizes or type only with a restart, …" |
+  | and a changed initial value of every type is reported | `integer_width_test.exs`, "… and a changed initial value of each width reported"; `bit_string_test.exs`, "… and a changed initial value reported"; `real_test.exs`, "`var x real 0` edited to `var x real 0.0` is a changed initial value"; `array_test.exs`, "a changed initial list is reported element by element, the running values kept"; a bool's and a dint's since OE-1, `edit_test.exs`, "for a kept var or var_output, keeps the running value, is reported at each …" |
+  | and the contract walks reach every type, refusal and trip reason, repeating exactly | `api_contract_test.exs`, "programs that mix every type run as each type's rules restated: …", its reach asserted whole and a fresh process's first walks the same; and "the runner on the manual clock runs each round as cycle/3 runs it, trips as the watchdogs and the faults say, and reaches every event kind and trip reason", every trip reason but `{:internal, message}`, which only the hidden seam reaches (`trip_test.exs`) |
+
+  So every clause is shown by a test but the first and the typed counter's: the done
+  sentence puts every type and a typed counter in one plant, from files on disk, through
+  the runner against an oracle, and the suite shows the types each in its own plant, card
+  or walk, eight of the fifteen never in a plant, and the typed counter through `cycle/3`
+  in a plant and through the runner only in a walk against a model. Whether that reading
+  stands, or a test closes it first, is the maintainer's (question 1).
+
+  **Put to the maintainer** (M5-16):
+  1. *Milestone 5's first clause, shown piecewise.* The done sentence asks for one plant,
+     §4.4's conveyor with its fan, oven card and box counter, loaded from files on disk,
+     that declares and runs every type and a typed counter through the runner against an
+     oracle that knows nothing of logex. The suite shows each type in the plant that
+     needs it, the drive's speed a `uint`, its status a `word`, the fan's speed a `real`,
+     and the eight integer widths and four bit strings as a card of points on the runner;
+     `sint`, `lint`, `usint`, `udint`, `ulint`, `byte`, `dword` and `lword` are never in a
+     plant, and the typed counter runs through the runner only in a seeded walk checked
+     against `cycle/3`. An operator sees nothing either way: the question is whether the
+     milestone is done. (a) Done as is, each clause met by the item that built it, as the
+     maintainer accepted M4's timing clauses; (b) one more end-to-end test before it is
+     called done: §4.4's plant from files on disk with a program declaring all fifteen
+     elementary types, a `ctud_int` box counter, the fan's `real`, the oven's located
+     `real[8]` and `weights[slot]`, through `Logex.Runner` on the manual clock against an
+     oracle, its cost about one test of the size of M5-13's; (c) the sentence amended to
+     what the suite shows. Recommended: (b), the reading closest to the sentence. IEC and
+     Logix say nothing of how a milestone is shown.
+
 **What stays deferred**, each a later item or milestone (§4.12): the TIME and LTIME types,
 the dates and `T#` literals; strings and characters; enumerations, named values and
 subranges; structures, UDTs and directly derived types; typed literals, `int#5`, and
@@ -8737,7 +8884,16 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   lowered to `{:bit, line, path, n, mask}`; a bit of a `bool` is refused, and a bit
   number held in a tag waits for M5-9. **A bit number held in a tag landed with M5-9**
   (2026-10-23): `status.[n]`, one name token, lowered to `{:bit_at, line, path, tag,
-  {width, top}, name}`.
+  {width, top}, name}`. *(M5-16, 2026-10-26: the bit's IR has carried its name as written
+  since M5-8's review, `{:bit, line, path, n, mask, name}` (decision 209).)* **Array
+  subscripts landed with Milestone 5**: literal ones, `temps[3]` and `grid[1,7]`, with
+  M5-11 on 2026-10-23, lowered to `{:element, line, array, index, name}`, one name token
+  ending at its `]`, a `.` part allowed after it, so still no grammar edit; a subscript
+  held in a tag, `weights[slot]`, with M5-12 on 2026-10-24, `{:element_at, ...}`; a bit of
+  an element, `faults[2].3`, since decision 221; and a member of an element of instances,
+  `lane_t[2].dn`, with M5-14, `{:member, line, element, members}`. And the second trap is
+  closed: real literals landed with M5-10, digits, a `.` and digits, and a name never
+  begins with a digit, so `t1.dn` and `1.5` never meet.
 - **Comments — `//` to end of line.** `//[^\r\n]* : skip_token.` — it must **not**
   consume the newline, or `ote a // note\note b` silently becomes one rung. Test exactly
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it

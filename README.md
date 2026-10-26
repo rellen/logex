@@ -3,12 +3,13 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is twenty-nine small modules.
+written by hand, and the whole thing is thirty-two small modules.
 
-**Stage: early, and honest about it.** Thirty-one instructions, among them four timers,
-two that run IEC's three counters, seven of integer arithmetic, a one-shot and two pulse
-coils, six comparisons and a forward jump to a label, parallel branches to arbitrary
-nesting depth,
+**Stage: early, and honest about it.** Forty instructions, among them four timers, two
+that run IEC's three counters and their typed variants, seven of arithmetic and `sqrt`,
+eight bitwise and shift instructions, a one-shot and two pulse coils, six comparisons and
+a forward jump to a label, and beside them the 182 typed conversions between its types;
+parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, function blocks of your own, each written once in a file of
 its own, instantiated as often as needed and run with `cal`, a public API
@@ -26,19 +27,22 @@ configuration on the clock through device adapters, a watchdog on every task, a 
 switching every output off once, with input forcing and online edits while it runs
 (`Logex.Runner`) — all of that works and is tested end to end, and a program or a
 configuration with mistakes in it gets every one reported with its file and line rather
-than an exception, a misspelt tag included. Its types are `bool` and IEC's eight
-integer widths, `sint` to `ulint`, signed and unsigned, with the 56 conversions between
-them (Milestone 5's M5-3), and IEC's four bit strings, `byte word dword lword`, with the
-bitwise instructions, bit access `status.3` and the 76 conversions between a bit string and
-another type (M5-8), and a bit whose number a tag holds, `status.[n]`, its number out of
-range a major fault that trips the plant (M5-9), and the reals, `real` and `lreal`,
-with `sqrt`, the 34 real conversions and the 16 truncations (M5-10), and arrays of an
-elementary type, one to three dimensions, each element named by literal subscripts,
-`weights[3]` and `grid[1,7]` (M5-11), and a subscript held in a tag, `weights[slot]`, an
-index out of range a major fault that trips the plant (M5-12), and a located array, one
-point an element at consecutive addresses, `var_global zone_t real[8] at card.i.0`
-(M5-13), and arrays of timers, counters and blocks, `var lane_t ton[4]`, each element run by
-literal subscripts and its members read through a tag subscript (M5-14). What logex is not, a safety controller first of all,
+than an exception, a misspelt tag included. Its types are `PLAN.md`'s Milestone 5, landed
+whole: `bool` and IEC's eight integer widths, `sint` to `ulint`, signed and unsigned, a
+result past its width wrapping with no power (M5-2 and M5-4), with the 56 conversions
+between them (M5-3); based literals, `16#ff` and `1_000` (M5-7); IEC's typed counters, `ctu_int`
+and the rest (M5-5), and long timers in nanoseconds, `ton_ltime` (M5-6); IEC's four bit
+strings, `byte word dword lword`, with the bitwise instructions, bit access `status.3` and
+the 76 conversions between a bit string and another type (M5-8), and a bit whose number a
+tag holds, `status.[n]`, its number out of range a major fault that trips the plant
+(M5-9); the reals, `real` and `lreal`, with `sqrt`, the 34 real conversions and the 16
+truncations (M5-10); and arrays, one to three dimensions, of an elementary type, each
+element named by literal subscripts, `weights[3]` and `grid[1,7]` (M5-11), or by a
+subscript held in a tag, `weights[slot]`, an index out of range a major fault that trips
+the plant (M5-12), located, one point an element at consecutive addresses, `var_global
+zone_t real[8] at card.i.0` (M5-13), and of timers, counters and blocks, `var lane_t
+ton[4]`, each element run by literal subscripts and its members read through a tag
+subscript (M5-14). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -54,7 +58,8 @@ Source syntax today:
   [<initial>]`, the section `var`, `var_input`, `var_output` or `var_external`, the type
   `bool`, an integer width, `sint int dint lint` signed and `usint uint udint ulint`
   unsigned, of 8, 16, 32 and 64 bits, a bit string, `byte word dword lword`, a real,
-  `real` or `lreal`, `ton` or a function block's name, as in `var_output speed_sp dint
+  `real` or `lreal`, a timer or counter type, `ton` to `rto_ltime` and `ctu` to
+  `ctud_ulint`, or a function block's name, as in `var_output speed_sp dint
   1200`, `var tare dint -120`, `var_input hz uint`, `var mask word 16#00ff` or `var
   ratio real 0.5` ("Integer widths", "Bit strings" and "Reals", below).
   Every tag a rung uses must be declared. A `var_input` is supplied from outside and no
@@ -112,13 +117,19 @@ Source syntax today:
   dotted name that is not a declared member is an error. `status.3` is bit 3 of
   `status`, an integer or a bit string, and `t1.acc.3` of a member: a bool wherever one
   goes, read by a contact and written by a coil, its number checked against the width
-  ("Bit strings", below); a bit of a `bool` or of a real is an error. No tag is declared with a `.`
+  ("Bit strings", below); `status.[n]` is the bit whose number the integer tag `n` holds
+  when the instruction runs ("A bit number in a tag", below); a bit of a `bool` or of a
+  real is an error. No tag is declared with a `.`
 - an array is declared with its sizes after its type, one to three, `var weights int[8]`,
   `var grid int[4,8]`, `var cube real[2,3,4]`, and an initial list of one literal an
   element, the rightmost subscript varying fastest, `var limits int[3] 10 20 30`; an
   element is its name and one pair of brackets, literal subscripts from 0 split by `,`
-  with no space, `weights[3]` or `grid[1,7]`, a tag of the elements' type wherever one
-  goes ("Arrays", below)
+  with no space, `weights[3]` or `grid[1,7]`, or integer tags, `weights[slot]` or
+  `grid[1,c]`, read as the instruction runs ("A subscript in a tag", below), a tag of the
+  elements' type wherever one goes, and a bit of one, `faults[2].3`, a bit as a tag's is
+  ("Arrays", below). An array may hold timers, counters or a block's instances, `var
+  lane_t ton[4]`, each element run by literal subscripts and its members read through any
+  ("Arrays of instances", below)
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
@@ -246,7 +257,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `add a b dst` `sub a b dst` `mul a b dst` | two number sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer or real tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside an integer type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault; a real's result is rounded to its nearest value, a `real`'s a single, so `add 16777216 1.0 x` is 16777216.0 in a `real`, and past its range is its largest value, the sign kept, with no power. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
 | `div a b dst` `mod a b dst` | as `add`, `mod`'s integers only | divide, an integer's truncated toward zero (`div -7 2 q` is −3), a real's exactly, and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, or 0.0 into a real, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
-| `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
+| `neg a dst` `abs a dst` | a source as `add`'s, then an integer or real tag or member it writes, not a `var_input`; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power; a real's is exact, `neg -2.5 r` 2.5 |
 | `and a b dst` `or a b dst` `xor a b dst` | two sources, each a tag, a member, a bit or a literal, then a tag, member or bit it writes, not a `var_input`: all bools and bit strings or all integers, each source of `dst`'s type or one Figure 11 widens into it, a bool into a bit string, any other refused naming its conversion | bitwise AND, OR and exclusive OR, IEC's, in `dst`'s type, a bool's one bit too, on an integer its two's-complement pattern — true: writes and passes power, as it cannot fail; false: writes nothing, passes no power. Anything may follow it on the rung |
 | `not src dst` | a source, then a destination, as `and`'s | each bit of the source inverted in the source's type and the result widened into `dst`'s by value, IEC's typing, `not` of a `byte` 2#0000_1111 2#1111_0000, of an `int` 0 −1, of a `bool` 1 0, and of a `bool` 1 into a `word` 16#0000 |
 | `shl src n dst` `shr src n dst` `rol src n dst` `ror src n dst` | a source and a destination as `and`'s, between them a count, an integer tag of any width or a literal, never negative | shift left or right, 0 filling, so `shr` of an `int` −2 by 1 is 32767, and rotate left or right, each within the source's width, by `n` modulo the width, the result widened into `dst`'s type by value, so `rol` of a `byte` into a `word` rotates within 8 bits — true: writes and passes power; a shift of the width or more writes 0; a tag count that is negative when the rung runs writes the source unshifted and passes **no** power, with no fault; false: writes nothing, passes no power |
@@ -285,36 +296,37 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 
 ### Settled, not yet landed
 
-These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) and will
-change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
-whole ("A function block" and "A configuration", below), and so has the wall-clock
-runner, `PLAN.md`'s Milestone 4 (decisions 108–143 in
-[`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose only words
-in the language are a task's `watchdog` and the `continuous` task ("Watchdogs and the
-continuous task" and "Running a plant on the clock", below). Still to land:
-- **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–160 in
-  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12), of which
-  IEC's integer widths `sint int lint usint uint udint ulint` beside `dint` have landed,
-  with based literals `16#ff` and `2#1010` and `_` between digits, `1_000` (M5-7),
-  with `move` by Figure 11 and the 56 integer conversions (M5-3, "Integer widths",
-  below), and arithmetic and comparison over every width (M5-4), and the bit strings
-  `byte word dword lword` with `and or xor not shl shr rol ror`, bit access `word.3` and
-  the 76 bit-string conversions (M5-8, "Bit strings", below), and a bit number in a tag,
-  `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below), and `real` and
-  `lreal`, with literals `37.5` and `1.5e3`, `sqrt` and the real conversions, `real_to_int`
-  and `real_trunc_int` among them (M5-10, "Reals", below), and arrays `var temps
-  real[8]`, up to three dimensions, by literal subscripts (M5-11, "Arrays", below), and by
-  a subscript held in a tag, `weights[slot]`, an index out of range a major fault (M5-12,
-  "A subscript in a tag", below), at I/O points (M5-13, "A located array", below), and
-  of timers, counters and blocks, `var lane_t ton[4]` (M5-14, "Arrays of instances",
-  below). IEC's typed
-  counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
-  (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
-  `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
-  power, in every integer width, as has landed (M5-2 and M5-4, "Arithmetic" and "Integer
-  widths", below), replacing the stop at the limit the dint had until then. Each type
-  word and mnemonic becomes a reserved word, `real` among them, as `int`, `word`, `byte`,
-  `and`, `or` and `not` already are.
+Nothing that is decided is waiting to land. Everything decided so far (see
+[`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) that changes the source language has
+landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
+configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
+108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),
+whose only words in the language are a task's `watchdog` and the `continuous` task
+("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
+- **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
+  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
+  maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16: IEC's
+  integer widths `sint int lint usint uint udint ulint` beside `dint`, with `move` by
+  Figure 11 and the 56 integer conversions (M5-3, "Integer widths", below), and
+  arithmetic and comparison over every width (M5-4); based literals `16#ff` and `2#1010`
+  and `_` between digits, `1_000` (M5-7); the bit strings `byte word dword lword` with
+  `and or xor not shl shr rol ror`, bit access `word.3` and the 76 bit-string conversions
+  (M5-8, "Bit strings", below), and a bit number in a tag, `word.[n]`, with the major fault
+  (M5-9, "A bit number in a tag", below); `real` and `lreal`, with literals `37.5` and
+  `1.5e3`, `sqrt` and the real conversions, `real_to_int` and `real_trunc_int` among them
+  (M5-10, "Reals", below); arrays `var temps real[8]`, up to three dimensions, by literal
+  subscripts (M5-11, "Arrays", below), by a subscript held in a tag, `weights[slot]`, an
+  index out of range a major fault (M5-12, "A subscript in a tag", below), at I/O points
+  (M5-13, "A located array", below), and of timers, counters and blocks, `var lane_t
+  ton[4]` (M5-14, "Arrays of instances", below); IEC's typed counters, `ctu_int` and the
+  rest, with `ctu_dint` another word for `ctu` (M5-5, "A counter", below), and the long
+  timers in nanoseconds, `ton_ltime`, `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long
+  timers", below). An arithmetic result past its type's limit wraps, with no power, in
+  every integer width (M5-2 and M5-4, "Arithmetic" and "Integer widths", below), replacing
+  the stop at the limit the dint had until then. Each type word and mnemonic is a reserved
+  word, in any case, `real`, `int`, `word`, `byte`, `and`, `or` and `not` among them. What
+  Milestone 5 left deferred, the TIME and LTIME types, strings and structures among them,
+  "What logex is not" lists below.
 - Milestone 3 (`PLAN.md` §3, decisions 67–107 in
   [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
   counters, the other timers, integer arithmetic, the pulse coils and the forward jump
@@ -2132,7 +2144,7 @@ And a block that holds an instance of itself, `var inner seal` on line 6 of `sea
 refused in its own file, and the program that names it is compiled no further:
 
 ```
-belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`, and the function block `seal` — did you mean `seal`?
+belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`, and the function block `seal` — did you mean `seal`?
 belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, whose members only its body writes
 ./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```
@@ -3376,14 +3388,14 @@ $ mix run on_the_real_clock.exs
   case_full: 1,
   no_more_rounds_than_milliseconds: true
 ]
-this run's figures: now=1231 rounds=1227 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
+this run's figures: now=1230 rounds=1229 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
 the last write: %{[0] => 0, [4] => 0}
 closed: true
 ```
 
 - The keyword list is the same on every run; the figures are this run's, on a four-core
-  Linux container, and differ from run to run and machine to machine. Here 1,227 rounds
-  ran in 1,231 ms, back to back, and no task reported a period missed: both overlaps are
+  Linux container, and differ from run to run and machine to machine. Here 1,229 rounds
+  ran in 1,230 ms, back to back, and no task reported a period missed: both overlaps are
   0. `no_more_rounds_than_milliseconds` counts over the whole run, so it says one round a
   millisecond at most on average, which the rule needs but does not prove; the rule
   itself, round by round, is tested on the manual clock. Nothing printed says when each
@@ -4113,12 +4125,19 @@ in every cycle's outputs at the value it holds.
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
-  integer widths, the four bit strings and the two reals only, arrays of those named by
-  literal subscripts or ones a tag holds, never an expression, located at a device's
-  consecutive addresses or not, and arrays of timers, counters and blocks, each element
-  run by literal subscripts; no structures, and no NaN or infinity in a real; a jump forward only; no retained
-  values, so a warm restart is a cold one; and forcing for inputs only, an output never
-  forced.
+  integer widths, the four bit strings and the two reals only, and arrays of those, of
+  one to three dimensions counted from 0, named by literal subscripts or ones a tag
+  holds, never an expression, located at a device's consecutive addresses or not, and
+  arrays of timers, counters and blocks, each element run by literal subscripts. There is
+  no TIME, LTIME, date or time-of-day type and no `T#` literal, so a preset is a plain
+  integer, milliseconds or a long timer's nanoseconds, and every timer, a long one too,
+  counts whole milliseconds of the clock; no strings or characters; no structures, UDTs,
+  enumerations, subranges or references; no typed literal, `int#5`, and no octal; no IEC
+  array bounds, `ARRAY[1..8]`, nor a whole-array copy or fill; no byte or word partial
+  access, `w.%B1`; no `round`, `ceil` or `floor`, and no conversion to or from a bool, a
+  BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
+  tag's type or array's size; a jump forward only; no retained values, so a warm restart
+  is a cold one; and forcing for inputs only, an output never forced.
 
 ## Running it
 
@@ -4157,7 +4176,7 @@ Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`).
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4, and its data types, §4.12, the integer widths, bit strings, reals and arrays, with Milestone 5)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

@@ -259,6 +259,16 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
    only an interface. Making the declarations double as the image for a lone `.ld` is
    logex's simplification.
 
+*(Landed with Milestone 5, M5-1 to M5-16, 2026-10-21 to 2026-10-26, §4.12: the elementary
+types are the type table's, `bool`, IEC's eight integer widths, four bit strings and two
+reals, each declared in every section above and as a `var_global`, located or not; an
+ARRAY of them, of one to three dimensions, `var temps real[8]`, and of standard and user
+FB instances, `var lane_t ton[4]`, is a row of this table in all but name, its state a
+tuple in the instance (M5-11, M5-14), and a located one a point an element (M5-13); and
+rule 2's instance state maps each name to an integer, a float, a tuple of either or of
+instance maps, or a nested instance, every value held to its tag's type where a state is
+handed in, decisions 171 and 173.)*
+
 ### 4.2 A program type: the README motor
 
 This is `motor.ld` under the M1-3 tag design. The rungs are the README's, unchanged:
@@ -636,7 +646,10 @@ IEC has three ways to bind a program to physical I/O. logex adopts one:
 - The integer fields are IEC's hierarchical address, *"with the leftmost field
   representing the highest level of the hierarchy"* (§2.4.1.1, p.37).
 - There is no size prefix (X/B/W/D). The declared type carries the size, and logex has no
-  BYTE or WORD.
+  BYTE or WORD. *(Since M5-8, 2026-10-23, logex has BYTE, WORD, DWORD and LWORD, each
+  locatable, `var_global drive_status word at drive.i.4`, and since M5-13 a located array,
+  `var_global zone_t real[8] at card.i.0`, one point an element at consecutive addresses;
+  the declared type still carries the size, so there is still no size prefix.)*
 - It lexes as one `name` under PLAN §5's settled `.` rule, so no `%` token and no new AST
   leaf are needed.
 
@@ -953,7 +966,13 @@ warns that `.` in the lexer is safe only while there are no float literals. *(De
 2026-10-21 for Milestone 5, §4.12: a bit is `word.3` or `word.[n]`, on every integer and
 bit string, and an element `temps[3]` or `grid[1,7]`, each one token; a real literal has
 digits before its `.`, and a name never does, so the two never meet; and `word` itself
-becomes a type word, reserved.)*
+becomes a type word, reserved.)* *(Landed: bit access `word.3` with M5-8 and `word.[n]`
+with M5-9 on 2026-10-23, a literal in brackets, `word.[4]`, the very bit `word.4` since
+decision 213; real literals with M5-10 the same day, each digits, a `.` and digits; and
+an element `temps[3]` or `grid[1,7]` with M5-11, `weights[slot]` with M5-12, a bit of one,
+`faults[2].3`, since decision 221, and a member of an element of instances,
+`lane_t[2].dn`, with M5-14, each one name token, so the table's first row, "a bit is
+refused until bit access lands", is past.)*
 
 ### 4.8 Reserved words, by file kind
 
@@ -967,6 +986,15 @@ becomes a type word, reserved.)*
 ulint`, are reserved in both file kinds, as `bool` and `dint` are, and the 56 integer
 conversions, `dint_to_int` and the rest, in every `.ld` file, as every mnemonic is
 (decisions 144 and 148).)*
+*(Landed with Milestone 5, 2026-10-26: a `.ld` file of either kind reserves every row of
+`Logex.Declarations.keywords/0`, the four section words, the fifteen elementary type
+words, `bool`, the eight integer widths, `byte word dword lword` and `real lreal`, and the
+built-in function block type words `ctu ctd ctud` and their typed variants `ctu_int` to
+`ctud_ulint`, `ctu_dint` among them, and `ton tof tp rto` with `ton_ltime` to `rto_ltime`,
+beside every mnemonic, the 182 conversions among them; a configuration file reserves
+`Logex.Configuration.Text.keywords/0`, its ten words, `at continuous interval priority
+program single task var_global watchdog with`, and the fifteen elementary type words,
+`bool`, `real` and `word` among them; `naming_test.exs` pins both lists whole.)*
 
 A `var_external` name must be legal in both kinds, because it is declared again as a
 `var_global`. *(Landed with M2-4: `Logex.Declarations` refuses a configuration file's
@@ -3170,7 +3198,15 @@ a bitwise operand since decision 206, and its ninth, M5-9, a bit number held in 
 `status.[n]`, and the first major fault, the same day, and its tenth, M5-10, the reals,
 `real` and `lreal`, with `sqrt`, the 34 real conversions and the 16 truncations, the same
 day, with the maintainer's answers to its five questions the same day, decisions 215 to
-219**
+219, and its eleventh, M5-11, arrays of elementary types by literal subscripts, the same
+day, with decisions 220 to 228, its twelfth, M5-12, a subscript held in a tag and the index
+fault, on 2026-10-24, with decisions 229 to 236, its thirteenth, M5-13, located arrays,
+the same day, with decisions 237 to 247, its fourteenth, M5-14, arrays of timers,
+counters and blocks, the same day, with decisions 248 to 256 on 2026-10-26, its
+fifteenth, M5-15, the contract walks' cross-type reach, on 2026-10-26, and its sixteenth
+and last, M5-16, the documents, the same day, so every item of Milestone 5 has landed,
+its done sentence checked clause by clause against the tests and put to the maintainer
+(`PLAN.md` §3, M5-16)**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3300,7 +3336,7 @@ Overflow, side by side:
 | Kind | IEC | Logix | Siemens TIA | CODESYS | logex (Milestone 5) |
 |---|---|---|---|---|---|
 | Bit strings BYTE, WORD, DWORD, LWORD | yes, Ed 2 and Ed 3 Table 10 f18–21; bitwise AND OR XOR NOT and SHL SHR ROL ROR take them only (Ed 3 Tables 30, 31); partial access `w.3`, `w.%B1` new in Ed 3 (Table 17 pp.59–60) | none; bit access on any integer instead (RM018A pp.884–885), and AND, OR, XOR, NOT on integers (RM018A pp.494ff) | yes; LWORD on S7-1500 | yes, and BIT in structures | **take**: the four types, the bitwise instructions on them and on integers, bit access `x.3` and `x.[n]` on both (decisions 155 and 160); IEC's byte, word and double-word partial access, `w.%B1`, deferred |
-| TIME, LTIME | TIME's size the implementer's; LTIME signed 64-bit ns, new in Ed 3 (T10 f12a/b) | TIME32, TIME, LTIME on 5x80 (RM094N p.13) | TIME signed 32-bit ms; LTIME on S7-1500; S5TIME | TIME unsigned 32-bit ms; LTIME | **defer the types**; presets stay dint ms, and the long timers count lint nanoseconds (decision 158) |
+| TIME, LTIME | TIME's size the implementer's; LTIME signed 64-bit ns, new in Ed 3 (T10 f12a/b) | TIME32, TIME, LTIME on 5x80 (RM094N p.21; p.13 the 5590's, corrected by M5-16) | TIME signed 32-bit ms; LTIME on S7-1500; S5TIME | TIME unsigned 32-bit ms; LTIME | **defer the types**; presets stay dint ms, and the long timers count lint nanoseconds (decision 158) |
 | DATE, TOD, DT and their L forms | yes; L forms new in Ed 3, ns from 1970 | DT, LDT on 5x80; LINT doubles as LDT | DATE, TOD, DT, LTOD, LDT, DTL (a 12-byte structure) | yes | **defer**: no calendar clock in the core |
 | STRING, WSTRING, CHAR, WCHAR | STRING, WSTRING in Ed 2; CHAR, WCHAR new in Ed 3; UCHAR, USTRING (UTF-8) in Ed 4 (definition 3.16; body **unverified**) | STRING of 82 characters (PM013H p.13), custom 1–65,535 (RM094N p.90) | STRING to 254, WSTRING to 16,382 | STRING default 80, WSTRING UCS-2 | **defer**: a milestone of its own |
 | Enumerations | yes, Ed 2 and Ed 3 Table 11 f1 | **unverified**: none found in the manuals read | named value types, S7-1500 only | yes | **defer** |
@@ -4179,8 +4215,8 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
-| STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day, arrays by literal subscripts with M5-11 the same day, a subscript held in a tag with M5-12 on 2026-10-24, located arrays with M5-13 and arrays of instances with M5-14 the same day, the walks' cross-type reach with M5-15 and the documents with M5-16 on 2026-10-26: **landed**, every item of Milestone 5 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* *(Arrays landed with M5-11 to M5-14, 2026-10-23 to 2026-10-24: of every elementary type, one to three dimensions, by literal or tag subscripts, located, and of instances; STRUCT, UDTs and IEC's array bounds still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
@@ -7344,6 +7380,13 @@ decision gives both. The questions the record found where two answers meet, or a
 leaves a reading open, are §4.12's "Put to the maintainer"; the maintainer answered them,
 and the three rules §4.12 left open, the same day, decisions 161–167 below and notes on
 the decisions the rest settle.
+*(Landed, all of them, with Milestone 5, 2026-10-26, M5-16: decisions 144–167 each carry
+the note of the item that built them; decisions 168–256 are the maintainer's answers to
+the questions each item and its review put, from M5-1's review to M5-14's, each built in
+the commit that recorded it, `PLAN.md` §3 naming the item; none awaits code. Their Logix
+and IEC claims were checked against the extracts of the manuals and the standard on
+2026-10-26, M5-16, and the two citations found wrong are corrected where they stand,
+decisions 158 and 241.)*
 
 144. **What the new types are called (Milestone 5).** The programmer declares the box
      count as a small whole number, the drive's register as a 16-bit unsigned number and
@@ -7830,6 +7873,9 @@ the decisions the rest settle.
      TON_LTIME among them (Table 46 features 1c, 2c, 3c), LTIME a signed 64-bit count of
      nanoseconds (Table 10 footnote m). Logix's TIMER and COUNTER are DINT (RM018A p.111,
      pp.93–94); its LTIME is 64-bit nanoseconds on the 5x80 (RM094N p.13).
+     *(Citation corrected by M5-16, 2026-10-26: p.13 is RM094N's 5590 chapter; the 5380
+     and 5580 controllers' LTIME is on p.21 and the 5480's on p.25. RM018A p.111 shows a
+     TIMER_T beside the TIMER, its `.ACC` a TIME in microseconds.)*
 
      *Recommended: every timer and counter member `dint`.* **Taken: typed variants**
      (the maintainer, 2026-10-21): IEC's typed counters for each integer type Table 45
@@ -8418,7 +8464,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
        such destination, as decision 169 refuses a hand-edited port.
 
      IEC and Logix have no compiled program a host can edit: Logix downloads a project
-     whose tags and code are checked together.
+     whose tags and code are checked together (**unverified** in the extracts read,
+     M5-16).
 
      **Taken: refused where the program is handed in** (the maintainer, 2026-10-22):
      "`m`'s `add` on line 7 computes in the type of `d`, a bool, which is no integer type:
@@ -9229,6 +9276,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
        type's, a signed type's top bit its sign (decision 155); a bit of a bool element,
        `b[1].3`, is told the element "has no members", and of a real element refused as a
        real's bit is (decision 155). Its element's subscripts are literal, until M5-12.
+       *(Since M5-12, 2026-10-24: an element a tag subscripts has its bits too,
+       `faults[i].3`, its subscripts checked first.)*
      - A one-shot's storage bit and a pulse coil's bits may be a literal bit of an element,
        `ons edge[1].0`, and never one a tag numbers, refused in decision 154's words, "a
        one-shot's storage bit is a bool or a bit with a literal number, as in
@@ -9756,7 +9805,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
        located array is a trigger and a whole-array force makes no round of its own.
 
      Logix forces within a tag, by element (1756-PM004L pp.51, 53 and 54), and its module
-     data is one tag, `Local:0:I.Data`, copied whole with `cps` (p.21); IEC's directly
+     data is one tag, `Local:0:I.Data`, copied whole with `cps` (p.20, cited as p.21 until
+     M5-16 corrected it); IEC's directly
      represented variables are single points (Ed 3 Table 16). This supersedes M5-13's
      provisional reading that the array named whole is no point.
 242. **A hierarchical address (Milestone 5),** M5-13's second question. **Taken: confirmed
