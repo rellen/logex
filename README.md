@@ -128,8 +128,8 @@ Source syntax today:
   `grid[1,c]`, read as the instruction runs ("A subscript in a tag", below), a tag of the
   elements' type wherever one goes, and a bit of one, `faults[2].3`, a bit as a tag's is
   ("Arrays", below). An array may hold timers, counters or a block's instances, `var
-  lane_t ton[4]`, each element run by literal subscripts and its members read through any
-  ("Arrays of instances", below)
+  lane_t ton[4]`, each element run by literal subscripts and its members read and written
+  through any ("Arrays of instances", below)
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
@@ -305,7 +305,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 ("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
-  maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16: IEC's
+  maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
+  eight readings built as provisional still put to the maintainer (`PLAN.md` §3, M5-16's
+  review): IEC's
   integer widths `sint int lint usint uint udint ulint` beside `dint`, with `move` by
   Figure 11 and the 56 integer conversions (M5-3, "Integer widths", below), and
   arithmetic and comparison over every width (M5-4); based literals `16#ff` and `2#1010`

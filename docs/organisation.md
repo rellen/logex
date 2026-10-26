@@ -7386,7 +7386,12 @@ the questions each item and its review put, from M5-1's review to M5-14's, each 
 the commit that recorded it, `PLAN.md` §3 naming the item; none awaits code. Their Logix
 and IEC claims were checked against the extracts of the manuals and the standard on
 2026-10-26, M5-16, and the two citations found wrong are corrected where they stand,
-decisions 158 and 241.)*
+decisions 158 and 241.)* *(M5-16's review, 2026-10-26: "none awaits code" holds only for
+what is decided. Eight questions on readings built as provisional are still with the
+maintainer, M5-14's answers' readings 7 to 9, M5-15's questions 1 and 2 and its review's
+3 to 5, gathered in `PLAN.md` §3, M5-16's review; each runs as built, and an answer other
+than the reading built would be code. Its review also corrected decision 151's Table 11
+citation where it stands.)*
 
 144. **What the new types are called (Milestone 5).** The programmer declares the box
      count as a small whole number, the drive's register as a 16-bit unsigned number and
@@ -7660,7 +7665,7 @@ decisions 158 and 241.)*
      - Logix's form, a count and zero-based subscripts: `var temps real[8]`, the zones
        `temps[0]` to `temps[7]` (PM004L pp.34–36);
      - IEC's form, bounds: `var temps real[1..8]`, or `real[-2..5]` (Ed 3 Table 11
-       feature 4, p.53);
+       feature 4, p.35, cited as p.53 until the review of M5-16 corrected it);
      - or both; and, either way, one dimension, or more.
 
      Logix allows three dimensions, one only inside a UDT (RM094N p.84), rightmost fastest

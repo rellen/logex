@@ -6572,4 +6572,402 @@ defmodule Logex.EndToEndTest do
       assert model.faults > 50
     end
   end
+
+  # PLAN Milestone 5's done sentence in one plant (M5-16's review, question 1's (b)):
+  # §4.4's plant from files on disk with a bench program that declares every elementary
+  # type, decisions 144, 150 and 155's fifteen, each read from a point of its own type and
+  # written to one, an integer through `add` past its width wrapping with no power, a bit
+  # string through `not`, a real through `mul` saturating; the fan's speed a `real` from
+  # the drive card; the oven's eight zone temperatures a located `real[8]`; and a box
+  # counter that is a typed counter, a `ctud_int`, weighing each box into `weights[slot]`,
+  # all through `Logex.Runner` on the manual clock against an oracle that knows nothing of
+  # logex, every state's real a single or a double and never −0.0. `slot` at 8 trips the
+  # plant at the fast task's step with every output 0 once, through every device, and
+  # nothing after.
+  describe "Milestone 5's done sentence in one plant" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    # Each type, the range a point of it holds, and what the bench writes from it.
+    @integer_types [
+      {"sint", -128, 127},
+      {"int", -32_768, 32_767},
+      {"dint", -2_147_483_648, 2_147_483_647},
+      {"lint", -9_223_372_036_854_775_808, 9_223_372_036_854_775_807},
+      {"usint", 0, 255},
+      {"uint", 0, 65_535},
+      {"udint", 0, 4_294_967_295},
+      {"ulint", 0, 18_446_744_073_709_551_615}
+    ]
+    @bit_strings [{"byte", 8}, {"word", 16}, {"dword", 32}, {"lword", 64}]
+
+    defp bench_ld do
+      ports =
+        for {type, _, _} <- @integer_types do
+          "var_input i_#{type} #{type}\nvar_output o_#{type} #{type}\nvar_output ok_#{type} bool\n"
+        end ++
+          for {type, _} <- @bit_strings do
+            "var_input i_#{type} #{type}\nvar_output o_#{type} #{type}\n"
+          end ++
+          for type <- ["bool", "real", "lreal"] do
+            "var_input i_#{type} #{type}\nvar_output o_#{type} #{type}\n"
+          end
+
+      rungs =
+        for({type, _, _} <- @integer_types, do: "add i_#{type} 1 o_#{type} ote ok_#{type}\n") ++
+          for({type, _} <- @bit_strings, do: "not i_#{type} o_#{type}\n") ++
+          [
+            "xio i_bool ote o_bool\n",
+            "mul i_real 2.0 o_real\n",
+            "mul i_lreal 2.0 o_lreal\n"
+          ]
+
+      Enum.join(ports) <> "// every type in, through its rule, and out\n" <> Enum.join(rungs)
+    end
+
+    # The bench's points, each type at an address of its own on the bench device.
+    defp bench_types,
+      do:
+        for({type, _, _} <- @integer_types, do: type) ++
+          for({type, _} <- @bit_strings, do: type) ++ ["bool", "real", "lreal"]
+
+    defp bench_lines do
+      types = Enum.with_index(bench_types())
+      integers = for {type, _, _} <- @integer_types, do: type
+
+      globals =
+        for({type, n} <- types, do: "var_global b_i_#{type} #{type} at bench.i.#{n}\n") ++
+          for({type, n} <- types, do: "var_global b_o_#{type} #{type} at bench.q.#{n}\n") ++
+          for {type, n} <- Enum.with_index(integers, 15),
+              do: "var_global b_ok_#{type} bool at bench.q.#{n}\n"
+
+      connections =
+        for(
+          {type, _} <- types,
+          do: "  bench.i_#{type} b_i_#{type}\n  bench.o_#{type} b_o_#{type}\n"
+        ) ++
+          for type <- integers, do: "  bench.ok_#{type} b_ok_#{type}\n"
+
+      "\n" <>
+        Enum.join(globals) <>
+        "\nprogram bench bench with fast\n" <> Enum.join(connections)
+    end
+
+    @boxes_ld """
+    var_input  eye     bool
+    var_input  outfeed bool
+    var_input  full    bool
+    var_input  weight  int
+    var_input  slot    int
+    var_output count   int
+    var_output over    bool
+    var_output last    int
+    var boxes   ctud_int
+    var weights int[8]
+    var edge    bool
+    var p       bool
+    // the box counter, a ctud_int, and each box's weight in the slot the panel names
+    xic full ote boxes.ld
+    xic eye ctu boxes 32767
+    xic outfeed ctd boxes 32767
+    move boxes.cv count
+    xic boxes.ov ote over
+    xic eye ons edge ote p
+    xic p move weight weights[slot]
+    move weights[slot] last
+    """
+
+    @rest_lines """
+
+    var_global fan_hz    real at drive.i.0
+    var_global fan_speed real
+    var_global fan_rpm   lreal
+    var_global fan_limit int  3000
+    var_global fan_over  bool at panel.q.7
+
+    program fan1 speed with fast
+      fan1.hz    fan_hz
+      fan1.limit fan_limit
+      fan1.speed fan_speed
+      fan1.rpm   fan_rpm
+      fan1.over  fan_over
+
+    var_global zone_t   real[8] at card.i.0
+    var_global zone_hot bool[8] at card.q.0
+    var_global zone_sp  real    180.0
+    var_global zone_t0  real
+
+    program oven zones with fast
+      oven.t   zone_t
+      oven.sp  zone_sp
+      oven.hot zone_hot
+      oven.t0  zone_t0
+
+    var_global box_eye     bool at panel.i.8
+    var_global box_slot    int  at panel.i.9
+    var_global box_outfeed bool at panel.i.10
+    var_global box_full    bool at panel.i.11
+    var_global box_weight  int  at drive.i.4
+    var_global box_count   int  at panel.q.4
+    var_global box_last    int  at panel.q.5
+    var_global box_over    bool at panel.q.6
+
+    program boxes boxes with fast
+      boxes.eye     box_eye
+      boxes.outfeed box_outfeed
+      boxes.full    box_full
+      boxes.weight  box_weight
+      boxes.slot    box_slot
+      boxes.count   box_count
+      boxes.last    box_last
+      boxes.over    box_over
+    """
+
+    # The oracle's rules, restated: an integer wraps by its width, a bit string's `not`
+    # flips its bits, a single is the BEAM's 32-bit float nearest a double, a real past
+    # its range is its largest value with its sign, and −0.0 is 0.0.
+    defp wrapped(x, lo, hi), do: Integer.mod(x - lo, hi - lo + 1) + lo
+    defp saturated(x, max) when x > max, do: max
+    defp saturated(x, max) when x < -max, do: -max
+    defp saturated(x, _max), do: x + 0.0
+
+    defp doubled_lreal(x) when x > 8.98846567431158e307, do: 1.7976931348623157e308
+    defp doubled_lreal(x) when x < -8.98846567431158e307, do: -1.7976931348623157e308
+    defp doubled_lreal(x), do: x * 2.0 + 0.0
+
+    defp drawn({_type, lo, hi}), do: Enum.random([lo, hi, hi - 1, lo + 1, Enum.random(lo..hi)])
+
+    defp drawn_bits(width),
+      do: Enum.random([0, Integer.pow(2, width) - 1, Enum.random(0..(Integer.pow(2, width) - 1))])
+
+    defp drawn_real,
+      do:
+        Enum.random([
+          0,
+          -0.0,
+          1.0e-40,
+          3.4028235e38,
+          -3.4e38,
+          37.5,
+          :rand.uniform() * 1000,
+          -:rand.uniform(1000)
+        ])
+
+    defp drawn_lreal,
+      do:
+        Enum.random([
+          0,
+          -0.0,
+          1.0e-310,
+          1.7e308,
+          -1.7e308,
+          0.1,
+          :rand.uniform() * 1.0e6,
+          -:rand.uniform(1000)
+        ])
+
+    test "every type, a ctud_int box counter, the fan's real, the oven's real[8] and weights[slot], through the runner",
+         %{tmp_dir: dir} do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"bench.ld", bench_ld()},
+        {"speed.ld", @speed_ld},
+        {"zones.ld", @zones_ld},
+        {"boxes.ld", @boxes_ld},
+        {"plant.logex", whole_plant() <> bench_lines() <> @rest_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert plant.warnings == []
+
+      # The program and the configuration declare each of the fifteen.
+      bench = Map.fetch!(plant.programs, "bench")
+      declared = for {_name, tag} <- bench.tags, into: MapSet.new(), do: tag.type
+      assert declared == MapSet.new(bench_types(), &String.to_atom/1)
+
+      assert MapSet.new(for g <- plant.globals, String.starts_with?(g.name, "b_i_"), do: g.type) ==
+               declared
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+      {:ok, card} = Sim.start_link(reports: true, inputs: 8, outputs: 8)
+      {:ok, bench_io} = Sim.start_link(reports: true, inputs: 15, outputs: 23)
+      sims = %{"panel" => panel, "drive" => drive, "card" => card, "bench" => bench_io}
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: Map.new(sims, fn {name, sim} -> {name, {Sim, sim: sim}} end),
+          clock: {Manual, clock}
+        )
+
+      :rand.seed(:exsss, {2026, 10, 256})
+      types = Enum.with_index(bench_types())
+      at = Map.new(types)
+
+      model = %{
+        weights: List.duplicate(0, 8),
+        temps: List.duplicate(0.0, 8),
+        eye: 0,
+        outfeed: 0,
+        cv: 0,
+        ov: 0,
+        seen: MapSet.new()
+      }
+
+      model =
+        Enum.reduce(1..300, model, fn _, model ->
+          # The bench: each type's point drawn about its limits.
+          ints = for {type, _, _} = row <- @integer_types, into: %{}, do: {type, drawn(row)}
+          bits = for {type, width} <- @bit_strings, into: %{}, do: {type, drawn_bits(width)}
+          bool = Enum.random([0, 1])
+          real = drawn_real()
+          lreal = drawn_lreal()
+
+          values =
+            ints
+            |> Map.merge(bits)
+            |> Map.merge(%{"bool" => bool, "real" => real, "lreal" => lreal})
+
+          Sim.set(bench_io, Map.new(values, fn {type, v} -> {[at[type]], v} end))
+
+          # The fan, the oven and the box counter.
+          hz = Enum.random([:rand.uniform() * 100, :rand.uniform(100), -0.0])
+          weight = Enum.random(0..999)
+
+          zones =
+            for zone <- Enum.take_random(0..7, Enum.random(1..8)),
+                into: %{},
+                do: {zone, Enum.random([Enum.random(0..400), :rand.uniform() * 400])}
+
+          eye = Enum.random([0, 0, 1])
+          outfeed = Enum.random([0, 0, 0, 1])
+          full = Enum.random(List.duplicate(0, 40) ++ [1])
+          slot = Enum.random(0..7)
+          Sim.set(drive, %{[0] => hz, [4] => weight})
+          Sim.set(card, Map.new(zones, fn {zone, t} -> {[zone], t} end))
+          Sim.set(panel, %{[8] => eye, [9] => slot, [10] => outfeed, [11] => full})
+          Manual.advance(clock, 10)
+
+          out = Sim.outputs(bench_io)
+
+          for {type, lo, hi} <- @integer_types do
+            assert out[[at[type]]] == wrapped(ints[type] + 1, lo, hi), type
+            assert out[[15 + at[type]]] == if(ints[type] < hi, do: 1, else: 0), type
+          end
+
+          for {type, width} <- @bit_strings,
+              do: assert(out[[at[type]]] == Integer.pow(2, width) - 1 - bits[type], type)
+
+          assert out[[at["bool"]]] == 1 - bool
+          r = single(real * 1.0)
+          assert Runner.get!(runner, "b_i_real") === r
+
+          assert Runner.get!(runner, "b_o_real") ===
+                   single(saturated(r * 2.0, 3.4028234663852886e38))
+
+          l = lreal * 1.0 + 0.0
+
+          assert Runner.get!(runner, "b_i_lreal") ===
+                   if(abs(l) < 2.2250738585072014e-308, do: 0.0, else: l)
+
+          assert Runner.get!(runner, "b_o_lreal") ===
+                   doubled_lreal(Runner.get!(runner, "b_i_lreal"))
+
+          # The fan's speed, in a real and an lreal, its alarm over 3000.
+          fan = single(hz * 1.0)
+          speed = single(fan * 60.0)
+          assert Runner.get!(runner, "fan_hz") === fan
+          assert Runner.get!(runner, "fan_speed") === speed
+          assert Runner.get!(runner, "fan_rpm") === fan * 60.0 + 0.0
+          assert Sim.outputs(panel)[[7]] == if(speed > 3000, do: 1, else: 0)
+
+          # The oven's eight zones, each lamp lit over 180.
+          temps =
+            Enum.reduce(zones, model.temps, fn {z, t}, ts ->
+              List.replace_at(ts, z, one_single(t * 1.0))
+            end)
+
+          assert Runner.get!(runner, "zone_t") == temps
+
+          assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
+                   for(t <- temps, do: if(t > 180.0, do: 1, else: 0))
+
+          # The box counter, IEC's CTUD restated over an int: a load first, then an up
+          # edge, stopping at 32767 with `ov`, then a down edge; each box's weight kept in
+          # its slot as the eye rises.
+          rose = eye == 1 and model.eye == 0
+          fell_in = outfeed == 1 and model.outfeed == 0
+
+          {cv, ov} =
+            case {full, rose, model.cv} do
+              {1, _, _} -> {32_767, 0}
+              {0, true, 32_767} -> {32_767, 1}
+              {0, true, cv} -> {cv + 1, model.ov}
+              {0, false, cv} -> {cv, model.ov}
+            end
+
+          cv = if full == 0 and fell_in and cv > -32_768, do: cv - 1, else: cv
+          weights = if rose, do: List.replace_at(model.weights, slot, weight), else: model.weights
+          assert Runner.get!(runner, "boxes.boxes.cv") == cv
+          assert Runner.get!(runner, "boxes.weights") == weights
+          assert Sim.outputs(panel)[[4]] == cv
+          assert Sim.outputs(panel)[[5]] == Enum.at(weights, slot)
+          assert Sim.outputs(panel)[[6]] == ov
+
+          %{
+            model
+            | weights: weights,
+              temps: temps,
+              eye: eye,
+              outfeed: outfeed,
+              cv: cv,
+              ov: ov,
+              seen:
+                MapSet.union(
+                  model.seen,
+                  MapSet.new([{:ov, ov}, {:wrap, out[[15]]}, {:full, full}])
+                )
+          }
+        end)
+
+      # The walk reached the counter's top and its `ov`, a wrap and a load.
+      assert MapSet.subset?(MapSet.new([{:ov, 1}, {:wrap, 0}, {:full, 1}]), model.seen)
+
+      # `slot` at 8: the fast task's step trips on `move weights[slot] last`, and every
+      # output of every device is written 0 once, and nothing after.
+      Runner.subscribe(runner, [:fault, :trip, :round])
+      Sim.set(panel, [9], 8)
+      Manual.advance(clock, 10)
+
+      assert {:fault, "fast", "boxes",
+              %Logex.Fault{kind: :index_out_of_range, instruction: :move, read: {8}, line: 21} =
+                fault} =
+               Runner.status(runner).trip
+
+      assert fault.file == Path.join(dir, "boxes.ld")
+
+      zeros =
+        for {device, points} <- Logex.IO.points(plant),
+            %{direction: :output, address: address} <- points,
+            reduce: %{} do
+          acc -> Map.update(acc, device, %{address => 0}, &Map.put(&1, address, 0))
+        end
+
+      writes = Map.new(sims, fn {name, sim} -> {name, Sim.writes(sim)} end)
+      for {name, zero} <- zeros, do: assert(List.last(writes[name]) == zero, name)
+      Manual.advance(clock, 1000)
+      Sim.set(panel, [9], 3)
+      Manual.advance(clock, 1000)
+      assert Map.new(sims, fn {name, sim} -> {name, Sim.writes(sim)} end) == writes
+      Runner.stop(runner)
+    end
+  end
 end

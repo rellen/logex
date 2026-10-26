@@ -56,9 +56,10 @@ defmodule Logex.Edit do
     or given another section) is reported as `:unread`. A section change keeps the value
     (decision 25);
   - *held outputs* (decision 20): below;
-  - *initial values* (decision 29): a bool or an integer of any width both programs declare whose initial
-    value differs keeps its running value, and the new one applies when a restart next
-    starts it. It is not reported where a rule above started it, which `:added` reports,
+  - *initial values* (decision 29): a tag of any elementary type, a bool, an integer of
+    any width, a bit string or a real, or an array of one, both programs declare whose
+    initial value differs, an array's reported element by element (decision 157), keeps
+    its running value, and the new one applies when a restart next starts it. It is not reported where a rule above started it, which `:added` reports,
     or `:input` for a var_input, nor where it is a var_input of the program started,
     whose value a restart keeps;
   - *one-shots* (decision 21): below;

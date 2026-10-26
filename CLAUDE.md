@@ -846,7 +846,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   initial value alone declares its tag with none, its uses checked rather than each told
   it is undeclared, as an array refused for its list is (provisional). Since M2-4 `var_external` is a
   row of `@sections`: since M5-3 of any elementary type, and since M5-11 an array of one,
-  bound to a global of exactly its type and sizes (decision 159), with no initial value
+  bound to a global of exactly its type (decision 159) and, an array, its sizes (M5-11),
+  with no initial value
   and no instance, and no configuration file's keyword
   (`Logex.Configuration.Text.keywords/0`) names one. Since
   M5-11 a declaration's type word may hold sizes, `int[8]`, `{:array, type, dims}`, one to
@@ -1527,7 +1528,12 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   ctu_int[4]` and `gates gate[4]` loaded from `gate.ld`, each lane run by literal
   subscripts and its count read through the panel's lane, over 600 seeded cycles
   against an oracle that knows nothing of logex, the lane outside the arrays its index
-  fault;
+  fault; and since M5-16's review Milestone 5's done sentence in one plant, §4.4's plant
+  from files on disk whose bench program and configuration declare all fifteen
+  elementary types, each a point of its own type read and written, with the fan's
+  `real`, the oven's located `real[8]` and a `ctud_int` box counter weighing into
+  `weights[slot]`, through the runner on the manual clock against an oracle that knows
+  nothing of logex, `slot` at 8 tripping it with every output of its four devices 0 once;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
@@ -1622,7 +1628,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   fixes, the same day, decisions 237–247, M5-14, arrays of instances, the same day, with
   decisions 248–256 on 2026-10-26, M5-15, the walks' cross-type reach, and M5-16, the
   documents, the same day, so Milestone 5 has landed whole, its done sentence put to the
-  maintainer (`PLAN.md` §3, M5-16):
+  maintainer (`PLAN.md` §3, M5-16), and M5-16's review the same day, which built the one
+  plant that sentence names as a test and gathered the eight questions still open on its
+  provisional readings:
   IEC's integer widths,
   signed and unsigned, overflow wrapping in every width, which supersedes decision 77's
   saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and
