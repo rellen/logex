@@ -1457,7 +1457,7 @@ line 13: `speed.3` names a bit of `speed`, a real, which has no bits
 line 14: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
 line 15: `move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
 line 16: `move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
-line 17: `gt` reads a number or a bit string, and compares two literals as lreals: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
+line 17: `gt` reads a number or a bit string, and compares two literals as lreals: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be read as 0.0
 line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 ```
@@ -1482,7 +1482,8 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
   `move 1.0e-310 big` above (decision 228), and so for one no double holds but 0.0,
   `move 1.0e-400 big`, which is read as 0.0 written so and refused in the same words
   (decision 231), beside another literal too, `eq 1.0e-400 0.0` (decision 240), and so
-  is a subnormal one, `gt 1.0e-310 0.0` above (decision 250), and in a
+  is a subnormal one, `gt 1.0e-310 0.0` above (decision 250), told it would be read as
+  0.0, since a comparison writes nothing (decision 263), and in a
   configuration's line in its global's words, "`big` is an lreal: `1.0e-400` is too near
   0.0 for an lreal, …", where a forces file holds it as 0.0, as `1.0e-310` (decision 237).
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
@@ -1502,7 +1503,9 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
 - The 34 real conversions round to the nearest integer, a tie to the even one, as IEC's
   rounding is, and then wrap, with no power, where the result does not fit (decision 161):
   `real_to_int` of 36000.0 is −29536, as above. The 16 truncations, `real_trunc_int` and
-  the rest, drop the fraction toward zero first (decision 162). A real has no bits:
+  the rest, drop the fraction toward zero first (decision 162), and write an integer: one
+  given a real destination is told to declare the integer type it writes, or use `move`
+  to keep the real (decision 260). A real has no bits:
   `speed.3` is refused (decision 155).
 - A force of a real point and a configuration file's real value are written as the
   shortest text that reads back to the value, a single's for a `real`, `fan_hz 0.1` and
@@ -2331,8 +2334,9 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
 - **An online edit by path.** An edit names each element by its path: `lane_t[2]`'s
   preset moved, a timer resumed, `lane_c[1].cu` on the block list. An array's
   dimensions or element type changed are refused, as an array's are, and a block's member
-  retyped is refused once, for the array: "`x` of every element of `ws` is a bool in the
-  running program and a dint in the candidate: …" (decision 254). An edit that drops a
+  retyped is refused once, for the array, its path naming every element `[*]`: "`ws[*].x`
+  is a bool in the running program and a dint in the candidate, in every element: …", and
+  at depth "`hs[*].ws[*].x` …" (decisions 254 and 259). An edit that drops a
   write through a tag subscript, `move 2 lane_c[k].pv`, reports every element's `pv`
   unwritten (decision 251).
 - **What reaches an element from outside.** The access paths of `Logex.Runtime.get/2`
@@ -3182,7 +3186,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   read is never taken for "not pressed" for longer than that (decision 134). One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
-  (decision 135).
+  (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
+  at every poll while the runner is tripped, and nothing else, until a write is taken;
+  `status/1`'s `unzeroed` names each device whose outputs are not known to be 0, those
+  and any down or killed, `[]` while running, the first reason kept (decision 262).
 - Each device's deadline is the step's: its task's watchdog and a poll period from the
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that

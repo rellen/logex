@@ -8068,7 +8068,10 @@ the walks' cross-type reach and the documents.
 
   2195 tests (11 doctests), up from 2194.
 
-  *Provisional readings* (the answers'), each a question for the maintainer:
+  *Provisional readings* (the answers'), each a question for the maintainer *(answered on
+  2026-10-26: 7 changed, a bit of a member of an element compared, decision 257; 8
+  confirmed, decision 258; 9 changed, one path with `[*]`, decision 259; below, after
+  M5-16's review)*:
 
   7. *A bit of a member of an element, coiled twice.* A sorter's lane counter, `lane_c
      ctu[4]`, and two rungs `xic a ote lane_c[1].pv.3` and `xic b ote lane_c[1].pv.3`:
@@ -8197,7 +8200,9 @@ the walks' cross-type reach and the documents.
   `bit_string_test.exs` alone; the walk as landed meets a negative source widened into a
   wider bit string and catches it, which a run with X5 planted confirmed.
 
-  **Questions for the maintainer.**
+  **Questions for the maintainer** *(answered on 2026-10-26: 1 changed, a truncation into a
+  real told it writes an integer, decision 260; 2 confirmed, as declared, decision 261;
+  below, after M5-16's review)*.
   1. *A truncation into a real.* A programmer writes `real_trunc_int fan_hz shown`, the
      fan's 37.9 Hz to show as 37, but declared `shown` a `real`. The compiler refuses it;
      what does the message suggest? (a) Nothing, as built: "`real_trunc_int` writes an
@@ -8317,7 +8322,11 @@ the walks' cross-type reach and the documents.
   | UB | the block member fix reverted | CrossTypeWalk (both tests), BitStringTest |
   | ZF | a trip's 0 that fails raising in the device | TripTest |
 
-  **Questions for the maintainer** (M5-15's review).
+  **Questions for the maintainer** (M5-15's review) *(answered on 2026-10-26: 3 changed to
+  (c), the 0 tried again at each poll and `status/1` naming each device not known to be 0,
+  decision 262; 4 changed to (b), "it would be read as 0.0", decision 263; 5 changed to
+  (b), every walk's and end-to-end test's oracle in clauses, decision 264; below, after
+  M5-16's review)*.
   3. *A trip's 0 that a device does not take.* A conveyor's drive card is told to stop:
      the runner trips, on a bit number out of range say, and writes every output 0 once,
      but the card's write fails that moment (a cable glitch, `{:error, :eio}`). Today the
@@ -8444,7 +8453,8 @@ the walks' cross-type reach and the documents.
   agreed with (b), and built it: every clause is now shown by a test, the first two whole
   in one plant; below.)*
 
-  **Put to the maintainer** (M5-16):
+  **Put to the maintainer** (M5-16) *(answered on 2026-10-26: accepted as is, the one plant
+  M5-16's review built showing the first clause; Milestone 5 is closed, decision 265)*:
   1. *Milestone 5's first clause, shown piecewise.* The done sentence asks for one plant,
      §4.4's conveyor with its fan, oven card and box counter, loaded from files on disk,
      that declares and runs every type and a typed counter through the runner against an
@@ -8518,7 +8528,8 @@ the walks' cross-type reach and the documents.
 
   2204 tests (11 doctests), up from 2203.
 
-  **The questions still open on Milestone 5**, gathered (M5-16's review): every one asks
+  **The questions still open on Milestone 5**, gathered (M5-16's review) *(every one answered
+  on 2026-10-26, decisions 257 to 265, below)*: every one asks
   of a reading built as provisional, so Milestone 5 runs as each says until answered.
   - M5-14's answers, provisional readings 7 to 9: a bit of a member of an element coiled
     twice, two lanes' members through two tags, and a member retyped in an array of blocks
@@ -8532,7 +8543,9 @@ the walks' cross-type reach and the documents.
   - M5-16's question 1, which the review answered for itself by building (b): whether the
     maintainer takes the one plant as the first clause shown.
 
-  **The done sentence, as the tests show it** (proposed, after M5-16's review): §4.4's
+  **The done sentence, as the tests show it** (proposed, after M5-16's review; *accepted as
+  is by the maintainer on 2026-10-26, decision 265, its every output's 0 tried again at
+  each poll since decision 262*): §4.4's
   plant, loaded from files on disk, declares in a program and its configuration every one
   of the fifteen elementary types, each read from a point of its own type and written to
   one, with the fan's speed a `real` from the drive card, its eight zone temperatures a
@@ -8547,6 +8560,96 @@ the walks' cross-type reach and the documents.
   refused, and a changed initial value of every type is reported; and the contract walks
   reach every type, refusal and trip reason but `{:internal, message}`, which only the
   hidden seam reaches, repeating exactly.
+
+  **The maintainer's answers to the questions still open** (2026-10-26, decisions 257 to
+  265, `docs/organisation.md` §7), landed the same day as one gated commit of code, tests
+  and the record and one of documents. **Milestone 5 is closed**: its done sentence is
+  accepted as proposed after M5-16's review (decision 265). Three answers confirm what was
+  built: two lanes' members through two tags warned (decision 258), and a changed real
+  initial value reported as declared, `{0.0, 1.0e-30}` (decision 261), each now pinned by a
+  test of its own where none was; and the done sentence. Six change it:
+  - *A bit of a member of an element* (257): `ote lane_c[1].pv.3` twice, and a coil on it
+    beside `move 5 lane_c[1].pv`, are the second-`ote` warning, as on `c.pv.3`; through a
+    tag subscript, `lane_c[i].pv.3`, in decisions 253's and 256's words, "already has an
+    `ote`" through the very tags and "may write" through others; and a bit a tag numbers of
+    a literal element's member, `lane_c[1].pv.[i]`, keyed by the member as M5-9 keys
+    `c.pv.[n]`. Not compared (provisional): a member's whole write beside a coil on its
+    bit where a tag subscript stands on either side.
+  - *A member retyped in nested arrays of blocks* (259): one path, `[*]` for each array,
+    "`hs[*].ws[*].x` is a bool in the running program and a dint in the candidate, in every
+    element: a member's type changes only with a restart", and so at one level, "`ws[*].x`
+    …", superseding decision 254's "`x` of every element of `ws`", so that the messages
+    keep one form.
+  - *A truncation into a real* (260): "`real_trunc_int` writes an int, but `shown` is a
+    real (declared on line 3): a truncation writes an integer, so declare `shown` an int, or
+    use `move` to keep the real", the conversion that rounds, `lreal_to_real`, where the
+    truncation's real does not widen into the destination's.
+  - *A trip's 0 that a device does not take* (262): while tripped, a device whose adapter
+    did not take its 0 is written its 0 again at each poll, and nothing else, until one is
+    taken; `status/1`'s `unzeroed`, a list of device names in device-name order, names it
+    until then, and a device down at the trip until a restart; the first reason kept, a
+    restart releasing and writing as before, one refused naming again each device whose 0
+    it did not take. The runner walk's model restates it, `status/1`'s `unzeroed` checked
+    after every step, a refused restart now and then given a device whose 0 fails, its two
+    reach atoms, `:unzeroed_named` and `:zero_retried`, among the walk's.
+  - *Decision 250's words* (263): every comparison slot says "it would be read as 0.0",
+    beside a literal and beside a tag; every other slot keeps "it would be written as 0.0".
+  - *Clauses in tests* (264): every function and test of the walks and the end-to-end tests
+    but the draws is clauses, 320 of their 443 conditionals rewritten as function clauses,
+    the 123 left all in draws, each
+    walk's module naming its draws in `@draws`, `end_to_end_test.exs` holding none, and
+    `clauses_test.exs` reading both files' syntax trees to pin it (a conditional in a
+    string or a comment is none, one inline is one). The walks run on their seeds as before:
+    every walk green, its reach the same, and no assertion fewer (the count of `assert`,
+    `refute` and `flunk` in each test file the same or more).
+
+  *Mutation table* (`scratchpad/m5/close/mut/run.log`), each mutant judged by the full
+  suite's exit code on a copy of the tip: 38 mutants, 37 red.
+  W1–W7 (decision 257's compare of a member's bit, literal and through a tag subscript,
+  in `Logex.Warnings`) each red on `instance_array_test.exs`'s table; P1–P3 (decision
+  259's `[*]` path) red on the retyped refusals; C1–C3 (decision 260's truncation into a
+  real) red on `real_test.exs` and the cross-type walk's Figure 11 oracle; D1–D4 (decision
+  263's "read as") red on the real literal tests; R1–R8 (decision 262's retry and
+  `unzeroed`, in `Logex.Runner` and its device) each red on `trip_test.exs` and the
+  RunnerWalk's model; O1–O9, O11 and O12 (an oracle's clause changed, decision 264) each
+  red on its walk or its end-to-end test, so each rewritten oracle still decides. O10,
+  `or true` on an event task's runs, survived: a weakening of an oracle cannot fail against
+  a correct logex, so it measures nothing, and O10b, the same clause told the opposite
+  edge, is red on the configuration walk. P3's first run was also red on one trip test
+  under the load of the run, which passed on its re-run alone
+
+  *Cost*, against `453ef7b` (`scratchpad/m5/close/cost.exs`, three runs each): every program
+  of the cost script compiles and scans in the reductions it took, within 2, but the one
+  that holds what decision 257 compares, 50 rungs that coil and latch a bit of a member of
+  an element, which compiles in 190,230 reductions where it took 169,649 (12.1%), its
+  scans the same; a truncation's compile, an accept and the lexer's five scripts as before.
+
+  2212 tests (11 doctests), up from 2204.
+
+  *Provisional readings* (the answers'), each a question for the maintainer:
+  1. *A stop while a device's 0 has not been taken.* The runner tripped, the drive card's 0
+     failed, and the host stops the runner before the card's next poll. As built the close
+     writes nothing more, as before decision 262, so the card keeps its last outputs. The
+     options: (a) as built; (b) the close tries the 0 once more, as the poll would have.
+     Logix leaves the safe state to the module's own fault behaviour (1756-UM900B p.242).
+  2. *A device down at the trip.* A drive killed or gone down when the runner trips is named
+     in `status/1`'s `unzeroed` until a restart, its outputs not known to be 0; one whose 0
+     was taken and that goes down later is not named. The options: (a) as built; (b) a
+     device that goes down while tripped named too, though its 0 was taken.
+  3. *A member's whole write beside a bit of it through a tag subscript.* `move 5
+     lane_c[1].pv` beside `ote lane_c[i].pv.3`, either first, is warned of nothing, where
+     `move x c.pv` beside `ote c.pv.3` is the second-`ote` warning. The options: (a) as
+     built; (b) warned, "`lane_c[i].pv.3` is in `lane_c`, as `lane_c[1].pv` is, which the
+     `move` on line 12 writes whole".
+  4. *A comparison beside a tag* (decision 263's reading). `eq l 1.0e-310`, `l` an lreal,
+     is told "… which never holds it: … it would be read as 0.0", the comparison's own
+     slot, where the question asked of two literals. The options: (a) as built; (b) "written
+     as 0.0" beside a tag, the literal held in the tag's type.
+
+  *Owed by the maintainer*, outside this session's reach: `nix flake update` and its commit,
+  `flake.lock` being the 2024-01-19 lock (§4, the toolchain item); and the old backup
+  branches, `backup/m2-2` to `backup/tidy`, 32 of them, `backup/m5` among them, to delete
+  once Milestone 5's commits are on `main`.
 
 **What stays deferred**, each a later item or milestone (§4.12): the TIME and LTIME types,
 the dates and `T#` literals; strings and characters; enumerations, named values and
