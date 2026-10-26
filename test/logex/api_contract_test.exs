@@ -205,6 +205,24 @@ defmodule Logex.ApiContractTest do
   """
   use ExUnit.Case, async: true
 
+  # Decision 264: the draws, the functions that draw a program, an input, a step or a
+  # fault at random, or write a drawn program as text, which alone may hold a `case`,
+  # `cond`, `if` or `unless`; every other function, each oracle and the harness that
+  # compares it with logex, is clauses (`clauses_test.exs`).
+  @draws ~w(
+    ar_block ar_declarations ar_divisor ar_initial ar_program ar_source ar_text
+    ay_rung ay_source ay_value ce_blocks ce_candidate ce_change ce_located
+    ce_mistakes ce_op ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
+    ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program
+    ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
+    jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
+    pc_text pc_texts re_source re_text source tm_maybe tm_op tm_program tm_rungs
+    tm_source ts_inputs ts_rung variant
+  )a
+
+  @doc false
+  def draws, do: @draws
+
   alias Logex.{Diagnostic, Edit, Instance, Program, Runtime, Scan, Tag}
   alias Logex.Configuration.Edit, as: ConfigEdit
 
@@ -639,22 +657,7 @@ defmodule Logex.ApiContractTest do
     results = for _ <- 1..2000, do: Logex.compile(source(), name: "p")
 
     reached =
-      for result <- results, into: MapSet.new() do
-        case result do
-          {:ok, %Program{name: "p", warnings: warnings}} ->
-            assert warnings == Enum.sort_by(warnings, & &1.line)
-            :ok
-
-          {:error, [%Diagnostic{stage: stage} | _] = diagnostics} ->
-            assert Enum.all?(
-                     diagnostics,
-                     &match?(%Diagnostic{line: line} when is_integer(line) and line > 0, &1)
-                   )
-
-            assert diagnostics == Enum.sort_by(diagnostics, & &1.line)
-            stage
-        end
-      end
+      for result <- results, into: MapSet.new(), do: compiled_in_order(result)
 
     assert reached == MapSet.new([:ok, :lex, :parse, :validate])
 
@@ -666,6 +669,21 @@ defmodule Logex.ApiContractTest do
       assert Enum.any?(messages, &String.contains?(&1, fragment)),
              "no source reached the message containing #{inspect(fragment)}"
     end
+  end
+
+  defp compiled_in_order({:ok, %Program{name: "p", warnings: warnings}}) do
+    assert warnings == Enum.sort_by(warnings, & &1.line)
+    :ok
+  end
+
+  defp compiled_in_order({:error, [%Diagnostic{stage: stage} | _] = diagnostics}) do
+    assert Enum.all?(
+             diagnostics,
+             &match?(%Diagnostic{line: line} when is_integer(line) and line > 0, &1)
+           )
+
+    assert diagnostics == Enum.sort_by(diagnostics, & &1.line)
+    stage
   end
 
   # Its draws are sized from the rate of its rarest behaviour, a clamped timer, seen in
@@ -786,16 +804,18 @@ defmodule Logex.ApiContractTest do
   defp walk(program, other, state, n) do
     {mistake?, call} = operation(program, other, state)
 
-    case attempt(call) do
-      {:ok, %Instance{} = next} ->
-        refute mistake?, "a host mistake was accepted"
-        assert next.now >= state.now
-        walk(program, other, next, n - 1)
+    walked(attempt(call), mistake?, {program, other, state, n})
+  end
 
-      :refused ->
-        assert mistake?, "a call without a host mistake was refused"
-        walk(program, other, state, n - 1)
-    end
+  defp walked({:ok, %Instance{} = next}, mistake?, {program, other, state, n}) do
+    refute mistake?, "a host mistake was accepted"
+    assert next.now >= state.now
+    walk(program, other, next, n - 1)
+  end
+
+  defp walked(:refused, mistake?, {program, other, state, n}) do
+    assert mistake?, "a call without a host mistake was refused"
+    walk(program, other, state, n - 1)
   end
 
   defp operation(program, other, state), do: operation(:rand.uniform(7), program, other, state)
@@ -1079,7 +1099,7 @@ defmodule Logex.ApiContractTest do
 
     # ons: power once a rise is seen, never on the first scan; the bit follows `go`.
     fires = go == 1 and before.env["s1"] == 0 and not before.first
-    assert outputs["p"] == if(fires, do: 1, else: 0)
+    assert outputs["p"] == bit(fires)
     assert later.env["s1"] == go
     behaviour(:fired, fires)
     behaviour(:held_first, before.first and go == 1)
@@ -1097,9 +1117,9 @@ defmodule Logex.ApiContractTest do
   defp timer(1, program, was, t1) do
     limit = max(t1["pre"], 0)
     assert t1["acc"] in 0..limit//1
-    assert t1["dn"] == if(t1["acc"] == limit, do: 1, else: 0)
+    assert t1["dn"] == bit(t1["acc"] == limit)
     assert t1["tt"] == 1 - t1["dn"]
-    behaviour(if(t1["dn"] == 1, do: :done, else: :timing), true)
+    behaviour(done_or_timing(t1["dn"]), true)
     behaviour(:negative_preset, t1["pre"] < 0)
     exact(String.contains?(program.source, "move 0 t1.acc"), was, t1, limit)
   end
@@ -1109,16 +1129,34 @@ defmodule Logex.ApiContractTest do
     behaviour(:idle, true)
   end
 
+  defp done_or_timing(1), do: :done
+  defp done_or_timing(_dn), do: :timing
+
   # Where no rung writes a member, .acc is exactly the delta formula's: nothing on the scan
   # that first sees the rung true, then the time since the ton last ran, added to .acc
   # floored at 0, and capped.
   defp exact(true, _was, _t1, _limit), do: :ok
 
   defp exact(false, was, t1, limit) do
-    delta = if was["en"] == 1, do: t1["last"] - was["last"], else: 0
+    delta = since_enabled(was["en"], t1["last"], was["last"])
     assert t1["acc"] == min(max(was["acc"], 0) + delta, limit)
     behaviour(:clamped, was["acc"] + delta > limit and delta > 1_000_000)
   end
+
+  # Decision 264: a condition as the bit it is, 1 or 0.
+  defp bit(true), do: 1
+  defp bit(false), do: 0
+
+  # A note, a reach atom an oracle reports, where its condition holds, and none where not.
+  defp noted(true, note), do: [note]
+  defp noted(false, _note), do: []
+
+  # The time a timer's run adds where it was timing, `en` or `tt` 1, and none where not.
+  defp timing(1, elapsed), do: elapsed
+  defp timing(_on, _elapsed), do: 0
+
+  defp since_enabled(1, last, was), do: last - was
+  defp since_enabled(_en, _last, _was), do: 0
 
   defp behaviour(_name, false), do: :ok
 
@@ -1157,6 +1195,21 @@ defmodule Logex.ApiContractTest do
 
   defp reached(key, name),
     do: Process.put(key, MapSet.put(Process.get(key, MapSet.new()), name))
+
+  # A reach where its condition holds, and none where not (decision 264).
+  defp reached_when(true, key, name), do: reached(key, name)
+  defp reached_when(false, _key, _name), do: nil
+
+  # A coil's tag written with the power it receives, where the rung has one.
+  defp coil_written(nil, env, _powered), do: env
+  defp coil_written(coil, env, powered), do: Map.put(env, coil, bit(powered))
+
+  # A resource's cycles 10 ms apart, the first at 0 with no time passed.
+  defp cycle_elapsed(0), do: 0
+  defp cycle_elapsed(_now), do: 10
+
+  defp cycle_now(0), do: 10
+  defp cycle_now(now), do: now + 10
 
   # ---- OE-1: the walk with online edits -------------------------------------------------
 
@@ -1923,17 +1976,26 @@ defmodule Logex.ApiContractTest do
     {was, undone} = resume_undone(was, undo, switched, now, tag)
     resumed? = to != nil and was["en"] == 1 and was["last"] < now
     moved = Map.put(was, "pre", target)
-    assert later.env[tag] == if(resumed?, do: Map.put(moved, "last", now), else: moved)
+    assert later.env[tag] == resumed_to(resumed?, moved, now)
 
     entries =
       preset_entries(tag, pre, target, to, was) ++
-        undone ++ if(resumed?, do: [{:resumed, tag, now - was["last"]}], else: [])
+        undone ++ resumed_entry(resumed?, tag, now, was["last"])
 
     edit_reach(how, target != pre or how == :pre_frozen)
-    {entries ++ expected, Map.put(next, tag, {target, pre, if(resumed?, do: was["last"])})}
+    {entries ++ expected, Map.put(next, tag, {target, pre, resumed_last(resumed?, was["last"])})}
   end
 
   defp timer!(_not_a_timer, _timer, _later, _undo, acc), do: acc
+
+  defp resumed_to(true, moved, now), do: Map.put(moved, "last", now)
+  defp resumed_to(false, moved, _now), do: moved
+
+  defp resumed_entry(true, tag, now, last), do: [{:resumed, tag, now - last}]
+  defp resumed_entry(false, _tag, _now, _last), do: []
+
+  defp resumed_last(true, last), do: last
+  defp resumed_last(false, _last), do: nil
 
   # Where this edit's last switch resumed the timer and no scan has run since, its `last`,
   # still at `now`, goes back to the one that switch found; not after a restart, which
@@ -1973,12 +2035,10 @@ defmodule Logex.ApiContractTest do
   defp timers_of(program),
     do: for([_, tag] <- Regex.scan(~r/^var (\S+) ton$/m, program.source), do: tag)
 
-  defp ton_of(program, tag) do
-    case Regex.run(~r/(^|\s)ton #{tag} (\d+)/, program.source) do
-      [_, _, preset] -> String.to_integer(preset)
-      nil -> nil
-    end
-  end
+  defp ton_of(program, tag), do: preset_of(Regex.run(~r/(^|\s)ton #{tag} (\d+)/, program.source))
+
+  defp preset_of([_, _, preset]), do: String.to_integer(preset)
+  defp preset_of(nil), do: nil
 
   # Independent of the rules, a scan's timers against `ton` itself. Resume: no scan lets
   # a timer its program runs gain more than the scan's own time, as one caught up after a
@@ -2013,11 +2073,19 @@ defmodule Logex.ApiContractTest do
   defp forecast!(kind, {acc, pre}, was, timer, dt) do
     assert {was["dn"], acc, pre} == {dn_before(kind), acc_of(was), was["pre"]}
 
-    if timer["en"] == 1 and timer["pre"] == pre and (kind == :dn_rises or dt < pre - acc) do
-      assert timer["dn"] == 1 - dn_before(kind)
-      edit_reach(:dn_scan, true)
-    end
+    borne_out(
+      timer["en"] == 1 and timer["pre"] == pre and (kind == :dn_rises or dt < pre - acc),
+      kind,
+      timer
+    )
   end
+
+  defp borne_out(true, kind, timer) do
+    assert timer["dn"] == 1 - dn_before(kind)
+    edit_reach(:dn_scan, true)
+  end
+
+  defp borne_out(false, _kind, _timer), do: nil
 
   defp dn_before(:dn_drops), do: 1
   defp dn_before(:dn_rises), do: 0
@@ -2562,9 +2630,13 @@ defmodule Logex.ApiContractTest do
         runs: Map.update!(model.runs, task.name, &(&1 + 1))
     }
 
-    events = if missed > 0, do: [{:overlap, task.name, missed} | events], else: events
-    {model, events}
+    {model, overlapped(missed, task, events)}
   end
+
+  defp overlapped(missed, task, events) when missed > 0,
+    do: [{:overlap, task.name, missed} | events]
+
+  defp overlapped(_missed, _task, events), do: events
 
   defp model_scan(config, instance, task, {model, events}) do
     program = config.programs[instance.type]
@@ -2575,7 +2647,7 @@ defmodule Logex.ApiContractTest do
       for c <- mine,
           section.(c) == :var_input,
           into: %{},
-          do: {c.member, if(is_binary(c.to), do: model.globals[c.to], else: c.to)}
+          do: {c.member, connected_value(c.to, model)}
 
     state = model.states[instance.name]
 
@@ -2603,86 +2675,125 @@ defmodule Logex.ApiContractTest do
 
   defp bits_scanned(_type, _inputs, _outputs), do: :ok
 
+  # A connection's far end, a global by its name or a constant.
+  defp connected_value(global, model) when is_binary(global), do: model.globals[global]
+  defp connected_value(constant, _model), do: constant
+
   defp config_walk(_config, _runtime, _model, 0), do: :ok
 
-  defp config_walk(config, runtime, model, n) do
-    case config_operation(:rand.uniform(8), config, runtime) do
-      {:cycle, mistake?, elapsed, inputs} ->
-        case config_attempt(fn -> Runtime.cycle(runtime, elapsed, inputs) end) do
-          {:ok, {next, outputs, events}} ->
-            before = model
-            refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
-            samples!(config, runtime, inputs, events)
+  defp config_walk(config, runtime, model, n),
+    do:
+      config_stepped(
+        config_operation(:rand.uniform(8), config, runtime),
+        {config, runtime, model, n}
+      )
 
-            {model, expected_outputs, expected_events} =
-              model_cycle(config, model, elapsed, inputs)
+  defp config_stepped({:cycle, mistake?, elapsed, inputs}, {_config, runtime, _model, _n} = at),
+    do:
+      config_cycled(
+        config_attempt(fn -> Runtime.cycle(runtime, elapsed, inputs) end),
+        {mistake?, elapsed, inputs},
+        at
+      )
 
-            assert events == expected_events
-            assert outputs == expected_outputs
-            assert Runtime.overlaps(next) == model.overlaps
-            observe(config, {before, model}, events, elapsed)
-            check_model(config, next, model)
-            config_walk(config, next, model, n - 1)
+  defp config_stepped({:get, mistake?, path}, {config, runtime, model, n}) do
+    config_got(
+      config_attempt(fn -> Runtime.get!(runtime, path) end),
+      mistake?,
+      path,
+      {config, runtime, model}
+    )
 
-          :refused ->
-            assert mistake?,
-                   "a call without a host mistake was refused: #{inspect({elapsed, inputs})}"
+    config_walk(config, runtime, model, n - 1)
+  end
 
-            config_walk(config, runtime, model, n - 1)
-        end
+  defp config_stepped({:bad_runtime, call}, {config, runtime, model, n}) do
+    assert config_attempt(call) == :refused
+    config_walk(config, runtime, model, n - 1)
+  end
 
-      {:get, mistake?, path} ->
-        case config_attempt(fn -> Runtime.get!(runtime, path) end) do
-          {:ok, value} ->
-            refute mistake?, "a bad path was read: #{inspect(path)}"
-            assert value == model_get(config, model, path)
-            assert Runtime.get(runtime, path) == {:ok, value}
+  defp config_stepped({:start, spoiled}, {config, runtime, model, n}) do
+    assert config_attempt(fn -> Runtime.start(spoiled) end) == :refused
+    config_walk(config, runtime, model, n - 1)
+  end
 
-          :refused ->
-            assert mistake?, "a good path was refused: #{inspect(path)}"
-            refused_get(runtime, path)
-        end
+  defp config_stepped({:restart, mistake?, mode}, {_config, runtime, _model, _n} = at),
+    do:
+      config_restarted(
+        config_attempt(fn -> Runtime.restart(runtime, mode) end),
+        mistake?,
+        mode,
+        at
+      )
 
-        config_walk(config, runtime, model, n - 1)
+  defp config_cycled(
+         {:ok, {next, outputs, events}},
+         {mistake?, elapsed, inputs},
+         {config, runtime, model, n}
+       ) do
+    before = model
+    refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
+    samples!(config, runtime, inputs, events)
 
-      {:bad_runtime, call} ->
-        assert config_attempt(call) == :refused
-        config_walk(config, runtime, model, n - 1)
+    {model, expected_outputs, expected_events} =
+      model_cycle(config, model, elapsed, inputs)
 
-      {:start, spoiled} ->
-        assert config_attempt(fn -> Runtime.start(spoiled) end) == :refused
-        config_walk(config, runtime, model, n - 1)
+    assert events == expected_events
+    assert outputs == expected_outputs
+    assert Runtime.overlaps(next) == model.overlaps
+    observe(config, {before, model}, events, elapsed)
+    check_model(config, next, model)
+    config_walk(config, next, model, n - 1)
+  end
 
-      {:restart, mistake?, mode} ->
-        case config_attempt(fn -> Runtime.restart(runtime, mode) end) do
-          {:ok, next} ->
-            refute mistake?, "a bad restart was accepted: #{inspect(mode)}"
-            model = model_restart(config, model, mode)
-            config_reach(:restart, true)
+  defp config_cycled(:refused, {mistake?, elapsed, inputs}, {config, runtime, model, n}) do
+    assert mistake?,
+           "a call without a host mistake was refused: #{inspect({elapsed, inputs})}"
 
-            config_reach(
-              :image_kept,
-              Enum.any?(input_points(), &(Runtime.get!(next, &1) != 0))
-            )
+    config_walk(config, runtime, model, n - 1)
+  end
 
-            check_restarted(config, next, model)
-            Process.put(:config_samples, %{})
-            Process.put(:config_fresh, :restart)
-            config_walk(config, next, model, n - 1)
+  defp config_got({:ok, value}, mistake?, path, {config, runtime, model}) do
+    refute mistake?, "a bad path was read: #{inspect(path)}"
+    assert value == model_get(config, model, path)
+    assert Runtime.get(runtime, path) == {:ok, value}
+  end
 
-          :refused ->
-            assert mistake?, "a good restart was refused: #{inspect(mode)}"
-            config_walk(config, runtime, model, n - 1)
-        end
-    end
+  defp config_got(:refused, mistake?, path, {_config, runtime, _model}) do
+    assert mistake?, "a good path was refused: #{inspect(path)}"
+    refused_get(runtime, path)
+  end
+
+  defp config_restarted({:ok, next}, mistake?, mode, {config, _runtime, model, n}) do
+    refute mistake?, "a bad restart was accepted: #{inspect(mode)}"
+    model = model_restart(config, model, mode)
+    config_reach(:restart, true)
+
+    config_reach(
+      :image_kept,
+      Enum.any?(input_points(), &(Runtime.get!(next, &1) != 0))
+    )
+
+    check_restarted(config, next, model)
+    Process.put(:config_samples, %{})
+    Process.put(:config_fresh, :restart)
+    config_walk(config, next, model, n - 1)
+  end
+
+  defp config_restarted(:refused, mistake?, mode, {config, runtime, model, n}) do
+    assert mistake?, "a good restart was refused: #{inspect(mode)}"
+    config_walk(config, runtime, model, n - 1)
   end
 
   # Right after a restart, every task with an interval is due at once, so next_due_in/1 is
   # 0 if there is one and :infinity if not, however many event tasks there are (decision
   # 50), and every value is the model's.
+  defp due_in(nil, _now), do: :infinity
+  defp due_in(next, now), do: next - now
+
   defp check_restarted(config, runtime, model) do
     periodic? = Enum.any?(config.tasks, &(&1.interval != nil))
-    assert Runtime.next_due_in(runtime) == if(periodic?, do: 0, else: :infinity)
+    assert Runtime.next_due_in(runtime) == due_at_once(periodic?)
     assert Runtime.overlaps(runtime) == model.overlaps
     for {name, value} <- model.globals, do: assert(Runtime.get!(runtime, name) == value)
 
@@ -2694,9 +2805,12 @@ defmodule Logex.ApiContractTest do
 
   # Everything the scheduler's rules say a model must also show: the next due time, every
   # global, and every tag of every instance.
+  defp due_at_once(true), do: 0
+  defp due_at_once(false), do: :infinity
+
   defp check_model(config, runtime, model) do
     next = model.next |> Map.values() |> Enum.reject(&is_nil/1) |> Enum.min(fn -> nil end)
-    expected = if next == nil, do: :infinity, else: next - model.now
+    expected = due_in(next, model.now)
     assert Runtime.next_due_in(runtime) == expected
     # After a cycle no task is overdue: each it ran moved past now.
     assert expected == :infinity or expected > 0
@@ -2726,6 +2840,17 @@ defmodule Logex.ApiContractTest do
   # restart: a task with a single alone runs exactly on its trigger's rising edges, and one
   # with an interval too on every edge, never while its trigger stays 1, and at most once a
   # cycle; and the tasks run in priority order. Its reach is the walk's.
+  # A trigger's rising edge runs its task once, a held one never, and a task with a single
+  # alone exactly on its edges.
+  defp edge_ran!(true, runs, name), do: assert(runs == 1, "#{name} missed an edge")
+  defp edge_ran!(false, _runs, _name), do: nil
+
+  defp held_ran!(true, runs, name), do: assert(runs == 0, "#{name} ran under a held trigger")
+  defp held_ran!(false, _runs, _name), do: nil
+
+  defp single_ran!(nil, runs, edge?), do: assert(runs == bit(edge?))
+  defp single_ran!(_interval, _runs, _edge?), do: nil
+
   defp samples!(config, runtime, inputs, events) do
     seen = Process.get(:config_samples, %{})
     fresh = Process.get(:config_fresh, :start)
@@ -2744,9 +2869,9 @@ defmodule Logex.ApiContractTest do
       held? = Map.get(seen, task.name, 0) == 1 and samples[task.name] == 1
       runs = Enum.count(ran, &(&1 == task.name))
       assert runs <= 1, "#{task.name} ran #{runs} times in one cycle"
-      if edge?, do: assert(runs == 1, "#{task.name} missed an edge")
-      if held?, do: assert(runs == 0, "#{task.name} ran under a held trigger")
-      if task.interval == nil, do: assert(runs == if(edge?, do: 1, else: 0))
+      edge_ran!(edge?, runs, task.name)
+      held_ran!(held?, runs, task.name)
+      single_ran!(task.interval, runs, edge?)
       config_reach(:edge_event, edge? and task.interval == nil)
       config_reach(:edge_both, edge? and task.interval != nil)
       config_reach(:first_cycle_edge, edge? and fresh == :start)
@@ -2846,17 +2971,18 @@ defmodule Logex.ApiContractTest do
   defp config_reach(name, true), do: reached(:config_reach, name)
   defp config_reach(_name, false), do: :ok
 
-  defp model_get(config, model, path) do
-    case String.split(path, ".") do
-      [global] ->
-        model.globals[global]
+  defp model_get(config, model, path), do: model_got(String.split(path, "."), config, model)
 
-      [instance | members] ->
-        get_in(model.states[instance].env, members)
-        |> then(&if(&1 == nil, do: 0, else: &1))
-        |> tap(fn _ -> assert Enum.any?(config.instances, &(&1.name == instance)) end)
-    end
+  defp model_got([global], _config, model), do: model.globals[global]
+
+  defp model_got([instance | members], config, model) do
+    get_in(model.states[instance].env, members)
+    |> zero_for_nil()
+    |> tap(fn _ -> assert Enum.any?(config.instances, &(&1.name == instance)) end)
   end
+
+  defp zero_for_nil(nil), do: 0
+  defp zero_for_nil(value), do: value
 
   # get/2 gives the reason get!/2 raises for a path that is a string (decision 41), and
   # raises for one that is not, as get!/2 does.
@@ -4486,25 +4612,36 @@ defmodule Logex.ApiContractTest do
   end
 
   defp ce_task(was, t) do
-    single =
-      if was.single != t.single,
-        do: [
-          {:single, t.line,
-           "task `#{t.name}`'s single changes from #{ce_named(was.single)} to #{ce_named(t.single)}: a task's single changes only with a restart"}
-        ],
-        else: []
+    single = ce_single_changed(was.single != t.single, was, t)
 
     interval =
-      if was.single != nil and was.single == t.single and
-           was.interval == nil != (t.interval == nil),
-         do: [
-           {:event_interval, t.line,
-            "task `#{t.name}` has a single, and its interval is #{if t.interval, do: "added", else: "removed"}: an event task's interval is added or removed only with a restart"}
-         ],
-         else: []
+      ce_interval_changed(
+        was.single != nil and was.single == t.single and
+          was.interval == nil != (t.interval == nil),
+        t
+      )
 
     single ++ interval
   end
+
+  defp ce_single_changed(true, was, t),
+    do: [
+      {:single, t.line,
+       "task `#{t.name}`'s single changes from #{ce_named(was.single)} to #{ce_named(t.single)}: a task's single changes only with a restart"}
+    ]
+
+  defp ce_single_changed(false, _was, _t), do: []
+
+  defp ce_interval_changed(true, t),
+    do: [
+      {:event_interval, t.line,
+       "task `#{t.name}` has a single, and its interval is #{ce_added(t.interval)}: an event task's interval is added or removed only with a restart"}
+    ]
+
+  defp ce_interval_changed(false, _t), do: []
+
+  defp ce_added(nil), do: "removed"
+  defp ce_added(_interval), do: "added"
 
   defp ce_named(nil), do: "none"
   defp ce_named(name), do: "`#{name}`"
@@ -4518,63 +4655,55 @@ defmodule Logex.ApiContractTest do
     ]
 
   defp ce_global(was, g) do
-    typed =
-      if was.type != g.type,
-        do: [
-          {:global_type, g.line,
-           "`#{g.name}` is a #{was.type} global in the running configuration and a #{g.type} in the candidate: a global's type changes only with a restart"}
-        ],
-        else: []
-
-    located =
-      case {was.at, g.at} do
-        {same, same} ->
-          []
-
-        {nil, at} ->
-          [
-            {:located, g.line,
-             "`#{g.name}` has no location in the running configuration and is at `#{at}` in the candidate: located I/O changes only with a restart"}
-          ]
-
-        {at, nil} ->
-          [
-            {:located, g.line,
-             "`#{g.name}` is at `#{at}` in the running configuration and has no location in the candidate: located I/O changes only with a restart"}
-          ]
-
-        {a, b} ->
-          [
-            {:located, g.line,
-             "`#{g.name}` is at `#{a}` in the running configuration and at `#{b}` in the candidate: located I/O changes only with a restart"}
-          ]
-      end
-
+    typed = ce_global_retyped(was.type != g.type, was, g)
+    located = ce_relocated({was.at, g.at}, g)
     typed ++ located
   end
 
+  defp ce_global_retyped(true, was, g),
+    do: [
+      {:global_type, g.line,
+       "`#{g.name}` is a #{was.type} global in the running configuration and a #{g.type} in the candidate: a global's type changes only with a restart"}
+    ]
+
+  defp ce_global_retyped(false, _was, _g), do: []
+
+  defp ce_relocated({same, same}, _g), do: []
+
+  defp ce_relocated({nil, at}, g),
+    do: [
+      {:located, g.line,
+       "`#{g.name}` has no location in the running configuration and is at `#{at}` in the candidate: located I/O changes only with a restart"}
+    ]
+
+  defp ce_relocated({at, nil}, g),
+    do: [
+      {:located, g.line,
+       "`#{g.name}` is at `#{at}` in the running configuration and has no location in the candidate: located I/O changes only with a restart"}
+    ]
+
+  defp ce_relocated({a, b}, g),
+    do: [
+      {:located, g.line,
+       "`#{g.name}` is at `#{a}` in the running configuration and at `#{b}` in the candidate: located I/O changes only with a restart"}
+    ]
+
   defp ce_moved(%{type: type, task: was}, %{type: type, task: task} = i, {o, c, rekinded}) do
     {from, to} = {ce_place(was, o), ce_place(task, c)}
-
-    cond do
-      was in rekinded or task in rekinded ->
-        []
-
-      match?({{:untimed, _}, {:untimed, _}}, {from, to}) ->
-        []
-
-      from == to ->
-        []
-
-      true ->
-        [
-          {:moved, i.line,
-           "`#{i.name}` runs #{ce_with(from)} in the running configuration and #{ce_with(to)} in the candidate: an instance moves to another task only with a restart"}
-        ]
-    end
+    ce_moved_to(was in rekinded or task in rekinded, {from, to}, i)
   end
 
   defp ce_moved(_was, _instance, _places), do: []
+
+  defp ce_moved_to(true, _places, _i), do: []
+  defp ce_moved_to(false, {{:untimed, _}, {:untimed, _}}, _i), do: []
+  defp ce_moved_to(false, {same, same}, _i), do: []
+
+  defp ce_moved_to(false, {from, to}, i),
+    do: [
+      {:moved, i.line,
+       "`#{i.name}` runs #{ce_with(from)} in the running configuration and #{ce_with(to)} in the candidate: an instance moves to another task only with a restart"}
+    ]
 
   defp ce_place(nil, untimed), do: {:untimed, untimed}
   defp ce_place(untimed, untimed), do: {:untimed, untimed}
@@ -4678,13 +4807,9 @@ defmodule Logex.ApiContractTest do
                 )
 
           rung = ce_ons_rung(rt.config.programs[later.type])
+          ce_pulsed!(later.env["q"] == 1 and rung != nil, onsp, key, {rung, name, before})
 
-          if later.env["q"] == 1 and rung != nil do
-            assert Map.get(onsp, key) == {rung, 0}, "#{name}'s one-shot pulsed"
-            ce_reach(:pulse_after_switch, before.switched)
-          end
-
-          {Map.put(prev, key, now), Map.put(onsp, key, rung && {rung, later.env["c"]})}
+          {Map.put(prev, key, now), Map.put(onsp, key, ce_ons_last(rung, later.env["c"]))}
 
         _event, acc ->
           acc
@@ -4703,71 +4828,94 @@ defmodule Logex.ApiContractTest do
   defp ce_ons_rung(%{source: source}),
     do: Enum.find(String.split(source, "\n"), &String.contains?(&1, " ons "))
 
+  # A one-shot that passes power passes it only where its state's last scan ran the same
+  # rung with its condition 0.
+  defp ce_pulsed!(true, onsp, key, {rung, name, before}) do
+    assert Map.get(onsp, key) == {rung, 0}, "#{name}'s one-shot pulsed"
+    ce_reach(:pulse_after_switch, before.switched)
+  end
+
+  defp ce_pulsed!(false, _onsp, _key, _seen), do: nil
+
+  defp ce_ons_last(nil, _c), do: nil
+  defp ce_ons_last(rung, c), do: {rung, c}
+
   defp ce_accept(w) do
     w = %{w | spec: ce_running_spec(w)}
     spec = ce_candidate(w.spec)
-
-    case ce_config(spec) do
-      {:ok, candidate} -> ce_accepted(candidate, spec, w)
-      {:error, _diagnostics} -> w
-    end
+    ce_configured(ce_config(spec), spec, w)
   end
+
+  defp ce_configured({:ok, candidate}, spec, w), do: ce_accepted(candidate, spec, w)
+  defp ce_configured({:error, _diagnostics}, _spec, w), do: w
 
   # The draws of the configuration the resource runs: an open edit's candidate under test,
   # its original otherwise.
   defp ce_running_spec(%{e: nil, spec: spec}), do: spec
 
   defp ce_running_spec(%{e: edit, c: {_candidate, spec}} = w),
-    do: if(ConfigEdit.stage(edit) == :testing, do: spec, else: w.spec)
+    do: ce_spec_running(ConfigEdit.stage(edit), spec, w.spec)
+
+  defp ce_spec_running(:testing, candidate, _original), do: candidate
+  defp ce_spec_running(_stage, _candidate, original), do: original
 
   defp ce_accepted(candidate, spec, w) do
     predicted = ce_predicted(w.rt.config, candidate)
 
-    case ce_attempt(fn -> ConfigEdit.accept(w.rt, candidate) end) do
-      {:ok, {:error, diagnostics}} ->
-        assert predicted != []
-
-        assert Enum.map(diagnostics, &{&1.line, &1.message}) ==
-                 Enum.map(predicted, &{elem(&1, 1), elem(&1, 2)})
-
-        for {kind, _, _} <- predicted, do: reached(:ce_diagnosed, kind)
-        w
-
-      {:ok, {:ok, edit, forecast}} ->
-        assert predicted == [], inspect(predicted)
-        ce_report!(forecast)
-        # The forecast is the report a test taken now gives.
-        {_edit, _rt, report} = ConfigEdit.test(edit, w.rt)
-        assert report == forecast
-        ce_reach(:forecast)
-
-        retyped =
-          for i <- candidate.instances,
-              o <- w.rt.config.instances,
-              o.name == i.name,
-              o.type != i.type,
-              o.task != i.task,
-              do: i
-
-        ce_reach(:retyped_elsewhere, retyped != [])
-
-        # Decision 129: `with main` added or taken away, an instance kept on its type.
-        ce_reach(
-          :with_main,
-          Enum.any?(candidate.instances, fn i ->
-            Enum.any?(
-              w.rt.config.instances,
-              &(&1.name == i.name and &1.type == i.type and &1.task != i.task and
-                  Enum.sort([&1.task, i.task]) == Enum.sort([nil, "main"]))
-            )
-          end)
-        )
-
-        ce_reach(:superseded, w.e != nil)
-        sup = if w.e, do: [w.e | w.sup], else: w.sup
-        %{w | e: edit, c: {candidate, spec}, o: w.rt.config, round: nil, sup: sup}
-    end
+    ce_accept_answered(
+      ce_attempt(fn -> ConfigEdit.accept(w.rt, candidate) end),
+      predicted,
+      {candidate, spec, w}
+    )
   end
+
+  defp ce_accept_answered({:ok, {:error, diagnostics}}, predicted, {_candidate, _spec, w}) do
+    assert predicted != []
+
+    assert Enum.map(diagnostics, &{&1.line, &1.message}) ==
+             Enum.map(predicted, &{elem(&1, 1), elem(&1, 2)})
+
+    for {kind, _, _} <- predicted, do: reached(:ce_diagnosed, kind)
+    w
+  end
+
+  defp ce_accept_answered({:ok, {:ok, edit, forecast}}, predicted, {candidate, spec, w}) do
+    assert predicted == [], inspect(predicted)
+    ce_report!(forecast)
+    # The forecast is the report a test taken now gives.
+    {_edit, _rt, report} = ConfigEdit.test(edit, w.rt)
+    assert report == forecast
+    ce_reach(:forecast)
+
+    retyped =
+      for i <- candidate.instances,
+          o <- w.rt.config.instances,
+          o.name == i.name,
+          o.type != i.type,
+          o.task != i.task,
+          do: i
+
+    ce_reach(:retyped_elsewhere, retyped != [])
+
+    # Decision 129: `with main` added or taken away, an instance kept on its type.
+    ce_reach(
+      :with_main,
+      Enum.any?(candidate.instances, fn i ->
+        Enum.any?(
+          w.rt.config.instances,
+          &(&1.name == i.name and &1.type == i.type and &1.task != i.task and
+              Enum.sort([&1.task, i.task]) == Enum.sort([nil, "main"]))
+        )
+      end)
+    )
+
+    ce_reach(:superseded, w.e != nil)
+    sup = ce_superseded(w.e, w.sup)
+    %{w | e: edit, c: {candidate, spec}, o: w.rt.config, round: nil, sup: sup}
+  end
+
+  defp ce_superseded(nil, sup), do: sup
+  defp ce_superseded(edit, sup), do: [edit | sup]
 
   defp ce_report!(report) do
     assert report == Enum.sort(report)
@@ -4787,8 +4935,7 @@ defmodule Logex.ApiContractTest do
     cancel: [:accepted, :untested]
   }
 
-  defp ce_step(:back, w),
-    do: ce_step(if(ConfigEdit.stage(w.e) == :testing, do: :untest, else: :test), w)
+  defp ce_step(:back, w), do: ce_step(ce_back(ConfigEdit.stage(w.e)), w)
 
   defp ce_step(step, w) do
     stage = ConfigEdit.stage(w.e)
@@ -4805,12 +4952,12 @@ defmodule Logex.ApiContractTest do
   defp ce_stepped(step, stage, true, {:ok, {next, rt, report}}, w)
        when step in [:test, :untest] do
     ce_report!(report)
-    assert ConfigEdit.stage(next) == if(step == :test, do: :testing, else: :untested)
+    assert ConfigEdit.stage(next) == ce_stage_after(step)
     assert rt.config == ConfigEdit.running(next)
     ce_unmoved!(w.rt, rt, report)
     ce_rebuilt!(w.rt, rt, report, :switch)
     ce_restated!(w.rt, rt, report, {:switch, step == :test and stage == :accepted})
-    ce_one_copy!(rt, if(step == :test, do: ConfigEdit.running(w.e), else: elem(w.c, 0)))
+    ce_one_copy!(rt, ce_switched_to(step, w))
     ce_round!(step, w, rt, report)
     ce_reach(:model_after_switch)
     _ = stage
@@ -4823,7 +4970,7 @@ defmodule Logex.ApiContractTest do
         stale: [w.e | w.stale],
         passed: w.sup ++ w.passed,
         sup: [],
-        round: if(step == :test, do: {w.rt, report}, else: nil),
+        round: ce_round_open(step, w.rt, report),
         resumed: Enum.any?(report, &match?({:resumed, _, _}, &1))
     }
   end
@@ -4831,34 +4978,14 @@ defmodule Logex.ApiContractTest do
   defp ce_stepped(step, stage, true, {:ok, {kept, rt, report}}, w) do
     ce_report!(report)
     ce_unmoved!(w.rt, rt, report)
-
-    case {step, stage} do
-      {:cancel, :accepted} ->
-        assert report == []
-        assert %{rt | generation: w.rt.generation} == w.rt
-        ce_reach(:cancelled_accepted)
-
-      _ ->
-        ce_rebuilt!(w.rt, rt, report, :prune)
-
-        ce_restated!(
-          w.rt,
-          rt,
-          report,
-          {:prune, if(step == :assemble, do: w.o, else: elem(w.c, 0))}
-        )
-
-        assert rt.aside == %{}
-        ce_reach(if(step == :assemble, do: :assembled, else: :cancelled_untested))
-        ce_reach(:model_after_prune)
-    end
+    ce_pruned!({step, stage}, {w, rt, report})
 
     # Cancel from accept leaves what a superseded edit set aside, which no configuration
     # here runs, for the next edit's first test to drop (decision 66).
-    ce_one_copy!(rt, if(stage == :accepted, do: nil, else: rt.config))
+    ce_one_copy!(rt, ce_left_running(stage, rt))
     assert rt.config == kept
     {_, spec} = w.c
-    spec = if step == :assemble, do: spec, else: w.spec
+    spec = ce_spec_kept(step, spec, w.spec)
 
     %{
       w
@@ -4873,6 +5000,44 @@ defmodule Logex.ApiContractTest do
         round: nil
     }
   end
+
+  defp ce_back(:testing), do: :untest
+  defp ce_back(_stage), do: :test
+
+  defp ce_stage_after(:test), do: :testing
+  defp ce_stage_after(:untest), do: :untested
+
+  defp ce_switched_to(:test, w), do: ConfigEdit.running(w.e)
+  defp ce_switched_to(:untest, w), do: elem(w.c, 0)
+
+  defp ce_round_open(:test, rt, report), do: {rt, report}
+  defp ce_round_open(:untest, _rt, _report), do: nil
+
+  defp ce_pruned!({:cancel, :accepted}, {w, rt, report}) do
+    assert report == []
+    assert %{rt | generation: w.rt.generation} == w.rt
+    ce_reach(:cancelled_accepted)
+  end
+
+  defp ce_pruned!({step, _stage}, {w, rt, report}) do
+    ce_rebuilt!(w.rt, rt, report, :prune)
+    ce_restated!(w.rt, rt, report, {:prune, ce_pruned_to(step, w)})
+    assert rt.aside == %{}
+    ce_reach(ce_pruned_reach(step))
+    ce_reach(:model_after_prune)
+  end
+
+  defp ce_pruned_to(:assemble, w), do: w.o
+  defp ce_pruned_to(_cancel, w), do: elem(w.c, 0)
+
+  defp ce_pruned_reach(:assemble), do: :assembled
+  defp ce_pruned_reach(_cancel), do: :cancelled_untested
+
+  defp ce_left_running(:accepted, _rt), do: nil
+  defp ce_left_running(_stage, rt), do: rt.config
+
+  defp ce_spec_kept(:assemble, candidate, _original), do: candidate
+  defp ce_spec_kept(_cancel, _candidate, original), do: original
 
   # Each report kind of the configuration's, against its rule restated from the two
   # configurations' text and the resource before the step; and what a step leaves in every
@@ -4935,11 +5100,7 @@ defmodule Logex.ApiContractTest do
     started =
       for i <- to.instances,
           i.name not in kept,
-          do:
-            {if(match?(%{type: t} when t == i.type, before.aside[i.name]),
-               do: :instance_back,
-               else: :instance_added
-             ), i.name, i.type}
+          do: {ce_started_kind(before.aside[i.name], i.type), i.name, i.type}
 
     shared =
       for name <- kept,
@@ -5012,18 +5173,7 @@ defmodule Logex.ApiContractTest do
     for {:instance_added, name, _} <- report,
         do: assert(later.instances[name] == fresh.instances[name], name)
 
-    if first? do
-      for i <- to.instances,
-          i.name not in kept,
-          do: assert(later.instances[i.name] == fresh.instances[i.name], i.name)
-
-      for g <- to.globals,
-          not Map.has_key?(old, g.name),
-          do: assert(later.globals[g.name] == fresh.globals[g.name], g.name)
-
-      assert Enum.sort(Map.keys(later.aside)) ==
-               Enum.sort(for i <- from.instances, i.name not in kept, do: i.name)
-    end
+    ce_first_fresh!(first?, {from, to, old, kept}, later, fresh)
 
     # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
     # timing; and, but at the first test, no start over a value the state already holds.
@@ -5135,6 +5285,27 @@ defmodule Logex.ApiContractTest do
   end
 
   # Decision 62, restated: the names both have on a task, or of the tasks, in another order.
+  defp ce_started_kind(%{type: type}, type), do: :instance_back
+  defp ce_started_kind(_aside, _type), do: :instance_added
+
+  defp ce_first_fresh!(false, _configs, _later, _fresh), do: nil
+
+  defp ce_first_fresh!(true, {from, to, old, kept}, later, fresh) do
+    for i <- to.instances,
+        i.name not in kept,
+        do: assert(later.instances[i.name] == fresh.instances[i.name], i.name)
+
+    for g <- to.globals,
+        not Map.has_key?(old, g.name),
+        do: assert(later.globals[g.name] == fresh.globals[g.name], g.name)
+
+    assert Enum.sort(Map.keys(later.aside)) ==
+             Enum.sort(for i <- from.instances, i.name not in kept, do: i.name)
+  end
+
+  defp ce_order_of(true, _task, untimed), do: untimed
+  defp ce_order_of(false, task, _untimed), do: task
+
   defp ce_orders(from, to) do
     # Decision 129: the untimed instances, with no task or `with` the continuous task, are
     # one order, under its name or :none.
@@ -5143,7 +5314,7 @@ defmodule Logex.ApiContractTest do
 
       Enum.group_by(
         config.instances,
-        &if(&1.task in [nil, untimed], do: untimed, else: &1.task),
+        &ce_order_of(&1.task in [nil, untimed], &1.task, untimed),
         & &1.name
       )
     end
@@ -5223,19 +5394,8 @@ defmodule Logex.ApiContractTest do
       |> Map.merge(Map.take(before.instances, stopped))
 
     {instances, globals} =
-      Enum.reduce(report, {instances, base_globals}, fn {kind, name, value} = entry,
-                                                        {instances, globals} ->
-        case String.split(to_string(name), ".", parts: 2) do
-          [instance, path] ->
-            {Map.update!(
-               instances,
-               instance,
-               &%{&1 | env: ce_write({kind, path, value}, &1.env)}
-             ), globals}
-
-          [_global] ->
-            {instances, ce_global_write(entry, globals)}
-        end
+      Enum.reduce(report, {instances, base_globals}, fn entry, acc ->
+        ce_entry_written(String.split(to_string(elem(entry, 1)), ".", parts: 2), entry, acc)
       end)
 
     assert later.globals == globals
@@ -5251,23 +5411,35 @@ defmodule Logex.ApiContractTest do
       assert state.now == later.now
     end
 
-    if kind == :switch do
-      kept = Map.keys(later.instances) -- (added ++ back)
+    ce_switched_kept!(kind, later, report, added ++ back)
+  end
 
-      for name <- kept do
-        state = later.instances[name]
-        assert state.switched
+  defp ce_entry_written([instance, path], {kind, _name, value}, {instances, globals}),
+    do:
+      {Map.update!(instances, instance, &%{&1 | env: ce_write({kind, path, value}, &1.env)}),
+       globals}
 
-        bits =
-          for {:ons_blocked, path, _} <- report,
-              [^name, bit] <- [String.split(path, ".", parts: 2)],
-              do: bit
+  defp ce_entry_written([_global], entry, {instances, globals}),
+    do: {instances, ce_global_write(entry, globals)}
 
-        assert state.ons_blocked == bits
-        ce_reach(:blocked_inside, Enum.any?(bits, &String.contains?(&1, ".")))
-      end
+  defp ce_switched_kept!(:switch, later, report, started) do
+    kept = Map.keys(later.instances) -- started
+
+    for name <- kept do
+      state = later.instances[name]
+      assert state.switched
+
+      bits =
+        for {:ons_blocked, path, _} <- report,
+            [^name, bit] <- [String.split(path, ".", parts: 2)],
+            do: bit
+
+      assert state.ons_blocked == bits
+      ce_reach(:blocked_inside, Enum.any?(bits, &String.contains?(&1, ".")))
     end
   end
+
+  defp ce_switched_kept!(_prune, _later, _report, _started), do: nil
 
   defp ce_write({kind, path, value}, env) when kind in [:added, :input, :left],
     do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
@@ -5281,14 +5453,13 @@ defmodule Logex.ApiContractTest do
   defp ce_write({:resume_undone, path, gap}, env),
     do: update_in(env, String.split(path, ".") ++ ["last"], &(&1 - gap))
 
-  defp ce_write({kind, path, _value}, env) when kind in [:pruned, :joined] do
-    case Enum.split(String.split(path, "."), -1) do
-      {[], [leaf]} -> Map.delete(env, leaf)
-      {parent, [leaf]} -> update_in(env, parent, &Map.delete(&1, leaf))
-    end
-  end
+  defp ce_write({kind, path, _value}, env) when kind in [:pruned, :joined],
+    do: ce_deleted(Enum.split(String.split(path, "."), -1), env)
 
   defp ce_write(_fact, env), do: env
+
+  defp ce_deleted({[], [leaf]}, env), do: Map.delete(env, leaf)
+  defp ce_deleted({parent, [leaf]}, env), do: update_in(env, parent, &Map.delete(&1, leaf))
 
   defp ce_global_write({:added, name, value}, globals), do: Map.put(globals, name, value)
   defp ce_global_write({:pruned, name, _value}, globals), do: Map.delete(globals, name)
@@ -5344,8 +5515,7 @@ defmodule Logex.ApiContractTest do
 
       assert after_env == expected
 
-      unless state.first,
-        do: assert(later.instances[name].ons_blocked == state.ons_blocked or name in back)
+      ce_blocks_kept!(state.first, later.instances[name], state, name in back)
 
       # The rest of the state: its type and `first` never touched; its `now` the
       # resource's, which a switch gives a kept instance and one back from aside (decisions
@@ -5382,21 +5552,27 @@ defmodule Logex.ApiContractTest do
 
   defp ce_round!(_step, _w, _later, _report), do: :ok
 
+  defp ce_blocks_kept!(true, _later, _state, _back?), do: nil
+
+  defp ce_blocks_kept!(false, later, state, back?),
+    do: assert(later.ons_blocked == state.ons_blocked or back?)
+
   defp ce_back_again(false, state, _now), do: state
 
   defp ce_back_again(true, state, now) do
     env =
       Enum.reduce([["t1"], ["b1", "i1", "t"]], state.env, fn path, env ->
-        times = ce_times(state.type, path)
-
-        case get_in(env, path) do
-          %{^times => 1, "last" => last} when last < now -> put_in(env, path ++ ["last"], now)
-          _ -> env
-        end
+        ce_timing_resumed(get_in(env, path), ce_times(state.type, path), {env, path, now})
       end)
 
     %{state | env: env, now: now}
   end
+
+  defp ce_timing_resumed(timer, times, {env, path, now})
+       when :erlang.map_get(times, timer) == 1 and :erlang.map_get("last", timer) < now,
+       do: put_in(env, path ++ ["last"], now)
+
+  defp ce_timing_resumed(_timer, _times, {env, _path, _now}), do: env
 
   # The member whose 1 says a timer is timing, by its kind (M3-2): a `tof` in its delay and
   # a `tp` in its pulse, `.tt`, whatever the rung; a `ton` and an `rto`, `.en`, the rung's.
@@ -5557,11 +5733,7 @@ defmodule Logex.ApiContractTest do
   end
 
   defp ce_model_plan({true, _come?, _sample}, task, index, model) do
-    model =
-      if task.interval && model.next[task.name] <= model.now,
-        do: ce_model_skip(task, model),
-        else: model
-
+    model = ce_due_skipped(task.interval, task, model)
     {{task, index, model.now}, model}
   end
 
@@ -5572,6 +5744,14 @@ defmodule Logex.ApiContractTest do
 
   defp ce_model_plan({false, false, _sample}, _task, _index, model), do: {nil, model}
 
+  defp ce_due_skipped(nil, _task, model), do: model
+
+  defp ce_due_skipped(_interval, task, model),
+    do: ce_skipped_if(model.next[task.name] <= model.now, task, model)
+
+  defp ce_skipped_if(true, task, model), do: ce_model_skip(task, model)
+  defp ce_skipped_if(false, _task, model), do: model
+
   defp ce_phase_after(model, task),
     do:
       model.next[task.name] +
@@ -5580,22 +5760,27 @@ defmodule Logex.ApiContractTest do
   defp ce_model_skip(task, model),
     do: %{model | next: Map.put(model.next, task.name, ce_phase_after(model, task))}
 
-  defp ce_model_run(task, at, model, events) do
-    case task.interval != nil and at == model.next[task.name] and at <= model.now do
-      false ->
-        {model, events}
+  defp ce_model_run(task, at, model, events),
+    do:
+      ce_model_ran(
+        task.interval != nil and at == model.next[task.name] and at <= model.now,
+        {task, at},
+        model,
+        events
+      )
 
-      true ->
-        missed = div(model.now - at, task.interval)
+  defp ce_model_ran(false, _run, model, events), do: {model, events}
 
-        model = %{
-          model
-          | next: Map.put(model.next, task.name, ce_phase_after(model, task)),
-            overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed))
-        }
+  defp ce_model_ran(true, {task, at}, model, events) do
+    missed = div(model.now - at, task.interval)
 
-        {model, if(missed > 0, do: [{:overlap, task.name, missed} | events], else: events)}
-    end
+    model = %{
+      model
+      | next: Map.put(model.next, task.name, ce_phase_after(model, task)),
+        overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed))
+    }
+
+    {model, overlapped(missed, task, events)}
   end
 
   defp ce_model_scan(config, instance, task, {model, events}) do
@@ -5608,7 +5793,7 @@ defmodule Logex.ApiContractTest do
       for c <- mine,
           section.(c) == :var_input,
           into: %{},
-          do: {c.member, if(is_binary(c.to), do: model.globals[c.to], else: c.to)}
+          do: {c.member, connected_value(c.to, model)}
 
     state = model.states[instance.name]
     state = %{state | env: Map.merge(state.env, Map.take(model.globals, externals))}
@@ -5904,11 +6089,15 @@ defmodule Logex.ApiContractTest do
   defp ct_kinds(spec),
     do:
       Map.new(
-        if(spec.u, do: [{"u", {spec.kind_u, spec.u.p}}], else: []) ++
-          if(spec.d, do: [{"d", {"ctd", spec.d.p}}], else: []) ++
-          if(spec.b, do: [{"b", {"ctud", spec.b.p}}], else: []) ++
-          if(spec.s, do: [{"s1.c", {"ctu", ct_body_preset(spec.s)}}], else: [])
+        ct_kind("u", spec.u, &{spec.kind_u, &1.p}) ++
+          ct_kind("d", spec.d, &{"ctd", &1.p}) ++
+          ct_kind("b", spec.b, &{"ctud", &1.p}) ++
+          ct_kind("s1.c", spec.s, &{"ctu", ct_body_preset(&1)})
       )
+
+  # A counter the drawn program holds, by its kind and preset; none where it holds none.
+  defp ct_kind(_name, drawn, _kind) when drawn in [nil, false], do: []
+  defp ct_kind(name, drawn, kind), do: [{name, kind.(drawn)}]
 
   defp ct_body_preset(2), do: 4
   defp ct_body_preset(_version), do: 2
@@ -6000,15 +6189,18 @@ defmodule Logex.ApiContractTest do
 
   defp ct_finish(true, step, w) do
     {:ok, {program, s, _report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
-    spec = if step == :assemble, do: w.c, else: w.spec
+    spec = ct_spec_kept(step, w)
     %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
   end
+
+  defp ct_spec_kept(:assemble, w), do: w.c
+  defp ct_spec_kept(_cancel, w), do: w.spec
 
   defp ct_switch(false, _step, w), do: w
 
   defp ct_switch(true, step, w) do
     first? = Edit.stage(w.e) == :accepted
-    {from, to} = if step == :test, do: {w.spec, w.c}, else: {w.c, w.spec}
+    {from, to} = ct_sides(step, w)
     {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
 
     # The writes the report lists rebuild the state.
@@ -6022,42 +6214,26 @@ defmodule Logex.ApiContractTest do
       # A counter both programs declare, of one kind, keeps its count and its memories, and
       # at a first test its `pv` moves to the new preset where logic left the old, or is
       # kept (decisions 23 and 27).
-      if match?({^kind, _}, was) and is_map(old) do
-        assert Map.delete(now, "pv") == Map.delete(old, "pv")
-        ct_reached(:kept_across)
-
-        if first? do
-          {_kind, from_p} = was
-          assert now["pv"] == if(old["pv"] == from_p, do: preset, else: old["pv"])
-          if old["pv"] != now["pv"], do: ct_reached(:preset_moved)
-          if old["pv"] == now["pv"] and now["pv"] != preset, do: ct_reached(:preset_kept)
-        end
-      end
+      ct_kept!(match?({^kind, _}, was) and is_map(old), {now, old}, {first?, was, preset})
     end
 
     blocked = for {:ons_blocked, path, _value} <- report, do: path
-    if blocked != [], do: ct_reached(:edge_blocked)
+    ct_reached_when(blocked != [], :edge_blocked)
 
     # A test then an untest with no scan between gives the counters back.
-    if step == :untest and w.round != nil do
-      for {name, _} <- ct_kinds(to), is_map(ct_at(w.round, name)) do
-        assert ct_at(s.env, name) == ct_at(w.round, name)
-      end
-
-      ct_reached(:round_trip)
-    end
+    ct_round_trip!(step == :untest and w.round != nil, to, s, w)
 
     forecast =
       for {kind, name, {cv, pv}} <- report,
           kind in [:dn_drops, :dn_rises],
           do: {kind, name, cv, pv}
 
-    round = if step == :test, do: w.s.env, else: nil
+    round = ct_round_of(step, w.s.env)
     blocked = Enum.uniq(blocked ++ w.blocked)
 
     # A restart with no scan since leaves every memory as a fresh instance's, so an edge a
     # counter sees after it is a real one, whatever its rung's text was.
-    last = if w.restarted, do: Map.merge(w.last, ct_texts(to)), else: w.last
+    last = ct_last_after(w.restarted, w.last, to)
 
     %{w | e: edit, s: s, clean: %{}, forecast: forecast, round: round, blocked: blocked}
     |> Map.put(:last, last)
@@ -6098,6 +6274,47 @@ defmodule Logex.ApiContractTest do
   # its rung's text with no switch since; one a switch came before counts no edge, unless
   # it last ran under the same text, in which case it may count it, the edit's block list
   # being the implementation's and no part of this oracle.
+  defp ct_sides(:test, w), do: {w.spec, w.c}
+  defp ct_sides(_untest, w), do: {w.c, w.spec}
+
+  defp ct_kept!(false, _counters, _preset), do: nil
+
+  defp ct_kept!(true, {now, old}, {first?, was, preset}) do
+    assert Map.delete(now, "pv") == Map.delete(old, "pv")
+    ct_reached(:kept_across)
+    ct_preset!(first?, {now, old}, was, preset)
+  end
+
+  defp ct_preset!(false, _counters, _was, _preset), do: nil
+
+  defp ct_preset!(true, {now, old}, {_kind, from_p}, preset) do
+    assert now["pv"] == ct_moved_pv(old["pv"] == from_p, preset, old["pv"])
+    ct_reached_when(old["pv"] != now["pv"], :preset_moved)
+    ct_reached_when(old["pv"] == now["pv"] and now["pv"] != preset, :preset_kept)
+  end
+
+  defp ct_moved_pv(true, preset, _old), do: preset
+  defp ct_moved_pv(false, _preset, old), do: old
+
+  defp ct_round_trip!(false, _to, _s, _w), do: nil
+
+  defp ct_round_trip!(true, to, s, w) do
+    for {name, _} <- ct_kinds(to), is_map(ct_at(w.round, name)) do
+      assert ct_at(s.env, name) == ct_at(w.round, name)
+    end
+
+    ct_reached(:round_trip)
+  end
+
+  defp ct_round_of(:test, env), do: env
+  defp ct_round_of(_untest, _env), do: nil
+
+  defp ct_last_after(true, last, to), do: Map.merge(last, ct_texts(to))
+  defp ct_last_after(_restarted, last, _to), do: last
+
+  defp ct_reached_when(true, name), do: ct_reached(name)
+  defp ct_reached_when(false, _name), do: nil
+
   defp ct_check_scan(w, spec, before, later) do
     image = Map.take(before.env, @ct_inputs)
     texts = ct_texts(spec)
@@ -6121,18 +6338,18 @@ defmodule Logex.ApiContractTest do
     assert matching != [], "no IEC reading gives #{inspect(got)} from #{inspect(start)}"
     notes = hd(matching)
     Enum.each(for(note when is_atom(note) <- notes, do: note), &ct_reached/1)
-    if Enum.count(notes, &(&1 == {:side, "b"})) == 2, do: ct_reached(:both_edges)
+    ct_reached_when(Enum.count(notes, &(&1 == {:side, "b"})) == 2, :both_edges)
 
     # Each forecast holds at the next run, where the count and the preset did not move.
     for {kind, name, cv, pv} <- w.forecast,
         {name, :up} in ran or {name, :down} in ran,
         got[name]["cv"] == cv and got[name]["pv"] == pv do
       done = Map.get(got[name], "qu", got[name]["q"])
-      assert done == if(kind == :dn_drops, do: 0, else: 1)
-      ct_reached(if kind == :dn_drops, do: :forecast_drops, else: :forecast_rises)
+      assert done == ct_forecast_done(kind)
+      ct_reached(ct_forecast_reach(kind))
     end
 
-    if before.first and Enum.any?(ran, &ct_cond(&1, spec, image)), do: ct_reached(:first_held)
+    ct_reached_when(before.first and Enum.any?(ran, &ct_cond(&1, spec, image)), :first_held)
 
     forecast =
       Enum.reject(w.forecast, fn {_k, name, _cv, _pv} ->
@@ -6198,22 +6415,22 @@ defmodule Logex.ApiContractTest do
 
   # One side, as IEC's body runs it: the edge counted where allowed, and, where only a
   # switch's block decides it, both readings.
+  defp ct_forecast_done(:dn_drops), do: 0
+  defp ct_forecast_done(:dn_rises), do: 1
+
+  defp ct_forecast_reach(:dn_drops), do: :forecast_drops
+  defp ct_forecast_reach(:dn_rises), do: :forecast_rises
+
   defp ct_side({counters, notes}, counter, {kind, side, cond}, ctx) do
     key = {counter, side}
     clean? = Map.get(ctx.w.clean, key, false)
 
-    allowed =
-      cond do
-        ctx.first -> [false]
-        clean? -> [true]
-        Map.get(ctx.w.last, key) == ctx.texts[key] -> [false, true]
-        true -> [false]
-      end
+    allowed = ct_allowed(ctx.first, clean?, Map.get(ctx.w.last, key) == ctx.texts[key])
 
     c = counters[counter]
-    mem = if side == :up, do: "cu", else: "cd"
+    mem = ct_memory(side)
     edge? = cond and c[mem] == 0
-    held = if edge? and c["r"] == 1 and kind != "ctd", do: [:reset_held], else: []
+    held = ct_reset_held(edge? and c["r"] == 1 and kind != "ctd")
 
     for ok <- Enum.uniq(allowed) do
       {c, counted} = ct_iec({kind, Map.fetch!(ctx.widths, counter)}, side, c, edge? and ok, cond)
@@ -6228,8 +6445,7 @@ defmodule Logex.ApiContractTest do
   defp ct_why([:counted | _], true, false, _key, _ctx), do: [:edge_kept]
 
   defp ct_why([:counted | _], true, true, {counter, side}, ctx),
-    do:
-      if("#{counter}.#{ct_memory(side)}" in ctx.w.blocked, do: [:blocked_counted_later], else: [])
+    do: ct_counted_later("#{counter}.#{ct_memory(side)}" in ctx.w.blocked)
 
   defp ct_why(_counted, _ok, _clean?, _key, _ctx), do: []
 
@@ -6244,21 +6460,53 @@ defmodule Logex.ApiContractTest do
     un = Map.get(c, "un", 0)
 
     {cv, ov, un, notes} =
-      cond do
-        kind != "ctd" and c["r"] == 1 -> {0, 0, 0, []}
-        kind != "ctu" and c["ld"] == 1 -> {c["pv"], 0, 0, [:loaded]}
-        edge and side == :up and c["cv"] == max -> {c["cv"], 1, un, [:overflow]}
-        edge and side == :up -> {c["cv"] + 1, ov, un, [:counted | ct_in(width)]}
-        edge and side == :down and c["cv"] == min -> {c["cv"], ov, 1, ct_under(min)}
-        edge and side == :down -> {c["cv"] - 1, ov, un, [:counted | ct_in(width)]}
-        true -> {c["cv"], ov, un, []}
-      end
+      ct_counted(
+        {kind, side, edge},
+        {c["r"], c["ld"], c["cv"], c["pv"]},
+        {min, max, ov, un},
+        width
+      )
 
-    c = Map.merge(c, %{"cv" => cv, mem => if(cond, do: 1, else: 0)})
-    c = if Map.has_key?(c, "ov"), do: Map.put(c, "ov", ov), else: c
-    c = if Map.has_key?(c, "un"), do: Map.put(c, "un", un), else: c
+    c = Map.merge(c, %{"cv" => cv, mem => bit(cond)})
+    c = ct_flag(c, "ov", ov)
+    c = ct_flag(c, "un", un)
     {ct_done(kind, c), notes}
   end
+
+  # IEC's CTU, CTD and CTUD in order: R, then LD, then an edge at a limit, then an edge.
+  defp ct_counted({kind, _side, _edge}, {1, _ld, _cv, _pv}, _limits, _width) when kind != "ctd",
+    do: {0, 0, 0, []}
+
+  defp ct_counted({kind, _side, _edge}, {_r, 1, _cv, pv}, _limits, _width) when kind != "ctu",
+    do: {pv, 0, 0, [:loaded]}
+
+  defp ct_counted({_kind, :up, true}, {_r, _ld, max, _pv}, {_min, max, _ov, un}, _width),
+    do: {max, 1, un, [:overflow]}
+
+  defp ct_counted({_kind, :up, true}, {_r, _ld, cv, _pv}, {_min, _max, ov, un}, width),
+    do: {cv + 1, ov, un, [:counted | ct_in(width)]}
+
+  defp ct_counted({_kind, :down, true}, {_r, _ld, min, _pv}, {min, _max, ov, _un}, _width),
+    do: {min, ov, 1, ct_under(min)}
+
+  defp ct_counted({_kind, :down, true}, {_r, _ld, cv, _pv}, {_min, _max, ov, un}, width),
+    do: {cv - 1, ov, un, [:counted | ct_in(width)]}
+
+  defp ct_counted(_run, {_r, _ld, cv, _pv}, {_min, _max, ov, un}, _width), do: {cv, ov, un, []}
+
+  defp ct_flag(c, flag, value) when is_map_key(c, flag), do: Map.put(c, flag, value)
+  defp ct_flag(c, _flag, _value), do: c
+
+  defp ct_allowed(true, _clean?, _same?), do: [false]
+  defp ct_allowed(false, true, _same?), do: [true]
+  defp ct_allowed(false, false, true), do: [false, true]
+  defp ct_allowed(false, false, false), do: [false]
+
+  defp ct_reset_held(true), do: [:reset_held]
+  defp ct_reset_held(false), do: []
+
+  defp ct_counted_later(true), do: [:blocked_counted_later]
+  defp ct_counted_later(false), do: []
 
   defp ct_in("_dint"), do: [:in_dint, :in_alias]
   defp ct_in(width), do: [:"in_#{ct_plain(width)}"]
@@ -6266,15 +6514,11 @@ defmodule Logex.ApiContractTest do
   defp ct_under(0), do: [:underflow]
   defp ct_under(_min), do: []
 
-  defp ct_done("ctu", c), do: %{c | "q" => if(c["cv"] >= c["pv"], do: 1, else: 0)}
-  defp ct_done("ctd", c), do: %{c | "q" => if(c["cv"] <= 0, do: 1, else: 0)}
+  defp ct_done("ctu", c), do: %{c | "q" => bit(c["cv"] >= c["pv"])}
+  defp ct_done("ctd", c), do: %{c | "q" => bit(c["cv"] <= 0)}
 
   defp ct_done("ctud", c),
-    do: %{
-      c
-      | "qu" => if(c["cv"] >= c["pv"], do: 1, else: 0),
-        "qd" => if(c["cv"] <= 0, do: 1, else: 0)
-    }
+    do: %{c | "qu" => bit(c["cv"] >= c["pv"]), "qd" => bit(c["cv"] <= 0)}
 
   # ---- M3-2: the other timers, against IEC's and the conventional rules restated --------
 
@@ -6469,15 +6713,18 @@ defmodule Logex.ApiContractTest do
             {"h", "tp", spec.h},
             {"l", "rto", spec.l}
           ],
-          do: {name, if(ns, do: "#{kind}_ltime", else: kind)}
+          do: {name, tm_word(ns, kind)}
         )
       )
 
   defp tm_scales(spec),
-    do:
-      Map.new(tm_words(spec), fn {name, word} ->
-        {name, if(word =~ "_ltime", do: @tm_ns, else: 1)}
-      end)
+    do: Map.new(tm_words(spec), fn {name, word} -> {name, tm_scale(word =~ "_ltime")} end)
+
+  defp tm_word(ns, kind) when ns in [nil, false], do: kind
+  defp tm_word(_ns, kind), do: "#{kind}_ltime"
+
+  defp tm_scale(true), do: @tm_ns
+  defp tm_scale(false), do: 1
 
   defp tm_text({:timer, name, kind, chain, preset}),
     do: "#{tm_chain_text(chain)} #{kind} #{name} #{preset}"
@@ -6593,7 +6840,7 @@ defmodule Logex.ApiContractTest do
 
   defp tm_finish(true, step, w) do
     {:ok, {program, s, _report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
-    spec = if step == :assemble, do: w.c, else: w.spec
+    spec = ct_spec_kept(step, w)
     %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
   end
 
@@ -6601,7 +6848,7 @@ defmodule Logex.ApiContractTest do
 
   defp tm_switch(true, step, w) do
     first? = Edit.stage(w.e) == :accepted
-    {from, to} = if step == :test, do: {w.spec, w.c}, else: {w.c, w.spec}
+    {from, to} = ct_sides(step, w)
     {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
 
     # The writes the report lists rebuild the state.
@@ -6617,23 +6864,12 @@ defmodule Logex.ApiContractTest do
       now = tm_at(s.env, name)
       assert Map.drop(now, ["pre", "last"]) == Map.drop(old, ["pre", "last"])
       tm_reached(:kept_across)
-
-      if first? do
-        assert now["pre"] == if(old["pre"] == from_p, do: preset, else: old["pre"])
-        if old["pre"] != now["pre"], do: tm_reached(:preset_moved)
-      end
+      tm_preset!(first?, {now, old}, from_p, preset)
     end
 
     blocked = for {:ons_blocked, path, _value} <- report, do: path
-    if blocked != [], do: tm_reached(:edge_blocked)
-
-    if step == :untest and w.round != nil do
-      for {name, _} <- tm_kinds(to),
-          is_map(tm_at(w.round, name)),
-          do: assert(tm_at(s.env, name) == tm_at(w.round, name))
-
-      tm_reached(:round_trip)
-    end
+    tm_reached_when(blocked != [], :edge_blocked)
+    tm_round_trip!(step == :untest and w.round != nil, to, s, w)
 
     kinds = tm_kinds(to)
 
@@ -6652,8 +6888,8 @@ defmodule Logex.ApiContractTest do
 
     assert Enum.sort(forecast) == Enum.sort(expected)
 
-    round = if step == :test, do: w.s.env, else: nil
-    last = if w.restarted, do: Map.merge(w.last, tm_texts(to)), else: w.last
+    round = ct_round_of(step, w.s.env)
+    last = tm_last_after(w.restarted, w.last, to)
 
     %{
       w
@@ -6769,7 +7005,7 @@ defmodule Logex.ApiContractTest do
   end
 
   defp tm_forecast(:dn_rises, "tp", timer, {cond, _r}) do
-    assert timer["tt"] == 0 and timer["dn"] == if(cond, do: 1, else: 0)
+    assert timer["tt"] == 0 and timer["dn"] == bit(cond)
     tm_reached(:forecast_rises)
   end
 
@@ -6827,11 +7063,11 @@ defmodule Logex.ApiContractTest do
   defp tm_one({timers, notes}, name, {kind, cond}, ctx) do
     t = timers[name]
     scale = Map.get(ctx.scales, name, 1)
-    elapsed = if is_integer(t["last"]), do: max(ctx.now - t["last"], 0) * scale, else: 0
-    long = if scale > 1 and elapsed > 0, do: [:long_timed], else: []
+    elapsed = tm_elapsed(t["last"], ctx.now, scale)
+    long = noted(scale > 1 and elapsed > 0, :long_timed)
 
     edges = tm_edges(name, kind, ctx)
-    first = if ctx.first and kind == "tp" and cond and t["en"] == 0, do: [:first_held], else: []
+    first = noted(ctx.first and kind == "tp" and cond and t["en"] == 0, :first_held)
 
     for {t2, more} <- tm_rule(kind, t, cond, elapsed, edges) do
       {Map.put(timers, name, Map.put(t2, "last", ctx.now)),
@@ -6844,7 +7080,7 @@ defmodule Logex.ApiContractTest do
   defp tm_why(true, [false, true], _name, _ctx), do: [:edge_kept]
 
   defp tm_why(true, [true], name, ctx),
-    do: if((name <> ".en") in ctx.w.blocked, do: [:blocked_pulsed_later], else: [])
+    do: noted((name <> ".en") in ctx.w.blocked, :blocked_pulsed_later)
 
   defp tm_why(_pulsed, _edges, _name, _ctx), do: []
 
@@ -6853,42 +7089,29 @@ defmodule Logex.ApiContractTest do
   # the same; never where the text changed.
   defp tm_edges(_name, kind, _ctx) when kind != "tp", do: [true]
 
-  defp tm_edges(name, "tp", ctx) do
-    cond do
-      ctx.first -> [false]
-      Map.get(ctx.w.clean, name, false) -> [true]
-      Map.get(ctx.w.last, name) == ctx.texts[name] -> [false, true]
-      true -> [false]
-    end
-  end
+  defp tm_edges(name, "tp", ctx),
+    do:
+      ct_allowed(
+        ctx.first,
+        Map.get(ctx.w.clean, name, false),
+        Map.get(ctx.w.last, name) == ctx.texts[name]
+      )
 
   # The off-delay timer: IEC's TOF, `.dn` its Q (decision 93).
   defp tm_rule("tof", t, true, _elapsed, _edges) do
-    notes = if t["tt"] == 1, do: [:delay_cut], else: []
+    notes = noted(t["tt"] == 1, :delay_cut)
     [{%{t | "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1}, notes}]
   end
 
-  defp tm_rule("tof", t, false, elapsed, _edges) do
-    lim = max(t["pre"], 0)
-
-    cond do
-      t["tt"] == 1 or t["en"] == 1 ->
-        acc = min(max(t["acc"], 0) + if(t["tt"] == 1, do: elapsed, else: 0), lim)
-        on = if acc < lim, do: 1, else: 0
-        notes = if on == 0 and t["tt"] == 1, do: [:delay_ended], else: []
-        [{%{t | "acc" => acc, "dn" => on, "tt" => on, "en" => 0}, notes}]
-
-      true ->
-        [{%{t | "dn" => 0, "tt" => 0, "en" => 0}, []}]
-    end
-  end
+  defp tm_rule("tof", t, false, elapsed, _edges),
+    do: tm_off(t["tt"] == 1 or t["en"] == 1, t, elapsed)
 
   # The on-delay timer, which `f` becomes where an edit that drops it changes its kind too
   # and a later one gives it back.
   defp tm_rule("ton", t, true, elapsed, _edges) do
     lim = max(t["pre"], 0)
-    acc = min(max(t["acc"], 0) + if(t["en"] == 1, do: elapsed, else: 0), lim)
-    done = if acc == lim, do: 1, else: 0
+    acc = min(max(t["acc"], 0) + timing(t["en"], elapsed), lim)
+    done = bit(acc == lim)
     [{%{t | "acc" => acc, "dn" => done, "tt" => 1 - done, "en" => 1}, []}]
   end
 
@@ -6901,55 +7124,93 @@ defmodule Logex.ApiContractTest do
 
     for edge_ok <- Enum.uniq(edges) do
       edge = cond and t["en"] == 0
-
-      cond do
-        t["tt"] == 1 ->
-          acc = min(max(t["acc"], 0) + elapsed, lim)
-          ignored = if edge, do: [:retrigger_ignored], else: []
-          tm_pulse(t, acc, lim, cond, ignored)
-
-        edge and edge_ok ->
-          tm_pulse(t, 0, lim, cond, [:pulsed])
-
-        cond ->
-          held = if t["dn"] == 1, do: [:pulse_held], else: []
-          {%{t | "tt" => 0, "en" => 1}, held}
-
-        true ->
-          {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, []}
-      end
+      tm_tp(t["tt"] == 1, edge and edge_ok, cond, {t, edge, elapsed, lim})
     end
   end
 
   # The retentive timer: the conventional RTO, cleared by `r` (decisions 76, 90 and 95).
   defp tm_rule("rto", t, cond, elapsed, _edges) do
     lim = max(t["pre"], 0)
-    en = if cond, do: 1, else: 0
-
-    cond do
-      t["r"] == 1 ->
-        held = if cond and t["acc"] > 0, do: [:reset_held], else: []
-        [{%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => en}, held}]
-
-      cond ->
-        kept = if t["en"] == 0 and t["acc"] > 0, do: [:retained], else: []
-        acc = min(max(t["acc"], 0) + if(t["en"] == 1, do: elapsed, else: 0), lim)
-        done = if acc == lim, do: 1, else: 0
-        notes = if done == 1 and t["dn"] == 0, do: [:rto_done], else: []
-        [{%{t | "acc" => acc, "dn" => done, "tt" => 1 - done, "en" => 1}, kept ++ notes}]
-
-      true ->
-        [{%{t | "tt" => 0, "en" => 0}, []}]
-    end
+    tm_rto(t["r"] == 1, cond, {t, elapsed, lim})
   end
 
-  defp tm_pulse(t, acc, lim, cond, notes) do
-    cond do
-      acc < lim -> {%{t | "acc" => acc, "dn" => 0, "tt" => 1, "en" => tm_bit(cond)}, notes}
-      cond -> {%{t | "acc" => acc, "dn" => 1, "tt" => 0, "en" => 1}, notes}
-      true -> {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, notes}
-    end
+  # IEC's TOF de-energised: timing out its delay where it was on or timing.
+  defp tm_off(true, t, elapsed) do
+    lim = max(t["pre"], 0)
+    acc = min(max(t["acc"], 0) + timing(t["tt"], elapsed), lim)
+    on = bit(acc < lim)
+    notes = noted(on == 0 and t["tt"] == 1, :delay_ended)
+    [{%{t | "acc" => acc, "dn" => on, "tt" => on, "en" => 0}, notes}]
   end
+
+  defp tm_off(false, t, _elapsed), do: [{%{t | "dn" => 0, "tt" => 0, "en" => 0}, []}]
+
+  # IEC's TP: a pulse timing, one started by an edge the block list lets through, a rung
+  # held after its pulse, and a rung de-energised.
+  defp tm_tp(true, _started, cond, {t, edge, elapsed, lim}) do
+    acc = min(max(t["acc"], 0) + elapsed, lim)
+    tm_pulse(t, acc, lim, cond, noted(edge, :retrigger_ignored))
+  end
+
+  defp tm_tp(false, true, cond, {t, _edge, _elapsed, lim}),
+    do: tm_pulse(t, 0, lim, cond, [:pulsed])
+
+  defp tm_tp(false, false, true, {t, _edge, _elapsed, _lim}),
+    do: {%{t | "tt" => 0, "en" => 1}, noted(t["dn"] == 1, :pulse_held)}
+
+  defp tm_tp(false, false, false, {t, _edge, _elapsed, _lim}),
+    do: {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, []}
+
+  # The conventional RTO: `r` first, then the rung.
+  defp tm_rto(true, cond, {t, _elapsed, _lim}) do
+    held = noted(cond and t["acc"] > 0, :reset_held)
+    [{%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => bit(cond)}, held}]
+  end
+
+  defp tm_rto(false, true, {t, elapsed, lim}) do
+    kept = noted(t["en"] == 0 and t["acc"] > 0, :retained)
+    acc = min(max(t["acc"], 0) + timing(t["en"], elapsed), lim)
+    done = bit(acc == lim)
+    notes = noted(done == 1 and t["dn"] == 0, :rto_done)
+    [{%{t | "acc" => acc, "dn" => done, "tt" => 1 - done, "en" => 1}, kept ++ notes}]
+  end
+
+  defp tm_rto(false, false, {t, _elapsed, _lim}), do: [{%{t | "tt" => 0, "en" => 0}, []}]
+
+  defp tm_pulse(t, acc, lim, cond, notes) when acc < lim,
+    do: {%{t | "acc" => acc, "dn" => 0, "tt" => 1, "en" => tm_bit(cond)}, notes}
+
+  defp tm_pulse(t, acc, _lim, true, notes),
+    do: {%{t | "acc" => acc, "dn" => 1, "tt" => 0, "en" => 1}, notes}
+
+  defp tm_pulse(t, _acc, _lim, false, notes),
+    do: {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, notes}
+
+  defp tm_elapsed(last, now, scale) when is_integer(last), do: max(now - last, 0) * scale
+  defp tm_elapsed(_last, _now, _scale), do: 0
+
+  defp tm_preset!(false, _timers, _from_p, _preset), do: nil
+
+  defp tm_preset!(true, {now, old}, from_p, preset) do
+    assert now["pre"] == ct_moved_pv(old["pre"] == from_p, preset, old["pre"])
+    tm_reached_when(old["pre"] != now["pre"], :preset_moved)
+  end
+
+  defp tm_round_trip!(false, _to, _s, _w), do: nil
+
+  defp tm_round_trip!(true, to, s, w) do
+    for {name, _} <- tm_kinds(to),
+        is_map(tm_at(w.round, name)),
+        do: assert(tm_at(s.env, name) == tm_at(w.round, name))
+
+    tm_reached(:round_trip)
+  end
+
+  defp tm_last_after(true, last, to), do: Map.merge(last, tm_texts(to))
+  defp tm_last_after(_restarted, last, _to), do: last
+
+  defp tm_reached_when(true, name), do: tm_reached(name)
+  defp tm_reached_when(false, _name), do: nil
 
   defp tm_bit(true), do: 1
   defp tm_bit(false), do: 0
@@ -7252,16 +7513,16 @@ defmodule Logex.ApiContractTest do
 
   defp ar_rung_run({contact, instructions, coil}, env, at) do
     power = ar_contact(contact, env)
-    if not power, do: ar_reached(:de_energised)
+    reached_when(not power, :ar_reach, :de_energised)
 
     {powered, env, faults} =
       Enum.reduce(instructions, {power, env, []}, fn instruction, {now, env, faults} ->
         # A rung's power that an earlier instruction on it took away.
-        if power and not now, do: ar_reached(:cut)
+        reached_when(power and not now, :ar_reach, :cut)
         ar_instruction_run(instruction, now, env, at, faults)
       end)
 
-    env = if coil, do: Map.put(env, coil, if(powered, do: 1, else: 0)), else: env
+    env = coil_written(coil, env, powered)
     {env, Enum.reverse(faults)}
   end
 
@@ -7278,33 +7539,64 @@ defmodule Logex.ApiContractTest do
     values = Enum.map(sources, &ar_value(&1, env))
     into = types[destination]
     first..last//1 = width_range(into)
-    if Enum.any?(sources, &match?({:lit, n} when n < 0, &1)), do: ar_reached(:negative_literal)
 
-    if Enum.any?(sources, &match?({:tag, tag} when :erlang.map_get(tag, types) != into, &1)),
-      do: ar_reached(:widened)
+    reached_when(
+      Enum.any?(sources, &match?({:lit, n} when n < 0, &1)),
+      :ar_reach,
+      :negative_literal
+    )
+
+    reached_when(
+      Enum.any?(sources, &match?({:tag, tag} when :erlang.map_get(tag, types) != into, &1)),
+      :ar_reach,
+      :widened
+    )
 
     ar_notes(op, values, first)
 
-    case ar_exact(op, values) do
-      :zero_divisor ->
-        ar_reached(if(op == :div, do: :div_by_zero, else: :mod_by_zero))
-        if path, do: ar_reached(:block_fault)
-        {false, Map.put(env, destination, 0), [{op, line, path} | faults]}
-
-      {:ok, exact} when exact > last ->
-        ar_reached(:above)
-        ar_reached({:wrapped, into})
-        {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
-
-      {:ok, exact} when exact < first ->
-        ar_reached(:below)
-        ar_reached({:wrapped, into})
-        {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
-
-      {:ok, exact} ->
-        {true, Map.put(env, destination, exact), faults}
-    end
+    ar_computed(
+      ar_exact(op, values),
+      {op, destination, into, first..last//1},
+      env,
+      {line, path, faults}
+    )
   end
+
+  defp ar_computed(:zero_divisor, {op, destination, _into, _range}, env, {line, path, faults}) do
+    ar_reached(ar_by_zero(op))
+    reached_when(path != nil, :ar_reach, :block_fault)
+    {false, Map.put(env, destination, 0), [{op, line, path} | faults]}
+  end
+
+  defp ar_computed(
+         {:ok, exact},
+         {_op, destination, into, _first..last//1},
+         env,
+         {_line, _path, faults}
+       )
+       when exact > last do
+    ar_reached(:above)
+    ar_reached({:wrapped, into})
+    {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
+  end
+
+  defp ar_computed(
+         {:ok, exact},
+         {_op, destination, into, first.._last//1},
+         env,
+         {_line, _path, faults}
+       )
+       when exact < first do
+    ar_reached(:below)
+    ar_reached({:wrapped, into})
+    {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
+  end
+
+  defp ar_computed({:ok, exact}, {_op, destination, _into, _range}, env, {_line, _path, faults}),
+    do: {true, Map.put(env, destination, exact), faults}
+
+  defp ar_by_zero(:div), do: :div_by_zero
+  defp ar_by_zero(_mod), do: :mod_by_zero
 
   # Decision 146, restated: a result outside its destination's width keeps its remainder by
   # 2^N, taken back into the width's range, so that the stored value is the one of the
@@ -7313,7 +7605,7 @@ defmodule Logex.ApiContractTest do
   defp ar_wrapped(type, exact) do
     {_kind, n} = Map.fetch!(@widths, type)
     span = Integer.pow(2, n)
-    if abs(exact) >= span, do: ar_reached(:far_past)
+    reached_when(abs(exact) >= span, :ar_reach, :far_past)
     ar_into(rem(exact, span), width_range(type), span)
   end
 
@@ -7344,26 +7636,32 @@ defmodule Logex.ApiContractTest do
   defp ar_exact(:div, [a, b]), do: {:ok, ar_truncated(a, b)}
   defp ar_exact(:mod, [a, b]), do: {:ok, a - ar_truncated(a, b) * b}
   defp ar_exact(:neg, [a]), do: {:ok, 0 - a}
-  defp ar_exact(:abs, [a]), do: {:ok, if(a < 0, do: 0 - a, else: a)}
+  defp ar_exact(:abs, [a]) when a < 0, do: {:ok, 0 - a}
+  defp ar_exact(:abs, [a]), do: {:ok, a}
 
   defp ar_truncated(a, b) do
     magnitude = Integer.floor_div(abs(a), abs(b))
-    if a < 0 != b < 0, do: -magnitude, else: magnitude
+    ar_signed(a < 0 != b < 0, magnitude)
   end
+
+  defp ar_signed(true, magnitude), do: -magnitude
+  defp ar_signed(false, magnitude), do: magnitude
 
   # The `cal` on `gb`: the block's inputs copied in, its body over its own map, its outputs
   # copied out; on a false `gb`, nothing at all (decision 12).
   defp ar_cal(%{block: nil}, env), do: {env, []}
 
-  defp ar_cal(spec, env) do
-    if env["gb"] == 1 do
-      c1 = Map.merge(env["c1"], %{"a" => env["x0"], "b" => env["x1"], "go" => env["g"]})
-      {c1, faults} = ar_routine(spec, spec.block.rungs, c1, {ar_block_first_line(), "c1"})
-      {Map.merge(env, %{"c1" => c1, "yb" => c1["r"], "okb" => c1["ok"]}), faults}
-    else
-      ar_reached(:block_frozen)
-      {env, []}
-    end
+  defp ar_cal(spec, env), do: ar_called(env["gb"] == 1, spec, env)
+
+  defp ar_called(true, spec, env) do
+    c1 = Map.merge(env["c1"], %{"a" => env["x0"], "b" => env["x1"], "go" => env["g"]})
+    {c1, faults} = ar_routine(spec, spec.block.rungs, c1, {ar_block_first_line(), "c1"})
+    {Map.merge(env, %{"c1" => c1, "yb" => c1["r"], "okb" => c1["ok"]}), faults}
+  end
+
+  defp ar_called(false, _spec, env) do
+    ar_reached(:block_frozen)
+    {env, []}
   end
 
   defp ar_inputs(spec) do
@@ -7493,8 +7791,8 @@ defmodule Logex.ApiContractTest do
         sample = ar_inputs(spec)
         {m1, f1} = ar_scan(spec, Map.merge(m1, sample))
         {m2, f2} = ar_scan(spec, Map.merge(m2, sample))
-        {rt, _outputs, events} = Runtime.cycle(rt, if(now == 0, do: 0, else: 10), sample)
-        now = if now == 0, do: 10, else: now + 10
+        {rt, _outputs, events} = Runtime.cycle(rt, cycle_elapsed(now), sample)
+        now = cycle_now(now)
         at = now - 10
 
         assert events ==
@@ -7503,7 +7801,7 @@ defmodule Logex.ApiContractTest do
                    [{:ran, :none, "m2", at}] ++
                    Enum.map(f2, &{:fault, :none, "m2", ar_fault(&1, nil)})
 
-        if f1 != [], do: ar_reached(:event_fault)
+        reached_when(f1 != [], :ar_reach, :event_fault)
         %Runtime{instances: %{"m1" => s1, "m2" => s2}} = rt
         assert {s1.env, s1.faults, s2.env, s2.faults} == {m1, [], m2, []}
         assert ar_fitting?(spec, s1.env) and ar_fitting?(spec, s2.env)
@@ -7747,12 +8045,12 @@ defmodule Logex.ApiContractTest do
   # normal value 0.0, with power (decision 150); a `real` rounded to its single.
   defp re_store(:real, x) when abs(x) >= @re_single_past do
     re_reached(:saturated_real)
-    {false, if(x > 0, do: @re_single_max, else: -@re_single_max)}
+    {false, re_saturated(x)}
   end
 
   defp re_store(:real, x) do
     y = re_single(x * 1.0)
-    if y != x, do: re_reached(:single_rounded)
+    reached_when(y != x, :re_reach, :single_rounded)
     {true, re_flushed(y, @re_single_min, :flushed_real)}
   end
 
@@ -7820,14 +8118,14 @@ defmodule Logex.ApiContractTest do
 
   defp re_rung_run({contact, instructions, coil}, env, line) do
     power = re_powered(contact, env)
-    if not power, do: re_reached(:de_energised)
+    reached_when(not power, :re_reach, :de_energised)
 
     {powered, env, faults} =
       Enum.reduce(instructions, {power, env, []}, fn instruction, {now, env, faults} ->
         re_run(instruction, now, env, line, faults)
       end)
 
-    env = if coil, do: Map.put(env, coil, if(powered, do: 1, else: 0)), else: env
+    env = coil_written(coil, env, powered)
     {env, Enum.reverse(faults)}
   end
 
@@ -7846,8 +8144,11 @@ defmodule Logex.ApiContractTest do
     into = @re_types[destination]
     values = Enum.map(sources, &re_value(&1, env, into))
 
-    if Enum.any?(sources, &match?({:tag, tag} when tag in ["i0", "d0"], &1)),
-      do: re_reached(:widened_int)
+    reached_when(
+      Enum.any?(sources, &match?({:tag, tag} when tag in ["i0", "d0"], &1)),
+      :re_reach,
+      :widened_int
+    )
 
     re_arithmetic(op, values, {into, destination, line}, env, faults)
   end
@@ -7903,13 +8204,14 @@ defmodule Logex.ApiContractTest do
   # neighbour, wrapped into the target by its remainder 2^N, with no power where it did not
   # fit (decisions 148 and 161); a truncation toward zero, wrapped so too (decision 162);
   # and between the reals, the nearest value of the target (decision 150).
-  defp re_converted(op, value) do
-    case Atom.to_string(op) |> String.split(["_to_", "_trunc_"]) do
-      [_from, "lreal"] -> re_store(:lreal, value)
-      [_from, "real"] -> re_narrowed(value)
-      [from, to] -> re_integer(op, from, value, String.to_atom(to))
-    end
-  end
+  defp re_converted(op, value),
+    do: re_converted_as(Atom.to_string(op) |> String.split(["_to_", "_trunc_"]), op, value)
+
+  defp re_converted_as([_from, "lreal"], _op, value), do: re_store(:lreal, value)
+  defp re_converted_as([_from, "real"], _op, value), do: re_narrowed(value)
+
+  defp re_converted_as([from, to], op, value),
+    do: re_integer(op, from, value, String.to_atom(to))
 
   defp re_narrowed(value) do
     re_reached(:narrowed)
@@ -7918,18 +8220,25 @@ defmodule Logex.ApiContractTest do
 
   defp re_integer(op, _from, value, to) do
     truncating = String.contains?(Atom.to_string(op), "_trunc_")
-    whole = if truncating, do: trunc(value), else: re_even(value)
+    whole = re_whole(truncating, value)
     {bits, low, high} = re_range(to)
-
-    if whole in low..high//1 do
-      {true, whole}
-    else
-      re_reached(if(truncating, do: :truncation_wrapped, else: :conversion_wrapped))
-      span = Integer.pow(2, bits)
-      r = Integer.mod(whole - low, span) + low
-      {false, r}
-    end
+    re_fitted(whole in low..high//1, whole, {truncating, bits, low})
   end
+
+  defp re_whole(true, value), do: trunc(value)
+  defp re_whole(false, value), do: re_even(value)
+
+  defp re_fitted(true, whole, _range), do: {true, whole}
+
+  defp re_fitted(false, whole, {truncating, bits, low}) do
+    re_reached(re_wrap_reach(truncating))
+    span = Integer.pow(2, bits)
+    r = Integer.mod(whole - low, span) + low
+    {false, r}
+  end
+
+  defp re_wrap_reach(true), do: :truncation_wrapped
+  defp re_wrap_reach(false), do: :conversion_wrapped
 
   defp re_range(:int), do: {16, -32_768, 32_767}
   defp re_range(:dint), do: {32, -2_147_483_648, 2_147_483_647}
@@ -7937,20 +8246,22 @@ defmodule Logex.ApiContractTest do
   # The nearest integer, a tie to the even one, from the floor and the fraction left.
   defp re_even(value) do
     floor = floor(value)
-    fraction = value - floor
-
-    cond do
-      fraction > 0.5 ->
-        floor + 1
-
-      fraction < 0.5 ->
-        floor
-
-      true ->
-        re_reached(:rounded_tie)
-        if rem(floor, 2) == 0, do: floor, else: floor + 1
-    end
+    re_rounded(value - floor, floor)
   end
+
+  defp re_rounded(fraction, floor) when fraction > 0.5, do: floor + 1
+  defp re_rounded(fraction, floor) when fraction < 0.5, do: floor
+
+  defp re_rounded(_tie, floor) do
+    re_reached(:rounded_tie)
+    re_tie(rem(floor, 2), floor)
+  end
+
+  defp re_tie(0, floor), do: floor
+  defp re_tie(_odd, floor), do: floor + 1
+
+  defp re_saturated(x) when x > 0, do: @re_single_max
+  defp re_saturated(_x), do: -@re_single_max
 
   defp re_fault({kind, instruction, line, read}),
     do: %Logex.Fault{
@@ -8077,15 +8388,15 @@ defmodule Logex.ApiContractTest do
       _, {rt, m1, now} ->
         sample = re_inputs()
         {m1, faults} = re_scan(spec, Map.merge(m1, re_taken(sample)))
-        {rt, _outputs, events} = Runtime.cycle(rt, if(now == 0, do: 0, else: 10), sample)
-        at = if now == 0, do: 0, else: now
-        now = if now == 0, do: 10, else: now + 10
+        {rt, _outputs, events} = Runtime.cycle(rt, cycle_elapsed(now), sample)
+        at = now
+        now = cycle_now(now)
 
         assert events ==
                  [{:ran, "fast", "m1", at}] ++
                    Enum.map(faults, &{:fault, "fast", "m1", re_fault(&1)})
 
-        if faults != [], do: re_reached(:event_fault)
+        reached_when(faults != [], :re_reach, :event_fault)
         %Runtime{instances: %{"m1" => s1}} = rt
         assert s1.env === m1
         for input <- ~w(x0 x1), do: assert(Runtime.get!(rt, input) === m1[input])
@@ -8203,12 +8514,11 @@ defmodule Logex.ApiContractTest do
   defp ay_wrap(type, value) do
     {bits, sign} = @ay_types[type]
     low = Integer.mod(value, Bitwise.bsl(1, bits))
-
-    case sign == :signed and low >= Bitwise.bsl(1, bits - 1) do
-      true -> low - Bitwise.bsl(1, bits)
-      false -> low
-    end
+    ay_signed(sign == :signed and low >= Bitwise.bsl(1, bits - 1), low, bits)
   end
+
+  defp ay_signed(true, low, bits), do: low - Bitwise.bsl(1, bits)
+  defp ay_signed(false, low, _bits), do: low
 
   defp ay_element(dims, array), do: {array, pick(ay_indexes(dims[array]))}
 
@@ -8347,7 +8657,7 @@ defmodule Logex.ApiContractTest do
     Enum.reduce(spec.rungs, model, fn
       {:coil, contact, {array, index}, n}, model ->
         ay_reached(:element_bit_written)
-        b = if ay_power(model, contact), do: 1, else: 0
+        b = bit(ay_power(model, contact))
 
         put_in(
           model,
@@ -8359,9 +8669,9 @@ defmodule Logex.ApiContractTest do
         power = ay_power(model, contact)
         stored = model["edges"][[at]] == 1
         pulse = power and not stored and not first
-        if pulse, do: ay_reached(:one_shot_fired)
-        model = put_in(model, ["edges", [at]], if(power, do: 1, else: 0))
-        ay_write(model, bit, if(pulse, do: 1, else: 0))
+        reached_when(pulse, :ay_reach, :one_shot_fired)
+        model = put_in(model, ["edges", [at]], bit(power))
+        ay_write(model, bit, bit(pulse))
 
       {:run, contact, instructions}, model ->
         {_power, model} =
@@ -8375,7 +8685,7 @@ defmodule Logex.ApiContractTest do
             {:add, [x, y], destination}, {true, model} ->
               sum = ay_read(model, x) + ay_read(model, y)
               wrapped = ay_wrap(spec.type, sum)
-              if wrapped != sum, do: ay_reached(:wrapped)
+              reached_when(wrapped != sum, :ay_reach, :wrapped)
               {wrapped == sum, ay_write(model, destination, wrapped)}
           end)
 
@@ -8408,113 +8718,121 @@ defmodule Logex.ApiContractTest do
     model = ay_start(spec, Map.new(ay_indexes(spec.dims["i"]), &{&1, 0}))
     now = 0
 
-    Enum.reduce(1..scans, {state, model, now, true}, fn _scan, {state, model, now, first} ->
-      case :rand.uniform(8) do
-        1 ->
-          # A host's list of the wrong length or shape is refused, the state unchanged.
-          ay_reached(:host_refused)
-
-          wrong =
-            pick([
-              [],
-              :x,
-              ay_listed(model["i"], spec.dims["i"]) ++ [0],
-              [ay_listed(model["i"], spec.dims["i"])]
-            ])
-
-          assert_raise ArgumentError, ~r/^input `i/, fn ->
-            Runtime.call(program, state, %{"i" => wrong}, %Scan{now: now, first: first})
-          end
-
-          {state, model, now, first}
-
-        2 ->
-          ay_reached(:restarted)
-          state = Runtime.restart(program, state, :cold)
-          {state, ay_start(spec, model["i"]), now, true}
-
-        3 ->
-          # An edit that changes the initial list of `a` reports each element changed.
-          changed = for v <- spec.initial, do: pick([v, ay_value(spec.type)])
-          candidate = ay_program(%{spec | initial: changed})
-          {:ok, edit, forecast} = Logex.Edit.accept(program, candidate, state)
-
-          expected =
-            for {index, old, new} <- Enum.zip([ay_indexes(spec.dims["a"]), spec.initial, changed]),
-                old != new,
-                do: {:initial_changed, ay_name({"a", index}), {old, new}}
-
-          if expected != [], do: ay_reached(:initial_changed)
-          assert Enum.filter(forecast, &match?({:initial_changed, _, _}, &1)) == expected
-          assert Logex.Edit.stage(edit) == :accepted
-          {state, model, now, first}
-
-        _ ->
-          go = :rand.uniform(2) - 1
-
-          {inputs, host} =
-            case :rand.uniform(4) do
-              1 ->
-                # Decision 222: one element set by its name, every other kept.
-                ay_reached(:host_element)
-                index = pick(ay_indexes(spec.dims["i"]))
-                value = ay_value(spec.type)
-                {Map.put(model["i"], index, value), %{"go" => go, ay_name({"i", index}) => value}}
-
-              _ ->
-                ay_reached(:host_list)
-                inputs = if :rand.uniform(3) == 1, do: ay_input(spec), else: model["i"]
-                {inputs, %{"go" => go, "i" => ay_listed(inputs, spec.dims["i"])}}
-            end
-
-          {outputs, state} =
-            Runtime.call(program, state, host, %Scan{now: now + 10, first: first})
-
-          model = ay_scan(spec, %{model | "go" => go, "i" => inputs}, first)
-          assert outputs == %{"o" => ay_listed(model["o"], spec.dims["o"])}, ay_source_text(spec)
-
-          for array <- ["a", "b", "o"] do
-            assert ay_tupled(ay_listed(model[array], spec.dims[array])) == state.env[array]
-          end
-
-          {state, model, now + 10, false}
-      end
+    Enum.reduce(1..scans, {state, model, now, true}, fn _scan, acc ->
+      ay_lone_step(:rand.uniform(8), acc, {spec, program})
     end)
   end
+
+  # A host's list of the wrong length or shape is refused, the state unchanged.
+  defp ay_lone_step(1, {state, model, now, first}, {spec, program}) do
+    ay_reached(:host_refused)
+
+    wrong =
+      pick([
+        [],
+        :x,
+        ay_listed(model["i"], spec.dims["i"]) ++ [0],
+        [ay_listed(model["i"], spec.dims["i"])]
+      ])
+
+    assert_raise ArgumentError, ~r/^input `i/, fn ->
+      Runtime.call(program, state, %{"i" => wrong}, %Scan{now: now, first: first})
+    end
+
+    {state, model, now, first}
+  end
+
+  defp ay_lone_step(2, {state, model, now, _first}, {spec, program}) do
+    ay_reached(:restarted)
+    state = Runtime.restart(program, state, :cold)
+    {state, ay_start(spec, model["i"]), now, true}
+  end
+
+  # An edit that changes the initial list of `a` reports each element changed.
+  defp ay_lone_step(3, {state, model, now, first}, {spec, program}) do
+    changed = for v <- spec.initial, do: pick([v, ay_value(spec.type)])
+    candidate = ay_program(%{spec | initial: changed})
+    {:ok, edit, forecast} = Logex.Edit.accept(program, candidate, state)
+
+    expected =
+      for {index, old, new} <- Enum.zip([ay_indexes(spec.dims["a"]), spec.initial, changed]),
+          old != new,
+          do: {:initial_changed, ay_name({"a", index}), {old, new}}
+
+    reached_when(expected != [], :ay_reach, :initial_changed)
+    assert Enum.filter(forecast, &match?({:initial_changed, _, _}, &1)) == expected
+    assert Logex.Edit.stage(edit) == :accepted
+    {state, model, now, first}
+  end
+
+  defp ay_lone_step(_scan, {state, model, now, first}, {spec, program}) do
+    go = :rand.uniform(2) - 1
+    {inputs, host} = ay_host(:rand.uniform(4), go, model, spec)
+
+    {outputs, state} =
+      Runtime.call(program, state, host, %Scan{now: now + 10, first: first})
+
+    model = ay_scan(spec, %{model | "go" => go, "i" => inputs}, first)
+    assert outputs == %{"o" => ay_listed(model["o"], spec.dims["o"])}, ay_source_text(spec)
+
+    for array <- ["a", "b", "o"] do
+      assert ay_tupled(ay_listed(model[array], spec.dims[array])) == state.env[array]
+    end
+
+    {state, model, now + 10, false}
+  end
+
+  # Decision 222: one element set by its name, every other kept.
+  defp ay_host(1, go, model, spec) do
+    ay_reached(:host_element)
+    index = pick(ay_indexes(spec.dims["i"]))
+    value = ay_value(spec.type)
+    {Map.put(model["i"], index, value), %{"go" => go, ay_name({"i", index}) => value}}
+  end
+
+  defp ay_host(_list, go, model, spec) do
+    ay_reached(:host_list)
+    inputs = ay_host_list(:rand.uniform(3), spec, model)
+    {inputs, %{"go" => go, "i" => ay_listed(inputs, spec.dims["i"])}}
+  end
+
+  defp ay_host_list(1, spec, _model), do: ay_input(spec)
+  defp ay_host_list(_kept, _spec, model), do: model["i"]
 
   defp ay_tupled(list) when is_list(list), do: list |> Enum.map(&ay_tupled/1) |> List.to_tuple()
   defp ay_tupled(value), do: value
 
   # In a resource: `i` connected whole to a global array, or element by element, half the
   # time each, and `o` whole to another, `get/2` reading each by its path.
+  defp ay_connected(1, {_spec, _inputs, word, listed}) do
+    ay_reached(:resource_whole)
+    {"m1.i gi\n", "var_global gi #{word} #{listed}\n"}
+  end
+
+  defp ay_connected(2, {spec, inputs, _word, _listed}) do
+    ay_reached(:resource_element)
+
+    {Enum.map_join(ay_indexes(spec.dims["i"]), &"#{ay_name({"m1.i", &1})} #{inputs[&1]}\n"), ""}
+  end
+
+  # Decision 223: each element from an element of a global array, the global's elements in
+  # reverse order.
+  defp ay_connected(3, {spec, inputs, word, _listed}) do
+    ay_reached(:resource_far_element)
+    indexes = ay_indexes(spec.dims["i"])
+    reversed = Enum.join(Enum.map(Enum.reverse(indexes), &inputs[&1]), " ")
+
+    {Enum.map_join(Enum.zip(indexes, Enum.reverse(indexes)), fn {index, far} ->
+       "#{ay_name({"m1.i", index})} #{ay_name({"gi", far})}\n"
+     end), "var_global gi #{word} #{reversed}\n"}
+  end
+
   defp ay_resource(spec, program, cycles) do
     inputs = ay_input(spec)
     word = ay_word(spec.type, spec.dims["i"])
     listed = Enum.join(Enum.map(ay_indexes(spec.dims["i"]), &inputs[&1]), " ")
 
-    {connection, globals} =
-      case :rand.uniform(3) do
-        1 ->
-          ay_reached(:resource_whole)
-          {"m1.i gi\n", "var_global gi #{word} #{listed}\n"}
-
-        2 ->
-          ay_reached(:resource_element)
-
-          {Enum.map_join(ay_indexes(spec.dims["i"]), &"#{ay_name({"m1.i", &1})} #{inputs[&1]}\n"),
-           ""}
-
-        3 ->
-          # Decision 223: each element from an element of a global array, the global's
-          # elements in reverse order.
-          ay_reached(:resource_far_element)
-          indexes = ay_indexes(spec.dims["i"])
-          reversed = Enum.join(Enum.map(Enum.reverse(indexes), &inputs[&1]), " ")
-
-          {Enum.map_join(Enum.zip(indexes, Enum.reverse(indexes)), fn {index, far} ->
-             "#{ay_name({"m1.i", index})} #{ay_name({"gi", far})}\n"
-           end), "var_global gi #{word} #{reversed}\n"}
-      end
+    {connection, globals} = ay_connected(:rand.uniform(3), {spec, inputs, word, listed})
 
     text =
       "var_global go bool\n" <>
@@ -8753,21 +9071,21 @@ defmodule Logex.ApiContractTest do
   defp pc_finish(true, step, w) do
     {:ok, {program, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
     assert s.env == pc_rebuilt(w.s.env, report)
-    if Enum.any?(report, &match?({:pruned, _, _}, &1)), do: pc_reached(:pruned)
-    spec = if step == :assemble, do: w.c, else: w.spec
+    reached_when(Enum.any?(report, &match?({:pruned, _, _}, &1)), :pc_reach, :pruned)
+    spec = ct_spec_kept(step, w)
     %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
   end
 
   defp pc_switch(false, _step, w), do: w
 
   defp pc_switch(true, step, w) do
-    to = if step == :test, do: w.c, else: w.spec
+    {_from, to} = ct_sides(step, w)
     {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
 
     # The writes the report lists rebuild the state: no switch writes a coil's bits, but
     # a tag it adds starts at its initial value.
     assert s.env == pc_rebuilt(w.s.env, report)
-    if Enum.any?(report, &match?({:added, _, _}, &1)), do: pc_reached(:added)
+    reached_when(Enum.any?(report, &match?({:added, _, _}, &1)), :pc_reach, :added)
 
     # Each coil's bits the program started declares are kept as the state held them, or
     # started at their initial values where the state lacked them.
@@ -8777,19 +9095,16 @@ defmodule Logex.ApiContractTest do
     end
 
     blocked = for {:ons_blocked, path, _value} <- report, do: path
-    if blocked != [], do: pc_reached(:edge_blocked)
+    reached_when(blocked != [], :pc_reach, :edge_blocked)
 
     # A test then an untest with no scan between gives every bit back.
-    if step == :untest and w.round != nil do
-      assert Map.take(s.env, Map.keys(w.round)) == w.round
-      pc_reached(:round_trip)
-    end
+    pc_round_trip!(step == :untest and w.round != nil, s, w)
 
-    round = if step == :test, do: w.s.env, else: nil
+    round = ct_round_of(step, w.s.env)
 
     # A restart with no scan since leaves every bit as a fresh instance's, so an edge a coil
     # sees after it is a real one, whatever its rung's text was.
-    last = if w.restarted, do: Map.merge(w.last, pc_texts(to)), else: w.last
+    last = pc_last_after(w.restarted, w.last, to)
     blocked = Enum.uniq(blocked ++ w.blocked)
     %{w | e: edit, s: s, clean: %{}, last: last, round: round, blocked: blocked}
   end
@@ -8821,14 +9136,13 @@ defmodule Logex.ApiContractTest do
         cond = pc_eval(c.chain, image)
         bit = "s#{name}"
         pulse = pc_coil!(c.kind, cond, bit, "p#{name}", {before, later, w, texts})
+        pc_passed_on!(c.y, later.env["y#{name}"], cond)
 
-        if c.y do
-          assert later.env["y#{name}"] == pc_one(cond)
-          pc_reached(:passed_on)
-        end
-
-        if pulse == 1 and w.clean[bit] == true and bit in w.blocked,
-          do: pc_reached(:blocked_pulsed_later)
+        reached_when(
+          pulse == 1 and w.clean[bit] == true and bit in w.blocked,
+          :pc_reach,
+          :blocked_pulsed_later
+        )
 
         bit
       end
@@ -8838,7 +9152,7 @@ defmodule Logex.ApiContractTest do
     # A removed coil's pulse bit holds what its last run gave it.
     for name <- ~w(r f), spec[String.to_atom(name)] == nil, is_integer(before.env["p#{name}"]) do
       assert later.env["p#{name}"] == before.env["p#{name}"]
-      if later.env["p#{name}"] == 1, do: pc_reached(:removed_pulse_held)
+      reached_when(later.env["p#{name}"] == 1, :pc_reach, :removed_pulse_held)
     end
 
     %{
@@ -8860,7 +9174,7 @@ defmodule Logex.ApiContractTest do
   defp pc_block(_version, _image, {before, later, _w, _texts}) do
     assert later.env["b"] == before.env["b"] and later.env["bu"] == before.env["bu"]
     pc_reached(:frozen)
-    if later.env["b"]["p"] == 1, do: pc_reached(:frozen_pulse_held)
+    reached_when(later.env["b"]["p"] == 1, :pc_reach, :frozen_pulse_held)
     []
   end
 
@@ -8875,22 +9189,37 @@ defmodule Logex.ApiContractTest do
     edge? = pc_edge?(kind, cond, stored)
 
     allowed =
-      cond do
-        before.first -> [false]
-        Map.get(w.clean, bit, false) -> [true]
-        Map.get(w.last, bit) == texts[bit] -> [false, true]
-        true -> [false]
-      end
+      ct_allowed(before.first, Map.get(w.clean, bit, false), Map.get(w.last, bit) == texts[bit])
 
-    if before.first and edge?, do: pc_reached(:first_held)
+    reached_when(before.first and edge?, :pc_reach, :first_held)
     got = pc_at(later.env, pulse)
     assert pc_at(later.env, bit) == pc_one(cond)
     assert got in Enum.map(allowed, &pc_one(edge? and &1)), "#{pulse}: #{got} from #{stored}"
-    if got == 1, do: pc_reached(if kind == :osr, do: :rose, else: :fell)
+    reached_when(got == 1, :pc_reach, pc_edge_reach(kind))
 
-    if got == 1 and not Map.get(w.clean, bit, false), do: pc_reached(:edge_kept)
+    reached_when(got == 1 and not Map.get(w.clean, bit, false), :pc_reach, :edge_kept)
     got
   end
+
+  defp pc_edge_reach(:osr), do: :rose
+  defp pc_edge_reach(_osf), do: :fell
+
+  defp pc_passed_on!(y, _got, _cond) when y in [nil, false], do: nil
+
+  defp pc_passed_on!(_y, got, cond) do
+    assert got == pc_one(cond)
+    pc_reached(:passed_on)
+  end
+
+  defp pc_round_trip!(false, _s, _w), do: nil
+
+  defp pc_round_trip!(true, s, w) do
+    assert Map.take(s.env, Map.keys(w.round)) == w.round
+    pc_reached(:round_trip)
+  end
+
+  defp pc_last_after(true, last, to), do: Map.merge(last, pc_texts(to))
+  defp pc_last_after(_restarted, last, _to), do: last
 
   defp pc_edge?(:osr, cond, stored), do: cond and not pc_closed?(stored)
   defp pc_edge?(:osf, cond, stored), do: not cond and pc_closed?(stored)
@@ -8955,7 +9284,7 @@ defmodule Logex.ApiContractTest do
     # about 20 a run and never under 10.
     for _ <- 1..400 do
       spec = jp_spec()
-      if spec.jumps == [], do: jp_reached(:jumpless)
+      reached_when(spec.jumps == [], :jp_reach, :jumpless)
       program = jp_program(spec)
 
       w = %{
@@ -9252,7 +9581,7 @@ defmodule Logex.ApiContractTest do
   defp jp_finish(true, step, w) do
     {:ok, {program, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
     assert s.env == pc_rebuilt(w.s.env, report)
-    spec = if step == :assemble, do: w.c, else: w.spec
+    spec = ct_spec_kept(step, w)
     %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
   end
 
@@ -9265,17 +9594,14 @@ defmodule Logex.ApiContractTest do
     assert s.env == pc_rebuilt(w.s.env, report) and s.env == w.s.env
 
     # A test then an untest with no scan between gives the state back.
-    if step == :untest and w.round != nil do
-      assert s.env == w.round
-      jp_reached(:round_trip)
-    end
+    jp_round_trip!(step == :untest and w.round != nil, s, w)
 
-    round = if step == :test, do: w.s.env, else: nil
+    round = ct_round_of(step, w.s.env)
 
     # A restart with no scan since leaves every memory as a fresh instance's, so an edge
     # one sees after it is a real one, whatever its rung's text was.
-    to = if step == :test, do: w.c, else: w.spec
-    last = if w.restarted, do: Map.merge(w.last, jp_texts(to)), else: w.last
+    {_from, to} = ct_sides(step, w)
+    last = jp_last_after(w.restarted, w.last, to)
     %{w | e: edit, s: s, clean: %{}, last: last, round: round}
   end
 
@@ -9324,22 +9650,27 @@ defmodule Logex.ApiContractTest do
   end
 
   defp jp_item(item, skip, w, ctx) do
-    if skip != nil, do: jp_reached(:landed)
+    reached_when(skip != nil, :jp_reach, :landed)
     jp_run(item, w, ctx)
   end
+
+  defp jp_round_trip!(false, _s, _w), do: nil
+
+  defp jp_round_trip!(true, s, w) do
+    assert s.env == w.round
+    jp_reached(:round_trip)
+  end
+
+  defp jp_last_after(true, last, to), do: Map.merge(last, jp_texts(to))
+  defp jp_last_after(_restarted, last, _to), do: last
 
   defp jp_cond(chain, image), do: pc_eval(chain, image)
 
   defp jp_run(%{kind: :jmp} = j, w, ctx) do
     on = jp_cond([j.on], ctx.image)
-
-    if j.q do
-      assert ctx.later.env["q#{j.i}"] == pc_one(on)
-      if on, do: jp_reached(:passed_on)
-    end
-
-    jp_reached(if on, do: :jumped, else: :not_taken)
-    {w, if(on, do: j.to, else: nil)}
+    jp_passed_on!(j.q, ctx.later.env["q#{j.i}"], on)
+    jp_reached(jp_jump_reach(on))
+    {w, jp_jumped_to(on, j.to)}
   end
 
   defp jp_run(%{kind: :end}, w, _ctx), do: {w, nil}
@@ -9355,11 +9686,9 @@ defmodule Logex.ApiContractTest do
     on = jp_cond(chain, ctx.image)
     stored = pc_closed?(ctx.before.env["s"])
     got = ctx.later.env["p"]
-    edge? = if kind == :osf, do: not on and stored, else: on and not stored
+    edge? = jp_one_shot_edge(kind, on, stored)
     jp_edge!("s", edge?, got, w, ctx)
-
-    if got == 1 and kind != :ons,
-      do: jp_reached(if(kind == :osr, do: :coil_rose, else: :coil_fell))
+    reached_when(got == 1 and kind != :ons, :jp_reach, jp_coil_reach(kind))
 
     assert ctx.later.env["s"] == pc_one(on)
     {jp_ran(w, "s", ctx), nil}
@@ -9373,7 +9702,7 @@ defmodule Logex.ApiContractTest do
     counted = after_up - w.count
     assert counted in [0, 1]
     jp_edge!("c.cu", on and not pc_closed?(ctx.before.env["c"]["cu"]), counted, w, ctx)
-    if counted == 1, do: jp_reached(:counted)
+    reached_when(counted == 1, :jp_reach, :counted)
     assert ctx.later.env["c"]["cu"] == pc_one(on)
     {%{jp_ran(w, "c.cu", ctx) | count: after_up}, nil}
   end
@@ -9384,7 +9713,7 @@ defmodule Logex.ApiContractTest do
     counted = w.count - after_down
     assert counted in [0, 1]
     jp_edge!("c.cd", on and not pc_closed?(ctx.before.env["c"]["cd"]), counted, w, ctx)
-    if counted == 1, do: jp_reached(:counted_down)
+    reached_when(counted == 1, :jp_reach, :counted_down)
     assert ctx.later.env["c"]["cd"] == pc_one(on)
     {%{jp_ran(w, "c.cd", ctx) | count: after_down}, nil}
   end
@@ -9397,55 +9726,84 @@ defmodule Logex.ApiContractTest do
     # No scan that skipped the timer stamped its `last`.
     assert was["last"] == ran_at
 
-    acc =
-      if on and was["en"] == 1,
-        do: min(max(was["acc"], 0) + now - ran_at, 200),
-        else: 0
+    acc = jp_timed(on and was["en"] == 1, was, now - ran_at)
 
-    if on and was["en"] == 1 and now - ran_at > now - ctx.before.now, do: jp_reached(:caught_up)
+    reached_when(
+      on and was["en"] == 1 and now - ran_at > now - ctx.before.now,
+      :jp_reach,
+      :caught_up
+    )
 
-    expected =
-      if on,
-        do: %{
-          "pre" => 200,
-          "acc" => acc,
-          "dn" => pc_one(acc == 200),
-          "tt" => pc_one(acc != 200),
-          "en" => 1,
-          "last" => now
-        },
-        else: %{"pre" => 200, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+    expected = jp_timer(on, acc, now)
 
     assert ctx.later.env["t"] == expected
     {%{w | ran_at: Map.put(w.ran_at, "t", now)}, nil}
   end
 
-  defp jp_run(%{kind: :b, chain: chain}, w, ctx) do
-    if jp_cond(chain, ctx.image) do
-      jp_block(w, ctx)
-    else
-      {jp_frozen(%{kind: :b}, w, ctx), nil}
-    end
+  defp jp_run(%{kind: :b, chain: chain}, w, ctx), do: jp_called(jp_cond(chain, ctx.image), w, ctx)
+
+  defp jp_called(true, w, ctx), do: jp_block(w, ctx)
+  defp jp_called(false, w, ctx), do: {jp_frozen(%{kind: :b}, w, ctx), nil}
+
+  defp jp_passed_on!(q, _got, _on) when q in [nil, false], do: nil
+
+  defp jp_passed_on!(_q, got, on) do
+    assert got == pc_one(on)
+    reached_when(on, :jp_reach, :passed_on)
   end
+
+  defp jp_jump_reach(true), do: :jumped
+  defp jp_jump_reach(false), do: :not_taken
+
+  defp jp_jumped_to(true, to), do: to
+  defp jp_jumped_to(false, _to), do: nil
+
+  defp jp_one_shot_edge(:osf, on, stored), do: not on and stored
+  defp jp_one_shot_edge(_rising, on, stored), do: on and not stored
+
+  defp jp_coil_reach(:osr), do: :coil_rose
+  defp jp_coil_reach(_osf), do: :coil_fell
+
+  defp jp_timed(true, was, gap), do: min(max(was["acc"], 0) + gap, 200)
+  defp jp_timed(false, _was, _gap), do: 0
+
+  defp jp_timer(true, acc, now),
+    do: %{
+      "pre" => 200,
+      "acc" => acc,
+      "dn" => pc_one(acc == 200),
+      "tt" => pc_one(acc != 200),
+      "en" => 1,
+      "last" => now
+    }
+
+  defp jp_timer(false, _acc, now),
+    do: %{"pre" => 200, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
 
   # The block's body: its one-shot skipped where its version jumps on `skip`, `m3`.
   defp jp_block(w, ctx) do
     jumps? = ctx.spec.b in [1, 3]
-
-    if jumps? and ctx.image["m3"] == 1 do
-      assert Map.take(ctx.later.env["b"], ~w(e q)) == Map.take(ctx.before.env["b"], ~w(e q))
-      assert ctx.later.env["bq"] == ctx.before.env["b"]["q"]
-      jp_reached(:block_skipped)
-      {jp_skipped(w, "b.e"), nil}
-    else
-      go = ctx.image["e1"] == 1
-      on = if ctx.spec.b == 3, do: not go, else: go
-      got = ctx.later.env["b"]["q"]
-      jp_edge!("b.e", on and not pc_closed?(ctx.before.env["b"]["e"]), got, w, ctx)
-      assert ctx.later.env["b"]["e"] == pc_one(on) and ctx.later.env["bq"] == got
-      {jp_ran(w, "b.e", ctx), nil}
-    end
+    jp_body(jumps? and ctx.image["m3"] == 1, w, ctx)
   end
+
+  defp jp_body(true, w, ctx) do
+    assert Map.take(ctx.later.env["b"], ~w(e q)) == Map.take(ctx.before.env["b"], ~w(e q))
+    assert ctx.later.env["bq"] == ctx.before.env["b"]["q"]
+    jp_reached(:block_skipped)
+    {jp_skipped(w, "b.e"), nil}
+  end
+
+  defp jp_body(false, w, ctx) do
+    go = ctx.image["e1"] == 1
+    on = jp_body_on(ctx.spec.b, go)
+    got = ctx.later.env["b"]["q"]
+    jp_edge!("b.e", on and not pc_closed?(ctx.before.env["b"]["e"]), got, w, ctx)
+    assert ctx.later.env["b"]["e"] == pc_one(on) and ctx.later.env["bq"] == got
+    {jp_ran(w, "b.e", ctx), nil}
+  end
+
+  defp jp_body_on(3, go), do: not go
+  defp jp_body_on(_version, go), do: go
 
   # One run of an edge memory: what it gave, 1 or 0, where the oracle allows an edge.
   @jp_memories %{"s" => :s, "c.cu" => :c, "c.cd" => :d, "b.e" => :b}
@@ -9453,25 +9811,32 @@ defmodule Logex.ApiContractTest do
   defp jp_edge!(mem, edge?, got, w, ctx) do
     same = Map.get(w.last, mem) == ctx.texts[mem]
 
-    allowed =
-      cond do
-        ctx.before.first -> [false]
-        Map.get(w.clean, mem, false) -> [true]
-        same -> [false, true]
-        true -> [false]
-      end
+    allowed = ct_allowed(ctx.before.first, Map.get(w.clean, mem, false), same)
 
     assert got in Enum.map(allowed, &pc_one(edge? and &1)), "#{mem}: #{got}"
     skipped = Map.get(w.skips, mem, 0) > 0
 
-    if edge? and skipped and not same and not ctx.before.first and
-         not Map.get(w.clean, mem, false) do
-      jp_reached(:blocked_through_skip)
-      if ctx.spec.legs[@jp_memories[mem]] != nil and mem != "b.e", do: jp_reached(:leg_held)
-    end
+    jp_blocked_through_skip(
+      edge? and skipped and not same and not ctx.before.first and
+        not Map.get(w.clean, mem, false),
+      mem,
+      ctx
+    )
 
-    if got == 1 and skipped and Map.get(w.clean, mem, false), do: jp_reached(:late_edge)
-    if got == 1 and not Map.get(w.clean, mem, false), do: jp_reached(:edge_kept)
+    reached_when(got == 1 and skipped and Map.get(w.clean, mem, false), :jp_reach, :late_edge)
+    reached_when(got == 1 and not Map.get(w.clean, mem, false), :jp_reach, :edge_kept)
+  end
+
+  defp jp_blocked_through_skip(false, _mem, _ctx), do: nil
+
+  defp jp_blocked_through_skip(true, mem, ctx) do
+    jp_reached(:blocked_through_skip)
+
+    reached_when(
+      ctx.spec.legs[@jp_memories[mem]] != nil and mem != "b.e",
+      :jp_reach,
+      :leg_held
+    )
   end
 
   defp jp_ran(w, mem, ctx),
@@ -9500,7 +9865,7 @@ defmodule Logex.ApiContractTest do
 
   defp jp_frozen(%{kind: :y, chain: chain}, w, ctx) do
     assert ctx.later.env["y"] == ctx.before.env["y"]
-    if ctx.before.env["y"] != pc_one(jp_cond(chain, ctx.image)), do: jp_reached(:held_ote)
+    reached_when(ctx.before.env["y"] != pc_one(jp_cond(chain, ctx.image)), :jp_reach, :held_ote)
     w
   end
 
@@ -9683,50 +10048,52 @@ defmodule Logex.ApiContractTest do
   # An element's index as the scan reads it, and whether every subscript is inside its
   # dimension.
   defp ts_index({array, subscripts}, model, spec) do
-    read =
-      for subscript <- subscripts do
-        case subscript do
-          {:lit, n} -> n
-          {:tag, name} -> model.inputs[name]
-        end
-      end
+    read = for subscript <- subscripts, do: ts_subscript(subscript, model)
 
-    if Enum.any?(subscripts, &match?({:lit, _}, &1)) and
-         Enum.any?(subscripts, &match?({:tag, _}, &1)),
-       do: ts_reached(:mixed)
+    reached_when(
+      Enum.any?(subscripts, &match?({:lit, _}, &1)) and
+        Enum.any?(subscripts, &match?({:tag, _}, &1)),
+      :ts_reach,
+      :mixed
+    )
 
     inside =
       Enum.zip(read, spec.dims[array]) |> Enum.all?(fn {i, count} -> i >= 0 and i < count end)
 
-    if Enum.any?(read, &(&1 < 0)), do: ts_reached(:negative)
+    reached_when(Enum.any?(read, &(&1 < 0)), :ts_reach, :negative)
     {read, inside}
   end
+
+  defp ts_subscript({:lit, n}, _model), do: n
+  defp ts_subscript({:tag, name}, model), do: model.inputs[name]
 
   # One instruction's run: `{power, model}` or a throw of its fault's subscripts.
   defp ts_get(_model, {:lit, n}, _spec), do: n
 
-  defp ts_get(model, {:el, element}, spec) do
-    case ts_index(element, model, spec) do
-      {read, true} ->
-        ts_reached(:read)
-        model.arrays[elem(element, 0)][read]
+  defp ts_get(model, {:el, element}, spec),
+    do: ts_got(ts_index(element, model, spec), model, element)
 
-      {read, false} ->
-        ts_reached(:read_fault)
-        throw({:ts_fault, read})
-    end
+  defp ts_got({read, true}, model, element) do
+    ts_reached(:read)
+    model.arrays[elem(element, 0)][read]
   end
 
-  defp ts_put(model, element, value, spec) do
-    case ts_index(element, model, spec) do
-      {read, true} ->
-        ts_reached(:written)
-        put_in(model, [:arrays, elem(element, 0), read], value)
+  defp ts_got({read, false}, _model, _element) do
+    ts_reached(:read_fault)
+    throw({:ts_fault, read})
+  end
 
-      {read, false} ->
-        ts_reached(:write_fault)
-        throw({:ts_fault, read})
-    end
+  defp ts_put(model, element, value, spec),
+    do: ts_written(ts_index(element, model, spec), model, element, value)
+
+  defp ts_written({read, true}, model, element, value) do
+    ts_reached(:written)
+    put_in(model, [:arrays, elem(element, 0), read], value)
+  end
+
+  defp ts_written({read, false}, _model, _element, _value) do
+    ts_reached(:write_fault)
+    throw({:ts_fault, read})
   end
 
   defp ts_fault(symbol, line, read),
@@ -9765,33 +10132,29 @@ defmodule Logex.ApiContractTest do
     {power, model} =
       ts_run(model, :xic, line, fn -> {ts_get(model, {:el, element}, spec) == 1, model} end)
 
-    if model.faults != [] and hd(model.faults).line == line, do: ts_reached(:contact_fault)
+    reached_when(model.faults != [] and hd(model.faults).line == line, :ts_reach, :contact_fault)
     {power, model}
   end
 
   defp ts_instruction({:coil, _, :ote, element}, power, model, spec, line) do
-    value = if power, do: 1, else: 0
+    value = bit(power)
     before = length(model.faults)
 
     {_power, model} =
       ts_run(model, :ote, line, fn -> {power, ts_put(model, element, value, spec)} end)
 
-    if not power and length(model.faults) > before, do: ts_reached(:ote_false_fault)
+    reached_when(not power and length(model.faults) > before, :ts_reach, :ote_false_fault)
     model
   end
 
   defp ts_instruction({:coil, _, coil, element}, power, model, spec, line) do
-    if not power and elem(ts_index(element, model, spec), 1) == false,
-      do: ts_reached(:latch_false_unchecked)
+    reached_when(
+      not power and elem(ts_index(element, model, spec), 1) == false,
+      :ts_reach,
+      :latch_false_unchecked
+    )
 
-    case power do
-      false ->
-        model
-
-      true ->
-        value = if coil == :otl, do: 1, else: 0
-        elem(ts_run(model, coil, line, fn -> {true, ts_put(model, element, value, spec)} end), 1)
-    end
+    ts_latched(power, coil, model, {element, spec, line})
   end
 
   defp ts_instruction({:move, _, x, element}, true, model, spec, line),
@@ -9833,33 +10196,45 @@ defmodule Logex.ApiContractTest do
   defp ts_lone(spec, program, scans) do
     model = %{arrays: ts_zeros(spec), inputs: %{}, faults: []}
 
-    Enum.reduce(1..scans, {Runtime.instance(program), model, 0}, fn _, {state, model, now} ->
-      case :rand.uniform(8) do
-        1 ->
-          ts_reached(:restarted)
-          {Runtime.restart(program, state, :cold), %{model | arrays: ts_zeros(spec)}, now}
-
-        _ ->
-          inputs = ts_inputs(spec)
-
-          {_outputs, state} =
-            Runtime.call(program, state, inputs, %Scan{now: now + 10, first: state.first})
-
-          model = ts_scan(spec, %{model | inputs: inputs})
-          source = ts_source_text(spec)
-          assert state.faults == model.faults, source
-
-          for array <- ["a", "b"],
-              do:
-                assert(
-                  state.env[array] == ts_tupled(model.arrays[array], spec.dims[array]),
-                  source
-                )
-
-          {state, model, now + 10}
-      end
+    Enum.reduce(1..scans, {Runtime.instance(program), model, 0}, fn _, acc ->
+      ts_lone_step(:rand.uniform(8), acc, {spec, program})
     end)
   end
+
+  defp ts_lone_step(1, {state, model, now}, {spec, program}) do
+    ts_reached(:restarted)
+    {Runtime.restart(program, state, :cold), %{model | arrays: ts_zeros(spec)}, now}
+  end
+
+  defp ts_lone_step(_scan, {state, model, now}, {spec, program}) do
+    inputs = ts_inputs(spec)
+
+    {_outputs, state} =
+      Runtime.call(program, state, inputs, %Scan{now: now + 10, first: state.first})
+
+    model = ts_scan(spec, %{model | inputs: inputs})
+    source = ts_source_text(spec)
+    assert state.faults == model.faults, source
+
+    for array <- ["a", "b"],
+        do:
+          assert(
+            state.env[array] == ts_tupled(model.arrays[array], spec.dims[array]),
+            source
+          )
+
+    {state, model, now + 10}
+  end
+
+  defp ts_latched(false, _coil, model, _at), do: model
+
+  defp ts_latched(true, coil, model, {element, spec, line}) do
+    value = ts_latch_value(coil)
+    elem(ts_run(model, coil, line, fn -> {true, ts_put(model, element, value, spec)} end), 1)
+  end
+
+  defp ts_latch_value(:otl), do: 1
+  defp ts_latch_value(_otu), do: 0
 
   # In a resource, the subscripts and `go` connected to constants: each fault an event of
   # its cycle just after its scan's `{:ran, ...}`.
@@ -9877,7 +10252,7 @@ defmodule Logex.ApiContractTest do
       {runtime, _outputs, events} = Runtime.cycle(runtime, elapsed, %{})
       model = ts_scan(spec, model)
       [{:ran, "fast", "m1", _} | faults] = events
-      if faults != [], do: ts_reached(:resource_fault)
+      reached_when(faults != [], :ts_reach, :resource_fault)
       assert faults == Enum.map(model.faults, &{:fault, "fast", "m1", &1})
       assert Runtime.get!(runtime, "m1.a") == ay_listed(model.arrays["a"], spec.dims["a"])
       {runtime, model, 10}
@@ -10050,26 +10425,7 @@ defmodule Logex.ApiContractTest do
       %{"pre" => pre, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}
     end
 
-    counter = fn pv ->
-      case spec.c_kind do
-        "ctu" ->
-          %{"cu" => 0, "r" => 0, "pv" => pv, "q" => 0, "cv" => 0, "ov" => 0}
-
-        "ctud" ->
-          %{
-            "cu" => 0,
-            "cd" => 0,
-            "r" => 0,
-            "ld" => 0,
-            "pv" => pv,
-            "qu" => 0,
-            "qd" => 0,
-            "cv" => 0,
-            "ov" => 0,
-            "un" => 0
-          }
-      end
-    end
+    counter = &ia_counter(spec.c_kind, &1)
 
     %{
       lt: Map.new(ts_indexes(spec.t_dims), &{&1, timer.(Map.get(presets, &1, 0))}),
@@ -10087,10 +10443,10 @@ defmodule Logex.ApiContractTest do
   # IEC's TON with logex's members, restated (docs/naming.md, `ton`).
   defp ia_ton(timer, true, now) do
     limit = max(timer["pre"], 0)
-    elapsed = if timer["en"] == 1, do: now - timer["last"], else: 0
+    elapsed = since_enabled(timer["en"], now, timer["last"])
     acc = min(max(timer["acc"], 0) + elapsed, limit)
-    if elapsed > 0, do: ia_reached(:timed)
-    if acc == limit, do: ia_reached(:done)
+    reached_when(elapsed > 0, :ia_reach, :timed)
+    reached_when(acc == limit, :ia_reach, :done)
 
     %{
       timer
@@ -10107,37 +10463,58 @@ defmodule Logex.ApiContractTest do
 
   # IEC's CTU and CTUD, restated: R before LD before a rising edge, never on a first scan.
   defp ia_count(counter, side, power, first) do
-    memory = if side == :up, do: "cu", else: "cd"
+    memory = ct_memory(side)
     edge = power and not first and counter[memory] == 0
-
-    cv =
-      cond do
-        counter["r"] == 1 ->
-          ia_reached(:reset)
-          0
-
-        Map.get(counter, "ld", 0) == 1 ->
-          counter["pv"]
-
-        edge and side == :up ->
-          ia_reached(:counted)
-          counter["cv"] + 1
-
-        edge and side == :down ->
-          ia_reached(:counted_down)
-          counter["cv"] - 1
-
-        true ->
-          counter["cv"]
-      end
-
-    counter = %{counter | "cv" => cv, memory => ia_bit(power)}
-
-    case Map.has_key?(counter, "qu") do
-      true -> %{counter | "qu" => ia_bit(cv >= counter["pv"]), "qd" => ia_bit(cv <= 0)}
-      false -> %{counter | "q" => ia_bit(cv >= counter["pv"])}
-    end
+    cv = ia_counted(counter, edge, side)
+    ia_qualified(%{counter | "cv" => cv, memory => ia_bit(power)})
   end
+
+  # IEC's CTU and CTUD: R, then LD, then an edge.
+  defp ia_counted(%{"r" => 1}, _edge, _side) do
+    ia_reached(:reset)
+    0
+  end
+
+  defp ia_counted(%{"ld" => 1} = counter, _edge, _side), do: counter["pv"]
+
+  defp ia_counted(counter, true, :up) do
+    ia_reached(:counted)
+    counter["cv"] + 1
+  end
+
+  defp ia_counted(counter, true, :down) do
+    ia_reached(:counted_down)
+    counter["cv"] - 1
+  end
+
+  defp ia_counted(counter, _edge, _side), do: counter["cv"]
+
+  # A counter's outputs from its count: a ctud's `qu` and `qd`, a ctu's `q`.
+  defp ia_qualified(%{"qu" => _} = counter),
+    do: %{
+      counter
+      | "qu" => ia_bit(counter["cv"] >= counter["pv"]),
+        "qd" => ia_bit(counter["cv"] <= 0)
+    }
+
+  defp ia_qualified(counter), do: %{counter | "q" => ia_bit(counter["cv"] >= counter["pv"])}
+
+  defp ia_counter("ctu", pv),
+    do: %{"cu" => 0, "r" => 0, "pv" => pv, "q" => 0, "cv" => 0, "ov" => 0}
+
+  defp ia_counter("ctud", pv),
+    do: %{
+      "cu" => 0,
+      "cd" => 0,
+      "r" => 0,
+      "ld" => 0,
+      "pv" => pv,
+      "qu" => 0,
+      "qd" => 0,
+      "cv" => 0,
+      "ov" => 0,
+      "un" => 0
+    }
 
   defp ia_fault(symbol, line, read),
     do: %Logex.Fault{
@@ -10179,61 +10556,69 @@ defmodule Logex.ApiContractTest do
          update_in(
            model,
            [:lc, [i]],
-           &ia_count(&1, if(side == :ctu, do: :up, else: :down), on.(input), first)
+           &ia_count(&1, ia_side(side), on.(input), first)
          )
 
   defp ia_rung({:cal, i, input}, _line, model, {_spec, on, _inputs, _now, first}) do
     s = ia_bit(on.(input))
     gate = model.lb[[i]]
     pulse = s == 1 and gate["e"] == 0 and not first
-    if pulse, do: ia_reached(:pulsed)
+    reached_when(pulse, :ia_reach, :pulsed)
     gate = %{gate | "s" => s, "e" => s, "q" => ia_bit(pulse)}
     model |> put_in([:lb, [i]], gate) |> put_in([:q, [i]], gate["q"])
   end
 
-  defp ia_rung({:read_dn}, line, model, {spec, _on, inputs, _now, _first}) do
-    case ia_at(spec.t_dims, inputs["k"]) do
-      {read, true} ->
-        ia_reached(:read_through_tag)
-        put_in(model, [:out, "r"], model.lt[read]["dn"])
+  defp ia_rung({:read_dn}, line, model, {spec, _on, inputs, _now, _first}),
+    do: ia_read_dn(ia_at(spec.t_dims, inputs["k"]), line, model)
 
-      {read, false} ->
-        ia_reached(:read_fault)
-        %{put_in(model, [:out, "r"], 0) | faults: [ia_fault(:xic, line, read) | model.faults]}
-    end
-  end
+  defp ia_rung({:read_acc}, line, model, {spec, _on, inputs, _now, _first}),
+    do: ia_read_acc(ia_at(spec.t_dims, inputs["k"]), line, model)
 
-  defp ia_rung({:read_acc}, line, model, {spec, _on, inputs, _now, _first}) do
-    case ia_at(spec.t_dims, inputs["k"]) do
-      {read, true} -> put_in(model, [:out, "v"], model.lt[read]["acc"])
-      {read, false} -> %{model | faults: [ia_fault(:move, line, read) | model.faults]}
-    end
-  end
+  defp ia_rung({:read_cv}, line, model, {spec, _on, inputs, _now, _first}),
+    do: ia_read_cv(ia_at([spec.n_c], inputs["k"]), line, model)
 
-  defp ia_rung({:read_cv}, line, model, {spec, _on, inputs, _now, _first}) do
-    case ia_at([spec.n_c], inputs["k"]) do
-      {read, true} -> put_in(model, [:out, "w"], model.lc[read]["cv"])
-      {read, false} -> %{model | faults: [ia_fault(:move, line, read) | model.faults]}
-    end
-  end
-
-  defp ia_rung({:write_pv}, line, model, {spec, on, inputs, _now, _first}) do
-    case {on.("e2"), ia_at([spec.n_c], inputs["k"])} do
-      {false, _} ->
-        model
-
-      {true, {read, true}} ->
-        ia_reached(:written_through_tag)
-        put_in(model, [:lc, read, "pv"], 2)
-
-      {true, {read, false}} ->
-        ia_reached(:write_fault)
-        %{model | faults: [ia_fault(:move, line, read) | model.faults]}
-    end
-  end
+  defp ia_rung({:write_pv}, line, model, {spec, on, inputs, _now, _first}),
+    do: ia_write_pv({on.("e2"), ia_at([spec.n_c], inputs["k"])}, line, model)
 
   defp ia_rung({:reset, i}, _line, model, {_spec, on, _inputs, _now, _first}),
     do: put_in(model, [:lc, [i], "r"], ia_bit(on.("e3")))
+
+  defp ia_side(:ctu), do: :up
+  defp ia_side(_ctd), do: :down
+
+  defp ia_read_dn({read, true}, _line, model) do
+    ia_reached(:read_through_tag)
+    put_in(model, [:out, "r"], model.lt[read]["dn"])
+  end
+
+  defp ia_read_dn({read, false}, line, model) do
+    ia_reached(:read_fault)
+    %{put_in(model, [:out, "r"], 0) | faults: [ia_fault(:xic, line, read) | model.faults]}
+  end
+
+  defp ia_read_acc({read, true}, _line, model),
+    do: put_in(model, [:out, "v"], model.lt[read]["acc"])
+
+  defp ia_read_acc({read, false}, line, model),
+    do: %{model | faults: [ia_fault(:move, line, read) | model.faults]}
+
+  defp ia_read_cv({read, true}, _line, model),
+    do: put_in(model, [:out, "w"], model.lc[read]["cv"])
+
+  defp ia_read_cv({read, false}, line, model),
+    do: %{model | faults: [ia_fault(:move, line, read) | model.faults]}
+
+  defp ia_write_pv({false, _at}, _line, model), do: model
+
+  defp ia_write_pv({true, {read, true}}, _line, model) do
+    ia_reached(:written_through_tag)
+    put_in(model, [:lc, read, "pv"], 2)
+  end
+
+  defp ia_write_pv({true, {read, false}}, line, model) do
+    ia_reached(:write_fault)
+    %{model | faults: [ia_fault(:move, line, read) | model.faults]}
+  end
 
   defp ia_tupled(elements, dims), do: ay_tupled(ay_listed(elements, dims))
 
@@ -10259,99 +10644,103 @@ defmodule Logex.ApiContractTest do
 
   defp ia_lone(spec, program, scans) do
     Enum.reduce(1..scans, {program, Runtime.instance(program), ia_start(spec), spec, 0}, fn _,
-                                                                                            {program,
-                                                                                             state,
-                                                                                             model,
-                                                                                             spec,
-                                                                                             now} ->
-      case :rand.uniform(9) do
-        1 ->
-          ia_reached(:restarted)
-          {program, Runtime.restart(program, state, :cold), ia_start(spec), spec, now}
-
-        2 ->
-          # A state holding an element outside its type is refused, and the state unchanged.
-          ia_reached(:state_refused)
-          i = Enum.random(0..(spec.n_c - 1))
-
-          bad = %{
-            state
-            | env:
-                Map.put(
-                  state.env,
-                  "cn",
-                  put_elem(state.env["cn"], i, %{elem(state.env["cn"], i) | "cv" => 5_000_000_000})
-                )
-          }
-
-          assert_raise ArgumentError, ~r/^state.env holds `cn\[#{i}\].cv` outside its type/, fn ->
-            Runtime.call(program, bad, %{}, %Scan{now: now, first: state.first})
-          end
-
-          {program, state, model, spec, now}
-
-        3 ->
-          ia_edit(program, state, model, spec, now)
-
-        _ ->
-          dt = pick([1, 5, 10, 20])
-          inputs = ia_inputs(spec)
-
-          {outputs, state2} =
-            Runtime.call(program, state, inputs, %Scan{now: now + dt, first: state.first})
-
-          model = ia_scan(spec, model, inputs, now + dt, state.first)
-          ia_assert(spec, model, state2, outputs)
-          {program, state2, model, spec, now + dt}
-      end
+                                                                                            acc ->
+      ia_lone_step(:rand.uniform(9), acc)
     end)
+  end
+
+  defp ia_lone_step(1, {program, state, _model, spec, now}) do
+    ia_reached(:restarted)
+    {program, Runtime.restart(program, state, :cold), ia_start(spec), spec, now}
+  end
+
+  # A state holding an element outside its type is refused, and the state unchanged.
+  defp ia_lone_step(2, {program, state, model, spec, now}) do
+    ia_reached(:state_refused)
+    i = Enum.random(0..(spec.n_c - 1))
+
+    bad = %{
+      state
+      | env:
+          Map.put(
+            state.env,
+            "cn",
+            put_elem(state.env["cn"], i, %{elem(state.env["cn"], i) | "cv" => 5_000_000_000})
+          )
+    }
+
+    assert_raise ArgumentError, ~r/^state.env holds `cn\[#{i}\].cv` outside its type/, fn ->
+      Runtime.call(program, bad, %{}, %Scan{now: now, first: state.first})
+    end
+
+    {program, state, model, spec, now}
+  end
+
+  defp ia_lone_step(3, {program, state, model, spec, now}),
+    do: ia_edit(program, state, model, spec, now)
+
+  defp ia_lone_step(_scan, {program, state, model, spec, now}) do
+    dt = pick([1, 5, 10, 20])
+    inputs = ia_inputs(spec)
+
+    {outputs, state2} =
+      Runtime.call(program, state, inputs, %Scan{now: now + dt, first: state.first})
+
+    model = ia_scan(spec, model, inputs, now + dt, state.first)
+    ia_assert(spec, model, state2, outputs)
+    {program, state2, model, spec, now + dt}
   end
 
   # An edit of one element's preset, which a test moves by its path, or of a counter's rung,
   # whose edge memory it blocks by its path; then assembled, the oracle's element updated
   # as the report says.
-  defp ia_edit(program, state, model, spec, now) do
-    case {spec.t_runs, spec.c_runs} do
-      {[{index, input, pre} | rest], _} ->
-        moved = if pre == 50, do: 20, else: 50
-        candidate_spec = %{spec | t_runs: [{index, input, moved} | rest]}
-        candidate = ia_program(candidate_spec)
-        {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
-        {edit, state, report} = Edit.test(edit, state)
-        name = ia_name("tm", index)
-        {target, model} = ia_moved(report, name, model, index)
-        assert target in [pre, moved, model.lt[index]["pre"]]
-        {^candidate, state, _} = Edit.assemble(edit, state)
-        {candidate, state, model, candidate_spec, now}
+  defp ia_edit(program, state, model, spec, now),
+    do: ia_edited({spec.t_runs, spec.c_runs}, {program, state, model, spec, now})
 
-      {[], [{i, up, down, pre} | rest]} ->
-        changed = if up == "e1", do: "e2", else: "e1"
-        candidate_spec = %{spec | c_runs: [{i, changed, down, pre} | rest]}
-        candidate = ia_program(candidate_spec)
-        {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
-        {edit, state, report} = Edit.test(edit, state)
-        assert {:ons_blocked, "cn[#{i}].cu", model.lc[[i]]["cu"]} in report
-        ia_reached(:edge_blocked)
-        {^candidate, state, _} = Edit.assemble(edit, state)
-        # The blocked memory counts no edge at its next run: restated as a first scan's.
-        {candidate, state, model, candidate_spec, now}
-        |> ia_blocked_scan(i)
-
-      {[], []} ->
-        {program, state, model, spec, now}
-    end
+  defp ia_edited({[{index, input, pre} | rest], _}, {program, state, model, spec, now}) do
+    moved = ia_other_preset(pre)
+    candidate_spec = %{spec | t_runs: [{index, input, moved} | rest]}
+    candidate = ia_program(candidate_spec)
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, state, report} = Edit.test(edit, state)
+    name = ia_name("tm", index)
+    {target, model} = ia_moved(report, name, model, index)
+    assert target in [pre, moved, model.lt[index]["pre"]]
+    {^candidate, state, _} = Edit.assemble(edit, state)
+    {candidate, state, model, candidate_spec, now}
   end
 
-  defp ia_moved(report, name, model, index) do
-    case for({:preset, ^name, {from, to}} <- report, do: {from, to}) do
-      [{_from, to}] ->
-        ia_reached(:preset_moved)
-        {to, put_in(model, [:lt, index, "pre"], to)}
-
-      [] ->
-        {model.lt[index]["pre"], model}
-    end
+  defp ia_edited({[], [{i, up, down, pre} | rest]}, {program, state, model, spec, now}) do
+    changed = ia_other_input(up)
+    candidate_spec = %{spec | c_runs: [{i, changed, down, pre} | rest]}
+    candidate = ia_program(candidate_spec)
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, state, report} = Edit.test(edit, state)
+    assert {:ons_blocked, "cn[#{i}].cu", model.lc[[i]]["cu"]} in report
+    ia_reached(:edge_blocked)
+    {^candidate, state, _} = Edit.assemble(edit, state)
+    # The blocked memory counts no edge at its next run: restated as a first scan's.
+    {candidate, state, model, candidate_spec, now}
+    |> ia_blocked_scan(i)
   end
+
+  defp ia_edited({[], []}, at), do: at
+
+  defp ia_other_preset(50), do: 20
+  defp ia_other_preset(_pre), do: 50
+
+  defp ia_other_input("e1"), do: "e2"
+  defp ia_other_input(_up), do: "e1"
+
+  defp ia_moved(report, name, model, index),
+    do: ia_preset_moved(for({:preset, ^name, {from, to}} <- report, do: {from, to}), model, index)
+
+  defp ia_preset_moved([{_from, to}], model, index) do
+    ia_reached(:preset_moved)
+    {to, put_in(model, [:lt, index, "pre"], to)}
+  end
+
+  defp ia_preset_moved([], model, index), do: {model.lt[index]["pre"], model}
 
   # The scan right after a switch that blocked a counter's memory: the counter counts no
   # edge, and every other rung runs as the oracle says; the block dropped by the scan.
@@ -10367,30 +10756,23 @@ defmodule Logex.ApiContractTest do
     counted = model.lc[[i]]["cv"] - before["cv"]
 
     model =
-      if counted > 0 and before["r"] == 0 and Map.get(before, "ld", 0) == 0,
-        do: update_in(model, [:lc, [i], "cv"], &(&1 - counted)) |> ia_requalify(i),
-        else: model
+      ia_uncounted(
+        counted > 0 and before["r"] == 0 and Map.get(before, "ld", 0) == 0,
+        model,
+        {i, counted}
+      )
 
     ia_assert(spec, model, state2, outputs)
     assert state2.ons_blocked == []
     {program, state2, model, spec, now + 10}
   end
 
-  defp ia_requalify(model, i) do
-    update_in(model, [:lc, [i]], fn counter ->
-      case Map.has_key?(counter, "qu") do
-        true ->
-          %{
-            counter
-            | "qu" => ia_bit(counter["cv"] >= counter["pv"]),
-              "qd" => ia_bit(counter["cv"] <= 0)
-          }
+  defp ia_requalify(model, i), do: update_in(model, [:lc, [i]], &ia_qualified/1)
 
-        false ->
-          %{counter | "q" => ia_bit(counter["cv"] >= counter["pv"])}
-      end
-    end)
-  end
+  defp ia_uncounted(true, model, {i, counted}),
+    do: update_in(model, [:lc, [i], "cv"], &(&1 - counted)) |> ia_requalify(i)
+
+  defp ia_uncounted(false, model, _counted), do: model
 
   # In a resource, the inputs connected to constants and each member read by its path.
   defp ia_resource(spec, program, cycles) do
@@ -10510,6 +10892,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   period, 3 to 8 ms, of real time.
   """
   use ExUnit.Case, async: true
+
+  # Decision 264: the draws, the functions that draw a program, an input, a step or a
+  # fault at random, or write a drawn program as text, which alone may hold a `case`,
+  # `cond`, `if` or `unless`; every other function, each oracle and the harness that
+  # compares it with logex, is clauses (`clauses_test.exs`).
+  @draws ~w(
+    editing restart stepped
+  )a
+
+  @doc false
+  def draws, do: @draws
 
   # A device or a runner the walk kills is reported by its process as it goes down.
   @moduletag :capture_log
@@ -10795,7 +11188,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :real_pressed,
     :word_pressed,
     :real_forced,
-    :real_misfit
+    :real_misfit,
+    :unzeroed_named,
+    :zero_retried
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1])
@@ -11002,6 +11397,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       fault: nil,
       failing: nil,
       down: MapSet.new(),
+      unzeroed: MapSet.new(),
+      maybe: nil,
+      sure: false,
+      retry_once: nil,
+      tripped_at: nil,
       unforcing: %{},
       hung: %{},
       begun: 0,
@@ -11236,44 +11636,44 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp forcing(w) do
     w = %{settled(w) | doing: :force}
+    forcing_drawn(:rand.uniform(6), w)
+  end
 
-    case :rand.uniform(6) do
-      n when n <= 3 ->
-        name =
-          pick(
-            triggers(w.config) ++ triggers(w.config) ++ ["pt[1]"] ++ Enum.sort(Map.keys(@inputs))
-          )
+  defp forcing_drawn(n, w) when n <= 3 do
+    name =
+      pick(triggers(w.config) ++ triggers(w.config) ++ ["pt[1]"] ++ Enum.sort(Map.keys(@inputs)))
 
-        {_device, _address, type} = @inputs[name]
-        value = forced_value(w, name, type)
-        kick = kicks?(w, name, value)
-        began = w.begun
-        forces = force_drawn(w, name, value)
-        reach(:force, true)
-        reach(:forced_trigger, kick == 1)
-        reach(:element_forced, String.contains?(name, "["))
-        reach(:real_forced, type == :real)
+    {_device, _address, type} = @inputs[name]
+    value = forced_value(w, name, type)
+    kick = kicks?(w, name, value)
+    began = w.begun
+    forces = force_drawn(w, name, value)
+    reach(:force, true)
+    reach(:forced_trigger, kick == 1)
+    reach(:element_forced, String.contains?(name, "["))
+    reach(:real_forced, type == :real)
 
-        # A force that changes what a trigger reads makes its round at once, before it
-        # returns, and one that does not makes none (decisions 120 and 138).
-        w = drained(%{w | forces: Map.merge(w.forces, forces)})
-        assert w.begun - began == kick
-        forced(w)
+    # A force that changes what a trigger reads makes its round at once, before it returns,
+    # and one that does not makes none (decisions 120 and 138).
+    w = drained(%{w | forces: Map.merge(w.forces, forces)})
+    assert w.begun - began == kick
+    forced(w)
+  end
 
-      n when n <= 5 ->
-        name =
-          pick(
-            Enum.sort(Map.keys(w.forces)) ++
-              [pick(Enum.sort(Map.keys(@inputs)))] ++ whole_unforced(w.forces)
-          )
+  defp forcing_drawn(n, w) when n <= 5 do
+    name =
+      pick(
+        Enum.sort(Map.keys(w.forces)) ++
+          [pick(Enum.sort(Map.keys(@inputs)))] ++ whole_unforced(w.forces)
+      )
 
-        forced(%{w | forces: Map.drop(w.forces, unforce_drawn(w, name))})
+    forced(%{w | forces: Map.drop(w.forces, unforce_drawn(w, name))})
+  end
 
-      6 ->
-        assert Runner.unforce_all(w.runner) == :ok
-        reach(:unforce_all, map_size(w.forces) > 0)
-        forced(%{w | forces: %{}, unforcing: w.forces})
-    end
+  defp forcing_drawn(6, w) do
+    assert Runner.unforce_all(w.runner) == :ok
+    reach(:unforce_all, map_size(w.forces) > 0)
+    forced(%{w | forces: %{}, unforcing: w.forces})
   end
 
   # A trigger forced, half the time to the other value than it reads, so that the force
@@ -11379,20 +11779,21 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = settled(w)
     draw = candidate(w.draws.running)
     candidate = configured(draw, w.programs)
+    accepted(ConfigEdit.accept(w.rt, candidate, step_time(w)), {draw, candidate}, w)
+  end
 
-    case ConfigEdit.accept(w.rt, candidate, step_time(w)) do
-      {:ok, edit, forecast} ->
-        assert Runner.accept(w.runner, candidate) == {:ok, forecast}
-        reach(:accept, true)
-        w = %{w | edit: edit, expect: [{:edit, :accept, forecast}]}
-        w = put_in(w.draws.original, w.draws.running)
-        checked(consumed(put_in(w.draws.candidate, draw)))
+  defp accepted({:ok, edit, forecast}, {draw, candidate}, w) do
+    assert Runner.accept(w.runner, candidate) == {:ok, forecast}
+    reach(:accept, true)
+    w = %{w | edit: edit, expect: [{:edit, :accept, forecast}]}
+    w = put_in(w.draws.original, w.draws.running)
+    checked(consumed(put_in(w.draws.candidate, draw)))
+  end
 
-      {:error, diagnostics} ->
-        assert Runner.accept(w.runner, candidate) == {:error, diagnostics}
-        reach(:accept_refused, true)
-        checked(consumed(w))
-    end
+  defp accepted({:error, diagnostics}, {_draw, candidate}, w) do
+    assert Runner.accept(w.runner, candidate) == {:error, diagnostics}
+    reach(:accept_refused, true)
+    checked(consumed(w))
   end
 
   defp edit_step(w, step) do
@@ -11466,33 +11867,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp mistaken(w) do
     w = settled(w)
-
-    case :rand.uniform(4) do
-      1 ->
-        restarted_running(w)
-
-      2 ->
-        {name, value, message} =
-          pick([
-            {"qa", 1, "`qa` is an output point, at `panel.q.0`: only an input point is forced"},
-            {"pa", 2, "`pa` is a bool, forced to 0 or 1, got: 2"}
-          ])
-
-        raises(misforced(w.file, message), fn -> Runner.force(w.runner, name, value) end)
-        reach(:misforced, w.file != nil)
-        checked(w)
-
-      3 ->
-        path = pick(["nothing", "c1.nothing", "zz"])
-        {:error, reason} = Runtime.get(w.rt, path)
-        raises(reason, fn -> Runner.get!(w.runner, path) end)
-        reach(:get_mistake, true)
-        checked(w)
-
-      4 ->
-        restarted_running(w)
-    end
+    mistaken_drawn(:rand.uniform(4), w)
   end
+
+  defp mistaken_drawn(2, w) do
+    {name, value, message} =
+      pick([
+        {"qa", 1, "`qa` is an output point, at `panel.q.0`: only an input point is forced"},
+        {"pa", 2, "`pa` is a bool, forced to 0 or 1, got: 2"}
+      ])
+
+    raises(misforced(w.file, message), fn -> Runner.force(w.runner, name, value) end)
+    reach(:misforced, w.file != nil)
+    checked(w)
+  end
+
+  defp mistaken_drawn(3, w) do
+    path = pick(["nothing", "c1.nothing", "zz"])
+    {:error, reason} = Runtime.get(w.rt, path)
+    raises(reason, fn -> Runner.get!(w.runner, path) end)
+    reach(:get_mistake, true)
+    checked(w)
+  end
+
+  defp mistaken_drawn(_restart, w), do: restarted_running(w)
 
   # A runner with no forces file takes no force at all, which it says first.
   defp misforced(nil, _message),
@@ -11556,6 +11954,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     before = writes(w)
     Sim.fail(w.sims[device], callback, refusal_how(callback, how))
 
+    # Now and then a device up does not take the refusal's 0 (decision 262), which its
+    # next poll writes again.
+    unzero =
+      pick([nil, nil | Enum.reject(Enum.sort(Map.keys(w.sims)), &MapSet.member?(w.down, &1))])
+
+    zero_fails(unzero, w)
+
     assert Runner.restart(w.runner, mode) ==
              {:error, {:io_init, device, refusal_cause(callback, device, how)}}
 
@@ -11564,11 +11969,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
       zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
-      assert Enum.drop(Sim.writes(sim), length(before[name])) == [zeros]
+
+      assert Enum.drop(Sim.writes(sim), length(before[name])) ==
+               written_again(name == unzero, zeros)
     end
 
-    checked(%{w | zeroed: %{}})
+    # Every device up released and written its 0 again, which each takes but the one drawn,
+    # so that status/1 names the devices down and that one, until its poll's 0 is taken
+    # (decision 262).
+    checked(%{
+      w
+      | zeroed: %{},
+        unzeroed: w.down,
+        maybe: unzero,
+        sure: true,
+        retry_once: unzero,
+        tripped_at: now(w)
+    })
   end
+
+  defp zero_fails(nil, _w), do: :ok
+  defp zero_fails(name, w), do: Sim.fail(w.sims[name], :write, {:error, :eio})
+
+  defp written_again(true, _zeros), do: []
+  defp written_again(false, zeros), do: [zeros]
 
   defp refusal_how(:init, reason), do: {:error, reason}
   defp refusal_how(:read, how), do: how
@@ -11723,17 +12147,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :sys.suspend(w.runner)
     :ok = Manual.advance(w.manual, k)
     :sys.resume(w.runner)
-    w = %{w | floor: now(w)}
+    stuck_for(size, %{w | floor: now(w)})
+  end
 
-    case size do
-      :small ->
-        reach(:stuck_small, true)
-        checked(consumed(w))
+  defp stuck_for(:small, w) do
+    reach(:stuck_small, true)
+    checked(consumed(w))
+  end
 
-      :big ->
-        w = %{w | fault: {:watchdog, {:device, "drive", w.idle + w.poll}}}
-        tripped!(consumed(w))
-    end
+  defp stuck_for(:big, w) do
+    w = %{w | fault: {:watchdog, {:device, "drive", w.idle + w.poll}}}
+    tripped!(consumed(w))
   end
 
   defp fault_acted(:report, device, _how, w) do
@@ -11805,20 +12229,20 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # A slow task's step is run within its interval, the walk moving the clock on until it is.
   defp wait_for_slow(_w, task, 0), do: flunk("the slow #{task} never ran")
 
-  defp wait_for_slow(w, task, n) do
-    case :ets.lookup(@table, {self(), :slow, task}) do
-      [] ->
-        w
+  defp wait_for_slow(w, task, n),
+    do: slow_waited(:ets.lookup(@table, {self(), :slow, task}), w, {task, n})
 
-      [_] when w.status == :tripped ->
-        :ets.delete(@table, {self(), :slow, task})
-        w
+  defp slow_waited([], w, _waiting), do: w
 
-      [_] ->
-        target = now(w) + 1
-        :ok = Manual.advance(w.manual, 1)
-        wait_for_slow(missed(consumed(w), target), task, n - 1)
-    end
+  defp slow_waited([_], %{status: :tripped} = w, {task, _n}) do
+    :ets.delete(@table, {self(), :slow, task})
+    w
+  end
+
+  defp slow_waited([_], w, {task, n}) do
+    target = now(w) + 1
+    :ok = Manual.advance(w.manual, 1)
+    wait_for_slow(missed(consumed(w), target), task, n - 1)
   end
 
   # The fault tripped the runner for the reason the watchdogs and the faults' rules give.
@@ -11977,6 +12401,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         down: MapSet.new(),
         hung: %{},
         zeroed: %{},
+        unzeroed: MapSet.new(),
+        maybe: nil,
+        retry_once: nil,
         logic: logic_values(w.config, rt)
     }
   end
@@ -12004,8 +12431,37 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         {name, zeroed_unless_down(MapSet.member?(w.down, name), name, %{w | trip: reason})}
       end)
 
-    %{w | status: :tripped, trip: reason, written: written, failing: nil}
+    maybe = maybe_unzeroed(w, reason)
+
+    %{
+      w
+      | status: :tripped,
+        trip: reason,
+        written: written,
+        failing: nil,
+        unzeroed: w.down,
+        maybe: maybe,
+        sure: false,
+        retry_once: maybe,
+        tripped_at: now(w)
+    }
   end
+
+  # Decision 262, restated: status/1 names each device whose outputs are not known to be
+  # 0, every device down at the trip; and a device whose write the walk made fail, where a
+  # round's major fault tripped first, either took that failure with the trip's 0, so that
+  # it is named and its poll writes the 0 again, once, the failure told only once, or with
+  # its poll's write again just before, latched by its own fault and written 0: which, the
+  # walk does not know until a poll period has passed since the trip, when it is 0 and
+  # named no more.
+  defp maybe_unzeroed(%{failing: {:io, name, _cause} = fault, down: down}, reason)
+       when reason != fault,
+       do: kept_up(MapSet.member?(down, name), name)
+
+  defp maybe_unzeroed(_w, _reason), do: nil
+
+  defp kept_up(true, _name), do: nil
+  defp kept_up(false, name), do: name
 
   defp zeroed_unless_down(true, name, w), do: Map.get(w.written, name)
 
@@ -12075,12 +12531,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp over(true, task, round, w),
     do: {:watchdog, {:round, task, round.took, watchdog(task, w.config), round.times}}
 
-  defp continuous_ran(w, took) do
-    case continuous(w.config) do
-      nil -> w.longest
-      task -> Map.update(w.longest, task, took, &max(&1, took))
-    end
-  end
+  defp continuous_ran(w, took), do: longest_round(continuous(w.config), w.longest, took)
+
+  defp longest_round(nil, longest, _took), do: longest
+  defp longest_round(task, longest, took), do: Map.update(longest, task, took, &max(&1, took))
 
   # ---- the rules restated ----------------------------------------------------------------
 
@@ -12278,6 +12732,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
 
+    w = unzeroed!(w, status.unzeroed)
+
     for {name, sim} <- w.sims, Map.has_key?(w.written, name) do
       assert Sim.outputs(sim) in outputs_of(w.written[name]), "#{name}'s outputs"
     end
@@ -12288,18 +12744,63 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp outputs_of({:either, outputs}), do: outputs
   defp outputs_of(outputs), do: [outputs]
 
-  # Every output written 0 once at a trip, and nothing after it until a restart.
+  # Decision 262: the devices status/1 names while tripped, none while running.
+  defp unzeroed!(%{status: :running} = w, named) do
+    assert named == []
+    w
+  end
+
+  defp unzeroed!(%{maybe: nil} = w, named) do
+    assert named == Enum.sort(w.unzeroed)
+    reach(:unzeroed_named, named != [])
+    w
+  end
+
+  defp unzeroed!(%{maybe: name} = w, named),
+    do: unzeroed_by(now(w) - w.tripped_at >= w.poll, name, w, named)
+
+  # Right after a refused restart whose 0 the walk made fail, before any poll, it is named.
+  defp unzeroed_by(false, name, %{sure: true} = w, named) do
+    assert named == Enum.sort(MapSet.put(w.unzeroed, name))
+    %{w | sure: false}
+  end
+
+  defp unzeroed_by(false, name, w, named) do
+    assert named in [Enum.sort(w.unzeroed), Enum.sort(MapSet.put(w.unzeroed, name))]
+    w
+  end
+
+  defp unzeroed_by(true, name, w, named) do
+    assert named == Enum.sort(w.unzeroed), "#{name}'s 0 not taken a poll period on"
+    zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+    %{w | maybe: nil, written: Map.put(w.written, name, zeros)}
+  end
+
+  # Every output written 0 once at a trip, and nothing after it until a restart, but the
+  # one write of 0 again a poll makes where the trip's 0 was not taken (decision 262).
   defp zeroed_once(%{status: :tripped} = w) do
     counts = Map.new(w.sims, fn {name, sim} -> {name, length(Sim.writes(sim))} end)
 
-    for {name, count} <- w.zeroed do
-      assert counts[name] == count, "#{name} was written while tripped"
-    end
+    w =
+      Enum.reduce(w.zeroed, w, fn {name, count}, w ->
+        rezeroed(counts[name] - count, name, w)
+      end)
 
     %{w | zeroed: Map.merge(counts, w.zeroed)}
   end
 
   defp zeroed_once(w), do: w
+
+  defp rezeroed(0, _name, w), do: w
+
+  defp rezeroed(1, name, %{retry_once: name} = w) do
+    zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+    assert List.last(Sim.writes(w.sims[name])) == zeros, "#{name} was written while tripped"
+    reach(:zero_retried, true)
+    %{w | retry_once: nil, zeroed: Map.update!(w.zeroed, name, &(&1 + 1))}
+  end
+
+  defp rezeroed(_more, name, _w), do: flunk("#{name} was written while tripped")
 
   defp reach(name, true),
     do: Process.put(:runner_reach, MapSet.put(Process.get(:runner_reach), name))
@@ -12342,6 +12843,18 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   conversion; and each fault, edit and host refusal.
   """
   use ExUnit.Case, async: true
+
+  # Decision 264: the draws, the functions that draw a program, an input, a step or a
+  # fault at random, or write a drawn program as text, which alone may hold a `case`,
+  # `cond`, `if` or `unless`; every other function, each oracle and the harness that
+  # compares it with logex, is clauses (`clauses_test.exs`).
+  @draws ~w(
+    added conversion host initial_change inputs points program rung shifted step
+    type_change
+  )a
+
+  @doc false
+  def draws, do: @draws
 
   alias Logex.{Edit, Runtime, Scan}
   alias Logex.Configuration.Edit, as: ConfigEdit
@@ -12461,12 +12974,10 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
 
   # ---- every pair, from source -----------------------------------------------------------
 
-  defp compiled(source) do
-    case Logex.compile(source, name: "p") do
-      {:ok, _program} -> :ok
-      {:error, diagnostics} -> Enum.map(diagnostics, &{&1.line, &1.message})
-    end
-  end
+  defp compiled(source), do: diagnosed(Logex.compile(source, name: "p"))
+
+  defp diagnosed({:ok, _compiled}), do: :ok
+  defp diagnosed({:error, diagnostics}), do: Enum.map(diagnostics, &{&1.line, &1.message})
 
   # M5-15's review: a user block's member, which logic outside its block only reads, is a
   # source of `not` and the shifts in its own type, for every pair Figure 11 widens, an
@@ -12554,10 +13065,7 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     text =
       "task fast interval 10 priority 1\nvar_global gx #{global}\nprogram m1 q with fast\n#{lines}\n"
 
-    case Logex.Configuration.compile("c", text, %{"q" => program}) do
-      {:ok, _config} -> :ok
-      {:error, diagnostics} -> Enum.map(diagnostics, &{&1.line, &1.message})
-    end
+    diagnosed(Logex.Configuration.compile("c", text, %{"q" => program}))
   end
 
   defp connection(true, _member, _global), do: :ok
@@ -12620,16 +13128,26 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
     do: [
       {3,
        "`#{word}` writes #{a(to)}, but `y` is #{a(type)} (declared on line 2)" <>
-         written_hint(truncates, from, type)}
+         written_hint({truncates, to}, from, type)}
     ]
 
   # A truncation's destination of another integer type is told the truncation into it, and
-  # one of a real type nothing, no instruction truncating into a real (provisional).
-  defp written_hint(true, from, type) when type not in @reals and type != :bool,
+  # since decision 260 one of a real type that a truncation writes an integer: to declare
+  # it the type the truncation writes, or to keep the real with `move`, or where the
+  # truncation's real does not widen into it the conversion that does.
+  defp written_hint({true, to}, from, type) when type in @reals,
+    do:
+      ": a truncation writes an integer, so declare `y` #{a(to)}, or use " <>
+        "`#{kept_real(widens?(from, type), from, type)}` to keep the real"
+
+  defp written_hint({true, _to}, from, type) when type != :bool,
     do: written_truncation(family(type), from, type)
 
-  defp written_hint(true, _from, _type), do: ""
-  defp written_hint(false, from, type), do: hint(conversion?(from, type), from, type)
+  defp written_hint({true, _to}, _from, _type), do: ""
+  defp written_hint({false, _to}, from, type), do: hint(conversion?(from, type), from, type)
+
+  defp kept_real(true, _from, _type), do: "move"
+  defp kept_real(false, from, type), do: "#{from}_to_#{type}"
 
   defp written_truncation(:integer, from, type), do: ": use `#{from}_trunc_#{type}`"
   defp written_truncation(_bits, from, type), do: hint(conversion?(from, type), from, type)
@@ -14067,17 +14585,23 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
   defp mistaken({spec, program, state, model, now, log}) do
     {inputs, ok, what} = host(spec)
 
-    case put(program, state, inputs) do
-      {:ok, state} ->
-        assert ok, "a host's call without a mistake was refused: #{inspect(inputs)}"
-        host_reached(what, true)
-        {spec, program, state, take(spec, model, inputs), now, [{:taken, inputs} | log]}
+    host_answered(
+      put(program, state, inputs),
+      {inputs, ok, what},
+      {spec, program, state, model, now, log}
+    )
+  end
 
-      :refused ->
-        refute ok, "a host's mistake was accepted: #{inspect(inputs)}"
-        host_reached(what, false)
-        {spec, program, state, model, now, [{:refused, inputs} | log]}
-    end
+  defp host_answered({:ok, state}, {inputs, ok, what}, {spec, program, _was, model, now, log}) do
+    assert ok, "a host's call without a mistake was refused: #{inspect(inputs)}"
+    host_reached(what, true)
+    {spec, program, state, take(spec, model, inputs), now, [{:taken, inputs} | log]}
+  end
+
+  defp host_answered(:refused, {inputs, ok, what}, {spec, program, state, model, now, log}) do
+    refute ok, "a host's mistake was accepted: #{inspect(inputs)}"
+    host_reached(what, false)
+    {spec, program, state, model, now, [{:refused, inputs} | log]}
   end
 
   # An edit to the same tags with other rungs keeps every value; one that changes an

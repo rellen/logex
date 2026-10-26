@@ -3863,7 +3863,7 @@ defmodule Logex.Compiler do
       diagnostic(
         line,
         "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is #{a_type(member.type)}" <>
-          converted(word, access, member.type, type)
+          converted(word, access, member.type, type, name)
       )
       | diagnostics
     ]
@@ -3929,7 +3929,7 @@ defmodule Logex.Compiler do
   defp tag_widened(false, diagnostics, {access, type}, tag, {line, word}) do
     message =
       "`#{word}` #{verb(access)} #{a_type(type)}, but `#{tag.name}` is " <>
-        "#{a_type(tag.type)}#{declared(tag)}" <> converted(word, access, tag.type, type)
+        "#{a_type(tag.type)}#{declared(tag)}" <> converted(word, access, tag.type, type, tag.name)
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -3943,13 +3943,14 @@ defmodule Logex.Compiler do
   # number, is told the conversion through its own width's unsigned integer, the integer
   # IEC compares it as, `word_to_uint` before a read and `uint_to_word` after a write
   # (provisional); any other type outside the class, a bool, has none to name.
-  defp converted(_word, access, found, class) when is_class(class) and is_elementary(found),
-    do: classless(Declarations.kind(found), access, found, class)
+  defp converted(_word, access, found, class, _name)
+       when is_class(class) and is_elementary(found),
+       do: classless(Declarations.kind(found), access, found, class)
 
-  defp converted(_word, _access, _found, class) when is_class(class), do: ""
+  defp converted(_word, _access, _found, class, _name) when is_class(class), do: ""
 
-  defp converted(word, access, found, type),
-    do: converting(Map.get(@conversions, String.downcase(word)), access, found, type)
+  defp converted(word, access, found, _type, name),
+    do: converting(Map.get(@conversions, String.downcase(word)), access, found, name)
 
   defp classless(_kind, :write, _found, :any_real),
     do: ": a square root is a real's, so declare it a real or an lreal"
@@ -3967,23 +3968,32 @@ defmodule Logex.Compiler do
   defp classless(_kind, _access, _found, _class), do: ""
 
   # M5-15: a truncation's slot is told the truncation that does the whole job, never the
-  # conversion that rounds: a source of the other real `lreal_trunc_int`, a destination of
-  # another integer type `real_trunc_dint`, and a destination of a real type nothing, no
-  # instruction truncating into a real (provisional); a source of an integer or a bit
-  # string is told its conversion, which truncates nothing it holds.
-  defp converting({symbol, [{:value, from}, {:write, to}]}, access, found, _type)
+  # conversion that rounds: a source of the other real `lreal_trunc_int`, and a destination
+  # of another integer type `real_trunc_dint`; a source of an integer or a bit string is
+  # told its conversion, which truncates nothing it holds. Since decision 260 a destination
+  # of a real type is told that a truncation writes an integer, to declare it the integer
+  # type this one writes, or to keep the real with `move`, or where the truncation's real
+  # does not widen into it, the conversion that rounds into it, `lreal_to_real`.
+  defp converting({symbol, [{:value, from}, {:write, to}]}, :write, found, name)
+       when is_map_key(@truncating, symbol) and found in @reals,
+       do:
+         ": a truncation writes an integer, so declare `#{name}` #{a_type(to)}, or use " <>
+           "`#{kept_real(Declarations.widens?(from, found), from, found)}` to keep the real"
+
+  defp converting({symbol, [{:value, from}, {:write, to}]}, access, found, _name)
        when is_map_key(@truncating, symbol),
        do: instead(truncation_of(access, found, {from, to}))
 
-  defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _type),
+  defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _name),
     do: instead(conversion_of(access, found, {from, to}))
 
-  defp converting(nil, _access, _found, _type), do: ""
+  defp converting(nil, _access, _found, _name), do: ""
+
+  defp kept_real(true, _from, _found), do: "move"
+  defp kept_real(false, from, found), do: Declarations.conversion(from, found)
 
   defp truncation_of(:write, found, {from, _to}) when is_map_key(@truncated_into, found),
     do: {"#{from}_trunc_#{found}", found, from}
-
-  defp truncation_of(:write, found, _from_to) when found in @reals, do: {nil, found, :none}
 
   defp truncation_of(:value, found, {_from, to}) when found in @reals,
     do: {"#{found}_trunc_#{to}", found, to}
@@ -4273,7 +4283,7 @@ defmodule Logex.Compiler do
     message =
       "`#{word}` compares `#{shown}` with `#{tag.name}`, #{a_type(type)}#{declared(tag)}, " <>
         "which never holds it: " <>
-        Declarations.literal_misfit(type, Parser.value(literal), "`#{shown}`")
+        Declarations.literal_misfit(type, Parser.value(literal), "`#{shown}`", :read)
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -4402,7 +4412,7 @@ defmodule Logex.Compiler do
       diagnostic(
         line,
         "`#{word}` reads #{a_type(class)}, and compares two literals as lreals: " <>
-          Declarations.literal_misfit(:lreal, 0.0, "`#{Parser.spelling(literal)}`")
+          Declarations.literal_misfit(:lreal, 0.0, "`#{Parser.spelling(literal)}`", :read)
       )
       | diagnostics
     ]
@@ -4425,7 +4435,8 @@ defmodule Logex.Compiler do
           Declarations.literal_misfit(
             :lreal,
             Parser.value(literal),
-            "`#{Parser.spelling(literal)}`"
+            "`#{Parser.spelling(literal)}`",
+            :read
           )
       )
       | diagnostics

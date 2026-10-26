@@ -81,9 +81,9 @@ defmodule Logex.Edit.Plan do
 
   # M5-14 (decision 154): an array of instances of a user block keeps its type where its
   # sizes stay and its block keeps its name and every member's kind. Since decision 254
-  # each change of its elements is cited once, for the array, `{:every, "ws", "x"}`, "`x`
-  # of every element of `ws`", where until then it was cited by its first element's path,
-  # `ws[0].x`.
+  # each change of its elements is cited once, for the array, `{:every, "ws", "x"}`,
+  # since decision 259 "`ws[*].x`", where until then it was cited by its first element's
+  # path, `ws[0].x`.
   defp changes(
          {:array, %FbType{name: name, body: %Program{}} = was, dims},
          {:array, %FbType{name: name, body: %Program{}} = type, dims},
@@ -137,13 +137,21 @@ defmodule Logex.Edit.Plan do
       line: line,
       message:
         "#{cited(path)} is #{word(was)} in the running program and #{word(type)} in the " <>
-          "candidate: #{whose(path)} type changes only with a restart"
+          "candidate#{every(path)}: #{whose(path)} type changes only with a restart"
     }
 
-  # Decision 254: a member of every element of an array of user blocks, `x` of every
-  # element of `ws`, and one of every element of an array its elements hold, in turn.
-  defp cited({:every, array, member}), do: "#{cited(member)} of every element of `#{array}`"
-  defp cited(path), do: "`#{path}`"
+  # Decision 254: a member of every element of an array of user blocks, cited once for the
+  # array; since decision 259 by one path, each array's subscripts `[*]`, `ws[*].x`, and
+  # one of every element of an array its elements hold `hs[*].ws[*].x`, ", in every
+  # element", where decision 254 cited "`x` of every element of `ws` of every element of
+  # `hs`".
+  defp cited(path), do: "`#{starred(path)}`"
+
+  defp starred({:every, array, member}), do: "#{array}[*].#{starred(member)}"
+  defp starred(path), do: path
+
+  defp every({:every, _array, _member}), do: ", in every element"
+  defp every(_path), do: ""
 
   defp whose({:every, _array, _member}), do: "a member's"
   defp whose(path), do: whose_path(String.contains?(path, "."))

@@ -1975,7 +1975,8 @@ defmodule Logex.RunnerTest do
                edit: nil,
                runs: %{"fast" => {0, 500}, "trip" => {0, 500}},
                latest_wake: 0,
-               refresh_gap: 0
+               refresh_gap: 0,
+               unzeroed: []
              }
     end
 

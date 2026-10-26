@@ -442,6 +442,9 @@ defmodule Logex.Warnings do
   defp coiled({:member_coil_at, group, _at, _shown, _id}, words),
     do: Map.put(words, {:member_coiled, group}, true)
 
+  defp coiled({:member_bit, group, _at, _shown}, words),
+    do: Map.put(words, {:member_coiled, group}, true)
+
   defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
   defp decisions(instructions, _coils, words, tags),
@@ -486,6 +489,9 @@ defmodule Logex.Warnings do
     do: from_source?(tags, array)
 
   defp decides?({:member_coil_at, {array, _members}, _at, _shown, _id}, tags, _owners),
+    do: from_source?(tags, array)
+
+  defp decides?({:member_bit, {array, _members}, _at, _shown}, tags, _owners),
     do: from_source?(tags, array)
 
   defp decides?({:member_whole, {array, _members}, _at, _shown}, tags, _owners),
@@ -628,6 +634,18 @@ defmodule Logex.Warnings do
        {coils |> first(key, at, nil) |> first({:member_lit, group}, {shown, at}, nil), wholes,
         bitted}}
 
+  # Decision 257: a coil on a bit of a literal element's member, after its coil as a bit
+  # (above), is that bit of a literal element coiled, after a coil or another write of the
+  # bit through a tag subscript told the array the first may write, as a member is.
+  defp decided({:member_bit, {array, _} = group, at, shown}, {coils, wholes, bitted}),
+    do:
+      {member_after(
+         :error,
+         Map.fetch(coils, {:member_at, group}),
+         Map.fetch(wholes, {:member_written, group}),
+         {array, at, shown}
+       ), {first(coils, {:member_lit, group}, {shown, at}, nil), wholes, bitted}}
+
   # A coil on a member through a tag subscript, `ote lane_c[i].r`: after one through the
   # very tags told the member already has one (decision 256), after one through other tags,
   # or a write through a tag subscript, `otl lane_c[j].r`, told the array the first may
@@ -701,6 +719,10 @@ defmodule Logex.Warnings do
 
   defp container_of_bit({:element, _, array, index, _name}), do: {:element, array, index}
   defp container_of_bit({:element_at, _, _, _, _, _} = element), do: same(element)
+
+  defp container_of_bit({:member, _, {:element, _, array, index, _}, members}),
+    do: {:member, array, index, members}
+
   defp container_of_bit(path), do: path
 
   defp subscript_of({:name, _, tag}), do: {:tag, tag}
@@ -909,7 +931,30 @@ defmodule Logex.Warnings do
           same(at_tag)}
        ]
 
+  # Decision 257: so for a write of a bit of a member of an element, `otl lane_c[1].pv.3`
+  # or `otl lane_c[i].pv.3`, where a coil names that bit, the bit's number one more part of
+  # the member's path.
+  defp in_arrays({:bit, l, {:member, _, element, members}, n, _mask, shown}, tags, words, at),
+    do:
+      in_arrays({:member, l, element, members ++ [Integer.to_string(n)]}, shown, tags, words, at)
+
   defp in_arrays(_operand, _tags, _words, _at), do: []
+
+  defp in_arrays({:member, _, {:element, _, array, _, _}, members}, shown, _tags, words, at)
+       when is_map_key(words, {:member_coiled, {array, members}}),
+       do: [{:member_whole, {array, members}, member_write(at), shown}]
+
+  defp in_arrays(
+         {:member, _, {:element_at, _, array, _, _, _} = at_tag, members},
+         shown,
+         _,
+         words,
+         at
+       )
+       when is_map_key(words, {:member_coiled, {array, members}}),
+       do: [{:member_whole_at, {array, members}, at, shown, same(at_tag)}]
+
+  defp in_arrays(_member, _shown, _tags, _words, _at), do: []
 
   # A member a coil names is a bool, so its write is told as a write, not a whole one.
   defp member_write({line, symbol}), do: {line, {:writes, symbol}}
@@ -949,6 +994,10 @@ defmodule Logex.Warnings do
   # of that word whole, its tag its array.
   defp whole({:bit_at, _, {:element, _, array, _, _} = element, _index, _width, _name}),
     do: [{Walk.bit_name(element), array}]
+
+  # Decision 257: a bit a tag numbers of a literal element's member, a write of the member.
+  defp whole({:bit_at, _, {:member, _, {:element, _, array, index, _}, members}, _, _, _}),
+    do: [{Enum.join([Logex.Array.name(array, index) | members], "."), array}]
 
   defp whole({:element, _, array, _index, _name} = element),
     do: [{Walk.bit_name(element), array}]
@@ -995,6 +1044,18 @@ defmodule Logex.Warnings do
        ),
        do: [{:coil_at, Walk.bit_name(element), array, {line, at}, shown, same(bit)}]
 
+  # Decision 257: so for a bit a tag numbers of a literal element's member, `ote
+  # lane_c[1].pv.[n]`, keyed by the member's path, as `ote c.pv.[n]` is by `c.pv`.
+  defp target(
+         {:bit_at, _, {:member, _, {:element, _, array, index, _}, members}, _, _, shown} = bit,
+         line,
+         symbol
+       ),
+       do: [
+         {:coil_at, Enum.join([Logex.Array.name(array, index) | members], "."), array,
+          {line, symbol}, shown, same(bit)}
+       ]
+
   defp target({:bit_at, _, [container | _] = path, _index, _width, shown} = bit, line, symbol),
     do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown, same(bit)}]
 
@@ -1025,6 +1086,39 @@ defmodule Logex.Warnings do
   # a coil on that member of every element, keyed by the array and the member, `{"lane_c",
   # ["r"]}`, as a coil through a tag subscript is a coil in its array (M5-12). Since
   # decision 253 the two are compared as decision 235 compares a bool array's elements.
+  # Decision 257: a coil on a bit of a member of an element, `ote lane_c[1].pv.3`, decides
+  # that bit of the member's word, keyed by its path, `lane_c[1].pv.3`, as a coil on a bit
+  # of a scalar instance's member, `ote c.pv.3`, is (M5-8's review), so that a second coil
+  # on it and a write of the member whole, `move x lane_c[1].pv`, are the second-`ote`
+  # warning; and it is that bit of a literal element, `{:member_bit, group}`, the bit's
+  # number one more part of the member's path, for a coil or another write of the bit
+  # through a tag subscript, `ote lane_c[i].pv.3`, which decision 253's rules compare as a
+  # member's, a bit through the very tags warned of nothing beside another write and told
+  # "already has an `ote`" beside a coil (decision 256).
+  defp target(
+         {:bit, _, {:member, _, {:element, _, array, index, _element}, members}, n, _, shown},
+         line,
+         symbol
+       ) do
+    word = Enum.join([Logex.Array.name(array, index) | members], ".")
+    bit = Integer.to_string(n)
+
+    [
+      {:coil, word <> "." <> bit, word, array, {line, symbol}, shown},
+      {:member_bit, {array, members ++ [bit]}, {line, symbol}, shown}
+    ]
+  end
+
+  defp target(
+         {:bit, _, {:member, _, {:element_at, _, array, _, _, _} = at, members}, n, _, shown},
+         line,
+         symbol
+       ),
+       do: [
+         {:member_coil_at, {array, members ++ [Integer.to_string(n)]}, {line, symbol}, shown,
+          same(at)}
+       ]
+
   defp target({:member, _, {:element, _, array, index, element}, members}, line, symbol),
     do: [
       {:member_coil, Enum.join([Logex.Array.name(array, index) | members], "."), {array, members},

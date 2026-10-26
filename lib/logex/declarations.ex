@@ -495,21 +495,26 @@ defmodule Logex.Declarations do
   named (M5-10): a real literal where an integer or a bit string is wanted, `` `1.5` is a
   real, and an int holds integers ``; an integer a real holds only to the nearest, ``
   `16777217` is no real's: the nearest is 16777216.0 ``; and otherwise `misfit/2`'s words.
-  `shown` is the literal as written.
+  `shown` is the literal as written. `use` is how its slot takes it, `:written`, the
+  default, where it is written or computed with, or `:read`, a comparison's, which writes
+  nothing: a literal a real would flush is told "it would be written as 0.0" or, since
+  decision 263, "it would be read as 0.0".
   """
-  def literal_misfit(type, value, nil), do: literal_misfit(type, value, "it")
+  def literal_misfit(type, value, shown, use \\ :written)
 
-  def literal_misfit(type, value, shown) when type in @reals and is_integer(value),
+  def literal_misfit(type, value, nil, use), do: literal_misfit(type, value, "it", use)
+
+  def literal_misfit(type, value, shown, _use) when type in @reals and is_integer(value),
     do: nearest_misfit(Logex.Real.in_range?(type, value), type, value, shown)
 
-  def literal_misfit(type, value, shown) when is_float(value) and type not in @reals,
+  def literal_misfit(type, value, shown, _use) when is_float(value) and type not in @reals,
     do: "#{shown} is a real, and #{a_type(type)} #{integers_only(kind(type), type)}"
 
-  def literal_misfit(type, value, shown) when is_float(value),
-    do: real_misfit(Logex.Real.in_range?(type, value), type, shown)
+  def literal_misfit(type, value, shown, use) when is_float(value),
+    do: real_misfit(Logex.Real.in_range?(type, value), type, shown, use)
 
-  def literal_misfit(type, _value, "it"), do: misfit(type)
-  def literal_misfit(type, _value, shown), do: misfit(type, shown)
+  def literal_misfit(type, _value, "it", _use), do: misfit(type)
+  def literal_misfit(type, _value, shown, _use), do: misfit(type, shown)
 
   @doc """
   Whether a literal's value is one of the generic type `class`'s, where no type is known
@@ -523,13 +528,15 @@ defmodule Logex.Declarations do
 
   # Decision 216: a real literal nearer 0.0 than the type's smallest normal value, which a
   # write would flush to 0.0, told so, as one past the range is told the range.
-  defp real_misfit(true, type, shown),
+  # Decision 263: a comparison reads the literal and writes nothing, so it is told the
+  # literal would be read as 0.0.
+  defp real_misfit(true, type, shown, use),
     do:
       "#{shown} is too near 0.0 for #{a_type(type)}, whose smallest above 0.0 is " <>
-        "#{Float.to_string(Logex.Real.min(type))}: it would be written as 0.0"
+        "#{Float.to_string(Logex.Real.min(type))}: it would be #{use} as 0.0"
 
-  defp real_misfit(false, type, "it"), do: misfit(type)
-  defp real_misfit(false, type, shown), do: misfit(type, shown)
+  defp real_misfit(false, type, "it", _use), do: misfit(type)
+  defp real_misfit(false, type, shown, _use), do: misfit(type, shown)
 
   defp nearest_misfit(true, type, value, shown),
     do:

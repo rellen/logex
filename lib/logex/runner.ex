@@ -384,8 +384,12 @@ defmodule Logex.Runner do
   `forces`, every force, by its point's name, with its value; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
-  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms; and
-  `refresh_gap`, the longest wait between two refreshes of the devices, in ms.
+  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms;
+  `refresh_gap`, the longest wait between two refreshes of the devices, in ms; and since
+  decision 262 `unzeroed`, the names, in device-name order, of the devices whose outputs
+  are not known to be 0 since the trip: one whose adapter did not take the trip's 0,
+  which its poll writes again until one is taken, and one down, until a restart; `[]`
+  while running.
   """
   def status(runner), do: call(runner, :status)
 
@@ -1314,7 +1318,8 @@ defmodule Logex.Runner do
       edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
       latest_wake: state.latest_wake,
-      refresh_gap: state.refresh_gap
+      refresh_gap: state.refresh_gap,
+      unzeroed: Enum.sort(state.unzeroed)
     }
 
   # Each event of a kind its subscriber named, sent, never awaited.
@@ -1420,6 +1425,7 @@ defmodule Logex.Runner do
           {{device, point.address}, {point.name, point.type}}
         end),
       down: MapSet.new(),
+      unzeroed: MapSet.new(),
       heard: Map.new(devices, fn {name, _pid, _points} -> {name, now(start)} end),
       deadline: nil,
       outputs:
@@ -1829,6 +1835,16 @@ defmodule Logex.Runner do
        when :erlang.map_get(name, pids) == pid,
        do: {%{state | heard: Map.put(state.heard, name, at)}, trip}
 
+  # Decision 262: a latched device's 0 taken at last, by a poll's write of it.
+  defp notice(
+         {Device, pid, restarts, _at, {:zeroed, name, nil}},
+         {%{pids: pids, restarts: restarts} = state, trip}
+       )
+       when :erlang.map_get(name, pids) == pid,
+       do: {%{state | unzeroed: MapSet.delete(state.unzeroed, name)}, trip}
+
+  defp notice({Device, _pid, _restarts, _at, {:zeroed, _name, nil}}, acc), do: acc
+
   defp notice(
          {Device, pid, restarts, _at, {_kind, name, _detail} = notice},
          {%{pids: pids, restarts: restarts} = state, nil}
@@ -1915,6 +1931,11 @@ defmodule Logex.Runner do
     do: device_answered(asked(pid, call, timeout), name, state)
 
   defp device_answered(:ok, _name, state), do: state
+
+  # Decision 262: a device whose trip's 0 its adapter did not take.
+  defp device_answered(:unzeroed, name, state),
+    do: %{state | unzeroed: MapSet.put(state.unzeroed, name)}
+
   defp device_answered({:error, _reason}, name, state), do: went_down(name, state)
 
   # A trip's one path, whatever caused it (decision 113): scheduling stopped, its wake
@@ -1927,7 +1948,7 @@ defmodule Logex.Runner do
   defp tripped(state, reason) do
     cancel(state.wake, state.clock)
     state = %{state | status: :tripped, trip: reason, wake: nil, next_round: nil, written: %{}}
-    state = each_live(state, &Device.zero/2)
+    state = zeroed(state)
     published(state, [{:trip, reason}])
     drained(:queue.out(state.queue), state)
   end
@@ -2025,7 +2046,16 @@ defmodule Logex.Runner do
   # A device that cannot be opened leaves the runner tripped, every device that answers
   # latched again, its 0 written once more, as a restart that trips again does: one
   # released and one opened again before it alike.
-  defp reopened({error, state}, _mode), do: {error, each_live(state, &Device.zero/2)}
+  defp reopened({error, state}, _mode), do: {error, zeroed(state)}
+
+  # Every device that answers latched, its outputs written 0 once; and since decision 262
+  # each device whose outputs are not known to be 0 named, one whose adapter did not take
+  # its 0, until a poll's write of it is taken, and one down, which nothing reaches until a
+  # restart opens it again.
+  defp zeroed(state) do
+    state = each_live(%{state | unzeroed: MapSet.new()}, &Device.zero/2)
+    %{state | unzeroed: MapSet.union(state.unzeroed, state.down)}
+  end
 
   defp released(mode, state) do
     runtime = Runtime.restart(state.runtime, mode)
@@ -2036,6 +2066,7 @@ defmodule Logex.Runner do
       | runtime: runtime,
         status: :running,
         trip: nil,
+        unzeroed: MapSet.new(),
         anchor: at - state.logical,
         refreshed: at,
         logic: Map.new(state.logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)

@@ -1020,13 +1020,14 @@ defmodule Logex.InstanceArrayTest do
       assert {:error, [%{message: message}]} = Edit.accept(p1, p2, Runtime.instance(p1))
 
       # Decision 254, superseding M5-14's provisional reading, which cited it by the first
-      # element's path, `ws[0].x`: once, for the array.
+      # element's path, `ws[0].x`: once, for the array; since decision 259 by one path, its
+      # subscripts `[*]`, where decision 254 cited "`x` of every element of `ws`".
       assert message ==
-               "`x` of every element of `ws` is a bool in the running program and a dint in " <>
-                 "the candidate: a member's type changes only with a restart"
+               "`ws[*].x` is a bool in the running program and a dint in the candidate, in " <>
+                 "every element: a member's type changes only with a restart"
 
-      # So in a block's instance, by its path, and in an array of blocks that hold one, in
-      # turn, each cited once.
+      # So in a block's instance, by its path, and in an array of blocks that hold one, by
+      # one path through both arrays (decision 259), each cited once.
       holder = fn w ->
         {:ok, h} =
           Logex.compile(
@@ -1054,12 +1055,11 @@ defmodule Logex.InstanceArrayTest do
 
       assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
                {3,
-                "`x` of every element of `b.ws` is a bool in the running program and a dint " <>
-                  "in the candidate: a member's type changes only with a restart"},
+                "`b.ws[*].x` is a bool in the running program and a dint in the candidate, in " <>
+                  "every element: a member's type changes only with a restart"},
                {4,
-                "`x` of every element of `ws` of every element of `hs` is a bool in the " <>
-                  "running program and a dint in the candidate: a member's type changes only " <>
-                  "with a restart"}
+                "`hs[*].ws[*].x` is a bool in the running program and a dint in the " <>
+                  "candidate, in every element: a member's type changes only with a restart"}
              ]
 
       # A body changed with its members' kinds kept is no type change.
@@ -1216,6 +1216,106 @@ defmodule Logex.InstanceArrayTest do
             {"xic go otl lane_c[1].r\nxio go ote lane_c[1].r", []},
             {"xic go ote lane_c[i].r\nxio go ote lane_c[1].ld", []},
             {"xic go ote lane_c[i].ld\nxio go move 1 lane_c[0].r", []}
+          ] do
+        assert warnings(source <> rungs) == expected, rungs
+      end
+    end
+
+    # Decision 257, superseding M5-14's provisional reading that a bit of a member of an
+    # element is not compared: two coils on it, `ote lane_c[1].pv.3` twice, and a coil on it
+    # beside a write of the member whole, are the second-`ote` warning, as on a scalar
+    # instance's member's bit, `c.pv.3` (M5-8's review); and through a tag subscript in
+    # decisions 253's and 256's words, the bit's number one more part of the member's path.
+    test "a bit of a member of an element is compared as a scalar instance's member's bit, and through a tag subscript as a member" do
+      source =
+        "var_input go bool\nvar_input i dint\nvar_input j dint\nvar_output q bool\n" <>
+          "var_output p bool\nvar lane_c ctu[2]\nvar c ctu\nxic go ctu lane_c[0] 1\n" <>
+          "xic go ctu lane_c[1] 1\nxic go ctu c 1\nge i j ote p xic c.q ote q\n"
+
+      last = "the last one in the scan decides it"
+
+      may = fn shown, symbol ->
+        "`#{shown}` is in `lane_c`, which the `#{symbol}` on line 12 may write through a tag " <>
+          "subscript: #{last}"
+      end
+
+      as = fn shown ->
+        "`#{shown}` is in `lane_c`, as `lane_c[1].pv.3` is, which already has an `ote` on " <>
+          "line 12: #{last}"
+      end
+
+      for {rungs, expected} <- [
+            # The scalar twin, as M5-8's review built it.
+            {"xic go ote c.pv.3\nxio go ote c.pv.3",
+             [{13, "`c.pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go move 5 c.pv\nxio go ote c.pv.3",
+             [
+               {13,
+                "`c.pv.3` is a bit of `c.pv`, which the `move` on line 12 writes whole: #{last}"}
+             ]},
+            # A literal element's, by its path, the bit keyed by its number's value.
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[1].pv.3",
+             [{13, "`lane_c[1].pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[01].pv.03",
+             [{13, "`lane_c[01].pv.03` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[1].pv",
+             [{13, "`lane_c[1].pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[1].pv.3",
+             [
+               {13,
+                "`lane_c[1].pv.3` is a bit of `lane_c[1].pv`, which the `move` on line 12 " <>
+                  "writes whole: #{last}"}
+             ]},
+            # Through a tag subscript: the very tags "already has", other tags "may".
+            {"xic go ote lane_c[i].pv.3\nxio go ote lane_c[i].pv.3",
+             [{13, "`lane_c[i].pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[i].pv.3\nxio go ote lane_c[j].pv.3",
+             [{13, may.("lane_c[j].pv.3", "ote")}]},
+            {"xic go ote lane_c[i].pv.3\nxio go otl lane_c[j].pv.3",
+             [{13, may.("lane_c[j].pv.3", "ote")}]},
+            {"xic go ote lane_c[i].pv.3\nxio go otl lane_c[i].pv.3", []},
+            {"xic go otl lane_c[i].pv.3\nxio go ote lane_c[i].pv.3", []},
+            # A literal element's beside one through a tag subscript, either first.
+            {"xic go ote lane_c[i].pv.3\nxio go ote lane_c[1].pv.3",
+             [{13, may.("lane_c[1].pv.3", "ote")}]},
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[i].pv.3",
+             [{13, as.("lane_c[i].pv.3")}]},
+            {"xic go ote lane_c[1].pv.3\nxio go otl lane_c[i].pv.3",
+             [{13, as.("lane_c[i].pv.3")}]},
+            {"xic go otl lane_c[i].pv.3\nxio go ote lane_c[1].pv.3",
+             [{13, may.("lane_c[1].pv.3", "otl")}]},
+            {"xic go ote lane_c[i].pv.3\nxio go otl lane_c[1].pv.3",
+             [{13, may.("lane_c[1].pv.3", "ote")}]},
+            {"xic go otl lane_c[1].pv.3\nxio go ote lane_c[i].pv.3",
+             [
+               {13,
+                "`lane_c[i].pv.3` is in `lane_c`, as `lane_c[1].pv.3` is, which the `otl` on " <>
+                  "line 12 writes: #{last}"}
+             ]},
+            # A write of a literal element's bit beside its own coil, as a member's, nothing;
+            # another bit, another element or a member of another name, nothing.
+            {"xic go ote lane_c[1].pv.3\nxio go otl lane_c[1].pv.3", []},
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[1].pv.4", []},
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[0].pv.3", []},
+            {"xic go ote lane_c[i].pv.3\nxio go ote lane_c[i].pv.4", []},
+            {"xic go ote lane_c[i].pv.3\nxio go ote lane_c[1].r", []},
+            # A bit a tag numbers of a literal element's member, `lane_c[1].pv.[i]`, keyed by
+            # the member's path, as `c.pv.[n]` is by `c.pv` (M5-9).
+            {"xic go ote c.pv.3\nxio go ote c.pv.[i]",
+             [{13, "`c.pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[1].pv.[i]",
+             [{13, "`lane_c[1].pv.3` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.[i]\nxio go ote lane_c[1].pv.[j]",
+             [{13, "`lane_c[1].pv.[j]` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.[i]\nxio go ote lane_c[1].pv.[i]",
+             [{13, "`lane_c[1].pv.[i]` already has an `ote` on line 12: #{last}"}]},
+            {"xic go ote lane_c[1].pv.[i]\nxio go otl lane_c[1].pv.[i]", []},
+            {"xic go ote lane_c[1].pv.[i]\nxio go ote lane_c[0].pv.[i]", []},
+            # Not compared (provisional): a member's whole write beside a coil on its bit
+            # where a tag subscript stands on either side.
+            {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3", []},
+            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv", []},
+            {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[i].pv", []}
           ] do
         assert warnings(source <> rungs) == expected, rungs
       end

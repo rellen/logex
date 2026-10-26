@@ -10021,6 +10021,145 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      such warning of IEC's or Logix's was found (**unverified**). M5-14's review's
      provisional reading under decision 246 stands as confirmed.
 
+257. **A bit of a member of an element, coiled twice (Milestone 5),** M5-14's answers'
+     seventh provisional reading, changing it. `xic a ote lane_c[1].pv.3` and `xic b ote
+     lane_c[1].pv.3` were warned of nothing, where two coils on a bit of a scalar
+     instance's member, `ote c.pv.3` twice, are the second-`ote` warning (M5-8's review).
+
+     **Taken: compared as a scalar instance's member's bit** (the maintainer, 2026-10-26):
+     two coils on `lane_c[1].pv.3` are told "`lane_c[1].pv.3` already has an `ote` on line
+     12: the last one in the scan decides it", and a coil on it beside a write of the member
+     whole, `move 5 lane_c[1].pv`, either first, as `ote c.pv.3` beside `move x c.pv` is.
+     *The reading (the record's, provisional where marked):*
+     - The bit is keyed by its element's subscripts' values and its number's, quoted as
+       written, so `ote lane_c[01].pv.03` is the same bit, as decisions 202 and 209 key a
+       scalar's.
+     - Through a tag subscript, `ote lane_c[i].pv.3`, the bit is compared in decisions
+       253's and 256's words, its number one more part of the member's path: through the
+       very tags, two coils "already has an `ote`" and a coil beside another write of it,
+       `otl lane_c[i].pv.3`, nothing (decision 246); through other tags, `lane_c[j].pv.3`,
+       "… which the `ote` on line 12 may write through a tag subscript"; a literal element's
+       bit beside one through a tag subscript, either first, a coil or another write, "is in
+       `lane_c`, as `lane_c[1].pv.3` is, which already has an `ote`" or "may write"; and a
+       write of a literal element's bit beside its own coil, `otl lane_c[1].pv.3`, nothing,
+       as a member's.
+     - A bit a tag numbers of a literal element's member, `ote lane_c[1].pv.[i]`, is keyed
+       by the member's path, as M5-9 keys `ote c.pv.[n]` by `c.pv`: beside a coil on a bit
+       of the member, or another such coil, the second-`ote` warning, the very tag beside
+       a latch nothing.
+     - Not compared (provisional): a write of the member whole beside a coil on its bit
+       where a tag subscript stands on either side, `move 5 lane_c[1].pv` beside `ote
+       lane_c[i].pv.3`, and a bit a tag numbers of a member through a tag subscript.
+
+     The warning is logex's own (decision 207); IEC and the Logix extracts read say nothing
+     of it. `instance_array_test.exs` pins every case.
+258. **Two lanes' members through two tags (Milestone 5),** M5-14's answers' eighth
+     provisional reading. **Taken: confirmed as built** (the maintainer, 2026-10-26): `xic a
+     ote lane_c[i].r` and `xic b ote lane_c[j].r` are told "`lane_c[j].r` is in `lane_c`,
+     which the `ote` on line 8 may write through a tag subscript", as `lamps[i]` beside
+     `lamps[j]` is (decision 246). No code changed; `instance_array_test.exs` pins it.
+     Decision 253's provisional bullet for other tags stands as confirmed.
+259. **A member retyped in an array of blocks inside an array of blocks (Milestone 5),**
+     M5-14's answers' ninth provisional reading, changing it. `var hs h[2]`, each `h`
+     holding `var ws w[2]`, and an edit changing `w`'s `x` from a bool to a dint, was told
+     "`x` of every element of `ws` of every element of `hs` is a bool …".
+
+     **Taken: one path, each array's subscripts `[*]`** (the maintainer, 2026-10-26):
+     "`hs[*].ws[*].x` is a bool in the running program and a dint in the candidate, in
+     every element: a member's type changes only with a restart". *The reading (the
+     record's):* so that the messages keep one form, the one level is cited so too,
+     "`ws[*].x` is a bool in the running program and a dint in the candidate, in every
+     element: …", superseding decision 254's "`x` of every element of `ws`", and a block's
+     instance's array by its path, "`b.ws[*].x`"; an array whose sizes or block change is
+     still refused for its own type. Logix changes an existing array's size or data type
+     offline only (1756-RM094N p.85).
+260. **A truncation into a real (Milestone 5),** M5-15's first question, changing its
+     provisional reading. `real_trunc_int fan_hz shown`, `shown` a `real`, was refused
+     "`real_trunc_int` writes an int, but `shown` is a real (declared on line 3)", with
+     nothing after it.
+
+     **Taken: told that a truncation writes an integer** (the maintainer, 2026-10-26):
+     "`real_trunc_int` writes an int, but `shown` is a real (declared on line 3): a
+     truncation writes an integer, so declare `shown` an int, or use `move` to keep the
+     real". *The reading (the record's):* the integer type named is the one the truncation
+     writes, `real_trunc_udint` a udint; and where the truncation's real does not widen into
+     the destination's, an `lreal_trunc_sint` into a `real`, the move is the conversion that
+     rounds, "or use `lreal_to_real` to keep the real". IEC's TRUNC writes only an integer
+     (Ed 3 Table 22 feature 2b, decision 162); Logix's TRUNC writes a REAL or LREAL too
+     (1756-RM018A-EN-P pp.828–829). `real_test.exs` pins each, and the cross-type walk's
+     oracle restates it.
+261. **An initial value reported as declared (Milestone 5),** M5-15's second question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-26): an edit that gives `var_output
+     speed real` the initial value `1.0e-30` reports `{:initial_changed, "speed", {0.0,
+     1.0e-30}}`, the value as declared, though a real holds it as 1.0000000031710769e-30,
+     decision 157's "compared exactly as declared", so `0` edited to `0.0` is reported. No
+     code changed; `real_test.exs` and the cross-type walk pin it, the configuration edit's
+     report of a global's value as the file reads it as before.
+262. **A trip's 0 that a device does not take (Milestone 5),** M5-15's review's third
+     question, changing decision 135's "where it still takes a write". A conveyor's drive
+     card, told to stop by a trip, failed that write, `{:error, :eio}`, and kept showing its
+     last outputs, nothing trying again until a restart.
+
+     **Taken: tried again at every poll, and named in `status/1`** (the maintainer,
+     2026-10-26): while the runner is tripped, a device whose adapter did not take the
+     trip's 0 is written its 0 again at each poll, and nothing else, until a write is
+     taken; and `status/1` names each device whose outputs are not known to be 0. *The
+     reading (the record's, provisional where marked):*
+     - `status/1`'s `unzeroed` is the list of those devices' names, in device-name order,
+       `[]` while running and from a restart on: one whose adapter did not take the trip's
+       0, until a poll's write of it is taken, which the device tells the runner, and one
+       down at the trip or not answering its 0, killed, which nothing reaches until a
+       restart opens it again. A device whose 0 was taken and that goes down afterwards is
+       not named, its outputs last known 0.
+     - The first trip reason is kept; a write again that fails raises nothing more, the
+       device latched already; a restart releases and writes as before, and one refused
+       names again each device whose 0 the refusal's zero does not take or that is down.
+     - A device that latched on its own deadline or fault, and whose own 0 failed, is so
+       too: the trip's zero finds it unzeroed and its polls write the 0 again.
+     - A stop of a tripped runner closes such a device writing nothing more, as before
+       (provisional).
+
+     IEC says nothing. In Logix the output module itself goes to its configured fault
+     state when the controller faults or its connection is lost (1756-UM900B p.242,
+     1756-UM058L p.83). `trip_test.exs` pins it on the manual clock, and the runner walk's
+     model restates it.
+263. **Decision 250's words for a comparison (Milestone 5),** M5-15's review's fourth
+     question, changing them. `gt 1.0e-310 0.0` was refused "…: it would be written as
+     0.0", words decision 240 took from a write; a comparison writes nothing.
+
+     **Taken: "it would be read as 0.0"** (the maintainer, 2026-10-26). *The reading (the
+     record's):* every comparison slot says so, beside another literal, "`gt` reads a
+     number or a bit string, and compares two literals as lreals: `1.0e-310` is too near
+     0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be read
+     as 0.0", `1.0e-400` there too (decision 240), and beside a tag, "`eq` compares
+     `1.0e-310` with `l`, an lreal (declared on line 1), which never holds it: … it would be
+     read as 0.0" (provisional, a case the question did not ask); every other slot, a write, an arithmetic source, a conversion's source,
+     a block's formal and an initial value, keeps "it would be written as 0.0". IEC and
+     Logix have no such message. `real_test.exs` pins each.
+264. **Clauses, not conditionals, in tests (Milestone 5),** M5-15's review's fifth
+     question. CLAUDE.md's rule was held on `lib/` by a grep; the walks and the end-to-end
+     tests held 443 `case`, `cond`, `if` and `unless`, by their syntax trees.
+
+     **Taken: every walk's oracle and every end-to-end test's oracle in clauses, the draws
+     free** (the maintainer, 2026-10-26). *The reading (the record's):* the oracles are
+     named by their complement: each module of `api_contract_test.exs` and
+     `end_to_end_test.exs` names its draws, the functions that draw a program, an input, a
+     step or a fault at random and write a drawn program as text, in a module attribute,
+     `@draws`, and every other function and test of the two files, each oracle and the
+     harness that compares it with logex, holds no conditional. `clauses_test.exs` reads
+     the two files' syntax trees, so that a conditional in a string, a comment or a
+     heredoc is no conditional and one in an inline `if(…, do: …)` is, and pins that every
+     conditional lies in a draw its module names, and that every draw named is a function
+     of its module: 320 of the 443 rewritten as clauses, the 123 left all in draws. The
+     walks run on their seeds as before: each draws what it drew, its reach the same,
+     every walk green, no assertion fewer.
+265. **Milestone 5's done sentence (Milestone 5),** M5-16's question, which its review
+     answered for itself by building the one plant. **Taken: accepted as is; Milestone 5
+     is closed** (the maintainer, 2026-10-26): `end_to_end_test.exs`, "Milestone 5's done
+     sentence in one plant", shows the first clause whole, and the sentence stands as
+     proposed after M5-16's review, its "every output written 0 once, through each device
+     that takes the write" read since decision 262 with the 0 tried again at each poll.
+
 ---
 
 ## 8. Sources, and what is unverified

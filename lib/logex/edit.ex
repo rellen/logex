@@ -265,8 +265,9 @@ defmodule Logex.Edit do
   block renamed is a type change of the instance, ``… is an instance of `pulse` in the
   running program and an instance of `latch` in the candidate …``; and since decision 254 a
   member whose kind changes in every element of an array of a user block's instances is
-  refused once, for the array, ``line 3: `x` of every element of `ws` is a bool in the
-  running program and a dint in the candidate: …``. Inside an instance both
+  refused once, for the array, and since decision 259 by one path, each array's subscripts
+  `[*]`, ``line 3: `ws[*].x` is a bool in the running program and a dint in the candidate,
+  in every element: …``, `hs[*].ws[*].x` for an array of blocks that hold one. Inside an instance both
   programs declare, a switch moves each member as it moves a tag, by its path, `p.count`:
   one the state lacks starts at its initial value; at the first test, one the candidate's
   version adds, or whose value does not fit, starts so too; a kept bool or integer whose

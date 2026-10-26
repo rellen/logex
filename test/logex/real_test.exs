@@ -483,7 +483,7 @@ defmodule Logex.RealTest do
                {3,
                 "`eq` compares `1.0e-310` with `l`, an lreal (declared on line 1), which never " <>
                   "holds it: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 " <>
-                  "is 2.2250738585072014e-308: it would be written as 0.0"}
+                  "is 2.2250738585072014e-308: it would be read as 0.0"}
              ]
 
       # 16777217.0 in a `real`'s slot is the single 16777216.0.
@@ -711,7 +711,8 @@ defmodule Logex.RealTest do
     # M5-15, found by the cross-type walk: a truncation's misfit was told the conversion that
     # rounds, `lreal_to_int` for an lreal source of `real_trunc_int`, `real_to_dint` for a
     # dint destination, and `move` for a real one; each is now told the truncation that
-    # does the whole job, and a real destination nothing (provisional).
+    # does the whole job, and since decision 260 a real destination that a truncation
+    # writes an integer, where M5-15 told it nothing.
     test "a truncation's misfit is told the truncation that does its job, never a rounding" do
       assert messages("var a lreal\nvar i int\nreal_trunc_int a i") == [
                {3,
@@ -726,7 +727,10 @@ defmodule Logex.RealTest do
              ]
 
       assert messages("var a real\nvar r real\nreal_trunc_int a r") == [
-               {3, "`real_trunc_int` writes an int, but `r` is a real (declared on line 2)"}
+               {3,
+                "`real_trunc_int` writes an int, but `r` is a real (declared on line 2): a " <>
+                  "truncation writes an integer, so declare `r` an int, or use `move` to keep " <>
+                  "the real"}
              ]
 
       assert messages("var a lreal\nvar w word\nlreal_trunc_int a w") == [
@@ -747,6 +751,43 @@ defmodule Logex.RealTest do
                 "`real_trunc_int` reads a real, but `d` is a dint (declared on line 1): " <>
                   "use `dint_to_int`"}
              ]
+    end
+
+    # Decision 260: a truncation into a real is told that a truncation writes an integer,
+    # the integer type it writes to declare, and `move` to keep the real, or, where the
+    # truncation's real does not widen into the destination's, the conversion that does.
+    test "a truncation into a real is told it writes an integer, and how to keep the real" do
+      head = "var_input fan_hz real\nvar_input l lreal\nvar shown real\nvar wide lreal\n"
+
+      for {rung, message} <- [
+            {"real_trunc_int fan_hz shown",
+             "`real_trunc_int` writes an int, but `shown` is a real (declared on line 3): a " <>
+               "truncation writes an integer, so declare `shown` an int, or use `move` to " <>
+               "keep the real"},
+            {"real_trunc_udint fan_hz wide",
+             "`real_trunc_udint` writes a udint, but `wide` is an lreal (declared on line 4): " <>
+               "a truncation writes an integer, so declare `wide` a udint, or use `move` to " <>
+               "keep the real"},
+            {"lreal_trunc_lint l wide",
+             "`lreal_trunc_lint` writes an lint, but `wide` is an lreal (declared on line 4): " <>
+               "a truncation writes an integer, so declare `wide` an lint, or use `move` to " <>
+               "keep the real"},
+            {"lreal_trunc_sint l shown",
+             "`lreal_trunc_sint` writes an sint, but `shown` is a real (declared on line 3): " <>
+               "a truncation writes an integer, so declare `shown` an sint, or use " <>
+               "`lreal_to_real` to keep the real"}
+          ] do
+        assert messages(head <> rung) == [{5, message}], rung
+      end
+
+      # Declared as told, each compiles.
+      assert outputs("var_input r real\nvar_output shown int\nreal_trunc_int r shown", %{
+               "r" => 37.75
+             }) == %{"shown" => 37}
+
+      assert outputs("var_input r real\nvar_output shown real\nmove r shown", %{
+               "r" => 37.75
+             }) == %{"shown" => 37.75}
     end
 
     test "`trunc_int` is no mnemonic" do
@@ -1004,6 +1045,20 @@ defmodule Logex.RealTest do
 
       assert report == [{:initial_changed, "x", {0, 0.0}}]
       assert state.env["x"] === 0.0
+    end
+
+    # Decision 261, confirmed as built: a changed initial value is reported as declared,
+    # `1.0e-30`, not as the single a real holds it at, which the state starts at.
+    test "a changed initial value is reported as declared, not as the value held" do
+      {state, report} =
+        edited(
+          "var_input a real\nvar_output speed real\nmove a speed",
+          "var_input a real\nvar_output speed real 1.0e-30\nmove a speed"
+        )
+
+      assert report == [{:initial_changed, "speed", {0.0, 1.0e-30}}]
+      assert state.env["speed"] === 0.0
+      assert single(1.0e-30) === 1.0000000031710769e-30
     end
 
     test "an initial value respelled, `0.5` as `5.0e-1`, is no change" do
@@ -1442,6 +1497,8 @@ defmodule Logex.RealTest do
   # a flushed result passing power, in "−0.0 and a subnormal are written as 0.0".
   describe "a real literal nearer 0.0 than its slot's real holds (decision 216)" do
     @flushed "it would be written as 0.0"
+    # Decision 263: a comparison reads the literal and writes nothing.
+    @read_as "it would be read as 0.0"
 
     test "is refused in every slot of a real, and 0.0 is taken however it is written" do
       assert messages(
@@ -1457,7 +1514,7 @@ defmodule Logex.RealTest do
                {7,
                 "`lt` compares `1.0e-40` with `a`, a real (declared on line 1), which never " <>
                   "holds it: `1.0e-40` is too near 0.0 for a real, whose smallest above 0.0 is " <>
-                  "1.1754943508222875e-38: " <> @flushed},
+                  "1.1754943508222875e-38: " <> @read_as},
                {8,
                 "`real_to_int` reads a real: `1.0e-40` is too near 0.0 for a real, whose " <>
                   "smallest above 0.0 is 1.1754943508222875e-38: " <> @flushed}
@@ -1964,6 +2021,9 @@ defmodule Logex.RealTest do
   describe "a literal nearer 0.0 than an lreal holds (decision 228)" do
     @too_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
                 "2.2250738585072014e-308: it would be written as 0.0"
+    # Decision 263: in a comparison's slots, which read it.
+    @read_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
+                 "2.2250738585072014e-308: it would be read as 0.0"
 
     test "is the double the lexer reads, refused in every slot that judges a literal" do
       assert {:ok, [{:real_lit, {1, 6}, 1.0e-310}, _], 1} =
@@ -1981,7 +2041,7 @@ defmodule Logex.RealTest do
              "`sqrt` computes in `l`'s type, an lreal: `1.0e-310` #{@too_near}"},
             {"gt a 1.0e-310 ote q",
              "`gt` compares `1.0e-310` with `a`, an lreal (declared on line 1), which never " <>
-               "holds it: `1.0e-310` #{@too_near}"},
+               "holds it: `1.0e-310` #{@read_near}"},
             {"lreal_to_real 1.0e-310 r",
              "`lreal_to_real` reads an lreal: `1.0e-310` #{@too_near}"}
           ] do
@@ -2036,7 +2096,7 @@ defmodule Logex.RealTest do
                    {2,
                     "`#{word}` reads a number or a bit string, and compares two literals as " <>
                       "lreals: `#{shown}` is too near 0.0 for an lreal, whose smallest above " <>
-                      "0.0 is 2.2250738585072014e-308: it would be written as 0.0"},
+                      "0.0 is 2.2250738585072014e-308: it would be read as 0.0"},
                    count
                  ),
                rung
@@ -2056,6 +2116,9 @@ defmodule Logex.RealTest do
   describe "a literal no double holds but 0.0 (decision 231)" do
     @too_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
                 "2.2250738585072014e-308: it would be written as 0.0"
+    # Decision 263: in a comparison's slots, which read it.
+    @read_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
+                 "2.2250738585072014e-308: it would be read as 0.0"
 
     test "is 0.0 spelled, a well-formed leaf the printer gives back" do
       assert {:ok, [_, {:real_lit, {1, 6}, zero, "1.0e-400"}, _], 1} = lexed("move 1.0e-400 l")
@@ -2089,7 +2152,7 @@ defmodule Logex.RealTest do
              "`sqrt` computes in `l`'s type, an lreal: `1.0e-400` #{@too_near}"},
             {"gt a 1.0e-400 ote q",
              "`gt` compares `1.0e-400` with `a`, an lreal (declared on line 1), which never " <>
-               "holds it: `1.0e-400` #{@too_near}"},
+               "holds it: `1.0e-400` #{@read_near}"},
             {"lreal_to_real 1.0e-400 r",
              "`lreal_to_real` reads an lreal: `1.0e-400` #{@too_near}"}
           ] do
@@ -2143,7 +2206,7 @@ defmodule Logex.RealTest do
         assert messages("var_output q bool\n#{rung} ote q") == [
                  {2,
                   "`#{word}` reads a number or a bit string, and compares two literals as " <>
-                    "lreals: `#{shown}` #{@too_near}"}
+                    "lreals: `#{shown}` #{@read_near}"}
                ],
                rung
       end

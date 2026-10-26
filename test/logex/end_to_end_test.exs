@@ -940,7 +940,7 @@ defmodule Logex.EndToEndTest do
     test "decision 6: two instances of one program, scanned every 10 ms and every 50 ms, " <>
            "reach the preset at the same logical time" do
       p = program(@timer)
-      go = fn now -> if now >= 1000, do: 1, else: 0 end
+      go = &bit(&1 >= 1000)
       fast = scans(p, Enum.to_list(0..8000//10), go)
       slow = scans(p, Enum.to_list(0..8000//50), go)
 
@@ -1591,13 +1591,13 @@ defmodule Logex.EndToEndTest do
 
     # `x` is 1 for two cycles in every seven, so that a 30 ms sample of it differs from a
     # 10 ms one.
-    defp x_at(now), do: if(rem(div(now, 10), 7) in [3, 4], do: 1, else: 0)
+    defp x_at(now), do: bit(rem(div(now, 10), 7) in [3, 4])
 
     test "M2-1's Done-when: a 10 ms task, a 30 ms task and a task-less instance, cycled " <>
            "every 10 ms from 0 to 990 ms, each run as often as its task dictates, in " <>
            "priority order" do
       times = Enum.to_list(0..990//10)
-      steps = Enum.map(times, &{if(&1 == 0, do: 0, else: 10), %{"x" => x_at(&1)}})
+      steps = Enum.map(times, &{elapsed(&1), %{"x" => x_at(&1)}})
       {runtime, trace} = cycles(Logex.Runtime.start(three_rates()), steps)
 
       # As often as its task dictates: every cycle at 10 ms, every third at 30 ms, and the
@@ -1613,7 +1613,7 @@ defmodule Logex.EndToEndTest do
       # then the 10 ms task's, then the task-less one, last.
       for {now, _outputs, events} <- trace do
         order = for {:ran, _task, instance, _now} <- events, do: instance
-        assert order == if(rem(now, 30) == 0, do: ~w(s f n), else: ~w(f n)), "at #{now} ms"
+        assert order == run_order(rem(now, 30)), "at #{now} ms"
       end
 
       # Seen in the outputs too, without the events: `y` and `z` show `x` as `s` last
@@ -2186,6 +2186,15 @@ defmodule Logex.EndToEndTest do
     defp bit(true), do: 1
     defp bit(false), do: 0
 
+    # The oracles' clauses (decision 264): the order of M2-1's runs in a cycle, the 30 ms
+    # task's first where it is due.
+    defp run_order(0), do: ~w(s f n)
+    defp run_order(_late), do: ~w(f n)
+
+    # A list of one where its condition holds, and none where not.
+    defp noted(true, entry), do: [entry]
+    defp noted(false, _entry), do: []
+
     # PLAN.md M2-2's Done-when: two instances of one `.ld` program type, wired in a
     # configuration file to different input and output points, run for N cycles from one
     # input image and keep independent state. Both files are on disk, and the
@@ -2362,6 +2371,9 @@ defmodule Logex.EndToEndTest do
     end
 
     # Both start buttons pressed at 0 ms, which both tasks see, and released at 10 ms.
+    defp contactors_at(true), do: {1, 1}
+    defp contactors_at(false), do: {0, 0}
+
     defp started(0), do: %{"pb_start_1" => 1, "pb_start_2" => 1}
     defp started(10), do: %{"pb_start_1" => 0, "pb_start_2" => 0}
     defp started(_now), do: %{}
@@ -2377,7 +2389,7 @@ defmodule Logex.EndToEndTest do
       for {now, contactors, ran} <- trace do
         # `m1` runs every 10 ms, `m2` every 50: both at 50 ms, the cycle the e-stop rises.
         assert "m2" in ran == (rem(now, 50) == 0)
-        expected = if now < 50, do: {1, 1}, else: {0, 0}
+        expected = contactors_at(now < 50)
         assert contactors == expected, "at #{now} ms"
       end
 
@@ -2413,11 +2425,11 @@ defmodule Logex.EndToEndTest do
 
       # A 10 ms pulse at 20 ms: `m1` sees it and stops; `m2`, which runs at 0 and 50 ms,
       # never does.
-      pulse = fn now -> Map.merge(started(now), %{"estop" => if(now in [20], do: 1, else: 0)}) end
+      pulse = fn now -> Map.merge(started(now), %{"estop" => bit(now in [20])}) end
       {trace, runtime} = cycled_plant(plant, pulse, 100)
 
       for {now, {k1, k2}, _ran} <- trace do
-        assert k1 == if(now < 20, do: 1, else: 0), "k1 at #{now} ms"
+        assert k1 == bit(now < 20), "k1 at #{now} ms"
         assert k2 == 1, "k2 at #{now} ms"
       end
 
@@ -2506,13 +2518,16 @@ defmodule Logex.EndToEndTest do
             do: %Configuration.Connection{
               instance: instance,
               member: member,
-              to: if(member == "in", do: "x", else: out)
+              to: connected_to(member, out)
             }
           )
       )
     end
 
     # Each cycle's runs, `estop` set to each value of `trace` in turn, 10 ms apart.
+    defp connected_to("in", _out), do: "x"
+    defp connected_to(_member, out), do: out
+
     defp tripped_runs(config, trace) do
       trace
       |> Enum.map_reduce(Logex.Runtime.start(config), fn value, runtime ->
@@ -2543,9 +2558,7 @@ defmodule Logex.EndToEndTest do
 
         # The 10 ms task runs in every cycle, and after `trip` in each it runs.
         for {cycle_runs, cycle} <- Enum.with_index(runs) do
-          expected =
-            if cycle in tripped, do: [{"trip", "snap"}, {"slow", "m"}], else: [{"slow", "m"}]
-
+          expected = noted(cycle in tripped, {"trip", "snap"}) ++ [{"slow", "m"}]
           assert cycle_runs == expected, "cycle #{cycle + 1}"
         end
       end
@@ -2662,8 +2675,8 @@ defmodule Logex.EndToEndTest do
         for {cycle_runs, cycle} <- Enum.with_index(runs) do
           # `m1` is due every cycle and `m2` every fifth: `trip`, priority 0, runs `snap`
           # first in each cycle it runs, before every lower-priority task due in it.
-          due = [{"fast", "m1"}] ++ if(rem(cycle, 5) == 0, do: [{"slow", "m2"}], else: [])
-          expected = if cycle in tripped, do: [{"trip", "snap"} | due], else: due
+          due = [{"fast", "m1"}] ++ noted(rem(cycle, 5) == 0, {"slow", "m2"})
+          expected = noted(cycle in tripped, {"trip", "snap"}) ++ due
           assert cycle_runs == expected, "cycle #{cycle + 1}"
         end
       end
@@ -2987,7 +3000,7 @@ defmodule Logex.EndToEndTest do
       |> elem(0)
     end
 
-    defp flip(true, _level), do: if(Enum.random(1..60) == 1, do: 1, else: 0)
+    defp flip(true, _level), do: bit(Enum.random(1..60) == 1)
     defp flip(false, level), do: Enum.random([level, level, 1 - level])
 
     defp box_scans(program, inputs, state \\ nil) do
@@ -3005,18 +3018,16 @@ defmodule Logex.EndToEndTest do
       {counts, _} =
         Enum.map_reduce(Enum.with_index(inputs), {0, 0}, fn {%{"eye" => eye} = input, i},
                                                             {count, last} ->
-          count =
-            cond do
-              input["reset_pb"] == 1 -> 0
-              i > 0 and eye == 1 and last == 0 -> count + 1
-              true -> count
-            end
-
+          count = box_counted(input["reset_pb"], i > 0 and eye == 1 and last == 0, count)
           {count, {count, eye}}
         end)
 
       counts
     end
+
+    defp box_counted(1, _edge, _count), do: 0
+    defp box_counted(_reset, true, count), do: count + 1
+    defp box_counted(_reset, false, count), do: count
 
     defp boxes_checked(program) do
       :rand.seed(:exsss, {2026, 10, 14})
@@ -3027,7 +3038,7 @@ defmodule Logex.EndToEndTest do
       assert Enum.map(outputs, & &1["count"]) == expected
 
       assert Enum.map(outputs, & &1["full_lamp"]) ==
-               Enum.map(expected, &if(&1 >= 12, do: 1, else: 0))
+               Enum.map(expected, &bit(&1 >= 12))
 
       assert Enum.max(expected) >= 12
 
@@ -3073,27 +3084,25 @@ defmodule Logex.EndToEndTest do
                                                                  {stock, left, last} ->
           rise = fn name -> i > 0 and input[name] == 1 and Map.get(last, name, 0) == 0 end
 
-          stock =
-            cond do
-              input["clear"] == 1 ->
-                0
-
-              true ->
-                stock + if(rise.("infeed"), do: 1, else: 0) - if(rise.("outfeed"), do: 1, else: 0)
-            end
-
-          left =
-            cond do
-              input["refill"] == 1 -> 4
-              rise.("portion") -> left - 1
-              true -> left
-            end
+          stock = buffer_stock(input["clear"], stock, rise)
+          left = hopper_left(input["refill"], left, rise)
 
           {{stock, left}, {stock, left, input}}
         end)
 
       rows
     end
+
+    defp buffer_stock(1, _stock, _rise), do: 0
+
+    defp buffer_stock(_clear, stock, rise),
+      do: stock + bit(rise.("infeed")) - bit(rise.("outfeed"))
+
+    defp hopper_left(1, _left, _rise), do: 4
+    defp hopper_left(_refill, left, rise), do: hopper_portioned(rise.("portion"), left)
+
+    defp hopper_portioned(true, left), do: left - 1
+    defp hopper_portioned(false, left), do: left
 
     defp buffer_checked(program) do
       :rand.seed(:exsss, {2026, 10, 15})
@@ -3105,8 +3114,7 @@ defmodule Logex.EndToEndTest do
 
       assert Enum.map(outputs, &{&1["buffer_full"], &1["buffer_empty"], &1["hopper_empty"]}) ==
                Enum.map(expected, fn {stock, left} ->
-                 {if(stock >= 2, do: 1, else: 0), if(stock <= 0, do: 1, else: 0),
-                  if(left <= 0, do: 1, else: 0)}
+                 {bit(stock >= 2), bit(stock <= 0), bit(left <= 0)}
                end)
 
       assert Enum.any?(expected, fn {stock, _} -> stock >= 2 end)
@@ -3299,7 +3307,7 @@ defmodule Logex.EndToEndTest do
     defp line_cycles(runtime, last, changes, names) do
       Enum.map_reduce(0..last//10, runtime, fn now, runtime ->
         {runtime, _outputs, _events} =
-          Logex.Runtime.cycle(runtime, if(now == 0, do: 0, else: 10), Map.get(changes, now, %{}))
+          Logex.Runtime.cycle(runtime, elapsed(now), Map.get(changes, now, %{}))
 
         {{now, Map.new(names, &{&1, Logex.Runtime.get!(runtime, &1)})}, runtime}
       end)
@@ -3351,13 +3359,7 @@ defmodule Logex.EndToEndTest do
         Enum.map_reduce(Enum.with_index(faults), {0, nil}, fn {fault, i}, {prev, start} ->
           now = i * 10
 
-          {on, start} =
-            cond do
-              start != nil and now - start >= 3000 -> {0, nil}
-              start != nil -> {1, start}
-              i > 0 and fault == 1 and prev == 0 -> {1, now}
-              true -> {0, nil}
-            end
+          {on, start} = horn_pulse(start, now, i > 0 and fault == 1 and prev == 0)
 
           {on, {fault, start}}
         end)
@@ -3365,12 +3367,18 @@ defmodule Logex.EndToEndTest do
       horn
     end
 
+    # IEC's TP restated: a pulse of 3000 ms from a rising edge, an edge during it ignored.
+    defp horn_pulse(nil, now, true), do: {1, now}
+    defp horn_pulse(nil, _now, false), do: {0, nil}
+    defp horn_pulse(start, now, _edge) when now - start >= 3000, do: {0, nil}
+    defp horn_pulse(start, _now, _edge), do: {1, start}
+
     defp horn_sounds(line) do
       :rand.seed(:exsss, {2026, 10, 32})
 
       {faults, _} =
         Enum.map_reduce(0..1999, 0, fn _, level ->
-          level = if :rand.uniform(40) == 1, do: 1 - level, else: level
+          level = toggled(:rand.uniform(40) == 1, level)
           {level, level}
         end)
 
@@ -3422,12 +3430,7 @@ defmodule Logex.EndToEndTest do
     defp lube_oracle(inputs) do
       {acc, _} =
         Enum.map_reduce(inputs, {0, 0}, fn %{"conveyor" => c, "greased" => g}, {acc, prev} ->
-          acc =
-            cond do
-              g == 1 -> 0
-              c == 1 and prev == 1 -> min(acc + 10, 20_000)
-              true -> acc
-            end
+          acc = lube_timed(g, c == 1 and prev == 1, acc)
 
           {acc, {acc, c}}
         end)
@@ -3435,15 +3438,22 @@ defmodule Logex.EndToEndTest do
       acc
     end
 
+    # The conventional RTO restated: the reset first, then 10 ms a scan it ran and the last.
+    defp lube_timed(1, _ran, _acc), do: 0
+    defp lube_timed(_greased, true, acc), do: min(acc + 10, 20_000)
+    defp lube_timed(_greased, false, acc), do: acc
+
+    # A level the draw turns over where it says so.
+    defp toggled(true, level), do: 1 - level
+    defp toggled(false, level), do: level
+
     defp lube_keeps(line) do
       :rand.seed(:exsss, {2026, 10, 76})
 
       {inputs, _} =
         Enum.map_reduce(0..19_999, %{"conveyor" => 0, "greased" => 0}, fn _, levels ->
-          conveyor =
-            if :rand.uniform(300) == 1, do: 1 - levels["conveyor"], else: levels["conveyor"]
-
-          greased = if :rand.uniform(6000) == 1, do: 1, else: 0
+          conveyor = toggled(:rand.uniform(300) == 1, levels["conveyor"])
+          greased = bit(:rand.uniform(6000) == 1)
           levels = %{"conveyor" => conveyor, "greased" => greased}
           {levels, levels}
         end)
@@ -3457,7 +3467,7 @@ defmodule Logex.EndToEndTest do
 
       for {{now, g}, want} <- Enum.zip(trace, expected) do
         assert g["run_ms"] == want, "run_ms at #{now} ms"
-        assert g["grease_due"] == if(want == 20_000, do: 1, else: 0)
+        assert g["grease_due"] == bit(want == 20_000)
       end
 
       # The seed gives time kept across a stop, the preset reached, and a clear.
@@ -3491,8 +3501,11 @@ defmodule Logex.EndToEndTest do
       end
     end
 
+    defp file_at(nil), do: ""
+    defp file_at(file), do: "#{file}: "
+
     defp warned(line, file) do
-      at = if file, do: "#{file}: ", else: ""
+      at = file_at(file)
 
       assert Enum.map(line.warnings, &Logex.Diagnostic.format/1) == [
                "#{at}line 30: warning: `f9` runs under the event task `trip`, and `fan` runs " <>
@@ -3644,7 +3657,7 @@ defmodule Logex.EndToEndTest do
     defp fill_cycles(runtime, last, changes, names) do
       Enum.map_reduce(0..last//10, runtime, fn now, runtime ->
         {runtime, _outputs, events} =
-          Runtime.cycle(runtime, if(now == 0, do: 0, else: 10), Map.get(changes, now, %{}))
+          Runtime.cycle(runtime, elapsed(now), Map.get(changes, now, %{}))
 
         assert all_dints?(runtime), "a value outside a dint at #{now} ms"
         {{now, events, Map.new(names, &{&1, Runtime.get!(runtime, &1)})}, runtime}
@@ -3662,12 +3675,16 @@ defmodule Logex.EndToEndTest do
       {trace, _} =
         Enum.map_reduce(0..last//10, {0, 0}, fn now, {flow, total} ->
           flow = Map.get(flows, now, flow)
-          total = if rem(now, 100) == 0, do: wrap(total + flow), else: total
-          {{now, total, if(total >= setpoint, do: 0, else: 1)}, {flow, total}}
+          total = fill_totalled(rem(now, 100), total, flow)
+          {{now, total, 1 - bit(total >= setpoint)}, {flow, total}}
         end)
 
       trace
     end
+
+    # The 100 ms task's run adds the flow to the total, wrapped in the dint.
+    defp fill_totalled(0, total, flow), do: wrap(total + flow)
+    defp fill_totalled(_between, total, _flow), do: total
 
     defp fills_to_setpoint({plant, _file}) do
       :rand.seed(:exsss, {2026, 10, 33})
@@ -3745,24 +3762,28 @@ defmodule Logex.EndToEndTest do
         line: 7
       }
 
-      for {now, events, g} <- trace, rem(now, 100) == 0 do
-        if now < 200 do
-          # The rate is 0 and not real, the cycle reports the fault after r1's run, and the
-          # plant runs on: the valve is open and the total counts.
-          assert events == [
-                   {:ran, "fill", "f1", now},
-                   {:ran, "fill", "r1", now},
-                   {:fault, "fill", "r1", fault}
-                 ]
-
-          assert {g["per_minute"], g["rate_ok"], g["valve"]} == {0, 0, 1}
-        else
-          assert events == [{:ran, "fill", "f1", now}, {:ran, "fill", "r1", now}]
-          assert {g["per_minute"], g["rate_ok"]} == {div(g["total"], 2), 1}
-        end
-      end
+      for {now, events, g} <- trace,
+          rem(now, 100) == 0,
+          do: rate_cycled!(now < 200, {now, events, g}, fault)
 
       assert for({now, _, g} <- trace, rem(now, 100) == 0, do: g["total"]) == [60, 120, 180, 240]
+    end
+
+    # The rate is 0 and not real, the cycle reports the fault after r1's run, and the plant
+    # runs on: the valve is open and the total counts.
+    defp rate_cycled!(true, {now, events, g}, fault) do
+      assert events == [
+               {:ran, "fill", "f1", now},
+               {:ran, "fill", "r1", now},
+               {:fault, "fill", "r1", fault}
+             ]
+
+      assert {g["per_minute"], g["rate_ok"], g["valve"]} == {0, 0, 1}
+    end
+
+    defp rate_cycled!(false, {now, events, g}, _fault) do
+      assert events == [{:ran, "fill", "f1", now}, {:ran, "fill", "r1", now}]
+      assert {g["per_minute"], g["rate_ok"]} == {div(g["total"], 2), 1}
     end
 
     defp phase_of_a_negative({plant, _file}) do
@@ -4148,9 +4169,7 @@ defmodule Logex.EndToEndTest do
         assert outputs["motor"] == one(input["run"] == 1 and input["manual"] == 0)
         assert outputs["auto_lamp"] == 1 - input["manual"]
 
-        if input["manual"] == 1,
-          do: assert(outputs["jog_lamp"] == input["jog_pb"]),
-          else: frozen!(last, {outputs, state})
+        jogged!(input["manual"], outputs, input, {last, state})
 
         {outputs, state}
       end)
@@ -4159,6 +4178,10 @@ defmodule Logex.EndToEndTest do
       jogs = List.last(a) |> elem(1) |> then(& &1.env["jogs"]["cv"])
       assert modes > 100 and jogs > 20
     end
+
+    # In manual the jog lamp follows the button; in auto nothing of the section moves.
+    defp jogged!(1, outputs, input, _scans), do: assert(outputs["jog_lamp"] == input["jog_pb"])
+    defp jogged!(_auto, outputs, _input, {last, state}), do: frozen!(last, {outputs, state})
 
     defp frozen!(nil, _now), do: :ok
 
@@ -4492,6 +4515,10 @@ defmodule Logex.EndToEndTest do
     # The plant cycled every 10 ms from 0, both motors started, the e-stop at each value of
     # `trace` in turn and the eye at each of `eyes`: each cycle's runs and lamp, and the
     # resource at the end.
+    # The boxes counted before a cycle, none before the first.
+    defp boxes_before(0, _counted), do: 0
+    defp boxes_before(cycle, counted), do: Enum.at(counted, cycle - 1)
+
     defp boxed(plant, trace, eyes) do
       Enum.zip(trace, eyes)
       |> Enum.with_index()
@@ -4535,15 +4562,15 @@ defmodule Logex.EndToEndTest do
       counted =
         eyes
         |> Enum.chunk_every(2, 1, :discard)
-        |> Enum.map(fn [before, now] -> if(before == 0 and now == 1, do: 1, else: 0) end)
+        |> Enum.map(fn [before, now] -> bit(before == 0 and now == 1) end)
         |> Enum.scan(&+/2)
 
       for {{runs, lamp}, cycle} <- Enum.with_index(cycles) do
-        due = [{"fast", "m1"}] ++ if(rem(cycle, 5) == 0, do: [{"slow", "m2"}], else: [])
-        due = if cycle in rises, do: [{"trip", "snap"} | due], else: due
+        due = [{"fast", "m1"}] ++ noted(rem(cycle, 5) == 0, {"slow", "m2"})
+        due = noted(cycle in rises, {"trip", "snap"}) ++ due
         assert runs == due ++ [{"main", "boxes"}], "cycle #{cycle + 1}"
-        boxes = if cycle == 0, do: 0, else: Enum.at(counted, cycle - 1)
-        assert lamp == if(boxes >= 12, do: 1, else: 0), "cycle #{cycle + 1}"
+        boxes = boxes_before(cycle, counted)
+        assert lamp == bit(boxes >= 12), "cycle #{cycle + 1}"
       end
 
       assert Enum.any?(cycles, &match?({_, 1}, &1)) and Enum.any?(cycles, &match?({_, 0}, &1))
@@ -4649,17 +4676,15 @@ defmodule Logex.EndToEndTest do
         ~w(pb_start_1 pb_start_1 pb_stop_1 tt_1 pb_start_2 pb_start_2 pb_stop_2 tt_2) ++
           ~w(estop estop) ++ List.duplicate("eye_1", 16)
 
-      random = fn ->
-        case :rand.uniform(5) do
-          kind when kind <= 3 -> {:wait, Enum.random(0..25)}
-          _press -> {:press, Enum.random(inputs), Enum.random(0..1)}
-        end
-      end
+      random = fn -> press_drawn(:rand.uniform(5), inputs) end
 
       half = for _ <- 1..div(n, 2), do: random.()
       rest = for _ <- 1..div(n, 2), do: random.()
       half ++ restarted() ++ rest
     end
+
+    defp press_drawn(kind, _inputs) when kind <= 3, do: {:wait, Enum.random(0..25)}
+    defp press_drawn(_press, inputs), do: {:press, Enum.random(inputs), Enum.random(0..1)}
 
     # Every fault's cause taken away, the faults reset and both conveyors started.
     defp restarted,
@@ -5597,8 +5622,15 @@ defmodule Logex.EndToEndTest do
     # the BEAM's encoding restated, with −0.0 and a single too small to be normal 0.0.
     defp single(x) do
       <<y::float-32>> = <<x::float-32>>
-      if abs(y) < 1.1754943508222875e-38, do: 0.0, else: y
+      flushed(y)
     end
+
+    defp flushed(y) when abs(y) < 1.1754943508222875e-38, do: 0.0
+    defp flushed(y), do: y
+
+    # A single past its range saturates at its largest finite value.
+    defp saturated(x) when abs(x) > 3.4028234663852886e38, do: 3.4028234663852886e38
+    defp saturated(x), do: single(x)
 
     defp speed_plant(dir) do
       files = [
@@ -5655,12 +5687,8 @@ defmodule Logex.EndToEndTest do
         Manual.advance(clock, 10)
         hz = single(reading * 1.0)
 
-        speed =
-          if abs(hz * 60.0) > 3.4028234663852886e38,
-            do: 3.4028234663852886e38,
-            else: single(hz * 60.0)
-
-        over = if speed > 3000, do: 1, else: 0
+        speed = saturated(hz * 60.0)
+        over = bit(speed > 3000)
         assert Runner.get!(runner, "fan_hz") === hz, inspect(reading)
         assert Runner.get!(runner, "fan_speed") === speed, inspect(reading)
         assert Runner.get!(runner, "fan_rpm") === hz * 60.0 + 0.0, inspect(reading)
@@ -5752,56 +5780,31 @@ defmodule Logex.EndToEndTest do
 
     # The oracle: IEC's CTUD and CTD bodies restated, each stopping at its type's limits.
     defp oracle(model, step) do
-      stock = model.stock
-      hopper = model.hopper
-
-      stock =
-        cond do
-          step["full_load"] == 1 ->
-            %{stock | cv: 32_767, ov: 0, un: 0}
-
-          step["infeed"] == 1 and model.last["infeed"] == 0 and stock.cv == 32_767 ->
-            %{stock | ov: 1}
-
-          step["infeed"] == 1 and model.last["infeed"] == 0 ->
-            %{stock | cv: stock.cv + 1}
-
-          true ->
-            stock
-        end
-
-      stock =
-        cond do
-          step["full_load"] == 1 ->
-            stock
-
-          step["outfeed"] == 1 and model.last["outfeed"] == 0 and stock.cv == -32_768 ->
-            %{stock | un: 1}
-
-          step["outfeed"] == 1 and model.last["outfeed"] == 0 ->
-            %{stock | cv: stock.cv - 1}
-
-          true ->
-            stock
-        end
-
-      hopper =
-        cond do
-          step["refill"] == 1 ->
-            %{cv: 2, un: 0}
-
-          step["outfeed"] == 1 and model.last["outfeed"] == 0 and hopper.cv == 0 ->
-            %{hopper | un: 1}
-
-          step["outfeed"] == 1 and model.last["outfeed"] == 0 ->
-            %{hopper | cv: hopper.cv - 1}
-
-          true ->
-            hopper
-        end
-
+      infeed = step["infeed"] == 1 and model.last["infeed"] == 0
+      outfeed = step["outfeed"] == 1 and model.last["outfeed"] == 0
+      stock = stock_up(step["full_load"], infeed, model.stock)
+      stock = stock_down(step["full_load"], outfeed, stock)
+      hopper = hopper_down(step["refill"], outfeed, model.hopper)
       %{model | stock: stock, hopper: hopper, last: step}
     end
+
+    # The ctud_int's up side: LD, then an edge at its top, then an edge.
+    defp stock_up(1, _edge, stock), do: %{stock | cv: 32_767, ov: 0, un: 0}
+    defp stock_up(_load, true, %{cv: 32_767} = stock), do: %{stock | ov: 1}
+    defp stock_up(_load, true, stock), do: %{stock | cv: stock.cv + 1}
+    defp stock_up(_load, false, stock), do: stock
+
+    # Its down side, after: LD again holds it, then an edge at its bottom, then an edge.
+    defp stock_down(1, _edge, stock), do: stock
+    defp stock_down(_load, true, %{cv: -32_768} = stock), do: %{stock | un: 1}
+    defp stock_down(_load, true, stock), do: %{stock | cv: stock.cv - 1}
+    defp stock_down(_load, false, stock), do: stock
+
+    # The ctd_udint: LD, then an edge at 0, then an edge.
+    defp hopper_down(1, _edge, _hopper), do: %{cv: 2, un: 0}
+    defp hopper_down(_load, true, %{cv: 0} = hopper), do: %{hopper | un: 1}
+    defp hopper_down(_load, true, hopper), do: %{hopper | cv: hopper.cv - 1}
+    defp hopper_down(_load, false, hopper), do: hopper
 
     test "M5-5's Done-when: a ctud_int and a ctd_udint stop at their types' limits in a plant",
          %{tmp_dir: dir} do
@@ -5899,7 +5902,7 @@ defmodule Logex.EndToEndTest do
       # The oracle: the time the press has been held, from the first cycle that saw it.
       lit = fn held ->
         Map.new(delays, fn {lamp, delay} ->
-          {lamp, if(held != nil and held >= delay, do: 1, else: 0)}
+          {lamp, bit(held != nil and held >= delay)}
         end)
       end
 
@@ -5923,7 +5926,7 @@ defmodule Logex.EndToEndTest do
             {runtime, outputs, _events} =
               Logex.Runtime.cycle(runtime, elapsed, %{"press" => press})
 
-            held = if press == 1, do: (held && held + elapsed) || 0, else: nil
+            held = held_for(press, held, elapsed)
             assert outputs == lit.(held), "held #{inspect(held)}"
             {runtime, held, [outputs | seen]}
         end)
@@ -5993,6 +5996,26 @@ defmodule Logex.EndToEndTest do
     line.history history
     """
 
+    # Eight weights shifted along on a pick's rising edge, the fourth copied out.
+    defp weighed(true, load, model) do
+      weights = [load | Enum.take(model.weights, 7)]
+
+      %{
+        model
+        | weights: weights,
+          corner: Enum.at(weights, 3),
+          history3: Enum.at(weights, 3),
+          shifts: model.shifts + 1
+      }
+    end
+
+    defp weighed(false, _load, model), do: model
+
+    # The time the press has been held: 0 at the first cycle that sees it, nil released.
+    defp held_for(1, nil, _elapsed), do: 0
+    defp held_for(1, held, elapsed), do: held + elapsed
+    defp held_for(_released, _held, _elapsed), do: nil
+
     test "M5-11's Done-when: `weights[3]` and `grid[1,7]` run in a plant against an oracle",
          %{tmp_dir: dir} do
       File.write!(Path.join(dir, "weigh.ld"), @weigh_ld)
@@ -6029,22 +6052,7 @@ defmodule Logex.EndToEndTest do
           {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, 10, step)
           rose = step["pick"] == 1 and model.last == 0 and not model.first
 
-          model =
-            case rose do
-              true ->
-                weights = [step["load"] | Enum.take(model.weights, 7)]
-
-                %{
-                  model
-                  | weights: weights,
-                    corner: Enum.at(weights, 3),
-                    history3: Enum.at(weights, 3),
-                    shifts: model.shifts + 1
-                }
-
-              false ->
-                model
-            end
+          model = weighed(rose, step["load"], model)
 
           model = %{model | last: step["pick"], first: false}
           fourth = Enum.at(model.weights, 3)
@@ -6055,11 +6063,7 @@ defmodule Logex.EndToEndTest do
           assert Logex.Runtime.get!(runtime, "history[3]") == model.history3
           assert Logex.Runtime.get!(runtime, "line.history[3]") == model.history3
 
-          heavy =
-            case fourth > 500 do
-              true -> 1
-              false -> 0
-            end
+          heavy = bit(fourth > 500)
 
           assert outputs == %{"heavy" => heavy, "corner" => model.corner}
           {runtime, Map.update(model, :lit, [heavy], &[heavy | &1])}
@@ -6155,14 +6159,9 @@ defmodule Logex.EndToEndTest do
           Sim.set(panel, %{[8] => eye, [9] => slot})
           Manual.advance(clock, 10)
 
-          weights =
-            case eye == 1 and last_eye == 0 do
-              true -> List.replace_at(weights, slot, weight)
-              false -> weights
-            end
-
+          weights = box_weighed(eye == 1 and last_eye == 0, weights, {slot, weight})
           last = Enum.at(weights, slot)
-          heavy = if last > 500, do: 1, else: 0
+          heavy = bit(last > 500)
           assert Runner.get!(runner, "scales.weights") == weights
           assert Runner.get!(runner, "box_last") == last
           assert Sim.outputs(panel)[[7]] == last
@@ -6356,7 +6355,7 @@ defmodule Logex.EndToEndTest do
           assert Runner.get!(runner, "zone_t0") === hd(temps)
 
           assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
-                   for(t <- temps, do: if(t > 180.0, do: 1, else: 0))
+                   for(t <- temps, do: bit(t > 180.0))
 
           temps
         end)
@@ -6512,12 +6511,7 @@ defmodule Logex.EndToEndTest do
 
           lanes =
             for {lane, eye} <- Enum.zip(model.lanes, eyes) do
-              acc =
-                case {eye, lane.timing} do
-                  {1, true} -> min(lane.acc + 10, lane.pre)
-                  {1, false} -> 0
-                  {0, _} -> 0
-                end
+              acc = lane_timed(eye, lane)
 
               done = eye == 1 and acc == lane.pre
               rose = done and not lane.done
@@ -6527,27 +6521,23 @@ defmodule Logex.EndToEndTest do
                 | acc: acc,
                   timing: eye == 1,
                   done: done,
-                  count: lane.count + if(rose, do: 1, else: 0)
+                  count: lane.count + bit(rose)
               }
             end
 
           inside = sel in 0..3
-          picked = if inside, do: Enum.at(lanes, sel)
-          lamp = if inside and picked.done, do: 1, else: 0
-          count = if inside, do: picked.count, else: model.count
+          {lamp, count} = lane_picked(inside, lanes, {sel, model.count})
 
           assert outputs ==
                    Map.merge(
-                     Map.new(Enum.with_index(lanes), fn {l, i} ->
-                       {"kick#{i}", if(l.done, do: 1, else: 0)}
-                     end),
+                     Map.new(Enum.with_index(lanes), fn {l, i} -> {"kick#{i}", bit(l.done)} end),
                      %{"lamp" => lamp, "count" => count}
                    )
 
           faults =
             for {:fault, "fast", "line", fault} <- events, do: {fault.instruction, fault.read}
 
-          assert faults == if(inside, do: [], else: [{:xic, {sel}}, {:move, {sel}}])
+          assert faults == lane_faults(inside, sel)
 
           for {lane, i} <- Enum.with_index(lanes) do
             assert Logex.Runtime.get!(runtime, "line.lane_t[#{i}].acc") == lane.acc
@@ -6730,6 +6720,40 @@ defmodule Logex.EndToEndTest do
     # flips its bits, a single is the BEAM's 32-bit float nearest a double, a real past
     # its range is its largest value with its sign, and −0.0 is 0.0.
     defp wrapped(x, lo, hi), do: Integer.mod(x - lo, hi - lo + 1) + lo
+
+    # An lreal too small to be normal is held as 0.0.
+    defp lreal_flushed(l) when abs(l) < 2.2250738585072014e-308, do: 0.0
+    defp lreal_flushed(l), do: l
+
+    # IEC's CTUD restated over an int: a load, then an up edge at its top, then an edge.
+    defp box_loaded({1, _rose, _cv}, _ov), do: {32_767, 0}
+    defp box_loaded({0, true, 32_767}, _ov), do: {32_767, 1}
+    defp box_loaded({0, true, cv}, ov), do: {cv + 1, ov}
+    defp box_loaded({0, false, cv}, ov), do: {cv, ov}
+
+    defp box_down(true, cv), do: cv - 1
+    defp box_down(false, cv), do: cv
+
+    # A box's weight kept in its slot as the eye rises.
+    defp box_weighed(true, weights, {slot, weight}), do: List.replace_at(weights, slot, weight)
+    defp box_weighed(false, weights, _box), do: weights
+
+    # A lane's TON restated: timing 10 ms a cycle while its eye is held, from the cycle after
+    # it rose; the lane the panel picks lighting the lamp and showing its count, one outside
+    # the lanes the index fault of each instruction that reads through it.
+    defp lane_timed(1, %{timing: true} = lane), do: min(lane.acc + 10, lane.pre)
+    defp lane_timed(1, %{timing: false}), do: 0
+    defp lane_timed(0, _lane), do: 0
+
+    defp lane_picked(true, lanes, {sel, _count}) do
+      picked = Enum.at(lanes, sel)
+      {bit(picked.done), picked.count}
+    end
+
+    defp lane_picked(false, _lanes, {_sel, count}), do: {0, count}
+
+    defp lane_faults(true, _sel), do: []
+    defp lane_faults(false, sel), do: [{:xic, {sel}}, {:move, {sel}}]
     defp saturated(x, max) when x > max, do: max
     defp saturated(x, max) when x < -max, do: -max
     defp saturated(x, _max), do: x + 0.0
@@ -6860,7 +6884,7 @@ defmodule Logex.EndToEndTest do
 
           for {type, lo, hi} <- @integer_types do
             assert out[[at[type]]] == wrapped(ints[type] + 1, lo, hi), type
-            assert out[[15 + at[type]]] == if(ints[type] < hi, do: 1, else: 0), type
+            assert out[[15 + at[type]]] == bit(ints[type] < hi), type
           end
 
           for {type, width} <- @bit_strings,
@@ -6875,8 +6899,7 @@ defmodule Logex.EndToEndTest do
 
           l = lreal * 1.0 + 0.0
 
-          assert Runner.get!(runner, "b_i_lreal") ===
-                   if(abs(l) < 2.2250738585072014e-308, do: 0.0, else: l)
+          assert Runner.get!(runner, "b_i_lreal") === lreal_flushed(l)
 
           assert Runner.get!(runner, "b_o_lreal") ===
                    doubled_lreal(Runner.get!(runner, "b_i_lreal"))
@@ -6887,7 +6910,7 @@ defmodule Logex.EndToEndTest do
           assert Runner.get!(runner, "fan_hz") === fan
           assert Runner.get!(runner, "fan_speed") === speed
           assert Runner.get!(runner, "fan_rpm") === fan * 60.0 + 0.0
-          assert Sim.outputs(panel)[[7]] == if(speed > 3000, do: 1, else: 0)
+          assert Sim.outputs(panel)[[7]] == bit(speed > 3000)
 
           # The oven's eight zones, each lamp lit over 180.
           temps =
@@ -6898,7 +6921,7 @@ defmodule Logex.EndToEndTest do
           assert Runner.get!(runner, "zone_t") == temps
 
           assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
-                   for(t <- temps, do: if(t > 180.0, do: 1, else: 0))
+                   for(t <- temps, do: bit(t > 180.0))
 
           # The box counter, IEC's CTUD restated over an int: a load first, then an up
           # edge, stopping at 32767 with `ov`, then a down edge; each box's weight kept in
@@ -6906,16 +6929,9 @@ defmodule Logex.EndToEndTest do
           rose = eye == 1 and model.eye == 0
           fell_in = outfeed == 1 and model.outfeed == 0
 
-          {cv, ov} =
-            case {full, rose, model.cv} do
-              {1, _, _} -> {32_767, 0}
-              {0, true, 32_767} -> {32_767, 1}
-              {0, true, cv} -> {cv + 1, model.ov}
-              {0, false, cv} -> {cv, model.ov}
-            end
-
-          cv = if full == 0 and fell_in and cv > -32_768, do: cv - 1, else: cv
-          weights = if rose, do: List.replace_at(model.weights, slot, weight), else: model.weights
+          {cv, ov} = box_loaded({full, rose, model.cv}, model.ov)
+          cv = box_down(full == 0 and fell_in and cv > -32_768, cv)
+          weights = box_weighed(rose, model.weights, {slot, weight})
           assert Runner.get!(runner, "boxes.boxes.cv") == cv
           assert Runner.get!(runner, "boxes.weights") == weights
           assert Sim.outputs(panel)[[4]] == cv
