@@ -1969,15 +1969,41 @@ defmodule Logex.RealTest do
       assert message == "`sp` is an lreal: `1.0e-310` #{@too_near}"
     end
 
-    test "an lreal's smallest normal is taken, two literals compared are the doubles" do
+    test "an lreal's smallest normal is taken, and a subnormal one beside a literal refused" do
       assert outputs("var_output l lreal\nmove 2.2250738585072014e-308 l") ===
                %{"l" => 2.2250738585072014e-308}
 
-      assert warnings("var_output q bool\nlt 1.0e-310 0.0 ote q") == [
-               {2, "`lt` compares two literals, `1.0e-310` and `0.0`: its result never changes"}
+      assert warnings("var_output q bool\nlt 2.2250738585072014e-308 0.0 ote q") == [
+               {2,
+                "`lt` compares two literals, `2.2250738585072014e-308` and `0.0`: its result " <>
+                  "never changes"}
              ]
 
-      assert outputs("var_output q bool\ngt 1.0e-310 0.0 ote q") == %{"q" => 1}
+      # Decision 250, superseding decision 240's provisional reading: a subnormal literal
+      # beside another literal, `gt 1.0e-310 0.0`, which compiled as the double it lexes
+      # as, true on every scan, is refused as beside a tag and as `1.0e-400` is, either
+      # side, in a negative one too, each such literal a line.
+      for {rung, shown, word, count} <- [
+            {"gt 1.0e-310 0.0", "1.0e-310", "gt", 1},
+            {"lt 0.0 -4.9e-324", "-4.9e-324", "lt", 1},
+            {"ne 1_0.0e-3_10 2.5", "1_0.0e-3_10", "ne", 1},
+            {"ge 5 1.0e-310", "1.0e-310", "ge", 1},
+            {"eq 1.0e-310 1.0e-310", "1.0e-310", "eq", 2}
+          ] do
+        assert messages("var_output q bool\n#{rung} ote q") ==
+                 List.duplicate(
+                   {2,
+                    "`#{word}` reads a number or a bit string, and compares two literals as " <>
+                      "lreals: `#{shown}` is too near 0.0 for an lreal, whose smallest above " <>
+                      "0.0 is 2.2250738585072014e-308: it would be written as 0.0"},
+                   count
+                 ),
+               rung
+      end
+
+      # A zero or a normal double beside it is still taken.
+      assert outputs("var_output q bool\ngt 2.2250738585072014e-308 0.0 ote q") == %{"q" => 1}
+      assert outputs("var_output q bool\neq 0.0e-310 0.0 ote q") == %{"q" => 1}
     end
   end
 
@@ -2081,8 +2107,9 @@ defmodule Logex.RealTest do
                rung
       end
 
-      # A subnormal one beside a literal is still the double it lexes as (decision 228).
-      assert outputs("var_output q bool\ngt 1.0e-310 0.0 ote q") == %{"q" => 1}
+      # A subnormal one beside a literal is refused too since decision 250.
+      assert [{2, "`gt` reads a number or a bit string, and compares two literals as " <> _}] =
+               messages("var_output q bool\ngt 1.0e-310 0.0 ote q")
     end
 
     # Decision 237, superseding decision 231's provisional reading: a configuration file's

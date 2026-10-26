@@ -3742,7 +3742,9 @@ index fault. Each element is an instance by its path, `lane_t[2]` and `lanes[1].
 walks, the edit's plan and block list, a fault's `path`, the event task's warnings and
 `get/2`, `m1.lane_t[2].acc`. Provisional: a write through a tag subscript of a member,
 `move 0 lane_c[i].pv`, is a write of that member of every element; an array some of whose
-elements nothing runs is warned once, ten and then a count. A scalar instance's rung scans
+elements nothing runs is warned once, ten and then a count (both confirmed by decisions 251
+and 252, 2026-10-26, beside decision 253's second-`ote` warning for a member through a tag
+subscript and decision 254's refusal of a member retyped, for the array). A scalar instance's rung scans
 in exactly what it did, a `ton` 112 reductions; an element's in 9 to 14 more, a `ton`'s
 121 and a `cal`'s 302 against 288, and a member read through a tag subscript in 5 more
 than by a literal one.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
@@ -7710,7 +7712,10 @@ the decisions the rest settle.
      every instruction that runs one, `ton lane_t[i] 500` refused and told why, and a tag
      subscript on a member's read or write, `xic lane_t[slot].dn`, the maintainer
      re-confirming the literal rule on 2026-10-24; §4.12 gives the costs and the
-     provisional readings.)*
+     provisional readings. Its four questions answered on 2026-10-26, decisions 251 to
+     254: a dropped member write and the unrun warning confirmed, a member through a tag
+     subscript compared with a literal element's, and a member retyped in an array of
+     blocks refused for the array.)*
 155. **Bit strings and bit access (Milestone 5).** Bit 3 of the drive's status word is "at
      speed", and the run lamp should follow it: `xic drive_status.3 ote run_lamp`.
      - IEC's way: `byte word dword lword` as types of their own, no arithmetic on them,
@@ -9365,7 +9370,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      under M5-14: a misfit is quoted as its line writes it, `level 16#ffffffff` "got:
      16#ffffffff" and `1.0e-400` at an int point "got: 1.0e-400", where until then it
      was quoted as the value read, 4294967295 and 0.0; a value written plainly reads as
-     before, "got: 2".)*
+     before, "got: 2". Superseded by decision 255: quoted both ways, "got: 16#ffffffff,
+     which is 4294967295", once where the two are one text.)*
 227. **A rounded initial value (Milestone 5),** M5-10's follow-up second question,
      changing decision 219's "a declaration's or a configuration line's initial value is
      not looked at". `var sp real 16777217.0` declares a setpoint the `real` holds as
@@ -9669,7 +9675,7 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      - The elements an instance is told of beside one other writer in the same words are
        one line, so two instances writing the same literal elements, neither through a tag
        subscript, are told once too, "`t2` writes `speeds[1]` and `speeds[3]` …, as `t1`
-       does" (provisional, a case the question did not ask).
+       does" (provisional, a case the question did not ask; confirmed by decision 249).
      - An array told whole (two writers through a tag subscript), a global that is no
        array, and an element that is a one-shot's storage bit, told so, stay a line each.
 
@@ -9686,8 +9692,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      literals compare as the doubles they lex as (decision 216), so the words name an
      lreal; a zero written any way, `0.0e-400`, is 0.0, warned only as two literals
      compared are; and a subnormal one beside a literal, `gt 1.0e-310 0.0`, is still the
-     double it lexes as, true, since its text and its value agree. IEC and Logix say
-     nothing found.
+     double it lexes as, true, since its text and its value agree *(superseded by decision
+     250: refused too, in the same words)*. IEC and Logix say nothing found.
 241. **A located array named whole (Milestone 5),** M5-13's first question, changing its
      provisional reading. The oven's eight zones, `zone_t real[8] at card.i.0`: a host's
      input, a force and a forces file's line naming `zone_t` whole were refused, told the
@@ -9724,7 +9730,7 @@ built; 221, 222, 223, 226, 227 and 228 change six.
        `status/1` lists them; so the file the runner writes reads back to the very forces it
        holds, the exact round trip, and a whole line written by hand is written back by
        element at the next force, as decision 218 rewrites a spelling (provisional, a
-       question below).
+       question below; confirmed by decision 248).
      - *Triggers:* a force or unforce that changes what a trigger reads makes that
        trigger's round, one a trigger, element by element; but an event task's single is
        a whole bool global, never an element nor an array (M5-13), so no element of a
@@ -9803,7 +9809,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      under M5-14: two coils through the very tags on an element, `ote lamps[slot]` twice,
      are told "`lamps[slot]` already has an `ote` on line 6", as `ote w.[n]` twice and a
      member's `ote c[i].r` twice are, where they were told the array may be written
-     through a tag subscript; through other tags the array's words stay.)*
+     through a tag subscript; through other tags the array's words stay. Confirmed by
+     decision 256.)*
 247. **A tag refused for its initial value (Milestone 5),** M5-13's review's seventh
      question. **Taken: confirmed as built** (the maintainer, 2026-10-24): `var r int
      40000` is refused once and `r` declared with no initial value, so its uses are
@@ -9811,6 +9818,134 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      undeclared; a line broken after its value, `var r int 5 7`, still declares nothing.
      No code changed; `validation_test.exs` pins it. M5-13's review's provisional reading
      stands as confirmed.
+248. **The forces file's form for a whole array (Milestone 5),** M5-13's eighth question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-26): the forces file keeps one
+     line an element, `zone_t[0] 170.0` to `zone_t[7] 170.0`, even where every element of
+     the array is forced, as the runner holds its forces and `status/1` lists them, so that
+     an operator who unforces zone 3 alone sees the other seven still listed; a whole line
+     written by hand, `zone_t 170.0 …`, is read as each element forced and written back by
+     element at the next force. No code changed; `located_array_test.exs` pins it. Logix
+     forces within a tag, by element (1756-PM004L pp.51, 53 and 54); no forces file of
+     Logix's was found in the extracts read (**unverified**). Decision 241's provisional
+     reading of the file's form stands as confirmed.
+249. **Two instances writing the same elements (Milestone 5),** M5-13's ninth question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-26): `t1` and `t2` both writing
+     `speeds[1]` and `speeds[3]`, neither through a tag subscript, are told once, "`t2`
+     writes `speeds[1]` and `speeds[3]` through its var_external, as `t1` does", the
+     elements named together as decision 239 names them beside a writer through a tag
+     subscript. No code changed; `tag_subscript_test.exs` pins it. Decision 48's warnings
+     are logex's own; Logix has no such check. Decision 239's provisional bullet stands as
+     confirmed.
+250. **A subnormal literal beside a literal (Milestone 5),** M5-13's tenth question,
+     changing decision 240's provisional reading. `gt 1.0e-310 0.0` compiled as the double
+     it lexes as and was true on every scan, warned only as two literals compared are,
+     where `eq 1.0e-400 0.0` is refused (decision 240) and `1.0e-310` beside a tag is
+     refused (decision 228).
+
+     **Taken: refused in every slot, a comparison of two literals included** (the
+     maintainer, 2026-10-26): "`gt` reads a number or a bit string, and compares two
+     literals as lreals: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0
+     is 2.2250738585072014e-308: it would be written as 0.0", either side, a negative one
+     too, `lt 0.0 -4.9e-324`, its spelling quoted, as decision 240 words `1.0e-400`. *The
+     reading (the record's, provisional where marked):* the literal is judged by
+     `Logex.Real.flushed?/2` in the lreal two literals compare in (decision 216's rule),
+     so the smallest normal double, `2.2250738585072014e-308`, is taken and warned only as
+     two literals compared are; a zero written any way, `0.0e-310`, is 0.0; and
+     `eq 1.0e-310 1.0e-310` is told once for each literal, as `eq 1.0e-400 1.0e-400` is
+     (provisional). IEC and Logix say nothing found.
+251. **A member written through a tag subscript, dropped by an edit (Milestone 5),**
+     M5-14's first question. **Taken: confirmed as built** (the maintainer, 2026-10-26): an
+     edit that drops the sorter's `xic set move 2 lane_c[k].pv` reports every element's
+     `pv` unwritten, `{:unwritten, "lane_c[0].pv", 2}` and the rest, each keeping its
+     value, since the write may have reached any of them (decision 96). No code changed;
+     `instance_array_test.exs` pins it. Decision 96's report is logex's own; no such report
+     of Logix's was found in the extracts read.
+252. **An array some of whose elements nothing runs (Milestone 5),** M5-14's second
+     question. **Taken: confirmed as built** (the maintainer, 2026-10-26): one warning for
+     the array, "`lane_t` is an array of 4 tons, but no `ton` runs `lane_t[3]`: it never
+     times", its elements listed ten and then counted, and one sentence for the array
+     whole where none is run. No code changed; `instance_array_test.exs` pins it. IEC says
+     nothing, and no such warning of Logix's was found in the extracts read
+     (**unverified**).
+253. **A member of an element through a tag subscript beside a literal element's
+     (Milestone 5),** M5-14's third question, changing its provisional reading. `xic a ote
+     lane_c[i].r` beside `xio a ote lane_c[1].r` was warned of nothing, where two coils
+     through the very tag, and two literal elements by value, were the second-`ote`
+     warning, and decision 235 warns `ote lamps[2]` beside a write through `lamps[slot]`.
+
+     **Taken: the second-`ote` warning, in either order, as a bool array's elements are**
+     (the maintainer, 2026-10-26), and so is any write of a member through a tag subscript
+     beside a coil on that member of a literal element, as decisions 235 and 246 have it,
+     so that the same element through the same tag is not warned. *The reading (the
+     record's, provisional where marked):*
+     - A coil through a tag subscript, `ote lane_c[i].r`, is a coil on that member of every
+       element, keyed by the array and the member, `lane_c` and `r`; a member of another
+       name, `lane_c[1].ld`, is not compared with it.
+     - A coil on a literal element's member after such a coil, or after any other write of
+       the member through a tag subscript, `otl lane_c[i].r`, is told "`lane_c[1].r` is in
+       `lane_c`, which the `ote` on line 8 may write through a tag subscript: the last one
+       in the scan decides it", in decision 235's words.
+     - A coil or another write through a tag subscript after a coil on a literal element's
+       member is told "`lane_c[i].r` is in `lane_c`, as `lane_c[1].r` is, which already has
+       an `ote` on line 8"; after a write of a literal element's member, `otl lane_c[1].r`,
+       "…, which the `otl` on line 8 writes"; and a write of a literal element's member
+       after a coil through a tag subscript is told the array the coil may write.
+     - Two coils through the very tags are told "`lane_c[i].r` already has an `ote`"
+       (decision 256); a coil and another write through the very tags, `ote lane_c[i].r`
+       beside `otl lane_c[i].r`, either first, are warned of nothing (decision 246); and
+       through other tags, `lane_c[i].r` beside `lane_c[j].r`, a coil or a write, they are
+       told the array the first may write, as `lamps[i]` beside `lamps[j]` is
+       (provisional, a case the question did not ask).
+     - A write of a literal element's member beside a coil on it, `otl lane_c[1].r` beside
+       `ote lane_c[1].r`, is warned of nothing, as `otl lamps[2]` beside `ote lamps[2]` is
+       not.
+     - A bit of a member of an element, `ote lane_c[1].pv.3`, is not compared, as before
+       (provisional).
+
+     The warning is logex's own (decisions 207 and 235); IEC and the extracts of Logix read
+     say nothing of it. This supersedes M5-14's provisional reading that a literal
+     element's member beside one through a tag subscript is not compared.
+254. **A block's member retyped in an array of its instances (Milestone 5),** M5-14's
+     fourth question, changing its provisional reading. `var ws w[3]`, and an edit changes
+     `w`'s `x` from a bool to a dint: the accept was refused once, by the first element,
+     "`ws[0].x` is a bool in the running program and a dint in the candidate: …".
+
+     **Taken: refused once, naming the array** (the maintainer, 2026-10-26): "`x` of every
+     element of `ws` is a bool in the running program and a dint in the candidate: a
+     member's type changes only with a restart", at the array's line. *The reading (the
+     record's, provisional where marked):* the member is named by its path below the
+     element, `s.x` for a member of an instance the block holds; an array held in a
+     block's instance by its path, "`x` of every element of `b.ws`"; and an array of
+     blocks inside each element of another, in turn, "`x` of every element of `ws` of
+     every element of `hs`" (provisional). An array whose sizes or block change is still
+     refused for its own type, as before. Logix changes an existing array's size or data
+     type offline only (1756-RM094N p.85), and says nothing found of how it names the
+     change.
+255. **How a forces file's bad value is quoted (Milestone 5),** M5-14's review's fifth
+     question, changing its provisional reading. The tank level forced in hex, `level
+     16#ffffffff`, too large for its `dint` point, was quoted as the line writes it, "got:
+     16#ffffffff".
+
+     **Taken: both, as written and as read** (the maintainer, 2026-10-26): "`level` is a
+     dint, forced to an integer from -2147483648 to 2147483647, got: 16#ffffffff, which is
+     4294967295"; where the two are the same text, `level 2147483648` or `x 1.0` at a bool
+     point, it is quoted once, "got: 2147483648"; and where nothing is read, a value that
+     is no number, the line is quoted as written, "`eye 1 2` is no force: …", as before.
+     *The reading (the record's):* the value read is shown as the runner holds a number,
+     `1.0e-400` at an int point "got: 1.0e-400, which is 0.0", `1.0E39` at a real point
+     "got: 1.0E39, which is 1.0e39", `37.50` at a bool point "got: 37.50, which is 37.5",
+     an element's line and a whole line's alike; a host's `force/3` value, which has no
+     other spelling, is quoted as the value it is, as before. Logix keeps forces in the
+     project, not a file (1756-PM004L pp.52–53); IEC says nothing of forcing.
+256. **Two coils through one subscript tag (Milestone 5),** M5-14's review's sixth
+     question. **Taken: confirmed as built** (the maintainer, 2026-10-26): `xic a ote
+     lamps[slot]` and `xic b ote lamps[slot]` are told "`lamps[slot]` already has an `ote`
+     on line 6: the last one in the scan decides it", as `ote lamps[2]` twice and `ote
+     w.[n]` twice are; through two tags, `lamps[i]` and `lamps[j]`, the array "may" be
+     written. No code changed; `tag_subscript_test.exs` pins it, and since decision 253 so
+     for a member of an element, `ote lane_c[i].r` twice (`instance_array_test.exs`). No
+     such warning of IEC's or Logix's was found (**unverified**). M5-14's review's
+     provisional reading under decision 246 stands as confirmed.
 
 ---
 

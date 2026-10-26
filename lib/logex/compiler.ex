@@ -4315,6 +4315,20 @@ defmodule Logex.Compiler do
        when is_zero_real(literal),
        do: underflowed_beside(Parser.underflowed?(literal), literal, class, at, diagnostics)
 
+  # Decision 250: a subnormal literal beside another literal, `gt 1.0e-310 0.0`, is
+  # refused as beside a tag (decision 228) and as `1.0e-400` is (decision 240), in the
+  # lreal two literals compare in, where until then it compiled as the double it lexes as.
+  defp source({:value, _class, {:literal, value, literal}}, {:class, class}, at, diagnostics)
+       when is_float(value),
+       do:
+         subnormal_beside(
+           Declarations.class_holds?(class, value) and Logex.Real.flushed?(:lreal, value),
+           literal,
+           class,
+           at,
+           diagnostics
+         )
+
   # M5-10: a real literal where no type is known for it, a comparison's beside a literal,
   # held to the class, which takes it where it holds a real.
   defp source({:value, _class, {:literal, value, literal}}, {:class, class}, at, diagnostics),
@@ -4365,6 +4379,30 @@ defmodule Logex.Compiler do
         line,
         "`#{word}` reads #{a_type(class)}, and compares two literals as lreals: " <>
           Declarations.literal_misfit(:lreal, 0.0, "`#{Parser.spelling(literal)}`")
+      )
+      | diagnostics
+    ]
+
+  defp subnormal_beside(false, literal, class, at, diagnostics),
+    do:
+      class_literal(
+        Declarations.class_holds?(class, Parser.value(literal)),
+        literal,
+        class,
+        at,
+        diagnostics
+      )
+
+  defp subnormal_beside(true, literal, class, {line, word}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` reads #{a_type(class)}, and compares two literals as lreals: " <>
+          Declarations.literal_misfit(
+            :lreal,
+            Parser.value(literal),
+            "`#{Parser.spelling(literal)}`"
+          )
       )
       | diagnostics
     ]

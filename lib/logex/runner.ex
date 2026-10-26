@@ -1162,8 +1162,9 @@ defmodule Logex.Runner do
   defp read_point({:error, message}, {name, _value, _text}, line, acc),
     do: once(first_line([name], acc), [name], line, acc, [message])
 
-  # M5-14's review (provisional): each value as the line writes it, after its name, which a
-  # misfit quotes as decision 202 quotes a literal, `2#10` and `1.0e-400` as written.
+  # M5-14's review: each value as the line writes it, after its name, which a misfit
+  # quotes as decision 202 quotes a literal, `2#10` and `1.0e-400` as written, and since
+  # decision 255 beside the value read where that differs.
   defp written(text), do: tl(String.split(text, " "))
 
   # A point forced on an earlier line, the first of the line's points that is.
@@ -1204,7 +1205,7 @@ defmodule Logex.Runner do
       [names, values, spellings]
       |> Enum.zip()
       |> Enum.reject(fn {_element, v, _spelling} -> Declarations.fits?(type, v) end)
-      |> Enum.map(fn {element, _v, spelling} -> misfit_written(element, type, spelling) end)
+      |> Enum.map(fn {element, v, spelling} -> misfit_read(element, type, {v, spelling}) end)
       |> Logex.Array.capped(&more_misfits(name, {:array, type, dims}, &1))
 
     whole_force(misfits, names, Enum.map(values, &forced(type, &1)))
@@ -1224,12 +1225,20 @@ defmodule Logex.Runner do
   defp count_of(_one), do: "1"
 
   defp real_force(true, name, type, {value, _}), do: {:take, [{name, forced(type, value)}]}
-  defp real_force(false, name, type, {_, spelling}), do: [misfit_written(name, type, spelling)]
+  defp real_force(false, name, type, read), do: [misfit_read(name, type, read)]
 
   defp fitting_force(true, name, _type, {value, _}), do: {:take, [{name, value}]}
 
-  defp fitting_force(false, name, type, {_, spelling}),
-    do: [misfit_written(name, type, spelling)]
+  defp fitting_force(false, name, type, read), do: [misfit_read(name, type, read)]
+
+  # Decision 255: a forces file's misfit quoted as its line writes it and as it is read,
+  # "got: 16#ffffffff, which is 4294967295", once where the two are one text, `37.5` at an
+  # int point, as a line that holds no number is quoted as written, "is no force".
+  defp misfit_read(name, type, {value, spelling}),
+    do: misfit_written(name, type, written_and_read(spelling, inspect(value)))
+
+  defp written_and_read(same, same), do: same
+  defp written_and_read(spelling, read), do: "#{spelling}, which is #{read}"
 
   defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
     do: {Enum.into(taken, forces), lines, problems}

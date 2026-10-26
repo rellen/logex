@@ -1019,9 +1019,48 @@ defmodule Logex.InstanceArrayTest do
 
       assert {:error, [%{message: message}]} = Edit.accept(p1, p2, Runtime.instance(p1))
 
+      # Decision 254, superseding M5-14's provisional reading, which cited it by the first
+      # element's path, `ws[0].x`: once, for the array.
       assert message ==
-               "`ws[0].x` is a bool in the running program and a dint in the candidate: a " <>
-                 "member's type changes only with a restart"
+               "`x` of every element of `ws` is a bool in the running program and a dint in " <>
+                 "the candidate: a member's type changes only with a restart"
+
+      # So in a block's instance, by its path, and in an array of blocks that hold one, in
+      # turn, each cited once.
+      holder = fn w ->
+        {:ok, h} =
+          Logex.compile(
+            "function_block h\nvar_input s bool\nvar_output q bool\nvar ws w[2]\ncal ws[1] s q",
+            name: "h",
+            types: [w]
+          )
+
+        h
+      end
+
+      held =
+        "var_input go bool\nvar_output lamp bool\nvar b h\nvar hs h[2]\n" <>
+          "cal b go lamp\ncal hs[0] go lamp"
+
+      h1 = holder.(w1)
+      h2 = holder.(w2)
+
+      assert {:error, diagnostics} =
+               Edit.accept(
+                 program(held, [h1]),
+                 program(held, [h2]),
+                 Runtime.instance(program(held, [h1]))
+               )
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {3,
+                "`x` of every element of `b.ws` is a bool in the running program and a dint " <>
+                  "in the candidate: a member's type changes only with a restart"},
+               {4,
+                "`x` of every element of `ws` of every element of `hs` is a bool in the " <>
+                  "running program and a dint in the candidate: a member's type changes only " <>
+                  "with a restart"}
+             ]
 
       # A body changed with its members' kinds kept is no type change.
       {:ok, w3} =
@@ -1119,9 +1158,67 @@ defmodule Logex.InstanceArrayTest do
                 "`lane_c[i].r` already has an `ote` on line 8: the last one in the scan decides it"}
              ]
 
-      # Provisional: a literal element's member beside one through a tag subscript is not
-      # compared.
-      assert warnings(source <> "xic go ote lane_c[i].r\nxio go ote lane_c[1].r") == []
+      # Decision 253, superseding M5-14's provisional reading that a literal element's
+      # member beside one through a tag subscript is not compared: they are, as decision 235
+      # compares a bool array's elements, either first.
+      assert warnings(source <> "xic go ote lane_c[i].r\nxio go ote lane_c[1].r") == [
+               {9,
+                "`lane_c[1].r` is in `lane_c`, which the `ote` on line 8 may write through a " <>
+                  "tag subscript: the last one in the scan decides it"}
+             ]
+
+      assert warnings(source <> "xic go ote lane_c[1].r\nxio go ote lane_c[i].r") == [
+               {9,
+                "`lane_c[i].r` is in `lane_c`, as `lane_c[1].r` is, which already has an `ote` " <>
+                  "on line 8: the last one in the scan decides it"}
+             ]
+    end
+
+    # Decision 253: any write of a member through a tag subscript beside a coil on that
+    # member of a literal element, and a write of a literal element's member beside a coil
+    # through a tag subscript, either first, is the second-`ote` warning, as for a bool
+    # array's element (decision 235); the very member through the very tags is warned of
+    # nothing (decision 246), and through other tags it is.
+    test "a member through a tag subscript and a literal element's member compared, as a bool array's elements" do
+      source =
+        "var_input go bool\nvar_input i dint\nvar_input j dint\nvar_output q bool\n" <>
+          "var_output p bool\nvar lane_c ctud[2]\nxic go ctu lane_c[0] 1\n" <>
+          "xic go ctu lane_c[1] 1\nxic lane_c[0].qu ote q\nge i j ote p\n"
+
+      may = fn shown, symbol ->
+        "`#{shown}` is in `lane_c`, which the `#{symbol}` on line 11 may write through a tag " <>
+          "subscript: the last one in the scan decides it"
+      end
+
+      as = fn shown ->
+        "`#{shown}` is in `lane_c`, as `lane_c[1].r` is, which already has an `ote` on line " <>
+          "11: the last one in the scan decides it"
+      end
+
+      for {rungs, expected} <- [
+            {"xic go otl lane_c[i].r\nxio go ote lane_c[1].r",
+             [{12, may.("lane_c[1].r", "otl")}]},
+            {"xic go ote lane_c[1].r\nxio go otl lane_c[i].r", [{12, as.("lane_c[i].r")}]},
+            {"xic go ote lane_c[i].r\nxio go otl lane_c[1].r",
+             [{12, may.("lane_c[1].r", "ote")}]},
+            {"xic go otl lane_c[1].r\nxio go ote lane_c[i].r",
+             [
+               {12,
+                "`lane_c[i].r` is in `lane_c`, as `lane_c[1].r` is, which the `otl` on line 11 " <>
+                  "writes: the last one in the scan decides it"}
+             ]},
+            {"xic go ote lane_c[i].r\nxio go ote lane_c[j].r",
+             [{12, may.("lane_c[j].r", "ote")}]},
+            {"xic go ote lane_c[i].r\nxio go otl lane_c[j].r",
+             [{12, may.("lane_c[j].r", "ote")}]},
+            {"xic go ote lane_c[i].r\nxio go otl lane_c[i].r", []},
+            {"xic go otl lane_c[i].r\nxio go ote lane_c[i].r", []},
+            {"xic go otl lane_c[1].r\nxio go ote lane_c[1].r", []},
+            {"xic go ote lane_c[i].r\nxio go ote lane_c[1].ld", []},
+            {"xic go ote lane_c[i].ld\nxio go move 1 lane_c[0].r", []}
+          ] do
+        assert warnings(source <> rungs) == expected, rungs
+      end
     end
   end
 

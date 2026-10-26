@@ -75,21 +75,28 @@ defmodule Logex.Edit.Plan do
     for %Member{name: member} = to <- type.members,
         {:ok, from} <- [Map.fetch(before, member)],
         change <-
-          changes(FbType.type_of(was, from), FbType.type_of(type, to), path <> "." <> member),
+          changes(FbType.type_of(was, from), FbType.type_of(type, to), below(path, member)),
         do: change
   end
 
   # M5-14 (decision 154): an array of instances of a user block keeps its type where its
-  # sizes stay and its block keeps its name and every member's kind, each element's
-  # change cited once, by its first element's path, `lanes[0].count` (provisional).
+  # sizes stay and its block keeps its name and every member's kind. Since decision 254
+  # each change of its elements is cited once, for the array, `{:every, "ws", "x"}`, "`x`
+  # of every element of `ws`", where until then it was cited by its first element's path,
+  # `ws[0].x`.
   defp changes(
          {:array, %FbType{name: name, body: %Program{}} = was, dims},
          {:array, %FbType{name: name, body: %Program{}} = type, dims},
          path
        ),
-       do: changes(was, type, Logex.Array.name(path, Enum.map(dims, fn _ -> 0 end)))
+       do:
+         for({member, from, to} <- changes(was, type, ""), do: {{:every, path, member}, from, to})
 
   defp changes(was, type, path), do: [{path, was, type}]
+
+  # A member's path below an instance's, or an element's own member, by its name alone.
+  defp below("", member), do: member
+  defp below(path, member), do: path <> "." <> member
 
   # A version's members by name, built once per type compared, so that matching the
   # members of two versions is linear in them, not quadratic.
@@ -129,12 +136,20 @@ defmodule Logex.Edit.Plan do
       file: file,
       line: line,
       message:
-        "`#{path}` is #{word(was)} in the running program and #{word(type)} in the " <>
-          "candidate: #{whose(String.contains?(path, "."))} type changes only with a restart"
+        "#{cited(path)} is #{word(was)} in the running program and #{word(type)} in the " <>
+          "candidate: #{whose(path)} type changes only with a restart"
     }
 
-  defp whose(false), do: "a tag's"
-  defp whose(true), do: "a member's"
+  # Decision 254: a member of every element of an array of user blocks, `x` of every
+  # element of `ws`, and one of every element of an array its elements hold, in turn.
+  defp cited({:every, array, member}), do: "#{cited(member)} of every element of `#{array}`"
+  defp cited(path), do: "`#{path}`"
+
+  defp whose({:every, _array, _member}), do: "a member's"
+  defp whose(path), do: whose_path(String.contains?(path, "."))
+
+  defp whose_path(false), do: "a tag's"
+  defp whose_path(true), do: "a member's"
 
   # A user block's name is any name, so it takes no article of its own (M2-5).
   defp word(%FbType{} = type), do: Declarations.instance_of(type)

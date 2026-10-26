@@ -434,6 +434,14 @@ defmodule Logex.Warnings do
 
   defp coiled({:coil_at, word, _tag, _at, _shown, _id}, words), do: Map.put(words, word, true)
 
+  # Decision 253: a member some coil names, of a literal element or through a tag subscript,
+  # whose other writes are compared with it.
+  defp coiled({:member_coil, _key, group, _at, _shown}, words),
+    do: Map.put(words, {:member_coiled, group}, true)
+
+  defp coiled({:member_coil_at, group, _at, _shown, _id}, words),
+    do: Map.put(words, {:member_coiled, group}, true)
+
   defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
   defp decisions(instructions, _coils, words, tags),
@@ -472,6 +480,18 @@ defmodule Logex.Warnings do
     do: from_source?(tags, array)
 
   defp decides?({:whole_at, array, _at, _shown, _id}, tags, _owners),
+    do: from_source?(tags, array)
+
+  defp decides?({:member_coil, _key, {array, _members}, _at, _shown}, tags, _owners),
+    do: from_source?(tags, array)
+
+  defp decides?({:member_coil_at, {array, _members}, _at, _shown, _id}, tags, _owners),
+    do: from_source?(tags, array)
+
+  defp decides?({:member_whole, {array, _members}, _at, _shown}, tags, _owners),
+    do: from_source?(tags, array)
+
+  defp decides?({:member_whole_at, {array, _members}, _at, _shown, _id}, tags, _owners),
     do: from_source?(tags, array)
 
   # A coil on a tag or member, keyed by its name, on no word; a coil on a bit, `status.3` on
@@ -591,6 +611,55 @@ defmodule Logex.Warnings do
          {array, at, shown}
        ), {coils, first(wholes, {:written, array}, at, id), bitted}}
 
+  # Decision 253: a member of an array of instances is compared as decision 235 compares a
+  # bool array's element. A coil on a literal element's member, `ote lane_c[1].r`, after a
+  # second coil on it is the second-`ote` warning, as before; after a coil on that member
+  # through a tag subscript, `ote lane_c[i].r`, or another write of it through one, `otl
+  # lane_c[i].r`, it is told the array the first may write; and it is for what comes later
+  # that member of a literal element coiled, `{:member_lit, group}`.
+  defp decided({:member_coil, key, {array, _} = group, at, shown}, {coils, wholes, bitted}),
+    do:
+      {member_after(
+         Map.fetch(coils, key),
+         Map.fetch(coils, {:member_at, group}),
+         Map.fetch(wholes, {:member_written, group}),
+         {array, at, shown}
+       ),
+       {coils |> first(key, at, nil) |> first({:member_lit, group}, {shown, at}, nil), wholes,
+        bitted}}
+
+  # A coil on a member through a tag subscript, `ote lane_c[i].r`: after one through the
+  # very tags told the member already has one (decision 256), after one through other tags,
+  # or a write through a tag subscript, `otl lane_c[j].r`, told the array the first may
+  # write; after a coil on that member of a literal element, `ote lane_c[1].r`, or a write
+  # of one, `otl lane_c[1].r`, told that element's member; and a write through the very
+  # tags, `otl lane_c[i].r`, beside it warned of nothing (decision 246).
+  defp decided({:member_coil_at, {array, _} = group, at, shown, id}, {coils, wholes, bitted}),
+    do:
+      {array_coil(
+         very(coils, {:member_at, group}, id),
+         Map.fetch(coils, {:member_lit, group}),
+         unlike(wholes, {:member_written, group}, id),
+         Map.fetch(wholes, {:member_some, group}),
+         {array, at, shown}
+       ), {first(coils, {:member_at, group}, at, id), wholes, bitted}}
+
+  # Any other write of a member through a tag subscript, `otl lane_c[i].r`, after a coil on
+  # it through other tags or on that member of a literal element; and a write of a literal
+  # element's member, `otl lane_c[1].r`, after a coil on it through a tag subscript.
+  defp decided({:member_whole_at, {array, _} = group, at, shown, id}, {coils, wholes, bitted}),
+    do:
+      {array_after(
+         unlike(coils, {:member_at, group}, id),
+         Map.fetch(coils, {:member_lit, group}),
+         {array, at, shown}
+       ), {coils, first(wholes, {:member_written, group}, at, id), bitted}}
+
+  defp decided({:member_whole, {array, _} = group, at, shown}, {coils, wholes, bitted}),
+    do:
+      {in_array(Map.fetch(coils, {:member_at, group}), {:array, array}, at, shown),
+       {coils, first(wholes, {:member_some, group}, {shown, at}, nil), bitted}}
+
   # Decision 246: a coil and another write of the very element or bit through the very tags,
   # `ote lamps[slot]` beside `otl lamps[slot]` or `move 0 lamps[slot]`, and `ote w.[n]` beside
   # `otl w.[n]`, are warned of nothing, as `ote lamps[2]` beside `otl lamps[2]` is not, where
@@ -653,6 +722,15 @@ defmodule Logex.Warnings do
     do: in_array(written, {:array, tag}, at, shown)
 
   defp bit_after(:error, :error, :error, _coil), do: []
+
+  defp member_after({:ok, first}, _at_tag, _written, {_array, {line, _symbol}, shown}),
+    do: [second_ote(shown, first, line)]
+
+  defp member_after(:error, {:ok, _} = first, _written, {array, at, shown}),
+    do: in_array(first, {:array, array}, at, shown)
+
+  defp member_after(:error, :error, written, {array, at, shown}),
+    do: in_array(written, {:array, array}, at, shown)
 
   defp element_after({:ok, first}, _written, _tag, {line, _symbol}, shown),
     do: [second_ote(shown, first, line)]
@@ -811,7 +889,30 @@ defmodule Logex.Warnings do
        ),
        do: whole_at({array, shown, same(at_tag)}, words, at)
 
+  # Decision 253: a write of a member of an element, `otl lane_c[1].r` or `otl
+  # lane_c[i].r`, any instruction's but a coil's, where a coil names that member.
+  defp in_arrays({:member, _, {:element, _, array, _, element}, members}, _tags, words, at)
+       when is_map_key(words, {:member_coiled, {array, members}}),
+       do: [
+         {:member_whole, {array, members}, member_write(at), Enum.join([element | members], ".")}
+       ]
+
+  defp in_arrays(
+         {:member, _, {:element_at, _, array, _, _, element} = at_tag, members},
+         _tags,
+         words,
+         at
+       )
+       when is_map_key(words, {:member_coiled, {array, members}}),
+       do: [
+         {:member_whole_at, {array, members}, at, Enum.join([element | members], "."),
+          same(at_tag)}
+       ]
+
   defp in_arrays(_operand, _tags, _words, _at), do: []
+
+  # A member a coil names is a bool, so its write is told as a write, not a whole one.
+  defp member_write({line, symbol}), do: {line, {:writes, symbol}}
 
   defp element_whole({array, shown}, words, at) when is_map_key(words, {:array, array}),
     do: [{:element_whole, array, at, shown}]
@@ -920,20 +1021,20 @@ defmodule Logex.Warnings do
 
   # M5-14 (decision 154): a coil on a member of an element, `ote lane_c[1].r`, decides that
   # member, keyed by its path, its tag its array; one through a tag subscript, `ote
-  # lane_c[slot].r`, decides that member of whichever element the subscript names, keyed by
-  # the array, its subscripts' tags and the member, so that two such through the same tags
-  # are the second-`ote` warning (provisional: a literal element's member beside one
-  # through a tag subscript is not compared).
+  # lane_c[slot].r`, decides that member of whichever element the subscript names, so it is
+  # a coil on that member of every element, keyed by the array and the member, `{"lane_c",
+  # ["r"]}`, as a coil through a tag subscript is a coil in its array (M5-12). Since
+  # decision 253 the two are compared as decision 235 compares a bool array's elements.
   defp target({:member, _, {:element, _, array, index, element}, members}, line, symbol),
     do: [
-      {:coil, Enum.join([Logex.Array.name(array, index) | members], "."), nil, array,
+      {:member_coil, Enum.join([Logex.Array.name(array, index) | members], "."), {array, members},
        {line, symbol}, Enum.join([element | members], ".")}
     ]
 
   defp target({:member, _, {:element_at, _, array, _, _, element} = at, members}, line, symbol),
     do: [
-      {:coil, {:member_at, same(at), members}, nil, array, {line, symbol},
-       Enum.join([element | members], ".")}
+      {:member_coil_at, {array, members}, {line, symbol}, Enum.join([element | members], "."),
+       same(at)}
     ]
 
   defp target(_literal, _line, _symbol), do: []

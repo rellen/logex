@@ -598,7 +598,7 @@ defmodule Logex.ForceTest do
       # A real at a bool point, written any way the lexer reads one, does not fit.
       File.write!(file, "x 37.50\n")
 
-      raises("#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 37.50", fn ->
+      raises("#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 37.50, which is 37.5", fn ->
         Runner.start_link(
           configuration: plant(),
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
@@ -636,17 +636,33 @@ defmodule Logex.ForceTest do
       end
 
       # Held to its type: a spelling of a number outside it is refused as a plain one is,
-      # quoted as the line writes it (M5-14's review, provisional).
+      # quoted as the line writes it (M5-14's review) and, since decision 255, as it is
+      # read, once where the two are one text, `1.0` and `2147483648`.
       {:ok, clock} = Manual.start_link()
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link(clock: clock)
       File.write!(file, "x 2#10\nlevel 16#ffffffff\ne 1.0\n")
 
       raises(
-        "#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 2#10\n" <>
+        "#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 2#10, which is 2\n" <>
           "#{file}: line 2: `level` is a dint, forced to an integer from -2147483648 to " <>
-          "2147483647, got: 16#ffffffff\n" <>
+          "2147483647, got: 16#ffffffff, which is 4294967295\n" <>
           "#{file}: line 3: `e` is a bool, forced to 0 or 1, got: 1.0",
+        fn ->
+          Runner.start_link(
+            configuration: plant(),
+            io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+            clock: {Manual, clock},
+            forces: file
+          )
+        end
+      )
+
+      File.write!(file, "level 2147483648\n")
+
+      raises(
+        "#{file}: line 1: `level` is a dint, forced to an integer from -2147483648 to " <>
+          "2147483647, got: 2147483648",
         fn ->
           Runner.start_link(
             configuration: plant(),
