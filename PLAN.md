@@ -195,7 +195,12 @@ four changes: a subnormal literal beside a literal, `gt 1.0e-310 0.0`, refused; 
 through a tag subscript beside a literal element's, `ote lane_c[i].r` and `ote
 lane_c[1].r`, the second-`ote` warning; a block's member retyped in an array of its
 instances refused once, for the array; and a forces file's bad value quoted as written and
-as read, with three questions put to the maintainer.
+as read, with three questions put to the maintainer. And the fifteenth, M5-15, the walks'
+cross-type reach, the same day (§3, M5-15): every pair of types through `move`, each
+conversion's two slots, `add`, `and` and a connection, and programs, resources and the
+runner walk that mix every type, against oracles that restate each rule; the one defect it
+found, a truncation's misfit told the rounding conversion, fixed, with two questions put
+to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8051,6 +8056,121 @@ the walks' cross-type reach and the documents.
   literal and tag subscripts, and edits refused by type, against oracles that restate each
   rule. *Done when* the walks' reach covers every type, every refusal kind and every trip
   reason but `{:internal, message}`, repeating exactly from fresh processes. *Size L.*
+
+  **Status: DONE — landed 2026-10-26**, as gated commits: `7c19e4b` lands the walks, the defect
+  they found fixed with a focused test, and the record's note on it; and a second holds
+  the documents. No syntax and no rule of the language changed but the one message.
+
+  The walks' cross-type reach is `Logex.ApiContractTest.CrossTypeWalk`, a module of its
+  own in `api_contract_test.exs`, so that it runs beside the other walks, and the runner
+  walk's configurations mixed. Its oracles know nothing of logex: each type's range, Ed 3
+  Figure 11 as its edges, the wrap, the binary transfer, IEEE 754's rounding, IEC's CTU,
+  CTD and TON in nanoseconds, the index and bit faults, and the host's rule for each
+  type's input, restated in the test.
+  - *Every pair.* `move` over each ordered pair of the fifteen elementary types, accepted
+    by Figure 11 or refused in its words, naming its conversion or saying there is none;
+    each of the 182 conversions and truncations given a source of each type and a
+    destination of each type, taking exactly the sources Figure 11 widens into its
+    `from` type and its own destination, each refusal and its hint in its words; `add`
+    and `and` over every pair, taking exactly their class; and a connection of each type
+    into a var_input and out of a var_output of each other type, widening by Figure 11
+    or refused naming the conversion a program would make (decision 159).
+  - *Programs that mix the types,* 400 at its seed: two to four types drawn from the
+    fifteen, each a var_input, a var_output and an array of one or two dimensions, with
+    an initial value or list now and then, beside a var_input array of another type, a
+    typed counter's array (`ctd_int`, `ctd_udint`, `ctu_int` or `ctu_udint`), a long
+    timer's array (`ton_ltime[2]`) and a block whose var_input and var_output widen
+    (decision 159). Their rungs move, convert, truncate, add and mask across the types,
+    each operand a tag, an element by literal or tag subscripts, a member of an element of
+    an instance array, a bit by a literal or a tag number, or a literal, now and then
+    based (decision 149). Every scan's outputs, instances and faults are exact, over a
+    host's mistakes and each input's edges by type, `1.0` a real's value and junk for
+    every other type (the walks' `@junk` and `@edges` by type), restarts, and edits that
+    keep every value, report a changed initial value as declared (decision 157), or
+    change a scalar's type, an array's size or an instance array's kind, which accept
+    refuses at each tag's line in its words; and in a resource whose located globals,
+    a located array among them, are each of a type Figure 11 widens into the program's
+    input, and whose globals its outputs and arrays widen into. Its reach is every type
+    read, written, in an element, at a point, given at its edges and refused from a host;
+    every family of conversion, integer to integer, to and from a bit string, to and from
+    a real, between the reals, and the truncations; a wrap, a saturation, a tie; the
+    index, bit, contact and de-energised `ote` faults; a counter at its type's limit and
+    a long timer done; each edit and each host refusal; and the walk again from a fresh
+    process, exactly.
+  - *The runner walk,* whose configurations now mix the types: the drive's `dr real` and
+    `dw word` points, pressed and forced, a `qu uint` output, and a program of a typed
+    counter's array, a long timer's array and a real array the panel's dint subscripts;
+    a float past a single's range at the real point a bad value, among its read faults.
+    Every trip reason but `{:internal, message}` is reached as before, now in mixed
+    configurations. The draws changed with the configuration, and the seed family
+    `{2026, 10, n}` missed `:array_unforced`, so the walk draws `{2027, 10, n}`; of six
+    families checked three reached every atom, each miss a reach and no check. Its input
+    check compares a reading by value, a real point's 0 from its device and the 0.0 the
+    resource holds being one reading.
+
+  **The defect the walks found.** A truncation's misfit was told the conversion that
+  rounds: `real_trunc_int` given an lreal source was told "use `lreal_to_int`", given a
+  dint destination "use `real_to_dint`", and given a real destination "use `move`", none
+  of which truncates, where decision 148 tells a conversion's slot the conversion that
+  does the whole job. It is now told `lreal_trunc_int` and `real_trunc_dint`, and a real
+  destination nothing (provisional, question 1); a source of an integer or a bit string
+  is still told its conversion. `real_test.exs` pins each, failing with the fix reverted;
+  decision 162 notes it.
+
+  **Cost.** The compiler's one new clause is met only by a truncation's misfit: every
+  program of `a18/cost.exs`'s 33, a truncation's among them, compiles and scans within
+  its parent's own spread, every scan identical, over two runs each; an edit's accept and
+  the lexer cost what they did. The suite's wall time, two runs each, interleaved on one
+  machine: 80.4 and 82.4 s at `98cd152`, 87.1 and 87.9 s at `7c19e4b`, some 6 s more, the
+  cross-type walk about 2 s of it and the runner walk's mixed program the rest, its walk
+  now about 10 s; the suite passes 2198 tests (11 doctests, 2187 tests), 3 more.
+
+  **Mutation table** (each judged by the full suite, `a18/mut/run.log`): fifteen mutants,
+  every one red, the cross-type walk failing for each, and for X10 alone.
+
+  | Mutant | Planted | Red in |
+  |---|---|---|
+  | X1 | a truncation's lreal source told `lreal_to_int` again | CrossTypeWalk, RealTest |
+  | X2 | a truncation's integer destination told `real_to_dint` | CrossTypeWalk, RealTest |
+  | X3 | a truncation's real destination told `move` | CrossTypeWalk, RealTest |
+  | X4 | a `uint` no longer widening into a `real` | CrossTypeWalk, TypeTableTest |
+  | X5 | a bit-string transfer not kept to its `from` width | CrossTypeWalk, BitStringTest |
+  | X6 | a typed down counter going past its type's minimum | CrossTypeWalk, RunnerWalk, the counters' tests |
+  | X7 | a block's real formal given an integer unconverted | CrossTypeWalk, RealTest |
+  | X8 | a block's copy-out into a real left an integer | CrossTypeWalk, RealTest |
+  | X9 | a connection's integer copy-out into a real global left an integer | CrossTypeWalk, RealTest, ArrayConfigurationTest |
+  | X10 | an lreal input taking an integer past its range | CrossTypeWalk alone |
+  | X11 | a long timer's millisecond adding 1,000 ns | CrossTypeWalk, LongTimerTest and others |
+  | X12 | an array of instances' type named in the singular | CrossTypeWalk, InstanceArrayTest, ArrayTest |
+  | X13 | a counter's load keeping its `un` | CrossTypeWalk, CounterTest and others |
+  | X14 | a real input taking an integer past its range | CrossTypeWalk, RealTest, EndToEndTest |
+  | X15 | a down counter's `q` at `cv < 0` | CrossTypeWalk, CounterTest and others |
+
+  A first run on an earlier snapshot of the walk, whose draws differed, found X5 caught by
+  `bit_string_test.exs` alone; the walk as landed meets a negative source widened into a
+  wider bit string and catches it, which a run with X5 planted confirmed.
+
+  **Questions for the maintainer.**
+  1. *A truncation into a real.* A programmer writes `real_trunc_int fan_hz shown`, the
+     fan's 37.9 Hz to show as 37, but declared `shown` a `real`. The compiler refuses it;
+     what does the message suggest? (a) Nothing, as built: "`real_trunc_int` writes an
+     int, but `shown` is a real (declared on line 2)"; (b) "use `move`", as before, though
+     a move would show 37.9; (c) say why, "no instruction truncates into a real: declare
+     `shown` an integer type". IEC's TRUNC writes only an integer (Ed 3 Table 22 feature
+     2b, decision 162); Logix's TRUNC writes a REAL or LREAL destination too
+     (1756-RM018A-EN-P pp.828–829), so a Logix programmer may expect one.
+  2. *An initial value reported as declared.* An edit gives `var_output speed real` an
+     initial value, `1.0e-30`. The report reads `{:initial_changed, "speed", {0.0,
+     1.0e-30}}`, the value as written, though a real holds it as 1.0000000031710769e-30,
+     which a restart will start it at. (a) As declared, as built, decision 157's "compared
+     exactly as declared", so `0` edited to `0.0` is reported though both start at 0.0;
+     (b) the value it will start at, so the operator sees what a restart gives, and `0`
+     to `0.0` reported no more; (c) both, `{0.0, 1.0e-30}` beside what it starts at. The
+     walk found the two edits differ today: a configuration's `var_global speed real
+     1.0e-30` is held at its nearest as the file is read, so a configuration edit reports
+     `{0.0, 1.0000000031710769e-30}`, while `var_global x real 0` still reports `0`, as
+     written; the walk restates each as built. Logix has no declared initial value but the
+     value a download carries, unverified.
 - **M5-16 · The documents' closing pass.** Each item has brought its README sections,
   instruction table rows and stanzas; this one checks "What logex is not" (which says
   "bool and dint only, no real, no bit access, no arrays") against the code,

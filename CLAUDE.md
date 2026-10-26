@@ -602,7 +602,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   pair refused naming its conversion, a bool with an integer told there is none (decision
   147); a `cal` formal widens, a var_input from a narrower tag and a var_output into a
   wider one (decision 159); a conversion's own slot is told the conversion that does the
-  whole job; since decision 176 a conversion's source takes any type Figure 11 widens into
+  whole job, since M5-15 a truncation's the truncation, `real_trunc_int` given an lreal
+  `lreal_trunc_int` and a dint destination `real_trunc_dint`, a real destination nothing
+  (provisional), where it named the rounding conversion; since decision 176 a conversion's source takes any type Figure 11 widens into
   its `from` type, a tag's or a member's, `dint_to_int` an `sint`, its destination exactly
   its `to` type. Since M5-4 (decisions 145 to 147) the slots of `add sub mul div neg abs`
   and the six comparisons take IEC's ANY_NUM and `mod`'s ANY_INT, generic types as data
@@ -1358,7 +1360,29 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   move an element's preset or block a counter's edge memory, and in a resource read
   through `get/2`, against an oracle of each element as a scalar instance of its type,
   IEC's TON, CTU and CTUD and the gate's one-shot restated, its reach every kind
-  (`@ia_reach`) and the array forced and unforced whole
+  (`@ia_reach`) and the array forced and unforced whole; and since M5-15, the walks'
+  cross-type reach, in a module of its own, `Logex.ApiContractTest.CrossTypeWalk`, every
+  ordered pair of the fifteen elementary types through `move`, each of the 182 conversions
+  given a source and a destination of every type, `add` and `and` over every pair, and a
+  connection of every type into a var_input and out of a var_output of every other, each
+  accepted by Figure 11 or refused in its words restated, and 400 programs that mix two to
+  four types, each a var_input, a var_output and an array of one or two dimensions, a
+  var_input array, a typed counter's array, a long timer's array and a block whose formals
+  widen, their rungs moving, converting, truncating, adding and masking across the types
+  through tags, elements by literal and tag subscripts, members of elements and bits by
+  literal and tag numbers, over scans, a host's mistakes and every input's edges by type,
+  `1.0` a real's value and junk for every other type, restarts and edits that keep every
+  value, report an initial value changed as declared or change a type, a size or an
+  instance's kind, refused, and in a resource whose located globals widen into the
+  program's inputs and whose globals its outputs widen into, against oracles restating
+  each type's range, Figure 11, the wrap, the binary transfer, IEEE 754's rounding, IEC's
+  CTU, CTD and TON in nanoseconds, the index and bit faults and the host's rule, repeating
+  exactly from a fresh process, its reach every type read, written, in an element, at a
+  point and given and refused by a host, every family of conversion and each fault, edit
+  and refusal (`@reach`); and the RunnerWalk's configurations mixing the types, the
+  drive's real and word points, a uint output, a typed counter's array, a long timer's
+  array and a real array a tag subscripts, a real point's float past its range a bad
+  value, at seed family `{2027, 10, n}`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
