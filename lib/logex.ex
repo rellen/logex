@@ -294,7 +294,8 @@ defmodule Logex do
   # `gate` of `gate[4]` (decision 154).
   defp needed({:routine, {:rungs, rungs}}, own) do
     words =
-      for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, typed} | _]} <- rungs,
+      for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, typed} | _]} <-
+            Enum.map(rungs, &Declarations.unqualified/1),
           Declarations.reserved(section) == :section,
           word = unsized(typed),
           Declarations.block_name?(word),

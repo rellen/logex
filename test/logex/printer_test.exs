@@ -82,7 +82,11 @@ defmodule Logex.PrinterTest do
                      :subnormal_real_lit,
                      # decision 231: one no double holds but 0.0, `1.0e-400`, which the
                      # lexer reads as 0.0 spelled and a slot refuses
-                     :underflowed_real_lit
+                     :underflowed_real_lit,
+                     # M6-1 (decision 267): a declaration line with a qualifier straight
+                     # after its section word, `var retain count dint`, a rung of names to
+                     # the parser, reached by the declaration corpus below, printed as written
+                     :qualified_declaration
                    ])
 
   describe "round trip" do
@@ -90,7 +94,7 @@ defmodule Logex.PrinterTest do
       spellings = for {_ast, _source, spelt} <- spelled_corpus(), shape <- spelt, do: shape
 
       assert @required_shapes ==
-               (corpus() ++ spelled_trees() ++ real_trees())
+               (corpus() ++ spelled_trees() ++ real_trees() ++ declaration_trees())
                |> Enum.map(&shapes/1)
                |> Enum.reduce(MapSet.new(spellings), &MapSet.union/2)
     end
@@ -122,14 +126,29 @@ defmodule Logex.PrinterTest do
       end
     end
 
+    # M6-1 (decision 267): a qualified declaration, in any case, reads back as its tree,
+    # prints back exactly as written, and compiles, its tag keeping its qualifier.
+    test "every qualified declaration reads back as its AST, prints as written and compiles" do
+      for ast <- declaration_trees() do
+        source = Printer.print(ast)
+        assert strip_lines(parse!(source)) == strip_lines(ast), source
+        assert Printer.print(parse!(source)) == source
+        assert Logex.Parser.well_formed!(ast) == ast
+
+        {:rung, [_section, {:name, _, qualifier}, {:name, _, tag} | _]} = first_rung(ast)
+        assert {:ok, %Logex.Program{tags: tags}} = Logex.compile(source, name: "p"), source
+        assert tags[tag].retain == String.to_atom(String.downcase(qualifier))
+      end
+    end
+
     test "parse . print restores the AST, modulo line numbers" do
-      for ast <- corpus() ++ spelled_trees() ++ real_trees() do
+      for ast <- corpus() ++ spelled_trees() ++ real_trees() ++ declaration_trees() do
         assert strip_lines(parse!(Printer.print(ast))) == strip_lines(ast)
       end
     end
 
     test "print . parse reaches a fixed point" do
-      for ast <- corpus() ++ spelled_trees() ++ real_trees() do
+      for ast <- corpus() ++ spelled_trees() ++ real_trees() ++ declaration_trees() do
         once = Printer.print(ast)
         assert Printer.print(parse!(once)) == once
       end
@@ -332,6 +351,43 @@ defmodule Logex.PrinterTest do
            status.[4] w.[16#a] t1.acc.[03] s.[-1] temps[3] grid[1,7] cube[0,1,2] w[16#a]
            flags[slot] int[8] m1.temps[3] faults[2].3 grid[1,2].[n] lane_t[2].dn
            lane_t[slot].dn)
+
+  # M6-1 (decision 267): declaration lines a qualifier follows the section word of, in a
+  # section that takes one, any case, of an elementary type, an array or an instance, an
+  # initial value now and then, then a rung, each a routine of its own. Seeded apart from
+  # the corpus above, so that corpus keeps its shapes.
+  defp declaration_trees do
+    :rand.seed(:exsss, {6, 1, 267})
+    for _ <- 1..40, do: declaration_tree()
+  end
+
+  defp declaration_tree do
+    section = Enum.random(~w(var var_output VAR Var_Output))
+    qualifier = Enum.random(~w(retain non_retain RETAIN Non_Retain))
+
+    {type, values} =
+      Enum.random([{"dint", [7]}, {"bool", []}, {"int[3]", [1, 2, 3]}, {"real", []}])
+
+    {type, values} = instance_or(section, Enum.random(1..4), {type, values})
+    initial = Enum.take(values, length(values) * Enum.random(0..1))
+
+    {:routine,
+     {:rungs,
+      [
+        {:rung,
+         [{:name, 1, section}, {:name, 1, qualifier}, {:name, 1, "count"}, {:name, 1, type}] ++
+           Enum.map(initial, &{:int_lit, 1, &1})},
+        {:rung, [{:name, 2, "var"}, {:name, 2, "go"}, {:name, 2, "bool"}]},
+        {:rung, [{:name, 3, "var"}, {:name, 3, "q"}, {:name, 3, "bool"}]},
+        {:rung, [{:name, 4, "xic"}, {:name, 4, "go"}, {:name, 4, "ote"}, {:name, 4, "q"}]}
+      ]}}
+  end
+
+  # An instance is declared with `var` alone, and takes no initial value.
+  defp instance_or(section, 1, _typed) when section in ["var", "VAR"], do: {"ctu", []}
+  defp instance_or(_section, _draw, typed), do: typed
+
+  defp first_rung({:routine, {:rungs, [rung | _]}}), do: rung
 
   # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
   # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
@@ -641,7 +697,8 @@ defmodule Logex.PrinterTest do
     |> Enum.reduce(MapSet.new(rung_count_shape(length(rungs))), &MapSet.union/2)
   end
 
-  defp shapes({:rung, elements}, depth), do: shapes_of(elements, depth)
+  defp shapes({:rung, elements}, depth),
+    do: MapSet.union(shapes_of(elements, depth), MapSet.new(qualified_shape(elements)))
 
   defp shapes({:name, _, name}, _depth),
     do:
@@ -711,6 +768,17 @@ defmodule Logex.PrinterTest do
       if_shape(x != 0 and abs(x) < 2.2250738585072014e-308, :subnormal_real_lit) ++
         if_shape(x < 0, :negative_real_lit) ++
         if_shape(String.contains?(String.downcase(spelling), "e"), :exponent_real_lit)
+
+  # M6-1: a rung whose first word is a section and whose second is a qualifier.
+  defp qualified_shape([{:name, _, section}, {:name, _, qualifier} | _]),
+    do:
+      if_shape(
+        Logex.Declarations.reserved(section) == :section and
+          Logex.Declarations.reserved(qualifier) == :qualifier,
+        :qualified_declaration
+      )
+
+  defp qualified_shape(_elements), do: []
 
   defp if_shape(true, shape), do: [shape]
   defp if_shape(false, _shape), do: []

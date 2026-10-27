@@ -27,10 +27,16 @@ defmodule Logex.Tag do
   `{:array, %Logex.FbType{}, dims}` for `ton[4]` or `gate[4]`, declared in `var` alone
   with no initial list, an array of a user block's instances in a compiled program naming
   its type, `{:array, {:block, name}, dims}`.
+
+  Since M6-1 (`docs/organisation.md` §4.13, decisions 267 to 270) `retain` is the
+  declaration's qualifier: `:retain` for `var retain count dint`, `:non_retain` for `var
+  non_retain jog bool`, and nil, the default, for a line with none, which is not retained
+  unless an instance holding it is (`Logex.Program`'s `retained`, decision 270). A program's
+  `var_input` and a `var_external` take none.
   """
 
   @enforce_keys [:name, :type, :section]
-  defstruct [:name, :type, :section, initial: nil, line: nil]
+  defstruct [:name, :type, :section, initial: nil, line: nil, retain: nil]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -42,7 +48,8 @@ defmodule Logex.Tag do
                [pos_integer]},
           section: :var | :var_input | :var_output | :var_external,
           initial: integer | float | [integer | float] | %{String.t() => integer} | nil,
-          line: pos_integer | nil
+          line: pos_integer | nil,
+          retain: :retain | :non_retain | nil
         }
 
   @doc """
@@ -62,14 +69,19 @@ defmodule Logex.Tag do
     give that `.pre`;
   - a user block's type that is not the one its source text compiles to
     (`Logex.FbType.user?/1`, decision 54), such as one whose body was edited by hand
-    (M2-5).
+    (M2-5);
+  - a qualifier, `retain`, a declaration line could not give (M6-1): one on a
+    `var_external`, whose global carries it, or one that is neither `:retain` nor
+    `:non_retain`. One on a program's `var_input` is refused where the program compiles
+    (`Logex.Compiler`), which knows a program from a function block's body.
   """
-  def new!(name, type, section \\ :var, initial \\ nil),
+  def new!(name, type, section \\ :var, initial \\ nil, retain \\ nil),
     do:
       Logex.Declarations.validate!(%__MODULE__{
         name: name,
         type: type,
         section: section,
-        initial: initial
+        initial: initial,
+        retain: retain
       })
 end

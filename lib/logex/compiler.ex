@@ -298,7 +298,7 @@ defmodule Logex.Compiler do
     marks = marked(kind, library, held)
 
     {tags, _logic, _declaring, _untyped} =
-      split = Declarations.split(rungs, declared, marks, checked)
+      split = Declarations.split(rungs, declared, marks, checked, kind)
 
     holds_itself!(kind, declared)
     {held, _walked, :tags} = Enum.reduce(blocks(tags), {held, %{}, :tags}, &one_version!/2)
@@ -361,7 +361,7 @@ defmodule Logex.Compiler do
     {kind, rungs, heading} = file_kind(rungs)
 
     {rungs, tags, diagnostics} =
-      lowering(routine, {kind, heading}, Declarations.split(rungs, declared, held))
+      lowering(routine, {kind, heading}, Declarations.split(rungs, declared, held, %{}, kind))
 
     rebuilt(kind, name, {rungs, tags, routine}, diagnostics)
   rescue
@@ -373,7 +373,7 @@ defmodule Logex.Compiler do
 
   defp rebuilt({:block, name}, name, {rungs, tags, routine}, []) do
     {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
-    {units, reals, arrays} = Program.settled(tags)
+    {units, reals, arrays, retained} = Program.settled(tags, %{})
 
     {:ok,
      %Program{
@@ -383,6 +383,7 @@ defmodule Logex.Compiler do
        units: units,
        reals: reals,
        arrays: arrays,
+       retained: retained,
        warnings: warned(rungs, tags, reals, routine)
      }}
   end
@@ -396,7 +397,8 @@ defmodule Logex.Compiler do
   one-per-instance rules and the path after a `ton` hold; each timer's preset is the
   number on the `ton` that runs it; the rungs are on rising lines, each on one line, after
   the declarations; the warnings are the ones its rungs give, a file aside; and since
-  decision 197 its `units` are the ones its tags give (`Logex.Program.units/1`). Its tag
+  decision 197 its `units` are the ones its tags give (`Logex.Program.units/1`), and since
+  M6-1 its `retained` (`Logex.Program.retained/1`). Its tag
   table is its tags with each instance's type itself (`Logex.Program.typed_tags/1`): a
   tag naming a type its `blocks` does not hold, or an entry that is no `%Logex.Tag{}`,
   makes it no compiled body.
@@ -423,7 +425,8 @@ defmodule Logex.Compiler do
           warnings: warnings,
           units: units,
           reals: reals,
-          arrays: arrays
+          arrays: arrays,
+          retained: retained
         } = body
       )
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
@@ -432,7 +435,8 @@ defmodule Logex.Compiler do
 
     relowered(
       proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and
-        Enum.all?(typed, &typed?/1) and {units, reals, arrays} == Program.settled(typed),
+        Enum.all?(typed, &typed?/1) and
+        {units, reals, arrays, retained} == Program.settled(typed, %{}),
       rungs,
       typed,
       {warnings, reals, body.source}
@@ -1607,7 +1611,7 @@ defmodule Logex.Compiler do
   # the paths to a type. The warnings are of the table with each type itself.
   defp lowered(:program, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
-    {units, reals, arrays} = Program.settled(tags)
+    {units, reals, arrays, retained} = Program.settled(tags, %{})
 
     {:ok,
      %Program{
@@ -1617,13 +1621,14 @@ defmodule Logex.Compiler do
        units: units,
        reals: reals,
        arrays: arrays,
+       retained: retained,
        warnings: warned(rungs, tags, reals, routine)
      }}
   end
 
   defp lowered({:block, name}, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
-    {units, reals, arrays} = Program.settled(tags)
+    {units, reals, arrays, retained} = Program.settled(tags, %{})
 
     body = %Program{
       name: name,
@@ -1634,6 +1639,7 @@ defmodule Logex.Compiler do
       units: units,
       reals: reals,
       arrays: arrays,
+      retained: retained,
       warnings: warned(rungs, tags, reals, routine)
     }
 
@@ -2140,6 +2146,7 @@ defmodule Logex.Compiler do
   defp reserved_word(:mnemonic), do: "the instruction"
   defp reserved_word(:type), do: "the type"
   defp reserved_word(:section), do: "the keyword"
+  defp reserved_word(:qualifier), do: "the keyword"
 
   # docs/organisation.md §4.3: an arity error names every formal, in order.
   defp cal_count(formals, operands, _rest, _instance, diagnostics)
@@ -2664,6 +2671,12 @@ defmodule Logex.Compiler do
   # A declaration is a line of its own, recognised only as a rung's first word.
   defp unknown_word(:section, word),
     do: "`#{word}` starts a declaration, which is a line of its own before the first rung"
+
+  # M6-1: a qualifier starts no line: it follows a declaration's section word.
+  defp unknown_word(:qualifier, word),
+    do:
+      "`#{word}` qualifies a declaration, straight after its section word, as in " <>
+        "`var #{word} count dint`"
 
   defp unknown_word(_reserved, word), do: "unknown instruction `#{word}`"
 
@@ -3385,6 +3398,10 @@ defmodule Logex.Compiler do
   defp resolve(:section, _, _slot, {:name, line, name}, {_, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects a tag, found the keyword `#{name}`") | diagnostics]
 
+  # M6-1: `retain` and `non_retain` are keywords too (decision 267).
+  defp resolve(:qualifier, _, _slot, {:name, line, name}, {_, word}, diagnostics),
+    do: [diagnostic(line, "`#{word}` expects a tag, found the keyword `#{name}`") | diagnostics]
+
   # The slot an undeclared name is first used in says how the note offers to declare it.
   defp resolve(nil, :error, slot, {:name, line, name}, _at, diagnostics),
     do: [{:undeclared, line, name, slot} | diagnostics]
@@ -3683,6 +3700,7 @@ defmodule Logex.Compiler do
   defp reserved_as(:mnemonic), do: "an instruction"
   defp reserved_as(:type), do: "a type"
   defp reserved_as(:section), do: "a keyword"
+  defp reserved_as(:qualifier), do: "a keyword"
 
   # `word.3` is PLAN.md §5's bit access, landed with M5-8: here a bit of a bool.
   defp no_members({_bit, ""}, name, tag), do: bit(name, tag.name, tag.type)

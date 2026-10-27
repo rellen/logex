@@ -58,6 +58,11 @@ defmodule Logex.Declarations do
     "var_output" => :var_output,
     "var_external" => :var_external
   }
+  # M6-1 (docs/organisation.md §4.13, decisions 267 to 270): IEC's two qualifiers, a third
+  # kind of word beside the sections and the types, each straight after a line's section
+  # word, `var retain count dint`, and reserved in any case.
+  @qualifiers %{"retain" => :retain, "non_retain" => :non_retain}
+  @qualifier_atoms Map.values(@qualifiers)
   # M5-1 (docs/organisation.md §4.12, "The types", decisions 144 and 145): the one table of
   # elementary types, a row each, in the record's order: its word, its value in a tag
   # (`type`), its kind, its width in bits, its range, its zero and the article a message
@@ -152,8 +157,14 @@ defmodule Logex.Declarations do
   }
   @class_atoms Map.keys(@classes)
 
-  @doc "The section and type words, lowercase. Each is reserved, in any case."
-  def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
+  @doc """
+  The section, qualifier and type words, lowercase. Each is reserved, in any case: since
+  M6-1 the qualifiers `retain` and `non_retain` (decision 267) among them.
+  """
+  def keywords,
+    do:
+      Map.keys(@sections) ++
+        Map.keys(@qualifiers) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
 
   @doc """
   The words that head a file of a kind other than a program, lowercase (M2-5), each
@@ -240,7 +251,10 @@ defmodule Logex.Declarations do
   defp builtin_or(nil, word, types), do: Map.get(types, word)
   defp builtin_or(builtin, _word, _types), do: builtin
 
-  @doc "What a word is reserved as, in any case: `:mnemonic`, `:section`, `:type` or nil."
+  @doc """
+  What a word is reserved as, in any case: `:mnemonic`, `:section`, `:qualifier` (M6-1,
+  `retain` and `non_retain`), `:type` or nil.
+  """
   def reserved(word) do
     key = String.downcase(word)
     reserved_as(key, Map.has_key?(Logex.Compiler.instructions(), key))
@@ -248,6 +262,7 @@ defmodule Logex.Declarations do
 
   defp reserved_as(_key, true), do: :mnemonic
   defp reserved_as(key, false) when is_map_key(@sections, key), do: :section
+  defp reserved_as(key, false) when is_map_key(@qualifiers, key), do: :qualifier
   defp reserved_as(key, false) when is_map_key(@types, key), do: :type
   defp reserved_as(key, false), do: fb_word(FbType.builtin(key))
 
@@ -638,23 +653,31 @@ defmodule Logex.Declarations do
   `var r int 40000` or `var r real 1.0e-40`, declares its tag with none, so that its uses
   are checked and not each told it is undeclared, as an array refused for its initial list
   is (provisional).
-  """
-  def split(rungs, declared \\ [], types \\ %{}, checked \\ %{})
 
-  def split(rungs, declared, types, checked) when is_list(declared) do
+  `kind` is the routine's, `:program` or `{:block, name}` (`Logex.Compiler`): since M6-1 a
+  program's `var_input` takes no qualifier, a block's does (decision 268), refused at its
+  line, its tag declared with none, and from Elixir as a host's mistake.
+  """
+  def split(rungs, declared \\ [], types \\ %{}, checked \\ %{}, kind \\ :program)
+
+  def split(rungs, declared, types, checked, kind) when is_list(declared) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
     late = Enum.map(late, &late(&1, first))
-    {entries, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
+
+    {entries, diagnostics} =
+      Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types, kind))
+
     {untyped, tags} = Enum.split_with(entries, &match?({:untyped, _name}, &1))
     {declared, _known} = Enum.map_reduce(declared, {types, checked}, &validate!/2)
+    Enum.each(declared, &input!(&1, kind))
     {table, diagnostics} = table(declared, tags, diagnostics)
     sorted = Enum.sort_by(Enum.reverse(diagnostics), & &1.line)
     {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
 
-  def split(_rungs, declared, _types, _checked),
+  def split(_rungs, declared, _types, _checked, _kind),
     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
 
   @doc """
@@ -724,20 +747,166 @@ defmodule Logex.Declarations do
 
   defp line_in([]), do: nil
 
-  defp declare({:late, rung, late}, diagnostics, types),
-    do: declare(rung, [late | diagnostics], types)
+  defp declare({:late, rung, late}, diagnostics, types, kind),
+    do: declare(rung, [late | diagnostics], types, kind)
 
-  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, types) do
+  # M6-1: a line whose second word may be a qualifier, told by its length, `retain` six
+  # bytes and `non_retain` ten; any other line is read as it was before M6-1.
+  defp declare(
+         {:rung, [{:name, line, keyword} | [{:name, _, word} | _] = rest]},
+         diagnostics,
+         types,
+         kind
+       )
+       when byte_size(word) in [6, 10] do
     section = Map.fetch!(@sections, String.downcase(keyword))
-    declared(shape(rest, keyword, types), section, line, diagnostics, types)
+    qualified(qualifier(rest), {keyword, of_kind(section, kind), line}, diagnostics, types)
   end
+
+  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, types, _kind) do
+    section = Map.fetch!(@sections, String.downcase(keyword))
+    declared(shape(rest, keyword, types), {section, nil}, line, diagnostics, types)
+  end
+
+  @doc """
+  M6-1 (decision 267): a declaration's rung with its qualifier taken out, `var retain s1
+  seal` read as `var s1 seal`, for a reader of a declaration's words by their place, the
+  loader's and the warnings'; any other rung as it is.
+  """
+  def unqualified({:rung, [{:name, _, _} = section, {:name, _, word} | rest]} = rung),
+    do: unqualified_of(is_map_key(@qualifiers, String.downcase(word)), section, rest, rung)
+
+  def unqualified(rung), do: rung
+
+  defp unqualified_of(true, section, rest, _rung), do: {:rung, [section | rest]}
+  defp unqualified_of(false, _section, _rest, rung), do: rung
+
+  # M6-1 (decision 267): a qualifier straight after the section word, `var retain count
+  # dint`, in any case, qualifies the one tag the line declares, and the line's messages
+  # quote both words, `var retain`; a line with none is read as it was before qualifiers.
+  # Told by its length first, `retain` six bytes and `non_retain` ten, so that a line of no
+  # qualifier is read in what it was before M6-1, its name never folded.
+  defp qualifier([{:name, _, word} | rest] = words) when byte_size(word) in [6, 10],
+    do: qualifier_of(Map.get(@qualifiers, String.downcase(word)), word, rest, words)
+
+  defp qualifier(words), do: {nil, nil, words}
+
+  defp qualifier_of(nil, _word, _rest, words), do: {nil, nil, words}
+  defp qualifier_of(retain, word, rest, _words), do: {retain, word, rest}
+
+  defp qualified({nil, nil, rest}, {keyword, section, line}, diagnostics, types),
+    do: declared(shape(rest, keyword, types), {section, nil}, line, diagnostics, types)
+
+  defp qualified({retain, word, rest}, {keyword, section, line}, diagnostics, types),
+    do:
+      declared(
+        again(qualifier(rest), word, rest, {"#{keyword} #{word}", types}),
+        {section, retain},
+        line,
+        diagnostics,
+        types
+      )
+
+  # M6-1 (decision 268): a program's var_input is told apart, `{:program, :var_input}`, as
+  # the one section of a program that takes no qualifier; every other section is itself.
+  defp of_kind(:var_input, :program), do: {:program, :var_input}
+  defp of_kind(section, _kind), do: section
+
+  # Decision 267: the two are alternatives, as IEC's grammar makes them, so a line takes
+  # one, once.
+  defp again({nil, nil, rest}, _word, rest, {kw, types}), do: shape(rest, kw, types)
+
+  defp again({_retain, second, _rest}, word, _words, _at),
+    do: {:error, twice(String.downcase(second) == String.downcase(word), word, second)}
+
+  defp twice(true, word, second),
+    do:
+      "`#{second}` is given twice: a declaration takes `#{word}` once, as in " <>
+        "`var #{word} count dint`"
+
+  defp twice(false, word, second),
+    do:
+      "a declaration takes `retain` or `non_retain`, not both: found `#{word}` and " <>
+        "`#{second}`"
+
+  # M6-1 (decision 268): a program's var_input from Elixir with a qualifier, refused as a
+  # host's mistake in the words its line would be.
+  defp input!(%Tag{section: :var_input, retain: retain, name: name}, :program)
+       when retain != nil,
+       do: raise(ArgumentError, input_message(name, retain))
+
+  defp input!(_tag, _kind), do: :ok
+
+  defp input_message(name, retain),
+    do:
+      "`#{name}` is a program's var_input, which takes no `#{retain}`: a var_input holds " <>
+        "the host's value, which every restart keeps where it fits"
+
+  # M6-1: a qualifier anywhere but straight after the section word is told where it goes.
+  defp misplaced(word, kw),
+    do:
+      {:error,
+       "`#{word}` comes straight after the section word, as in " <>
+         "`#{section_word(kw)} #{word} count dint`"}
+
+  defp section_word(kw), do: kw |> String.split(" ") |> hd()
+
+  # The section a line's words name: its first word's, a qualifier after it aside (M6-1).
+  defp section_of(kw), do: Map.fetch!(@sections, String.downcase(section_word(kw)))
 
   # A block's type came from `types`, which `Logex.compile/2` checked on entry, so it is
   # known by being the one given under its name, not checked again for every instance.
   # Decision 202: an initial value written other than as its plain decimal is quoted as
   # written, `16#ffff`, which the tag, a value, does not keep.
-  defp declared({:ok, name, type, initial, shown}, section, line, diagnostics, types) do
-    tag = %Tag{name: name, type: type, section: section, initial: initial, line: line}
+  # M6-1: a program's var_input refused for its qualifier, declared with none, so that its
+  # uses are checked.
+  defp declared(
+         {:ok, name, _, _, _} = ok,
+         {{:program, :var_input}, retain},
+         line,
+         diagnostics,
+         types
+       )
+       when retain != nil,
+       do:
+         declared(
+           ok,
+           {:var_input, nil},
+           line,
+           [diagnostic(line, input_message(name, retain)) | diagnostics],
+           types
+         )
+
+  defp declared(
+         {:error, message, tag},
+         {{:program, :var_input}, retain},
+         line,
+         diagnostics,
+         types
+       )
+       when retain != nil,
+       do:
+         declared(
+           {:error, message, tag},
+           {:var_input, nil},
+           line,
+           [diagnostic(line, input_message(tag.name, retain)) | diagnostics],
+           types
+         )
+
+  defp declared(shaped, {{:program, section}, retain}, line, diagnostics, types),
+    do: declared(shaped, {section, retain}, line, diagnostics, types)
+
+  defp declared({:ok, name, type, initial, shown}, {section, retain}, line, diagnostics, types) do
+    tag = %Tag{
+      name: name,
+      type: type,
+      section: section,
+      initial: initial,
+      line: line,
+      retain: retain
+    }
+
     {messages, _checked} = check(tag, types, %{}, shown)
     checked(messages, tag, line, diagnostics)
   end
@@ -750,8 +919,9 @@ defmodule Logex.Declarations do
   defp declared({:untyped, name, message}, _section, line, diagnostics, _types),
     do: {[{:untyped, name}], [diagnostic(line, message) | diagnostics]}
 
-  defp declared({:error, message, tag}, _section, line, diagnostics, _types),
-    do: {recovered(%{tag | line: line}), [diagnostic(line, message) | diagnostics]}
+  defp declared({:error, message, tag}, {_section, retain}, line, diagnostics, _types),
+    do:
+      {recovered(%{tag | line: line, retain: retain}), [diagnostic(line, message) | diagnostics]}
 
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
@@ -766,6 +936,11 @@ defmodule Logex.Declarations do
   defp checked_recovered(%Tag{type: type, initial: initial} = tag)
        when is_atom(type) and initial != nil,
        do: recover(check(%{tag | initial: nil}), %{tag | initial: nil})
+
+  # M6-1 (provisional): so is one refused for its qualifier alone, `var_external retain e
+  # bool`, declared with none, its uses checked.
+  defp checked_recovered(%Tag{retain: retain} = tag) when retain != nil,
+    do: recover(check(%{tag | retain: nil}), %{tag | retain: nil})
 
   defp checked_recovered(tag), do: recovered(tag)
 
@@ -872,14 +1047,12 @@ defmodule Logex.Declarations do
   # M5-11: `var w int[2] 1 x`, an array whose initial list is broken, is still plainly an
   # array of its line's section, declared with no initial list, so its uses are checked.
   defp salvaged({:error, message}, {:array, _, _} = type, {name, kw}),
-    do:
-      {:error, message,
-       %Tag{name: name, type: type, section: Map.fetch!(@sections, String.downcase(kw))}}
+    do: {:error, message, %Tag{name: name, type: type, section: section_of(kw)}}
 
   defp salvaged(shaped, _type, _named), do: shaped
 
   defp typed(nil, name, type, tail, {kw, types}),
-    do: untyped(String.downcase(name), name, type, tail, {kw, types})
+    do: unqualified(qualifier_word?(type), name, type, tail, {kw, types})
 
   defp typed({:unknown, base}, name, _word, tail, {kw, types}),
     do: untyped(String.downcase(name), name, base, tail, {kw, types})
@@ -930,7 +1103,16 @@ defmodule Logex.Declarations do
   defp typed(_type, name, _word, [literal, extra | _], _kw) when is_literal(literal),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
+  # M6-1: so is one after the type word, `var count dint retain`.
+  defp typed(_type, name, _word, [{:name, _, extra} | _] = tail, {kw, _types}),
+    do: after_type(qualifier_word?(extra), name, tail, kw)
+
   defp typed(_type, name, _word, [extra | _], _kw),
+    do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+
+  defp after_type(true, _name, [{:name, _, word} | _], kw), do: misplaced(word, kw)
+
+  defp after_type(false, name, [extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   defp listed(true, type, name, tail),
@@ -962,7 +1144,7 @@ defmodule Logex.Declarations do
   defp short({:type, type}, word, _v, kw),
     do:
       "`#{kw}` needs a tag name before the type `#{word}`" <>
-        as_in(type, Map.fetch!(@sections, String.downcase(kw)), word, kw)
+        as_in(type, section_of(kw), word, kw)
 
   # A name that can never be declared says so first, rather than ask for a type.
   defp short(nil, name, v, kw),
@@ -984,13 +1166,13 @@ defmodule Logex.Declarations do
 
   defp typeless([], name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
 
-  # IEC's RETAIN qualifier (docs/instruction-sets.md §3.2, Table 33 f3a) is not a tag name
-  # here, because a tag name is never followed by a second name.
-  defp untyped("retain", _name, _type, _tail, _kw),
-    do:
-      {:error,
-       "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
-         "at its initial value but the var_inputs whose values fit their types"}
+  # M6-1: a qualifier where a type word goes, `var count retain dint`, is told where it goes.
+  defp unqualified(true, _name, word, _tail, {kw, _types}), do: misplaced(word, kw)
+
+  defp unqualified(false, name, type, tail, at),
+    do: untyped(String.downcase(name), name, type, tail, at)
+
+  defp qualifier_word?(word), do: is_map_key(@qualifiers, String.downcase(word))
 
   defp untyped(_key, name, type, tail, {kw, types}),
     do: unknown_type(Enum.any?(tail, &type_word?(&1, types)), name, type, {kw, types})
@@ -1106,7 +1288,8 @@ defmodule Logex.Declarations do
 
   defp check(%Tag{type: %FbType{} = type} = tag, types, checked, _shown) do
     {known, checked} = fb_type(type, types, checked)
-    {name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag), checked}
+
+    {name(tag.name) ++ known ++ section(tag.section, tag) ++ looked_into(known, tag), checked}
   end
 
   # M5-14 (decision 154): an array of instances, its type known as an instance's is and its
@@ -1116,7 +1299,8 @@ defmodule Logex.Declarations do
     sized = dimensions(counts?(dims), tag.name, dims)
 
     {name(tag.name) ++
-       known ++ sized ++ section(tag.section) ++ instances_into(known ++ sized, tag), checked}
+       known ++
+       sized ++ section(tag.section, tag) ++ instances_into(known ++ sized, tag), checked}
   end
 
   # M5-11 (decision 151): an array's initial list is judged once its type is one; told by
@@ -1125,14 +1309,15 @@ defmodule Logex.Declarations do
     typed = array_type(tag.name, type)
 
     {name(tag.name) ++
-       typed ++ section(tag.section) ++ judged_initial(typed, tag, shown) ++ external(tag),
-     checked}
+       typed ++
+       section(tag.section, tag) ++ judged_initial(typed, tag, shown) ++ external(tag), checked}
   end
 
   defp check(%Tag{} = tag, _types, checked, shown),
     do:
       {name(tag.name) ++
-         type(tag.type) ++ section(tag.section) ++ initial(tag, shown) ++ external(tag), checked}
+         type(tag.type) ++
+         section(tag.section, tag) ++ initial(tag, shown) ++ external(tag), checked}
 
   defp name(name) when is_binary(name), do: name(reserved(name), name, Logex.Lexer.tokenize(name))
   defp name(name), do: ["#{inspect(name)} is not a tag name"]
@@ -1140,6 +1325,7 @@ defmodule Logex.Declarations do
   defp name(:mnemonic, name, _), do: ["`#{name}` is an instruction and cannot name a tag"]
   defp name(:type, name, _), do: ["`#{name}` is a type and cannot name a tag"]
   defp name(:section, name, _), do: ["`#{name}` is a keyword and cannot name a tag"]
+  defp name(:qualifier, name, _), do: ["`#{name}` is a keyword and cannot name a tag"]
 
   # M5-11: brackets name no tag either: they are kept for an element's subscripts (decision
   # 151), told by the name's last byte, which the clause's guard reads.
@@ -1347,8 +1533,33 @@ defmodule Logex.Declarations do
   defp display(name) when is_binary(name), do: name
   defp display(_name), do: "t1"
 
+  # M6-1 (decisions 267 and 268): a tag's qualifier, nil where its line has none, which a
+  # `var_external` never takes, its global carrying it; a program's `var_input`, which no
+  # restart puts back, is refused by Logex.Compiler, which knows a program from a block.
+  defp retain_of(%Tag{retain: nil}), do: []
+
+  defp retain_of(%Tag{retain: retain, section: :var_external, name: name})
+       when retain in @qualifier_atoms,
+       do: [
+         "#{label(name)} is a var_external, which takes no `#{retain}`: its global carries " <>
+           "it, as the configuration declares it"
+       ]
+
+  defp retain_of(%Tag{retain: retain}) when retain in @qualifier_atoms, do: []
+
+  defp retain_of(%Tag{retain: retain, name: name}),
+    do: [
+      "unknown qualifier #{inspect(retain)} on #{label(name)}: logex has :retain and " <>
+        ":non_retain, or nil for none"
+    ]
+
   defp section(section) when section in @section_atoms, do: []
   defp section(section), do: ["unknown section #{inspect(section)}"]
+
+  # The section and, since M6-1, the qualifier, read in one call where the line has none,
+  # so a tag of no qualifier is checked in what it was before M6-1.
+  defp section(section, %Tag{retain: nil}) when section in @section_atoms, do: []
+  defp section(section, tag), do: section(section) ++ retain_of(tag)
 
   # Messages name the tag with label/1, because from Elixir the name itself may be the
   # thing that is wrong.

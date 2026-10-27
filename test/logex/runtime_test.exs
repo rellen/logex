@@ -2332,9 +2332,17 @@ defmodule Logex.RuntimeTest do
       # 53).
       # Decision 197: and each timer's unit where it is not the millisecond, `units`.
       # M5-10: and each real's type, `reals`. M5-11: and each array's type, `arrays`.
+      # M6-1: and each path a warm restart keeps, `retained` (decision 270).
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
-               [:__struct__, :arrays, :blocks, :file, :name, :reals, :rungs, :source, :tags] ++
-                 [:units, :warnings]
+               [:__struct__, :arrays, :blocks, :file, :name, :reals, :retained, :rungs] ++
+                 [:source, :tags, :units, :warnings]
+
+      # M6-1: a tag, and a block's member, keep their line's qualifier, `retain`.
+      assert Enum.sort(Map.keys(Logex.Tag.__struct__())) ==
+               [:__struct__, :initial, :line, :name, :retain, :section, :type]
+
+      assert Enum.sort(Map.keys(Logex.FbType.Member.__struct__())) ==
+               [:__struct__, :initial, :name, :retain, :role, :type, :write]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.
       assert Enum.sort(Logex.Edit.__info__(:functions)) == [

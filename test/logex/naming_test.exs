@@ -136,7 +136,8 @@ defmodule Logex.NamingTest do
     # the counters; M3-2: the other timers; M5-3: the seven other integer types; M5-5:
     # the twelve typed counters and the three dint aliases (decisions 158 and 163); M5-6:
     # the four long timers (decision 158); M5-8: the four bit strings (decision 155);
-    # M5-10: the two reals (decision 144).
+    # M5-10: the two reals (decision 144); M6-1: the two qualifiers (decision 267), each
+    # reserved as a keyword.
     counters =
       for kind <- ~w(ctu ctd ctud), count <- ~w(int dint lint udint ulint), do: "#{kind}_#{count}"
 
@@ -148,8 +149,12 @@ defmodule Logex.NamingTest do
                  ~w(byte word dword lword) ++
                  ~w(ton tof tp rto ctu ctd ctud) ++
                  counters ++
-                 ~w(ton_ltime tof_ltime tp_ltime rto_ltime)
+                 ~w(ton_ltime tof_ltime tp_ltime rto_ltime) ++
+                 ~w(retain non_retain)
              )
+
+    for word <- ~w(retain non_retain RETAIN Non_Retain),
+        do: assert(Logex.Declarations.reserved(word) == :qualifier)
 
     for word <- Map.keys(Logex.FbType.builtins()) do
       assert word in Logex.Declarations.keywords()

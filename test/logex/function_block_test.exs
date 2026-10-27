@@ -1137,15 +1137,18 @@ defmodule Logex.FunctionBlockTest do
     test "a tag table edited into one declaration lines could give is refused where it is " <>
            "given" do
       # The members and the warnings rebuilt from the edited table: an initial value, a
-      # section, a line, and a key a tag never has.
+      # section, a line, and a qualifier no line gives, `true`, which until M6-1 was a key a
+      # tag never had, and since M6-1 one a line could give but this block's does not.
       counter =
         block!(
           "function_block counter\nvar_input go bool\nvar_output n dint 3\n\n" <>
             "xic go move 7 n"
         )
 
+      # Since M6-1 the body's `retained` is rebuilt from the edited table too.
       retagged = fn type, tag, edit ->
         body = %{type.body | tags: Map.update!(type.body.tags, tag, edit)}
+        body = %{body | retained: Logex.Program.retained(body.tags)}
         FbType.of(%{body | warnings: Logex.Warnings.of(body.rungs, body.tags)})
       end
 
@@ -1153,7 +1156,9 @@ defmodule Logex.FunctionBlockTest do
             retagged.(counter, "n", &%{&1 | initial: 5}),
             retagged.(counter, "go", &%{&1 | section: :var}),
             retagged.(counter, "n", &%{&1 | line: 4}),
-            retagged.(counter, "go", &Map.put(&1, :retain, true))
+            retagged.(counter, "go", &Map.put(&1, :retain, true)),
+            # M6-1: a qualifier its line does not give, one a line could.
+            retagged.(counter, "go", &%{&1 | retain: :retain})
           ],
           do: refused(edited)
 

@@ -510,7 +510,8 @@ defmodule Logex.ValidationTest do
       assert source_errors(
                "var b\nvar c dintt\nvar e bool 2\nvar f dint 3000000000\nvar ote bool\n" <>
                  "var Bool bool\nvar var_input bool\nvar 7 bool\nvar g bool 1 2\nvar x 5\n" <>
-                 "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain r bool\nvar p q bool"
+                 "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain non_retain r bool\n" <>
+                 "var p q bool"
              ) == [
                "line 1: `b` needs a type, as in `var b bool` or `var b dint`",
                "line 2: unknown type `dintt`: #{@has} — did you mean `dint`?",
@@ -525,9 +526,10 @@ defmodule Logex.ValidationTest do
                "line 11: `var` needs a tag name and a type, as in `var fault bool`",
                "line 12: `i` is a var_input: its value comes from outside, so it takes no initial value",
                "line 13: a declaration cannot hold a branch group",
-               "line 14: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag at its initial value but the var_inputs whose values fit " <>
-                 "their types",
+               # M6-1: `var retain r bool` is a line since `retain` landed (decision 267), and
+               # the two qualifiers on one line are this line's mistake in its place.
+               "line 14: a declaration takes `retain` or `non_retain`, not both: found " <>
+                 "`retain` and `non_retain`",
                "line 15: `var` declares one tag: found `p` and `q` before the type"
              ]
     end
@@ -618,13 +620,16 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    # M6-1 (decision 267): `retain` qualifies a line in any case, where until then the line
+    # was refused, and the line's words are quoted as written, the qualifier among them.
     test "`retain` is recognised in any case, and the section word is quoted as written" do
-      assert source_errors("VAR RETAIN r bool\nVAR b") == [
-               "line 1: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag at its initial value but the var_inputs whose values fit " <>
-                 "their types",
-               "line 2: `b` needs a type, as in `VAR b bool` or `VAR b dint`"
+      assert source_errors("VAR RETAIN r bool\nVAR b\nVAR RETAIN c\nxic r ote r") == [
+               "line 2: `b` needs a type, as in `VAR b bool` or `VAR b dint`",
+               "line 3: `c` needs a type, as in `VAR RETAIN c bool` or `VAR RETAIN c dint`"
              ]
+
+      assert {:ok, %Logex.Program{tags: %{"r" => %Logex.Tag{retain: :retain}}}} =
+               source_compile("VAR RETAIN r bool\nxic r ote r")
 
       assert source_errors("VAR a bool\nxic a ote a\nVAR b bool") == [
                "line 3: `VAR` after the first rung (line 2): declarations come first"
@@ -810,20 +815,22 @@ defmodule Logex.ValidationTest do
 
     test "a line refused for anything but its type word excuses nothing" do
       assert source_errors(
-               "var p q bool\nvar retain r bool\nvar c bool 2\nvar d\nvar x bool\n" <>
+               "var p q bool\nvar r retain bool\nvar c bool 2\nvar d\nvar x bool\n" <>
                  "xic p ote x\nxic q ote x\nxic r ote x\nxic retain ote x\n" <>
                  "xic c ote x\nxic d ote x"
              ) == [
                "line 1: `var` declares one tag: found `p` and `q` before the type",
-               "line 2: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag at its initial value but the var_inputs whose values fit " <>
-                 "their types",
+               # M6-1: a qualifier after the name is this line's mistake, where until then
+               # `var retain r bool` was refused (decision 267).
+               "line 2: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
                "line 3: `c` is a bool: its initial value must be 0 or 1, found `2`",
                "line 4: `d` needs a type, as in `var d bool` or `var d dint`",
                "line 6: `p` is not declared",
                "line 7: `q` is not declared",
                "line 8: `r` is not declared",
-               "line 9: `retain` is not declared",
+               # M6-1: `retain` is a keyword, reserved, where until then it was a name.
+               "line 9: `xic` expects a tag, found the keyword `retain`",
                "line 11: `d` is not declared"
              ]
     end

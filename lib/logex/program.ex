@@ -44,6 +44,16 @@ defmodule Logex.Program do
     and gives its outputs as it did before arrays where a program holds none. An array of
     reals is among the `reals` too, by its name, so that a write into one of its elements
     writes the real's nearest value.
+  - `retained` (M6-1, `docs/organisation.md` §4.13, decisions 269 and 270) is each path a
+    warm restart keeps, in order, nil, the default, where there is none: a tag whole, `count`
+    or `weights`, an instance whole, `boxes`, where every member of it is retained, and
+    otherwise each retained member's path, `s1.count`, an array of a user block's instances
+    `gates[*].count` for that member of every element. A member is retained by the nearest
+    qualifier on its path, from the member outward through each enclosing instance's
+    declaration line to the program's own tag, none meaning not retained (decision 270); a
+    built-in's members follow their instance. The compiler settles it once from the tag
+    table, `retained/1`, the one rule, so that a program that marks nothing pays nothing; a
+    block's body holds its own.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
@@ -65,7 +75,8 @@ defmodule Logex.Program do
     blocks: %{},
     units: nil,
     reals: nil,
-    arrays: nil
+    arrays: nil,
+    retained: nil
   ]
 
   @type t :: %__MODULE__{
@@ -75,6 +86,7 @@ defmodule Logex.Program do
           units: nil | %{String.t() => pos_integer},
           reals: nil | %{String.t() => :real | :lreal},
           arrays: nil | %{String.t() => {:array, atom, [pos_integer]}},
+          retained: nil | [String.t()],
           name: String.t() | nil,
           source: String.t() | nil,
           file: String.t() | nil,
@@ -320,43 +332,175 @@ defmodule Logex.Program do
   instance a timer of another unit or nothing.
   """
   def settled(tags) when is_map(tags) do
-    {units, reals, arrays} = Enum.reduce(tags, {[], [], []}, &settle/2)
-    {some(units), some(reals), some(arrays)}
+    {units, reals, arrays, _retained} = settled(tags, %{})
+    {units, reals, arrays}
   end
 
-  defp settle({name, %Logex.Tag{type: type}}, {units, reals, arrays}) when type in @reals,
-    do: {units, [{name, type} | reals], arrays}
+  @doc """
+  `settled/1` with, since M6-1, the routine's `retained` too, `{units, reals, arrays,
+  retained}`, in the same one walk of its tags (`retained/2`), `blocks` the table a
+  compiled tag's `{:block, name}` is read inside.
+  """
+  def settled(tags, blocks) when is_map(tags) do
+    {units, reals, arrays, retained, _blocks} =
+      Enum.reduce(tags, {[], [], [], [], blocks}, &settle/2)
 
-  defp settle({name, %Logex.Tag{type: {:array, element, _dims} = type}}, {units, reals, arrays})
+    {some(units), some(reals), some(arrays), listed(retained)}
+  end
+
+  # The common tag, elementary and unqualified, first, and passed over as before M6-1.
+  defp settle({_name, %Logex.Tag{type: type, retain: nil}}, acc)
+       when is_atom(type) and type not in @reals,
+       do: acc
+
+  defp settle({name, %Logex.Tag{type: type} = tag}, {units, reals, arrays, kept, blocks})
+       when type in @reals,
+       do: {units, [{name, type} | reals], arrays, own(tag.retain, name, kept), blocks}
+
+  defp settle(
+         {name, %Logex.Tag{type: {:array, element, _dims} = type} = tag},
+         {units, reals, arrays, kept, blocks}
+       )
        when element in @reals,
-       do: {units, [{name, element} | reals], [{name, type} | arrays]}
+       do:
+         {units, [{name, element} | reals], [{name, type} | arrays], own(tag.retain, name, kept),
+          blocks}
+
+  # M6-1: an instance nothing marks, of a built-in or of a block whose body keeps nothing,
+  # keeps nothing, and is settled as before M6-1.
+  defp settle({name, %Logex.Tag{type: %Logex.FbType{body: nil} = type, retain: nil}}, acc),
+    do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+
+  defp settle(
+         {_name, %Logex.Tag{type: %Logex.FbType{body: %__MODULE__{retained: nil}}, retain: nil}},
+         acc
+       ),
+       do: acc
 
   # M5-14 (decision 154): an array of instances is no host's value, so no array of
   # `arrays`, and its timers' unit, a long timer's, is its own under its name, each
   # element timing in it.
-  defp settle({name, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _dims}}}, acc),
-    do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+  defp settle({name, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _dims}} = tag}, acc),
+    do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
 
-  defp settle({_name, %Logex.Tag{type: {:array, {:block, _}, _dims}}}, acc), do: acc
+  defp settle({_name, %Logex.Tag{type: {:array, {:block, _}, _dims}} = tag}, acc),
+    do: instances_kept(tag, acc)
 
-  defp settle({name, %Logex.Tag{type: type}}, {units, reals, arrays}) when is_array(type),
-    do: {units, reals, [{name, type} | arrays]}
+  defp settle({name, %Logex.Tag{type: type} = tag}, {units, reals, arrays, kept, blocks})
+       when is_array(type),
+       do: {units, reals, [{name, type} | arrays], own(tag.retain, name, kept), blocks}
 
-  defp settle({_name, %Logex.Tag{type: type}}, acc) when is_atom(type), do: acc
+  defp settle({name, %Logex.Tag{type: type} = tag}, {units, reals, arrays, kept, blocks})
+       when is_atom(type),
+       do: {units, reals, arrays, own(tag.retain, name, kept), blocks}
 
-  defp settle({name, %Logex.Tag{type: type}}, acc),
-    do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+  defp settle({_name, %Logex.Tag{type: {:block, _}} = tag}, acc), do: instances_kept(tag, acc)
+
+  defp settle({name, %Logex.Tag{type: type} = tag}, acc),
+    do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
 
   defp settle(_not_a_tag, acc), do: acc
 
   defp unit(nil, _name, acc), do: acc
-  defp unit(per_ms, name, {units, reals, arrays}), do: {[{name, per_ms} | units], reals, arrays}
+
+  defp unit(per_ms, name, {units, reals, arrays, kept, blocks}),
+    do: {[{name, per_ms} | units], reals, arrays, kept, blocks}
+
+  # M6-1: a tag of no instance is retained whole by its own qualifier alone.
+  defp own(:retain, name, kept), do: [name | kept]
+  defp own(_none, _name, kept), do: kept
+
+  defp instances_kept(
+         %Logex.Tag{name: name, type: type, retain: retain},
+         {u, r, a, kept, blocks}
+       ),
+       do: {u, r, a, kept(name, held_type(type, blocks), marked(retain, false)) ++ kept, blocks}
 
   defp some([]), do: nil
   defp some(units), do: Map.new(units)
 
   defp per_ms(%{per_ms: per_ms}) when is_integer(per_ms) and per_ms != 1, do: per_ms
   defp per_ms(_plain_or_no_timer), do: nil
+
+  @doc """
+  M6-1 (decisions 269 and 270): each path of `tags` a warm restart keeps, sorted, or nil
+  where there is none, the one rule for a routine's `retained`, which the compiler gives
+  every program and body it builds and the check below holds a program handed in to.
+  `tags` is a typed tag table (`typed_tags/1`), each instance's type itself, so that a
+  user block's members, and the types they hold, are read inside its table
+  (`Logex.FbType.type_of/2`).
+
+  The nearest qualifier on a path wins: a tag's own `retain`, else its enclosing
+  instance's, else that one's, and so out to the program's tag, none meaning not
+  retained. A path is listed whole where everything under it is retained, a tag, an
+  array, a built-in instance, or a user block's instance or array of them none of whose
+  members at any depth is kept out, and otherwise each retained member is listed, an
+  element of an array of user block instances by `[*]`, `gates[*].count`.
+  """
+  def retained(tags, blocks \\ %{}) when is_map(tags), do: elem(settled(tags, blocks), 3)
+
+  # `blocks` reads a compiled table's `{:block, name}` inside the table that holds it, as
+  # typed_tags/1 does, for the check below, which walks a program's tags as they are.
+  defp held_type({:block, name} = type, blocks),
+    do: in_table(Map.fetch(blocks, name), type, blocks)
+
+  defp held_type({:array, {:block, name}, dims} = type, blocks),
+    do: in_array(in_table(Map.fetch(blocks, name), type, blocks), dims)
+
+  defp held_type(type, _blocks), do: type
+
+  defp in_table({:ok, %Logex.FbType{body: %__MODULE__{}} = type}, _named, blocks),
+    do: Logex.FbType.within(type, blocks)
+
+  defp in_table(_not_held, named, _blocks), do: named
+
+  defp in_array(%Logex.FbType{} = type, dims), do: {:array, type, dims}
+  defp in_array(named, _dims), do: named
+
+  defp listed([]), do: nil
+  defp listed(paths), do: Enum.sort(paths)
+
+  defp marked(:retain, _held), do: true
+  defp marked(:non_retain, _held), do: false
+  defp marked(_none, held), do: held
+
+  # An instance nothing outside marks keeps what its own body marks, the body's
+  # `retained`, which its compile settled once and the check of the body holds it to, so
+  # that a program of unmarked instances pays nothing for their depth; one an outer
+  # qualifier retains is walked member by member, its own marks deciding.
+  defp kept(path, %Logex.FbType{body: %__MODULE__{retained: retained}}, false),
+    do: prefixed(retained, path <> ".")
+
+  defp kept(path, {:array, %Logex.FbType{body: %__MODULE__{retained: retained}}, _dims}, false),
+    do: prefixed(retained, path <> "[*].")
+
+  defp kept(path, %Logex.FbType{body: %__MODULE__{}} = type, true),
+    do: whole(members_kept(path <> ".", type, true), path)
+
+  defp kept(path, {:array, %Logex.FbType{body: %__MODULE__{}} = type, _dims}, true),
+    do: whole(members_kept(path <> "[*].", type, true), path)
+
+  defp kept(path, _whole, true), do: [path]
+  defp kept(_path, _whole, false), do: []
+
+  defp prefixed(paths, prefix) when is_list(paths), do: Enum.map(paths, &(prefix <> &1))
+  defp prefixed(_none, _prefix), do: []
+
+  defp members_kept(prefix, type, held),
+    do:
+      Enum.map(type.members, fn member ->
+        path = prefix <> member.name
+        {path, kept(path, Logex.FbType.type_of(type, member), marked(member.retain, held))}
+      end)
+
+  # Everything under it retained, it is one path; otherwise each member's own.
+  defp whole(members, path) do
+    every = Enum.all?(members, fn {member, kept} -> kept == [member] end)
+    whole_or(every, path, members)
+  end
+
+  defp whole_or(true, path, _members), do: [path]
+  defp whole_or(false, _path, members), do: Enum.flat_map(members, &elem(&1, 1))
 
   @doc """
   M5-10: the type of each tag of `tags` that is a real, `real` or `lreal`, by its name, or
@@ -379,7 +523,7 @@ defmodule Logex.Program do
   is first handed in (decision 190).
   """
   def edited_by_hand(%__MODULE__{name: name} = program) do
-    {lines, _seen} = routine(program, {name, nil}, {[], MapSet.new()})
+    {lines, _seen} = routine(program, {name, nil}, {[], MapSet.new()}, table(program.blocks))
     Enum.reverse(lines)
   end
 
@@ -390,47 +534,57 @@ defmodule Logex.Program do
            blocks: blocks,
            units: units,
            reals: reals,
-           arrays: arrays
+           arrays: arrays,
+           retained: retained
          },
          where,
-         {lines, seen}
+         {lines, seen},
+         table
        )
        when is_list(rungs) and is_map(tags) do
     {program, _block} = where
     # The tags settled once for all three (M5-11's review), and nothing compared where a
     # routine holds none and gives none, the common case.
-    {wanted_units, wanted_reals, wanted_arrays} = settled(tags)
+    {wanted_units, wanted_reals, wanted_arrays, wanted_retained} = settled(tags, table)
     lines = Enum.reverse(unit_lines(units, {tags, wanted_units}, where), lines)
     lines = Enum.reverse(real_lines(reals, {tags, wanted_reals}, where), lines)
     lines = Enum.reverse(array_lines(arrays, {tags, wanted_arrays}, where), lines)
+    lines = Enum.reverse(retained_lines(retained, wanted_retained, where), lines)
     {lines, called} = rungs(rungs, {tags, where}, {lines, []})
-    acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
-    held_bodies(blocks, program, acc)
+    acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, {program, table}, &2))
+    held_bodies(blocks, {program, table}, acc)
   end
 
-  defp routine(_not_a_routine, _where, acc), do: acc
+  defp routine(_not_a_routine, _where, acc, _table), do: acc
 
   # Only a program's own table is walked: a held body's table is the program's (decision
-  # 53), so a body names no table of its own to walk.
-  defp held_bodies(%{} = blocks, program, acc),
-    do: Enum.reduce(Enum.sort(blocks), acc, fn {_name, type}, acc -> once(type, program, acc) end)
+  # 53), so a body names no table of its own to walk. Since M6-1 a body's instances are read
+  # inside that table, `table`, for its `retained`.
+  defp held_bodies(%{} = blocks, at, acc),
+    do: Enum.reduce(Enum.sort(blocks), acc, fn {_name, type}, acc -> once(type, at, acc) end)
 
-  defp held_bodies(_no_table, _program, acc), do: acc
+  defp held_bodies(_no_table, _at, acc), do: acc
 
-  defp once(%Logex.FbType{name: name, body: %__MODULE__{} = body}, program, {lines, seen} = acc),
-    do:
-      unseen(
-        MapSet.member?(seen, body),
-        body,
-        {program, name},
-        acc,
-        {lines, MapSet.put(seen, body)}
-      )
+  defp once(
+         %Logex.FbType{name: name, body: %__MODULE__{} = body},
+         {program, table},
+         {lines, seen} = acc
+       ),
+       do:
+         unseen(
+           MapSet.member?(seen, body),
+           body,
+           {program, name},
+           acc,
+           {{lines, MapSet.put(seen, body)}, Map.merge(table, table(body.blocks))}
+         )
 
-  defp once(_no_body, _program, acc), do: acc
+  defp once(_no_body, _at, acc), do: acc
 
   defp unseen(true, _body, _where, acc, _put), do: acc
-  defp unseen(false, body, where, _acc, put), do: routine(%{body | blocks: nil}, where, put)
+
+  defp unseen(false, body, where, _acc, {put, table}),
+    do: routine(%{body | blocks: nil}, where, put, table)
 
   # The walk itself, a clause an element, with no closure: a few reductions an
   # instruction, paid once a program since decision 190, where it is first handed in.
@@ -545,6 +699,31 @@ defmodule Logex.Program do
       "#{owner(where)} units are neither nil nor a map of timer names to units, got: #{inspect(units)}: " <>
         "#{named(elem(where, 0))} was edited by hand after it compiled"
     ]
+
+  # M6-1: a routine's retained paths against the ones its tags give, each that differs a
+  # line, in order, as its units.
+  defp retained_lines(nil, nil, _where), do: []
+
+  defp retained_lines(retained, wanted, where) when is_list(retained) or retained == nil do
+    given = MapSet.new(retained || [])
+    wanted = MapSet.new(wanted || [])
+
+    for path <- Enum.sort(MapSet.to_list(MapSet.union(given, wanted))),
+        MapSet.member?(given, path) != MapSet.member?(wanted, path),
+        do:
+          "#{owner(where)} retained paths #{retained_given(MapSet.member?(given, path))} " <>
+            "`#{path}`, where its tags #{retained_given(MapSet.member?(wanted, path))} it: " <>
+            "#{named(elem(where, 0))} was edited by hand after it compiled"
+  end
+
+  defp retained_lines(retained, _wanted, where),
+    do: [
+      "#{owner(where)} retained paths are neither nil nor a list of paths, got: " <>
+        "#{inspect(retained)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+    ]
+
+  defp retained_given(true), do: "hold"
+  defp retained_given(false), do: "do not hold"
 
   # M5-10: a routine's reals against the ones its tags give, by name in order, as its units.
   defp real_lines(nil, {_tags, nil}, _where), do: []

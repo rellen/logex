@@ -61,7 +61,7 @@ defmodule Logex.FbType do
   defmodule Member do
     @moduledoc "One member of a function block type. See `Logex.FbType`."
     @enforce_keys [:name, :type, :role]
-    defstruct [:name, :type, :role, write: false, initial: 0]
+    defstruct [:name, :type, :role, write: false, initial: 0, retain: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
@@ -69,7 +69,8 @@ defmodule Logex.FbType do
               Logex.Declarations.elementary() | :clock | Logex.FbType.t() | {:block, String.t()},
             role: :input | :output | :local | :internal,
             write: boolean,
-            initial: integer | %{String.t() => integer}
+            initial: integer | %{String.t() => integer},
+            retain: :retain | :non_retain | nil
           }
   end
 
@@ -527,7 +528,8 @@ defmodule Logex.FbType do
   A user function block's type, from its compiled body (M2-5): the body's tags become its
   members, a `var_input` an `:input`, a `var_output` an `:output` and a `var` a `:local`,
   each of its tag's type, so a member holding an instance of a user block names it,
-  `{:block, name}`, as its tag does. Their order is `cal`'s positional order: the tags
+  `{:block, name}`, as its tag does, and since M6-1 of its tag's qualifier, `retain`
+  (decision 270). A built-in's members have none: they follow their instance. Their order is `cal`'s positional order: the tags
   declared from Elixir first, which have no line, by name, then the source's in the order
   they are declared. No member of a user block is written from outside it.
   """
@@ -543,8 +545,14 @@ defmodule Logex.FbType do
   defp order(%Tag{line: nil, name: name}), do: {0, name}
   defp order(%Tag{line: line}), do: {1, line}
 
-  defp member_of(%Tag{name: name, type: type, section: section, initial: initial}),
-    do: %Member{name: name, type: type, role: role(section), initial: starts(type, initial)}
+  defp member_of(%Tag{name: name, type: type, section: section, initial: initial} = tag),
+    do: %Member{
+      name: name,
+      type: type,
+      role: role(section),
+      initial: starts(type, initial),
+      retain: tag.retain
+    }
 
   defp role(:var_input), do: :input
   defp role(:var_output), do: :output

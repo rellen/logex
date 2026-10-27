@@ -108,11 +108,31 @@ defmodule Logex.Warnings do
   def initials(rungs, reals),
     do: Enum.flat_map(rungs, &initial_of(&1, reals)) |> Enum.sort_by(& &1.line)
 
+  # M6-1: a line with a qualifier after its section word, `var retain sp real 37.1`
+  # (decision 267), told by the qualifier's length and then by the word itself.
+  defp initial_of(
+         {:rung, [{:name, line, section}, {:name, _, word}, {:name, _, name}, _type | values]},
+         reals
+       )
+       when is_map_key(reals, name) and byte_size(word) in [6, 10],
+       do:
+         qualified_initial(
+           Declarations.reserved(word),
+           {line, section},
+           Map.fetch!(reals, name),
+           values
+         )
+
   defp initial_of({:rung, [{:name, line, section}, {:name, _, name}, _type | values]}, reals)
        when is_map_key(reals, name),
        do: initial_in(Declarations.reserved(section), line, Map.fetch!(reals, name), values)
 
   defp initial_of(_rung, _reals), do: []
+
+  defp qualified_initial(:qualifier, {line, section}, type, values),
+    do: initial_in(Declarations.reserved(section), line, type, values)
+
+  defp qualified_initial(_not_a_qualifier, _at, _type, _values), do: []
 
   defp initial_in(:section, line, type, values),
     do:

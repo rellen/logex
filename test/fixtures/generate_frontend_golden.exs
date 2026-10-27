@@ -150,7 +150,8 @@ defmodule FrontendGolden do
       tiny_reals() ++
       arrays() ++
       element_bits() ++
-      instance_arrays()
+      instance_arrays() ++
+      qualified_declarations()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -453,6 +454,28 @@ defmodule FrontendGolden do
       "xic lane_t[2].dn[1]",
       "xic lane_t[2] .dn",
       "xic lane_t[2]. dn"
+    ]
+  end
+
+  # M6-1 (decision 267): a declaration's qualifier, `retain` or `non_retain`, straight after
+  # its section word, in any case, and the lines the compiler refuses: both words, a
+  # qualifier out of its place, alone. Each is a rung of names and literals to the front
+  # end, which reads them all already; added after the rest, and recorded first by the front
+  # end before M6-1, so that the diff of the commit that lands it is these entries alone.
+  defp qualified_declarations do
+    [
+      "var retain count dint\nxic eye ctu boxes 10",
+      "var non_retain jog bool",
+      "var_output retain total dint 0",
+      "VAR RETAIN lube rto",
+      "var retain weights int[8] 0 0 12 14 0 0 0 0",
+      "var retain lane_t ton[4]",
+      "var retain non_retain r bool",
+      "var r retain bool",
+      "var r bool retain",
+      "var retain",
+      "xic retain ote q",
+      "retain count dint"
     ]
   end
 

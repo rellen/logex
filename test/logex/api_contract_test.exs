@@ -241,7 +241,9 @@ defmodule Logex.ApiContractTest do
     "var d ( xic a )",
     "var e bool ( xic a )",
     "var a bool",
-    "var retain r bool",
+    # M6-1: `var retain r bool` is a valid line since `retain` landed (decision 267), so
+    # the line in its place is one the qualifiers still refuse, keeping the draws.
+    "var retain non_retain r bool",
     "var bool dint",
     "var f bool 7",
     "var g dint 3000000000",
@@ -287,6 +289,7 @@ defmodule Logex.ApiContractTest do
   # the compile test must reach.
   @m16_diagnostics [
     "is already run by the `ton`",
+    "a declaration takes `retain` or `non_retain`, not both",
     "but logic may write only",
     "is not a member of",
     "only an instance of a function block has members",
