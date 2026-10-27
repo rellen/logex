@@ -225,7 +225,8 @@ designed and decided the same day (§3, "Milestone 6"; `docs/organisation.md` §
 decisions 266–285), the maintainer answering its twenty questions as recommended, and the
 three its close's review raised the same day (decisions 290–292); of its nine items, M6-1,
 the words `retain` and `non_retain`, and M6-2, the warm restart in the core, landed the
-same day in one push, and the other seven are planned.
+same day in one push, and M6-3, retained globals, the same day with the maintainer's
+answers to their six readings (decisions 293–298), and the other six are planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8958,7 +8959,7 @@ done-when reads the next store write; and last the contract walk and the documen
   ever; each retained timer's `last` is set to its instance's `now`, its last scan's
   (decision 188), at any depth;
   `first: true` and `ons_blocked: []` warm or cold; an instance set aside dropped. The
-  globals restart as cold until M6-3. `Logex.Runner.restart/2` `:warm` keeps the same in
+  globals restart as cold until M6-3 *(since M6-3 a retained global is kept warm, below)*. `Logex.Runner.restart/2` `:warm` keeps the same in
   memory, the time the runner stood tripped never counted, its clock not moving over it
   (tested since M6-2's review, below). The image functions are not in this entry and are
   left for M6-4. Every clause of the done-when has its test in `retain_test.exs`, the
@@ -9109,7 +9110,87 @@ done-when reads the next store write; and last the contract walk and the documen
   *(Settled by decision 298, 2026-10-27: both words are reserved in a configuration file
   too, a file naming anything so refused with the word named.)*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-27** (`7a48281`, with the record of decisions 293 to 298 in
+  `20f0d79`). As the entry says: `Logex.Configuration.Text` reads `var_global retain
+  total_boxes dint 0` and `var_global non_retain count dint`, the qualifier straight
+  after `var_global`, in any case, into `%Logex.Configuration.Global{}`'s `retain`
+  (`:retain`, `:non_retain` or nil, as a tag's struct holds it), and `print/1` writes it
+  back, the round trip exact and its seeded draws drawing the qualifier; one given twice,
+  both, one after the name, the type, the initial value or the location, or one that
+  starts a line is a broken line told where it goes, one broken for its qualifiers alone
+  still naming its global. `check/1` refuses a located global's `retain` at its line,
+  "`lamp_q` is an output point, and a located global takes no `retain`: an input point is
+  read again at every start, and an output point starts at 0 until logic writes it", and
+  a `retain` no line can say as the host's, a pinned line; and warns, at the connection's
+  line, of a retained var_output wired straight to an output point or to an element of an
+  array of them, in the entry's words, looked for only where a program type given retains
+  anything. By decision 298 both words are configuration keywords, so a global, an
+  instance, a task, a program type or a device named either is refused with the word
+  named. `Logex.Runtime.restart/2` `:warm` keeps each retained global, which a
+  var_external of it reads, every other as a cold restart puts it; `Logex.Runner.restart/2`
+  reaches it through that one call. Every clause of the done-when has its test:
+  `end_to_end_test.exs`'s M6-3 Done-when, §4.4's plant with a retained `total_boxes`
+  shared through `var_external` and a retained counter, through 400 seeded cycles and
+  warm and cold restarts against an oracle that knows nothing of logex, from text and
+  from files on disk; `retain_configuration_test.exs`'s warm restart during an edit,
+  keeping the running instances' values and dropping those set aside (decision 65), and a
+  configuration with nothing retained restarting warm exactly as cold; the round trip's
+  draws in `configuration_test.exs`. The contract walk's resource draws
+  (`api_contract_test.exs`, the `var_external` walk) draw each unlocated global's
+  qualifier and restate decision 271's rows for globals from the draw alone, four reach
+  atoms, `ext_retained_kept`, `ext_retained_lost`, `ext_retained_read` and
+  `ext_unretained_warm`. README's "A retained global" is a real run, `retained.exs`.
+  *Mutation table* (`scratchpad/m6/m63mut/run.log`): 23 mutants, 22 red and one
+  equivalent, every located global taken for an output point, a good connection driving
+  no input point, whose filter was removed; one, a retained var_output wired to an
+  unlocated global warned of, survived the first run and is red since a test of it was
+  added; the warm restart's three each red on the walk alone and the end-to-end test
+  alone. *Cost* against `20f0d79` (`scratchpad/m6/cost63_{base,now}.txt`), a plant of 1 to
+  64 motor instances retaining nothing: a cycle and a restart, warm and cold, in exactly
+  the reductions they took; `check/1`, `start/1` and `compile/3` about 3 reductions a
+  global more (0.1 to 0.4%), the qualifier's host check and the device-name guard; and
+  `print/1` about 10 a global more (2%). 2268 tests (11 doctests), up from 2253.
+
+  *Provisional readings of M6-3*, each a question for the maintainer:
+  1. *`non_retain` on a located global.* `var_global non_retain lamp_q bool at panel.q.0`
+     is taken, where `retain` there is refused (decision 272). An operator sees nothing
+     different: an output point starts at 0 and an input point is read at every start
+     either way. The options: (a) as built, the word stating the default; (b) refused as
+     `retain` is, a located global taking no qualifier. IEC qualifies `VAR_GLOBAL` over a
+     section, `NON_RETAIN` there in §6.5.6.2's text but not the grammar (Ed 3, pp.57 and
+     224), and retains located variables (p.58); Logix has no qualifier (§4.13).
+  2. *A device named by another configuration keyword.* By decision 298 a device named
+     `retain` or `non_retain` is refused, but `var_global x bool at task.i.0` still names
+     a device `task`, as before M6-3, where a global, an instance, a task or a program
+     type so named is refused. The options: (a) as built, only the two words; (b) every
+     configuration keyword refused as a device's name, which would break a plant whose
+     card is named `program` or `at`. Neither IEC, whose `%IX` addresses name no device,
+     nor Logix, whose module names are the I/O tree's, speaks to it.
+  3. *A configuration line refused for its qualifier alone.* `var_global retain retain
+     total_boxes dint` is one diagnostic, its global named so that nothing naming it is
+     reported again, as every broken configuration line is (decision 42); its uses are
+     not checked, where a `.ld` line so refused declares its tag and its uses are
+     (decision 294). On the conveyor, `t1.eye total_boxes` beside such a line is told
+     nothing, though `total_boxes` is a dint and `eye` a bool. The options: (a) as built;
+     (b) the line read without its qualifiers and the global declared, its uses checked
+     as decision 294 has a tag's. Neither IEC nor the Logix manuals say how a compiler
+     recovers.
+  4. *An edit that only changes a global's qualifier, until M6-7.* An online edit that
+     adds `retain` to `var_global total_boxes dint 0` is accepted and reports nothing,
+     changes no value, and the next warm restart keeps the global, following the
+     configuration running; M6-7 adds `:retain_added`. The options: (a) as built until
+     M6-7; (b) refused until M6-7 lands. Decision 278 says the switch writes nothing.
+  5. *The warning's words.* The warning is given per connection, a whole array var_output
+     wired to an array of output points once, naming the array, and an element at its
+     element, "`a1.o[1]` is retained and drives the output `l2[0]`: …"; and it does not
+     itself say that only a direct connection is seen, which README and the moduledoc
+     say. The options: (a) as built; (b) the warning adds "(a direct connection: logic
+     that reads a retained value is not checked)". Decision 272 says the warning "catches
+     only a direct connection and says so".
+  6. *A global's qualifier from Elixir.* `%Logex.Configuration.Global{retain: :retain}`,
+     the struct's atom, as `%Logex.Tag{}` holds it, since a global is built by hand with
+     no function to take decision 296's keyword option. The options: (a) as built; (b) a
+     constructor, `Global.new!(name, type, retain: true)`, as `Logex.Tag.new!/5` takes it.
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with
   decision 277's matching and its dropped report, the image checked as a host's state is
   (decisions 171 to 188). *Done when* a resource started from another resource's image
@@ -9233,7 +9314,7 @@ before another, and says so.
 
 - **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
   2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
-  266–285; M6-1 and M6-2 landed the same day, the rest not yet built.)* Today a warm restart is a
+  266–285; M6-1, M6-2 and M6-3 landed the same day, the rest not yet built.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store

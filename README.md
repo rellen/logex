@@ -74,7 +74,9 @@ Source syntax today:
   dint` stays out of `var retain s1 seal`. A program's `var_input`, whose value the host
   gives and every restart keeps, and a `var_external`, whose global carries it, take
   none, and the two words never stand on one line together. Both are reserved, so no
-  tag is named `retain` or `non_retain`. Retained values are kept in memory only, across
+  tag is named `retain` or `non_retain`. A configuration's global takes one too,
+  `var_global retain total_boxes dint 0` (M6-3, "A retained global", below). Retained
+  values are kept in memory only, across
   `Logex.Runtime.restart/2,3` and `Logex.Runner.restart/2` with `:warm`; the store on
   disk that keeps them across a crash is still to land (Milestone 6, "Settled, not yet
   landed", below)
@@ -175,7 +177,10 @@ file's does:
   real, `var_global sp real 0.1` printed back as `0.1`, or an array of one, `var_global
   limits int[3] 10 20 30`, never located yet, and `var_global <name>
   <type> at <device>.i.<n>` or `… at <device>.q.<n>`, an input or an output point, which
-  takes no initial value: the `var_global … at` lines are the plant's I/O list
+  takes no initial value: the `var_global … at` lines are the plant's I/O list; since
+  M6-3 `var_global retain <name> <type> …`, a global a warm restart keeps, or `var_global
+  non_retain …`, which states the default, the qualifier straight after `var_global` and
+  never on a located global ("A retained global", below)
 - `program <instance> <type> [with <task>]`: an instance of the program type in
   `<type>.ld` beside the file, on a task or, without `with`, run in every cycle after the
   tasks
@@ -191,7 +196,9 @@ file's does:
 - `task single interval priority with program var_global at` and the type words, `bool`
   and the eight integer widths, are reserved in
   a configuration file, in any case, and nowhere else: a `.ld` program may still have a
-  tag called `task` or `single`, though no `var_external`, whose name is a global's too
+  tag called `task` or `single`, though no `var_external`, whose name is a global's too;
+  and `retain` and `non_retain`, reserved in both kinds of file, so nothing in a
+  configuration file is named by either, a device among it (decision 298)
 - a program type's `var_external` binds to the global of its name and type, checked once
   a type at its first instance's `program` line; nothing writes an input point through
   one, and no connection names one. Two instances that write one global through one, and
@@ -325,7 +332,11 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   scan, through `Logex.Runtime.restart/3` and `restart/2` and a tripped runner's
   `Logex.Runner.restart(runner, :warm)`, which counts none of the time it stood tripped; `retain`
   and `non_retain` are reserved words in any case, so a tag named either no longer
-  compiles. Still to land: a configuration's `var_global retain`; the image a resource
+  compiles. Landed, M6-3: a configuration's `var_global retain total_boxes dint 0`, kept
+  by a warm restart, refused on a located global, a retained var_output wired to an
+  output point warned of, and both words reserved in a configuration file too, so that a
+  plant file naming a global, an instance, a task, a program type or a device `retain` or
+  `non_retain` no longer loads. Still to land: the image a resource
   starts from; and a store the runner writes on the host's disk every second and at a
   trip, a stop and a cold restart, read at a fresh start, warm unless `start: :cold`, so
   that until then a crash or a stopped VM keeps nothing. `persistent` is deferred and
@@ -2775,6 +2786,129 @@ wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches t
   stands, or, for a global that is the storage bit of an `ons`, an `osr` or an `osf`,
   the one-shot fires on the wrong scans.
 
+### A retained global
+
+`tally.ld` counts boxes, keeps the count in a retained counter and adds each box to a
+total it shares through `var_external`, and latches a retained `full` once three are
+counted:
+
+```
+var_input eye bool
+var_output retain full bool
+var_external total_boxes dint
+var retain boxes ctu
+var e bool
+
+xic eye ctu boxes 3
+xic eye ons e add total_boxes 1 total_boxes
+xic boxes.q otl full
+```
+
+`tally.logex` declares the total `retain`, the qualifier straight after `var_global`, as
+on a `.ld` declaration line:
+
+```
+// tally.logex -- a box counter whose count and total survive a warm restart
+var_global eye_1              bool at panel.i.0
+var_global retain total_boxes dint 0
+var_global case_full          bool
+
+program t1 tally
+  t1.eye  eye_1
+  t1.full case_full
+```
+
+`retained.exs` counts four boxes, restarts warm, counts two more, the first under the
+eye as it restarts, and restarts cold; then it loads `wired.logex`, the same plant with
+`full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
+`broken.logex`, a mistake on each of its last four lines:
+
+```
+var_global eye_1              bool at panel.i.0
+var_global retain case_lamp   bool at panel.q.0
+var_global total_boxes retain dint
+var_global retain non_retain total dint
+program retain tally
+```
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("tally.logex")
+
+show = fn rt, label ->
+  IO.puts("#{label}  total_boxes=#{Logex.Runtime.get!(rt, "total_boxes")} " <>
+            "t1.boxes.cv=#{Logex.Runtime.get!(rt, "t1.boxes.cv")} " <>
+            "case_full=#{Logex.Runtime.get!(rt, "case_full")}")
+  rt
+end
+
+boxes = fn rt, n ->
+  Enum.reduce(1..n, rt, fn _, rt ->
+    {rt, _, _} = Logex.Runtime.cycle(rt, 10, %{"eye_1" => 1})
+    {rt, _, _} = Logex.Runtime.cycle(rt, 10, %{"eye_1" => 0})
+    rt
+  end)
+end
+
+{rt, _, _} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, %{})
+
+rt
+|> boxes.(4)
+|> show.("four boxes   ")
+|> Logex.Runtime.restart(:warm)
+|> show.("warm restart ")
+|> boxes.(1)
+|> show.("first box    ")
+|> boxes.(1)
+|> show.("one more     ")
+|> Logex.Runtime.restart(:cold)
+|> show.("cold restart ")
+
+{:ok, wired} = Logex.Configuration.compile_file("wired.logex")
+Enum.each(wired.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+
+{:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run retained.exs
+four boxes     total_boxes=4 t1.boxes.cv=4 case_full=1
+warm restart   total_boxes=4 t1.boxes.cv=4 case_full=0
+first box      total_boxes=4 t1.boxes.cv=4 case_full=1
+one more       total_boxes=5 t1.boxes.cv=5 case_full=1
+cold restart   total_boxes=0 t1.boxes.cv=0 case_full=0
+wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_lamp`: after a warm start it is written in the first round
+broken.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
+broken.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
+broken.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
+broken.logex: line 5: `retain` is a keyword and cannot name an instance
+```
+
+- A warm restart, `Logex.Runtime.restart(runtime, :warm)`, keeps a global its line marks
+  `retain` at the value the resource holds, and so what a `var_external` of it reads, as
+  it keeps what each program marks; every other global is put back as a cold restart puts
+  it, one marked `non_retain`, which states the default, among them. A cold restart puts
+  every global back (`PLAN.md`'s M6-3; decisions 268 and 271 in
+  [`docs/organisation.md`](docs/organisation.md) §7).
+- The first scan after any start counts no edge: the box under the eye as the plant
+  restarts is not counted, as on a first start (decision 274).
+- `full` is retained, so the warm restart keeps it, but `case_full`, the global it drives,
+  is not, and reads 0 until the first round copies `full` out. Wired straight to an output
+  point, a retained var_output is written there in the first round after a warm start,
+  which the configuration warns of; logic that reads a retained value and writes an
+  output another way is not seen (decision 272).
+- A located global takes no `retain`: an input point is read again at every start, and
+  an output point starts at 0 until logic writes it, so no output comes back on from a
+  kept value. `retain` and `non_retain` are reserved in a configuration file as in a `.ld`
+  file, in any case: nothing is named by either, a global, an instance, a task, a program
+  type or a device (decision 298).
+- From Elixir a global's qualifier is its struct's field, `%Logex.Configuration.Global{name:
+  "total_boxes", type: :dint, initial: 0, retain: :retain}`, which
+  `Logex.Configuration.Text.print/1` prints as the line above.
+- Retained globals are kept in memory only, as a program's are; the store on disk that
+  keeps them across a crash is still to land (Milestone 6, "Settled, not yet landed",
+  above).
+
 ### An event task
 
 `trip.logex` runs a conveyor of `conveyor.ld`, above, on a 10 ms task, and `snapshot.ld`
@@ -4186,7 +4320,8 @@ in every cycle's outputs at the value it holds.
   tag's type or array's size; a jump forward only; retained values in memory only, a warm
   restart keeping what a program marks `retain` while the runner lives, but nothing
   surviving a crash, a kill or a stopped VM, the store on disk not yet built
-  (Milestone 6, "Settled, not yet landed", above), and no retained global; and forcing
+  (Milestone 6, "Settled, not yet landed", above), a configuration's retained global
+  likewise; and forcing
   for inputs only, an output never forced.
 
 ## Running it
