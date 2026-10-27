@@ -374,7 +374,9 @@ defmodule Logex.Runner do
   closed, in device-name order, before it returns (decision 116); a tripped runner's
   devices written no 0 again but, since decision 286, each whose trip's 0 its adapter has
   not taken, which `status/1` names, tried once more and closed whether or not the 0 is
-  taken. A reason other than
+  taken. A device whose 0 hangs, a running runner's or that last 0, is waited on until
+  its deadline, the idle watchdog and a poll period in real time, and then killed, its
+  adapter not closed, so a stop returns within that time a device. A reason other than
   `:normal`, `:shutdown` or `{:shutdown, term}` is an abnormal exit, as for any GenServer.
   """
   def stop(runner, reason \\ :normal), do: GenServer.stop(runner!(runner), reason, :infinity)

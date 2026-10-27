@@ -600,7 +600,7 @@ defmodule Logex.TripTest do
       r.out y
     """
 
-    defp lamped(text \\ @lamped, poll \\ 1_000_000) do
+    defp lamped(text \\ @lamped, poll \\ 1_000_000, extra \\ []) do
       {:ok, config} =
         Configuration.compile("plant", text, %{
           "lamp" => program(@lamp, "lamp"),
@@ -613,13 +613,15 @@ defmodule Logex.TripTest do
 
       {:ok, runner} =
         Runner.start_link(
-          configuration: config,
-          io: %{"panel" => {Sim, sim: panel}},
-          clock: {Manual, clock},
-          poll: poll
+          [
+            configuration: config,
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {Manual, clock},
+            poll: poll
+          ] ++ extra
         )
 
-      %{runner: runner, clock: clock, panel: panel}
+      %{runner: runner, clock: clock, panel: panel, config: config}
     end
 
     defp out_of_range(task, instance, line, read),
@@ -794,7 +796,7 @@ defmodule Logex.TripTest do
     end
 
     test "a stop of a tripped runner whose device fails its last 0 too closes it anyway" do
-      %{runner: runner, clock: clock, panel: panel} = lamped()
+      %{runner: runner, clock: clock, panel: panel, config: config} = lamped()
       Sim.set(panel, %{[0] => 0x8000, [1] => 15})
       Manual.advance(clock, 10)
       for _ <- 1..2, do: Sim.fail(panel, :write, {:error, :eio})
@@ -807,6 +809,50 @@ defmodule Logex.TripTest do
       assert Sim.writes(panel) == written
       assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
       assert Sim.closed?(panel)
+
+      # The review of decisions 286-289: Sim.writes/1 records only the writes taken, so the
+      # last 0 is seen to be tried by the failure it used up: a runner opened on the panel
+      # afterwards meets no failure left queued, and its first round's write is taken.
+      Sim.set(panel, [1], 15)
+
+      {:ok, again} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      assert %{status: :running, trip: nil} = Runner.status(again)
+      assert List.last(Sim.writes(panel)) == %{[0] => 1, [1] => 1}
+      assert Runner.stop(again) == :ok
+    end
+
+    # The review of decisions 286-289: a last 0 that hangs is bounded as every close is, by
+    # the device's deadline, the idle watchdog and a poll period in real time (decision
+    # 116's close): the stop returns :ok once it passes, the device killed, its adapter's
+    # close never called and its outputs as they were. Before decision 286 the close wrote
+    # nothing and so closed at once.
+    @tag :capture_log
+    test "a stop of a tripped runner whose last 0 hangs returns once the device's deadline " <>
+           "passes, the device killed and its adapter not closed" do
+      %{runner: runner, clock: clock, panel: panel} = lamped(@lamped, 50, idle: 300)
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+      written = Sim.writes(panel)
+
+      device = Process.monitor(device_pid(runner, "panel"))
+      Sim.fail(panel, :write, :hang)
+      {took, :ok} = :timer.tc(fn -> Runner.stop(runner) end, :millisecond)
+      assert took >= 350 and took < 3000
+      assert_receive {:DOWN, ^device, :process, _, :killed}, 5000
+      assert Sim.writes(panel) == written
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      refute Sim.closed?(panel)
     end
 
     # Decision 286 in the device's close at its runner's death (decision 115's "where it had

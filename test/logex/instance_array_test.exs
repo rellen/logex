@@ -1313,7 +1313,8 @@ defmodule Logex.InstanceArrayTest do
             {"xic go ote lane_c[1].pv.[i]\nxio go ote lane_c[0].pv.[i]", []},
             # Decision 288, superseding the provisional reading that left it uncompared: a
             # member's whole write beside a coil on its bit through a tag subscript, either
-            # first, in the "may" words of decisions 253 and 257; through the very tags
+            # first, "may" where the write may come through a tag subscript (decision 257's
+            # words; the whole write first "…writes whole"); through the very tags
             # nothing (decision 246). Still not compared (provisional): a whole write
             # through a tag subscript beside a coil on a literal element's bit.
             {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3",

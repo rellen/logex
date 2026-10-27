@@ -635,7 +635,9 @@ defmodule Logex.Runner.Device do
   # A close's 0 (decisions 115, 116 and 286): every output written 0 once where the device is
   # not latched; a latched one whose 0 its adapter has not taken tried once more, the last
   # the device can do, and closed whether or not the adapter takes it; a latched one whose 0
-  # was taken written nothing again.
+  # was taken written nothing again. A last 0 that hangs holds the close as any close's 0
+  # does: the runner's call gives up at the device's deadline, the idle watchdog and a poll
+  # period in real time, and kills it, its adapter's close never called.
   defp last_zero(%{latched: true, unzeroed: true, zeros: zeros} = state),
     do: zero_written(adapted(:write, [zeros, state.adapter], state), state)
 

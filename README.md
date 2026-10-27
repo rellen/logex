@@ -3207,7 +3207,8 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   and any down or killed, at the trip or after it, until a restart opens it (decision
   287), `[]` while running, the first reason kept (decision 262). A stop of a tripped
   runner tries the 0 once more on each device it names, and closes it whether or not the
-  0 is taken (decision 286).
+  0 is taken (decision 286); one whose last 0 hangs is killed at its deadline, the idle
+  watchdog and a poll period, its adapter not closed.
 - Each device's deadline is the step's: its task's watchdog and a poll period from the
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that

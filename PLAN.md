@@ -8701,8 +8701,9 @@ the walks' cross-type reach and the documents.
     a last 0 taken, one that fails and is closed anyway, and a kill.
   - *A device down while tripped* (287): (b). One whose 0 was taken and that goes down while
     the runner is tripped is named until a restart opens it again. `trip_test.exs` pins it.
-  - *A member's whole write beside a bit of it through a tag subscript* (288): (b), in the
-    "may" words of decisions 253 and 257: "`lane_c[i].pv.3` is in `lane_c`, as
+  - *A member's whole write beside a bit of it through a tag subscript* (288): (b), in
+    decision 257's words, "may" where the write may come through a tag subscript, the
+    whole write first: "`lane_c[i].pv.3` is in `lane_c`, as
     `lane_c[1].pv` is, which the `move` on line 12 writes whole", the coil first "…
     which the `ote` on line 12 may write through a tag subscript", through other tags
     "may", through the very tags nothing (decision 246). Still not compared (provisional):
@@ -8727,6 +8728,25 @@ the walks' cross-type reach and the documents.
   the reductions it took, within 6; 50 pairs of a coil on a bit of a member through a tag
   subscript and a whole write of the member compile in 193,825 where they took 189,237
   (2.4%).
+
+  *The review of decisions 286 to 289* (2026-10-27) found nothing high, and each finding
+  is answered:
+  - `stop/2`'s promised `{:error, {:retain, reason}}` cannot come from `GenServer.stop/3`,
+    which always gives `:ok`: M6-5 now makes `stop/2` a call, the zeros and the closes
+    first, then the store's write, the reply and the stop (§4.13, decisions 116 and 275
+    annotated), and its done-when pins the failed write's answer.
+  - A last 0 that hangs is bounded as every close's 0 is, by the device's deadline, the
+    idle watchdog and a poll period, the device then killed and its adapter not closed,
+    written into decision 286 and pinned in `trip_test.exs` (it fails with 286 reverted,
+    the close then closing at once); whether to bound it tighter is put to the maintainer.
+  - The test of a last 0 that fails now shows that it was tried: a runner opened on the
+    device afterwards meets no failure left queued.
+  - M6-5's done-when gains a cold restart, and a fresh start with `start: :cold`, whose
+    store write fails; M6-7 needs M6-6 as well, a crash writing no store.
+  - Decision 274's taken text names its option, `first: true` on every start; decision
+    288's summary says "may" only where the write may come through a tag subscript.
+  - The mutation log says how R4's anchor, which matched twice, was put right, and the
+    four R mutants are red again against these fixes.
 
   2219 tests (11 doctests), up from 2215.
 
@@ -8780,8 +8800,8 @@ answered all twenty on 2026-10-27, each as recommended:
 - a fresh start with a store warm unless `start: :cold`, and a cold restart writing the
   store before its first round (271); `retain` on a located global refused, a retained
   var_output driving an output point warned of, README naming the hazard (272);
-- an outage not counted, a timer resuming (273), and no first-scan edge (274), so no
-  prescan (279);
+- an outage not counted, a timer resuming (273), and `first: true` on every start, warm
+  or cold, so no edge fires on the first scan (274), and no prescan (279);
 - the store written every `retain_period:`, 1000 ms unless set, and at a trip, a stop and
   a cold restart, atomically, by a writer process of its own, a failed write reported and
   the plant running on (275), in readable text under a header (276), matched by
@@ -8844,7 +8864,7 @@ done-when reads the next store write; and last the contract walk and the documen
 | M6-4 | The image: `Runtime.retained/1,2`, `start/2`, `instance/2`, the matching | 273, 277, 282 | M6-3 | L |
 | M6-5 | The store, read and written at events, `retain:` and `start:` | 271, 275, 276, 284, 285 | M6-4 | L |
 | M6-6 | The periodic writer, `retain_period:` | 275 | M6-5 | M |
-| M6-7 | Online edits: `:retain_added` and `:retain_removed` | 278 | M6-5 | M |
+| M6-7 | Online edits: `:retain_added` and `:retain_removed` | 278 | M6-5, M6-6 | M |
 | M6-8 | The contract walk | all | M6-7 | L |
 | M6-9 | The documents | all | M6-8 | S |
 
@@ -8924,13 +8944,22 @@ done-when reads the next store write; and last the contract walk and the documen
   `start:`, each checked in the caller in order, added to `@options` and both pinned
   messages; the read in the caller; the writes at a trip, a stop and a cold restart,
   synchronous as the forces file's are; `status/1`'s `retain` and the store's age
-  (decisions 271, 275 and 285). Decisions 115's last sentence, 116, 127 and 133
+  (decisions 271, 275 and 285). `stop/2` made a call, since `GenServer.stop/3`, which it is
+  today, ignores `terminate/2`'s return and always gives `:ok` (§4.13): the stop taken when
+  the runner reaches it, never held for a slot, each waiting request answered as today,
+  every output 0 once and every device closed (decision 116) before the store's write, so
+  that no store write keeps an output on, then the reply, `:ok` or `{:error, {:retain,
+  reason}}`, then the stop with its reason; with no `retain:`, `:ok` as today. Decisions 115's last sentence, 116, 127 and 133
   annotated as landed. *Done when*, on the manual clock: a runner stopped, or tripped and
   killed, and started fresh restores what its last write held, never older and never
   half; a cold restart's store write precedes its first round, and a crash right after it
   brings back none of the discarded values; a store that does not read is refused a line
   each, and one of another configuration is refused naming both; `start: :cold` ignores
-  it and writes a new one at once; a retained output-driving bit comes back on only
+  it and writes a new one at once; a cold restart whose store write fails leaves the
+  runner tripped as it was, `{:error, {:retain, reason}}`, the store as it was, and a fresh start with `start: :cold` whose write fails is not started, the
+  same reason given, the forces file's rule (§4.13); a `stop/2` whose store write fails
+  stops, every output 0 and every device closed first, and returns `{:error, {:retain,
+  reason}}`, and every existing pin of its `:ok` still passes; a retained output-driving bit comes back on only
   through logic in the first round, never written before it; a retained value that
   tripped the plant trips it again at a warm start and not at a cold one (decision 284);
   and the end-to-end Done-when: §4.4's plant from files on disk with a retained box
@@ -8942,8 +8971,9 @@ done-when reads the next store write; and last the contract walk and the documen
   suggests 100 to 3,600,000 ms), the writer process, latest wins, the failed write's
   event `{:retain, {:error, reason}}` and status (decision 275). *Done when* a runner
   killed between two periods restores the earlier period's write; a write that fails
-  leaves the old store, is reported, and the plant runs on; a `stop/2` whose final write
-  fails still stops and returns `{:error, {:retain, reason}}`; a slow write delays no
+  leaves the old store, is reported, and the plant runs on; a `stop/2` while a period's
+  write is in progress waits for it, drops any pending one and writes last, and one whose
+  final write fails still stops and returns `{:error, {:retain, reason}}`; a slow write delays no
   round (the writer suspended with `:sys.suspend/1`); and a round with a store costs
   within a measured bound of one without, the take-out bounded in the retained count.
   *Size M.*
@@ -8951,7 +8981,9 @@ done-when reads the next store write; and last the contract walk and the documen
   **Status: not started.**
 - **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit` and
   `Logex.Configuration.Edit`, rows of their tables and §4.9's, `@report_kinds` and
-  `@configuration_kinds`; decision 44 annotated as landed. *Done when* an edit that only
+  `@configuration_kinds`; decision 44 annotated as landed. It needs M6-6 as well as M6-5:
+  a crash writes no store, so the candidate's values reach it only by a period's write.
+  *Done when* an edit that only
   changes a qualifier reports it by path and writes nothing; the next store write and
   the next warm restart follow the program running; and a crash while a candidate is
   tested, then a fresh start with the original configuration, meets the candidate's

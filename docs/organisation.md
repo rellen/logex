@@ -4447,7 +4447,19 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   proportion to them alone, a write still in progress makes the newer image wait and drops
   the older pending one, latest wins. A write that fails is reported, `{:retain, {:error,
   reason}}` to subscribers and in `status/1`, and the plant runs on; a `stop/2` whose
-  final write fails still stops and returns `{:error, {:retain, reason}}`. A fresh start
+  final write fails still stops and returns `{:error, {:retain, reason}}`. To give that
+  answer `stop/2` becomes a call (M6-5): today it is `GenServer.stop/3`, which ignores
+  `terminate/2`'s return and always gives `:ok`. The runner takes the stop when it
+  reaches it, never holding it for a slot; answers each request still waiting as today;
+  writes every output 0 once and closes every device, in device-name order (decision
+  116), the zeros first so that no store write, slow or hung, keeps an output on; then
+  waits for the writer's write in progress, drops any pending one and writes the resource
+  as the stop found it; replies `:ok` or `{:error, {:retain, reason}}`; and only then
+  stops with the stop's reason. A runner with no `retain:` replies `:ok` after the zeros as
+  today, and every existing pin of `stop/2`'s `:ok` and its host mistakes holds. A
+  runner that dies or is killed writes no store; its last write is the period's or an
+  event's. *(Added after the review of decisions 286–289, 2026-10-27, the record's
+  reading.)* A fresh start
   reports the store's age, its header's `written_at`, in `status/1` and in its first
   round's `{:retain, …}` event. The trip's write is of the resource as the trip left it,
   the one `get/2` reads and a warm `restart/2` keeps. A sync of the directory after the
@@ -6751,7 +6763,9 @@ over.
      its contactor on. *(Taken 2026-10-17.)*
      *(Amended 2026-10-27 by decision 275, for Milestone 6, not yet built: `stop/2` also
      writes the store, where one is named, before it returns; a final write that fails
-     still stops, and `stop/2` returns `{:error, {:retain, reason}}`.)*
+     still stops, and `stop/2` returns `{:error, {:retain, reason}}`. Since `stop/2` is
+     `GenServer.stop/3` today, which always gives `:ok`, M6-5 makes it a call: the zeros
+     and the closes first, then the store, then the reply, then the stop, §4.13.)*
 117. **Forcing a signal for testing (Milestone 4).** A technician wants to check the "case
      full" lamp without loading 12 boxes, so they make the controller see the photo-eye
      as blocked and unblocked from a laptop, whatever the real eye says. Forcing an
@@ -10757,7 +10771,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *Recommended: `first: true` on every start, warm or cold*, `ons_blocked` dropped as
      today; a first-scan bit and how-did-I-start information deferred.
 
-     **Taken: no first-scan edge** (the maintainer, 2026-10-27), as recommended.
+     **Taken: not counted, `first: true` on every start, warm or cold** (the maintainer,
+     2026-10-27), as recommended, so no edge fires on the first scan; `ons_blocked`
+     dropped as today, and a first-scan bit deferred.
 275. **Where the store lives and when it is written (Milestone 6).** logex has no
      battery-backed memory; the host's disk stands in for it.
      - *Where:* a path the host names, `retain:`, as `forces:` is (decision 127); with
@@ -10785,7 +10801,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: every `retain_period:` (1000 ms unless set), and at a trip, a stop and a
      cold restart; atomic, by its own process; a failed write reported, the plant running
      on** (the maintainer, 2026-10-27), as recommended. The period's range is M6-6's to
-     settle, the record suggesting 100 to 3,600,000 ms.
+     settle, the record suggesting 100 to 3,600,000 ms. *(The review of decisions 286–289:
+     `stop/2`'s `{:error, {:retain, reason}}` needs `stop/2` made a call, the zeros and the
+     closes before the store's write, §4.13; M6-5 builds it.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
@@ -10922,10 +10940,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
        (decision 115's "where it had not").
      - A 0 that fails at the close too is passed over and the adapter closed anyway, the
        last the device can do.
+     - A last 0 that hangs is bounded as every close's 0 is (decision 116): the runner
+       waits the device's deadline, the idle watchdog and a poll period in real time, and
+       kills it, its adapter's close never called and its outputs as they were, so such a
+       stop takes up to that time a device where, before this decision, the close wrote
+       nothing and closed at once. *(Added after the review of decisions 286–289,
+       2026-10-27, the record's reading; whether the last try should be bounded tighter is
+       put to the maintainer.)*
 
      Logix leaves the safe state to the module's own fault behaviour (1756-UM900B p.242).
      `trip_test.exs` pins a stop whose last 0 is taken, one whose last 0 fails, closed
-     anyway, and a tripped runner killed; the runner walk's model restates it at every stop
+     anyway, its failure seen used up by a runner opened on the device afterwards, one whose
+     last 0 hangs, returning at the deadline with the device killed, and a tripped runner
+     killed; the runner walk's model restates it at every stop
      and crash, a reach atom of its own, `:zero_at_stop`.
 287. **A device down while tripped (Milestone 5),** the close's second open question,
      changing decision 262's first bullet. A drive killed or gone down when the runner
@@ -10947,8 +10974,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `move x c.pv` beside `ote c.pv.3` is the second-`ote` warning. The options: (a) as
      built; (b) warned.
 
-     **Taken: (b), warned in the "may" words of decisions 253 and 257** (the maintainer,
-     2026-10-27). *The reading (the record's, provisional where marked):*
+     **Taken: (b), warned, in decision 257's words, "may" where the write may come through
+     a tag subscript** (the maintainer, 2026-10-27). *The reading (the record's, provisional where marked):*
      - The whole write first: "`lane_c[i].pv.3` is in `lane_c`, as `lane_c[1].pv` is,
        which the `move` on line 12 writes whole: the last one in the scan decides it".
      - The coil first: "`lane_c[1].pv` is in `lane_c`, which the `ote` on line 12 may
