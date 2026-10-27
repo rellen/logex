@@ -2342,6 +2342,10 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   element, `ote lane_c[1].r`, or any other write of it through a tag subscript, `otl
   lane_c[i].r`, beside such a coil, in either order, is the second-`ote` warning, as for a
   bool array's elements, though not the very member through the very tag (decision 253).
+  So is a coil on a bit of a member through a tag subscript, `ote lane_c[i].pv.3`, beside
+  a write of that member whole, `move 5 lane_c[1].pv`, either first, "`lane_c[i].pv.3` is
+  in `lane_c`, as `lane_c[1].pv` is, which the `move` on line 12 writes whole" (decision
+  288).
 - **An online edit by path.** An edit names each element by its path: `lane_t[2]`'s
   preset moved, a timer resumed, `lane_c[1].cu` on the block list. An array's
   dimensions or element type changed are refused, as an array's are, and a block's member
@@ -3200,7 +3204,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
   at every poll while the runner is tripped, and nothing else, until a write is taken;
   `status/1`'s `unzeroed` names each device whose outputs are not known to be 0, those
-  and any down or killed, `[]` while running, the first reason kept (decision 262).
+  and any down or killed, at the trip or after it, until a restart opens it (decision
+  287), `[]` while running, the first reason kept (decision 262). A stop of a tripped
+  runner tries the 0 once more on each device it names, and closes it whether or not the
+  0 is taken (decision 286).
 - Each device's deadline is the step's: its task's watchdog and a poll period from the
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that

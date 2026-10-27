@@ -218,7 +218,8 @@ the done sentence names built as a test, every elementary type, a `ctud_int` box
 the fan's `real`, the oven's located `real[8]` and `weights[slot]` from files on disk
 through `Logex.Runner` against an oracle, `Logex.Tag`'s and `Logex.Edit`'s docs made true,
 three IEC page citations corrected, and the eight questions still open on Milestone 5's
-provisional readings gathered in one list (§3, M5-16's review). Milestones 6 to 13 were
+provisional readings gathered in one list (§3, M5-16's review), the four left at the
+close answered and built on 2026-10-27 (decisions 286–289). Milestones 6 to 13 were
 proposed on 2026-10-27 (§3), and Milestone 6, retained values and a true warm restart, was
 designed and decided the same day (§3, "Milestone 6"; `docs/organisation.md` §4.13 and
 decisions 266–285), the maintainer answering its twenty questions as recommended; its nine
@@ -8664,7 +8665,8 @@ the walks' cross-type reach and the documents.
 
   2215 tests (11 doctests), up from 2212.
 
-  *Provisional readings* (the answers'), each a question for the maintainer:
+  *Provisional readings* (the answers'), each a question for the maintainer *(every one
+  answered on 2026-10-27, decisions 286 to 289, below)*:
   1. *A stop while a device's 0 has not been taken.* The runner tripped, the drive card's 0
      failed, and the host stops the runner before the card's next poll. As built the close
      writes nothing more, as before decision 262, so the card keeps its last outputs. The
@@ -8687,6 +8689,46 @@ the walks' cross-type reach and the documents.
      is told "… which never holds it: … it would be read as 0.0", the comparison's own
      slot, where the question asked of two literals. The options: (a) as built; (b) "written
      as 0.0" beside a tag, the literal held in the tag's type.
+
+  **The maintainer's answers to the close's four questions** (2026-10-27, decisions 286 to
+  289, `docs/organisation.md` §7), landed the same day as one gated commit of code, tests
+  and the record (`c85b70f`) and one of documents. Three change what was built, one
+  confirms it:
+  - *A stop while a device's 0 has not been taken* (286): (b). A stop of a tripped runner
+    tries the 0 once more on each device still named in `status/1`'s `unzeroed`, then
+    closes it, taken or not, as decision 116's every output 0 once; the device's own close
+    does it (`last_zero/1`), so a tripped runner killed does the same. `trip_test.exs` pins
+    a last 0 taken, one that fails and is closed anyway, and a kill.
+  - *A device down while tripped* (287): (b). One whose 0 was taken and that goes down while
+    the runner is tripped is named until a restart opens it again. `trip_test.exs` pins it.
+  - *A member's whole write beside a bit of it through a tag subscript* (288): (b), in the
+    "may" words of decisions 253 and 257: "`lane_c[i].pv.3` is in `lane_c`, as
+    `lane_c[1].pv` is, which the `move` on line 12 writes whole", the coil first "…
+    which the `ote` on line 12 may write through a tag subscript", through other tags
+    "may", through the very tags nothing (decision 246). Still not compared (provisional):
+    a whole write through a tag subscript beside a coil on a literal element's bit.
+    `instance_array_test.exs` pins every case.
+  - *A comparison beside a tag* (289): (a), confirmed as built; `real_test.exs` pins it.
+
+  The runner walk's model restates 286 at every stop and crash of a tripped runner, the 0
+  once more exactly where it was certainly not taken (right after a refused restart whose
+  0 the walk made fail, no time passed) and allowed where it may have been, and 287 by
+  killing, now and then while tripped, a device whose 0 was taken; two reach atoms,
+  `:zero_at_stop` and `:down_while_tripped`, reached at the walk's seed and at each of the
+  families `{3101..3106, 10, n}`.
+
+  *Mutation table* (`scratchpad/m6/mut/run.log`): 12 mutants, 12 red. R1–R4 (the close's
+  last 0 at a stop, at a runner's death, on every latched device, and a device down while
+  tripped not named) each red on `trip_test.exs` alone and on the runner walk alone;
+  W1–W8 (decision 288's keys, fallbacks, very-tags rule and records in `Logex.Warnings`)
+  each red on `instance_array_test.exs`.
+
+  *Cost*, against `c865349` (the close's cost script): every program compiles and scans in
+  the reductions it took, within 6; 50 pairs of a coil on a bit of a member through a tag
+  subscript and a whole write of the member compile in 193,825 where they took 189,237
+  (2.4%).
+
+  2219 tests (11 doctests), up from 2215.
 
   *Owed by the maintainer*, outside this session's reach: `nix flake update` and its commit,
   `flake.lock` being the 2024-01-19 lock (§4, the toolchain item); and the old backup
