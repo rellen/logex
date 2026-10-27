@@ -1641,7 +1641,12 @@ defmodule Logex.TripTest do
 
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 10)
-      Process.exit(device_pid(runner, "panel"), :kill)
+      # The panel's death is waited for, so that the runner's exit signal from it is not
+      # overtaken by the status call under load.
+      panel_pid = device_pid(runner, "panel")
+      panel_down = Process.monitor(panel_pid)
+      Process.exit(panel_pid, :kill)
+      assert_receive {:DOWN, ^panel_down, :process, _, :killed}, 5000
       Runner.status(runner)
 
       assert %{trip: {:io, "panel", {:down, :killed}}, unzeroed: ["panel"]} =
