@@ -1685,7 +1685,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   5's close answered and built the same day, decisions 286–289: a stop of a tripped runner
   trying a device's untaken 0 once more, a device gone down while tripped named until a
   restart, a member's whole write beside a coil on its bit through a tag subscript warned,
-  and decision 263's words beside a tag confirmed).
+  and decision 263's words beside a tag confirmed; and the three questions their review
+  raised answered the same day, decisions 290–292: a stop's last 0 on a hung device bounded
+  as any close's, a cold start's store written before any device is released or read, and
+  a crash writing no store).
   Read it before designing anything that adds a data type (§4.12), retains a value
   (§4.13), names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on

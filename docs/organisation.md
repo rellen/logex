@@ -44,7 +44,8 @@ questions put back and its three open rules were answered by the maintainer the 
 yet (it has since landed whole, M5-1 to M5-16, by 2026-10-26). Milestone 6, retained
 values and a true warm restart, was designed and decided on 2026-10-27 (§4.13, decisions
 266–285), nothing of it built yet; the four questions left open at Milestone 5's close
-were answered the same day and built, decisions 286–289.** On 2026-09-28 the
+were answered the same day and built, decisions 286–289, and the three questions their
+review raised answered the same day, decisions 290–292.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -4407,7 +4408,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   `restart(runner, :cold)` or `start: :cold`, writes the store before its first round, so
   a crash a second later brings back none of the values it discarded; a write that fails
   leaves the runner as it was, `{:error, {:retain, reason}}`, tripped for a restart and not
-  started for a fresh start, the forces file's rule. At 14:20, with `retain` on the
+  started for a fresh start, the forces file's rule. *(Decision 291, 2026-10-27: the
+  write comes before any device is released or read, so a failed one leaves every output
+  0.)* At 14:20, with `retain` on the
   counter, the lube timer and the total and a store written every second, the operator
   sees 41 boxes, or 40 if a box was counted in the last second; 62 hours, less up to a
   second; the fan, the conveyor and the lamp off, the conveyor waiting for start.
@@ -4459,7 +4462,7 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   today, and every existing pin of `stop/2`'s `:ok` and its host mistakes holds. A
   runner that dies or is killed writes no store; its last write is the period's or an
   event's. *(Added after the review of decisions 286–289, 2026-10-27, the record's
-  reading.)* A fresh start
+  reading; confirmed by decision 292.)* A fresh start
   reports the store's age, its header's `written_at`, in `status/1` and in its first
   round's `{:retain, …}` event. The trip's write is of the resource as the trip left it,
   the one `get/2` reads and a warm `restart/2` keeps. A sync of the directory after the
@@ -10717,7 +10720,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a fresh start with a store is warm unless `start: :cold`; a cold restart
      writes the store before its first round** (the maintainer, 2026-10-27), as
      recommended. Decision 115's last sentence and decision 133's are annotated, and
-     README says it beside the hazard of decision 272.
+     README says it beside the hazard of decision 272. *(Decision 291, 2026-10-27: the cold
+     start's write comes before any device is released or read, a failed one leaving the
+     runner tripped as it was, or not started, every output still 0.)*
 272. **Located globals and outputs at a warm start (Milestone 6).** A warm start writes
      nothing before its first round, as every start does (decisions 113 and 142); the
      question is what that first round writes.
@@ -10803,7 +10808,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      on** (the maintainer, 2026-10-27), as recommended. The period's range is M6-6's to
      settle, the record suggesting 100 to 3,600,000 ms. *(The review of decisions 286–289:
      `stop/2`'s `{:error, {:retain, reason}}` needs `stop/2` made a call, the zeros and the
-     closes before the store's write, §4.13; M6-5 builds it.)*
+     closes before the store's write, §4.13; M6-5 builds it.)* *(Decision 292, 2026-10-27:
+     a runner that crashes or is killed writes no store, its next warm start using the last
+     periodic or event write, confirmed.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
@@ -10946,7 +10953,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
        stop takes up to that time a device where, before this decision, the close wrote
        nothing and closed at once. *(Added after the review of decisions 286–289,
        2026-10-27, the record's reading; whether the last try should be bounded tighter is
-       put to the maintainer.)*
+       put to the maintainer.)* *(Taken by decision 290, 2026-10-27: the same deadline as
+       any close, confirmed.)*
 
      Logix leaves the safe state to the module's own fault behaviour (1756-UM900B p.242).
      `trip_test.exs` pins a stop whose last 0 is taken, one whose last 0 fails, closed
@@ -10999,6 +11007,32 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: (a), confirmed as built** (the maintainer, 2026-10-27). `real_test.exs` pins
      it, as it did.
+290. **How long a stop waits on a hung last 0 (Milestone 5),** the first question the
+     review of decisions 286–289 raised: a stop of a tripped runner whose device hangs on
+     the last 0 decision 286 tries waits the device's deadline, the idle watchdog and a
+     poll period in real time, and kills it, its adapter's close never called; whether that
+     last try should be bounded tighter was put to the maintainer.
+
+     **Taken: the same deadline as any close, the idle watchdog plus a poll period, the
+     device then killed unclosed** (the maintainer, 2026-10-27), confirmed as built.
+     `trip_test.exs` pins it, as it did.
+291. **A cold start's store write (Milestone 6),** the review's second question, on
+     decision 271's "a cold restart writes the store before its first round": when, in a
+     cold restart, the write comes, and what a failed one leaves.
+
+     **Taken: a cold restart, or a fresh start with `start: :cold`, writes the store before
+     it releases or reads any device; a write that fails leaves the runner tripped as it
+     was, or not started, every output still 0** (the maintainer, 2026-10-27). M6-5 builds
+     it so: the write comes first, so no device is released, read or written, and no round
+     run, on a start whose discarded values a crash could bring back, and the failure
+     `{:error, {:retain, reason}}`, the store as it was.
+292. **A runner that crashes or is killed (Milestone 6),** the review's third question, on
+     decision 275's reading that a runner that dies writes no store.
+
+     **Taken: a runner that crashes or is killed writes no store; its next warm start uses
+     the last periodic or event write** (the maintainer, 2026-10-27), confirmed as the
+     record reads it. README's "What logex is not" will say, with M6-9, that a crash loses
+     up to a period and one write.
 
 ---
 

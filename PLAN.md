@@ -8750,6 +8750,18 @@ the walks' cross-type reach and the documents.
 
   2219 tests (11 doctests), up from 2215.
 
+  **The maintainer's answers to the review's three questions** (2026-10-27, decisions 290
+  to 292, `docs/organisation.md` §7), recorded before M6-1:
+  - *A hung last 0* (290): a stop's last 0 on a hung device keeps the same deadline as any
+    close, the idle watchdog plus a poll period, the device then killed unclosed;
+    confirmed as built.
+  - *A cold start's store write* (291): a cold restart, or a fresh start with `start:
+    :cold`, writes the store before it releases or reads any device; a failed write leaves
+    the runner tripped as it was, or not started, every output still 0. M6-5 builds it so.
+  - *A crash* (292): a runner that crashes or is killed writes no store, its next warm
+    start using the last periodic or event write; confirmed, and README's "What logex is
+    not" will say, with M6-9, that a crash loses up to a period and one write.
+
   *Owed by the maintainer*, outside this session's reach: `nix flake update` and its commit,
   `flake.lock` being the 2024-01-19 lock (§4, the toolchain item); and the old backup
   branches, `backup/m2-2` to `backup/tidy`, 32 of them, `backup/m5` among them, to delete
@@ -8862,7 +8874,7 @@ done-when reads the next store write; and last the contract walk and the documen
 | M6-2 | The warm restart in the core, `restart/3 :warm` | 266, 269, 271, 273, 274, 279 | M6-1, one push | L |
 | M6-3 | Globals: `var_global retain`, the located refusal and warning, `restart/2 :warm` | 268, 271, 272 | M6-2 | M |
 | M6-4 | The image: `Runtime.retained/1,2`, `start/2`, `instance/2`, the matching | 273, 277, 282 | M6-3 | L |
-| M6-5 | The store, read and written at events, `retain:` and `start:` | 271, 275, 276, 284, 285 | M6-4 | L |
+| M6-5 | The store, read and written at events, `retain:` and `start:` | 271, 275, 276, 284, 285, 291, 292 | M6-4 | L |
 | M6-6 | The periodic writer, `retain_period:` | 275 | M6-5 | M |
 | M6-7 | Online edits: `:retain_added` and `:retain_removed` | 278 | M6-5, M6-6 | M |
 | M6-8 | The contract walk | all | M6-7 | L |
@@ -8952,12 +8964,15 @@ done-when reads the next store write; and last the contract walk and the documen
   reason}}`, then the stop with its reason; with no `retain:`, `:ok` as today. Decisions 115's last sentence, 116, 127 and 133
   annotated as landed. *Done when*, on the manual clock: a runner stopped, or tripped and
   killed, and started fresh restores what its last write held, never older and never
-  half; a cold restart's store write precedes its first round, and a crash right after it
+  half; a cold restart's store write precedes its first round, and its release and read
+  of every device (decision 291), and a crash right after it
   brings back none of the discarded values; a store that does not read is refused a line
   each, and one of another configuration is refused naming both; `start: :cold` ignores
   it and writes a new one at once; a cold restart whose store write fails leaves the
-  runner tripped as it was, `{:error, {:retain, reason}}`, the store as it was, and a fresh start with `start: :cold` whose write fails is not started, the
-  same reason given, the forces file's rule (§4.13); a `stop/2` whose store write fails
+  runner tripped as it was, `{:error, {:retain, reason}}`, the store as it was, every
+  output still 0 and no device released or read, and a fresh start with `start: :cold`
+  whose write fails is not started, the same reason given, no device opened, the forces
+  file's rule (§4.13, decision 291); a `stop/2` whose store write fails
   stops, every output 0 and every device closed first, and returns `{:error, {:retain,
   reason}}`, and every existing pin of its `:ok` still passes; a retained output-driving bit comes back on only
   through logic in the first round, never written before it; a retained value that
