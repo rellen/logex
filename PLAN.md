@@ -8711,6 +8711,67 @@ minor fault, `:negative_sqrt`; an online edit of a type or a
 size is refused, and a changed initial value of every type is reported; and the contract
 walks reach every type, refusal and trip reason, repeating exactly.
 
+
+### Milestones 6 to 13 — proposed 2026-10-27
+
+The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
+is not". They are listed, not designed: each gets a design pass of its own, the record's
+questions put to the maintainer and decisions taken in `docs/organisation.md` §7, before
+any of its code. The order is the maintainer's; a design pass may find one should come
+before another, and says so.
+
+- **Milestone 6 — retained values and a true warm restart.** Today a warm restart is a
+  cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
+  when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
+  `PERSISTENT` qualifiers against the conventional family's every tag retained; a store
+  the runner writes and reads on the host's disk, which stands in for battery-backed
+  memory, written atomically as the forces file is; what a cold restart, a warm restart,
+  a crash and a fresh start each restore; a running timer across the outage; a changed
+  program or configuration meeting an old store, by name and type as an edit's switch
+  matches state; an online edit that adds or removes a qualifier. Leaves out a pre-scan
+  in the conventional family's sense unless its design pass finds logex needs one.
+- **Milestone 7 — the time types and literals.** IEC's `TIME` and `LTIME` and the `T#5s`
+  and `LT#` literals, a timer's preset and `.acc` as a duration rather than a bare count
+  of milliseconds or nanoseconds, the conversions between durations and integers, and
+  the arithmetic and comparisons on them. Whether the dates, `DATE`, `TOD`, `DT` and
+  their long forms, come with it is the design pass's to say; a clock the program can
+  read is a question for it too.
+- **Milestone 8 — structures.** IEC's `STRUCT` and the conventional family's UDT: a type
+  declared once and used for tags, members read and written by a dotted path, nested
+  structures, arrays of them and structures holding arrays, initial values, a
+  structure as a var_input, var_output, global and connection, located or not, and an
+  online edit's rules for a changed structure. Leaves out unions, references and
+  enumerations, each a later item.
+- **Milestone 9 — whole-array and rounding instructions.** Copy and fill over an array
+  or part of one, the conventional family's COP and FLL, which IEC has no standard
+  function for, so the naming rule's step 2 applies; IEC's rounding functions where
+  Ed 3 names them, and `round`, `ceil` and `floor` by the naming rule where it does not.
+  Leaves out file instructions, FAL and FSC.
+- **Milestone 10 — forcing outputs.** A force on an output point as the conventional
+  family has it, beside the input forces of decision 117, kept in the forces file, shown
+  in `status/1`, its interplay with a trip's 0 and a stop's, and the safety framing
+  README's "What logex is not" owes it.
+- **Milestone 11 — strings.** IEC's `STRING` and `WSTRING`, `CHAR` and `WCHAR`, their
+  literals, a string's length bound, the conventional family's `.len` and `.data`, IEC's
+  string functions (`len`, `left`, `right`, `mid`, `concat`, `insert`, `delete`,
+  `replace`, `find`) by the naming rule, comparisons, conversions to and from numbers,
+  arrays of strings, strings at I/O points and in the forces file, and an edit's rules.
+- **Milestone 12 — backward jumps.** A `jmp` to a label on an earlier rung, which IEC
+  allows and decision 81 refused: the rung loop as an indexed loop rather than a
+  recursion over the rungs, a loop's interaction with the watchdog, which is then the only
+  bound on a scan, the frozen-rung rules of decision 82 and the block list of decision
+  106 for a rung run more than once in a scan, and the event-task and edit rules it
+  touches. Its design pass weighs it against IEC's `FOR` and `WHILE`, which logex's text
+  does not have.
+- **Milestone 13 — more than one resource a configuration.** IEC's `RESOURCE`, several in
+  one configuration, each with its own tasks and scheduler, and globals shared between
+  them at configuration level, IEC's `VAR_GLOBAL` there and `VAR_CONFIG`; how
+  `Logex.Runner` runs several resources, one runner each or one for all, their watchdogs
+  and trips apart or together, the I/O each owns, and an online edit across them.
+
+Still in the backlog, without a milestone: a real I/O adapter beside `Logex.IO.Sim`, and an
+online edit that changes a tag's type or an array's size.
+
 ---
 
 ## 4. Backlog
