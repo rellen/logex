@@ -296,7 +296,8 @@ defmodule Logex.Runner do
     can cause it: a test reaches it through one hidden option of `start_link/1`, which
     stands a module of the test's in for `Logex.Runtime`'s steps.
 
-  `restart(runner, :cold | :warm)`, `:warm` being `:cold` until `retain` lands, releases
+  `restart(runner, :cold | :warm)`, `:warm` keeping what each program retains, since M6-2
+  (`Logex.Runtime.restart/2`, decision 271), in memory, no store yet (M6-5), releases
   every latch, in device-name order, a device that does not answer within the idle
   watchdog and a poll period killed, as one that hung while the runner was tripped; reads
   every device once, in device-name order, as a start does (decision 142), opening again
@@ -500,8 +501,9 @@ defmodule Logex.Runner do
   def cancel(runner), do: call(runner, {:edit, :cancel})
 
   @doc """
-  Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
-  lands (decision 113): every device's latch released, every device read once, as a
+  Starts a tripped runner again, `:cold` or `:warm`, `:warm` keeping what each program
+  retains, in memory, since M6-2, a retained timer resuming from the resource's `now`
+  (decisions 113, 271 and 273): every device's latch released, every device read once, as a
   start reads it (decision 142), each device that went down, or does not answer its
   release, opened again, the resource restarted
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global

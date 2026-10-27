@@ -122,6 +122,15 @@ defmodule Logex.Program do
   one the switch starts here, at its new initial value, and a var_input of the program
   started, whose value a restart keeps: neither is so reported. An event task's trigger, its
   last sample, is a resource's state, not a tag's, its rule in `Logex.Runtime`'s (M2-6).
+
+  **The rule beside it for a retained path** (M6-2, `docs/organisation.md` §4.13,
+  decisions 266, 270, 271 and 273): at a warm restart, `Logex.Runtime.restart/3` and
+  `restart/2` with `:warm`, a path the program retains (`retained`) keeps its value, which
+  the state handed in holds and fits, a retained timer's `last` set to the restart's
+  `now`; every other path starts by this rule, as at a cold restart, the var_inputs kept
+  as ever. A path nothing marks is not retained, so a program that marks nothing restarts
+  warm exactly as cold. An online edit's switch writes no value for a qualifier (decision
+  278, M6-7).
   """
   def initial_env(%__MODULE__{} = program),
     do: Map.new(typed_tags(program), fn {name, tag} -> {name, start(tag)} end)

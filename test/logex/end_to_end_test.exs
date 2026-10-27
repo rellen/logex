@@ -3493,7 +3493,8 @@ defmodule Logex.EndToEndTest do
                [{0, 0}, {10, 10}, {1000, 1000}, {1500, 1000}, {2000, 1000}, {2600, 1600}] ++
                  [{2610, 0}]
 
-      # A restart, warm or cold, loses it, until `retain` lands (decision 76).
+      # A program with no `retain` loses it at a restart, warm or cold (decisions 76 and
+      # 266); a retained one keeps it warm, retain_test.exs's.
       for mode <- [:warm, :cold] do
         assert Logex.Runtime.get!(runtime, "l1.lube.acc") == List.last(expected)
         restarted = Logex.Runtime.restart(runtime, mode)

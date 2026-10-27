@@ -213,7 +213,7 @@ defmodule Logex.ApiContractTest do
     ar_block ar_declarations ar_divisor ar_initial ar_program ar_source ar_text
     ay_rung ay_source ay_value ce_blocks ce_candidate ce_change ce_located
     ce_mistakes ce_op ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
-    ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program
+    ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program rw_op rw_program
     ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
     jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
     pc_text pc_texts re_source re_text source tm_maybe tm_op tm_program tm_rungs
@@ -10812,6 +10812,208 @@ defmodule Logex.ApiContractTest do
 
       {runtime, model, false}
     end)
+  end
+
+  # ---- M6-2: warm restarts against the rule restated -------------------------------------
+
+  # M6-2 (docs/organisation.md §4.13, decisions 266, 269 to 271, 273 and 274): programs
+  # whose every declaration line's qualifier is drawn, `retain`, `non_retain` or none, a
+  # counter, a totaliser behind a one-shot, an rto, a tof, an array, a block `cell` whose own
+  # members' qualifiers are drawn too, an instance of it under a `cal` that may be false and
+  # an array of two, over random scans and restarts, warm and cold. After each restart its
+  # state is the one decision 271's table and decision 270's nearest mark give, restated
+  # here from the drawn qualifiers alone, without `Logex.Program`: a cold restart and every
+  # leaf no mark retains back at its first value, the var_inputs kept; a retained leaf as it
+  # was, a retained timer's `last` the restart's `now` (decision 273); `first` true and no
+  # one-shot blocked (decision 274). Its reach: a value kept and one put back warm, one put
+  # back cold, a block's member kept out of a retained instance, an element kept, a frozen
+  # timer rebased, no edge counted on the first scan after a warm restart, and a one-shot
+  # an edit left blocked, as `ons_blocked` holds it, unblocked by a warm restart.
+  @rw_reach ~w(rw_kept rw_reset_warm rw_reset_cold rw_member_out rw_element_kept rw_rebased
+               rw_no_edge rw_unblocked)a
+
+  test "a warm restart keeps exactly what the nearest mark retains, and a cold one nothing, " <>
+         "each timer rebased and no edge on the first scan" do
+    :rand.seed(:exsss, {2026, 10, 2706})
+
+    for _ <- 1..60 do
+      spec = rw_program()
+      {:ok, cell} = Logex.compile(spec.cell, name: "cell")
+      {:ok, program} = Logex.compile(spec.program, name: "rw", types: [cell])
+      fresh = Runtime.instance(program)
+      rw_walk(%{spec: spec, p: program, fresh: fresh.env, s: fresh}, 40)
+    end
+
+    assert Process.get(:rw_reach, MapSet.new()) == MapSet.new(@rw_reach)
+  end
+
+  defp rw_walk(w, 0), do: w
+  defp rw_walk(w, n), do: rw_walk(rw_step(rw_op(), w), n - 1)
+
+  defp rw_step({:scan, inputs, elapsed}, w) do
+    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, w.s, inputs), elapsed)
+    %{w | s: s}
+  end
+
+  # The block list an online edit's switch leaves, `e` blocked for the next scan (OE-1).
+  defp rw_step(:block, w), do: %{w | s: %{w.s | ons_blocked: ["e"]}}
+
+  defp rw_step({:restart, mode, eye}, w) do
+    restarted = Runtime.restart(w.p, w.s, mode)
+    expected = rw_expected(mode, w)
+    assert restarted.env == expected, inspect({mode, w.spec.quals})
+    assert {restarted.first, restarted.ons_blocked, restarted.now} == {true, [], w.s.now}
+    rw_reached(mode, w)
+    rw_reach(:rw_unblocked, mode == :warm and w.s.ons_blocked != [])
+    rw_first_scan(eye, restarted, w)
+    %{w | s: restarted}
+  end
+
+  # The first scan after a warm restart counts no edge of a retained counter whose `cu`
+  # was 0, the eye risen (decision 274).
+  defp rw_first_scan(1, restarted, w) do
+    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, restarted, %{"eye" => 1}), 10)
+    assert s.env["boxes"]["cv"] == restarted.env["boxes"]["cv"]
+    rw_reach(:rw_no_edge, rw_kept?(w, ["boxes"]) and w.s.env["boxes"]["cu"] == 0)
+  end
+
+  defp rw_first_scan(0, _restarted, _w), do: :ok
+
+  # The rule restated: every leaf at its first value, the var_inputs as they were, and each
+  # leaf the nearest mark retains, at a warm restart, as it was, a timer's `last` the
+  # restart's `now`.
+  defp rw_expected(:cold, w), do: rw_base(w)
+
+  defp rw_expected(:warm, w),
+    do:
+      Enum.reduce(rw_leaves(w.spec.quals), rw_base(w), fn leaf, env ->
+        rw_restored(leaf, env, w)
+      end)
+
+  defp rw_base(w), do: Map.merge(w.fresh, Map.take(w.s.env, ~w(eye run)))
+
+  defp rw_restored({path, true, kind}, env, w),
+    do: rw_put(env, path, rw_rebased(kind, rw_get(w.s.env, path), w.s.now))
+
+  defp rw_restored({_path, false, _kind}, env, _w), do: env
+
+  defp rw_rebased(:timer, timer, now), do: Map.put(timer, "last", now)
+  defp rw_rebased(:value, value, _now), do: value
+
+  # Each leaf, its path, whether the nearest mark retains it, and whether it is a timer:
+  # the program's own tags by their line's qualifier, a member of `c1` or of an element of
+  # `cs` by its own line in `cell`, else its instance's (decision 270).
+  defp rw_leaves(quals) do
+    own =
+      for {name, kind} <- [
+            {"e", :value},
+            {"boxes", :value},
+            {"total", :value},
+            {"lube", :timer},
+            {"fan", :timer},
+            {"w", :value},
+            {"lamp", :value}
+          ],
+          do: {[name], rw_flag(quals[name], false), kind}
+
+    cell = for m <- ~w(go q k t), do: {m, rw_kind(m)}
+
+    own ++
+      for(
+        {m, kind} <- cell,
+        do: {["c1", m], rw_flag(quals["cell." <> m], rw_flag(quals["c1"], false)), kind}
+      ) ++
+      for(
+        i <- [0, 1],
+        {m, kind} <- cell,
+        do: {["cs", i, m], rw_flag(quals["cell." <> m], rw_flag(quals["cs"], false)), kind}
+      )
+  end
+
+  defp rw_kind("t"), do: :timer
+  defp rw_kind(_member), do: :value
+
+  defp rw_flag(:retain, _held), do: true
+  defp rw_flag(:non_retain, _held), do: false
+  defp rw_flag(nil, held), do: held
+
+  defp rw_kept?(w, path),
+    do: Enum.any?(rw_leaves(w.spec.quals), &match?({^path, true, _}, &1))
+
+  defp rw_get(env, [name]), do: env[name]
+  defp rw_get(env, [name, member]), do: env[name][member]
+  defp rw_get(env, [name, i, member]), do: elem(env[name], i)[member]
+
+  defp rw_put(env, [name], value), do: Map.put(env, name, value)
+  defp rw_put(env, [name, member], value), do: put_in(env, [name, member], value)
+
+  defp rw_put(env, [name, i, member], value),
+    do: Map.put(env, name, put_elem(env[name], i, Map.put(elem(env[name], i), member, value)))
+
+  # Its reach, read off the state before the restart against the first values.
+  defp rw_reached(:cold, w),
+    do: rw_reach(:rw_reset_cold, Enum.any?(rw_leaves(w.spec.quals), &rw_moved?(&1, w)))
+
+  defp rw_reached(:warm, w) do
+    leaves = rw_leaves(w.spec.quals)
+    moved = Enum.filter(leaves, &rw_moved?(&1, w))
+    rw_reach(:rw_kept, Enum.any?(moved, &match?({_, true, _}, &1)))
+    rw_reach(:rw_reset_warm, Enum.any?(moved, &match?({_, false, _}, &1)))
+
+    rw_reach(
+      :rw_member_out,
+      Enum.any?(moved, &match?({["c1", _], false, _}, &1)) and w.spec.quals["c1"] == :retain
+    )
+
+    rw_reach(:rw_element_kept, Enum.any?(moved, &match?({["cs", _, _], true, _}, &1)))
+
+    rw_reach(
+      :rw_rebased,
+      Enum.any?(leaves, fn leaf -> rw_stale?(leaf, w) end)
+    )
+  end
+
+  defp rw_moved?({path, _flag, _kind}, w), do: rw_get(w.s.env, path) != rw_get(w.fresh, path)
+
+  defp rw_stale?({path, true, :timer}, w), do: rw_get(w.s.env, path)["last"] != w.s.now
+  defp rw_stale?(_leaf, _w), do: false
+
+  defp rw_reach(atom, true),
+    do: Process.put(:rw_reach, MapSet.put(Process.get(:rw_reach, MapSet.new()), atom))
+
+  defp rw_reach(_atom, false), do: :ok
+
+  # The draws: a step, and a program with every line's qualifier drawn.
+  defp rw_op do
+    case :rand.uniform(7) do
+      7 -> :block
+      5 -> {:restart, :warm, pick([0, 1])}
+      6 -> {:restart, :cold, pick([0, 1])}
+      _ -> {:scan, %{"eye" => pick([0, 1]), "run" => pick([0, 1, 1])}, pick([0, 10, 10, 20, 50])}
+    end
+  end
+
+  defp rw_program do
+    names = ~w(e boxes total lube fan w lamp c1 cs cell.go cell.q cell.k cell.t)
+    quals = Map.new(names, &{&1, pick([nil, :retain, :non_retain, :retain])})
+    word = fn name -> if quals[name], do: "#{quals[name]} ", else: "" end
+
+    cell =
+      "function_block cell\nvar_input #{word.("cell.go")}go bool\n" <>
+        "var_output #{word.("cell.q")}q bool\nvar #{word.("cell.k")}k dint\n" <>
+        "var #{word.("cell.t")}t ton\nxic go ton t 30\nxic t.dn ote q\nxic go add k 1 k"
+
+    program =
+      "var_input eye bool\nvar_input run bool\nvar #{word.("e")}e bool\n" <>
+        "var #{word.("boxes")}boxes ctu\nvar #{word.("total")}total dint\n" <>
+        "var #{word.("lube")}lube rto\nvar #{word.("fan")}fan tof\nvar #{word.("c1")}c1 cell\n" <>
+        "var #{word.("cs")}cs cell[2]\nvar #{word.("w")}w dint[3]\n" <>
+        "var_output #{word.("lamp")}lamp bool\nvar q1 bool\nvar q2 bool\n" <>
+        "xic eye ctu boxes 1000\nxic eye ons e add total 1 total\nxic run rto lube 100000\n" <>
+        "xic run tof fan 40\nxic run cal c1 eye q1\ncal cs[0] run q2\nxic eye cal cs[1] run q2\n" <>
+        "xic eye move total w[1]\nxic run ote lamp"
+
+    %{quals: quals, cell: cell, program: program}
   end
 end
 

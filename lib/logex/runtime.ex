@@ -144,7 +144,11 @@ defmodule Logex.Runtime do
     value (decision 20);
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
-    restarts it through `restart/3`. A cycle reports the faults of its scan as events and
+    restarts it through `restart/3`: since M6-2 a warm one keeps each path its program
+    retains (`Logex.Program`'s `retained`, decisions 266 and 270), a retained timer's
+    `last` set to the resource's `now` so the time the resource stood is not counted
+    (decision 273), and puts back every other, a cold one every path; an instance set
+    aside is dropped either way (decision 65). A cycle reports the faults of its scan as events and
     keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
     and an edit's switch find it so. An edit's switch moves a kept one by its program
     type's plan (`Logex.Edit`'s rules, by path), its `now` set to the resource's after fix
@@ -486,20 +490,117 @@ defmodule Logex.Runtime do
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
   "initialized in an implementation-dependent manner" (Ed 2 §2.4.2 rule 4), and keeping
   them is what makes `scan/2` agree with a configuration, whose copy-in refreshes them
-  every scan. `:warm` is `:cold` until `retain` exists: nothing is retained yet.
+  every scan.
+
+  Since M6-2 (`docs/organisation.md` §4.13, decisions 266, 269, 271, 273 and 274) `:warm`
+  keeps, besides, every path the program retains (`Logex.Program`'s `retained`, decision
+  270), a tag or a member as it was and an instance whole, the hidden members of a
+  built-in among it, a counter's edge memory and a `tp`'s `.en`, and puts back every other
+  by `Logex.Program.initial_env/1`, so a program that marks nothing restarts warm exactly
+  as cold, as before (decision 266): the rule beside `initial_env/1`, a retained path
+  keeping its value, which a state handed in fits. Each retained timer's `last` is set to
+  the instance's `now`, so the time before the restart since the timer last ran is not
+  counted (decision 273), a frozen block's timer among them. The next scan is marked
+  first, warm or cold, so no edge fires on it, a retained counter's among them (decision
+  274), and no one-shot is blocked; there is no prescan (decision 279).
   """
   def restart(program, state, mode) do
     program!(program)
-    %Instance{env: env} = state = state!(state, program)
+    %Instance{env: env, now: now} = state = state!(state, program)
     mode!(mode)
 
     %{
       state
-      | env: Map.merge(Program.initial_env(program), inputs(program, env)),
+      | env: restarted(mode, program, env, now),
         first: true,
         ons_blocked: []
     }
   end
+
+  defp restarted(:warm, %Program{retained: [_ | _] = retained} = program, env, now),
+    do: warm(retained, cold(program, env), env, {Program.typed_tags(program), now})
+
+  defp restarted(_cold_or_nothing_retained, program, env, _now), do: cold(program, env)
+
+  defp cold(program, env), do: Map.merge(Program.initial_env(program), inputs(program, env))
+
+  # M6-2: each retained path's value taken from the state into the cold env, its timers'
+  # `last` set to `now`. A path is its tag's name, then a member's at each instance, a
+  # `[*]` reaching each element of an array of instances (Logex.Program.retained/2).
+  defp warm(paths, started, env, {tags, now}),
+    do:
+      Enum.reduce(paths, started, fn path, started ->
+        [name | members] = String.split(path, ".")
+        {name, each} = each(name)
+        type = Map.fetch!(tags, name).type
+        Map.put(started, name, warm_kept({each, members}, type, {env[name], started[name]}, now))
+      end)
+
+  # `gates[*]`: every element of an array of instances, the rest of the path in each.
+  defp each(name), do: each_of(String.split(name, "[*]"), name)
+
+  defp each_of([name, ""], _whole), do: {name, true}
+  defp each_of(_parts, name), do: {name, false}
+
+  defp warm_kept({false, []}, type, {value, _started}, now), do: rebased(type, value, now)
+
+  defp warm_kept({true, members}, {:array, type, dims}, {values, started}, now),
+    do: zipped(length(dims), values, started, &warm_kept({false, members}, type, {&1, &2}, now))
+
+  defp warm_kept({false, [member | rest]}, %FbType{} = type, {value, started}, now) do
+    {member, each} = each(member)
+    found = Enum.find(type.members, &(&1.name == member))
+    inner = FbType.type_of(type, found)
+
+    Map.put(
+      started,
+      member,
+      warm_kept(
+        {each, rest},
+        inner,
+        {Map.fetch!(value, member), Map.fetch!(started, member)},
+        now
+      )
+    )
+  end
+
+  # Two arrays of one shape, element by element, a tuple of tuples for more dimensions.
+  defp zipped(1, values, started, fun),
+    do:
+      values
+      |> Tuple.to_list()
+      |> Enum.zip_with(Tuple.to_list(started), fun)
+      |> List.to_tuple()
+
+  defp zipped(depth, values, started, fun),
+    do:
+      values
+      |> Tuple.to_list()
+      |> Enum.zip_with(Tuple.to_list(started), &zipped(depth - 1, &1, &2, fun))
+      |> List.to_tuple()
+
+  # Decision 273: a retained timer's `last` is the restart's `now`, at any depth.
+  defp rebased(%FbType{body: nil} = type, value, now),
+    do: rebased_built_in(FbType.rules(type), value, now)
+
+  defp rebased(%FbType{} = type, value, now),
+    do:
+      Enum.reduce(type.members, value, fn member, value ->
+        Map.update!(value, member.name, &rebased(FbType.type_of(type, member), &1, now))
+      end)
+
+  defp rebased({:array, %FbType{} = type, dims}, values, now),
+    do: mapped(length(dims), values, &rebased(type, &1, now))
+
+  defp rebased(_elementary, value, _now), do: value
+
+  defp rebased_built_in(%{kind: :timer}, value, now), do: Map.put(value, "last", now)
+  defp rebased_built_in(_counter, value, _now), do: value
+
+  defp mapped(1, values, fun), do: values |> Tuple.to_list() |> Enum.map(fun) |> List.to_tuple()
+
+  defp mapped(depth, values, fun),
+    do: values |> Tuple.to_list() |> Enum.map(&mapped(depth - 1, &1, fun)) |> List.to_tuple()
 
   @doc """
   A resource running `config`, at time 0 before its first cycle: every global at its
@@ -622,7 +723,9 @@ defmodule Logex.Runtime do
   defp due_in(next, now), do: next - now
 
   @doc """
-  Starts the resource again (`:warm` is `:cold` until `retain` exists). It is then as
+  Starts the resource again, `:cold` or, since M6-2, `:warm`, which keeps each path an
+  instance's program retains as `restart/3` does (decisions 271 and 273), its globals as
+  a cold restart puts them until a global may be retained (M6-3). It is then as
   `start/1` left it, but for its clock and its input image, which it keeps: every other
   global back at its initial value, each instance through `restart/3`, every task with an
   interval due at the next cycle, every trigger's last sample 0, so a trigger already 1

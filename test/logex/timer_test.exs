@@ -392,7 +392,10 @@ defmodule Logex.TimerTest do
       assert trace(below, inputs, ["lube", "acc"]) == [0, 10, 20, 0, 10]
     end
 
-    test "every restart, warm or cold, starts it at 0, until `retain` lands (decision 76)" do
+    # M6-2: a program with no `retain` keeps nothing at a warm restart (decision 266); a
+    # retained `rto` keeps its time, retain_test.exs's.
+    test "in a program with no `retain`, every restart, warm or cold, starts it at 0 " <>
+           "(decisions 76 and 266)" do
       p = c!(@lube)
       state = Runtime.instance(p)
 

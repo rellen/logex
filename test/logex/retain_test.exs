@@ -2,14 +2,16 @@ defmodule Logex.RetainTest do
   @moduledoc """
   Milestone 6 (`docs/organisation.md` §4.13): M6-1's words, `retain` and `non_retain`,
   their lines and refusals, and `Logex.Program`'s `retained`, settled by the nearest mark
-  on a member's path (decisions 266 to 270). Each rule a test that fails when it alone is
-  reverted. The warm restart that keeps what is marked is M6-2's, which lands in the same
-  push; the configuration's `var_global retain`, the image and the store are later items'
-  (M6-3 to M6-5).
+  on a member's path (decisions 266 to 270); and M6-2's warm restart in the core,
+  `Logex.Runtime.restart/3` and `restart/2` with `:warm`, keeping what is marked and
+  putting back the rest, a retained timer resuming without counting the time before the
+  restart since it last ran and no edge firing on the first scan (decisions 271, 273, 274
+  and 279). Each rule a test that fails when it alone is reverted. The configuration's
+  `var_global retain`, the image and the store are later items' (M6-3 to M6-5).
   """
   use ExUnit.Case, async: true
 
-  alias Logex.{Program, Runtime, Tag}
+  alias Logex.{Instance, Program, Runtime, Scan, Tag}
 
   defp c!(src, types \\ []) do
     {:ok, program} = Logex.compile(src, name: "m", types: types)
@@ -30,6 +32,14 @@ defmodule Logex.RetainTest do
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
   defp qualifiers(%Program{tags: tags}), do: Map.new(tags, fn {n, t} -> {n, t.retain} end)
+
+  # Scans `program` from `state` once per entry of `inputs`, `dt` ms apart.
+  defp scans(program, state, inputs, dt \\ 10),
+    do:
+      Enum.reduce(inputs, state, fn input, %Instance{now: now, first: first} = state ->
+        {_out, state} = Runtime.call(program, state, input, %Scan{now: now + dt, first: first})
+        state
+      end)
 
   @seal """
   function_block seal
@@ -402,6 +412,244 @@ defmodule Logex.RetainTest do
       refute Logex.Compiler.lowered?(%{seal.body | retained: ["jog"]})
       assert Logex.Compiler.lowered?(seal.body)
     end
+  end
+
+  describe "M6-2: the warm restart in the core (decisions 271, 273 and 274)" do
+    @line """
+    var e bool
+    var_input eye bool
+    var_input motor bool
+    var retain boxes ctu
+    var retain lube rto
+    var retain total dint
+    var count dint
+    var fan tof
+    xic eye ctu boxes 100
+    xic motor rto lube 100000
+    xic eye ons e add total 1 total
+    xic eye add count 1 count
+    xic motor tof fan 50
+    """
+
+    defp line_source, do: @line
+
+    test "a box counter, a totaliser and an rto marked retain keep their values through a " <>
+           "warm restart and lose them through a cold one" do
+      p = c!(line_source())
+      s = scans(p, Runtime.instance(p), for(i <- 1..8, do: %{"eye" => rem(i, 2), "motor" => 1}))
+      # The first scan's edges count nothing (decision 69), so three of the four boxes.
+      assert s.env["boxes"]["cv"] == 3
+      assert s.env["total"] == 3
+      assert s.env["lube"]["acc"] == 70
+      assert s.env["count"] > 0
+
+      warm = Runtime.restart(p, s, :warm)
+      assert warm.env["boxes"] == s.env["boxes"]
+      assert warm.env["total"] == 3
+      assert warm.env["lube"] == %{s.env["lube"] | "last" => s.now}
+      # Unmarked: put back, as at a cold restart.
+      assert warm.env["count"] == 0
+      assert warm.env["fan"] == Runtime.instance(p).env["fan"]
+      assert warm.env["e"] == 0
+      assert %Instance{first: true, ons_blocked: [], now: now} = warm
+      assert now == s.now
+
+      cold = Runtime.restart(p, s, :cold)
+      assert cold.env == Map.merge(Runtime.instance(p).env, Map.take(s.env, ~w(eye motor)))
+      assert cold.env["boxes"]["cv"] == 0 and cold.env["lube"]["acc"] == 0
+    end
+
+    test "a program with no retain restarts warm exactly as cold, in no more reductions" do
+      p = c!(String.replace(line_source(), "retain ", ""))
+      s = scans(p, Runtime.instance(p), for(i <- 1..8, do: %{"eye" => rem(i, 2), "motor" => 1}))
+      assert Runtime.restart(p, s, :warm) == Runtime.restart(p, s, :cold)
+
+      warm = reductions(fn -> Runtime.restart(p, s, :warm) end)
+      cold = reductions(fn -> Runtime.restart(p, s, :cold) end)
+      assert warm <= cold + 4, "warm #{warm}, cold #{cold}"
+    end
+
+    # Decision 273: the time before the restart since a retained timer last ran is not
+    # counted; its `last` is the restart's `now`, so it resumes from where it stood.
+    test "a retained ton, tof and tp caught mid-time resume, counting none of the time before " <>
+           "the restart since they last ran" do
+      p =
+        c!(
+          "var_input run bool\nvar_input skip bool\nvar retain t ton\nvar retain f tof\n" <>
+            "var retain pulse tp\nxic skip jmp past\nxic run ton t 100\nxio run tof f 100\n" <>
+            "xic run tp pulse 100\nlbl past"
+        )
+
+      # The pulse's rising edge after the first scan, then 20 ms of running, then the
+      # timers' rungs skipped for 50 ms: each frozen mid-time, its `last` 50 ms behind the
+      # instance's `now`.
+      s = scans(p, Runtime.instance(p), [%{"run" => 0}, %{"run" => 1}, %{"run" => 1}])
+      s = scans(p, s, [%{"run" => 1}])
+      s = scans(p, s, List.duplicate(%{"skip" => 1}, 5))
+      t = s.env["t"]["acc"]
+      pulse = s.env["pulse"]["acc"]
+
+      assert {t, s.env["t"]["tt"], s.env["t"]["last"], s.now} == {20, 1, 40, 90}
+      assert {pulse, s.env["pulse"]["tt"]} == {20, 1}
+
+      warm = Runtime.restart(p, s, :warm)
+
+      for timer <- ~w(t f pulse),
+          do: assert(warm.env[timer] == %{s.env[timer] | "last" => 90})
+
+      # A first scan at the restart's own `now` adds nothing; the next adds its 10 ms.
+      {_, at_once} =
+        Runtime.call(p, warm, %{"run" => 1, "skip" => 0}, %Scan{now: 90, first: true})
+
+      assert {at_once.env["t"]["acc"], at_once.env["pulse"]["acc"]} == {t, pulse}
+      later = scans(p, at_once, [%{"run" => 1}])
+      assert {later.env["t"]["acc"], later.env["pulse"]["acc"]} == {t + 10, pulse + 10}
+
+      # The tof, run on after a stop, resumes its delay where it stood.
+      off = scans(p, Runtime.instance(p), [%{"run" => 0}, %{"run" => 1}, %{"run" => 1}])
+      assert {off.env["f"]["acc"], off.env["f"]["tt"]} == {10, 1}
+      resumed = scans(p, Runtime.restart(p, off, :warm), [%{"run" => 1}])
+      assert {resumed.env["f"]["acc"], resumed.env["f"]["dn"]} == {20, 1}
+
+      # Without the rebase, the frozen 50 ms would be counted on the first scan.
+      unrebased = %{warm | env: Map.put(warm.env, "t", s.env["t"])}
+
+      {_, counted} =
+        Runtime.call(p, unrebased, %{"run" => 1, "skip" => 0}, %Scan{now: 90, first: true})
+
+      assert counted.env["t"]["acc"] == t + 50
+    end
+
+    test "a block's non_retain member and an unmarked nested timer follow decision 270" do
+      seal = block!(@seal)
+      plain = block!(@plain)
+
+      outer =
+        block!(
+          "function_block outer\nvar_input go bool\nvar_output q bool\nvar retain s seal\n" <>
+            "var p plain\ncal s go q\ncal p go q",
+          [seal, plain]
+        )
+
+      p =
+        c!(
+          "var_input go bool\nvar retain s1 seal\nvar o outer\nvar q bool\ncal s1 go q\ncal o go q",
+          [seal, plain, outer]
+        )
+
+      s = scans(p, Runtime.instance(p), List.duplicate(%{"go" => 1}, 4))
+      fresh = Runtime.instance(p).env
+      warm = Runtime.restart(p, s, :warm)
+
+      # `s1` retained, but its `jog` marked non_retain in `seal`.
+      assert warm.env["s1"]["k"] == 4 and warm.env["s1"]["t"]["acc"] == 30
+      assert warm.env["s1"]["jog"] == fresh["s1"]["jog"] and s.env["s1"]["jog"] == 1
+      # `o` unmarked: its `s`, marked retain in `outer`, kept, its `p` and its timer not.
+      assert warm.env["o"]["s"]["t"]["acc"] == 30 and warm.env["o"]["s"]["k"] == 4
+      assert warm.env["o"]["s"]["jog"] == 0
+      assert warm.env["o"]["p"] == fresh["o"]["p"] and s.env["o"]["p"]["t"]["acc"] == 30
+    end
+
+    test "an array of instances, marked retain, keeps every element" do
+      seal = block!(@seal)
+
+      p =
+        c!(
+          "var_input go bool\nvar retain lanes ton[2,2]\nvar retain gs seal[2]\nvar q bool\n" <>
+            "xic go ton lanes[0,0] 100\nxic go ton lanes[1,1] 100\ncal gs[0] go q\ncal gs[1] go q",
+          [seal]
+        )
+
+      s = scans(p, Runtime.instance(p), List.duplicate(%{"go" => 1}, 3))
+      warm = Runtime.restart(p, s, :warm)
+      lanes = warm.env["lanes"]
+
+      assert elem(elem(lanes, 0), 0)["acc"] == 20 and elem(elem(lanes, 1), 1)["acc"] == 20
+      assert elem(elem(lanes, 0), 0)["last"] == s.now
+      assert elem(warm.env["gs"], 0)["k"] == 3 and elem(warm.env["gs"], 1)["k"] == 3
+      assert elem(warm.env["gs"], 1)["t"]["last"] == s.now
+      assert elem(warm.env["gs"], 1)["jog"] == 0
+      assert Runtime.restart(p, s, :cold).env["gs"] == Runtime.instance(p).env["gs"]
+    end
+
+    # Decision 274: first: true on every start, so a retained counter counts no edge on
+    # the first scan, a box that arrived while the plant stood among it.
+    test "no edge fires on the first scan after a warm restart: a retained cu of 0 under a " <>
+           "held eye" do
+      p = c!(line_source())
+      s = scans(p, Runtime.instance(p), [%{"eye" => 1}, %{"eye" => 0}])
+      assert {s.env["boxes"]["cv"], s.env["boxes"]["cu"]} == {0, 0}
+
+      # Counted without a restart, on the rising edge.
+      assert scans(p, s, [%{"eye" => 1}]).env["boxes"]["cv"] == 1
+
+      warm = Runtime.restart(p, s, :warm)
+      after_restart = scans(p, warm, [%{"eye" => 1}])
+      assert after_restart.env["boxes"]["cv"] == 0
+      assert after_restart.env["total"] == s.env["total"]
+      assert scans(p, after_restart, [%{"eye" => 0}, %{"eye" => 1}]).env["boxes"]["cv"] == 1
+    end
+
+    test "a blocked one-shot is dropped by a warm restart, as by a cold one" do
+      p = c!(line_source())
+      s = %{scans(p, Runtime.instance(p), [%{"eye" => 0}]) | ons_blocked: ["e"]}
+      assert Runtime.restart(p, s, :warm).ons_blocked == []
+    end
+
+    test "a resource's warm restart keeps each instance's retained values, and a cold one " <>
+           "loses them" do
+      p = c!(line_source())
+
+      config =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [p],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          globals: [
+            %Logex.Configuration.Global{name: "eye_g", type: :bool, at: "panel.i.0"},
+            %Logex.Configuration.Global{name: "motor_g", type: :bool, at: "panel.i.1"}
+          ],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [
+            %Logex.Configuration.Connection{instance: "m1", member: "eye", to: "eye_g"},
+            %Logex.Configuration.Connection{instance: "m1", member: "motor", to: "motor_g"}
+          ]
+        )
+
+      runtime =
+        Enum.reduce(1..6, Runtime.start(config), fn i, rt ->
+          {rt, _, _} = Runtime.cycle(rt, 10, %{"eye_g" => rem(i, 2), "motor_g" => 1})
+          rt
+        end)
+
+      assert Runtime.get!(runtime, "m1.total") == 2
+      warm = Runtime.restart(runtime, :warm)
+      assert Runtime.get!(warm, "m1.total") == 2
+      assert Runtime.get!(warm, "m1.boxes.cv") == 2
+      assert Runtime.get!(warm, "m1.lube.acc") == Runtime.get!(runtime, "m1.lube.acc")
+      assert Runtime.get!(warm, "m1.count") == 0
+      cold = Runtime.restart(runtime, :cold)
+      assert Runtime.get!(cold, "m1.total") == 0 and Runtime.get!(cold, "m1.boxes.cv") == 0
+    end
+  end
+
+  defp reductions(fun) do
+    parent = self()
+
+    {_pid, ref} =
+      :erlang.spawn_opt(
+        fn ->
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.()
+          {:reductions, later} = Process.info(self(), :reductions)
+          send(parent, {:reductions, later - before})
+        end,
+        [:monitor, min_heap_size: 8_000_000]
+      )
+
+    assert_receive {:reductions, r}, 10_000
+    assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+    r
   end
 
   # ---- the rule restated, for the seeded programs above ------------------------------

@@ -1396,7 +1396,9 @@ defmodule Logex.RuntimeTest do
                Runtime.scan(m, Runtime.restart(m, s, :cold))
     end
 
-    test "a warm restart is a cold one until retain exists", %{motor: m, running: s} do
+    # M6-2 (decision 266): a program that marks nothing keeps nothing warm; what a warm
+    # restart keeps of a marked one is retain_test.exs's.
+    test "a program with no `retain` restarts warm as it restarts cold", %{motor: m, running: s} do
       assert Runtime.restart(m, s, :warm) == Runtime.restart(m, s, :cold)
     end
 
