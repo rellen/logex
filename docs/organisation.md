@@ -4386,7 +4386,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   tag, its uses checked, with the qualifier in its place where it has one and none
   otherwise. A configuration file reads `retain` and `non_retain` as names until M6-3,
   `var_global retain bool` a global named `retain`, which M6-3 settles, `PLAN.md`'s
-  question 6.)*
+  question 6.)* *(Answered 2026-10-27: readings 2 and 3 confirmed, decisions 294 and 295;
+  from Elixir the qualifier is a keyword option, `Logex.Tag.new!("c", :dint, :var, nil,
+  retain: true)`, decision 296; and both words reserved in a configuration file too,
+  decision 298, which M6-3 builds.)*
 - *The sections* (decision 268): a program's `var` and `var_output`; a block's `var`,
   `var_input` and `var_output`; a configuration's `var_global`, `non_retain` there too.
   Refused: a program's `var_input`, told that it holds the host's value, which every
@@ -10682,6 +10685,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: `var retain count dint` and `var non_retain count dint`, both reserved,
      never on one line together** (the maintainer, 2026-10-27), as recommended. A program
      with a tag named `retain` or `non_retain` stops compiling, which M6-1's commit says.
+     *(Since decisions 294, 295, 296 and 298, 2026-10-27: a line refused for its
+     qualifier alone declares its tag; a misplaced one is told where it goes; from Elixir
+     the qualifier is the option `retain: true` or `non_retain: true`; and a configuration
+     file reserves both words too.)*
 268. **Which sections may be retained (Milestone 6).**
      - A program's `var` and `var_output`, as IEC's VAR and VAR_OUTPUT;
      - a block's `var`, `var_input` and `var_output`, as Ed 3 Table 40 features 4a to 4f
@@ -10731,7 +10738,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `edited_by_hand/1`.
 
      **Taken: the nearest mark on a member's path wins** (the maintainer, 2026-10-27), as
-     recommended.
+     recommended. *(Decision 297, 2026-10-27: `Program.retained`'s paths confirmed as M6-1
+     built them.)*
 271. **What a cold restart, a warm restart, a crash and a fresh start each restore
      (Milestone 6).** §4.13's table of starts. Two questions inside it:
      - *a fresh start with a store:* warm unless `start: :cold`, naming a store being the
@@ -10795,7 +10803,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      counted either.
 
      **Taken: the outage is not counted; a timer resumes** (the maintainer, 2026-10-27),
-     as recommended.
+     as recommended. *(Decision 293, 2026-10-27: the first scan after a warm restart
+     counts the time the host gives it, as any scan does.)*
 274. **Edges and the first scan on a warm start (Milestone 6).** A retained counter and a
      box that arrived on the eye while the power was off.
      - Not counted: `first: true` on every start, decision 69's one start-up rule, as the
@@ -11065,6 +11074,68 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the last periodic or event write** (the maintainer, 2026-10-27), confirmed as the
      record reads it. README's "What logex is not" will say, with M6-9, that a crash loses
      up to a period and one write.
+293. **The first scan after a warm restart (Milestone 6),** the first of the six readings
+     M6-1 and M6-2 left provisional (`PLAN.md`, M6-2's status): decision 273 sets a
+     retained timer's `last` to its instance's `now`, its last scan's, so the time before
+     the restart is not counted, but the first scan after it counts the time the host
+     passes in it, as any scan does; the lube `rto` at 62 hours restarted warm in the core
+     and then scanned with an hour's `elapsed_ms` adds that hour.
+
+     **Taken: confirmed, the first scan after a warm restart counts the time the host
+     gives it** (the maintainer, 2026-10-27). `retain_test.exs` pins it, as it did; the
+     runner, which moves its anchor at a restart, gives it only the time since.
+294. **A line refused for its qualifier alone (Milestone 6),** the second reading:
+     `var_external retain estop bool`, a qualifier out of its place or given twice, or both
+     words, refused and the tag still declared, with the qualifier in its place where it
+     has one and none otherwise, so its uses are checked and not each told it is
+     undeclared.
+
+     **Taken: confirmed, a line refused only for its qualifier still declares its tag**
+     (the maintainer, 2026-10-27), as built.
+295. **A qualifier out of its place (Milestone 6),** the third reading: `var count retain
+     dint` and `var count dint retain` refused, told "`retain` comes straight after the
+     section word, as in `var retain count dint`", rather than taken in either place.
+
+     **Taken: confirmed, a misplaced qualifier is refused and told where it goes** (the
+     maintainer, 2026-10-27), as built.
+296. **The qualifier from Elixir (Milestone 6),** the fourth reading: M6-1 took it as
+     `Logex.Tag.new!/5`'s positional fifth argument, `new!("c", :dint, :var, nil,
+     :retain)`.
+
+     **Taken: changed, the qualifier is a keyword option** (the maintainer, 2026-10-27):
+     `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and
+     `non_retain: true` for `var non_retain c dint`, `new!/4` kept as it was and the
+     positional fifth argument dropped, with no deprecation, logex being unreleased. The
+     option names are settled as the line's own words, `retain:` and `non_retain:`, each
+     `true` or `false`, rather than `qualifier: :retain`: the call then reads as the line
+     it stands for, word for word, and a flag of its own word is Elixir's idiom for an
+     option that is on or off, as `trap_exit: true` is; `qualifier:` would name a term the
+     source never writes. Refused, a pinned line each of one `ArgumentError`, before the
+     declaration's own check: options that are no keyword list, M6-1's `:retain` among
+     them; an option of another name; a value neither `true` nor `false`; an option given
+     twice; and both `true`, as a line takes `retain` or `non_retain`, not both. `false`
+     is no qualifier. The struct's `retain` field keeps its atom, `:retain`,
+     `:non_retain` or nil. *(Provisional, the record's reading: a configuration's global
+     from Elixir is a `%Logex.Configuration.Global{}` built by hand, with no function to
+     take an option, so it carries the struct's atom, `retain: :retain`, as a tag's
+     struct does, M6-3.)*
+297. **`Program.retained`'s paths (Milestone 6),** the fifth reading: a sorted list of
+     strings, a path whole where everything under it is retained, otherwise each retained
+     member, an array of block instances' members by `[*]`.
+
+     **Taken: confirmed, `Program.retained` as built** (the maintainer, 2026-10-27).
+298. **`retain` and `non_retain` in a configuration file (Milestone 6),** the sixth
+     reading, raised by M6-2's review: the configuration file reserved no `.ld` word, so
+     `var_global retain bool` was a global named `retain`, and `program non_retain m` an
+     instance so named.
+
+     **Taken: changed, both words reserved in configuration files too** (the maintainer,
+     2026-10-27): a file that uses either, in any case, as the name of a global, an
+     instance, a task, a device or a program type is refused with the word named, as a
+     `.ld` file's tag is, and `Logex.Configuration.Text.keywords/0` holds both. M6-3
+     builds it, so `var_global retain total_boxes dint 0` is the only reading of the
+     word after `var_global`. A plant file that names a global `retain` stops loading,
+     which M6-3's commit says.
 
 ---
 

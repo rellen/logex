@@ -8914,7 +8914,8 @@ done-when reads the next store write; and last the contract walk and the documen
   any case and `keywords/0`'s pinned list grown; `var retain count dint` and `var
   non_retain jog bool` parsed, the qualifier straight after the section word, the clause
   that refused `retain` gone; `%Logex.Tag{}` and `%Logex.FbType.Member{}` with `retain`,
-  `Logex.Tag.new!/5` taking it from Elixir; `Program.retained` settled by decision 270's
+  `Logex.Tag.new!/5` taking it from Elixir (as a keyword option since decision 296,
+  `retain: true`); `Program.retained` settled by decision 270's
   nearest mark, nil where there is none, a path listed whole where everything under it is
   retained and an array of block instances' member by `[*]`, `gates[*].k`, in the one walk
   of the tags (`Program.settled/2`), each body holding its own and an unmarked instance
@@ -8970,7 +8971,8 @@ done-when reads the next store write; and last the contract walk and the documen
   alone too. *Cost*: a restart of a program with nothing retained, warm or cold, in 3 to 5
   reductions more than a cold one took; warm equal to cold.
 
-  *Provisional readings of M6-1 and M6-2*, each a question for the maintainer:
+  *Provisional readings of M6-1 and M6-2*, each a question for the maintainer *(every one
+  answered on 2026-10-27, decisions 293 to 298, below)*:
   1. *The first scan after a warm restart counts its own time.* Decision 273 sets a
      retained timer's `last` to its instance's `now`, its last scan's, so the time before the restart since
      the timer last ran is not counted, a frozen block's or a skipped rung's; but the first
@@ -9029,6 +9031,27 @@ done-when reads the next store write; and last the contract walk and the documen
      §6.5.6 and Annex A, p.224), and reserves its keywords everywhere; Logix has no
      qualifier (§4.13). Left to M6-3, its entry says so.
 
+  **The maintainer's answers to the six readings** (2026-10-27, decisions 293 to 298,
+  `docs/organisation.md` §7), recorded and built with M6-3. Four confirm what was built,
+  two change it:
+  - *The first scan after a warm restart* (293): confirmed, it counts the time the host
+    gives it; `retain_test.exs` pins it.
+  - *A line refused for its qualifier alone* (294): confirmed, it still declares its tag.
+  - *A qualifier out of its place* (295): confirmed, refused and told where it goes.
+  - *The qualifier from Elixir* (296): changed. It is a keyword option, the line's own
+    word, `Logex.Tag.new!("c", :dint, :var, nil, retain: true)` or `non_retain: true`,
+    each `true` or `false`, rather than `qualifier: :retain`, so that the call reads as
+    the line; `new!/4` kept, M6-1's positional fifth argument dropped with no
+    deprecation, logex being unreleased. Options that are no keyword list, M6-1's
+    `:retain` among them, an unknown option, a value neither boolean, an option given
+    twice and both `true` are refused, a pinned line each of one `ArgumentError`, in
+    `retain_test.exs`.
+  - *`Program.retained`'s paths* (297): confirmed as built.
+  - *A configuration file's `retain`* (298): changed. Both words are reserved in a
+    configuration file too, any case, a global, an instance, a task, a device or a
+    program type so named refused with the word named, `keywords/0` holding both; built
+    by M6-3.
+
   *M6-2's review answered (2026-10-27, `042713f`).* The review of `17855c3` (24 mutants, 20 red)
   found ten things, each answered with a test that fails when its fix is reverted:
   1. *`Logex.Runner.restart/2 :warm` had no test*: `retain_test.exs` runs the box counter,
@@ -9083,6 +9106,8 @@ done-when reads the next store write; and last the contract walk and the documen
   cycles in what it did. It settles what a configuration file's `retain` and
   `non_retain` are where they could be names, `var_global retain bool`, question 6 of
   M6-1's and M6-2's readings, which today reads them as names (M6-2's review). *Size M.*
+  *(Settled by decision 298, 2026-10-27: both words are reserved in a configuration file
+  too, a file naming anything so refused with the word named.)*
 
   **Status: not started.**
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with

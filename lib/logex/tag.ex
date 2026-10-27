@@ -71,17 +71,84 @@ defmodule Logex.Tag do
     (`Logex.FbType.user?/1`, decision 54), such as one whose body was edited by hand
     (M2-5);
   - a qualifier, `retain`, a declaration line could not give (M6-1): one on a
-    `var_external`, whose global carries it, or one that is neither `:retain` nor
-    `:non_retain`. One on a program's `var_input` is refused where the program compiles
-    (`Logex.Compiler`), which knows a program from a function block's body.
+    `var_external`, whose global carries it. One on a program's `var_input` is refused
+    where the program compiles (`Logex.Compiler`), which knows a program from a function
+    block's body.
+
+  Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
+  key: `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and
+  `non_retain: true` for `var non_retain c dint`, `false` or no option for a line with
+  none; `new!/4` is as it was. Refused, each a line of one `ArgumentError`, before the
+  declaration is checked: options that are no keyword list, the fifth argument of M6-1's
+  `new!/5`, `:retain`, among them; an option of another name; a value that is neither
+  `true` nor `false`; an option given twice; and both `true`, as a line takes `retain` or
+  `non_retain`, not both. The struct's `retain` keeps the atom, `:retain`, `:non_retain`
+  or nil, and a `%Logex.Tag{}` built by hand with any other is refused where it is
+  checked (`Logex.Declarations.check/1`).
   """
-  def new!(name, type, section \\ :var, initial \\ nil, retain \\ nil),
+  def new!(name, type, section \\ :var, initial \\ nil, options \\ []),
     do:
       Logex.Declarations.validate!(%__MODULE__{
         name: name,
         type: type,
         section: section,
         initial: initial,
-        retain: retain
+        retain: qualifier!(options, name)
       })
+
+  # Decision 296: the qualifier's options, read in clauses, every problem a line.
+  @options [:retain, :non_retain]
+
+  defp qualifier!(options, name) when is_list(options),
+    do: options(options, options, name, %{}, [])
+
+  defp qualifier!(options, name), do: raise(ArgumentError, shape(options, name))
+
+  defp options([], _all, name, seen, []), do: chosen(seen, name)
+
+  defp options([], _all, _name, _seen, problems),
+    do: raise(ArgumentError, Enum.join(Enum.reverse(problems), "\n"))
+
+  defp options([{key, _value} | rest], all, name, seen, problems) when is_map_key(seen, key),
+    do: options(rest, all, name, seen, ["`#{key}:` is given twice for #{label(name)}" | problems])
+
+  defp options([{key, value} | rest], all, name, seen, problems)
+       when key in @options and is_boolean(value),
+       do: options(rest, all, name, Map.put(seen, key, value), problems)
+
+  defp options([{key, value} | rest], all, name, seen, problems) when key in @options,
+    do:
+      options(rest, all, name, Map.put(seen, key, value), [
+        "`#{key}:` for #{label(name)} takes true or false, found #{inspect(value)}" | problems
+      ])
+
+  defp options([{key, value} | rest], all, name, seen, problems) when is_atom(key),
+    do:
+      options(rest, all, name, Map.put(seen, key, value), [
+        "unknown option #{inspect(key)} for #{label(name)}: Logex.Tag.new!/5 takes " <>
+          "`retain:` and `non_retain:`"
+        | problems
+      ])
+
+  defp options(_improper, all, name, _seen, _problems), do: raise(ArgumentError, shape(all, name))
+
+  defp chosen(%{retain: true, non_retain: true}, name),
+    do:
+      raise(
+        ArgumentError,
+        "#{label(name)} takes `retain: true` or `non_retain: true`, not both, as a " <>
+          "declaration takes `retain` or `non_retain`, not both"
+      )
+
+  defp chosen(%{retain: true}, _name), do: :retain
+  defp chosen(%{non_retain: true}, _name), do: :non_retain
+  defp chosen(_seen, _name), do: nil
+
+  defp shape(options, name),
+    do:
+      "the options of #{label(name)} are a keyword list, `retain: true` or " <>
+        "`non_retain: true`, found #{inspect(options)}"
+
+  defp label(name) when is_binary(name), do: "`#{name}`"
+  defp label(name), do: inspect(name)
 end

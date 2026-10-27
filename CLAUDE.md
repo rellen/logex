@@ -899,7 +899,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
   timer), and since M3-3 a dint's negative initial value, which it refused until a negative
   literal lexed (decision 97). Its section may be `:var_external` (M2-4). Since M6-1 its
-  `retain` is the line's qualifier, `:retain`, `:non_retain` or nil, `new!/5` taking it
+  `retain` is the line's qualifier, `:retain`, `:non_retain` or nil, `new!/5` taking it,
+  since decision 296 as a keyword option, the line's own word, `retain: true` or
+  `non_retain: true`, an option list that is none, an unknown option, a value neither
+  boolean, one given twice and both `true` each a pinned line of one `ArgumentError`
 - `lib/logex/fb_type.ex` — `%Logex.FbType{}`, a function block type's schema (M1-6), which
   M2-5's user function blocks reuse: its members, each a `%Logex.FbType.Member{}` with a
   type, a role (`:input`, `:output`, `:internal`, and a user block's own `var`, `:local`)

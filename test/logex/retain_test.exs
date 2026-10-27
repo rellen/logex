@@ -268,26 +268,104 @@ defmodule Logex.RetainTest do
 
     test "from Elixir, Logex.Tag.new!/5 takes the qualifier a line could give, and refuses " <>
            "what no line can say" do
-      assert %Tag{retain: :retain} = Tag.new!("c", :dint, :var, nil, :retain)
-      assert %Tag{retain: :non_retain} = Tag.new!("c", :dint, :var_output, 3, :non_retain)
+      # Decision 296: the qualifier is an option, the line's own word as its key.
+      assert %Tag{retain: :retain} = Tag.new!("c", :dint, :var, nil, retain: true)
+      assert %Tag{retain: :non_retain} = Tag.new!("c", :dint, :var_output, 3, non_retain: true)
       assert %Tag{retain: nil} = Tag.new!("c", :dint)
-      assert %Tag{retain: :retain} = Tag.new!("t", Logex.FbType.ton(), :var, nil, :retain)
+      assert %Tag{retain: nil} = Tag.new!("c", :dint, :var, nil, [])
+      assert %Tag{retain: nil} = Tag.new!("c", :dint, :var, nil, retain: false)
+
+      assert %Tag{retain: :non_retain} =
+               Tag.new!("c", :dint, :var, nil, retain: false, non_retain: true)
+
+      assert %Tag{retain: :retain} = Tag.new!("t", Logex.FbType.ton(), :var, nil, retain: true)
+
+      assert Tag.new!("c", :dint, :var, nil, retain: true) == %Tag{
+               name: "c",
+               type: :dint,
+               section: :var,
+               retain: :retain
+             }
 
       raises(
         "`e` is a var_external, which takes no `retain`: its global carries it, as the " <>
           "configuration declares it",
-        fn -> Tag.new!("e", :bool, :var_external, nil, :retain) end
+        fn -> Tag.new!("e", :bool, :var_external, nil, retain: true) end
+      )
+
+      # A hand-built struct's qualifier is still checked where the tag is.
+      raises(
+        "unknown qualifier true on `c`: logex has :retain and :non_retain, or nil for none",
+        fn ->
+          Logex.Declarations.validate!(%Tag{name: "c", type: :dint, section: :var, retain: true})
+        end
+      )
+
+      i = Tag.new!("i", :bool, :var_input, nil, retain: true)
+      assert i.retain == :retain
+    end
+
+    test "decision 296: Logex.Tag.new!/5's options, each mistake a pinned line" do
+      # M6-1's positional fifth argument is no option list.
+      raises(
+        "the options of `c` are a keyword list, `retain: true` or `non_retain: true`, " <>
+          "found :retain",
+        fn -> Tag.new!("c", :dint, :var, nil, :retain) end
       )
 
       raises(
-        "unknown qualifier true on `c`: logex has :retain and :non_retain, or nil for none",
-        fn -> Tag.new!("c", :dint, :var, nil, true) end
+        "the options of `c` are a keyword list, `retain: true` or `non_retain: true`, " <>
+          "found [{\"retain\", true}]",
+        fn -> Tag.new!("c", :dint, :var, nil, [{"retain", true}]) end
       )
 
+      raises(
+        "the options of `c` are a keyword list, `retain: true` or `non_retain: true`, " <>
+          "found [{:retain, true} | :x]",
+        fn -> Tag.new!("c", :dint, :var, nil, [{:retain, true} | :x]) end
+      )
+
+      raises(
+        "unknown option :persistent for `c`: Logex.Tag.new!/5 takes `retain:` and `non_retain:`",
+        fn -> Tag.new!("c", :dint, :var, nil, persistent: true) end
+      )
+
+      raises("`retain:` for `c` takes true or false, found :yes", fn ->
+        Tag.new!("c", :dint, :var, nil, retain: :yes)
+      end)
+
+      raises("`non_retain:` for `c` takes true or false, found 1", fn ->
+        Tag.new!("c", :dint, :var, nil, non_retain: 1)
+      end)
+
+      raises("`retain:` is given twice for `c`", fn ->
+        Tag.new!("c", :dint, :var, nil, retain: true, retain: false)
+      end)
+
+      raises(
+        "`c` takes `retain: true` or `non_retain: true`, not both, as a declaration takes " <>
+          "`retain` or `non_retain`, not both",
+        fn -> Tag.new!("c", :dint, :var, nil, retain: true, non_retain: true) end
+      )
+
+      # Every mistake a line, in order, before the declaration's own check.
+      raises(
+        "`retain:` for `c` takes true or false, found nil\n" <>
+          "unknown option :keep for `c`: Logex.Tag.new!/5 takes `retain:` and `non_retain:`",
+        fn -> Tag.new!("c", :nope, :var, nil, retain: nil, keep: true) end
+      )
+
+      raises(
+        "the options of 5 are a keyword list, `retain: true` or `non_retain: true`, found :x",
+        fn -> Tag.new!(5, :dint, :var, nil, :x) end
+      )
+    end
+
+    test "decision 296: a program's var_input from Elixir refused where it compiles" do
       # A program's var_input, which only the compile tells from a block's.
       {:ok, tokens, _} = Logex.Compiler.tokenize("var x bool\nxic i ote x")
       {:ok, routine} = Logex.Compiler.parse(tokens)
-      i = Tag.new!("i", :bool, :var_input, nil, :retain)
+      i = Tag.new!("i", :bool, :var_input, nil, retain: true)
 
       raises(
         "`i` is a program's var_input, which takes no `retain`: a var_input holds the " <>
@@ -298,7 +376,7 @@ defmodule Logex.RetainTest do
       assert {:ok, %Program{retained: ["c"]}} =
                Logex.Compiler.instructionize(routine, [
                  Tag.new!("i", :bool, :var_input),
-                 Tag.new!("c", :dint, :var, nil, :retain)
+                 Tag.new!("c", :dint, :var, nil, retain: true)
                ])
     end
   end
