@@ -66,6 +66,18 @@ Source syntax today:
   instruction may write it; a tag with no initial value starts at 0. A timer, `var t1
   ton`, is declared only with `var` and with no initial value: its preset is the number on
   the `ton` that runs it. So is an instance of a function block, `var s1 seal`
+- a qualifier straight after the section word, `var retain count dint` or `var
+  non_retain jog bool`, on a program's `var` and `var_output` and a block's three
+  sections: a warm restart keeps a tag its line marks `retain` and puts back every other
+  (`PLAN.md`'s M6-1 and M6-2). An instance or an array is retained whole, and inside an
+  instance the nearest mark on a member's path wins, so a block's `var non_retain step
+  dint` stays out of `var retain s1 seal`. A program's `var_input`, whose value the host
+  gives and every restart keeps, and a `var_external`, whose global carries it, take
+  none, and the two words never stand on one line together. Both are reserved, so no
+  tag is named `retain` or `non_retain`. Retained values are kept in memory only, across
+  `Logex.Runtime.restart/2,3` and `Logex.Runner.restart/2` with `:warm`; the store on
+  disk that keeps them across a crash is still to land (Milestone 6, "Settled, not yet
+  landed", below)
 - `var_external estop bool` names a configuration's global, its `var_global estop bool`
   ("A global shared by name", below): logic reads and writes the global itself, one copy
   for every instance that declares it. It is of an elementary type, exactly its global's,
@@ -252,7 +264,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms, or a long timer (`var t1 ton_ltime`, M5-6) and 0 to 9223372036854775807 ns, the unit the instance's | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms, or a `tof_ltime` and a preset in ns | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms, or a `tp_ltime` and a preset in ns | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
-| `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms, or an `rto_ltime` and a preset in ns | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
+| `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms, or an `rto_ltime` and a preset in ns | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; a cold restart starts it at 0, and a warm one keeps it only where it is marked, `var retain lube rto`. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset, any value of its `pv`'s type, −2147483648 to 2147483647 for a `ctu`, negatives among them, and 0 to its top for an unsigned typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `add a b dst` `sub a b dst` `mul a b dst` | two number sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer or real tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside an integer type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault; a real's result is rounded to its nearest value, a `real`'s a single, so `add 16777216 1.0 x` is 16777216.0 in a `real`, and past its range is its largest value, the sign kept, with no power. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
@@ -296,7 +308,7 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 
 ### Settled, not yet landed
 
-One milestone that is decided is waiting to land, retained values (the first bullet
+One milestone that is decided is part way to landing, retained values (the first bullet
 below). Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -305,15 +317,17 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 ("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
 - **Retained values and a true warm restart**, `PLAN.md`'s Milestone 6, decided on
   2026-10-27 (decisions 266–285 in [`docs/organisation.md`](docs/organisation.md) §7,
-  designed in its §4.13), none of it built yet: `var retain count dint` and `var
-  non_retain jog bool` on a program's `var` and `var_output`, a block's three sections
-  and a configuration's `var_global`, the nearest mark on a member's path winning; a warm
-  restart keeping what is marked and initialising everything else, a running timer's
-  outage not counted and nothing edge-driven firing on its first scan; and a store the
-  runner writes on the host's disk every second and at a trip, a stop and a cold restart,
-  read at a fresh start, warm unless `start: :cold`. `retain` and `non_retain` become
-  reserved words in any case, so a tag named either stops compiling when the words land;
-  `persistent` is deferred and stays unreserved.
+  designed in its §4.13). Landed, M6-1 and M6-2: `var retain count dint` and `var
+  non_retain jog bool` on a program's `var` and `var_output` and a block's three
+  sections, the nearest mark on a member's path winning, and a warm restart in the core
+  keeping what is marked and initialising everything else, a retained timer resuming
+  from the restart's `now` and nothing edge-driven firing on its first scan; `retain`
+  and `non_retain` are reserved words in any case, so a tag named either no longer
+  compiles. Still to land: a configuration's `var_global retain`; the image a resource
+  starts from; and a store the runner writes on the host's disk every second and at a
+  trip, a stop and a cold restart, read at a fresh start, warm unless `start: :cold`, so
+  that until then a crash or a stopped VM keeps nothing. `persistent` is deferred and
+  stays unreserved.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -753,7 +767,9 @@ keeps its 10 ms while the motor is stopped and adds to it when it runs again, fr
 scan after the motor starts again, as a `ton` adds nothing on the scan that first sees its rung
 true; `grease_due` lights at its 50 ms, and its reset input `r`, written by the
 `greased` rung above it, clears it, the time counting again from the last scan that saw
-the reset. A restart, warm or cold, starts it at 0 too, until `retain` lands.
+the reset. A restart, warm or cold, starts it at 0 too, since this program marks nothing:
+declared `var retain lube rto`, a warm restart keeps its time, resuming from the
+restart's `now`, and a cold one starts it at 0 (decisions 266 and 273).
 
 Each is a timer by every rule a `ton` keeps: one instruction runs it, nothing may follow
 it on its path, logic may move into `.pre` and `.acc`, and a `ton` made a `tof` is a
@@ -3217,7 +3233,8 @@ the panel's outputs: %{[0] => 0, [4] => 0}
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
   release killed, reads every device once, as a start does, opening again each device
   that went down, those among them (decision 142), restarts the resource, which keeps its
-  input image and puts every other global back to its initial value, and runs the first
+  input image and puts every other global back to its initial value, a warm restart
+  keeping what each program marks `retain` (M6-2), and runs the first
   round at once, on what was read, the stopped time not counted: the conveyor stays off
   until start is pressed again. A released device writes nothing again until that round
   has written its own outputs, so a restart never puts back, even for a moment, what the
@@ -4164,9 +4181,11 @@ in every cycle's outputs at the value it holds.
   array bounds, `ARRAY[1..8]`, nor a whole-array copy or fill; no byte or word partial
   access, `w.%B1`; no `round`, `ceil` or `floor`, and no conversion to or from a bool, a
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
-  tag's type or array's size; a jump forward only; no retained values, so a warm restart
-  is a cold one (retained values are decided for Milestone 6, "Settled, not yet landed",
-  above, and not yet built); and forcing for inputs only, an output never forced.
+  tag's type or array's size; a jump forward only; retained values in memory only, a warm
+  restart keeping what a program marks `retain` while the runner lives, but nothing
+  surviving a crash, a kill or a stopped VM, the store on disk not yet built
+  (Milestone 6, "Settled, not yet landed", above), and no retained global; and forcing
+  for inputs only, an output never forced.
 
 ## Running it
 

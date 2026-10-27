@@ -43,7 +43,8 @@ questions put back and its three open rules were answered by the maintainer the 
 (decisions 161–167, and notes on the decisions they settle); nothing of it is built
 yet (it has since landed whole, M5-1 to M5-16, by 2026-10-26). Milestone 6, retained
 values and a true warm restart, was designed and decided on 2026-10-27 (§4.13, decisions
-266–285), nothing of it built yet; the four questions left open at Milestone 5's close
+266–285), its words and the core's warm restart landing first, M6-1 and M6-2 on the same
+day; the four questions left open at Milestone 5's close
 were answered the same day and built, decisions 286–289, and the three questions their
 review raised answered the same day, decisions 290–292.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
@@ -1490,13 +1491,13 @@ day, and `Logex.Runtime`, `Logex.Instance` and `Logex.Edit` give their rules as 
 counter, `ctu`, `ctd` or `ctud`, is a built-in function block instance, state of the
 program instance that holds it, as a timer is:
 
-| Piece | A new instance | A scan | `restart/3` | A switch: kept | added | removed, then restored |
-|---|---|---|---|---|---|---|
-| `cv`, `ov`, `un` | 0 | IEC's body for the side its `ctu` or `ctd` runs (decisions 69–71) | 0 | kept | 0, by `initial_env/1` | frozen, then kept |
-| `pv` | the instruction's preset | written by logic, read at the next run | the preset | moved where logic left the old preset, else kept (decisions 23, 27), reported `:preset`, `:preset_kept`, with `q`'s forecast (decision 88); `:unwritten` where no logic writes it any more (decision 96) | the preset | frozen, then the new preset outright (decision 23) |
-| `r`, `ld` | 0 | written by logic, read at the next run (decision 84) | 0 | kept; `:unwritten` where no logic writes it any more (decision 96) | 0 | frozen, then kept |
-| `cu`, `cd`, the edge memories | 0 | the side's rung power | 0 | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
-| `q`, `qu`, `qd` | 0 | set from `cv` at every run | 0 | kept, set at the next run | 0 | frozen, then set at the next run |
+| Piece | A new instance | A scan | `restart/3`, cold | `restart/3`, warm (M6-2) | A switch: kept | added | removed, then restored |
+|---|---|---|---|---|---|---|---|
+| `cv`, `ov`, `un` | 0 | IEC's body for the side its `ctu` or `ctd` runs (decisions 69–71) | 0 | kept where the counter is retained, else 0 (decisions 266 and 269) | kept | 0, by `initial_env/1` | frozen, then kept |
+| `pv` | the instruction's preset | written by logic, read at the next run | the preset | kept where retained, else the preset | moved where logic left the old preset, else kept (decisions 23, 27), reported `:preset`, `:preset_kept`, with `q`'s forecast (decision 88); `:unwritten` where no logic writes it any more (decision 96) | the preset | frozen, then the new preset outright (decision 23) |
+| `r`, `ld` | 0 | written by logic, read at the next run (decision 84) | 0 | kept where retained, else 0 | kept; `:unwritten` where no logic writes it any more (decision 96) | 0 | frozen, then kept |
+| `cu`, `cd`, the edge memories | 0 | the side's rung power | 0 | kept where retained, else 0; no edge counted on the first scan either way (decision 274) | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
+| `q`, `qu`, `qd` | 0 | set from `cv` at every run | 0 | kept where retained, else 0 | kept, set at the next run | 0 | frozen, then set at the next run |
 
 In a block whose `cal` is false everything is held, and an edge that comes and goes while
 it is frozen is not counted (decision 89); a blocked memory there stays listed until a
@@ -1506,8 +1507,10 @@ or from aside. A type change, `ctu` to `ctud` among them, is refused at accept.
 M3-2's timers, `tof`, `tp` and `rto`, landed on 2026-10-14 (decisions 93–95). Each is a
 timer as a `ton` is, with its members, an `rto` with its reset `r` too, and every rule a
 `ton`'s member has: started by `initial_env/1`, at its preset for `.pre` and 0 for the
-rest; started again by `restart/3` and `restart/2`, warm or cold, an `rto`'s time among
-them until `retain` lands (decision 76); `.pre` moved at a switch by decisions 23 and 27,
+rest; started again by `restart/3` and `restart/2`, cold, and warm where nothing marks the
+timer, an `rto`'s time among them (decision 76), and since M6-2 kept whole at a warm
+restart where it is retained, its `last` set to the restart's `now` (decisions 266 and
+273); `.pre` moved at a switch by decisions 23 and 27,
 reported `:preset` or `:preset_kept`; a removed one frozen and a restored one given its
 preset outright. What differs is by type:
 
@@ -1540,10 +1543,10 @@ keep no state of their own: their two bits are bools the program declares, a `va
 `var_output`, under every rule above, started by `initial_env/1` and kept by name across a
 switch. What the coils add is each bit's part:
 
-| Piece | A new instance | A scan | `restart/3` | A switch: kept | added | removed, then restored |
-|---|---|---|---|---|---|---|
-| a coil's storage bit | its declared value | the power the coil receives, at every run | its declared value | kept; blocked by name where its rung changed, its kind and pulse bit among it, the presets left out, or where the program that last scanned also writes it another way (decisions 21, 80 and 87) | its declared value, blocked | kept, unused, then blocked |
-| a coil's pulse bit | its declared value | 1 on the run whose power rises (`osr`) or falls (`osf`), never on a first scan nor while its storage bit is blocked; 0 at every other run (decision 102) | its declared value | kept, and set at the coil's next run | its declared value | held, `:held` where it is a var_output (decision 20), then set at the next run |
+| Piece | A new instance | A scan | `restart/3`, cold | `restart/3`, warm (M6-2) | A switch: kept | added | removed, then restored |
+|---|---|---|---|---|---|---|---|
+| a coil's storage bit | its declared value | the power the coil receives, at every run | its declared value | kept where retained, else its declared value | kept; blocked by name where its rung changed, its kind and pulse bit among it, the presets left out, or where the program that last scanned also writes it another way (decisions 21, 80 and 87) | its declared value, blocked | kept, unused, then blocked |
+| a coil's pulse bit | its declared value | 1 on the run whose power rises (`osr`) or falls (`osf`), never on a first scan nor while its storage bit is blocked; 0 at every other run (decision 102) | its declared value | kept where retained, else its declared value; set by no first scan (decision 274) | kept, and set at the coil's next run | its declared value | held, `:held` where it is a var_output (decision 20), then set at the next run |
 
 In a block whose `cal` is false both bits are held, so a pulse given at the body's last run
 stays on until it next runs (decision 102), and a blocked storage bit there stays listed
@@ -2870,7 +2873,9 @@ for `restart(runner, :cold | :warm)`, which releases every latch, reads every de
 as a start does, opening again each device that went down (decision 142), calls
 `Logex.Runtime.restart/2`, which keeps the input image and puts every other global back to
 its initial value, and runs the first round at once, on what the devices read, the clock
-not counting the stopped time. `:warm` is `:cold` until `retain` lands. A trip's reason is
+not counting the stopped time. `:warm` is `:cold` until `retain` lands. *(Since M6-2,
+2026-10-27, `:warm` keeps what each program marks `retain`, in memory, decision 271.)* A
+trip's reason is
 one of:
 - `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run;
 - `{:watchdog, {:round, task, took_ms, limit_ms, steps}}`, a round of the continuous task,
@@ -4203,8 +4208,8 @@ suffixes.
 
 ### 4.13 Retained values and a true warm restart (Milestone 6)
 
-**Designed and decided 2026-10-27; nothing of it is built yet** (`PLAN.md` §3, Milestone
-6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
+**Designed and decided 2026-10-27; M6-1, the words, and M6-2, the warm restart in the
+core, landed the same day, the rest not yet built** (`PLAN.md` §3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
 is not": today a warm restart is a cold one, so a counter's count, a totaliser's total or
 a timer's accumulated time is lost when the runner restarts, crashes or the VM stops. A
 design pass on `3a7c2eb` read IEC 61131-3 Ed 2:2003 and Ed 3:2013 in full and Ed 4:2025
@@ -4347,6 +4352,11 @@ lube timer at 0, the fan off and the conveyor off until start is pressed.
 | **first-scan signal** | none in Part 3 | `S:FS` | OB 100 runs | none found |
 | **hot restart** | none in Part 3 | none | S7-400 only, OB 101 | none |
 
+*(Since M6-1 and M6-2, 2026-10-27, the paragraph below is how logex was at `3a7c2eb`:
+`var retain count dint` and `var non_retain jog bool` compile, both words reserved, and
+`restart/3` and `restart/2` with `:warm` keep what is marked, as "The design, as decided"
+says; the store, the image and a retained global are still to land.)*
+
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
 that still fits, and puts every other tag back by `Program.initial_env/1`, with `first:
@@ -4469,7 +4479,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   rename, which would make the rename durable, OTP probably cannot do (`{error, eisdir}`
   in 2014, **unverified for OTP 28**; M6-1 tries it and records the result), so on some
   file systems a power failure just after a write may bring back the write before it, as
-  the forces file may today.
+  the forces file may today. *(Tried by M6-1, 2026-10-27, on OTP 28 over ext4:
+  `file:open(Dir, [read, raw])`, `file:open(Dir, [read])` and `prim_file:open(Dir,
+  [read])` each give `{error, eisdir}`, so no directory can be opened to sync, and the
+  rename is not made durable; the record's reading stands.)*
 - *The store's format* (decision 276): text a person can read, as the forces file is
   (decision 140): a header `logex retain 1`, then `configuration <name> written <time>`,
   the time on the host's wall clock through the runner's clock behaviour, for a person and
@@ -4608,7 +4621,7 @@ a tag across a power-up; and the exact label TIA gives its retain column.
 | Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–128 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 129–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). *(Decided for Milestone 6, 2026-10-27, §4.13; the words and `restart/3` and `restart/2` with `:warm` landed with M6-1 and M6-2 the same day.)* Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day, arrays by literal subscripts with M5-11 the same day, a subscript held in a tag with M5-12 on 2026-10-24, located arrays with M5-13 and arrays of instances with M5-14 the same day, the walks' cross-type reach with M5-15 and the documents with M5-16 on 2026-10-26: **landed**, every item of Milestone 5 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* *(Arrays landed with M5-11 to M5-14, 2026-10-23 to 2026-10-24: of every elementary type, one to three dimensions, by literal or tag subscripts, located, and of instances; STRUCT, UDTs and IEC's array bounds still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
@@ -4666,7 +4679,8 @@ Each is a field or a sentence now and a migration later.
 where the landing departs from it. Beyond the six: `%Logex.Diagnostic{}` also gained
 `severity:`, for the three warnings M1-3 deferred; an instance is a `%Logex.Instance{type:,
 env:, now:, first:}` that holds no program and is matched to one by name; and `restart/3`
-keeps the var_inputs, with `:warm` equal to `:cold` until `retain` lands. B5 went in just
+keeps the var_inputs, with `:warm` equal to `:cold` until `retain` lands (it landed with
+M6-2, 2026-10-27). B5 went in just
 before M1-5's documents rather than just after them.*
 
 **M1-6 (TON, ONS, comparisons, scan loop).** *(The scan loop is not M1-6's after all:
@@ -5681,7 +5695,9 @@ questions asked after M3-1's review, the same day.
     program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for `tp`, 2026-10-14.)* *(Landed with M3-4 for `osr` and `osf`, 2026-10-14: neither sets its pulse bit on a first scan, whatever its storage bit holds.)*
     *(Kept by decision 274, 2026-10-27, for Milestone 6: `first: true` on every start, a
     warm restart and a fresh start from the store among them, so a retained edge memory
-    fires nothing on the first scan either.)*
+    fires nothing on the first scan either.)* *(Landed with M6-2, 2026-10-27, for a warm
+    restart in the core: `restart/3` and `restart/2` give `first: true` warm or cold, so a
+    retained `cu` of 0 under a held eye counts nothing on the first scan.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -5770,7 +5786,9 @@ questions asked after M3-1's review, the same day.
     *(Answered 2026-10-27 by decisions 266, 269 and 273, for Milestone 6, not yet built:
     an `rto` declared `var retain lube rto` keeps `.acc` and `.dn` across a warm restart
     and a fresh start from the store, the outage not counted; one not marked starts at 0
-    at every restart, as here.)*
+    at every restart, as here.)* *(Landed with M6-2, 2026-10-27, for a warm restart in the
+    core: a retained `rto` keeps `.acc` and `.dn`, its `last` the restart's `now`; the fresh
+    start from the store waits for M6-4 and M6-5.)*
 77. **Arithmetic past the dint's limit (M3-3).** The fill valve adds each delivery to a
     running total, and the total passes the largest number logex holds.
     - It wraps round to a huge negative number;
@@ -10610,7 +10628,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
 
 **Milestone 6's decisions, 2026-10-27** (§4.13). Decisions 266–285 are the questions
 Milestone 6's design put to the maintainer, 284 and 285 added by its review; the
-maintainer answered all twenty on 2026-10-27, each as recommended. None is built yet.
+maintainer answered all twenty on 2026-10-27, each as recommended. M6-1 and M6-2 built
+266 to 270, 273, 274 and 279 for a restart in the core, and 271's core rows, the same day;
+the rest are not built yet.
 The example plant is §4.13's: the power fails at 14:00 with 41 boxes counted, the lube
 timer at 62 hours, the fan in its run-on and the conveyor running, and comes back at
 14:20.
@@ -10794,6 +10814,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
        over the store, by a writer process of the runner's own so that a write delays no
        round, latest wins. A sync of the directory after the rename OTP probably cannot
        make (`{error, eisdir}` in 2014, **unverified for OTP 28**; M6-1 tries it).
+       *(M6-1 tried it on OTP 28: `{error, eisdir}` still, §4.13.)*
      - *A write that fails:* reported, `{:retain, {:error, reason}}` and in `status/1`,
        the plant running on; or the runner trips. A `stop/2` whose final write fails
        still stops, and returns `{:error, {:retain, reason}}`; a fresh start reports the

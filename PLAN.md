@@ -222,8 +222,10 @@ provisional readings gathered in one list (§3, M5-16's review), the four left a
 close answered and built on 2026-10-27 (decisions 286–289). Milestones 6 to 13 were
 proposed on 2026-10-27 (§3), and Milestone 6, retained values and a true warm restart, was
 designed and decided the same day (§3, "Milestone 6"; `docs/organisation.md` §4.13 and
-decisions 266–285), the maintainer answering its twenty questions as recommended; its nine
-items, M6-1 to M6-9, are planned, and none has landed.
+decisions 266–285), the maintainer answering its twenty questions as recommended, and the
+three its close's review raised the same day (decisions 290–292); of its nine items, M6-1,
+the words `retain` and `non_retain`, and M6-2, the warm restart in the core, landed the
+same day in one push, and the other seven are planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8907,7 +8909,28 @@ done-when reads the next store write; and last the contract walk and the documen
   present bound in reductions; and `naming_test.exs` holds the new words. **Lands in one
   push with M6-2.** *Size L.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-27** (`e1302b2`, in one push with M6-2). As the entry says:
+  the two stanzas; the qualifier rows (`@qualifiers`), each reserved as `:qualifier` in
+  any case and `keywords/0`'s pinned list grown; `var retain count dint` and `var
+  non_retain jog bool` parsed, the qualifier straight after the section word, the clause
+  that refused `retain` gone; `%Logex.Tag{}` and `%Logex.FbType.Member{}` with `retain`,
+  `Logex.Tag.new!/5` taking it from Elixir; `Program.retained` settled by decision 270's
+  nearest mark, nil where there is none, a path listed whole where everything under it is
+  retained and an array of block instances' member by `[*]`, `gates[*].k`, in the one walk
+  of the tags (`Program.settled/2`), each body holding its own and an unmarked instance
+  reading its body's, held by `edited_by_hand/1` and `Logex.Compiler.lowered?/1`; every
+  refusal of decision 268 at its line, from text and from Elixir; the loader and decision
+  227's warning reading a qualified line by place; printer_test's generator and
+  `@required_shapes` (`:qualified_declaration`); and the golden record's 12 qualified
+  sources, recorded by the front end before M6-1 and changing no other entry. The tests
+  moved on purpose are the entry's: validation_test's three, api_contract_test's junk line
+  (`var retain non_retain r bool` in its place, the draws kept) and function_block_test's
+  tag-table edits; and `runtime_test.exs`'s surface pins Program's, Tag's and Member's
+  fields. *The directory sync, tried* on OTP 28 over ext4: `file:open/2` and
+  `prim_file:open/2` of a directory give `{error, eisdir}`, recorded in §4.13. *Mutation
+  table* (`scratchpad/m6/mut/run6.log`): 25 mutants, 25 red. *Cost* against `c963cab`:
+  every program compiles within 14 reductions of what it took and scans in exactly what
+  it took; `instance/1` within 13. *Provisional readings*, put to the maintainer below.
 - **M6-2 · The warm restart in the core.** `restart/3` `:warm` by the rule beside
   `initial_env/1`, retained instances whole, each retained timer's `last` set to the
   restart's `now` and `first: true` (decisions 271, 273 and 274); the moduledocs'
@@ -8924,7 +8947,62 @@ done-when reads the next store write; and last the contract walk and the documen
   costs no more than a cold one for a program with nothing retained, in reductions.
   *Size L.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-27** (`2336932`, in one push with M6-1). `restart/3` and
+  `restart/2` `:warm` keep each retained path, an instance whole and each element of an
+  array of instances, and put back every other path by `initial_env/1`, the var_inputs as
+  ever; each retained timer's `last` is set to the restart's `now`, at any depth;
+  `first: true` and `ons_blocked: []` warm or cold; an instance set aside dropped. The
+  globals restart as cold until M6-3. The image functions are not in this entry and are
+  left for M6-4. Every clause of the done-when has its test in `retain_test.exs`, the
+  three warm-is-cold tests renamed as the entry says; the contract walk gains warm and cold
+  restarts of 60 seeded programs whose every line's qualifier is drawn, against decision
+  271's and 270's rules restated from the drawn qualifiers alone, its reach eight `rw_`
+  atoms. The moduledocs' one-rule sections and §4.9's Milestone 3 tables (a warm column)
+  say what a warm restart keeps; decisions 69 and 76 are annotated as landed. *Mutation
+  table* (`scratchpad/m6/mut/run6.log`, `run6w.log`): 8 mutants, 8 red, each on the walk
+  alone too. *Cost*: a restart of a program with nothing retained, warm or cold, in 3 to 5
+  reductions more than a cold one took; warm equal to cold.
+
+  *Provisional readings of M6-1 and M6-2*, each a question for the maintainer:
+  1. *The first scan after a warm restart counts its own time.* Decision 273 sets a
+     retained timer's `last` to the restart's `now`, so the time before the restart since
+     the timer last ran is not counted, a frozen block's or a skipped rung's; but the first
+     scan after it counts the time the host passes in it, as any scan does. The conveyor's
+     lube `rto` stands at 62 hours when the runner trips; at a warm restart the runner
+     moves its anchor, so the operator sees 62 hours and then only the motor's running
+     after the restart. A host of the core alone that restarts and then scans with
+     `elapsed_ms` of an hour sees the lube timer add that hour. The options: (a) as built,
+     the host's `elapsed_ms` the time that passed; (b) a timer adds nothing on a first
+     scan, which would change every timer clause's cost. M6-2's done-when says "without
+     counting the gap between the restart and the next scan's `now`", read here as the
+     time before the restart; `retain_test.exs` pins (a). Logix's RTO adds `current_time −
+     last_time_scanned` (1756-RM018A p.112); whether its first scan after a power cycle
+     counts the outage is unverified (§4.13).
+  2. *A line refused for its qualifier alone still declares its tag*, with none, so its
+     uses are checked and not each told it is undeclared: `var_external retain estop
+     bool` is told once, as M5-13's review's scalar refused for its initial value alone is.
+     On the conveyor, a program whose e-stop line is so refused gets one message, not one
+     more for each of the ten rungs that read `estop`. The options: (a) as built; (b)
+     declare nothing, every use then told it is undeclared. Neither IEC nor the Logix
+     manuals saved say how a compiler recovers from a bad declaration (none found).
+  3. *A qualifier out of its place is told where it goes*: `var count retain dint` and
+     `var count dint retain` are "`retain` comes straight after the section word, as in
+     `var retain count dint`"; such a line declares nothing. IEC writes the word after the
+     section keyword only (Ed 3 Annex A, p.224), over a section; Logix has no qualifier
+     (§4.13). A box counter declared `var boxes ctu retain` is refused, and its count is
+     kept only once written `var retain boxes ctu`. The options: (a) as built; (b) taken in
+     either place.
+  4. *`Logex.Tag.new!/5`*: from Elixir the qualifier is a fifth argument, `new!("c",
+     :dint, :var, nil, :retain)`, `new!/4` kept as it was, so no host's call changes. The
+     options: (a) as built; (b) a keyword list. No standard speaks to it.
+  5. *`Program.retained`'s paths*: a sorted list of strings, a path whole where everything
+     under it is retained, `boxes`, and otherwise each retained member, `s1.k`, an array
+     of block instances' members by `[*]`, `gates[*].k`, as decision 259's messages write
+     a path into every element. M6-4's image and M6-5's store name each value by its own
+     path, `m1.boxes.cv`; this list is the compile's settling, never the store's lines.
+     The options: (a) as built; (b) every leaf listed, `boxes.cv`, `boxes.cu` and the rest,
+     which a reader of `retained` would see in full at the cost of a longer list. No
+     standard speaks to it.
 - **M6-3 · Globals.** `var_global retain|non_retain` in `Logex.Configuration.Text`,
   `%Logex.Configuration.Global{}`, `print/1`'s exact round trip, `check/1`'s refusal of
   a located global's `retain` and decision 272's warning, "`m1.run` is retained and
@@ -9061,7 +9139,7 @@ before another, and says so.
 
 - **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
   2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
-  266–285; nothing built yet.)* Today a warm restart is a
+  266–285; M6-1 and M6-2 landed the same day, the rest not yet built.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store

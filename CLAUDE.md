@@ -40,7 +40,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   gate[4]` loading `gate.ld`
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
-  task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host
+  task-less sugar) and `restart/3`, whose `:warm` since M6-2 keeps each path the program
+  retains, a retained timer's `last` set to the instance's `now`, and `first: true` warm
+  or cold (decisions 266, 271, 273 and 274), with the host contract in its moduledoc: a host
   mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rungs/3`,
   the one rung loop, a program's and a block body's (M3-5), `series/3`, `element/3`, and
   the instruction clauses of `evaluate/3`, each threading the scan's read-only
@@ -867,7 +869,16 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   tag refused, every rule in `array_misfits/3` too, which a configuration's global reads;
   `a_type/1` names one "an array of 4 by 8 ints" and `a_global/1` "a global array of 8
   ints"; since M5-14 (decision 154) an array of instances, `{:array, %FbType{}, dims}`, declared
-  in `var` alone with no initial list, each refused in its own words, from Elixir too
+  in `var` alone with no initial list, each refused in its own words, from Elixir too;
+  since M6-1 (§4.13, decisions 267 to 270) the qualifiers, `@qualifiers`, a third kind of
+  row beside the sections and the types, `retain` and `non_retain`, each reserved in any
+  case (`reserved/1` gives `:qualifier`) and in `keywords/0`: `var retain count dint`, the
+  qualifier straight after the section word, told by its length first so that a line of
+  none reads as before, on a program's `var` and `var_output` and a block's three
+  sections; refused at the line, both words, one twice, a qualifier after the name or the
+  type, a program's `var_input` (`split/5`'s `kind`), a `var_external`, and from Elixir a
+  value neither atom; a line refused for its qualifier alone declares its tag with none
+  (provisional); `unqualified/1` a qualified line read by place, the loader's
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is an elementary type's atom, a row of
   `Logex.Declarations.table/0`, `:bool`, `:dint` or `:real` among them, an array,
   `{:array, type, dims}` (M5-11, M5-14), or, for an instance
@@ -878,11 +889,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   which declares a tag from Elixir. Since OE-1 it takes no timer preset (the
   `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
   timer), and since M3-3 a dint's negative initial value, which it refused until a negative
-  literal lexed (decision 97). Its section may be `:var_external` (M2-4)
+  literal lexed (decision 97). Its section may be `:var_external` (M2-4). Since M6-1 its
+  `retain` is the line's qualifier, `:retain`, `:non_retain` or nil, `new!/5` taking it
 - `lib/logex/fb_type.ex` — `%Logex.FbType{}`, a function block type's schema (M1-6), which
   M2-5's user function blocks reuse: its members, each a `%Logex.FbType.Member{}` with a
   type, a role (`:input`, `:output`, `:internal`, and a user block's own `var`, `:local`)
-  and whether logic may write it; `body`, nil for a built-in and a user block's
+  and whether logic may write it, and since M6-1 its line's qualifier, `retain`, nil for a
+  built-in's; `body`, nil for a built-in and a user block's
   compiled `%Logex.Program{}`; `ton/0`, the built-in timer; since M3-1 `ctu/0`, `ctd/0` and
   `ctud/0`, IEC's counters with IEC's pins lowercased (decisions 67 and 68), logic writing
   only `r`, `ld` and `pv` (decision 86); since M3-2 `tof/0`, `tp/0` and `rto/0`, timers
@@ -951,7 +964,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   array tag by name to its type, nil where the routine holds none, settled with them, a
   real array's name among the `reals`, held to its tags by `edited_by_hand/1` too; since M5-14 an array of a user block's instances typed `{:array, {:block, name}, dims}`,
   read inside the table by `typed_tags/1`, an array of long timers' unit keyed by its
-  name, and an array of instances in no `arrays`
+  name, and an array of instances in no `arrays`; and since M6-1 `retained`, each path a
+  warm restart keeps, sorted, nil where there is none, by decision 270's nearest mark, a
+  path whole where everything under it is retained, `gates[*].k` for a member of every
+  element, settled with them in one walk (`settled/2`, `retained/2`), an unmarked
+  instance reading its body's own, held by `edited_by_hand/1` and
+  `Logex.Compiler.lowered?/1`; and since M6-2 the rule beside `initial_env/1` for a
+  retained path, which `Logex.Runtime.restart/3` and `restart/2` with `:warm` keep
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). `Logex.Parser.well_formed!/1` is the definition
@@ -1351,6 +1370,14 @@ by one path, `hs[*].ws[*].x`, and since decision 257 a bit of a member of an ele
 twice, beside the member's whole write and through a tag subscript, in either order,
 and since decision 288 the member's whole write beside a coil on its bit through a tag
 subscript, either first, the very tags warned of nothing,
+`retain_test.exs` M6-1's words and refusals at their lines, from text and from Elixir,
+`Program.retained` against decision 270's rule restated over seeded programs of blocks
+three deep, the hand edit of it refused, a qualified line read by place by the loader and
+the real-initial warning, and M6-2's warm restart, a counter, totaliser and `rto` kept
+warm and lost cold, timers caught mid-time resuming with no frozen time counted, a block's
+`non_retain` member and an unmarked nested timer, an array of instances, no edge on the
+first scan, a resource's `restart/2`, and a program with no `retain` restarting warm as
+cold in no more reductions,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1432,7 +1459,13 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   have been taken, exactly where it certainly was not, and a device whose 0 was taken
   killed now and then while tripped, named until a restart, its reach `:zero_at_stop` and
   `:down_while_tripped`; and since decision 264
-  every walk's oracle and harness in clauses, the draws alone in `@draws`
+  every walk's oracle and harness in clauses, the draws alone in `@draws`; and since M6-2
+  a walk of warm and cold restarts of 60 seeded programs whose every declaration line's
+  qualifier is drawn, a counter, a totaliser behind a one-shot, an `rto`, a `tof`, an
+  array, a block whose own members' qualifiers are drawn, an instance of it under a `cal`
+  that may be false and an array of two, and a block list an edit leaves, each restart's
+  state against decisions 270, 271, 273 and 274 restated from the drawn qualifiers
+  alone, its reach eight `rw_` atoms
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -1455,7 +1488,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   front end before it, which already read them, and changed none; and decision 228
   changed 5 of decision 216's 11, each a subnormal double that now parses; and decision
   231 changed 2, `move 1.0e-400 aa` and `move 1_0.0e-4_00 aa`, each a lex error that now
-  parses as a spelled leaf of 0.0. It keeps the AST and error lines, not the tokens or
+  parses as a spelled leaf of 0.0; and M6-1's qualified declarations, `var retain count
+  dint` and its refusals, added 12, recorded by the front end before M6-1, which reads
+  them all already, and changed none. It keeps the AST and error lines, not the tokens or
   columns, so newline coalescing, columns and messages are pinned in
   `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
   language or the generator on purpose, and read the diff:
@@ -1676,7 +1711,8 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   instances and located, an index or a bit number out of range a major fault that trips
   the runner, typed counters and long timers in nanoseconds; Milestone 6, retained values
   and a true warm restart, designed and decided on 2026-10-27, §4.13 and decisions
-  266–285, its nine items planned in `PLAN.md` and none landed: `var retain` and `var
+  266–285, its nine items planned in `PLAN.md`, M6-1 (the words) and M6-2 (the warm
+  restart in the core) landed the same day: `var retain` and `var
   non_retain`, both reserved, on a program's `var` and `var_output`, a block's three
   sections and `var_global`, the nearest mark on a member's path winning, a warm restart
   keeping what is marked and nothing else, a timer's outage not counted and no first-scan
