@@ -2897,6 +2897,12 @@ broken.logex: line 5: `retain` is a keyword and cannot name an instance
   point, a retained var_output is written there in the first round after a warm start,
   which the configuration warns of; logic that reads a retained value and writes an
   output another way is not seen (decision 272).
+- The other way round, a retained global a connection drives is written over by the
+  var_output it is wired to at that instance's first run after the restart: where the
+  program does not retain the var_output, the kept value lasts until then and is then the
+  var_output's initial value, with no warning; and a retained global that is a task's `single`, kept at
+  1, runs its event task in the first round after a warm restart, as a trigger already 1
+  does. Both are provisional, questions for the maintainer (`PLAN.md`'s M6-3).
 - A located global takes no `retain`: an input point is read again at every start, and
   an output point starts at 0 until logic writes it, so no output comes back on from a
   kept value. `retain` and `non_retain` are reserved in a configuration file as in a `.ld`

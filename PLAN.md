@@ -9139,7 +9139,8 @@ done-when reads the next store write; and last the contract walk and the documen
   (`api_contract_test.exs`, the `var_external` walk) draw each unlocated global's
   qualifier and restate decision 271's rows for globals from the draw alone, four reach
   atoms, `ext_retained_kept`, `ext_retained_lost`, `ext_retained_read` and
-  `ext_unretained_warm`. README's "A retained global" is a real run, `retained.exs`.
+  `ext_unretained_warm`, and since M6-3's review six, a `real` and an `int[2]` global
+  among its draws, `ext_retained_real_kept` and `ext_retained_array_kept`. README's "A retained global" is a real run, `retained.exs`.
   *Mutation table* (`scratchpad/m6/m63mut/run.log`): 23 mutants, 22 red and one
   equivalent, every located global taken for an output point, a good connection driving
   no input point, whose filter was removed; one, a retained var_output wired to an
@@ -9191,6 +9192,47 @@ done-when reads the next store write; and last the contract walk and the documen
      the struct's atom, as `%Logex.Tag{}` holds it, since a global is built by hand with
      no function to take decision 296's keyword option. The options: (a) as built; (b) a
      constructor, `Global.new!(name, type, retain: true)`, as `Logex.Tag.new!/5` takes it.
+  *Answer to M6-3's review* (2026-10-27, `scratchpad/m6/rv3probe`): eight findings.
+  Two were behaviours the record does not settle; they are pinned as built, provisional,
+  and put to the maintainer as questions 7 and 8 below (`retain_configuration_test.exs`,
+  the `restart/2` doc, decisions 272 and 274 annotated, README's "A retained global").
+  A retained array global and a retained `real` or `lreal` global had no test, so a warm
+  restart that kept only elementary globals, or no reals, passed the suite; now
+  `retain_configuration_test.exs` keeps an `int[3]`, a `real` and an `lreal` warm beside
+  unretained twins, and the `var_external` walk draws a `real` and an `int[2]` global,
+  two more reach atoms. Decision 272's warning is now tested with the one retaining
+  program type sorting first, last and between. `Logex.Tag.new!/5` given both `true`
+  beside another mistake now reports both, the not-both line last, as decision 296 says.
+  `retain[0]` at a connection's far end, or as a task's `single`, is now told that
+  `retain` is a keyword, as `retain` alone is. The documents: `text.ex`'s comment cites
+  decision 42, not 294; CLAUDE.md's cost now gives PLAN's figure; `docs/naming.md`'s
+  M6-3 changes are appended notes, its rows as before, and the `non_retain` note says
+  `VAR_GLOBAL NON_RETAIN` is in §6.5.6.2's text and not in Annex A's grammar. The tests
+  the review found missing are now there: `Logex.Runner.restart/2` `:warm` keeping a
+  retained global, run 50 times under CPU load, and, with nothing retained, a warm
+  `restart/2` in no more reductions than a cold one and a cycle in exactly the
+  reductions of the same plant with its unlocated globals retained, at 1 and 32
+  instances. *Mutation table* (`scratchpad/m6/rv63mut/run.log`): the review's three survivors, V11 (only elementary globals kept), V12 (no real kept) and V18 (the first type alone looked at), and seven new mutants, N1 to N7 (the not-both line dropped beside another mistake, each keyword element message reverted, the trigger seeded from the kept value, an array or a real dropped warm, a warm restart dearer than a cold one), each red on the full suite. 2275 tests (11 doctests), up from 2268.
+  7. *A retained global that is a task's `single`* (M6-3's review). With `var_global
+     retain arm bool` and `task ev single arm priority 0`, a warm restart keeps `arm` at 1.
+     The trigger's last sample goes back to 0, as after every restart (M2-6), so the first
+     cycle runs `ev` though `arm` never rose. Decision 274 keeps a program's edges from
+     firing on the first scan, but a `single` is not one of the program's edges. What the
+     operator sees: (a) as built, the event task runs once just after the warm restart,
+     as it would for an input point that is already 1 (decision 51); (b) the trigger's
+     last sample taken from the kept value, so `ev` waits for the next real rise; (c) a
+     retained `single` refused or warned of. IEC's SINGLE is a rising-edge trigger and
+     says nothing about restarts; Logix has no qualifier (§4.13), and how its event tasks
+     meet a power-up is not in the record's extracts (**unverified**).
+  8. *A retained global a connection drives* (M6-3's review). With `var_global retain
+     total dint 0` and `w1.count total`, where `count` is not retained, `total` is 2 before
+     a warm restart and still 2 just after it. `w1`'s first run then copies its `count`,
+     back at 0, over it, so the operator sees the kept total come back for one round and
+     then drop to 0, with no warning. With `var_output retain count dint` it stays 2. What
+     the operator sees: (a) as built, no warning; (b) a warning, as decision 272 gives for
+     output points: "`total` is retained but driven by `w1.count`, which is not: the first
+     round writes over it"; (c) refused. IEC and Siemens leave this to the programmer, and
+     Logix has no qualifier.
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with
   decision 277's matching and its dropped report, the image checked as a host's state is
   (decisions 171 to 188). *Done when* a resource started from another resource's image

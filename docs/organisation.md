@@ -10789,7 +10789,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      at the connection's line, for an output point or an element of an array of them,
      "`m1.run` is retained and drives the output `motor_q`: after a warm start it is
      written in the first round", a direct connection only, which README says. README's
-     "What logex is not" names the hazard with M6-9.)*
+     "What logex is not" names the hazard with M6-9.)* *(M6-3's review, 2026-10-27,
+     provisional and put to the maintainer, `PLAN.md` M6-3's question 8: the reverse
+     direction, a retained global a connection drives from a var_output its program does
+     not retain, `var_global retain total dint 0` driven by `w1.count`, keeps its value
+     through a warm restart only until `w1`'s first run, whose copy-out writes the
+     var_output, back at its initial value, over it, with no warning.)*
 273. **A running timer across a power failure (Milestone 6).** The lube `rto` at 62 hours
      and the fan's `tof` in its run-on.
      - Not counted: `.acc` and the bits kept, each retained timer's `last` set to the
@@ -10826,7 +10831,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: not counted, `first: true` on every start, warm or cold** (the maintainer,
      2026-10-27), as recommended, so no edge fires on the first scan; `ons_blocked`
-     dropped as today, and a first-scan bit deferred.
+     dropped as today, and a first-scan bit deferred. *(M6-3's review, 2026-10-27,
+     provisional and put to the maintainer, `PLAN.md` M6-3's question 7: a task's
+     `single` is no program's edge. Its last sample is 0 after every `restart/2` (M2-6),
+     so a retained global that is a `single`, kept at 1 by a warm restart, is a trigger
+     already 1 and runs its event task in the first cycle, decision 51's rule for an
+     input point's trigger, with no rising edge.)*
 275. **Where the store lives and when it is written (Milestone 6).** logex has no
      battery-backed memory; the host's disk stands in for it.
      - *Where:* a path the host names, `retain:`, as `forces:` is (decision 127); with
