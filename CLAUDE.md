@@ -42,7 +42,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, whose `:warm` since M6-2 keeps each path the program
   retains, a retained timer's `last` set to the instance's `now`, and `first: true` warm
-  or cold (decisions 266, 271, 273 and 274), with the host contract in its moduledoc: a host
+  or cold (decisions 266, 271, 273 and 274), and since M6-2's review a warm restart of a
+  program whose retained paths were edited by hand after its check raising a pinned
+  `ArgumentError` where it reaches one its tags do not give ("a warm restart keeps the
+  retained path `zz`, which the program's tags do not give: the program was edited by
+  hand after it was handed in and checked"), decision 194's pattern, with the host contract in its moduledoc: a host
   mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rungs/3`,
   the one rung loop, a program's and a block body's (M3-5), `series/3`, `element/3`, and
   the instruction clauses of `evaluate/3`, each threading the scan's read-only
@@ -878,7 +882,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   sections; refused at the line, both words, one twice, a qualifier after the name or the
   type, a program's `var_input` (`split/5`'s `kind`), a `var_external`, and from Elixir a
   value neither atom; a line refused for its qualifier alone declares its tag with none
-  (provisional); `unqualified/1` a qualified line read by place, the loader's
+  (provisional), and since M6-2's review one out of its place, after the name, the type
+  or the initial value, or given twice or both, read without it, with the qualifier in
+  its place where it has one and none otherwise (`{:refused, ...}`); a word told a
+  qualifier first by a guard on its length and first letter (`may_qualify/1`), so that
+  `var lane_c ctu[4]` reads as before; `unqualified/1` a qualified line read by place,
+  and since M6-2's review one whose qualifier comes before the type word, the loader's
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is an elementary type's atom, a row of
   `Logex.Declarations.table/0`, `:bool`, `:dint` or `:real` among them, an array,
   `{:array, type, dims}` (M5-11, M5-14), or, for an instance
@@ -969,7 +978,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   path whole where everything under it is retained, `gates[*].k` for a member of every
   element, settled with them in one walk (`settled/2`, `retained/2`), an unmarked
   instance reading its body's own, held by `edited_by_hand/1` and
-  `Logex.Compiler.lowered?/1`; and since M6-2 the rule beside `initial_env/1` for a
+  `Logex.Compiler.lowered?/1`, since M6-2's review an unmarked instance of a block whose
+  body retains nothing, or an array of them, passed over by a guard on the held blocks
+  that retain nothing, named once a check (`quiet/1`), so that a program of them is checked
+  in no more than it was at `c963cab`; and since M6-2 the rule beside `initial_env/1` for a
   retained path, which `Logex.Runtime.restart/3` and `restart/2` with `:warm` keep
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
@@ -1377,7 +1389,13 @@ the real-initial warning, and M6-2's warm restart, a counter, totaliser and `rto
 warm and lost cold, timers caught mid-time resuming with no frozen time counted, a block's
 `non_retain` member and an unmarked nested timer, an array of instances, no edge on the
 first scan, a resource's `restart/2`, and a program with no `retain` restarting warm as
-cold in no more reductions,
+cold in no more reductions, and since M6-2's review a retained real and an `lreal` array,
+a member a block retains in every element of a 2-D array of its instances, a warm restart
+of a program whose retained paths were edited by hand raising where it reaches them, a
+line refused for a qualifier out of place or given twice declaring its tag, the loader
+reading `var s1 retain seal`, a program of unmarked block instances checked in no more
+than at `c963cab`, and `Logex.Runner.restart/2` `:warm` keeping what is retained on the
+manual clock, the time stood tripped not counted, and `:cold` losing it,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1465,7 +1483,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   array, a block whose own members' qualifiers are drawn, an instance of it under a `cal`
   that may be false and an array of two, and a block list an edit leaves, each restart's
   state against decisions 270, 271, 273 and 274 restated from the drawn qualifiers
-  alone, its reach eight `rw_` atoms
+  alone, its reach eight `rw_` atoms, and since M6-2's review a `tp`, an `osr`'s two bits,
+  a real, a 2-D array, a typed counter and a long timer among its tags, a ninth,
+  `rw_types_kept`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a

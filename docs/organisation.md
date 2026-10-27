@@ -1509,7 +1509,7 @@ timer as a `ton` is, with its members, an `rto` with its reset `r` too, and ever
 `ton`'s member has: started by `initial_env/1`, at its preset for `.pre` and 0 for the
 rest; started again by `restart/3` and `restart/2`, cold, and warm where nothing marks the
 timer, an `rto`'s time among them (decision 76), and since M6-2 kept whole at a warm
-restart where it is retained, its `last` set to the restart's `now` (decisions 266 and
+restart where it is retained, its `last` set to the instance's `now` (decisions 266 and
 273); `.pre` moved at a switch by decisions 23 and 27,
 reported `:preset` or `:preset_kept`; a removed one frozen and a restored one given its
 preset outright. What differs is by type:
@@ -2874,7 +2874,9 @@ as a start does, opening again each device that went down (decision 142), calls
 `Logex.Runtime.restart/2`, which keeps the input image and puts every other global back to
 its initial value, and runs the first round at once, on what the devices read, the clock
 not counting the stopped time. `:warm` is `:cold` until `retain` lands. *(Since M6-2,
-2026-10-27, `:warm` keeps what each program marks `retain`, in memory, decision 271.)* A
+2026-10-27, `:warm` keeps what each program marks `retain`, in memory, decision 271, each
+retained timer's `last` its instance's `now`, so the time it stood tripped is not counted
+(decision 273); tested since M6-2's review.)* A
 trip's reason is
 one of:
 - `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run;
@@ -4379,7 +4381,12 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   beside sections and types, each reserved in any case and owing its `docs/naming.md`
   stanza, so a program with a tag named `retain` or `non_retain` stops compiling, which
   M6-1's commit says. The two on one line are refused, as IEC's grammar makes them
-  alternatives.
+  alternatives. *(Since M6-2's review, provisional, `PLAN.md`'s readings 2 and 3: a line
+  refused for its qualifier alone, out of place, given twice or both words, declares its
+  tag, its uses checked, with the qualifier in its place where it has one and none
+  otherwise. A configuration file reads `retain` and `non_retain` as names until M6-3,
+  `var_global retain bool` a global named `retain`, which M6-3 settles, `PLAN.md`'s
+  question 6.)*
 - *The sections* (decision 268): a program's `var` and `var_output`; a block's `var`,
   `var_input` and `var_output`; a configuration's `var_global`, `non_retain` there too.
   Refused: a program's `var_input`, told that it holds the host's value, which every
@@ -4621,7 +4628,7 @@ a tag across a power-up; and the exact label TIA gives its retain column.
 | Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–128 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 129–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). *(Decided for Milestone 6, 2026-10-27, §4.13; the words and `restart/3` and `restart/2` with `:warm` landed with M6-1 and M6-2 the same day.)* Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`, until M6-2 for RETAIN and `:warm`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built, until M6-1 and M6-2 for the words and the warm restart in memory.)* *(Since M6-1 and M6-2, 2026-10-27: `var retain` and `var non_retain` on a program's and a block's lines, and `restart/3`, `restart/2` and `Logex.Runner.restart/2` with `:warm` keeping what is marked, in memory; `var_global retain`, the image and the store wait for M6-3 to M6-5. VAR_CONFIG and output forcing are still targets.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day, arrays by literal subscripts with M5-11 the same day, a subscript held in a tag with M5-12 on 2026-10-24, located arrays with M5-13 and arrays of instances with M5-14 the same day, the walks' cross-type reach with M5-15 and the documents with M5-16 on 2026-10-26: **landed**, every item of Milestone 5 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* *(Arrays landed with M5-11 to M5-14, 2026-10-23 to 2026-10-24: of every elementary type, one to three dimensions, by literal or tag subscripts, located, and of instances; STRUCT, UDTs and IEC's array bounds still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
@@ -5787,7 +5794,7 @@ questions asked after M3-1's review, the same day.
     an `rto` declared `var retain lube rto` keeps `.acc` and `.dn` across a warm restart
     and a fresh start from the store, the outage not counted; one not marked starts at 0
     at every restart, as here.)* *(Landed with M6-2, 2026-10-27, for a warm restart in the
-    core: a retained `rto` keeps `.acc` and `.dn`, its `last` the restart's `now`; the fresh
+    core: a retained `rto` keeps `.acc` and `.dn`, its `last` the instance's `now`; the fresh
     start from the store waits for M6-4 and M6-5.)*
 77. **Arithmetic past the dint's limit (M3-3).** The fill valve adds each delivery to a
     running total, and the total passes the largest number logex holds.
@@ -6715,7 +6722,11 @@ over.
      warm restart keeps the retained values of the resource as the trip left it, the one
      `get/2` reads, and a runner with a store writes those values at the trip; the clock
      still does not count the stopped time, and each retained timer's `last` is set to the
-     restart's `now`.)*
+     restart's `now`.)* *(Landed with M6-2, 2026-10-27, in memory: `Runner.restart/2`
+     `:warm` keeps what each program retains, each retained timer's `last` its instance's
+     `now`, its last scan's, which decision 188 requires and which the stopped time, never
+     counted by the clock, does not move; tested since M6-2's review. The store waits for
+     M6-5.)*
 114. **A device that fails or is lost (Milestone 4).** The drive's network cable comes
      loose, or an input card stops answering.
      - It is treated as the watchdog is: everything off, and wait for a restart;

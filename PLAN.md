@@ -8930,7 +8930,11 @@ done-when reads the next store write; and last the contract walk and the documen
   `prim_file:open/2` of a directory give `{error, eisdir}`, recorded in §4.13. *Mutation
   table* (`scratchpad/m6/mut/run6.log`): 25 mutants, 25 red. *Cost* against `c963cab`:
   every program compiles within 14 reductions of what it took and scans in exactly what
-  it took; `instance/1` within 13. *Provisional readings*, put to the maintainer below.
+  it took; `instance/1` within 13. *(Corrected by M6-2's review: true only for a program
+  of no user block instance, each of which `instance/1`, an edit's accept and a
+  configuration's check paid 7 reductions more, and a tag named in six bytes, `lane_c`,
+  some 40 more a compile; since the review's answer, below, each costs what it did.)*
+  *Provisional readings*, put to the maintainer below.
 - **M6-2 · The warm restart in the core.** `restart/3` `:warm` by the rule beside
   `initial_env/1`, retained instances whole, each retained timer's `last` set to the
   restart's `now` and `first: true` (decisions 271, 273 and 274); the moduledocs'
@@ -8950,9 +8954,12 @@ done-when reads the next store write; and last the contract walk and the documen
   **Status: landed, 2026-10-27** (`2336932`, in one push with M6-1). `restart/3` and
   `restart/2` `:warm` keep each retained path, an instance whole and each element of an
   array of instances, and put back every other path by `initial_env/1`, the var_inputs as
-  ever; each retained timer's `last` is set to the restart's `now`, at any depth;
+  ever; each retained timer's `last` is set to its instance's `now`, its last scan's
+  (decision 188), at any depth;
   `first: true` and `ons_blocked: []` warm or cold; an instance set aside dropped. The
-  globals restart as cold until M6-3. The image functions are not in this entry and are
+  globals restart as cold until M6-3. `Logex.Runner.restart/2` `:warm` keeps the same in
+  memory, the time the runner stood tripped never counted, its clock not moving over it
+  (tested since M6-2's review, below). The image functions are not in this entry and are
   left for M6-4. Every clause of the done-when has its test in `retain_test.exs`, the
   three warm-is-cold tests renamed as the entry says; the contract walk gains warm and cold
   restarts of 60 seeded programs whose every line's qualifier is drawn, against decision
@@ -8965,7 +8972,7 @@ done-when reads the next store write; and last the contract walk and the documen
 
   *Provisional readings of M6-1 and M6-2*, each a question for the maintainer:
   1. *The first scan after a warm restart counts its own time.* Decision 273 sets a
-     retained timer's `last` to the restart's `now`, so the time before the restart since
+     retained timer's `last` to its instance's `now`, its last scan's, so the time before the restart since
      the timer last ran is not counted, a frozen block's or a skipped rung's; but the first
      scan after it counts the time the host passes in it, as any scan does. The conveyor's
      lube `rto` stands at 62 hours when the runner trips; at a warm restart the runner
@@ -8982,12 +8989,17 @@ done-when reads the next store write; and last the contract walk and the documen
      uses are checked and not each told it is undeclared: `var_external retain estop
      bool` is told once, as M5-13's review's scalar refused for its initial value alone is.
      On the conveyor, a program whose e-stop line is so refused gets one message, not one
-     more for each of the ten rungs that read `estop`. The options: (a) as built; (b)
+     more for each of the ten rungs that read `estop`. Since M6-2's review this holds for
+     every refusal of a qualifier alone, one out of place or given twice among them
+     (reading 3). The options: (a) as built; (b)
      declare nothing, every use then told it is undeclared. Neither IEC nor the Logix
      manuals saved say how a compiler recovers from a bad declaration (none found).
   3. *A qualifier out of its place is told where it goes*: `var count retain dint` and
      `var count dint retain` are "`retain` comes straight after the section word, as in
-     `var retain count dint`"; such a line declares nothing. IEC writes the word after the
+     `var retain count dint`"; since M6-2's review such a line is read without it and
+     declares its tag, with the qualifier in its place where it has one, as reading 2
+     has it, and `var retain non_retain count dint` and `var retain retain count dint`
+     declare theirs with none, neither word being taken. IEC writes the word after the
      section keyword only (Ed 3 Annex A, p.224), over a section; Logix has no qualifier
      (§4.13). A box counter declared `var boxes ctu retain` is refused, and its count is
      kept only once written `var retain boxes ctu`. The options: (a) as built; (b) taken in
@@ -9003,6 +9015,61 @@ done-when reads the next store write; and last the contract walk and the documen
      The options: (a) as built; (b) every leaf listed, `boxes.cv`, `boxes.cu` and the rest,
      which a reader of `retained` would see in full at the cost of a longer list. No
      standard speaks to it.
+  6. *A configuration file's `retain` until M6-3* (raised by M6-2's review). The
+     configuration file reserves no `.ld` word today, so `var_global retain total bool`
+     is read as a global named `retain` of an unknown type `total`, and `var_global
+     retain bool` and `program non_retain m` are accepted, a global and an instance so
+     named. Once M6-3 lands, `var_global retain bool` changes meaning or is refused. On
+     the conveyor, an operator whose plant file names a global `retain` sees it start
+     failing to load at M6-3. The options: (a) M6-3 reserves both words in a
+     configuration file's names too, as `.ld` reserves them, such a plant file then
+     refused with the word named; (b) M6-3 reads a qualifier only where a type follows
+     it, `var_global retain bool` still a global named `retain`. IEC writes the
+     qualifier after the section keyword over a section, `VAR_GLOBAL RETAIN` (Ed 3
+     §6.5.6 and Annex A, p.224), and reserves its keywords everywhere; Logix has no
+     qualifier (§4.13). Left to M6-3, its entry says so.
+
+  *M6-2's review answered (2026-10-27, `042713f`).* The review of `17855c3` (24 mutants, 20 red)
+  found ten things, each answered with a test that fails when its fix is reverted:
+  1. *`Logex.Runner.restart/2 :warm` had no test*: `retain_test.exs` runs the box counter,
+     totaliser and lube `rto` through the runner on the manual clock, trips it on the
+     panel's read, stands it tripped a second and restarts it warm, every retained value
+     kept and the timer adding none of the second, then cold, each lost.
+  2. *A retained real untested*: a `real` and an `lreal[2]` retained and kept warm.
+  3. *A 2-D array of block instances untested*: `cell[2,2]` with a retained `k`, each
+     element's kept and its unmarked members put back.
+  4. *A hand-edited `retained` escaped as another error*: a warm restart now raises a
+     pinned `ArgumentError` where it reaches a path the tags do not give, a non-path or a
+     non-list, decision 194's pattern; a cold restart reads none.
+  5. *The cost claim*: a program's instance of a block whose body retains nothing, or an
+     array of them, is passed over by a guard in the check (`Program.settled/2`), the held
+     blocks that retain nothing named once a check, and a word is read as a possible
+     qualifier only by its length and first letter: against `c963cab`, `edited_by_hand/1`
+     takes 19 reductions an unmarked `seal` instance (24 at `c963cab`, 31 at `17855c3`)
+     and 21 a `seal[2]` (21; 35), `instance/1` 133 and 256 (138 and 256); every program of
+     `cost62.exs` compiles within 24 reductions of what it took, a constant, the `cal`
+     program 229 fewer, scans in exactly what it took, `instance/1` within 21 and a
+     restart within 5; an edit's accept within 91, a constant. A test pins the slopes.
+  6. *Which `now`*: the code was right; the moduledocs, README and §4.13's annotations
+     say the instance's `now`, its last scan's.
+  7. *Qualifier-only refusals that declared nothing*: one out of place or given twice is
+     read without it and declares its tag (readings 2 and 3), and the loader reads `var
+     s1 retain seal` as naming `seal`; `validation_test.exs`'s "`r` is not declared" for
+     `var r retain bool` moved on purpose, its comment saying why.
+  8. *The configuration file's `retain`*: question 6, left to M6-3.
+  9. *§5's RETAIN row*: each older note closed "until M6-2", the landed note last.
+  10. *The walk's reach*: the `rw` walk's program holds a `tp`, an `osr`'s two bits, a
+     real, a 2-D array, a `ctu_int` and a `ton_ltime` too, a ninth reach atom,
+     `rw_types_kept`, held over seeds `{2026, 10, 5001}` to `5010`; `restart/2` stays
+     M6-8's.
+  *Mutation table* (`scratchpad/m6/fixmut/run.log`): 17 mutants, one or more a fix, 17 red, each on the full suite: the runner's
+  restart made cold, each real clause's `retain` dropped, one dimension read of a 2-D
+  array, each of the five warm-restart refusals taken out and the path guard removed, each
+  guard of the unmarked blocks' check, a refused line declaring nothing, a misplaced
+  qualifier's own not kept, the loader's third-word clause and the clause for a
+  qualifier after an initial value. Two clauses only save reductions and change no
+  outcome, an array of built-ins passed over in the compile's settling and a word's first
+  letter in `may_qualify/1`; the cost figures above hold with them.
 - **M6-3 · Globals.** `var_global retain|non_retain` in `Logex.Configuration.Text`,
   `%Logex.Configuration.Global{}`, `print/1`'s exact round trip, `check/1`'s refusal of
   a located global's `retain` and decision 272's warning, "`m1.run` is retained and
@@ -9013,7 +9080,9 @@ done-when reads the next store write; and last the contract walk and the documen
   disk; a warm `restart/2` during a configuration edit keeps the running instances'
   retained values and drops those set aside (decision 65); the configuration round
   trip's seeded draws include the qualifier; and a configuration with nothing retained
-  cycles in what it did. *Size M.*
+  cycles in what it did. It settles what a configuration file's `retain` and
+  `non_retain` are where they could be names, `var_global retain bool`, question 6 of
+  M6-1's and M6-2's readings, which today reads them as names (M6-2's review). *Size M.*
 
   **Status: not started.**
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with

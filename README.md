@@ -321,7 +321,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   non_retain jog bool` on a program's `var` and `var_output` and a block's three
   sections, the nearest mark on a member's path winning, and a warm restart in the core
   keeping what is marked and initialising everything else, a retained timer resuming
-  from the restart's `now` and nothing edge-driven firing on its first scan; `retain`
+  from its instance's `now`, its last scan's, and nothing edge-driven firing on its first
+  scan, through `Logex.Runtime.restart/3` and `restart/2` and a tripped runner's
+  `Logex.Runner.restart(runner, :warm)`, which counts none of the time it stood tripped; `retain`
   and `non_retain` are reserved words in any case, so a tag named either no longer
   compiles. Still to land: a configuration's `var_global retain`; the image a resource
   starts from; and a store the runner writes on the host's disk every second and at a
@@ -768,8 +770,8 @@ scan after the motor starts again, as a `ton` adds nothing on the scan that firs
 true; `grease_due` lights at its 50 ms, and its reset input `r`, written by the
 `greased` rung above it, clears it, the time counting again from the last scan that saw
 the reset. A restart, warm or cold, starts it at 0 too, since this program marks nothing:
-declared `var retain lube rto`, a warm restart keeps its time, resuming from the
-restart's `now`, and a cold one starts it at 0 (decisions 266 and 273).
+declared `var retain lube rto`, a warm restart keeps its time, resuming from its
+instance's `now`, its last scan's, and a cold one starts it at 0 (decisions 266 and 273).
 
 Each is a timer by every rule a `ton` keeps: one instruction runs it, nothing may follow
 it on its path, logic may move into `.pre` and `.acc`, and a `ton` made a `tof` is a
