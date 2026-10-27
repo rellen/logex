@@ -6384,8 +6384,12 @@ defmodule Logex.EndToEndTest do
 
       # Killed: a fresh runner from the same file comes back with zone 3 forced.
       Process.flag(:trap_exit, true)
+      # The process that opened the card is waited for as it goes, since the fresh
+      # runner opens the same sim, which only one device's process may hold open.
+      opener = Process.monitor(:sys.get_state(card).reporter)
       Process.exit(runner, :kill)
       assert_receive {:EXIT, ^runner, :killed}
+      assert_receive {:DOWN, ^opener, :process, _, _}, 5000
       {runner, clock} = oven_runner(plant, dir, card)
       assert %{forces: %{"zone_t[3]" => 250.0}} = Runner.status(runner)
       assert Runner.get!(runner, "zone_t[3]") === 250.0

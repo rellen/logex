@@ -1189,8 +1189,12 @@ defmodule Logex.LocatedArrayTest do
       assert lamps(card) == [0, 0, 0, 1, 0, 0, 0, 0]
 
       Process.flag(:trap_exit, true)
+      # The process that opened the card is waited for as it goes, since the fresh
+      # runner opens the same sim, which only one device's process may hold open.
+      opener = Process.monitor(:sys.get_state(card).reporter)
       Process.exit(runner, :kill)
       assert_receive {:EXIT, ^runner, :killed}
+      assert_receive {:DOWN, ^opener, :process, _, _}, 5000
 
       {:ok, runner} =
         Runner.start_link(
