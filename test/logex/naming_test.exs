@@ -202,7 +202,9 @@ defmodule Logex.NamingTest do
     # <task>`; M2-6: `task <name> single <global> [interval <ms>] priority <p>`; M4-2:
     # `task <name> continuous [watchdog <ms>]` and `... priority <p> watchdog <ms>`; M5-3:
     # the seven other integer type words of `var_global <name> <type>`; M5-8: the four
-    # bit strings' (decision 156); M5-10: the two reals' (decision 156).
+    # bit strings' (decision 156); M5-10: the two reals' (decision 156); M6-3: the two
+    # qualifiers of `var_global retain <name> <type>`, reserved in a configuration file too
+    # (decision 298).
     assert Enum.sort(Logex.Configuration.Text.keywords()) ==
              [
                "at",
@@ -216,9 +218,11 @@ defmodule Logex.NamingTest do
                "lint",
                "lreal",
                "lword",
+               "non_retain",
                "priority",
                "program",
                "real",
+               "retain",
                "single",
                "sint",
                "task",

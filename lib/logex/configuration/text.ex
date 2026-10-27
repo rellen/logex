@@ -8,13 +8,14 @@ defmodule Logex.Configuration.Text do
       line        -> task | global | program | connection
       task        -> 'task' NAME ['continuous'] ['single' NAME] ['interval' INT]
                      ['priority' INT] ['watchdog' INT]
-      global      -> 'var_global' NAME TYPE [INT] ['at' NAME]
-                   | 'var_global' NAME ARRAY INT* ['at' NAME]
+      global      -> 'var_global' [QUALIFIER] NAME TYPE [INT] ['at' NAME]
+                   | 'var_global' [QUALIFIER] NAME ARRAY INT* ['at' NAME]
       program     -> 'program' NAME NAME ['with' NAME]
       connection  -> PATH (NAME | INT)         PATH: a name with `.` parts, as `m1.start`,
                                                or an element's, `m1.temps[3]` (M5-11)
       TYPE        -> 'bool' | 'dint' | each of Logex.Declarations.type_words/0 (M5-3)
       ARRAY       -> a TYPE with its sizes, one NAME token, `int[8]` or `real[4,8]` (M5-11)
+      QUALIFIER   -> 'retain' | 'non_retain'                                    (M6-3)
 
   `line/1` reads `line` by its first token; `task/3` reads `task`, with `inputs/2` its
   words, `order/4` their order and `value/5` each one's number, for `single` its name and
@@ -46,7 +47,13 @@ defmodule Logex.Configuration.Text do
     continuous one with any of the three, is refused by `Logex.Configuration.check/1`,
     as it is from Elixir;
   - `var_global <name> <type> [<initial>] [at <location>]`, a
-    `%Logex.Configuration.Global{}`;
+    `%Logex.Configuration.Global{}`, and since M6-3 (`docs/organisation.md` §4.13,
+    decisions 267, 268 and 298) `var_global retain <name> …` or `var_global non_retain
+    <name> …`, its `retain` `:retain` or `:non_retain`, the qualifier straight after
+    `var_global` as on a `.ld` declaration line; one given twice, both, or one anywhere
+    else on the line, after the name, the type, the initial value or the location, is a
+    broken line told where it goes, and a line that starts with one is told the line it
+    belongs on;
   - `program <instance> <type> [with <task>]`, a `%Logex.Configuration.Instance{}`, with
     no task where the line names none: IEC's `PROGRAM inst WITH task : type`, the type
     always the third word;
@@ -82,7 +89,12 @@ defmodule Logex.Configuration.Text do
   and `with`, which belongs on a `program` line after the type, so no line starts with it
   and no program type is named by it. M2-6's is `single`, which belongs on a `task` line,
   so no line starts with it and no task is named by it, and M4-2's are `continuous` and
-  `watchdog`, which belong there too. A configuration file reserves its words in that
+  `watchdog`, which belong there too. M6-3's are `retain` and `non_retain`, which belong
+  on a `var_global` line straight after `var_global`, so no line starts with one and, by
+  decision 298, nothing in a configuration file is named by one, a global, an instance, a
+  task, a program type or a device, as no `.ld` tag is; they are the one pair a
+  configuration file shares with a `.ld` file's reserved words. A configuration file
+  reserves its other words in that
   file kind only (§4.8, decision 10): a `.ld` program may name a tag `program`, `task`,
   `single` or `watchdog`. A message names a word only once a line reads it, so
   none offers a line this reader refuses.
@@ -114,8 +126,14 @@ defmodule Logex.Configuration.Text do
               "priority" => :task,
               "watchdog" => :task,
               "with" => :program,
-              "at" => :global
+              "at" => :global,
+              "retain" => :qualifier,
+              "non_retain" => :qualifier
             })
+
+  # M6-3 (decisions 267 and 298): a qualifier straight after `var_global`, each to the
+  # global's `retain`.
+  @qualifiers %{"retain" => :retain, "non_retain" => :non_retain}
 
   @types Map.new(Declarations.elementary(), &{Declarations.word(&1), &1})
   # M5-10: the reals, whose globals take a real initial value.
@@ -142,8 +160,11 @@ defmodule Logex.Configuration.Text do
   # The words that start a line, among which an unknown first word gets a did-you-mean.
   @starts for {word, :line} <- @keywords, do: word
 
-  # The words a `var_global` line reads where its name goes, so no global is named by one.
-  @unnamed Enum.sort(for {word, place} <- @keywords, place in [:global, :type], do: word)
+  # The words a `var_global` line reads where its name goes, so no global is named by one:
+  # since M6-3 a qualifier there is read as one.
+  @unnamed Enum.sort(
+             for {word, place} <- @keywords, place in [:global, :type, :qualifier], do: word
+           )
 
   @doc "The words of a configuration file's lines, lowercase."
   def keywords, do: Map.keys(@keywords)
@@ -365,6 +386,11 @@ defmodule Logex.Configuration.Text do
   defp belongs(:program),
     do: "it goes on a `program` line, as in `program m1 motor with fast`"
 
+  defp belongs(:qualifier),
+    do:
+      "it goes on a `var_global` line, straight after `var_global`, as in " <>
+        "`var_global retain total_boxes dint 0`"
+
   defp belongs(_global_or_type),
     do: "it goes on a `var_global` line, as in `var_global k1 bool at panel.q.0`"
 
@@ -492,19 +518,91 @@ defmodule Logex.Configuration.Text do
       "unexpected #{describe(token)} on the line of task `#{task.name}`: a task takes " <>
         "`continuous`, `single`, `interval`, `priority` and `watchdog`"
 
-  # global -> 'var_global' NAME TYPE [INT] ['at' NAME]
-  #         | 'var_global' NAME ARRAY INT* ['at' NAME]   (M5-11)
-  defp global([], first, _line),
+  # global -> 'var_global' [QUALIFIER] NAME TYPE [INT] ['at' NAME]
+  #         | 'var_global' [QUALIFIER] NAME ARRAY INT* ['at' NAME]   (M5-11, M6-3)
+  #
+  # M6-3: a qualifier straight after `var_global`, then the line as before, the global
+  # holding it; one after it, given twice or both, is the line's one mistake.
+  defp global([{:name, _, word} = token | rest], first, line)
+       when byte_size(word) in [6, 10],
+       do: qualifier(Map.get(@qualifiers, String.downcase(word)), token, {rest, first, line})
+
+  defp global(rest, first, line), do: unqualified(rest, first, line)
+
+  defp qualifier(nil, token, {rest, first, line}), do: unqualified([token | rest], first, line)
+
+  defp qualifier(retain, {:name, _, word} = token, {rest, _first, line}),
+    do: after_qualifier(rest, {retain, word, token}, line)
+
+  defp after_qualifier([], {_retain, word, token}, _line),
+    do:
+      {:error,
+       fail(
+         token,
+         "`var_global #{word}` needs a name and a type, as in " <>
+           "`var_global #{word} total_boxes dint 0`"
+       ), []}
+
+  defp after_qualifier([{:name, _, second} = token | rest], {retain, word, first}, line)
+       when byte_size(second) in [6, 10],
+       do:
+         second_word(
+           Map.get(@qualifiers, String.downcase(second)),
+           token,
+           {rest, {retain, word, first}, line}
+         )
+
+  defp after_qualifier(rest, {retain, _word, token}, line),
+    do: qualified(unqualified(rest, token, line), retain)
+
+  defp second_word(nil, token, {rest, {retain, _word, first}, line}),
+    do: qualified(unqualified([token | rest], first, line), retain)
+
+  # Decision 294's rule in a configuration file: a line refused for its qualifiers alone
+  # still names its global, so that nothing that names it is reported again.
+  defp second_word(_second, {:name, _, second} = token, {rest, {_retain, word, first}, line}),
+    do:
+      {:error, fail(token, both(String.downcase(second) == String.downcase(word), word, second)),
+       still_named(unqualified(rest, first, line))}
+
+  defp still_named({:ok, global}), do: declared(global)
+  defp still_named({:error, _diagnostic, declared}), do: declared
+
+  defp both(true, word, second),
+    do:
+      "`#{second}` is given twice: a global takes `#{word}` once, as in " <>
+        "`var_global #{word} total_boxes dint 0`"
+
+  defp both(false, word, second),
+    do: "a global takes `retain` or `non_retain`, not both: found `#{word}` and `#{second}`"
+
+  defp qualified({:ok, global}, retain), do: {:ok, %{global | retain: retain}}
+  defp qualified(broken, _retain), do: broken
+
+  # A qualifier anywhere else on a `var_global` line is told where it goes.
+  defp misplaced(token, word, global),
+    do:
+      {:error,
+       fail(
+         token,
+         "`#{word}` comes straight after `var_global`, as in " <>
+           "`var_global #{String.downcase(word)} #{global.name} #{example_type(global.type)}`"
+       ), declared(global)}
+
+  defp example_type(nil), do: "dint"
+  defp example_type(type), do: type_text(type)
+
+  defp unqualified([], first, _line),
     do:
       {:error, fail(first, "`var_global` needs a name and a type, as in `var_global estop bool`"),
        []}
 
-  defp global([token | _rest], _first, _line) when is_literal(token),
+  defp unqualified([token | _rest], _first, _line) when is_literal(token),
     do:
       {:error,
        fail(token, "expected a global's name after `var_global`, found #{describe(token)}"), []}
 
-  defp global([{:name, _, word} = token | rest], first, line),
+  defp unqualified([{:name, _, word} = token | rest], first, line),
     do: named_global(String.downcase(word), word, token, {rest, first, line})
 
   # A type word or `at` where the name goes is read as itself: the name is missing.
@@ -546,6 +644,9 @@ defmodule Logex.Configuration.Text do
 
   defp type_word(key, _word, _token, {rest, global}) when is_map_key(@types, key),
     do: initial(rest, %{global | type: Map.fetch!(@types, key)})
+
+  defp type_word(key, word, token, {_rest, global}) when is_map_key(@qualifiers, key),
+    do: misplaced(token, word, global)
 
   # M5-11 (decision 151): an array's type word, `int[8]` or `real[4,8]`, its sizes literal
   # numbers, then an initial list of one literal an element, as a declaration line's, which
@@ -626,6 +727,10 @@ defmodule Logex.Configuration.Text do
   defp located([{:name, _, word} = token | rest], %Global{at: nil} = global),
     do: at(String.downcase(word), token, rest, global)
 
+  # M6-3: a qualifier after the location is told where it goes.
+  defp located([{:name, _, word} = token | _rest], global) when byte_size(word) in [6, 10],
+    do: late(is_map_key(@qualifiers, String.downcase(word)), token, word, global)
+
   # A number after the initial value, or anything after the location.
   defp located([extra | _rest], global),
     do: {:error, fail(extra, after_global(extra, global)), declared(global)}
@@ -639,7 +744,15 @@ defmodule Logex.Configuration.Text do
        fail(at_found(rest, token), "`at` needs a location, as in `at panel.i.0`" <> found(rest)),
        declared(global)}
 
+  defp at(key, {:name, _, word} = token, _rest, global) when is_map_key(@qualifiers, key),
+    do: misplaced(token, word, global)
+
   defp at(_word, token, _rest, global),
+    do: {:error, fail(token, after_global(token, global)), declared(global)}
+
+  defp late(true, token, word, global), do: misplaced(token, word, global)
+
+  defp late(false, token, _word, global),
     do: {:error, fail(token, after_global(token, global)), declared(global)}
 
   defp after_global(token, global),
@@ -890,13 +1003,19 @@ defmodule Logex.Configuration.Text do
     Enum.join(words, " ") <> "\n"
   end
 
-  defp printed(%Global{} = global),
+  defp printed(%Global{retain: nil} = global),
     do:
       Enum.join(
         ["var_global", global.name, type_text(global.type)] ++
           initial_text(global.type, global.initial) ++ given("at", global.at),
         " "
       ) <> "\n"
+
+  # M6-3: the qualifier straight after `var_global`.
+  defp printed(%Global{retain: retain} = global),
+    do:
+      "var_global #{qualifier_text(retain)} " <>
+        String.replace_prefix(printed(%{global | retain: nil}), "var_global ", "")
 
   defp printed(%Instance{name: name, type: type, task: task}),
     do: Enum.join(["program", name, type] ++ given("with", task), " ") <> "\n"
@@ -913,6 +1032,9 @@ defmodule Logex.Configuration.Text do
     do: Enum.map(values, &"#{spelled(type, &1)}")
 
   defp initial_text(type, value), do: given(nil, spelled(type, value))
+
+  defp qualifier_text(:retain), do: "retain"
+  defp qualifier_text(:non_retain), do: "non_retain"
 
   defp flagged(true), do: ["continuous"]
   defp flagged(false), do: []
@@ -943,7 +1065,8 @@ defmodule Logex.Configuration.Text do
     either (M2-6, M4-2); its interval, its priority and its watchdog each nil or an
     integer; and whether it is continuous true or false (M4-2);
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
-    `at` or a type word in any case, which a line reads as that keyword; its type an
+    `at`, a type word or since M6-3 a qualifier in any case, which a line reads as that
+    keyword; its `retain` nil, `:retain` or `:non_retain` (M6-3); its type an
     elementary type, `:bool`, `:dint` or since M5-3 any integer type, or since M5-11 an
     array of one, `{:array, :int, [4, 8]}`, its sizes a non-empty list of integers; its
     initial value nil or an integer, a real's a float of its values too, and an array's
@@ -1023,6 +1146,7 @@ defmodule Logex.Configuration.Text do
     type!(type, entry)
     initial!(type, initial, entry)
     optional_name!(at, entry)
+    retain!(entry.retain, entry)
   end
 
   defp fields!(%Instance{name: name, type: type, task: task} = entry) do
@@ -1036,6 +1160,13 @@ defmodule Logex.Configuration.Text do
     path!(instance, member, entry)
     to!(to, entry)
   end
+
+  # M6-3: a line says a global's qualifier by its word straight after `var_global`, and by
+  # none that it has none.
+  defp retain!(retain, _entry) when retain in [nil, :retain, :non_retain], do: :ok
+
+  defp retain!(_retain, entry),
+    do: unsaid!("a global's retain is :retain, :non_retain or nil", entry)
 
   # M4-2: a line says a task is continuous by a word, and by its absence that it is not.
   defp continuous!(continuous, _entry) when is_boolean(continuous), do: :ok

@@ -580,7 +580,7 @@ defmodule Logex.TypeTableTest do
       assert raised(fn -> Text.entries!([%Global{name: "e", type: :float}]) end) ==
                "not an entry a configuration file can say: a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one, as in `{:array, :int, [8]}`, " <>
                  "got: %Logex.Configuration.Global{name: \"e\", type: :float, initial: nil, at: nil, " <>
-                 "line: nil}"
+                 "line: nil, retain: nil}"
 
       assert raised(fn ->
                Configuration.new!(

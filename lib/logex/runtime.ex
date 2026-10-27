@@ -136,6 +136,10 @@ defmodule Logex.Runtime do
     kept by `restart/2` and by every step of an edit;
   - a global starts by `Logex.Configuration.initial/1`: at `start/1`, at `restart/2` but
     for an input point, whose value is the host's from its first cycle on and is kept, and
+    since M6-3 at a warm `restart/2` but for a global the configuration declares `retain`
+    (decisions 268 and 271), whose value it keeps, a var_external of it reading the kept
+    value, no located global being one (decision 272); at a cold one every such global too;
+    and
     at the switch that first finds one the configuration started declares missing. A kept
     one whose initial value an edit changes keeps its running value until `restart/2`
     (decision 44); one only the configuration stopped declares is kept unused until
@@ -764,8 +768,10 @@ defmodule Logex.Runtime do
 
   @doc """
   Starts the resource again, `:cold` or, since M6-2, `:warm`, which keeps each path an
-  instance's program retains as `restart/3` does (decisions 271 and 273), its globals as
-  a cold restart puts them until a global may be retained (M6-3). It is then as
+  instance's program retains as `restart/3` does (decisions 271 and 273), and since M6-3
+  each global the configuration declares `retain`, `var_global retain total_boxes dint 0`,
+  at the value the resource holds, which a var_external of it reads, every other global
+  as a cold restart puts it (decision 268). It is then as
   `start/1` left it, but for its clock and its input image, which it keeps: every other
   global back at its initial value, each instance through `restart/3`, every task with an
   interval due at the next cycle, every trigger's last sample 0, so a trigger already 1
@@ -781,7 +787,7 @@ defmodule Logex.Runtime do
 
     %{
       runtime
-      | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime)}),
+      | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime, mode)}),
         instances:
           Map.new(runtime.instances, fn {name, state} ->
             restarted =
@@ -798,7 +804,12 @@ defmodule Logex.Runtime do
     }
   end
 
-  defp restarted(%Configuration.Global{name: name} = global, %__MODULE__{} = runtime),
+  # M6-3 (decisions 268 and 271): a warm restart keeps a retained global's value, which no
+  # located global is; every other global as a cold restart puts it.
+  defp restarted(%Configuration.Global{retain: :retain, name: name}, runtime, :warm),
+    do: Map.fetch!(runtime.globals, name)
+
+  defp restarted(%Configuration.Global{name: name} = global, %__MODULE__{} = runtime, _mode),
     do: input_kept(Map.has_key?(runtime.wiring.inputs, name), global, runtime)
 
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)

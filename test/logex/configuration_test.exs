@@ -3569,6 +3569,9 @@ defmodule Logex.ConfigurationTest do
         arrays() ++
         snapshots(snapshot?)
 
+    # M6-3: each global's qualifier drawn, a located one's `non_retain` alone.
+    globals = Enum.map(globals, &qualified/1)
+
     instances =
       for(i <- 1..count, do: %Instance{name: "m#{i}", type: "motor", task: on_task.()}) ++
         snapshot_instances(snapshot?, on_task.())
@@ -3596,6 +3599,11 @@ defmodule Logex.ConfigurationTest do
       connections: Enum.shuffle(connections)
     )
   end
+
+  defp qualified(%Global{at: nil} = global),
+    do: %{global | retain: Enum.random([nil, nil, :retain, :non_retain])}
+
+  defp qualified(%Global{} = global), do: %{global | retain: Enum.random([nil, nil, :non_retain])}
 
   defp sp(i, :located), do: %Global{name: "sp_#{i}", type: :dint, at: "drive.q.#{i}.0"}
   defp sp(i, :fixed), do: %Global{name: "sp_#{i}", type: :dint, initial: 1200 + i}
@@ -4875,11 +4883,12 @@ defmodule Logex.ConfigurationTest do
               "a name lexes as one name token",
               "a connection's instance has no `.`: its first `.` begins the member",
               "a connection is to a global, by its name, or to a constant",
-              "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+              "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `non_retain`, `real`, `retain`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                 "word as its keyword",
               "a number is an integer",
               "a real global's real initial value is one of its type's values, as a line reads it",
-              "a task's continuous is true or false"
+              "a task's continuous is true or false",
+              "a global's retain is :retain, :non_retain or nil"
             ]
             |> Enum.map(&Regex.escape/1)
             |> Enum.join("|")
@@ -4906,6 +4915,7 @@ defmodule Logex.ConfigurationTest do
     # the delimiters, and a few that do not lex.
     @vocabulary ~w(var_global VAR_GLOBAL program Program at AT bool Dint task Task interval
                    PRIORITY with With single continuous Continuous watchdog WATCHDOG main
+                   retain RETAIN non_retain Non_Retain
                    fast m m2 m.start m.stop m.motor m.sp m.fault m.t1
                    m.t1.pre m.x.y m2.start pb
                    pb2 k sp seal Seal x.y panel.i.0 panel.I.0 panel.q.00 Panel.q.1 panel.q.0

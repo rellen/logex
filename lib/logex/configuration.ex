@@ -222,16 +222,25 @@ defmodule Logex.Configuration do
     an input point, set by the host; one at a `q` address an output point, given back to
     the host after every cycle. Since M5-13 a located array is a point an element, at
     consecutive addresses from `at`, each named by its element, `temps[3]`.
+
+    Since M6-3 (`docs/organisation.md` §4.13, decisions 268, 271 and 272) `retain` is the
+    line's qualifier, as a `%Logex.Tag{}`'s is: `:retain` for `var_global retain
+    total_boxes dint 0`, which `Logex.Runtime.restart/2` with `:warm` keeps, `:non_retain`
+    for `var_global non_retain count dint`, which states the default, and nil for a line
+    with none, which is not retained. A located global takes no `:retain`. From Elixir the
+    struct is built by hand, so it carries the atom, as a tag's struct does (decision 296's
+    note).
     """
     @enforce_keys [:name, :type]
-    defstruct [:name, :type, initial: nil, at: nil, line: nil]
+    defstruct [:name, :type, initial: nil, at: nil, line: nil, retain: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
             type: Logex.Declarations.elementary(),
             initial: non_neg_integer | nil,
             at: String.t() | nil,
-            line: pos_integer | nil
+            line: pos_integer | nil,
+            retain: :retain | :non_retain | nil
           }
   end
 
@@ -271,6 +280,9 @@ defmodule Logex.Configuration do
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
+  # Decision 298: the qualifiers, which name nothing in a configuration file, a device
+  # among it.
+  @qualifier_words ["retain", "non_retain"]
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
@@ -827,7 +839,8 @@ defmodule Logex.Configuration do
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
      Enum.map(
-       warnings({tasks, globals, instances}, wiring, externals, triggers) ++ timed(world),
+       warnings({tasks, globals, instances}, wiring, externals, triggers) ++
+         timed(world) ++ retained_outputs(retaining(programs), wiring.driven, {world, globals}),
        &%{&1 | file: file}
      )
      |> Enum.sort_by(&line_order/1)}
@@ -1048,7 +1061,10 @@ defmodule Logex.Configuration do
         counted(task.watchdog, watchdog_rule(name)) ++ flag(task.continuous, name)
 
   defp said(%Global{} = global),
-    do: named(global) ++ global_type(global) ++ global_initial(global) ++ global_at(global)
+    do:
+      named(global) ++
+        global_type(global) ++
+        global_initial(global) ++ global_at(global) ++ global_retain(global)
 
   defp said(%Instance{type: type, task: task} = instance),
     do:
@@ -1123,6 +1139,15 @@ defmodule Logex.Configuration do
   defp proper_elements([], acc), do: acc
   defp proper_elements([element | rest], acc), do: proper_elements(rest, [element | acc])
   defp proper_elements(_improper, _acc), do: [:improper]
+
+  # M6-3 (decision 267): a line's qualifier, or none.
+  defp global_retain(%Global{retain: retain}) when retain in [nil, :retain, :non_retain], do: []
+
+  defp global_retain(%Global{name: name, retain: retain}),
+    do: [
+      "unknown qualifier #{inspect(retain)} on global #{label(name)}: logex has :retain and " <>
+        ":non_retain, or nil for none"
+    ]
 
   defp global_initial(%Global{initial: nil}), do: []
 
@@ -1702,6 +1727,11 @@ defmodule Logex.Configuration do
 
   defp triggered(:skip, _task), do: {[], MapSet.new()}
 
+  # M6-3 (decision 272): a located global takes no `retain`, so no output comes back on
+  # from a kept value, and an input point is read again at every start.
+  defp global(%Global{retain: :retain, at: at} = global) when at != nil,
+    do: retained_point(location(at), global) ++ global(%{global | retain: nil})
+
   defp global(%Global{type: type} = global) when is_elementary(type),
     do: initial(global, location(global.at))
 
@@ -1761,6 +1791,16 @@ defmodule Logex.Configuration do
   end
 
   defp a_point(:error, _global), do: "located"
+
+  defp retained_point(location, %Global{name: name, line: line} = global),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` is #{a_point(location, global)}, and a located global takes no `retain`: " <>
+          "an input point is read again at every start, and an output point starts at 0 " <>
+          "until logic writes it"
+      )
+    ]
 
   defp direction_word("i"), do: "input"
   defp direction_word("q"), do: "output"
@@ -1996,9 +2036,26 @@ defmodule Logex.Configuration do
           "and its address has no leading zero, so it is written `#{spelling(address)}`"
       )
 
+  # Decision 298: a qualifier names no device, as it names nothing else in a configuration
+  # file, a global's own name refused or not.
+  defp at_spelled({:ok, {device, _io, _fields}} = spelled, global, keeps, acc)
+       when byte_size(device) in [6, 10],
+       do: device_word(String.downcase(device) in @qualifier_words, spelled, global, {keeps, acc})
+
   defp at_spelled({:ok, _address}, _global, false, acc), do: acc
 
   defp at_spelled({:ok, {device, _io, _fields} = address}, global, true, {_, devices, _} = acc),
+    do: device(Map.get(devices, String.downcase(device)), address, global, acc)
+
+  defp device_word(true, {:ok, {device, _io, _fields}}, global, {_keeps, acc}),
+    do: noted(acc, global.line, "`#{device}` is a keyword and cannot name a device")
+
+  defp device_word(false, {:ok, address}, global, {keeps, acc}),
+    do: located_at(address, global, acc, keeps)
+
+  defp located_at(_address, _global, acc, false), do: acc
+
+  defp located_at({device, _io, _fields} = address, global, {_, devices, _} = acc, true),
     do: device(Map.get(devices, String.downcase(device)), address, global, acc)
 
   defp device(
@@ -3267,6 +3324,37 @@ defmodule Logex.Configuration do
        writers(externals.writers, wiring.driven, arrays(globals)))
     |> Enum.sort_by(&line_order/1)
   end
+
+  # M6-3 (decision 272): a retained var_output a connection wires straight to an output
+  # point, or to an element of an array of them, is told that a warm start writes it in the
+  # first round, the kept value driving the point at once. Only a direct connection is
+  # seen: logic that reads a retained value and writes an output another way is not. The
+  # program types that retain something are found first, a map of the programs given, so a
+  # configuration that retains nothing pays one pass of its types (retaining/1).
+  defp retaining(programs) when is_map(programs),
+    do: for({_name, %Program{retained: [_ | _]}} <- programs, do: true) != []
+
+  defp retained_outputs(false, _driven, _world), do: []
+
+  defp retained_outputs(true, driven, {world, globals}) do
+    # A connection drives no input point, which check/1 refuses, so every located global a
+    # good connection drives is an output point, or an array of them.
+    outputs = for %Global{name: name, at: at} <- globals, at != nil, into: MapSet.new(), do: name
+
+    for {target, %Connection{instance: instance, member: member} = connection} <- driven,
+        MapSet.member?(outputs, root(target)),
+        {:ok, {_instance, %Program{retained: [_ | _] = retained}}} <-
+          [Map.fetch(world.runnable, instance)],
+        root(member) in retained,
+        do:
+          warning(
+            connection.line,
+            "`#{instance}.#{member}` is retained and drives the output `#{target}`: after a " <>
+              "warm start it is written in the first round"
+          )
+  end
+
+  defp root(name), do: hd(:binary.split(name, "["))
 
   # M2-4 (decision 48): each instance that writes a global through its var_external after
   # an earlier one does, in line order, is told the first; and each that writes one a

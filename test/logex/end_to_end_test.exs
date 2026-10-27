@@ -6991,4 +6991,127 @@ defmodule Logex.EndToEndTest do
       Runner.stop(runner)
     end
   end
+
+  # PLAN.md M6-3's Done-when, as it is worded: §4.4's plant with a retained `total_boxes`
+  # global, shared through `var_external`, and a retained counter keeps both through
+  # `restart/2 :warm` and loses them through `:cold`, from a configuration file's text and
+  # from files on disk. The oracle knows nothing of logex: each start's first cycle counts
+  # no box, and every later cycle counts one where the eye rose since the cycle before; a
+  # warm restart keeps both counts and a cold one empties them.
+  describe "retained globals in the plant (M6-3)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration
+    alias Logex.Configuration.Text
+
+    @tally_ld """
+    var_input eye bool
+    var_external total_boxes dint
+    var retain boxes ctu
+    var e bool
+
+    xic eye ctu boxes 100000
+    xic eye ons e add total_boxes 1 total_boxes
+    """
+
+    @tally """
+
+    var_global eye_1 bool at panel.i.8
+    var_global retain total_boxes dint 0
+
+    program tally tally
+      tally.eye eye_1
+    """
+
+    defp tally_plant, do: whole_plant() <> @tally
+
+    defp tally_programs do
+      {programs, files} = shared_programs()
+      {:ok, tally} = Logex.compile(@tally_ld, name: "tally")
+      {Map.put(programs, "tally", tally), Map.put(files, "tally.ld", @tally_ld)}
+    end
+
+    # The oracle: the two counts, the eye's last sample and whether the next cycle is a
+    # start's first.
+    defp tallied({:cycle, eye}, {total, cv, prev, first}),
+      do: counted(first, prev, eye, {total, cv})
+
+    defp tallied({:restart, :warm}, {total, cv, prev, _first}), do: {total, cv, prev, true}
+    defp tallied({:restart, :cold}, {_total, _cv, prev, _first}), do: {0, 0, prev, true}
+
+    defp counted(true, _prev, eye, {total, cv}), do: {total, cv, eye, false}
+    defp counted(false, 0, 1, {total, cv}), do: {total + 1, cv + 1, 1, false}
+    defp counted(false, _prev, eye, {total, cv}), do: {total, cv, eye, false}
+
+    defp stepped({:cycle, eye}, {runtime, now}) do
+      inputs = Map.merge(started(now), %{"eye_1" => eye})
+      {runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, min(now, 10), inputs)
+      {runtime, now + 10}
+    end
+
+    defp stepped({:restart, mode}, {runtime, now}),
+      do: {Logex.Runtime.restart(runtime, mode), now}
+
+    defp kept({:restart, mode}, {total, _cv, _prev, _first}) when total > 0,
+      do: Process.put(:m63_reach, MapSet.put(Process.get(:m63_reach, MapSet.new()), mode))
+
+    defp kept(_step, _model), do: :ok
+
+    defp the_retained_done_when(plant, text) do
+      assert plant.warnings == []
+      assert Text.print(plant) == printed_as(text)
+
+      assert Enum.find(plant.globals, &(&1.name == "total_boxes")) ==
+               %Configuration.Global{
+                 name: "total_boxes",
+                 type: :dint,
+                 initial: 0,
+                 retain: :retain,
+                 line: watched_line(text, "var_global retain total_boxes")
+               }
+
+      :rand.seed(:exsss, {2026, 10, 63})
+      Process.delete(:m63_reach)
+
+      steps =
+        for _ <- 1..400,
+            do: Enum.random(List.duplicate(:cycle, 12) ++ [{:restart, :warm}, {:restart, :cold}])
+
+      steps = Enum.map(steps, &with_eye/1)
+
+      Enum.reduce(steps, {{Logex.Runtime.start(plant), 0}, {0, 0, 0, true}}, fn step,
+                                                                                {at, model} ->
+        kept(step, model)
+        {runtime, _now} = at = stepped(step, at)
+        {total, cv, _prev, _first} = model = tallied(step, model)
+        assert Logex.Runtime.get!(runtime, "total_boxes") == total
+        assert Logex.Runtime.get!(runtime, "tally.total_boxes") == total
+        assert Logex.Runtime.get!(runtime, "tally.boxes.cv") == cv
+        {at, model}
+      end)
+
+      # Both kinds of restart met counts that were not 0.
+      assert Process.get(:m63_reach) == MapSet.new([:warm, :cold])
+    end
+
+    defp with_eye(:cycle), do: {:cycle, Enum.random([0, 1])}
+    defp with_eye(restart), do: restart
+
+    test "M6-3's Done-when, from a configuration file's text" do
+      {programs, _files} = tally_programs()
+      assert {:ok, plant} = Configuration.compile("plant", tally_plant(), programs)
+      the_retained_done_when(plant, tally_plant())
+    end
+
+    test "M6-3's Done-when, from files on disk", %{tmp_dir: dir} do
+      {_programs, files} = tally_programs()
+
+      for {name, text} <-
+            Map.merge(files, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => tally_plant()}),
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, plant} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      the_retained_done_when(plant, tally_plant())
+    end
+  end
 end

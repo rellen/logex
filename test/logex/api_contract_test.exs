@@ -3600,7 +3600,8 @@ defmodule Logex.ApiContractTest do
   ]
 
   @ext_reach ~w(restart saw_earlier_write missed_later_write output_via_external
-                copy_out_over_external pulse_fired dint_moved not_due)a
+                copy_out_over_external pulse_fired dint_moved not_due
+                ext_retained_kept ext_retained_lost ext_retained_read ext_unretained_warm)a
 
   # 120 configurations of up to six instances of the types above, 40 steps each: a cycle,
   # or now and then a restart. After each, every global, every var_external of every
@@ -3609,6 +3610,11 @@ defmodule Logex.ApiContractTest do
   # another instance changed earlier in the cycle read through a var_external, a write a
   # reader earlier in the cycle missed, an output point written through one, a copy-out
   # over the same scan's write through one, a one-shot fired, a dint moved, a task not due.
+  # Since M6-3 each unlocated global's qualifier is drawn, `retain`, `non_retain` or none,
+  # and a warm restart keeps exactly the retained ones, restated here from the draw alone
+  # (decisions 268 and 271), every other global as a cold one puts it: its reach a retained
+  # global kept warm, one put back cold, one kept and read through a var_external after
+  # the restart, and one with no `retain` put back warm.
   test "a resource whose programs share globals through var_external runs as a model of " <>
          "one map of globals says, with one copy of each" do
     programs =
@@ -3661,12 +3667,22 @@ defmodule Logex.ApiContractTest do
       globals:
         for(
           {name, type, at, initial} <- @ext_globals,
-          do: %Logex.Configuration.Global{name: name, type: type, at: at, initial: initial}
+          do: %Logex.Configuration.Global{
+            name: name,
+            type: type,
+            at: at,
+            initial: initial,
+            retain: ext_qualifier(at)
+          }
         ),
       instances: instances,
       connections: connections
     )
   end
+
+  # M6-3: an unlocated global's qualifier drawn; a located one takes no `retain`.
+  defp ext_qualifier(nil), do: pick([nil, :retain, :non_retain, :retain])
+  defp ext_qualifier(_at), do: nil
 
   defp ext_wire(%Logex.Configuration.Instance{type: "mixed", name: name}, sinks) do
     source = %Logex.Configuration.Connection{
@@ -3720,11 +3736,16 @@ defmodule Logex.ApiContractTest do
 
   defp ext_step(1, config, runtime, model) do
     mode = pick([:cold, :warm])
+    retained = for %{retain: :retain, name: g} <- config.globals, into: MapSet.new(), do: g
+    ext_restart_reach(mode, retained, config, model)
 
     model = %{
       model
       | globals:
-          Map.new(model.globals, fn {g, v} -> {g, ext_kept(ext_input?(g), v, ext_initial(g))} end),
+          Map.new(model.globals, fn {g, v} ->
+            {g,
+             ext_restarted(mode, MapSet.member?(retained, g), {ext_input?(g), v, ext_initial(g)})}
+          end),
         own: Map.new(config.instances, &{&1.name, ext_own(&1.type)}),
         first: Map.new(config.instances, &{&1.name, true}),
         next: Map.new(config.tasks, &{&1.name, model.now})
@@ -3761,6 +3782,30 @@ defmodule Logex.ApiContractTest do
 
   defp ext_kept(true, value, _initial), do: value
   defp ext_kept(false, _value, initial), do: initial
+
+  # The rule restated: a warm restart keeps a retained global, and every other global, and
+  # every global at a cold one, is kept where it is an input point and put back otherwise.
+  defp ext_restarted(:warm, true, {_input, value, _initial}), do: value
+
+  defp ext_restarted(_mode, _retained, {input, value, initial}),
+    do: ext_kept(input, value, initial)
+
+  defp ext_restart_reach(mode, retained, config, model) do
+    moved = for {g, v} <- model.globals, v != ext_initial(g), into: MapSet.new(), do: g
+    kept = MapSet.intersection(moved, retained)
+
+    read =
+      for i <- config.instances,
+          {name, %Tag{section: :var_external}} <- config.programs[i.type].tags,
+          into: MapSet.new(),
+          do: name
+
+    unretained = for g <- moved, not MapSet.member?(retained, g), not ext_input?(g), do: g
+    ext_reach(:ext_retained_kept, mode == :warm and MapSet.size(kept) > 0)
+    ext_reach(:ext_retained_lost, mode == :cold and MapSet.size(kept) > 0)
+    ext_reach(:ext_retained_read, mode == :warm and not MapSet.disjoint?(kept, read))
+    ext_reach(:ext_unretained_warm, mode == :warm and unretained != [])
+  end
 
   defp ext_input(:bool), do: pick([0, 1])
   defp ext_input(:dint), do: pick([0, 5, 11, 40])

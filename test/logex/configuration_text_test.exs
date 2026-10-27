@@ -744,13 +744,13 @@ defmodule Logex.Configuration.TextTest do
              "a connection is to a global, by its name, or to a constant"},
             # A keyword a line reads in a global's name place: no line can say these.
             {%{a | name: "AT"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `non_retain`, `real`, `retain`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "bool"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `non_retain`, `real`, `retain`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "Dint"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `non_retain`, `real`, `retain`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"}
           ] do
         assert_raise ArgumentError, unsaid(rule, entry), fn -> Text.entries!([m1, entry]) end
@@ -934,8 +934,11 @@ defmodule Logex.Configuration.TextTest do
              "TASK did not start its line"
     end
 
+    # Decision 298: the qualifiers, `retain` and `non_retain`, are the one pair a
+    # configuration file shares with a program's reserved words, so they are left out here
+    # and pinned reserved in both below.
     test "and none is reserved in a program" do
-      for word <- Text.keywords() -- Logex.Declarations.type_words() do
+      for word <- Text.keywords() -- (Logex.Declarations.type_words() ++ ~w(retain non_retain)) do
         assert {:ok, _} = Logex.compile("var #{word} bool\nxic #{word} ote #{word}", name: "p")
       end
     end
