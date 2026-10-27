@@ -146,8 +146,9 @@ defmodule Logex.Runtime do
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
     restarts it through `restart/3`: since M6-2 a warm one keeps each path its program
     retains (`Logex.Program`'s `retained`, decisions 266 and 270), a retained timer's
-    `last` set to the resource's `now` so the time the resource stood is not counted
-    (decision 273), and puts back every other, a cold one every path; an instance set
+    `last` set to the instance's own `now`, its last scan's, so the time before the
+    restart since the timer last ran is not counted (decision 273, decision 188 holding),
+    and puts back every other, a cold one every path; an instance set
     aside is dropped either way (decision 65). A cycle reports the faults of its scan as events and
     keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
     and an edit's switch find it so. An edit's switch moves a kept one by its program
@@ -517,24 +518,49 @@ defmodule Logex.Runtime do
     }
   end
 
-  defp restarted(:warm, %Program{retained: [_ | _] = retained} = program, env, now),
+  defp restarted(:warm, %Program{retained: nil} = program, env, _now), do: cold(program, env)
+
+  defp restarted(:warm, %Program{retained: retained} = program, env, now),
     do: warm(retained, cold(program, env), env, {Program.typed_tags(program), now})
 
-  defp restarted(_cold_or_nothing_retained, program, env, _now), do: cold(program, env)
+  defp restarted(_cold, program, env, _now), do: cold(program, env)
 
   defp cold(program, env), do: Map.merge(Program.initial_env(program), inputs(program, env))
 
   # M6-2: each retained path's value taken from the state into the cold env, its timers'
   # `last` set to `now`. A path is its tag's name, then a member's at each instance, a
-  # `[*]` reaching each element of an array of instances (Logex.Program.retained/2).
-  defp warm(paths, started, env, {tags, now}),
+  # `[*]` reaching each element of an array of instances (Logex.Program.retained/2). A
+  # program `instance/1` checked and the host then edited by hand is trusted, as decision
+  # 194 has it, and a warm restart that reaches retained paths its tags do not give raises
+  # a pinned ArgumentError there (M6-2's review).
+  defp warm([path | paths], started, env, {tags, now} = at) when is_binary(path) do
+    [name | members] = String.split(path, ".")
+    {name, each} = each(name)
+    kept = {env[name], started[name]}
+    put = warm_tag(Map.fetch(tags, name), {each, members}, kept, {now, path})
+    warm(paths, Map.put(started, name, put), env, at)
+  end
+
+  defp warm([], started, _env, _at), do: started
+
+  defp warm([path | _paths], _started, _env, _at),
     do:
-      Enum.reduce(paths, started, fn path, started ->
-        [name | members] = String.split(path, ".")
-        {name, each} = each(name)
-        type = Map.fetch!(tags, name).type
-        Map.put(started, name, warm_kept({each, members}, type, {env[name], started[name]}, now))
-      end)
+      raise(
+        ArgumentError,
+        "a warm restart keeps the retained path #{inspect(path)}, which is no path: " <>
+          by_hand()
+      )
+
+  defp warm(paths, _started, _env, _at),
+    do:
+      raise(
+        ArgumentError,
+        "a warm restart reads retained paths that are no list of paths, got: " <>
+          "#{inspect(paths)}: #{by_hand()}"
+      )
+
+  defp warm_tag({:ok, %Tag{type: type}}, path, kept, at), do: warm_kept(path, type, kept, at)
+  defp warm_tag(:error, _path, _kept, {_now, path}), do: unretainable(path)
 
   # `gates[*]`: every element of an array of instances, the rest of the path in each.
   defp each(name), do: each_of(String.split(name, "[*]"), name)
@@ -542,27 +568,41 @@ defmodule Logex.Runtime do
   defp each_of([name, ""], _whole), do: {name, true}
   defp each_of(_parts, name), do: {name, false}
 
-  defp warm_kept({false, []}, type, {value, _started}, now), do: rebased(type, value, now)
+  defp warm_kept({false, []}, type, {value, _started}, {now, _path}),
+    do: rebased(type, value, now)
 
-  defp warm_kept({true, members}, {:array, type, dims}, {values, started}, now),
-    do: zipped(length(dims), values, started, &warm_kept({false, members}, type, {&1, &2}, now))
+  defp warm_kept({true, members}, {:array, type, dims}, {values, started}, at),
+    do: zipped(length(dims), values, started, &warm_kept({false, members}, type, {&1, &2}, at))
 
-  defp warm_kept({false, [member | rest]}, %FbType{} = type, {value, started}, now) do
-    {member, each} = each(member)
-    found = Enum.find(type.members, &(&1.name == member))
-    inner = FbType.type_of(type, found)
-
-    Map.put(
-      started,
-      member,
-      warm_kept(
-        {each, rest},
-        inner,
-        {Map.fetch!(value, member), Map.fetch!(started, member)},
-        now
-      )
-    )
+  defp warm_kept({false, [member | rest]}, %FbType{} = type, kept, at) do
+    {name, each} = each(member)
+    warm_member(Enum.find(type.members, &(&1.name == name)), {type, {each, rest}}, kept, at)
   end
+
+  defp warm_kept(_members, _type, _kept, {_now, path}), do: unretainable(path)
+
+  defp warm_member(%Member{name: name} = found, {type, rest}, {value, started}, at),
+    do:
+      Map.put(
+        started,
+        name,
+        warm_kept(
+          rest,
+          FbType.type_of(type, found),
+          {Map.fetch!(value, name), Map.fetch!(started, name)},
+          at
+        )
+      )
+
+  defp warm_member(nil, _type, _kept, {_now, path}), do: unretainable(path)
+
+  defp unretainable(path),
+    do:
+      raise(
+        ArgumentError,
+        "a warm restart keeps the retained path `#{path}`, which the program's tags do not " <>
+          "give: #{by_hand()}"
+      )
 
   # Two arrays of one shape, element by element, a tuple of tuples for more dimensions.
   defp zipped(1, values, started, fun),
@@ -579,7 +619,7 @@ defmodule Logex.Runtime do
       |> Enum.zip_with(Tuple.to_list(started), &zipped(depth - 1, &1, &2, fun))
       |> List.to_tuple()
 
-  # Decision 273: a retained timer's `last` is the restart's `now`, at any depth.
+  # Decision 273: a retained timer's `last` is the instance's `now`, at any depth.
   defp rebased(%FbType{body: nil} = type, value, now),
     do: rebased_built_in(FbType.rules(type), value, now)
 

@@ -137,6 +137,67 @@ defmodule Logex.RetainTest do
              ]
     end
 
+    # M6-2's review: so is one refused for a qualifier out of its place or given twice,
+    # read without it: with the qualifier in its place where it has one, and none where
+    # two were given.
+    test "a line refused for a qualifier out of place or given twice still declares its tag" do
+      assert errors(
+               "var retain non_retain a bool\nvar retain retain b bool\nvar c retain bool\n" <>
+                 "var d bool retain\nvar e dint 5 retain\nvar f retain retain bool\n" <>
+                 "var x bool\nxic a ote x\nxic b ote x\nxic c ote x\nxic d ote x\n" <>
+                 "xic x move e e\nxic f ote x"
+             ) == [
+               "line 1: a declaration takes `retain` or `non_retain`, not both: found " <>
+                 "`retain` and `non_retain`",
+               "line 2: `retain` is given twice: a declaration takes `retain` once, as in " <>
+                 "`var retain count dint`",
+               "line 3: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 4: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 5: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 6: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 6: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`"
+             ]
+
+      # The rest of the line is read as any line is: a type still wanted is told, and a
+      # line of no type declares nothing, as `var f` does.
+      assert errors("var retain retain f\nvar g retain\nvar x bool\nxic x ote x") ==
+               [
+                 "line 1: `retain` is given twice: a declaration takes `retain` once, as in " <>
+                   "`var retain count dint`",
+                 "line 1: `f` needs a type, as in `var f bool` or `var f dint`",
+                 "line 2: `retain` comes straight after the section word, as in " <>
+                   "`var retain count dint`",
+                 "line 2: `g` needs a type, as in `var g bool` or `var g dint`"
+               ]
+
+      # Declared with its initial value, and with the qualifier in its place, where it
+      # has one.
+      {:ok, ast} =
+        Logex.Compiler.parse(
+          elem(
+            Logex.Compiler.tokenize(
+              "var retain a dint 7 retain\nvar non_retain retain b bool\nvar c non_retain dint\nxic b ote b"
+            ),
+            1
+          )
+        )
+
+      {:routine, {:rungs, rungs}} = ast
+      {table, _logic, diagnostics, _untyped} = Logex.Declarations.split(rungs)
+      assert length(diagnostics) == 3
+
+      assert Map.new(table, fn {n, t} -> {n, {t.retain, t.initial}} end) == %{
+               "a" => {:retain, 7},
+               "b" => {nil, nil},
+               "c" => {nil, nil}
+             }
+    end
+
     test "a section word is quoted as written beside its qualifier" do
       assert errors("VAR_OUTPUT Retain\nVar x Retain bool") == [
                "line 1: `VAR_OUTPUT Retain` needs a tag name and a type, as in " <>
@@ -259,6 +320,21 @@ defmodule Logex.RetainTest do
                Logex.compile_file(path)
     end
 
+    # M6-2's review: one out of its place before the type word is taken out too, so the
+    # block it names is loaded and the line told only where its qualifier goes.
+    @tag :tmp_dir
+    test "compile_file/1 loads the block a line with a misplaced qualifier names",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "seal.ld"), @seal)
+      path = Path.join(dir, "line.ld")
+      File.write!(path, "var s1 retain seal\nvar x bool\ncal s1 x x")
+
+      assert {:error, [%Logex.Diagnostic{line: 1, message: message}]} = Logex.compile_file(path)
+
+      assert message ==
+               "`retain` comes straight after the section word, as in `var retain count dint`"
+    end
+
     # Decision 227's warning reads a real's initial value by its place on the line.
     test "a real's initial value on a qualified line is warned of at its line, as on any" do
       p =
@@ -275,6 +351,52 @@ defmodule Logex.RetainTest do
   end
 
   describe "M6-1: Program.retained (decisions 269 and 270)" do
+    # Decision 269: every elementary type, the reals among them, whole or in an array.
+    test "a retained real and an array of lreals are retained, and kept by a warm restart" do
+      p =
+        c!(
+          "var_input go bool\nvar retain sp real\nvar retain hist lreal[2]\nvar tmp real\n" <>
+            "var non_retain off lreal\nxic go move 3.0 sp\nxic go move 5.0 hist[1]\n" <>
+            "xic go move 7.0 tmp\nxic go move 9.0 off"
+        )
+
+      assert p.retained == ["hist", "sp"]
+      s = scans(p, Runtime.instance(p), [%{"go" => 1}])
+      warm = Runtime.restart(p, s, :warm)
+      assert {warm.env["sp"], warm.env["hist"]} == {3.0, {0.0, 5.0}}
+      assert {warm.env["tmp"], warm.env["off"]} == {0.0, 0.0}
+      assert {s.env["tmp"], s.env["off"]} == {7.0, 9.0}
+      assert Runtime.restart(p, s, :cold).env["sp"] == 0.0
+    end
+
+    # An array of a block's instances of two dimensions, a member retained in each element.
+    test "a member a block retains is kept in every element of a 2-D array of its instances" do
+      cell =
+        block!(
+          "function_block cell\nvar_input go bool\nvar retain k dint\nvar j dint\n" <>
+            "var t ton\nxic go add k 1 k\nxic go add j 1 j\nxic go ton t 100"
+        )
+
+      p =
+        c!(
+          "var_input go bool\nvar g cell[2,2]\ncal g[0,1] go\ncal g[1,0] go\ncal g[1,1] go",
+          [cell]
+        )
+
+      assert p.retained == ["g[*].k"]
+      s = scans(p, Runtime.instance(p), List.duplicate(%{"go" => 1}, 3))
+      warm = Runtime.restart(p, s, :warm)
+      fresh = Runtime.instance(p).env["g"]
+
+      for {i, j, k} <- [{0, 0, 0}, {0, 1, 3}, {1, 0, 3}, {1, 1, 3}] do
+        element = elem(elem(warm.env["g"], i), j)
+        assert element["k"] == k
+        assert element["j"] == 0 and element["t"] == elem(elem(fresh, i), j)["t"]
+      end
+
+      assert elem(elem(s.env["g"], 1), 1)["j"] == 3
+    end
+
     test "a program that marks nothing has none, and compiles as it did, its warnings " <>
            "exactly as before" do
       src =
@@ -367,6 +489,38 @@ defmodule Logex.RetainTest do
 
         assert {covered -- expected, expected -- covered} == {[], []},
                Enum.join(sources, "\n\n") <> "\n\n" <> program_source
+      end
+    end
+
+    # M6-2's review: the check of a program handed in (edited_by_hand/1, which instance/1,
+    # an edit's accept and a configuration's check run) passes over an instance of a block
+    # that retains nothing by a guard, so that each costs no more than it did at `c963cab`,
+    # before M6-1, where it cost 7 reductions more an instance: the slopes over 100 and 400
+    # instances, of `seal` and of `seal[2]`, against the parent's, 24 and 21 a check and
+    # 138.3 and 256.3 an instance/1, measured on it.
+    test "a program of unmarked block instances is checked as it was before M6-1" do
+      plain = block!(@plain)
+
+      for {decl, use, check, made} <- [
+            {"plain", &"cal s#{&1} go q", 24, 139},
+            {"plain[2]", &"cal s#{&1}[0] go q", 21, 257}
+          ] do
+        [{c1, i1}, {c2, i2}] =
+          for n <- [100, 400] do
+            p =
+              c!(
+                "var_input go bool\nvar_output q bool\n" <>
+                  Enum.map_join(1..n, "\n", &"var s#{&1} #{decl}") <>
+                  "\n" <> Enum.map_join(1..n, "\n", use),
+                [plain]
+              )
+
+            {reductions(fn -> Program.edited_by_hand(p) end),
+             reductions(fn -> Runtime.instance(p) end)}
+          end
+
+        assert (c2 - c1) / 300 <= check, "#{decl}: a check #{(c2 - c1) / 300} an instance"
+        assert (i2 - i1) / 300 <= made, "#{decl}: instance/1 #{(i2 - i1) / 300} an instance"
       end
     end
 
@@ -596,6 +750,49 @@ defmodule Logex.RetainTest do
       assert Runtime.restart(p, s, :warm).ons_blocked == []
     end
 
+    # Decision 194's pattern (M6-2's review): a program instance/1 checked and then edited
+    # by hand is trusted, and a warm restart that reaches retained paths its tags do not
+    # give raises a pinned ArgumentError there; a cold one reads none.
+    test "a warm restart of a program whose retained paths were edited by hand after its " <>
+           "check raises where it reaches them" do
+      seal = block!(@seal)
+      p = c!("var_input go bool\nvar retain c dint\nvar s seal\nvar q bool\ncal s go q", [seal])
+      assert p.retained == ["c", "s.k"]
+      s = scans(p, Runtime.instance(p), [%{"go" => 1}])
+      by_hand = "the program was edited by hand after it was handed in and checked"
+
+      for path <- ["zz", "c.x", "s.zz", "s[*].k", "s.k.x", "go.x.y", "zz[*].k"] do
+        raises(
+          "a warm restart keeps the retained path `#{path}`, which the program's tags do " <>
+            "not give: #{by_hand}",
+          fn -> Runtime.restart(%{p | retained: ["c", path]}, s, :warm) end
+        )
+      end
+
+      raises("a warm restart keeps the retained path :c, which is no path: #{by_hand}", fn ->
+        Runtime.restart(%{p | retained: ["c", :c]}, s, :warm)
+      end)
+
+      for paths <- [:all, %{}, "c"] do
+        raises(
+          "a warm restart reads retained paths that are no list of paths, got: " <>
+            "#{inspect(paths)}: #{by_hand}",
+          fn -> Runtime.restart(%{p | retained: paths}, s, :warm) end
+        )
+      end
+
+      raises(
+        "a warm restart reads retained paths that are no list of paths, got: :tail: " <>
+          by_hand,
+        fn -> Runtime.restart(%{p | retained: ["c" | :tail]}, s, :warm) end
+      )
+
+      # A cold restart reads no retained path.
+      assert Runtime.restart(%{p | retained: ["zz"]}, s, :cold) == Runtime.restart(p, s, :cold)
+      # And a path edited by hand that the tags do give is taken as it stands.
+      assert Runtime.restart(%{p | retained: ["c"]}, s, :warm).env["s"]["k"] == 0
+    end
+
     test "a resource's warm restart keeps each instance's retained values, and a cold one " <>
            "loses them" do
       p = c!(line_source())
@@ -630,6 +827,86 @@ defmodule Logex.RetainTest do
       assert Runtime.get!(warm, "m1.count") == 0
       cold = Runtime.restart(runtime, :cold)
       assert Runtime.get!(cold, "m1.total") == 0 and Runtime.get!(cold, "m1.boxes.cv") == 0
+    end
+  end
+
+  describe "M6-2: the runner's warm restart (decisions 113, 271 and 273)" do
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @plant """
+    task fast interval 10 priority 1
+
+    var_global eye_g   bool at panel.i.0
+    var_global motor_g bool at panel.i.1
+    var_global lamp_g  bool at panel.q.0
+
+    program m1 m with fast
+      m1.eye   eye_g
+      m1.motor motor_g
+      m1.lamp  lamp_g
+    """
+
+    defp plant do
+      p = c!("var_output lamp bool\n" <> line_source() <> "xic lube.dn ote lamp")
+      {:ok, config} = Logex.Configuration.compile("plant", @plant, %{"m" => p})
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 10
+        )
+
+      %{runner: runner, clock: clock, panel: panel}
+    end
+
+    # The runner trips on the panel's read, stands tripped for a second, and is restarted:
+    # warm, the box count, the total and the lube timer are kept and the timer adds none of
+    # the second it stood; cold, each is lost.
+    test "Runner.restart/2 :warm keeps what is retained, not counting the time it stood " <>
+           "tripped, and :cold loses it" do
+      %{runner: runner, clock: clock, panel: panel} = plant()
+      Sim.set(panel, [1], 1)
+
+      for eye <- [1, 0, 1, 0, 1, 0] do
+        Sim.set(panel, [0], eye)
+        Manual.advance(clock, 10)
+      end
+
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      kept = for path <- ~w(m1.boxes.cv m1.total m1.lube.acc), do: Runner.get!(runner, path)
+      # The start's first round sees the eye low, so its three rises are counted.
+      assert [3, 3, 50] = kept
+      assert Runner.get!(runner, "m1.count") == 3
+
+      Manual.advance(clock, 1000)
+      assert Runner.restart(runner, :warm) == :ok
+      # The restart's first round, at once, scanned with the motor still on.
+      assert for(path <- ~w(m1.boxes.cv m1.total m1.lube.acc), do: Runner.get!(runner, path)) ==
+               kept
+
+      # Unmarked, the count is put back, the eye low in that round; and the resource's
+      # `now` has not moved over the second stood, nor has the timer's.
+      assert {Runner.get!(runner, "m1.count"), Runner.status(runner).now} == {0, 60}
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "m1.lube.acc") == 60
+
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      assert Runner.restart(runner, :cold) == :ok
+
+      assert for(path <- ~w(m1.boxes.cv m1.total m1.lube.acc), do: Runner.get!(runner, path)) ==
+               [0, 0, 0]
+
+      Runner.stop(runner)
     end
   end
 

@@ -10828,9 +10828,11 @@ defmodule Logex.ApiContractTest do
   # one-shot blocked (decision 274). Its reach: a value kept and one put back warm, one put
   # back cold, a block's member kept out of a retained instance, an element kept, a frozen
   # timer rebased, no edge counted on the first scan after a warm restart, and a one-shot
-  # an edit left blocked, as `ons_blocked` holds it, unblocked by a warm restart.
+  # an edit left blocked, as `ons_blocked` holds it, unblocked by a warm restart. Since
+  # M6-2's review its program holds a `tp`, an `osr`'s storage and pulse bits, a real, a
+  # 2-D array, a typed counter and a long timer too, each kept moved, `rw_types_kept`.
   @rw_reach ~w(rw_kept rw_reset_warm rw_reset_cold rw_member_out rw_element_kept rw_rebased
-               rw_no_edge rw_unblocked)a
+               rw_no_edge rw_unblocked rw_types_kept)a
 
   test "a warm restart keeps exactly what the nearest mark retains, and a cold one nothing, " <>
          "each timer rebased and no edge on the first scan" do
@@ -10912,7 +10914,14 @@ defmodule Logex.ApiContractTest do
             {"lube", :timer},
             {"fan", :timer},
             {"w", :value},
-            {"lamp", :value}
+            {"lamp", :value},
+            {"pulse", :timer},
+            {"os", :value},
+            {"op", :value},
+            {"sp", :value},
+            {"g", :value},
+            {"ci", :value},
+            {"lng", :timer}
           ],
           do: {[name], rw_flag(quals[name], false), kind}
 
@@ -10968,6 +10977,11 @@ defmodule Logex.ApiContractTest do
     rw_reach(:rw_element_kept, Enum.any?(moved, &match?({["cs", _, _], true, _}, &1)))
 
     rw_reach(
+      :rw_types_kept,
+      Enum.any?(moved, fn {[name | _], kept, _} -> kept and name in ~w(pulse os sp g ci lng) end)
+    )
+
+    rw_reach(
       :rw_rebased,
       Enum.any?(leaves, fn leaf -> rw_stale?(leaf, w) end)
     )
@@ -10994,7 +11008,9 @@ defmodule Logex.ApiContractTest do
   end
 
   defp rw_program do
-    names = ~w(e boxes total lube fan w lamp c1 cs cell.go cell.q cell.k cell.t)
+    names =
+      ~w(e boxes total lube fan w lamp c1 cs cell.go cell.q cell.k cell.t pulse os op sp g ci lng)
+
     quals = Map.new(names, &{&1, pick([nil, :retain, :non_retain, :retain])})
     word = fn name -> if quals[name], do: "#{quals[name]} ", else: "" end
 
@@ -11009,9 +11025,14 @@ defmodule Logex.ApiContractTest do
         "var #{word.("lube")}lube rto\nvar #{word.("fan")}fan tof\nvar #{word.("c1")}c1 cell\n" <>
         "var #{word.("cs")}cs cell[2]\nvar #{word.("w")}w dint[3]\n" <>
         "var_output #{word.("lamp")}lamp bool\nvar q1 bool\nvar q2 bool\n" <>
+        "var #{word.("pulse")}pulse tp\nvar #{word.("os")}os bool\nvar #{word.("op")}op bool\n" <>
+        "var #{word.("sp")}sp real\nvar #{word.("g")}g dint[2,2]\nvar #{word.("ci")}ci ctu_int\n" <>
+        "var #{word.("lng")}lng ton_ltime\n" <>
         "xic eye ctu boxes 1000\nxic eye ons e add total 1 total\nxic run rto lube 100000\n" <>
         "xic run tof fan 40\nxic run cal c1 eye q1\ncal cs[0] run q2\nxic eye cal cs[1] run q2\n" <>
-        "xic eye move total w[1]\nxic run ote lamp"
+        "xic eye move total w[1]\nxic run ote lamp\nxic eye tp pulse 30\nxic run osr os op\n" <>
+        "xic eye add sp 1.5 sp\nxic eye move total g[1,1]\nxic eye ctu ci 1000\n" <>
+        "xic run ton lng 30000000"
 
     %{quals: quals, cell: cell, program: program}
   end

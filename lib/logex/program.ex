@@ -126,8 +126,8 @@ defmodule Logex.Program do
   **The rule beside it for a retained path** (M6-2, `docs/organisation.md` §4.13,
   decisions 266, 270, 271 and 273): at a warm restart, `Logex.Runtime.restart/3` and
   `restart/2` with `:warm`, a path the program retains (`retained`) keeps its value, which
-  the state handed in holds and fits, a retained timer's `last` set to the restart's
-  `now`; every other path starts by this rule, as at a cold restart, the var_inputs kept
+  the state handed in holds and fits, a retained timer's `last` set to the instance's
+  `now`, its last scan's (decision 188); every other path starts by this rule, as at a cold restart, the var_inputs kept
   as ever. A path nothing marks is not retained, so a program that marks nothing restarts
   warm exactly as cold. An online edit's switch writes no value for a qualifier (decision
   278, M6-7).
@@ -350,12 +350,15 @@ defmodule Logex.Program do
   retained}`, in the same one walk of its tags (`retained/2`), `blocks` the table a
   compiled tag's `{:block, name}` is read inside.
   """
-  def settled(tags, blocks) when is_map(tags) do
-    {units, reals, arrays, retained, _blocks} =
-      Enum.reduce(tags, {[], [], [], [], blocks}, &settle/2)
+  def settled(tags, blocks) when is_map(tags), do: settled_in(tags, held_in(blocks))
 
+  # `at` is the table with its quiet names (quiet/1), made once a check (edited_by_hand/1).
+  defp settled_in(tags, at) do
+    {units, reals, arrays, retained, _at} = Enum.reduce(tags, {[], [], [], [], at}, &settle/2)
     {some(units), some(reals), some(arrays), listed(retained)}
   end
+
+  defp held_in(blocks), do: {blocks, quiet(blocks)}
 
   # The common tag, elementary and unqualified, first, and passed over as before M6-1.
   defp settle({_name, %Logex.Tag{type: type, retain: nil}}, acc)
@@ -389,8 +392,38 @@ defmodule Logex.Program do
   # M5-14 (decision 154): an array of instances is no host's value, so no array of
   # `arrays`, and its timers' unit, a long timer's, is its own under its name, each
   # element timing in it.
+  # M6-2's review: one nothing marks, of a built-in or of a block whose body keeps
+  # nothing, keeps nothing, and is settled as before M6-1.
+  defp settle(
+         {name, %Logex.Tag{type: {:array, %Logex.FbType{body: nil} = type, _}, retain: nil}},
+         acc
+       ),
+       do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+
+  defp settle(
+         {name,
+          %Logex.Tag{
+            type: {:array, %Logex.FbType{body: %__MODULE__{retained: nil}} = type, _},
+            retain: nil
+          }},
+         acc
+       ),
+       do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+
   defp settle({name, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _dims}} = tag}, acc),
     do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
+
+  # M6-2's review: so is a compiled program's instance of a block, `{:block, name}`, which
+  # the check of a program handed in walks, passed over by a guard where its body retains
+  # nothing, the held blocks that do not named once a routine (quiet/1), and walked
+  # further only where it or the tag keeps anything, so that a program of unmarked blocks
+  # is checked in no more than it was before M6-1.
+  defp settle(
+         {_name, %Logex.Tag{type: {:array, {:block, name}, _dims}, retain: nil}},
+         {_, _, _, _, {_blocks, quiet}} = acc
+       )
+       when is_map_key(quiet, name),
+       do: acc
 
   defp settle({_name, %Logex.Tag{type: {:array, {:block, _}, _dims}} = tag}, acc),
     do: instances_kept(tag, acc)
@@ -403,12 +436,30 @@ defmodule Logex.Program do
        when is_atom(type),
        do: {units, reals, arrays, own(tag.retain, name, kept), blocks}
 
+  defp settle(
+         {_name, %Logex.Tag{type: {:block, name}, retain: nil}},
+         {_, _, _, _, {_blocks, quiet}} = acc
+       )
+       when is_map_key(quiet, name),
+       do: acc
+
   defp settle({_name, %Logex.Tag{type: {:block, _}} = tag}, acc), do: instances_kept(tag, acc)
 
   defp settle({name, %Logex.Tag{type: type} = tag}, acc),
     do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
 
   defp settle(_not_a_tag, acc), do: acc
+
+  # The held blocks whose bodies retain nothing, by name, once a routine's settling.
+  defp quiet(blocks) when map_size(blocks) == 0, do: blocks
+
+  defp quiet(blocks),
+    do:
+      for(
+        {name, %Logex.FbType{body: %__MODULE__{retained: nil}}} <- blocks,
+        into: %{},
+        do: {name, true}
+      )
 
   defp unit(nil, _name, acc), do: acc
 
@@ -421,9 +472,9 @@ defmodule Logex.Program do
 
   defp instances_kept(
          %Logex.Tag{name: name, type: type, retain: retain},
-         {u, r, a, kept, blocks}
+         {u, r, a, kept, {blocks, _quiet} = at}
        ),
-       do: {u, r, a, kept(name, held_type(type, blocks), marked(retain, false)) ++ kept, blocks}
+       do: {u, r, a, kept(name, held_type(type, blocks), marked(retain, false)) ++ kept, at}
 
   defp some([]), do: nil
   defp some(units), do: Map.new(units)
@@ -532,7 +583,9 @@ defmodule Logex.Program do
   is first handed in (decision 190).
   """
   def edited_by_hand(%__MODULE__{name: name} = program) do
-    {lines, _seen} = routine(program, {name, nil}, {[], MapSet.new()}, table(program.blocks))
+    {lines, _seen} =
+      routine(program, {name, nil}, {[], MapSet.new()}, held_in(table(program.blocks)))
+
     Enum.reverse(lines)
   end
 
@@ -554,7 +607,7 @@ defmodule Logex.Program do
     {program, _block} = where
     # The tags settled once for all three (M5-11's review), and nothing compared where a
     # routine holds none and gives none, the common case.
-    {wanted_units, wanted_reals, wanted_arrays, wanted_retained} = settled(tags, table)
+    {wanted_units, wanted_reals, wanted_arrays, wanted_retained} = settled_in(tags, table)
     lines = Enum.reverse(unit_lines(units, {tags, wanted_units}, where), lines)
     lines = Enum.reverse(real_lines(reals, {tags, wanted_reals}, where), lines)
     lines = Enum.reverse(array_lines(arrays, {tags, wanted_arrays}, where), lines)
@@ -585,10 +638,16 @@ defmodule Logex.Program do
            body,
            {program, name},
            acc,
-           {{lines, MapSet.put(seen, body)}, Map.merge(table, table(body.blocks))}
+           {{lines, MapSet.put(seen, body)}, merged(table, body.blocks)}
          )
 
   defp once(_no_body, _at, acc), do: acc
+
+  # A body's own table, where it has one, read with the one it is held in; the quiet names
+  # made again only then (M6-2's review), so a check of held bodies makes them once.
+  defp merged(at, nil), do: at
+  defp merged(at, blocks) when map_size(blocks) == 0, do: at
+  defp merged({table, _quiet}, blocks), do: held_in(Map.merge(table, blocks))
 
   defp unseen(true, _body, _where, acc, _put), do: acc
 

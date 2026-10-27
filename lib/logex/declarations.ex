@@ -63,6 +63,12 @@ defmodule Logex.Declarations do
   # word, `var retain count dint`, and reserved in any case.
   @qualifiers %{"retain" => :retain, "non_retain" => :non_retain}
   @qualifier_atoms Map.values(@qualifiers)
+  # A word that may be a qualifier, told in a guard by its length, `retain` six bytes and
+  # `non_retain` ten, and since M6-2's review its first letter, in either case, so that a
+  # line of none, `var lane_c ctu[4]` among them, is read in what it was before M6-1.
+  defguardp may_qualify(word)
+            when byte_size(word) in [6, 10] and binary_part(word, 0, 1) in ["r", "R", "n", "N"]
+
   # M5-1 (docs/organisation.md §4.12, "The types", decisions 144 and 145): the one table of
   # elementary types, a row each, in the record's order: its word, its value in a tag
   # (`type`), its kind, its width in bits, its range, its zero and the article a message
@@ -750,15 +756,15 @@ defmodule Logex.Declarations do
   defp declare({:late, rung, late}, diagnostics, types, kind),
     do: declare(rung, [late | diagnostics], types, kind)
 
-  # M6-1: a line whose second word may be a qualifier, told by its length, `retain` six
-  # bytes and `non_retain` ten; any other line is read as it was before M6-1.
+  # M6-1: a line whose second word may be a qualifier, told by its length and first
+  # letter (may_qualify/1); any other line is read as it was before M6-1.
   defp declare(
          {:rung, [{:name, line, keyword} | [{:name, _, word} | _] = rest]},
          diagnostics,
          types,
          kind
        )
-       when byte_size(word) in [6, 10] do
+       when may_qualify(word) do
     section = Map.fetch!(@sections, String.downcase(keyword))
     qualified(qualifier(rest), {keyword, of_kind(section, kind), line}, diagnostics, types)
   end
@@ -771,22 +777,30 @@ defmodule Logex.Declarations do
   @doc """
   M6-1 (decision 267): a declaration's rung with its qualifier taken out, `var retain s1
   seal` read as `var s1 seal`, for a reader of a declaration's words by their place, the
-  loader's and the warnings'; any other rung as it is.
+  loader's and the warnings'; and since M6-2's review one out of its place before the type
+  word, `var s1 retain seal`, which the compiler tells where it goes and reads without it;
+  any other rung as it is. A word is told a qualifier by its length and first letter
+  first, so that a rung of none is passed over in a clause head.
   """
-  def unqualified({:rung, [{:name, _, _} = section, {:name, _, word} | rest]} = rung),
-    do: unqualified_of(is_map_key(@qualifiers, String.downcase(word)), section, rest, rung)
+  def unqualified({:rung, [{:name, _, _} = section, {:name, _, word} | rest]} = rung)
+      when may_qualify(word),
+      do: unqualified_of(qualifier_word?(word), section, rest, rung)
+
+  def unqualified({:rung, [{:name, _, _} = section, name, {:name, _, word} | rest]} = rung)
+      when may_qualify(word),
+      do: unqualified_of(qualifier_word?(word), section, [name | rest], rung)
 
   def unqualified(rung), do: rung
 
-  defp unqualified_of(true, section, rest, _rung), do: {:rung, [section | rest]}
+  defp unqualified_of(true, section, rest, _rung), do: unqualified({:rung, [section | rest]})
   defp unqualified_of(false, _section, _rest, rung), do: rung
 
   # M6-1 (decision 267): a qualifier straight after the section word, `var retain count
   # dint`, in any case, qualifies the one tag the line declares, and the line's messages
   # quote both words, `var retain`; a line with none is read as it was before qualifiers.
-  # Told by its length first, `retain` six bytes and `non_retain` ten, so that a line of no
+  # Told by its length and first letter first (may_qualify/1), so that a line of no
   # qualifier is read in what it was before M6-1, its name never folded.
-  defp qualifier([{:name, _, word} | rest] = words) when byte_size(word) in [6, 10],
+  defp qualifier([{:name, _, word} | rest] = words) when may_qualify(word),
     do: qualifier_of(Map.get(@qualifiers, String.downcase(word)), word, rest, words)
 
   defp qualifier(words), do: {nil, nil, words}
@@ -816,8 +830,13 @@ defmodule Logex.Declarations do
   # one, once.
   defp again({nil, nil, rest}, _word, rest, {kw, types}), do: shape(rest, kw, types)
 
-  defp again({_retain, second, _rest}, word, _words, _at),
-    do: {:error, twice(String.downcase(second) == String.downcase(word), word, second)}
+  # M6-2's review (provisional reading 2): a line refused for its qualifiers alone still
+  # declares its tag, with none, since neither of two can be taken, so that its uses are
+  # checked (`:refused`, declared/5).
+  defp again({_retain, second, rest}, word, _words, {kw, types}),
+    do:
+      {:refused, twice(String.downcase(second) == String.downcase(word), word, second),
+       shape(rest, section_word(kw), types), :none}
 
   defp twice(true, word, second),
     do:
@@ -843,11 +862,13 @@ defmodule Logex.Declarations do
         "the host's value, which every restart keeps where it fits"
 
   # M6-1: a qualifier anywhere but straight after the section word is told where it goes.
-  defp misplaced(word, kw),
+  # Since M6-2's review the line is read without it and declares its tag, with the
+  # qualifier in its place where it has one and none otherwise (provisional reading 2).
+  defp misplaced(word, kw, shaped),
     do:
-      {:error,
+      {:refused,
        "`#{word}` comes straight after the section word, as in " <>
-         "`#{section_word(kw)} #{word} count dint`"}
+         "`#{section_word(kw)} #{word} count dint`", shaped, :kept}
 
   defp section_word(kw), do: kw |> String.split(" ") |> hd()
 
@@ -858,6 +879,19 @@ defmodule Logex.Declarations do
   # known by being the one given under its name, not checked again for every instance.
   # Decision 202: an initial value written other than as its plain decimal is quoted as
   # written, `16#ffff`, which the tag, a value, does not keep.
+  # M6-2's review: a line refused for a qualifier out of place or given twice, read
+  # without it, declares what the rest of it declares, with the qualifier in its place
+  # where there is one, and none where two were given.
+  defp declared({:refused, message, shaped, kept}, {section, retain}, line, diagnostics, types),
+    do:
+      declared(
+        shaped,
+        {section, refused_keeps(kept, retain)},
+        line,
+        [diagnostic(line, message) | diagnostics],
+        types
+      )
+
   # M6-1: a program's var_input refused for its qualifier, declared with none, so that its
   # uses are checked.
   defp declared(
@@ -922,6 +956,9 @@ defmodule Logex.Declarations do
   defp declared({:error, message, tag}, {_section, retain}, line, diagnostics, _types),
     do:
       {recovered(%{tag | line: line, retain: retain}), [diagnostic(line, message) | diagnostics]}
+
+  defp refused_keeps(:kept, retain), do: retain
+  defp refused_keeps(:none, _retain), do: nil
 
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
@@ -1100,19 +1137,37 @@ defmodule Logex.Declarations do
   defp typed(_type, _name, _word, [literal, {:branches, _} | _], _kw) when is_literal(literal),
     do: {:error, "a declaration cannot hold a branch group"}
 
+  # M6-2's review: so is a qualifier after an initial value, `var count dint 5 retain`.
+  defp typed(type, name, word, [literal, {:name, _, extra} | rest], at)
+       when is_literal(literal),
+       do:
+         after_type(
+           qualifier_word?(extra),
+           {type, name, word},
+           [literal | rest],
+           {:after_initial, extra, at}
+         )
+
   defp typed(_type, name, _word, [literal, extra | _], _kw) when is_literal(literal),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   # M6-1: so is one after the type word, `var count dint retain`.
-  defp typed(_type, name, _word, [{:name, _, extra} | _] = tail, {kw, _types}),
-    do: after_type(qualifier_word?(extra), name, tail, kw)
+  defp typed(type, name, word, [{:name, _, extra} | _] = tail, at),
+    do: after_type(qualifier_word?(extra), {type, name, word}, tail, at)
 
   defp typed(_type, name, _word, [extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
-  defp after_type(true, _name, [{:name, _, word} | _], kw), do: misplaced(word, kw)
+  defp after_type(true, {type, name, word}, [{:name, _, qualifier} | rest], {kw, _} = at),
+    do: misplaced(qualifier, kw, salvaged(typed(type, name, word, rest, at), type, {name, kw}))
 
-  defp after_type(false, name, [extra | _], _kw),
+  defp after_type(true, {type, name, word}, initial, {:after_initial, qualifier, {kw, _} = at}),
+    do: misplaced(qualifier, kw, salvaged(typed(type, name, word, initial, at), type, {name, kw}))
+
+  defp after_type(false, {_type, name, _word}, [_literal | _], {:after_initial, extra, _at}),
+    do: {:error, "unexpected `#{extra}` after the declaration of `#{name}`"}
+
+  defp after_type(false, {_type, name, _word}, [extra | _], _at),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   defp listed(true, type, name, tail),
@@ -1167,7 +1222,9 @@ defmodule Logex.Declarations do
   defp typeless([], name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
 
   # M6-1: a qualifier where a type word goes, `var count retain dint`, is told where it goes.
-  defp unqualified(true, _name, word, _tail, {kw, _types}), do: misplaced(word, kw)
+  # Read again without it, its name a token of no line, which no shape reads.
+  defp unqualified(true, name, word, tail, {kw, types}),
+    do: misplaced(word, kw, shape([{:name, nil, name} | tail], kw, types))
 
   defp unqualified(false, name, type, tail, at),
     do: untyped(String.downcase(name), name, type, tail, at)

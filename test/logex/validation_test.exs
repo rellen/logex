@@ -828,7 +828,10 @@ defmodule Logex.ValidationTest do
                "line 4: `d` needs a type, as in `var d bool` or `var d dint`",
                "line 6: `p` is not declared",
                "line 7: `q` is not declared",
-               "line 8: `r` is not declared",
+               # Since M6-2's review the line refused for its qualifier alone declares `r`,
+               # its uses checked, as `c`'s refused for its initial value alone does
+               # (provisional reading 2), where until then line 8 was told `r` is not
+               # declared.
                # M6-1: `retain` is a keyword, reserved, where until then it was a name.
                "line 9: `xic` expects a tag, found the keyword `retain`",
                "line 11: `d` is not declared"

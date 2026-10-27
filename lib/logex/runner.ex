@@ -502,8 +502,9 @@ defmodule Logex.Runner do
 
   @doc """
   Starts a tripped runner again, `:cold` or `:warm`, `:warm` keeping what each program
-  retains, in memory, since M6-2, a retained timer resuming from the resource's `now`
-  (decisions 113, 271 and 273): every device's latch released, every device read once, as a
+  retains, in memory, since M6-2, a retained timer resuming from its instance's `now`,
+  its last scan's, so the time it stood tripped is not counted, the clock not counting it
+  either (decisions 113, 271 and 273): every device's latch released, every device read once, as a
   start reads it (decision 142), each device that went down, or does not answer its
   release, opened again, the resource restarted
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
