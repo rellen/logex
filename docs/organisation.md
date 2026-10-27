@@ -41,7 +41,9 @@ decision 77), the two reals, the bit strings and the bitwise instructions, array
 to three dimensions, located too, typed counters and long timers; the record's ten
 questions put back and its three open rules were answered by the maintainer the same day
 (decisions 161–167, and notes on the decisions they settle); nothing of it is built
-yet.** On 2026-09-28 the
+yet (it has since landed whole, M5-1 to M5-16, by 2026-10-26). Milestone 6, retained
+values and a true warm restart, was designed and decided on 2026-10-27 (§4.13, decisions
+266–285), nothing of it built yet.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -4197,6 +4199,383 @@ widening of a type or an array (decision 157's second option); `round`, `ceil` a
 clock. **Not adopted:** pointers, unions, target-width integers and Logix's literal
 suffixes.
 
+### 4.13 Retained values and a true warm restart (Milestone 6)
+
+**Designed and decided 2026-10-27; nothing of it is built yet** (`PLAN.md` §3, Milestone
+6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
+is not": today a warm restart is a cold one, so a counter's count, a totaliser's total or
+a timer's accumulated time is lost when the runner restarts, crashes or the VM stops. A
+design pass on `3a7c2eb` read IEC 61131-3 Ed 2:2003 and Ed 3:2013 in full and Ed 4:2025
+from its publisher preview only; the conventional family's general instructions
+reference (1756-RM018A), design considerations reference (1756-RM094N), add-on
+instructions manual (1756-PM010N), faults manual (1756-PM014O), memory card manual
+(1756-PM017J) and the user manuals 1756-UM001Q, UM543T and UM900B; Siemens' S7-1200/S7-1500
+programming guideline (81318674 V1.3), its memory and system manuals (A5E03461664-01,
+A5E03461182-01 and -AD) and the S7-400 CPU manual (6ES7498-8AA04-8BA0); and CODESYS's and
+Beckhoff's online help. Its review corrected seven facts, sharpened six questions and
+added two (decisions 284 and 285). The maintainer answered all twenty on 2026-10-27, each
+as the design recommends (decisions 266 to 285). Where a rule changes decided text above
+or in §7, that text is annotated where it stands, never rewritten: decisions 38, 44, 69,
+76, 113, 115, 116, 127, 133 and 188, and §5's RETAIN row. IEC 61131-1, where warm and cold
+restart are defined, was not available, and every reading of it below is
+**unverified**.
+
+**Words.**
+- A *retained* value (IEC's *retentive*) is one a warm restart keeps: *"data stored in
+  such a way that its value remains unchanged after a power down / power up sequence"*
+  (Ed 2 §1.3.67, p.13).
+- A *qualifier* is the word that marks a declaration retained or not: IEC's `RETAIN` and
+  `NON_RETAIN`, logex's `retain` and `non_retain`.
+- A *cold restart* starts every variable at its initial value; a *warm restart* starts
+  the retained ones at the values they had when the controller stopped and every other
+  at its initial value; a *hot restart* resumes mid-scan with everything kept, which only
+  the S7-400 has, and logex will not.
+- A *power cycle* is the controller losing power and getting it back. Its logex stand-in
+  is a *crash*: the runner process killed, or the VM or the machine stopping without an
+  orderly stop.
+- A *fresh start* is a new `Logex.Runner.start_link/1`, after a crash or an orderly stop;
+  a *restart* is `Logex.Runner.restart/2` on a tripped runner still alive (decision 133).
+- A *store* is the file on the host's disk that stands in for battery-backed memory: the
+  runner writes it and a fresh start reads it. An *image* is the plain data it holds,
+  every retained value of a resource by path, with its type.
+- A *pre-scan* (the conventional family's *prescan*) is a pass over the logic before the
+  first scan that runs each instruction's own reset, reading no inputs and writing no
+  outputs (1756-RM094N p.47).
+
+**The example plant** is the record's: a conveyor with its motor, the motor's fan, a box
+counter on a photo-eye, a run lamp, and the lubrication timer, an `rto` that greases the
+line every 100 hours of motor running (decision 76). The power fails at 14:00 with 41
+boxes counted, the lube timer at 62 hours, the fan in its run-on after a stop and the
+conveyor running; it comes back at 14:20. Today the operator then sees a count of 0, the
+lube timer at 0, the fan off and the conveyor off until start is pressed.
+
+**What IEC says** (Ed 3 §6.5.6, pp.56–58; Ed 2 §2.4.2, p.38, and Table 16 a), pp.39–40):
+- The qualifier marks a whole section, `VAR RETAIN … END_VAR`, never one variable (Ed 3
+  Annex A, `Retain_Var_Decls`, p.224). It may qualify VAR, VAR_INPUT, VAR_OUTPUT and
+  VAR_GLOBAL, *"but not in VAR_IN_OUT section"* (§6.5.6.2, p.57); the grammar gives
+  VAR_EXTERNAL none, which takes its global's. *"The usage of these keywords is an
+  optional feature"* (§6.5.6.1, p.56), and Figure 7's NOTE makes each keyword *"a feature
+  of the program organization unit or configuration element in which they are used"*
+  (p.50), which the record reads as letting an implementer take it in some places and not
+  others.
+- What each start does (Figure 9, rules 1–4, p.57):
+
+  | Start | `RETAIN` | `NON_RETAIN` | neither |
+  |---|---|---|---|
+  | Warm restart | the value it had when stopped | initialised | **Implementer specific** (rule 3) |
+  | Cold restart | initialised | initialised | initialised |
+
+  Rule 4 names only a section with a qualifier; the cold cell of an unqualified variable
+  rests on §4.1's *"The starting of a resource shall cause the initialization of all the
+  variables in the resource"* (p.19). Inputs of the controller are initialised *"in an
+  Implementer specific manner"* on any start (§6.5.6.2). Part 3 does not say which start
+  follows a power failure; it leaves both to Part 1 (**unverified**).
+- An instance declared `VAR RETAIN TMR1: TON` (Table 40 feature 5a, p.101; Table 47,
+  pp.117–118) retains every variable of the instance, except one its type declares
+  `RETAIN` or `NON_RETAIN` itself, and one that is itself a block, for which *"the retain
+  declaration of the used function block type or class is applied"* (§6.5.6.2). Which
+  declaration that means is **unverified** (decision 270). A structure's qualifier covers
+  *"all structure elements, also those of nested structures"*. Ed 2's worked example is a
+  retained level counter, `VAR RETAIN LEVEL_CTR : CTU` (Figure F.3, p.197).
+- Arrays and located variables may be retained, whole only (Ed 2 Table 17 features 2a and
+  7, pp.41–42; Ed 3's example on p.58 retains `OUTARY AT %QW6`).
+- `VAR_GLOBAL RETAIN` is in the grammar (p.224); `VAR_GLOBAL NON_RETAIN` is in
+  §6.5.6.2's text but not the grammar; `PROGRAM RETAIN p WITH t : T` is in the grammar
+  (`Prog_Config`, p.226) with no feature row or example. `PERSISTENT` is not IEC.
+- Part 3 says nothing of where retained data is kept, how much there may be, when it is
+  captured, or what a download, an online change or a changed type does to it.
+
+**What the vendors do.**
+- *The conventional family* has no per-tag retain attribute (none found: an absence,
+  **unverified** as absolute). All user memory is kept at power-down, by battery
+  (1756-UM001Q p.36) or energy storage (UM001Q pp.71–72; UM543T p.205); that tag values
+  survive with the program is implied (PM017J pp.9, 14 and 27; RM094N p.47) but never said
+  in one sentence (**unverified as a quotation**). On going to Run, and on powering up in
+  Run (PM010N p.43), the controller prescans: *"The controller resets all state-based
+  instructions, such as outputs (OTE) and timers (TON)"*, and *"During prescan, input
+  values are not current and outputs are not written"* (RM094N p.47). Each instruction's
+  prescan row (RM018A):
+
+  | Instruction | Page | Prescan |
+  |---|---|---|
+  | OTE | p.85 | data bit cleared |
+  | OTL, OTU | pp.86–87 | N/A: **a latched bit is kept** |
+  | ONS, OSR | pp.73, 80 | storage bit set |
+  | OSF | p.75 | storage bit cleared |
+  | TON | p.134 | `.EN`, `.TT`, `.DN` cleared, **`.ACC` cleared to zero** |
+  | TOF | pp.123–124 | `.EN`, `.TT`, `.DN` cleared, `.ACC` set to `.PRE` |
+  | RTO | p.113 | `.EN`, `.TT` cleared; **`.ACC` and `.DN` kept** |
+  | CTU, CTD | pp.99, 95 | `.CU` or `.CD` set true; **`.ACC` kept** |
+
+  "Kept" means the row does not name the member. So the conventional family keeps every
+  value, then the prescan resets each instruction's own state: counters and an RTO's time
+  survive a power cycle, a TON's does not. `S:FS` is set for the first scan after the
+  prescan (RM018A p.868; RM094N p.47). The Power-Up Handler is an optional task; left
+  empty, a power-up in Run becomes major fault 1/1 and the controller stays faulted
+  (PM014O p.15). A memory card's image loaded "On Power Up" replaces the live tag values
+  (PM017J p.14). What a download does to tag values the manuals do not say.
+- *Siemens.* A declared subset is retentive, the default non-retentive (*"The default
+  setting is non-retentive"*, of a global DB's tags, guideline 81318674 V1.3 p.16); bit
+  memories, timers and counters only as a prefix from address 0 (p.58). The data is copied
+  at power-down with buffer energy, 10 Kbytes on an S7-1200 and 88 to 768 Kbytes on an
+  S7-1500 in 2014 (p.57). The S7-1500 *"always starts up in a warm restart"*
+  (A5E03461182-01 p.103, read on a mirror). The S7-400 has three starts: cold (OB 102),
+  warm (OB 100) and hot (OB 101) (6ES7498-8AA04-8BA0 §2.6). A download of changes keeps
+  actual values, and a changed type or retentivity reinitialises the block
+  (A5E03461664-01 pp.18–19), whose manual warns against cyclic writes to load memory
+  (p.22).
+- *CODESYS.* `RETAIN` and its own `PERSISTENT` per section. Reset warm resets all but
+  RETAIN and PERSISTENT, Reset cold all but PERSISTENT, Reset origin all (online help,
+  "Reset Application"); a download keeps PERSISTENT alone ("Setting Data Persistence").
+  Without NVRAM, retained data reaches a file only on a correct shutdown ("Preserving Data
+  with Retain Variables"). A persistent list is matched entry by entry, by name and type,
+  on a reload. *TwinCAT* keeps RETAIN across its Reset cold and download, has no Reset
+  warm, writes RETAIN to NovRAM at the end of every cycle and PERSISTENT to a `.bootdata`
+  file at an orderly stop.
+
+| Term | IEC 61131-3 | Logix 5000 | Siemens S7-1500 (S7-400) | CODESYS |
+|---|---|---|---|---|
+| **retain** | `RETAIN` on a section; optional | no word; all memory kept by battery or ESM | "retentive", per tag, per block or a prefix | `RETAIN` |
+| an unmarked variable at a warm start | Implementer specific (rule 3) | kept, then the prescan per instruction | non-retentive | reset |
+| **non_retain** | `NON_RETAIN` | none | "non-retentive" | none (plain) |
+| **persistent** | none | none (the card's image the nearest) | none | `PERSISTENT`: survives a cold reset and a download |
+| **cold restart** | every variable initialised | no command; a download the nearest | S7-400 OB 102; S7-1500 none (a memory reset) | Reset cold: all but PERSISTENT |
+| **warm restart** | RETAIN kept, NON_RETAIN initialised | no such term; the record maps it to a power-up in Run: all kept, then the prescan, then `S:FS` | every start; OB 100 first | Reset warm: RETAIN and PERSISTENT kept |
+| **pre-scan** | none | prescan: OTE, TON and one-shots reset; counters, RTO, OTL kept | the startup OB, the program's own code | none found |
+| **first-scan signal** | none in Part 3 | `S:FS` | OB 100 runs | none found |
+| **hot restart** | none in Part 3 | none | S7-400 only, OB 101 | none |
+
+**What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
+`:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
+that still fits, and puts every other tag back by `Program.initial_env/1`, with `first:
+true` and `ons_blocked: []`. A resource's `restart/2` keeps the clock, the input image and
+`generation`, every other global back by `Configuration.initial/1`. The runner's restart
+works only from tripped (decision 133), reads the forces file and every device (decision
+142), and moves its anchor so the stopped time is not counted. A crash ends the runner for
+good (decision 115), and a fresh start begins at `now` 0 with every value initial. `var
+retain r bool` is refused by a clause of its own, and `retain` is not reserved.
+
+**The design, as decided.**
+- *Nothing is retained unless marked* (decision 266): logex's answer to Figure 9's rule 3
+  is *initialised*, so every program written so far behaves exactly as it does now, warm
+  or cold, and decision 115's "nothing starts again that no person asked to start" holds
+  for it.
+- *The lines* (decision 267): `var retain count dint` and `var non_retain jog bool`, the
+  qualifier straight after the section word, IEC's word order, on the one tag the line
+  declares; in a configuration `var_global retain total_boxes dint 0`. `retain` and
+  `non_retain` are IEC's names lowercased, a third kind of row in `Logex.Declarations`
+  beside sections and types, each reserved in any case and owing its `docs/naming.md`
+  stanza, so a program with a tag named `retain` or `non_retain` stops compiling, which
+  M6-1's commit says. The two on one line are refused, as IEC's grammar makes them
+  alternatives.
+- *The sections* (decision 268): a program's `var` and `var_output`; a block's `var`,
+  `var_input` and `var_output`; a configuration's `var_global`, `non_retain` there too.
+  Refused: a program's `var_input`, told that it holds the host's value, which every
+  restart keeps where it fits, a departure from IEC's Table 47 features 4a and 4c that
+  Figure 7's NOTE allows and logex's compliance statement owes; and `var_external`, told
+  its global carries it.
+- *The types* (decision 269): every elementary type; arrays whole, `var retain weights
+  int[8]`, never one element; and instances of timers, counters and user blocks whole, an
+  array of instances whole, every member retained, the hidden ones among them, a
+  counter's `cu`, a `tp`'s `.en`, and a timer's `.acc` and bits, its `last` by decision
+  273's rule.
+- *Inside an instance, the nearest qualifier wins* (decision 270): walking outward from a
+  member through each enclosing instance's declaration line to the program's own tag, the
+  first `retain` or `non_retain` met decides it, and with none it is not retained. So a
+  block's `var retain count dint` is retained in every instance, a block's `var
+  non_retain` member stays out of a retained instance, and `var retain s1 seal` retains
+  `seal`'s timer too unless `seal` marks that timer's line itself. This is logex's reading
+  of IEC's unverified nested-block clause, not its literal reading, under which an outer
+  word stops at a nested block. A built-in's members follow its instance. The compiler
+  settles the rule into `Program.retained`, each retained path, nil where there is none,
+  so that a program with nothing retained pays nothing, as `units`, `reals` and `arrays`
+  are settled, and `edited_by_hand/1` holds it to the tags.
+- *The starts* (decision 271):
+
+  | Event | Retained values | Everything else | Input image | Clock | `first` |
+  |---|---|---|---|---|---|
+  | `restart(:cold)`, runner or core | initial | initial | kept by the core (decision 38); the runner reads every device first (decision 142) | kept, the stop not counted | true |
+  | `restart(:warm)` after a trip | kept from the resource as the trip left it | initial | as above | kept, the stop not counted | true |
+  | a crash, then a fresh start with a store, `start: :warm` (the default where `retain:` is given) | from the store, as of its last write | initial | read from the devices | 0, timers rebased (decision 273) | true |
+  | a fresh start with `start: :cold`, or with no store file | initial; the store written at once | initial | read | 0 | true |
+  | an orderly `stop/2`, then a fresh start | from the store, which `stop/2` wrote last | initial | read | 0 | true |
+  | a runner given no `retain:` | nothing survives a crash; a warm `restart/2` still keeps retained values in memory | initial | read | 0 | true |
+
+  A fresh start with a store is warm unless `start: :cold`: naming a store is the host
+  asking for one, as naming a forces file is (decision 127). A cold restart,
+  `restart(runner, :cold)` or `start: :cold`, writes the store before its first round, so
+  a crash a second later brings back none of the values it discarded; a write that fails
+  leaves the runner as it was, `{:error, {:retain, reason}}`, tripped for a restart and not
+  started for a fresh start, the forces file's rule. At 14:20, with `retain` on the
+  counter, the lube timer and the total and a store written every second, the operator
+  sees 41 boxes, or 40 if a box was counted in the last second; 62 hours, less up to a
+  second; the fan, the conveyor and the lamp off, the conveyor waiting for start.
+- *Located globals and outputs* (decision 272): `retain` on a located global is refused,
+  an input point being read again at every start (decision 142) and an output point
+  starting at 0 until logic writes it, so no output comes back on from the store itself.
+  A warm start writes nothing before its first round, as every start does. The
+  configuration warns where a retained var_output is connected to an output point or to a
+  global that is one, "`m1.run` is retained and drives the output `motor_q`: after a warm
+  start it is written in the first round", a direct connection only, which it says; and
+  README's "What logex is not" says that logic reading a retained bit can switch an
+  output on in the first round.
+- *A timer across the outage* (decision 273): not counted. `.acc` and the bits are kept,
+  `last` is never written to the store, and each retained timer starts with `last` equal
+  to the `now` it starts at, a warm `restart/2` of a live resource setting it to that
+  `now` too, so the time the runner stood tripped is not counted either: decision 57's
+  resume and decision 113's anchor rule. The lube timer reads 62 hours and adds only motor
+  running after 14:20; a retained `tof` resumes its run-on, so the fan runs for the rest
+  of its delay after the first round, the program's choice; a retained `ton` whose rung is
+  still true goes on from its time, one whose rung is false resets. The conventional
+  family's TON loses its time to the prescan (RM018A p.134) and only its RTO keeps it
+  (p.113), whose `ACC = ACC + (current_time − last_time_scanned)` (p.112); whether its
+  first scan after a power cycle counts the outage turns on a flow chart the extract does
+  not hold (**unverified**).
+- *Edges* (decision 274): `first: true` on every start, warm or cold, decision 69's one
+  start-up rule, so nothing edge-driven fires on the first scan, a box that arrived during
+  the outage among it, as the conventional prescan sets `.CU` *"to prevent invalid
+  increments during the first program scan"* (RM018A p.99); `ons_blocked` is dropped as
+  today. A program gets no first-scan bit and no word of how it started.
+- *The store's place and schedule* (decision 275): a path the host names, `retain:`, as
+  `forces:` is; with none nothing survives a crash, a configuration that declares
+  `retain` is not refused, and `status/1` says `retain: nil`. It is written every
+  `retain_period:` ms, 1000 unless set, and at every trip, every `stop/2` and every cold
+  restart, to `<path>.tmp` beside it, synced, closed and renamed over it, so that a crash
+  at any moment leaves the old store or the new. The write is made by a writer process of
+  the runner's own: the runner takes the retained values out between rounds, at a cost in
+  proportion to them alone, a write still in progress makes the newer image wait and drops
+  the older pending one, latest wins. A write that fails is reported, `{:retain, {:error,
+  reason}}` to subscribers and in `status/1`, and the plant runs on; a `stop/2` whose
+  final write fails still stops and returns `{:error, {:retain, reason}}`. A fresh start
+  reports the store's age, its header's `written_at`, in `status/1` and in its first
+  round's `{:retain, …}` event. The trip's write is of the resource as the trip left it,
+  the one `get/2` reads and a warm `restart/2` keeps. A sync of the directory after the
+  rename, which would make the rename durable, OTP probably cannot do (`{error, eisdir}`
+  in 2014, **unverified for OTP 28**; M6-1 tries it and records the result), so on some
+  file systems a power failure just after a write may bring back the write before it, as
+  the forces file may today.
+- *The store's format* (decision 276): text a person can read, as the forces file is
+  (decision 140): a header `logex retain 1`, then `configuration <name> written <time>`,
+  the time on the host's wall clock through the runner's clock behaviour, for a person and
+  for `status/1` and never for a timer; `instance <name> <program type>` before each
+  instance's lines, an instance of a built-in on a line of its own, `m1.lube rto`, before
+  its members; then `path type value` a line, a real spelled by `Logex.Real.spelled/2`,
+  never a `last`:
+
+  ```
+  logex retain 1
+  configuration plant written 2026-10-27T14:00:00Z
+  global total_boxes dint 41
+  instance m1 motor
+  m1.boxes ctu
+  m1.boxes.cv dint 41
+  m1.boxes.cu bool 1
+  m1.lube rto
+  m1.lube.acc dint 223200000
+  m1.weights int[8] 0 0 12 14 0 0 0 0
+  ```
+
+  A store that cannot be read, or a line of no such shape, is the host's mistake, one
+  `ArgumentError` a line each, and the runner does not start; `start: :cold` does not
+  read it.
+- *An old store against a changed program* (decision 277): a stored value is kept only
+  where the configuration has an instance of its name running the same program type,
+  whose program declares the path retained, of exactly the stored type (an array of the
+  stored sizes, an instance of the stored kind), and the value fits it
+  (`Declarations.is_fitting/2`). A user block's instance is matched member by member, by
+  path, as an edit's switch moves one (decision 31), a member its new version adds
+  starting at its initial value; an array of instances element by element only where its
+  sizes are unchanged; a tag whose initial value changed keeps its stored value, as
+  decision 44 keeps a running one. The rest is dropped and starts at its initial value, a
+  type changed (even widened), an array resized, an instance retyped and a qualifier
+  removed among it, each reported once at the start, `dropped: [{path, reason}]` in
+  `status/1`'s `retain` and the first round's event; a tag newly retained starts at its
+  initial value. The matching forgives a changed program, never a broken file.
+- *An online edit of a qualifier* (decision 278): an edit that only adds or removes
+  `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
+  path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
+  `Logex.Configuration.Edit` and `@configuration_kinds`; the switch writes nothing. The
+  next store write follows the program running, so a tag whose `retain` is removed keeps
+  its value until the next restart and is then initialised; a crash while an edit is
+  tested leaves a store of the candidate's values, which a fresh start meets by decision
+  277's matching; and a warm `restart/2` during an edit keeps the running instances'
+  retained values and drops those set aside, decision 65 unchanged. §4.9's Milestone 3
+  tables gain a warm column with M6-2, in place of their "until `retain` lands".
+- *No pre-scan* (decision 279): logex puts back everything unmarked by `initial_env/1`,
+  the prescan's job done by declaration, and an `ote` writes 0 on a de-energised rung in
+  the first scan itself; `first: true` stays logex's only start-up rule.
+- *Deferred* (decisions 280, 281 and 283): `persistent`, which is not reserved, since a
+  changed program already meets the store by name and type and a cold restart is the
+  host's explicit act; the configuration's `program retain` line; and the rest of the
+  list under **Deferred**, below.
+- *The host API* (decision 282): the core stays pure, no clock and no file.
+  `Logex.Runtime.restart/3` and `restart/2` take `:warm` to mean warm, by
+  `Program.retained`; `Logex.Runtime.retained/1` gives a resource's image as plain data
+  and `retained/2` a lone instance's; `Logex.Runtime.start/2` takes a configuration and an
+  image and gives `{runtime, dropped}`, `start/1` with decision 277's matching and decision
+  273's rebase, and `Logex.Runtime.instance/2` the same for a lone program, the image
+  checked after the matching as a host's state is (decisions 171 to 188). The rule beside
+  `initial_env/1`, "a retained path keeps its value where it fits, else it starts by
+  `initial_env/1`", is stated once in `Logex.Program`, a global's beside
+  `Configuration.initial/1`. `Logex.Retain`, internal, is the store, `encode/1`,
+  `decode!/2` and the atomic write and read, sharing the forces file's write rule.
+  `Logex.Runner` gains `retain:` (a path), `retain_period:` (ms) and `start:` (`:warm` or
+  `:cold`, `:warm` unless set), each checked in the caller in order; it reads the store in
+  the caller, runs the writer, writes at each period, trip, stop and cold restart, reports
+  `retain: %{path, written_at, failed, dropped}` in `status/1` and sends `{:retain, …}`.
+  No field is added to `%Logex.Instance{}`; the warm rows for globals and instances join
+  `%Logex.Runtime{}`'s one-rule section.
+- *A retained value that tripped the plant* (decision 284): nothing special. A retained
+  `slot` at 8 that trips the plant through `weights[slot]` trips it again at a warm
+  start, the trip naming the instance, the file, the line and the index; the remedy is a
+  cold restart, an online edit that writes the value, or a hand edit of the store's one
+  line, which README says beside the trip, and a test pins the second trip. From revision
+  13 the conventional family clears an array-subscript fault met during prescan (PM014O
+  p.19); that its first scan then faults again is the record's inference.
+- *A store from another configuration* (decision 285): the header names the
+  configuration, and a store of another name is the host's mistake at a fresh start, a
+  line naming both, `start: :cold` starting over it and writing a new store at once, so a
+  renamed configuration starts only cold, which the message says.
+
+**What "What logex is not" will owe** (M6-9): its "no retained values" clause replaced,
+and a bullet of its own, that a retained value is kept on the host's disk, not in
+battery-backed memory, a crash losing up to a period and one write and a power failure
+just after a write possibly bringing back the one before; that a retained value is no
+safety memory, a burner lockout, a guard-opened latch or a trip count must not be kept in
+logex; that a warm start can switch an output on in its first round through logic that
+reads a retained bit or timer, the warning catching only a direct wiring; that a host's
+own child spec that restarts the runner after a crash restarts it warm where a store is
+named; and that there are no persistent values, a cold restart discarding every retained
+value.
+
+**Deferred**, each a later item or milestone: `persistent` (decision 280); `program
+retain` on a configuration's line (281); a retained located global (272); a retained
+element of an array; an outage counted in wall time (273); a program's first-scan bit or
+knowledge of how it started (274); a pre-scan (279); a hot restart; `VAR_CONFIG` and
+several resources in one store (Milestone 13); `constant`; a warm restart that names paths
+to start cold (284); a store per program instance; encryption or a checksum of the store
+beyond its grammar; retaining forces, which have their own file; and the retention of the
+types later milestones add, Milestone 7's `TIME` changing a timer's `.acc` line in the
+store and Milestone 8's structures taking IEC's "all structure elements, also those of
+nested structures", which the store's header version, `logex retain 1`, lets either change.
+
+**Checked, and what is unverified.** Every IEC and conventional-family citation above was
+checked on 2026-10-27 against the extracts saved for this record (Ed 2 and Ed 3 in full;
+RM018A, RM094N, PM010N, PM014O, PM017J, UM001Q and UM543T), page numbers the printed
+ones, and Siemens' guideline 81318674 and the S7-400 manual against theirs, as were
+CODESYS's reset and persistence pages; one correction was made, Ed 2 §1.3.67 being on
+p.13, where the design had p.11. **Not rechecked**, no extract of them being saved:
+Siemens A5E03461664-01 and A5E03461182-01 (the latter read on a mirror); CODESYS's
+entry-by-entry matching of a persistent list; Beckhoff's pages. **Unverified:** IEC
+61131-1's definitions of warm, cold and hot restart and which start a power-up makes; Ed
+4's normative text; what IEC's nested-block clause refers to (decision 270); that a backed
+Logix controller's tag values survive a power cycle (implied, not quoted); what a Logix
+download does to tag values; whether an RTO's first enabled scan after the prescan counts
+the outage; what a retentive timer does with an outage's time in Siemens and CODESYS;
+Siemens' current retentive memory sizes; TwinCAT's matching rule; Schneider's behaviour;
+whether OTP 28 can sync a directory; what Logix's first scan does with a bad index left in
+a tag across a power-up; and the exact label TIA gives its retain column.
+
 ---
 
 ## 5. Decided now, and deferred
@@ -4213,7 +4592,7 @@ suffixes.
 | Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–128 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 129–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day, arrays by literal subscripts with M5-11 the same day, a subscript held in a tag with M5-12 on 2026-10-24, located arrays with M5-13 and arrays of instances with M5-14 the same day, the walks' cross-type reach with M5-15 and the documents with M5-16 on 2026-10-26: **landed**, every item of Milestone 5 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* *(Arrays landed with M5-11 to M5-14, 2026-10-23 to 2026-10-24: of every elementary type, one to three dimensions, by literal or tag subscripts, located, and of instances; STRUCT, UDTs and IEC's array bounds still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
@@ -4852,6 +5231,10 @@ the rules in §4.10.
     *Recommend both.* A resource keeps each task's overlap count, and a host has no other
     way to read it; and without `restart/2` a host restarting a plant must rebuild and
     resend its input image. Adopted.
+    *(Amended 2026-10-27 by decision 271, for Milestone 6, not yet built: `restart(rt,
+    :warm)` keeps each retained global and each instance's retained paths, by
+    `Program.retained`, and puts the rest back by their one rules, the clock and the input
+    image kept as here; `:cold` stays as here.)*
 39. **A task with both `single` and `interval` (M2-6):**
     - the phase anchored at start: at most one run a cycle; due on an edge, or when the
       trigger samples 0 and a periodic due time has come; while the trigger is 1, a
@@ -4919,6 +5302,11 @@ to OE-2.
     `{:initial_changed, name, {old, new}}`, its running value kept, as decision 29 reports
     a tag's; or say nothing. *Recommend reporting it,* one rule for two kinds of state,
     which extends decision 29 to globals. Adopted.
+    *(Amended 2026-10-27 by decisions 277 and 278, for Milestone 6, not yet built: a
+    running value kept until a restart is, for a retained global or tag, kept by a warm
+    restart still, only a cold restart taking the new initial value; and a store read at a
+    fresh start keeps a stored value whose initial value changed, as this decision keeps a
+    running one.)*
 45. **How an edit's switch sees a configured instance's `var_external`s (OE-2),** when
     the two programs declare different ones (the running program reads `estop` through
     `var_external`, the candidate declares `estop` as a `var`):
@@ -5275,6 +5663,9 @@ questions asked after M3-1's review, the same day.
     `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
     for a counter, which sets `.CU` true *"to prevent invalid increments during the first
     program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for `tp`, 2026-10-14.)* *(Landed with M3-4 for `osr` and `osf`, 2026-10-14: neither sets its pulse bit on a first scan, whatever its storage bit holds.)*
+    *(Kept by decision 274, 2026-10-27, for Milestone 6: `first: true` on every start, a
+    warm restart and a fresh start from the store among them, so a retained edge memory
+    fires nothing on the first scan either.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -5360,6 +5751,10 @@ questions asked after M3-1's review, the same day.
 
     *Recommend back to zero.* Adopted: an `rto` starts again at every restart, warm or
     cold, as every tag does, until `retain` lands. *(Landed with M3-2, 2026-10-14.)*
+    *(Answered 2026-10-27 by decisions 266, 269 and 273, for Milestone 6, not yet built:
+    an `rto` declared `var retain lube rto` keeps `.acc` and `.dn` across a warm restart
+    and a fresh start from the store, the outage not counted; one not marked starts at 0
+    at every restart, as here.)*
 77. **Arithmetic past the dint's limit (M3-3).** The fill valve adds each delivery to a
     running total, and the total passes the largest number logex holds.
     - It wraps round to a huge negative number;
@@ -6282,6 +6677,11 @@ over.
      the runner trips at the end of the step that raised the round's first major fault,
      no later step of the round running, decision 153's note.)* *(Landed with M5-9,
      2026-10-23, for a tag bit number.)*
+     *(Amended 2026-10-27 by decisions 271, 273 and 275, for Milestone 6, not yet built: a
+     warm restart keeps the retained values of the resource as the trip left it, the one
+     `get/2` reads, and a runner with a store writes those values at the trip; the clock
+     still does not count the stopped time, and each retained timer's `last` is set to the
+     restart's `now`.)*
 114. **A device that fails or is lost (Milestone 4).** The drive's network cable comes
      loose, or an input card stops answering.
      - It is treated as the watchdog is: everything off, and wait for a restart;
@@ -6331,6 +6731,11 @@ over.
      again that no person asked to start. A host that wants a restart by itself may say so
      in its own child spec, knowing that a cold start runs the program from its initial
      values. *(Taken 2026-10-17.)*
+     *(Amended 2026-10-27 by decision 271, for Milestone 6, not yet built: a host's own
+     child spec that restarts the runner after a crash restarts it **warm** where a store
+     is named, `retain:`, unless it passes `start: :cold`, so a retained value, a latched
+     run bit among them, comes back with no person asking; README says so beside decision
+     272's hazard.)*
 116. **A normal shutdown (Milestone 4).** Someone shuts the controller down normally, for
      maintenance.
      - Everything is switched off first, then it shuts down: the conveyor stops and the
@@ -6343,6 +6748,9 @@ over.
      that has shut down leaves no conveyor running behind it. The spike first left the
      zeroing to the devices' own exit, and its `stop` returned while the panel still held
      its contactor on. *(Taken 2026-10-17.)*
+     *(Amended 2026-10-27 by decision 275, for Milestone 6, not yet built: `stop/2` also
+     writes the store, where one is named, before it returns; a final write that fails
+     still stops, and `stop/2` returns `{:error, {:retain, reason}}`.)*
 117. **Forcing a signal for testing (Milestone 4).** A technician wants to check the "case
      full" lamp without loading 12 boxes, so they make the controller see the photo-eye
      as blocked and unblocked from a laptop, whatever the real eye says. Forcing an
@@ -6709,6 +7117,10 @@ question put, as decisions 111 and 112 were.
      without `forces:` refuses to force, and that a force the configuration cannot take
      refuses the start, as recorded above. Built with M4-5, 2026-10-19, its format one
      force a line, `name value`, read exactly as written, decision 140.)*
+     *(Followed 2026-10-27 by decisions 275, 276 and 285, for Milestone 6, not yet built:
+     the store of retained values is written by this decision's rule, to a file beside it
+     renamed over it, and read in the caller at every fresh start; unlike the forces file
+     it records its configuration, and a store of another configuration is refused.)*
 
 128. **The bound on the runner's own time between steps (Milestone 4),** following
      decision 125, asked after M4-1's review. Between rounds the runner waits, serves a
@@ -6983,6 +7395,9 @@ on the drive.
      runner left as it was (the maintainer, 2026-10-19). A host that wants the plant
      started again from its initial values while it runs stops it and starts a new one,
      every output going to 0 on the way, as decision 116 says.
+     *(Amended 2026-10-27 by decision 271, for Milestone 6, not yet built: for a runner
+     with a store the last sentence holds only with `start: :cold`, a new runner given the
+     store starting warm unless told otherwise.)*
 134. **How soon a device stuck inside its own read is a fault (Milestone 4),** following
      decisions 114, 119 and 128. The panel card's adapter hangs in the middle of reading
      the buttons while the conveyor runs steadily and no output changes, so no request of
@@ -8630,6 +9045,9 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      `end_to_end_test.exs`'s `a `last` later than now`, which pinned that such a timer adds
      nothing, its hand-built env now taken at `now` 5, and `runtime_test.exs`'s `last` of
      2^70, now taken only where `now` is at least 2^70.
+     *(Kept by decision 273, 2026-10-27, for Milestone 6: a retained timer's `last` is
+     never stored, and every start sets it to the `now` it starts at, so no state a start
+     makes holds a `last` later than its `now`.)*
 189. **What a literal `neg` source names (Milestone 5),** following decision 181. `neg -128
      count` into a `usint` was told "declare `count` an sint", the narrowest signed type
      -128 fits, where −(−128) wraps to −128 with no power in an `sint`.
@@ -10166,6 +10584,319 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      proposed after M5-16's review, its "every output written 0 once, through each device
      that takes the write" read since decision 262 with the 0 tried again at each poll.
 
+**Milestone 6's decisions, 2026-10-27** (§4.13). Decisions 266–285 are the questions
+Milestone 6's design put to the maintainer, 284 and 285 added by its review; the
+maintainer answered all twenty on 2026-10-27, each as recommended. None is built yet.
+The example plant is §4.13's: the power fails at 14:00 with 41 boxes counted, the lube
+timer at 62 hours, the fan in its run-on and the conveyor running, and comes back at
+14:20.
+
+266. **What is retained when nothing says so (Milestone 6).** The power fails with 41
+     boxes counted.
+     - Only what the program marks `retain` comes back, as IEC's qualifiers, Siemens and
+       CODESYS have it: the count and the lube timer only where the program marked them,
+       the conveyor's seal-in off so the conveyor waits for start;
+     - or everything comes back, as the conventional family keeps all memory: the 41
+       boxes and the 62 hours without a word written, and every latched bit, so a run bit
+       latched with `otl` restarts the conveyor at the first round (its prescan keeps
+       OTL, 1756-RM018A pp.86–87), against which logex would need a prescan of its own
+       (decision 279).
+
+     IEC leaves an unmarked variable's warm value to the implementer (Ed 3 Figure 9 rule
+     3, p.57), so both conform. *Recommended: only what is marked*, which keeps decision
+     115's rule for every program written so far, needs no prescan, and leaves the three
+     tests that pin "warm is cold" passing for their unmarked programs.
+
+     **Taken: only what is marked** (the maintainer, 2026-10-27), as recommended: logex's
+     answer to rule 3 is *initialised*.
+267. **How a declaration line says it (Milestone 6).** IEC writes the qualifier after the
+     section word over a whole section, `VAR RETAIN`; logex declares one tag a line.
+     - `var retain count dint`, the qualifier straight after the section word, IEC's word
+       order, the form the current refusal already recognises;
+     - `var count dint retain`, the qualifier last, where a line's tail is its initial
+       value or array list;
+     - or new section words, `var_retain`, which IEC does not spell.
+
+     `retain` and `non_retain` are IEC's names lowercased (Ed 3 §6.5.6 and Figure 7; Ed 2
+     §2.4.2 and Table 16 a)), the naming rule's first step; CODESYS spells them so too.
+     *Recommended: `var retain count dint` and `var non_retain count dint`*, each word a
+     third kind of row in `Logex.Declarations`, reserved in any case, added to
+     `keywords/0`'s pinned list with its stanza, `non_retain` taken to keep a member out of
+     a retained instance and to state the default on a program's own tag.
+
+     **Taken: `var retain count dint` and `var non_retain count dint`, both reserved,
+     never on one line together** (the maintainer, 2026-10-27), as recommended. A program
+     with a tag named `retain` or `non_retain` stops compiling, which M6-1's commit says.
+268. **Which sections may be retained (Milestone 6).**
+     - A program's `var` and `var_output`, as IEC's VAR and VAR_OUTPUT;
+     - a block's `var`, `var_input` and `var_output`, as Ed 3 Table 40 features 4a to 4f
+       (p.101), a block's var_input being rewritten by its `cal` at every run;
+     - a configuration's `var_global`, `var_global retain total dint 0`, by IEC's
+       `VAR_GLOBAL RETAIN`, and `non_retain` there too, as §6.5.6.2's text allows;
+     - a program's `var_input` refused, *"a var_input holds the host's value, which every
+       restart keeps where it fits"*, a departure from Ed 3 Table 47 features 4a and 4c
+       (p.117) that Figure 7's NOTE allows and logex's compliance statement must name;
+     - `var_external` refused, told its global carries it, IEC's grammar giving it none;
+     - a located global refused (decision 272).
+
+     *Recommended: as listed.*
+
+     **Taken: a program's `var` and `var_output`, all three of a block's sections, and
+     `var_global`; refused on a program's `var_input` and on `var_external`** (the
+     maintainer, 2026-10-27), as recommended.
+269. **Which types may be retained (Milestone 6).** Every elementary type, bools and
+     one-shot storage bits, every integer, bit string and real; arrays whole, `var retain
+     weights int[8]`, IEC having no syntax for one element; arrays of instances whole,
+     every element by the instance rule (decision 270); and instances of timers, counters
+     and user blocks whole, every member retained, the hidden ones among them, a counter's
+     edge memory `cu`, a `tp`'s `.en`, a timer's `last` by decision 273's rule. `var
+     retain boxes ctu` brings back 41 at 14:20 and `var retain lube rto` 62 hours; a
+     retained `ton` brings back its time too, where the conventional prescan would clear
+     it (RM018A p.134), because the program asked for it. *Recommended: as listed.*
+
+     **Taken: every elementary type; arrays and instances whole, hidden members
+     included** (the maintainer, 2026-10-27), as recommended.
+270. **A qualifier inside an instance (Milestone 6).** IEC's type wins over its instance
+     for a member the type marks, and a member that is itself a block takes *"the retain
+     declaration of the used function block type or class"* (Ed 3 §6.5.6.2, p.57), which
+     may mean the qualifier on the nested instance's own line inside the outer type, or
+     only the qualifiers in the nested type's body: **unverified**.
+     - The nearest qualifier on a member's path wins: from the member outward through each
+       enclosing instance's declaration line to the program's own tag, the first `retain`
+       or `non_retain` met decides it, none meaning not retained; so `var retain s1 seal`
+       retains `seal`'s timer unless `seal` marks that timer's line, one rule at every
+       depth, Siemens' shape (guideline 81318674 p.16);
+     - or IEC read literally: an outer word covers the instance's own elementary members
+       and stops at each nested block, whose own body decides, a block author who wants
+       its timer kept writing `var retain t ton` in the block.
+
+     Under either a built-in's members follow its instance. *Recommended: the nearest
+     qualifier wins, stated as logex's reading of the unverified clause*, settled by the
+     compiler into `Program.retained`, each retained path, nil where there is none, held by
+     `edited_by_hand/1`.
+
+     **Taken: the nearest mark on a member's path wins** (the maintainer, 2026-10-27), as
+     recommended.
+271. **What a cold restart, a warm restart, a crash and a fresh start each restore
+     (Milestone 6).** §4.13's table of starts. Two questions inside it:
+     - *a fresh start with a store:* warm unless `start: :cold`, naming a store being the
+       host asking for one, as naming a forces file is (decision 127); or `start:`
+       required wherever `retain:` is given, so that a host's own restarting child spec
+       (decision 115) never starts warm unasked, a retained latched run bit restarting the
+       conveyor with no person asking;
+     - *a cold restart's store:* written at once, before its first round, so that a crash
+       a second later brings back none of the values it discarded, a failed write leaving
+       the runner as it was with `{:error, {:retain, reason}}`; or written at the next
+       period.
+
+     Part 3 does not say which start follows a power failure (Part 1's definitions are
+     **unverified**); the S7-1500 always starts warm (A5E03461182-01 p.103, read on a
+     mirror). *Recommended: warm unless `start: :cold`, and the store written at once.*
+
+     **Taken: a fresh start with a store is warm unless `start: :cold`; a cold restart
+     writes the store before its first round** (the maintainer, 2026-10-27), as
+     recommended. Decision 115's last sentence and decision 133's are annotated, and
+     README says it beside the hazard of decision 272.
+272. **Located globals and outputs at a warm start (Milestone 6).** A warm start writes
+     nothing before its first round, as every start does (decisions 113 and 142); the
+     question is what that first round writes.
+     - `retain` on a located global refused: an input point is read again at every start,
+       and an output point starts at 0 until logic writes it, so no output comes back on
+       from the store itself;
+     - or taken, as IEC allows (Ed 3 p.58, `OUTARY AT %QW6` under `VAR RETAIN`), a
+       retained lamp's 1 written at the first round wherever no logic drives it.
+
+     The program-level hazard remains either way: `var retain run bool`, latched by `otl`
+     and connected to the motor's output, restarts the conveyor at the first round; IEC
+     and Siemens leave it to the programmer, and the conventional family needs a
+     Power-Up Handler against it (1756-PM014O p.15). *Recommended: refuse `retain` on a
+     located global, warn where a retained var_output is connected to an output point or
+     to a global that is one*, the warning catching only a direct connection and saying
+     so, and README's "What logex is not" naming the hazard.
+
+     **Taken: refuse retain on a located global; warn where a retained var_output drives
+     an output point; README names the hazard** (the maintainer, 2026-10-27), as
+     recommended.
+273. **A running timer across a power failure (Milestone 6).** The lube `rto` at 62 hours
+     and the fan's `tof` in its run-on.
+     - Not counted: `.acc` and the bits kept, each retained timer's `last` set to the
+       start's `now`, the lube timer adding only motor running after 14:20 and the fan
+       finishing its run-on after the first round, decision 57's resume and decision 113's
+       anchor rule;
+     - or counted: the store holding wall time and the start adding the outage, the lube
+       timer reading 62 h 20 min though the motor never ran, which needs a new clock in
+       the runner, logex's clocks being monotonic and meaning nothing across a VM (§4.11).
+
+     The conventional family's TON loses its time to the prescan (RM018A p.134); only an
+     RTO keeps `.ACC` and `.DN` (p.113), by `ACC = ACC + (current_time −
+     last_time_scanned)` (p.112), whether its first scan after a power cycle counts the
+     outage turning on a flow chart the extract does not hold (**unverified**). Decision
+     188 refuses a `last` later than the instance's `now`, and a fresh start is at `now`
+     0, so a stored `last` cannot be loaded as it stands. *Recommended: not counted*,
+     `last` never written to the store, and a warm `restart/2` of a live resource setting
+     each retained `last` to its kept `now`, so the time the runner stood tripped is not
+     counted either.
+
+     **Taken: the outage is not counted; a timer resumes** (the maintainer, 2026-10-27),
+     as recommended.
+274. **Edges and the first scan on a warm start (Milestone 6).** A retained counter and a
+     box that arrived on the eye while the power was off.
+     - Not counted: `first: true` on every start, decision 69's one start-up rule, as the
+       conventional prescan sets `.CU` true *"to prevent invalid increments during the
+       first program scan"* (RM018A p.99);
+     - or counted, `first: false` where an edge memory is retained, so that an unretained
+       one-shot beside it would fire on a held button, the hazard decision 69 refused.
+
+     *Recommended: `first: true` on every start, warm or cold*, `ons_blocked` dropped as
+     today; a first-scan bit and how-did-I-start information deferred.
+
+     **Taken: no first-scan edge** (the maintainer, 2026-10-27), as recommended.
+275. **Where the store lives and when it is written (Milestone 6).** logex has no
+     battery-backed memory; the host's disk stands in for it.
+     - *Where:* a path the host names, `retain:`, as `forces:` is (decision 127); with
+       none nothing survives a crash, and a configuration that declares `retain` without a
+       store is not refused, a warm `restart/2` still keeping retained values in memory
+       and `status/1` saying `retain: nil`.
+     - *When:* every round, TwinCAT's RETAIN, an fsync a round, against decision 108's
+       share and a flash card's wear, Siemens warning against cyclic writes to load memory
+       (A5E03461664-01 p.22); on change, which is every round while a timer runs; or at a
+       period, `retain_period:`, and at every trip, `stop/2` and cold restart, a crash
+       losing at most a period and one write.
+     - *How:* as the forces file is written, to `<path>.tmp`, synced, closed and renamed
+       over the store, by a writer process of the runner's own so that a write delays no
+       round, latest wins. A sync of the directory after the rename OTP probably cannot
+       make (`{error, eisdir}` in 2014, **unverified for OTP 28**; M6-1 tries it).
+     - *A write that fails:* reported, `{:retain, {:error, reason}}` and in `status/1`,
+       the plant running on; or the runner trips. A `stop/2` whose final write fails
+       still stops, and returns `{:error, {:retain, reason}}`; a fresh start reports the
+       store's age.
+     - *The write at a trip:* the resource as the trip left it, the one `get/2` reads.
+
+     *Recommended: a period, 1000 ms unless set, plus the event writes; a failed write
+     reported, not tripped.*
+
+     **Taken: every `retain_period:` (1000 ms unless set), and at a trip, a stop and a
+     cold restart; atomic, by its own process; a failed write reported, the plant running
+     on** (the maintainer, 2026-10-27), as recommended. The period's range is M6-6's to
+     settle, the record suggesting 100 to 3,600,000 ms.
+276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
+     (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
+     a line*, under a header `logex retain 1` and a line naming the configuration and the
+     write's wall time, each instance introduced by `instance <name> <program type>` and an
+     instance of a built-in by a line of its own, a real spelled by
+     `Logex.Real.spelled/2`, never a `last`; self-describing, as decision 277's matching
+     needs, and readable after an incident. A store that cannot be read, or a line of no
+     such shape, is the host's mistake, a line each, and the runner does not start.
+
+     **Taken: readable text with a header** (the maintainer, 2026-10-27), as recommended.
+277. **A changed program or configuration meeting an old store (Milestone 6).** The host
+     stops the plant, changes the program, a new tag, a counter made a `ctu_int`, an array
+     grown from 8 to 16, and starts it fresh from the old store.
+     - Refuse, the forces file's rule: every change to a retained tag stops the plant
+       from starting until someone deletes the store;
+     - or match by name and type and drop the rest, reported, as an edit's switch matches
+       state and CODESYS its persistent list.
+
+     *Recommended: match*, a stored value kept only where the configuration has an
+     instance of its name running the same program type, whose program declares the path
+     retained, of exactly the stored type, the value fitting it; a user block's instance
+     member by member, by path (decision 31); an array of instances element by element
+     only where its sizes are unchanged; a changed initial value keeping the stored value
+     (decision 44); each dropped value reported once, in `status/1` and the first round's
+     event; a broken file still refused.
+
+     **Taken: match by instance, type, path, exact type and fit, member by member; the
+     rest dropped and reported in `status/1`; only a malformed file refused** (the
+     maintainer, 2026-10-27), as recommended.
+278. **An online edit that adds or removes a qualifier (Milestone 6).** An edit that only
+     changes `retain` changes no value, the plan comparing tags by name and kind.
+     *Recommended: two report kinds, `:retain_added` and `:retain_removed`, by path*, rows
+     of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
+     `Logex.Configuration.Edit` and `@configuration_kinds`, the switch writing nothing; the
+     next store write following the program running; a warm `restart/2` during an edit
+     keeping the running instances' retained values and dropping those set aside
+     (decision 65).
+
+     **Taken: `:retain_added` and `:retain_removed`, report only** (the maintainer,
+     2026-10-27), as recommended. Decision 44 is annotated.
+279. **A pre-scan in the conventional family's sense (Milestone 6).** The conventional
+     family needs one because it keeps everything (RM094N p.47); under decision 266 logex
+     puts back everything unmarked by `initial_env/1`, and an `ote` writes 0 on a
+     de-energised rung in the first scan itself. *Recommended: none*, `first: true`
+     logex's only start-up rule.
+
+     **Taken: no prescan** (the maintainer, 2026-10-27), as recommended.
+280. **Persistent as well as retain (Milestone 6).** CODESYS's PERSISTENT, which is not
+     IEC, survives a cold reset and a download. In logex no download clears values, a
+     changed program meeting the store by name and type (decision 277), and
+     `restart(:cold)` is the host's explicit act; what remains is a value meant to outlive
+     a cold start, an hour meter or a calibration. *Recommended: deferred*, the word not
+     reserved.
+
+     **Taken: deferred, `persistent` not reserved** (the maintainer, 2026-10-27), as
+     recommended.
+281. **The configuration's `program` line (Milestone 6).** IEC's grammar allows `PROGRAM
+     RETAIN p WITH t : T` (Ed 3 Annex A, `Prog_Config`, p.226) with no feature row; it is a
+     second place to say what the program's own lines say, and its rule against an online
+     edit's retype a design of its own. *Recommended: deferred.*
+
+     **Taken: deferred** (the maintainer, 2026-10-27), as recommended.
+282. **The host API (Milestone 6).** *Recommended:* the core pure, no clock and no file:
+     `Logex.Runtime.restart/3` and `restart/2` taking `:warm` to mean warm;
+     `Logex.Runtime.retained/1`, a resource's image as plain data, and `retained/2`, a lone
+     instance's; `Logex.Runtime.start/2`, a configuration and an image giving `{runtime,
+     dropped}`, and `instance/2` for a lone program, the image checked as a host's state
+     is (decisions 171 to 188); the rule beside `initial_env/1` stated once in
+     `Logex.Program`; `Logex.Retain`, internal, the store; and `Logex.Runner` owning the
+     file, with `retain:`, `retain_period:` and `start:`, each checked in the caller in
+     order, `status/1`'s `retain` and the `{:retain, …}` event. No field joins
+     `%Logex.Instance{}`.
+
+     **Taken: a pure core image and a runner-owned file** (the maintainer, 2026-10-27), as
+     recommended, with the names `retained`, `start/2` and `retain_period:`.
+283. **What the scope leaves out (Milestone 6).** *Recommended: §4.13's deferred list*,
+     `persistent`, `program retain`, `VAR_CONFIG` (Milestone 13's), `constant`, one
+     element of an array, a retained located global, a hot restart, an outage's wall
+     time, a first-scan bit, a pre-scan, a store per program instance, encryption or a
+     checksum of the store, retaining forces, and several resources in one store.
+
+     **Taken: the scope as listed** (the maintainer, 2026-10-27), as recommended.
+284. **A retained value that tripped the plant (Milestone 6),** added by the design's
+     review. The panel's `slot` is a retained `dint` and a wrong rung takes it to 8 in
+     `weights`, an `int[8]`: the index fault trips the plant (decision 153), the trip's
+     store write keeps `slot` at 8, and a warm restart, or a crash and a warm fresh start,
+     trips it again at its first round.
+     - Nothing special: the trip names the instance, the file, the line and the index,
+       and the remedy is a cold restart, an online edit that writes the value, or a hand
+       edit of the store's one line;
+     - a warm restart naming paths to start cold, `restart(runner, {:warm, reset:
+       ["m1.slot"]})`, a new host form with its own refusals;
+     - or no store write at a trip, which rarely helps, the fault's value usually older
+       than the period, and the warm `restart/2` would meet it still.
+
+     From revision 13 the conventional family clears an array-subscript fault met during
+     prescan (1756-PM014O p.19); that its first scan then faults again is the record's
+     inference. *Recommended: nothing special*, README saying so beside the trip and a test
+     pinning the second trip.
+
+     **Taken: nothing special** (the maintainer, 2026-10-27), as recommended.
+285. **A store from another configuration (Milestone 6),** added by the design's review.
+     The host copies a plant's files to a second line with the first line's store beside
+     them, or restores an old backup.
+     - The header names the configuration, and a store of another name is the host's
+       mistake at a fresh start, a line naming both, `start: :cold` not reading it and so
+       starting, writing a new store at once;
+     - matched anyway, the name only reported;
+     - or nothing recorded, as the forces file records nothing of its configuration
+       (decision 127).
+
+     A force is a technician's act on a point, shown in `status/1`; a store is many values
+     nobody looks at until they are wrong. *Recommended: the header and the refusal*, a
+     renamed configuration then starting only cold, which the message says.
+
+     **Taken: refused, `start: :cold` to start over it** (the maintainer, 2026-10-27), as
+     recommended.
+
 ---
 
 ## 8. Sources, and what is unverified
@@ -10185,6 +10916,13 @@ built; 221, 222, 223, 226, 227 and 228 change six.
   - For decision 127, searched on 2026-10-18: "forc" occurs in the extracted text of
     neither Ed 2 nor Ed 3, so IEC 61131-3 says nothing of forcing; the other parts of IEC
     61131 were not read.
+  - For Milestone 6's design (§4.13, decisions 266–285), checked against the extracts on
+    2026-10-27: Ed 2 §1.3.67 (p.13), §2.4.2 (p.38), Table 16 a) with its notes (pp.39–40),
+    Table 17 features 2a and 7 (pp.41–42) and Figure F.3 (p.197); Ed 3 §4.1 (p.19),
+    §6.5.2.1 Figure 7 and its NOTE (p.50), §6.5.6 with Figure 9 and its example
+    (pp.56–58), Table 40 (p.101), Table 47 (pp.117–118) and Annex A's
+    `Retain_Var_Decls`, `Global_Var_Decls` (p.224) and `Prog_Config` (p.226). IEC
+    61131-1, where warm and cold restart are defined, was not read: **unverified**.
 - Ed 4 (2025) was not read beyond its publisher preview, so **its organisation clauses are
   unverified**.
 
@@ -10247,6 +10985,36 @@ built; 221, 222, 223, 226, 227 and 228 change six.
   nested up to 16 levels deep, decision 32; the design considerations reference says the
   same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a
   parameter read or written from outside logic, decision 33).
+
+- For Milestone 6's design (§4.13, decisions 266–285), checked against the extracts on
+  2026-10-27: the general instructions reference, 1756-RM018A, Sept 2025, its prescan
+  rows for ONS (p.73), OSF (p.75), OSR (p.80), OTE, OTL and OTU (pp.85–87), CTD (p.95),
+  CTU (p.99), RTO (pp.112–113, its `ACC = ACC + (current_time − last_time_scanned)`),
+  TOF (pp.123–124) and TON (p.134), and `S:FS` (p.868); the design considerations
+  reference, 1756-RM094N, p.47 (the prescan, inputs not current and outputs not written,
+  and `S:FS`); the add-on instructions manual, 1756-PM010N, p.43 (a prescan on powering
+  up in Run and on Program to Run); *Major, Minor, and I/O Faults*, 1756-PM014O, p.15
+  (the Power-Up Handler, an empty one a major fault 1/1) and p.19 (an array-subscript
+  fault met during prescan cleared from revision 13); the memory card manual,
+  1756-PM017J, March 2022, pp.9, 14 and 27 (an image loaded "On Power Up" and tag values
+  stored to the card); 1756-UM001Q, p.36 (the battery) and pp.71–72 (energy storage
+  saving the program); and 1756-UM543T, p.205 (the backup energy's status messages).
+  **Unverified:** that a backed controller's tag values survive a power cycle, implied
+  and never said in one sentence; what a download does to tag values.
+
+**Siemens and CODESYS, for Milestone 6's design** (§4.13), read on 2026-10-27.
+- Siemens: the programming guideline for S7-1200/S7-1500, entry 81318674 V1.3, 09/2014,
+  p.16 (a global DB's tags non-retentive by default, an instance's retentivity set in
+  its function block), p.57 (retentive data copied with buffer energy at a power failure,
+  and Table 3-5's sizes) and p.58 (retentivity from address 0 onward); the S7-400 CPU
+  manual, 6ES7498-8AA04-8BA0, §2.6 (cold restart OB 102, warm restart OB 100, hot
+  restart OB 101), each checked against its extract. **Not rechecked**, no extract
+  saved: A5E03461664-01 pp.13–14, 18–19 and 22 and A5E03461182-01 p.103 (read on a
+  mirror).
+- CODESYS online help: "Setting Data Persistence", "Preserving Data with Retain
+  Variables", "Reset Application" and "Variable: PERSISTENT", checked against the pages
+  saved; its matching of a persistent list entry by entry, by name and type, not in the
+  pages saved. Beckhoff's InfoSys pages on remanent variables were read and not saved.
 
 **Free software, cited by symbol (CONTRIBUTING.md, "Anchor on names, not line
 numbers").**

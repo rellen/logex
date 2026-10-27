@@ -1661,8 +1661,16 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and
   the bitwise instructions, a bit number in a tag, arrays of up to three dimensions, of
   instances and located, an index or a bit number out of range a major fault that trips
-  the runner, typed counters and long timers in nanoseconds).
-  Read it before designing anything that adds a data type (§4.12), names a program, schedules one, binds I/O,
+  the runner, typed counters and long timers in nanoseconds; Milestone 6, retained values
+  and a true warm restart, designed and decided on 2026-10-27, §4.13 and decisions
+  266–285, its nine items planned in `PLAN.md` and none landed: `var retain` and `var
+  non_retain`, both reserved, on a program's `var` and `var_output`, a block's three
+  sections and `var_global`, the nearest mark on a member's path winning, a warm restart
+  keeping what is marked and nothing else, a timer's outage not counted and no first-scan
+  edge, and a store the runner writes on the host's disk, matched by name and type at a
+  fresh start, warm unless `start: :cold`).
+  Read it before designing anything that adds a data type (§4.12), retains a value
+  (§4.13), names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,

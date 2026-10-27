@@ -296,13 +296,24 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 
 ### Settled, not yet landed
 
-Nothing that is decided is waiting to land. Everything decided so far (see
-[`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) that changes the source language has
-landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
+One milestone that is decided is waiting to land, retained values (the first bullet
+below). Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
+`PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
 108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),
 whose only words in the language are a task's `watchdog` and the `continuous` task
 ("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
+- **Retained values and a true warm restart**, `PLAN.md`'s Milestone 6, decided on
+  2026-10-27 (decisions 266–285 in [`docs/organisation.md`](docs/organisation.md) §7,
+  designed in its §4.13), none of it built yet: `var retain count dint` and `var
+  non_retain jog bool` on a program's `var` and `var_output`, a block's three sections
+  and a configuration's `var_global`, the nearest mark on a member's path winning; a warm
+  restart keeping what is marked and initialising everything else, a running timer's
+  outage not counted and nothing edge-driven firing on its first scan; and a store the
+  runner writes on the host's disk every second and at a trip, a stop and a cold restart,
+  read at a fresh start, warm unless `start: :cold`. `retain` and `non_retain` become
+  reserved words in any case, so a tag named either stops compiling when the words land;
+  `persistent` is deferred and stays unreserved.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -4146,7 +4157,8 @@ in every cycle's outputs at the value it holds.
   access, `w.%B1`; no `round`, `ceil` or `floor`, and no conversion to or from a bool, a
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
   tag's type or array's size; a jump forward only; no retained values, so a warm restart
-  is a cold one; and forcing for inputs only, an output never forced.
+  is a cold one (retained values are decided for Milestone 6, "Settled, not yet landed",
+  above, and not yet built); and forcing for inputs only, an output never forced.
 
 ## Running it
 

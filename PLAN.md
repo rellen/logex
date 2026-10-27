@@ -218,7 +218,11 @@ the done sentence names built as a test, every elementary type, a `ctud_int` box
 the fan's `real`, the oven's located `real[8]` and `weights[slot]` from files on disk
 through `Logex.Runner` against an oracle, `Logex.Tag`'s and `Logex.Edit`'s docs made true,
 three IEC page citations corrected, and the eight questions still open on Milestone 5's
-provisional readings gathered in one list (§3, M5-16's review).
+provisional readings gathered in one list (§3, M5-16's review). Milestones 6 to 13 were
+proposed on 2026-10-27 (§3), and Milestone 6, retained values and a true warm restart, was
+designed and decided the same day (§3, "Milestone 6"; `docs/organisation.md` §4.13 and
+decisions 266–285), the maintainer answering its twenty questions as recommended; its nine
+items, M6-1 to M6-9, are planned, and none has landed.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8712,6 +8716,252 @@ size is refused, and a changed initial value of every type is reported; and the 
 walks reach every type, refusal and trip reason, repeating exactly.
 
 
+### Milestone 6 — retained values and a true warm restart
+
+**Designed and decided 2026-10-27** (`docs/organisation.md` §4.13 and §7, decisions
+266–285; "decision N" in this section is that §7's). The maintainer asked for it after
+Milestone 5 closed, from README's "What logex is not": today a warm restart is a cold one,
+so a counter's count, a totaliser's total or a timer's accumulated time is lost when the
+runner restarts, crashes or the VM stops. A design pass on `3a7c2eb` read IEC 61131-3 Ed 2
+and Ed 3 in full, the conventional family's prescan rows, power-up handling and stored
+images (1756-RM018A, RM094N, PM010N, PM014O, PM017J, UM001Q, UM543T, UM900B), Siemens'
+retentive memory and starts, and CODESYS's and Beckhoff's RETAIN and PERSISTENT; its
+review corrected seven facts and added two questions (284 and 285). The maintainer
+answered all twenty on 2026-10-27, each as recommended:
+- only what a program marks is retained, an unmarked tag initialised at a warm start, as
+  logex's answer to IEC's implementer-specific rule (266);
+- `var retain count dint` and `var non_retain count dint`, both words reserved, never on
+  one line together (267), on a program's `var` and `var_output`, a block's three
+  sections and `var_global`, and refused on a program's `var_input` and on `var_external`
+  (268), of every elementary type, arrays and instances whole, hidden members included
+  (269), the nearest mark on a member's path winning (270);
+- a fresh start with a store warm unless `start: :cold`, and a cold restart writing the
+  store before its first round (271); `retain` on a located global refused, a retained
+  var_output driving an output point warned of, README naming the hazard (272);
+- an outage not counted, a timer resuming (273), and no first-scan edge (274), so no
+  prescan (279);
+- the store written every `retain_period:`, 1000 ms unless set, and at a trip, a stop and
+  a cold restart, atomically, by a writer process of its own, a failed write reported and
+  the plant running on (275), in readable text under a header (276), matched by
+  instance, program type, path, exact type and fit, member by member, the rest dropped and
+  reported in `status/1` and only a malformed file refused (277), and a store of another
+  configuration refused, `start: :cold` starting over it (285);
+- an online edit of a qualifier reported, `:retain_added` and `:retain_removed`, and
+  nothing written (278);
+- a pure core image and a runner-owned file (282); `persistent` and `program retain`
+  deferred, `persistent` not reserved (280, 281), the scope as listed (283), and nothing
+  special for a retained value that tripped the plant (284).
+
+Decisions 38, 44, 69, 76, 113, 115, 116, 127, 133 and 188, and §5's RETAIN row, carry
+annotation notes in `docs/organisation.md`; the taken text is untouched.
+
+Each item lands as Milestone 5's did: its words surveyed in `docs/naming.md` first,
+before any code, each new word reserved in any case and its commit naming what programs
+and configurations it breaks; a gated series, each commit gated alone by `mix format
+--check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
+`mix test --warnings-as-errors`, judged by exit code on Elixir 1.20.4, with its mutation
+table in its message, every rule it adds reverted alone and the suite judged by exit
+code, every survivor given a test. Throughout:
+- **A program that marks nothing behaves exactly as before**, warm or cold, its compile
+  and its scans in the reductions they took at `3a7c2eb`, and a configuration with
+  nothing retained cycles in what it did.
+- **The core stays pure** (decision 282): no clock and no file in `Logex.Runtime`; the
+  runner owns the store, as it owns the forces file.
+- **Each item extends `api_contract_test.exs`'s walks with its own rules as it lands**,
+  its oracles restating decision 271's table of starts in Elixir without calling
+  `Logex.Program`, written in clauses, its draws alone in `@draws` (decision 264), its
+  reach atoms never the existing `:retained`.
+- **The data API refuses what the text cannot say, and widens in the same commit as the
+  syntax** (decision 97's rule): `Logex.Tag.new!/4`, `Logex.Declarations.check/1` and
+  `Logex.Configuration.new!/1`.
+- **A host mistake is a pinned `ArgumentError`**, a malformed store among them, a line
+  each; a store's write that fails is the plant's state, never a raise (decision 275).
+- **New state** states its rule across an online edit (`Logex.Program.initial_env/1` and
+  the rule beside it for a retained path, `Logex.Configuration.initial/1` and a global's,
+  §4.9's "One rule for new state"), and `%Logex.Runtime{}`'s one-rule section gains the
+  warm rows.
+- **Growth is tested in reductions** where a rule walks something: the take-out against
+  the retained count, a round with a store against one without, the matching against the
+  store's lines.
+
+Sizes use Milestone 5's key: **S** under about 30 lines of `lib/` and its tests, **M** 30
+to 150, **L** 150 to 500, **XL** more, or a spike first. The record's estimate for the
+milestone, unmeasured, is 850 to 1,600 lines of `lib/`, about M4-5 and a declaration item,
+with tests two to four times that.
+
+**The order**: the words and the core's warm restart in one push, so that no commit on
+`main` accepts `retain` and then discards it at a warm restart; the configuration's
+globals; the image; the store at events, then the periodic writer; the edits, whose
+done-when reads the next store write; and last the contract walk and the documents.
+
+| Item | What | Decisions | Needs | Size |
+|---|---|---|---|---|
+| M6-1 | The words `retain` and `non_retain`, the sections and types, `Program.retained` | 266–270 | — | L |
+| M6-2 | The warm restart in the core, `restart/3 :warm` | 266, 269, 271, 273, 274, 279 | M6-1, one push | L |
+| M6-3 | Globals: `var_global retain`, the located refusal and warning, `restart/2 :warm` | 268, 271, 272 | M6-2 | M |
+| M6-4 | The image: `Runtime.retained/1,2`, `start/2`, `instance/2`, the matching | 273, 277, 282 | M6-3 | L |
+| M6-5 | The store, read and written at events, `retain:` and `start:` | 271, 275, 276, 284, 285 | M6-4 | L |
+| M6-6 | The periodic writer, `retain_period:` | 275 | M6-5 | M |
+| M6-7 | Online edits: `:retain_added` and `:retain_removed` | 278 | M6-5 | M |
+| M6-8 | The contract walk | all | M6-7 | L |
+| M6-9 | The documents | all | M6-8 | S |
+
+- **M6-1 · The words.** `docs/naming.md` stanzas for `retain` and `non_retain` first (Ed
+  3 §6.5.6 and Figure 7; Ed 2 §2.4.2 and Table 16 a); Logix none; Siemens' "Retain" in
+  TIA's interface, **unverified** as the exact label; CODESYS `RETAIN`). The qualifier
+  rows in `Logex.Declarations`, a third kind beside sections and types, and `keywords/0`'s
+  pinned list grown. `var retain …` parsed in place of the clause that refuses it today,
+  `%Logex.Tag{}` with `retain`, `Logex.FbType.Member` with it, and `Logex.Tag.new!/4` and
+  `Logex.Declarations.check/1` from Elixir. Decision 270's rule settled into
+  `Program.retained`, nil where there is none, held by `edited_by_hand/1`. Every refusal
+  of decision 268 at its line: a program's `var_input` ("a var_input holds the host's
+  value, which every restart keeps where it fits"), `var_external` (told its global
+  carries it), `retain` beside `non_retain`, and each word as a tag's name. The tests
+  that pin the refusal or an unreserved `retain` moved on purpose and named in the
+  commit: `validation_test.exs`'s three (the refusal, and "`retain` is not declared" for
+  `xic retain ote x`, which a reserved word changes), `api_contract_test.exs`'s junk
+  tokens and lines (`var retain r bool` now a valid line, so the junk generator's
+  expectation changes), and `function_block_test.exs`'s three; the commit says that a tag
+  named `retain` or `non_retain` no longer compiles. The directory sync tried on OTP 28
+  (decision 275), `:file.open(dir, [:read, :raw])` and a sync, and the result recorded
+  in §4.13. *Done when* every line of decisions 267 to 270 compiles or is refused at its
+  line, from text and from Elixir, `retain` and `non_retain` in any case;
+  `Program.retained` lists each retained path at depth, through blocks, a block's
+  `non_retain` member and arrays of instances, against the rule restated; a program with
+  no `retain` compiles to the struct it did at `3a7c2eb` but for `retained: nil` and each
+  tag's absent `retain`, its warnings exactly as before, a program of bools within its
+  present bound in reductions; and `naming_test.exs` holds the new words. **Lands in one
+  push with M6-2.** *Size L.*
+
+  **Status: not started.**
+- **M6-2 · The warm restart in the core.** `restart/3` `:warm` by the rule beside
+  `initial_env/1`, retained instances whole, each retained timer's `last` set to the
+  restart's `now` and `first: true` (decisions 271, 273 and 274); the moduledocs'
+  one-rule sections; §4.9's Milestone 3 tables given a warm column in place of their
+  "until `retain` lands"; decisions 69 and 76 annotated as landed. *Done when* a box
+  counter, a totaliser and an `rto` marked `retain` keep their values through `restart/3
+  :warm` and lose them through `:cold`; a `tof`, a `ton` and a `tp` caught mid-time
+  resume without counting the gap between the restart and the next scan's `now`; a
+  block's `non_retain` member and an unmarked nested timer each follow decision 270; an
+  array of instances keeps every element; `ons_blocked` is dropped and no edge fires on
+  the first scan, a retained `cu` of 0 under a held eye among them; the three warm-is-cold
+  tests (`runtime_test.exs`, `timer_test.exs` and `end_to_end_test.exs`) still pass for
+  their unmarked programs, renamed to "a program with no `retain`"; and a warm restart
+  costs no more than a cold one for a program with nothing retained, in reductions.
+  *Size L.*
+
+  **Status: not started.**
+- **M6-3 · Globals.** `var_global retain|non_retain` in `Logex.Configuration.Text`,
+  `%Logex.Configuration.Global{}`, `print/1`'s exact round trip, `check/1`'s refusal of
+  a located global's `retain` and decision 272's warning, "`m1.run` is retained and
+  drives the output `motor_q`: after a warm start it is written in the first round";
+  `restart/2` `:warm` for globals and instances. *Done when* §4.4's plant with a retained
+  `total_boxes` global, shared through `var_external`, and a retained counter keeps both
+  through `restart/2 :warm` and loses them through `:cold`, from text and from files on
+  disk; a warm `restart/2` during a configuration edit keeps the running instances'
+  retained values and drops those set aside (decision 65); the configuration round
+  trip's seeded draws include the qualifier; and a configuration with nothing retained
+  cycles in what it did. *Size M.*
+
+  **Status: not started.**
+- **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with
+  decision 277's matching and its dropped report, the image checked as a host's state is
+  (decisions 171 to 188). *Done when* a resource started from another resource's image
+  cycles exactly as the original does after a warm restart; every kind of mismatch
+  (renamed, retyped, resized, widened, qualifier removed, instance retyped, a block's
+  member added or retyped, matched member by member) is dropped or kept with its reason;
+  a misfit value of the right type is dropped; a timer's `last` is never in the image
+  and every retained timer starts at the start's `now` (decision 188 holding); and the
+  take-out's cost is bounded in the retained count. *Size L.*
+
+  **Status: not started.**
+- **M6-5 · The store, read and written at events.** `Logex.Retain`, internal, its
+  `encode/1` and `decode!/2` and the atomic write and read, the forces file's write rule
+  shared rather than copied (decision 276), its header naming the configuration and the
+  write's wall time through the runner's clock behaviour; the runner's `retain:` and
+  `start:`, each checked in the caller in order, added to `@options` and both pinned
+  messages; the read in the caller; the writes at a trip, a stop and a cold restart,
+  synchronous as the forces file's are; `status/1`'s `retain` and the store's age
+  (decisions 271, 275 and 285). Decisions 115's last sentence, 116, 127 and 133
+  annotated as landed. *Done when*, on the manual clock: a runner stopped, or tripped and
+  killed, and started fresh restores what its last write held, never older and never
+  half; a cold restart's store write precedes its first round, and a crash right after it
+  brings back none of the discarded values; a store that does not read is refused a line
+  each, and one of another configuration is refused naming both; `start: :cold` ignores
+  it and writes a new one at once; a retained output-driving bit comes back on only
+  through logic in the first round, never written before it; a retained value that
+  tripped the plant trips it again at a warm start and not at a cold one (decision 284);
+  and the end-to-end Done-when: §4.4's plant from files on disk with a retained box
+  counter, `rto` and total, through the runner, killed and started fresh, against an
+  oracle that knows nothing of logex. *Size L.*
+
+  **Status: not started.**
+- **M6-6 · The periodic writer.** `retain_period:`, its range settled (the record
+  suggests 100 to 3,600,000 ms), the writer process, latest wins, the failed write's
+  event `{:retain, {:error, reason}}` and status (decision 275). *Done when* a runner
+  killed between two periods restores the earlier period's write; a write that fails
+  leaves the old store, is reported, and the plant runs on; a `stop/2` whose final write
+  fails still stops and returns `{:error, {:retain, reason}}`; a slow write delays no
+  round (the writer suspended with `:sys.suspend/1`); and a round with a store costs
+  within a measured bound of one without, the take-out bounded in the retained count.
+  *Size M.*
+
+  **Status: not started.**
+- **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit` and
+  `Logex.Configuration.Edit`, rows of their tables and §4.9's, `@report_kinds` and
+  `@configuration_kinds`; decision 44 annotated as landed. *Done when* an edit that only
+  changes a qualifier reports it by path and writes nothing; the next store write and
+  the next warm restart follow the program running; and a crash while a candidate is
+  tested, then a fresh start with the original configuration, meets the candidate's
+  store by decision 277's matching. *Size M.*
+
+  **Status: not started.**
+- **M6-8 · The contract walk.** The host walk gains `retain` on drawn tags, members,
+  arrays and instances, and restarts of both modes against an oracle restating decision
+  271's table; the `RunnerWalk` gains a store: periods, kills and fresh starts from the
+  store, `start: :cold`, a failing write, and a changed configuration meeting an old
+  store, against a model that knows the last write. Its reach is every row of the table
+  and every dropped reason, under atoms that do not reuse the existing `:retained`;
+  oracles in clauses, draws alone in `@draws` (decision 264). *Size L.*
+
+  **Status: not started.**
+- **M6-9 · The documents.** README: "Retained values", the trip's restart example run
+  again warm, the `rto`'s "until `retain` lands" in "Three more timers", "Settled, not yet
+  landed", and "What logex is not", whose "no retained values" clause is replaced and
+  which gains a bullet of its own: a retained value is kept on the host's disk, not in
+  battery-backed memory, a crash losing what changed since the last write, up to a period
+  and one write, and on some file systems a power failure just after a write may bring
+  back the write before it; a retained value is no safety memory, a burner lockout, a
+  guard-opened latch or a trip count must not be kept in logex; a warm start can switch an
+  output on in its first round through logic that reads a retained bit or timer, the
+  warning catching only a retained var_output wired straight to an output point; a host's
+  own child spec that restarts the runner after a crash restarts it warm where a store is
+  named; and there are no persistent values, a cold restart discarding every retained
+  value. `docs/organisation.md` §4.13 and the decisions annotated as landed, §5's RETAIN
+  row among them; CLAUDE.md; and this section, the done sentence put to the maintainer.
+  *Size S.*
+
+  **Status: not started.**
+
+**What stays deferred**, each a later item or milestone (§4.13): `persistent`, not
+reserved (decision 280); `program retain` on a configuration's line (281); a retained
+located global (272); a retained element of an array; an outage counted in wall time
+(273); a program's first-scan bit, or knowledge of how it started (274); a pre-scan (279);
+a hot restart; `VAR_CONFIG` and several resources in one store (Milestone 13); `constant`;
+a warm restart that names paths to start cold (284); a store per program instance;
+encryption or a checksum of the store beyond its grammar; retaining forces, which have
+their own file; and the retention of the types later milestones add, Milestone 7's `TIME`
+and Milestone 8's structures, which the store's header version lets change its format.
+
+**Milestone 6 is done when** a box counter, a totaliser and a lubrication timer that a
+program marks `retain` keep their values across a warm restart, across a runner killed
+and started fresh from its store, losing at most what changed in one store period and one
+write, and across a changed program, by name and type; a cold restart starts them at
+their initial values, and a crash just after it brings none of the old values back; no
+output comes back on from the store itself; and a program that marks nothing behaves
+exactly as before.
+
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
@@ -8720,7 +8970,9 @@ questions put to the maintainer and decisions taken in `docs/organisation.md` §
 any of its code. The order is the maintainer's; a design pass may find one should come
 before another, and says so.
 
-- **Milestone 6 — retained values and a true warm restart.** Today a warm restart is a
+- **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
+  2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
+  266–285; nothing built yet.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store
