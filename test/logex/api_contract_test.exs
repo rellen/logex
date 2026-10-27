@@ -11190,7 +11190,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :real_forced,
     :real_misfit,
     :unzeroed_named,
-    :zero_retried
+    :zero_retried,
+    :zero_at_stop,
+    :down_while_tripped
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1])
@@ -11314,6 +11316,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # the array unforced whole more often and a continuous task's slow step twice among the
   # injections. Every atom is reached at this seed in about 20 s alone; of the 31 families
   # {2026, 10, n} and {3101..3130, 10, n}, 28 reached every atom, and no check failed in any.
+  # Decisions 286 and 287 added a device killed while tripped and the close's last 0, two
+  # atoms; at this seed and at {3101..3106, 10, n} every atom is reached.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
@@ -11401,6 +11405,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       maybe: nil,
       sure: false,
       retry_once: nil,
+      zero_refused: false,
       tripped_at: nil,
       unforcing: %{},
       hung: %{},
@@ -11533,20 +11538,53 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   # Every output written 0 once by a runner stopped or gone while it ran, nothing by one
-  # that had tripped, and every device that was up closed.
+  # that had tripped but, since decision 286, the 0 once more on a device whose trip's 0
+  # may not have been taken, and every device that was up closed.
   defp stopped!(w, before) do
     for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
       assert Sim.closed?(sim)
       after_ = Sim.writes(sim)
       zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
-      zeroed!(w.status, before[name], after_, zeros)
+      zeroed!(stop_kind(w, name), before[name], after_, zeros)
     end
   end
+
+  # Decision 286, restated: a tripped runner's device whose 0 the walk made fail and whose
+  # poll has not been seen to write it again (the model's `maybe` and `retry_once`) is
+  # tried once more as it closes. Its last write before the stop not the 0, the trip's 0
+  # was not taken and the close writes it; its last write the 0, it may have been taken,
+  # by the trip or by its own latch, or not, the outputs having been 0 already.
+  # Right after a refused restart whose 0 the walk made fail, with no time passed and so no
+  # poll, the 0 was certainly not taken, and the close writes it.
+  defp stop_kind(w, name), do: stop_kind(w, name, now(w))
+
+  defp stop_kind(
+         %{status: :tripped, maybe: name, retry_once: name, zero_refused: true, tripped_at: at},
+         name,
+         at
+       ),
+       do: :unzeroed
+
+  defp stop_kind(%{status: :tripped, maybe: name, retry_once: name}, name, _now), do: :unknown
+  defp stop_kind(w, _name, _now), do: w.status
 
   defp zeroed!(:running, before, after_, zeros),
     do: assert(Enum.drop(after_, length(before)) == [zeros])
 
   defp zeroed!(:tripped, before, after_, _zeros), do: assert(after_ == before)
+
+  defp zeroed!(:unzeroed, before, after_, zeros),
+    do: last_zero!(false, Enum.drop(after_, length(before)), zeros)
+
+  defp zeroed!(:unknown, before, after_, zeros),
+    do: last_zero!(List.last(before) == zeros, Enum.drop(after_, length(before)), zeros)
+
+  defp last_zero!(false, added, zeros) do
+    assert added == [zeros], "the close did not try the 0 once more"
+    reach(:zero_at_stop, true)
+  end
+
+  defp last_zero!(true, added, zeros), do: assert(added in [[], [zeros]])
 
   defp writes(w), do: Map.new(w.sims, fn {name, sim} -> {name, Sim.writes(sim)} end)
 
@@ -11570,6 +11608,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp running_step(6, w), do: forcing(Process.get(:stale_mode), w)
   defp running_step(n, w) when n in [7, 11], do: editing(w)
   defp running_step(8, %{status: :running} = w), do: inject(w)
+  defp running_step(8, %{status: :tripped} = w), do: killed_tripped(w)
   defp running_step(9, w), do: mistaken(w)
   defp running_step(10, %{file: file, crashed: false} = w) when file != nil, do: crashed(w)
   defp running_step(_n, w), do: wait(w, :rand.uniform(6))
@@ -11984,6 +12023,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         maybe: unzero,
         sure: true,
         retry_once: unzero,
+        zero_refused: true,
         tripped_at: now(w)
     })
   end
@@ -12443,6 +12483,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         maybe: maybe,
         sure: false,
         retry_once: maybe,
+        zero_refused: false,
         tripped_at: now(w)
     }
   end
@@ -12692,6 +12733,36 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {within, before} = Enum.split_while(timeline, fn {at, _} -> at > from end)
     {_at, then} = List.first(before, {0, 0})
     [then | for({at, value} <- within, at <= to, do: value)]
+  end
+
+  # Decision 287: a device whose 0 was taken killed while the runner is tripped is named in
+  # status/1's `unzeroed` until a restart opens it again, as one down at the trip is. One
+  # whose 0 the walk does not yet know taken is left alone, and with none up it is a wait.
+  defp killed_tripped(w) do
+    w.sims
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.reject(&(MapSet.member?(w.down, &1) or &1 == w.maybe))
+    |> killed_while_tripped(w)
+  end
+
+  defp killed_while_tripped([], w), do: wait(w, :rand.uniform(6))
+
+  defp killed_while_tripped(up, w) do
+    device = pick(up)
+    [pid] = for {^device, pid} <- device_pids(w.runner), do: pid
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, _, :killed}, 5000
+    reach(:down_while_tripped, true)
+
+    checked(
+      consumed(%{
+        w
+        | down: MapSet.put(w.down, device),
+          unzeroed: MapSet.put(w.unzeroed, device)
+      })
+    )
   end
 
   # ---- the checks after every step -------------------------------------------------------

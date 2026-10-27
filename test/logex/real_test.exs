@@ -479,6 +479,8 @@ defmodule Logex.RealTest do
              ) == %{"p" => 0, "q" => 1}
 
       # A subnormal literal beside an lreal is one it never holds (decisions 216 and 228).
+      # Decision 289 confirms the words: the comparison's own slot, "read as 0.0", beside a
+      # tag as beside a literal (decision 263).
       assert messages("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p") == [
                {3,
                 "`eq` compares `1.0e-310` with `l`, an lreal (declared on line 1), which never " <>

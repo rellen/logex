@@ -1311,11 +1311,32 @@ defmodule Logex.InstanceArrayTest do
              [{13, "`lane_c[1].pv.[i]` already has an `ote` on line 12: #{last}"}]},
             {"xic go ote lane_c[1].pv.[i]\nxio go otl lane_c[1].pv.[i]", []},
             {"xic go ote lane_c[1].pv.[i]\nxio go ote lane_c[0].pv.[i]", []},
-            # Not compared (provisional): a member's whole write beside a coil on its bit
-            # where a tag subscript stands on either side.
-            {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3", []},
-            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv", []},
-            {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[i].pv", []}
+            # Decision 288, superseding the provisional reading that left it uncompared: a
+            # member's whole write beside a coil on its bit through a tag subscript, either
+            # first, in the "may" words of decisions 253 and 257; through the very tags
+            # nothing (decision 246). Still not compared (provisional): a whole write
+            # through a tag subscript beside a coil on a literal element's bit.
+            {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3",
+             [
+               {13,
+                "`lane_c[i].pv.3` is in `lane_c`, as `lane_c[1].pv` is, which the `move` on " <>
+                  "line 12 writes whole: #{last}"}
+             ]},
+            {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[1].pv",
+             [{13, may.("lane_c[1].pv", "ote")}]},
+            {"xic go move 5 lane_c[j].pv\nxio go ote lane_c[i].pv.3",
+             [{13, may.("lane_c[i].pv.3", "move")}]},
+            {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[j].pv",
+             [{13, may.("lane_c[j].pv", "ote")}]},
+            {"xic go move 5 lane_c[0].pv\nxio go ote lane_c[i].pv.4",
+             [
+               {13,
+                "`lane_c[i].pv.4` is in `lane_c`, as `lane_c[0].pv` is, which the `move` on " <>
+                  "line 12 writes whole: #{last}"}
+             ]},
+            {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[i].pv", []},
+            {"xic go move 5 lane_c[i].pv\nxio go ote lane_c[i].pv.3", []},
+            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv", []}
           ] do
         assert warnings(source <> rungs) == expected, rungs
       end

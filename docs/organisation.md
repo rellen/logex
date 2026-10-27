@@ -43,7 +43,8 @@ questions put back and its three open rules were answered by the maintainer the 
 (decisions 161–167, and notes on the decisions they settle); nothing of it is built
 yet (it has since landed whole, M5-1 to M5-16, by 2026-10-26). Milestone 6, retained
 values and a true warm restart, was designed and decided on 2026-10-27 (§4.13, decisions
-266–285), nothing of it built yet.** On 2026-09-28 the
+266–285), nothing of it built yet; the four questions left open at Milestone 5's close
+were answered the same day and built, decisions 286–289.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -10468,6 +10469,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      - Not compared (provisional): a write of the member whole beside a coil on its bit
        where a tag subscript stands on either side, `move 5 lane_c[1].pv` beside `ote
        lane_c[i].pv.3`, and a bit a tag numbers of a member through a tag subscript.
+     *(Changed by decision 288, 2026-10-27: a whole write of the member, literal or through
+     a tag subscript, beside a coil on its bit through a tag subscript is warned in the "may"
+     words, the very tags not; the other two stay provisional.)*
 
      The warning is logex's own (decision 207); IEC and the Logix extracts read say nothing
      of it. `instance_array_test.exs` pins every case.
@@ -10536,6 +10540,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
        too: the trip's zero finds it unzeroed and its polls write the 0 again.
      - A stop of a tripped runner closes such a device writing nothing more, as before
        (provisional).
+     *(Changed by decisions 286 and 287, 2026-10-27: a stop of a tripped runner tries the 0
+     once more on each device still named, then closes it; and a device that goes down
+     while tripped is named until a restart opens it, though its 0 was taken.)*
 
      IEC says nothing. In Logix the output module itself goes to its configured fault
      state when the controller faults or its connection is lost (1756-UM900B p.242,
@@ -10551,7 +10558,7 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be read
      as 0.0", `1.0e-400` there too (decision 240), and beside a tag, "`eq` compares
      `1.0e-310` with `l`, an lreal (declared on line 1), which never holds it: … it would be
-     read as 0.0" (provisional, a case the question did not ask); every other slot, a write, an arithmetic source, a conversion's source,
+     read as 0.0" (provisional, a case the question did not ask, confirmed by decision 289); every other slot, a write, an arithmetic source, a conversion's source,
      a block's formal and an initial value, keeps "it would be written as 0.0". IEC and
      Logix have no such message. `real_test.exs` pins each.
 264. **Clauses, not conditionals, in tests (Milestone 5),** M5-15's review's fifth
@@ -10896,6 +10903,75 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: refused, `start: :cold` to start over it** (the maintainer, 2026-10-27), as
      recommended.
+286. **A stop while a device's 0 has not been taken (Milestone 5),** the first question left
+     open at Milestone 5's close, a safety point its review put first, changing decision
+     262's last bullet. The runner tripped, the drive card's 0 failed, and the host stops
+     the runner before the card's next poll: as built the close wrote nothing more, so the
+     card kept its last outputs, which sat uneasily with decision 116's "every output 0
+     once" at a stop. The options: (a) as built; (b) the close tries the 0 once more, as
+     the poll would have.
+
+     **Taken: (b), the close tries the 0 once more** (the maintainer, 2026-10-27), as the
+     review recommended. *The reading (the record's):*
+     - A stop of a tripped runner tries the 0 once more on each device still named in
+       `status/1`'s `unzeroed`, its adapter not having taken it, and then closes it, taken
+       or not; a device whose 0 was taken is written nothing again, as before, and one down
+       is reached by nothing.
+     - The device's own close does it, `Logex.Runner.Device`'s `last_zero/1`, so a device
+       whose runner goes down while tripped, a crash or a kill, does the same as it closes
+       (decision 115's "where it had not").
+     - A 0 that fails at the close too is passed over and the adapter closed anyway, the
+       last the device can do.
+
+     Logix leaves the safe state to the module's own fault behaviour (1756-UM900B p.242).
+     `trip_test.exs` pins a stop whose last 0 is taken, one whose last 0 fails, closed
+     anyway, and a tripped runner killed; the runner walk's model restates it at every stop
+     and crash, a reach atom of its own, `:zero_at_stop`.
+287. **A device down while tripped (Milestone 5),** the close's second open question,
+     changing decision 262's first bullet. A drive killed or gone down when the runner
+     trips is named in `unzeroed` until a restart; one whose 0 was taken and that goes down
+     later was not named, its outputs last known 0. The options: (a) as built; (b) named
+     too, though its 0 was taken.
+
+     **Taken: (b), named until a restart opens it** (the maintainer, 2026-10-27). *The
+     reading (the record's):* a device that goes down while the runner is tripped, its 0
+     taken or not, is named in `status/1`'s `unzeroed` from then until a restart opens it
+     again, since nothing reaches its outputs and whatever its process did on going down is
+     not known to the runner; a restart refused names it again with every device down, as
+     before. `trip_test.exs` pins it on the manual clock, and the runner walk kills a device
+     whose 0 was taken while tripped now and then, its model naming it, a reach atom of its
+     own, `:down_while_tripped`.
+288. **A member's whole write beside a bit of it through a tag subscript (Milestone 5),**
+     the close's third open question, changing decision 257's last bullet. `move 5
+     lane_c[1].pv` beside `ote lane_c[i].pv.3`, either first, was warned of nothing, where
+     `move x c.pv` beside `ote c.pv.3` is the second-`ote` warning. The options: (a) as
+     built; (b) warned.
+
+     **Taken: (b), warned in the "may" words of decisions 253 and 257** (the maintainer,
+     2026-10-27). *The reading (the record's, provisional where marked):*
+     - The whole write first: "`lane_c[i].pv.3` is in `lane_c`, as `lane_c[1].pv` is,
+       which the `move` on line 12 writes whole: the last one in the scan decides it".
+     - The coil first: "`lane_c[1].pv` is in `lane_c`, which the `ote` on line 12 may
+       write through a tag subscript: …".
+     - A whole write through other tags, `move 5 lane_c[j].pv`, either first: "… which the
+       `move` (or the `ote`) on line 12 may write through a tag subscript"; through the very
+       tags, `move 5 lane_c[i].pv`, nothing, as decision 246 says.
+     - Any bit of the member, `ote lane_c[i].pv.4` beside `move 5 lane_c[0].pv`, since the
+       whole write writes every bit.
+     - Still not compared (provisional): a whole write through a tag subscript beside a
+       coil on a literal element's bit, `ote lane_c[1].pv.3` beside `move 5 lane_c[i].pv`,
+       and a bit a tag numbers of a member through a tag subscript.
+
+     A program with no coil on a bit of a member through a tag subscript looks for no such
+     write and compiles in the reductions it took; one that holds 50 such pairs compiles in
+     193,825 where it took 189,237 (2.4%). `instance_array_test.exs` pins every case.
+289. **A comparison beside a tag (Milestone 5),** the close's fourth open question, on
+     decision 263's reading. `eq l 1.0e-310`, `l` an lreal, is told "… which never holds
+     it: … it would be read as 0.0", the comparison's own slot. The options: (a) as built;
+     (b) "written as 0.0" beside a tag.
+
+     **Taken: (a), confirmed as built** (the maintainer, 2026-10-27). `real_test.exs` pins
+     it, as it did.
 
 ---
 

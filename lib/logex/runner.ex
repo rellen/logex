@@ -371,7 +371,10 @@ defmodule Logex.Runner do
 
   @doc """
   Stops the runner: every output written 0 once, through each device, and every device
-  closed, in device-name order, before it returns (decision 116). A reason other than
+  closed, in device-name order, before it returns (decision 116); a tripped runner's
+  devices written no 0 again but, since decision 286, each whose trip's 0 its adapter has
+  not taken, which `status/1` names, tried once more and closed whether or not the 0 is
+  taken. A reason other than
   `:normal`, `:shutdown` or `{:shutdown, term}` is an abnormal exit, as for any GenServer.
   """
   def stop(runner, reason \\ :normal), do: GenServer.stop(runner!(runner), reason, :infinity)
@@ -388,8 +391,8 @@ defmodule Logex.Runner do
   `refresh_gap`, the longest wait between two refreshes of the devices, in ms; and since
   decision 262 `unzeroed`, the names, in device-name order, of the devices whose outputs
   are not known to be 0 since the trip: one whose adapter did not take the trip's 0,
-  which its poll writes again until one is taken, and one down, until a restart; `[]`
-  while running.
+  which its poll writes again until one is taken, and one down, at the trip or, since
+  decision 287, after it, though its 0 was taken, until a restart; `[]` while running.
   """
   def status(runner), do: call(runner, :status)
 
@@ -625,7 +628,8 @@ defmodule Logex.Runner do
 
   # A stop: each host's request still waiting answered as one to a runner that is not
   # running, raised in its caller, and then every output written 0 once and every device
-  # closed, in device-name order (decision 116).
+  # closed, in device-name order (decision 116), a latched device's 0 tried once more where
+  # its adapter has not taken it (decision 286, in the device's close).
   @impl GenServer
   def terminate(_reason, %{queue: queue} = state) do
     for {from, _request} <- :queue.to_list(queue),
@@ -1897,6 +1901,13 @@ defmodule Logex.Runner do
       end)
 
   defp live(name, %{down: down}), do: not MapSet.member?(down, name) and name
+
+  # Decision 287: a device that goes down while the runner is tripped is named in status/1's
+  # `unzeroed` until a restart opens it again, though its 0 was taken, as one down at the
+  # trip is, since nothing reaches its outputs now; one that goes down while running is
+  # named by the trip's zero it causes.
+  defp went_down(name, %{status: :tripped} = state),
+    do: %{state | down: MapSet.put(state.down, name), unzeroed: MapSet.put(state.unzeroed, name)}
 
   defp went_down(name, state), do: %{state | down: MapSet.put(state.down, name)}
 

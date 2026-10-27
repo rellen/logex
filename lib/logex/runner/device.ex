@@ -44,8 +44,9 @@ defmodule Logex.Runner.Device do
   #   taken, which the device tells the runner, `{Logex.Runner.Device, pid, restarts, at,
   #   {:zeroed, name, nil}}`; a zero answers `:ok` where its outputs are 0, or have none,
   #   and `:unzeroed` where its 0 has not been taken yet, so that the runner's status
-  #   names it; a release forgets it, the restart's first round writing anew; and a close
-  #   of a latched device whose 0 was not taken writes nothing more (provisional).
+  #   names it; a release forgets it, the restart's first round writing anew; and since
+  #   decision 286 a close of a latched device whose 0 was not taken, a stop's or its
+  #   runner's death's, tries the 0 once more and closes, whether or not it is taken.
   # - `reread/1` is a restart's read, after its release (decision 142): the adapter read
   #   once, as an opening reads it, and merged over every reading the device holds that
   #   the runner has not taken, `{:ok, values}`, or the read's `{:fault, cause}`, the
@@ -175,7 +176,7 @@ defmodule Logex.Runner.Device do
   def handle_call({:write, _values}, _from, %{latched: true} = state), do: {:reply, :ok, state}
   def handle_call({:write, values}, _from, state), do: written(wrote(values, state))
 
-  def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(zeroed(state))}
+  def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(last_zero(state))}
   def handle_call(:zero, _from, state), do: zero_answer(unheld(latched(state)))
 
   # A release forgets what the device last wrote, so that a poll's write again writes
@@ -624,13 +625,21 @@ defmodule Logex.Runner.Device do
 
   # Every output written 0, once; a device with none is written nothing, and a latched
   # one was written its 0 when it latched, or since decision 262 is written it at its
-  # polls until one is taken, and a close of one whose 0 was not taken writes nothing
-  # more, as before (provisional).
+  # polls until one is taken, a close trying it once more (decision 286, last_zero/1).
   defp zeroed(%{latched: true} = state), do: state
   defp zeroed(%{zeros: zeros} = state) when map_size(zeros) == 0, do: state
 
   defp zeroed(%{zeros: zeros} = state),
     do: zero_written(adapted(:write, [zeros, state.adapter], state), state)
+
+  # A close's 0 (decisions 115, 116 and 286): every output written 0 once where the device is
+  # not latched; a latched one whose 0 its adapter has not taken tried once more, the last
+  # the device can do, and closed whether or not the adapter takes it; a latched one whose 0
+  # was taken written nothing again.
+  defp last_zero(%{latched: true, unzeroed: true, zeros: zeros} = state),
+    do: zero_written(adapted(:write, [zeros, state.adapter], state), state)
+
+  defp last_zero(state), do: zeroed(state)
 
   # A zero that fails is passed over, the device's outputs then not known to be 0, which
   # its next poll tries again while it is latched (decision 262).
@@ -651,7 +660,7 @@ defmodule Logex.Runner.Device do
   def terminate(_reason, %{closed: true}), do: :ok
 
   def terminate(_reason, state) do
-    closed(zeroed(state))
+    closed(last_zero(state))
     :ok
   end
 

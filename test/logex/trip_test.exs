@@ -771,6 +771,65 @@ defmodule Logex.TripTest do
       assert %{status: :tripped, trip: ^fault, unzeroed: []} = Runner.status(runner)
     end
 
+    # Decision 286: a stop of a tripped runner tries the 0 once more on each device whose
+    # trip's 0 its adapter has not taken, the one status/1 names, and closes it, whether or
+    # not that 0 is taken, as decision 116's every output 0 once; a device whose 0 was taken
+    # is written nothing again (above, "stop/2 after a trip writes no 0 again").
+    test "a stop of a tripped runner tries the 0 once more on a device still named, then " <>
+           "closes it" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+      written = Sim.writes(panel)
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+
+      assert Runner.stop(runner) == :ok
+      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert Sim.outputs(panel) == %{[0] => 0, [1] => 0}
+      assert Sim.closed?(panel)
+    end
+
+    test "a stop of a tripped runner whose device fails its last 0 too closes it anyway" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      for _ <- 1..2, do: Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+      written = Sim.writes(panel)
+
+      assert Runner.stop(runner) == :ok
+      assert Sim.writes(panel) == written
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.closed?(panel)
+    end
+
+    # Decision 286 in the device's close at its runner's death (decision 115's "where it had
+    # not"): a tripped runner killed, a device whose 0 was not taken tries it once more.
+    @tag :capture_log
+    test "a tripped runner killed: a device still named tries its 0 once more as it closes" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :write, {:error, :eio})
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
+      written = Sim.writes(panel)
+
+      device = Process.monitor(device_pid(runner, "panel"))
+      Process.unlink(runner)
+      Process.exit(runner, :kill)
+      assert_receive {:DOWN, ^device, :process, _, _}, 5000
+      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert Sim.closed?(panel)
+    end
+
     test "a step that meets two major faults trips for the first, in the order its " <>
            "instances run" do
       text = """
@@ -1524,6 +1583,40 @@ defmodule Logex.TripTest do
       Sim.fail(drive, :read, {:error, :eio})
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
+    end
+
+    # Decision 287: a device whose 0 was taken and that goes down while the runner is
+    # tripped is named in status/1's unzeroed until a restart opens it again, as one down at
+    # the trip is.
+    test "a device that goes down while the runner is tripped is named until a restart " <>
+           "opens it" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), poll: 10, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "panel"), :kill)
+      Runner.status(runner)
+
+      assert %{trip: {:io, "panel", {:down, :killed}}, unzeroed: ["panel"]} =
+               Runner.status(runner)
+
+      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+
+      old = device_pid(runner, "drive")
+      watched = Process.monitor(old)
+      Process.exit(old, :kill)
+      assert_receive {:DOWN, ^watched, :process, _, :killed}, 5000
+
+      assert %{trip: {:io, "panel", {:down, :killed}}, unzeroed: ["drive", "panel"]} =
+               Runner.status(runner)
+
+      Manual.advance(clock, 100)
+      assert Runner.status(runner).unzeroed == ["drive", "panel"]
+
+      assert Runner.restart(runner, :cold) == :ok
+      assert device_pid(runner, "drive") != old
+      assert %{status: :running, unzeroed: []} = Runner.status(runner)
     end
 
     test "a device that cannot be opened at a restart leaves the runner tripped, and a " <>
