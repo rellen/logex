@@ -558,8 +558,10 @@ defmodule Logex.Configuration.Text do
   defp second_word(nil, token, {rest, {retain, _word, first}, line}),
     do: qualified(unqualified([token | rest], first, line), retain)
 
-  # Decision 294's rule in a configuration file: a line refused for its qualifiers alone
-  # still names its global, so that nothing that names it is reported again.
+  # Decision 42's rule for a broken configuration line, not decision 294's for a `.ld`
+  # line: a line refused for its qualifiers alone still names its global, so that nothing
+  # that names it is reported again, but declares no global whose uses are checked
+  # (M6-3's provisional reading 3).
   defp second_word(_second, {:name, _, second} = token, {rest, {_retain, word, first}, line}),
     do:
       {:error, fail(token, both(String.downcase(second) == String.downcase(word), word, second)),

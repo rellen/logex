@@ -780,6 +780,14 @@ defmodule Logex.Runtime do
   `scan/2` with `restart/3` and a one-instance configuration in agreement across a
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
+
+  Two readings the record does not settle, provisional since M6-3's review: a retained
+  global that is a task's `single`, kept at 1 by a warm restart, is a trigger already 1,
+  its last sample 0 as after every restart, so its event task runs in the first cycle
+  with no rising edge, as an input point's trigger already 1 does (decision 51); and a
+  retained global a connection drives from a var_output its program does not retain
+  keeps its value only until that instance's first run, whose copy-out writes the
+  var_output, back at its initial value, over it.
   """
   def restart(runtime, mode) do
     %__MODULE__{now: now, config: config} = runtime = runtime!(runtime)

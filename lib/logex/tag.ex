@@ -104,10 +104,7 @@ defmodule Logex.Tag do
 
   defp qualifier!(options, name), do: raise(ArgumentError, shape(options, name))
 
-  defp options([], _all, name, seen, []), do: chosen(seen, name)
-
-  defp options([], _all, _name, _seen, problems),
-    do: raise(ArgumentError, Enum.join(Enum.reverse(problems), "\n"))
+  defp options([], _all, name, seen, problems), do: chosen(seen, name, Enum.reverse(problems))
 
   defp options([{key, _value} | rest], all, name, seen, problems) when is_map_key(seen, key),
     do: options(rest, all, name, seen, ["`#{key}:` is given twice for #{label(name)}" | problems])
@@ -132,17 +129,27 @@ defmodule Logex.Tag do
 
   defp options(_improper, all, name, _seen, _problems), do: raise(ArgumentError, shape(all, name))
 
-  defp chosen(%{retain: true, non_retain: true}, name),
+  # Every problem a line of the one message, both `true` the last of them.
+  defp chosen(%{retain: true, non_retain: true}, name, problems),
     do:
       raise(
         ArgumentError,
-        "#{label(name)} takes `retain: true` or `non_retain: true`, not both, as a " <>
-          "declaration takes `retain` or `non_retain`, not both"
+        Enum.join(
+          problems ++
+            [
+              "#{label(name)} takes `retain: true` or `non_retain: true`, not both, as a " <>
+                "declaration takes `retain` or `non_retain`, not both"
+            ],
+          "\n"
+        )
       )
 
-  defp chosen(%{retain: true}, _name), do: :retain
-  defp chosen(%{non_retain: true}, _name), do: :non_retain
-  defp chosen(_seen, _name), do: nil
+  defp chosen(_seen, _name, [_ | _] = problems),
+    do: raise(ArgumentError, Enum.join(problems, "\n"))
+
+  defp chosen(%{retain: true}, _name, []), do: :retain
+  defp chosen(%{non_retain: true}, _name, []), do: :non_retain
+  defp chosen(_seen, _name, []), do: nil
 
   defp shape(options, name),
     do:

@@ -2396,7 +2396,21 @@ defmodule Logex.Configuration do
          "`#{name}` names an element of `#{array}`, #{Declarations.a_global(type)}" <>
            "#{where(global)}: a global is named here whole, never by one of its elements"
 
-  defp element_named(_none, _array, name),
+  # M6-3's review: an element of a keyword, `retain[0]`, is told the word is a keyword, as
+  # the word alone is.
+  defp element_named(nil, array, name), do: keyword_element(reserved?(array), array, name)
+
+  defp element_named(_none, _array, name), do: whole_only(name)
+
+  defp keyword_element(true, array, name), do: keyword_named(array, name)
+  defp keyword_element(false, _array, name), do: whole_only(name)
+
+  defp keyword_named(array, name),
+    do:
+      "no global `#{name}`: `#{array}` is a keyword of a configuration file, and nothing in " <>
+        "one is named so"
+
+  defp whole_only(name),
     do: "no global `#{name}`: a global is named here whole, never by one of its elements"
 
   defp declare("", :global, name, type),
@@ -2827,10 +2841,7 @@ defmodule Logex.Configuration do
 
   defp global_element(nil, name, _type, world) do
     [array | _] = String.split(name, "[")
-
-    {:error,
-     "no global `#{name}`: there is no global array `#{array}`" <>
-       Declarations.suggest(array, world.globals, & &1, "names")}
+    {:error, no_array(reserved?(array), array, name, world)}
   end
 
   defp global_element({kind, line, _ref}, name, _type, _world) do
@@ -2840,6 +2851,14 @@ defmodule Logex.Configuration do
      "`#{name}` names an element of `#{array}`, but `#{array}` is #{a(kind)}#{at_line(line)}, " <>
        "not a global"}
   end
+
+  # M6-3's review: `retain[0]` at a far end is told `retain` is a keyword, as `retain` is.
+  defp no_array(true, array, name, _world), do: keyword_named(array, name)
+
+  defp no_array(false, array, name, world),
+    do:
+      "no global `#{name}`: there is no global array `#{array}`" <>
+        Declarations.suggest(array, world.globals, & &1, "names")
 
   defp global_subscripts(subscripts, {global, etype, dims}, name) do
     tags = for {:tag, tag} <- subscripts, do: tag

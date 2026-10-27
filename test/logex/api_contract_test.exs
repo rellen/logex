@@ -3551,7 +3551,12 @@ defmodule Logex.ApiContractTest do
         "gt d0 10 move d0 n0\nmove n0 a0",
     "mixed" =>
       "var_input in bool\nvar_output out bool\nvar_external g0 bool\nxic in ote g0\n" <>
-        "xio g0 ote out"
+        "xio g0 ote out",
+    # Since M6-3's review, a real global and an int array global, so that a warm restart
+    # keeps each kind the walk can retain.
+    "keeper" =>
+      "var_external g0 bool\nvar_external r0 real\nvar_external v0 int[2]\n" <>
+        "xic g0 add r0 0.5 r0\nxic g0 add v0[1] 1 v0[1]"
   }
 
   defp ext_run("copy", {gl, own, _in, _first}), do: {Map.put(gl, "g0", gl["i0"]), own}
@@ -3581,6 +3586,16 @@ defmodule Logex.ApiContractTest do
     {gl, Map.put(own, "out", ext_bit(gl["g0"] == 0))}
   end
 
+  defp ext_run("keeper", {gl, own, _in, _first}), do: {ext_keep(gl["g0"] == 1, gl), own}
+
+  defp ext_keep(true, gl),
+    do:
+      gl
+      |> Map.put("r0", gl["r0"] + 0.5)
+      |> Map.put("v0", List.update_at(gl["v0"], 1, &(&1 + 1)))
+
+  defp ext_keep(false, gl), do: gl
+
   defp ext_when(true, gl, name, value), do: Map.put(gl, name, value)
   defp ext_when(false, gl, _name, _value), do: gl
 
@@ -3596,12 +3611,15 @@ defmodule Logex.ApiContractTest do
     {"n0", :dint, nil, 7},
     {"q0", :bool, "panel.q.0", nil},
     {"q1", :bool, "panel.q.1", nil},
-    {"a0", :dint, "drive.q.0", nil}
+    {"a0", :dint, "drive.q.0", nil},
+    {"r0", :real, nil, 1.5},
+    {"v0", {:array, :int, [2]}, nil, [3, 4]}
   ]
 
   @ext_reach ~w(restart saw_earlier_write missed_later_write output_via_external
                 copy_out_over_external pulse_fired dint_moved not_due
-                ext_retained_kept ext_retained_lost ext_retained_read ext_unretained_warm)a
+                ext_retained_kept ext_retained_lost ext_retained_read ext_unretained_warm
+                ext_retained_real_kept ext_retained_array_kept)a
 
   # 120 configurations of up to six instances of the types above, 40 steps each: a cycle,
   # or now and then a restart. After each, every global, every var_external of every
@@ -3614,7 +3632,8 @@ defmodule Logex.ApiContractTest do
   # and a warm restart keeps exactly the retained ones, restated here from the draw alone
   # (decisions 268 and 271), every other global as a cold one puts it: its reach a retained
   # global kept warm, one put back cold, one kept and read through a var_external after
-  # the restart, and one with no `retain` put back warm.
+  # the restart, and one with no `retain` put back warm; and since M6-3's review a real
+  # global and an int array global among them, each kept warm.
   test "a resource whose programs share globals through var_external runs as a model of " <>
          "one map of globals says, with one copy of each" do
     programs =
@@ -3805,6 +3824,8 @@ defmodule Logex.ApiContractTest do
     ext_reach(:ext_retained_lost, mode == :cold and MapSet.size(kept) > 0)
     ext_reach(:ext_retained_read, mode == :warm and not MapSet.disjoint?(kept, read))
     ext_reach(:ext_unretained_warm, mode == :warm and unretained != [])
+    ext_reach(:ext_retained_real_kept, mode == :warm and MapSet.member?(kept, "r0"))
+    ext_reach(:ext_retained_array_kept, mode == :warm and MapSet.member?(kept, "v0"))
   end
 
   defp ext_input(:bool), do: pick([0, 1])

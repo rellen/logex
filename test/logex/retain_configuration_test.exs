@@ -35,6 +35,20 @@ defmodule Logex.RetainConfigurationTest do
   xic eye ote lamp
   """
 
+  @motor """
+  var_input start bool
+  var_input stop bool
+  var_output run bool
+  var_output sp dint
+  var t ton
+  var c ctu
+  var e bool
+  ( xic start | xic run ) xio stop ote run
+  xic run ton t 100
+  xic run ctu c 10
+  xic start ons e move 1200 sp
+  """
+
   defp programs do
     {:ok, tally} = Logex.compile(@tally, name: "tally")
     {:ok, plain} = Logex.compile(@plain, name: "plain")
@@ -238,6 +252,32 @@ defmodule Logex.RetainConfigurationTest do
              ]
     end
 
+    test "an element of either word, at a connection's far end or as a task's single, is " <>
+           "told the word is a keyword, as the word alone is (M6-3's review)" do
+      source = """
+      var_global q bool
+      task t single Non_Retain[1] priority 1
+      program p3 plain with t
+        p3.eye retain[0]
+        p3.lamp q
+      """
+
+      assert messages(compiled(source)) == [
+               "2: the single of `t`: no global `Non_Retain[1]`: `Non_Retain` is a keyword of " <>
+                 "a configuration file, and nothing in one is named so",
+               "4: no global `retain[0]`: `retain` is a keyword of a configuration file, and " <>
+                 "nothing in one is named so"
+             ]
+
+      # Any other name in brackets is told as before.
+      assert messages(compiled(String.replace(source, ["Non_Retain[1]", "retain[0]"], "qq[0]"))) ==
+               [
+                 "2: the single of `t`: no global `qq[0]`: a global is named here whole, never " <>
+                   "by one of its elements",
+                 "4: no global `qq[0]`: there is no global array `qq` — did you mean `q`?"
+               ]
+    end
+
     test "from Elixir too, a global named by one is refused" do
       for word <- ["retain", "NON_RETAIN"] do
         assert_raise ArgumentError, ~r/`#{word}` is a keyword and cannot name a global/, fn ->
@@ -380,6 +420,57 @@ defmodule Logex.RetainConfigurationTest do
     end
   end
 
+  describe "M6-3: decision 272's warning looks at every program type" do
+    test "the one program type that retains anything is seen whatever its name's place " <>
+           "among the types given, first, last or between (M6-3's review)" do
+      plain = programs()["plain"]
+
+      {:ok, keep} =
+        Logex.compile("var_input eye bool\nvar_output retain lamp bool\nxic eye ote lamp",
+          name: "keep"
+        )
+
+      source = """
+      var_global eye_1 bool at panel.i.0
+      var_global lamp_q bool at panel.q.0
+      var_global q2 bool at panel.q.1
+      var_global q3 bool at panel.q.2
+      program p1 PLAIN_A
+        p1.eye eye_1
+        p1.lamp q2
+      program p2 PLAIN_Z
+        p2.eye eye_1
+        p2.lamp q3
+      program k1 KEEP
+        k1.eye eye_1
+        k1.lamp lamp_q
+      """
+
+      for {a, k, z} <- [
+            {"b_plain", "a_keep", "c_plain"},
+            {"a_plain", "z_keep", "b_plain"},
+            {"a_plain", "m_keep", "z_plain"}
+          ] do
+        text =
+          String.replace(source, ["PLAIN_A", "PLAIN_Z", "KEEP"], fn
+            "PLAIN_A" -> a
+            "PLAIN_Z" -> z
+            "KEEP" -> k
+          end)
+
+        given = %{a => %{plain | name: a}, z => %{plain | name: z}, k => %{keep | name: k}}
+        assert {:ok, config} = Configuration.compile("plant", text, given)
+
+        assert Enum.map(config.warnings, &{&1.line, &1.message}) == [
+                 {13,
+                  "`k1.lamp` is retained and drives the output `lamp_q`: after a warm start it " <>
+                    "is written in the first round"}
+               ],
+               inspect({a, k, z})
+      end
+    end
+  end
+
   describe "M6-3: restart/2 keeps a retained global warm" do
     defp cycled(runtime, eyes),
       do:
@@ -512,6 +603,179 @@ defmodule Logex.RetainConfigurationTest do
       assert Runtime.restart(runtime, :warm) |> Runtime.get!("total_boxes") == 2
     end
 
+    test "a retained array global and real and lreal globals are kept warm, each element " <>
+           "and each value as the resource holds it, and put back cold; unretained twins are " <>
+           "put back either way (M6-3's review)" do
+      {:ok, setter} = Logex.compile(setter("arr", "r", "lr"), name: "setter")
+      {:ok, twin} = Logex.compile(setter("arr2", "r2", "lr2"), name: "twin")
+
+      source = """
+      var_global eye_1 bool at panel.i.0
+      var_global retain arr int[3] 0 0 0
+      var_global retain r real 1.0
+      var_global retain lr lreal 2.0
+      var_global arr2 int[3] 7 7 7
+      var_global r2 real 1.0
+      var_global lr2 lreal 2.0
+      program s1 setter
+        s1.eye eye_1
+      program s2 twin
+        s2.eye eye_1
+      """
+
+      assert {:ok, config} =
+               Configuration.compile("plant", source, %{"setter" => setter, "twin" => twin})
+
+      runtime = cycled(Runtime.start(config), [0, 1, 0, 1, 0])
+      held = ~w(arr r lr arr2 r2 lr2)
+
+      assert Enum.map(held, &Runtime.get!(runtime, &1)) ==
+               [[0, 2, 0], 4.0, 2.5, [7, 9, 7], 4.0, 2.5]
+
+      warm = Runtime.restart(runtime, :warm)
+
+      assert Enum.map(held, &Runtime.get!(warm, &1)) ==
+               [[0, 2, 0], 4.0, 2.5, [7, 7, 7], 1.0, 2.0]
+
+      assert Runtime.get!(warm, "s1.arr[1]") == 2
+      assert Runtime.get!(warm, "s1.lr") == 2.5
+
+      # It counts on from the kept values, the first scan seeing no edge (decision 274).
+      warm = cycled(warm, [0, 1])
+      assert Enum.map(~w(arr r lr), &Runtime.get!(warm, &1)) == [[0, 3, 0], 5.5, 2.75]
+
+      cold = Runtime.restart(runtime, :cold)
+
+      assert Enum.map(held, &Runtime.get!(cold, &1)) ==
+               [[0, 0, 0], 1.0, 2.0, [7, 7, 7], 1.0, 2.0]
+    end
+
+    # Provisional, M6-3's review, question 7: the record says nothing of a retained global a
+    # task's single reads. A trigger's last sample is 0 after any restart/2 (M2-6), so a
+    # kept 1 is read as a trigger already 1 in the first cycle, decision 51's rule for an
+    # input point, and the event task runs then, with no rising edge.
+    test "a retained global that is a task's single, kept at 1, runs its event task in the " <>
+           "first cycle after a warm restart, as a trigger already 1 does; cold it is put " <>
+           "back and nothing runs (provisional)" do
+      {:ok, arming} =
+        Logex.compile("var_input eye bool\nvar_external arm bool\nxic eye otl arm",
+          name: "arming"
+        )
+
+      {:ok, counting} =
+        Logex.compile(
+          "var_external arm bool\nvar_output hits dint\nxic arm add hits 1 hits",
+          name: "counting"
+        )
+
+      source = """
+      task fast interval 10 priority 1
+      task ev single arm priority 0
+      var_global eye_1 bool at panel.i.0
+      var_global retain arm bool
+      program a1 arming with fast
+        a1.eye eye_1
+      program c1 counting with ev
+      """
+
+      assert {:ok, config} =
+               Configuration.compile("plant", source, %{
+                 "arming" => arming,
+                 "counting" => counting
+               })
+
+      runtime = cycled(Runtime.start(config), [0, 1, 0, 0])
+      assert Runtime.get!(runtime, "arm") == 1
+      assert Runtime.get!(runtime, "c1.hits") == 1
+
+      # The trigger held high runs nothing more before the restart.
+      {runtime, _outputs, events} = Runtime.cycle(runtime, 10, %{"eye_1" => 0})
+      refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+
+      warm = Runtime.restart(runtime, :warm)
+      assert Runtime.get!(warm, "arm") == 1
+      assert Runtime.get!(warm, "c1.hits") == 0
+      {warm, _outputs, events} = Runtime.cycle(warm, 10, %{"eye_1" => 0})
+      assert Enum.any?(events, &match?({:ran, "ev", "c1", _}, &1))
+      assert Runtime.get!(warm, "c1.hits") == 1
+
+      cold = Runtime.restart(runtime, :cold)
+      assert Runtime.get!(cold, "arm") == 0
+      {cold, _outputs, events} = Runtime.cycle(cold, 10, %{"eye_1" => 0})
+      refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+      assert Runtime.get!(cold, "c1.hits") == 0
+    end
+
+    # Provisional, M6-3's review, question 8: the record says nothing of a retained global a
+    # connection drives. The connection copies its var_output out at every scan, so one the
+    # program does not retain, back at its initial value after the restart, writes over
+    # the kept value in its instance's first run; one it retains keeps it.
+    test "a retained global a connection drives keeps its value warm until the driving " <>
+           "instance's first run, which writes its var_output over it where that is not " <>
+           "retained, and keeps it where it is (provisional)" do
+      counted =
+        "var_input eye bool\nvar_output COUNT dint\nvar e bool\n" <>
+          "xic eye ons e add count 1 count"
+
+      {:ok, w} = Logex.compile(String.replace(counted, "COUNT", "count"), name: "w")
+      {:ok, wk} = Logex.compile(String.replace(counted, "COUNT", "retain count"), name: "wk")
+
+      source = """
+      var_global eye_1 bool at panel.i.0
+      var_global retain total dint 0
+      var_global retain kept dint 0
+      program w1 w
+        w1.eye eye_1
+        w1.count total
+      program w2 wk
+        w2.eye eye_1
+        w2.count kept
+      """
+
+      assert {:ok, config} = Configuration.compile("plant", source, %{"w" => w, "wk" => wk})
+      assert config.warnings == []
+      runtime = cycled(Runtime.start(config), [0, 1, 0, 1, 0])
+      assert {Runtime.get!(runtime, "total"), Runtime.get!(runtime, "kept")} == {2, 2}
+
+      warm = Runtime.restart(runtime, :warm)
+      assert {Runtime.get!(warm, "total"), Runtime.get!(warm, "kept")} == {2, 2}
+      assert {Runtime.get!(warm, "w1.count"), Runtime.get!(warm, "w2.count")} == {0, 2}
+
+      warm = cycled(warm, [0])
+      assert {Runtime.get!(warm, "total"), Runtime.get!(warm, "kept")} == {0, 2}
+
+      cold = Runtime.restart(runtime, :cold)
+      assert {Runtime.get!(cold, "total"), Runtime.get!(cold, "kept")} == {0, 0}
+    end
+
+    test "with nothing retained, a warm restart costs no more than a cold one, and a cycle " <>
+           "what it costs with every unlocated global retained (M6-3's review)" do
+      {:ok, motor} = Logex.compile(@motor, name: "motor")
+
+      for n <- [1, 32] do
+        plain = motors(n, "")
+        kept = motors(n, "retain ")
+        {:ok, plain} = Configuration.compile("plant", plain, %{"motor" => motor})
+        {:ok, kept} = Configuration.compile("plant", kept, %{"motor" => motor})
+        presses = Map.new(1..n, &{"pb#{&1}", 1})
+
+        [rp, rk] =
+          for config <- [plain, kept] do
+            {rt, _, _} = Runtime.cycle(Runtime.start(config), 0, presses)
+            {rt, _, _} = Runtime.cycle(rt, 10, %{})
+            rt
+          end
+
+        assert Runtime.restart(rp, :warm) == Runtime.restart(rp, :cold)
+        warm = reductions(fn -> Runtime.restart(rp, :warm) end)
+        cold = reductions(fn -> Runtime.restart(rp, :cold) end)
+        assert warm <= cold + 4, "n=#{n}: warm #{warm}, cold #{cold}"
+
+        cycle = fn rt -> reductions(fn -> Runtime.cycle(rt, 10, %{"pb1" => 0}) end) end
+        assert cycle.(rp) == cycle.(rk), "n=#{n}"
+      end
+    end
+
     test "a configuration with nothing retained restarts warm exactly as cold" do
       source = String.replace(@plant, ["retain ", "non_retain "], "")
       {:ok, tally} = Logex.compile(String.replace(@tally, "retain ", ""), name: "tally")
@@ -519,5 +783,114 @@ defmodule Logex.RetainConfigurationTest do
       runtime = cycled(Runtime.start(config), [0, 1, 0, 1, 1])
       assert Runtime.restart(runtime, :warm) == Runtime.restart(runtime, :cold)
     end
+  end
+
+  describe "M6-3: the runner's warm restart keeps a retained global (M6-3's review)" do
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    # The runner trips on the panel's read and is restarted: warm, the retained global and
+    # the program's retained counter are kept through Logex.Runner.restart/2, which reaches
+    # Logex.Runtime.restart/2; cold, both are lost; an unretained global is put back either
+    # way.
+    test "Runner.restart/2 :warm keeps a retained global and :cold loses it" do
+      source = """
+      task fast interval 10 priority 1
+      var_global eye_1 bool at panel.i.0
+      var_global retain total_boxes dint 0
+      var_global plain dint 7
+      var_global shown dint
+      program t1 tally with fast
+        t1.eye eye_1
+        t1.count shown
+      """
+
+      assert {:ok, config} = compiled(source)
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 10
+        )
+
+      for eye <- [1, 0, 1, 0, 1, 0] do
+        Sim.set(panel, [0], eye)
+        Manual.advance(clock, 10)
+      end
+
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      paths = ~w(total_boxes t1.total_boxes t1.boxes.cv plain)
+      # The start's first round sees the eye low, so its three rises are counted.
+      assert for(path <- paths, do: Runner.get!(runner, path)) == [3, 3, 3, 7]
+
+      assert Runner.restart(runner, :warm) == :ok
+      assert for(path <- paths, do: Runner.get!(runner, path)) == [3, 3, 3, 7]
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "total_boxes") == 4
+
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      assert Runner.restart(runner, :cold) == :ok
+      assert for(path <- paths, do: Runner.get!(runner, path)) == [0, 0, 0, 7]
+
+      Runner.stop(runner)
+    end
+  end
+
+  # A setter that adds to an int array's element, a real and an lreal on each press, each
+  # a global it reads through a var_external.
+  defp setter(arr, r, lr),
+    do: """
+    var_input eye bool
+    var_external #{arr} int[3]
+    var_external #{r} real
+    var_external #{lr} lreal
+    var e1 bool
+    var e2 bool
+    var e3 bool
+    xic eye ons e1 add #{arr}[1] 1 #{arr}[1]
+    xic eye ons e2 add #{r} 1.5 #{r}
+    xic eye ons e3 add #{lr} 0.25 #{lr}
+    """
+
+  # cost63.exs's plant: n motors, each with its button, lamp, setpoint and stop, the last
+  # two unlocated globals, `qualifier` on each of them.
+  defp motors(n, qualifier),
+    do:
+      "task fast interval 10 priority 1\ntask slow interval 50 priority 2\n" <>
+        Enum.map_join(1..n, "", fn i ->
+          "var_global pb#{i} bool at panel.i.#{i}\nvar_global k#{i} bool at panel.q.#{i}\n" <>
+            "var_global #{qualifier}sp#{i} dint\nvar_global #{qualifier}st#{i} bool 1\n" <>
+            "program m#{i} motor with #{Enum.at(["slow", "fast"], rem(i, 2))}\n" <>
+            "m#{i}.start pb#{i}\nm#{i}.stop st#{i}\nm#{i}.run k#{i}\nm#{i}.sp sp#{i}\n"
+        end)
+
+  defp reductions(fun) do
+    parent = self()
+
+    {_pid, ref} =
+      :erlang.spawn_opt(
+        fn ->
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.()
+          {:reductions, later} = Process.info(self(), :reductions)
+          send(parent, {:reductions, later - before})
+        end,
+        [:monitor, min_heap_size: 8_000_000]
+      )
+
+    assert_receive {:reductions, r}, 10_000
+    assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+    r
   end
 end

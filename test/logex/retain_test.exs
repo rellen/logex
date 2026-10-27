@@ -355,6 +355,22 @@ defmodule Logex.RetainTest do
         fn -> Tag.new!("c", :nope, :var, nil, retain: nil, keep: true) end
       )
 
+      # M6-3's review: both `true` beside another mistake is a line of the same message,
+      # the last, not dropped for the first.
+      raises(
+        "unknown option :x for `c`: Logex.Tag.new!/5 takes `retain:` and `non_retain:`\n" <>
+          "`c` takes `retain: true` or `non_retain: true`, not both, as a declaration takes " <>
+          "`retain` or `non_retain`, not both",
+        fn -> Tag.new!("c", :dint, :var, nil, retain: true, non_retain: true, x: 1) end
+      )
+
+      raises(
+        "`retain:` is given twice for `c`\n" <>
+          "`c` takes `retain: true` or `non_retain: true`, not both, as a declaration takes " <>
+          "`retain` or `non_retain`, not both",
+        fn -> Tag.new!("c", :dint, :var, nil, retain: true, non_retain: true, retain: true) end
+      )
+
       raises(
         "the options of 5 are a keyword list, `retain: true` or `non_retain: true`, found :x",
         fn -> Tag.new!(5, :dint, :var, nil, :x) end
