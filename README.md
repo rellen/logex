@@ -2825,7 +2825,9 @@ program t1 tally
 
 `retained.exs` counts four boxes, restarts warm, counts two more, the first under the
 eye as it restarts, takes the plant's retained image and restarts cold; starts a new
-resource from the image, and another whose program counts in a `ctu_int`; then it loads `wired.logex`, the same plant with
+resource from the image, and another whose program counts in a `ctu_int`, the plant's
+text compiled again with that program by `Logex.Configuration.compile/3`, so that the
+configuration it starts is checked whole; then it loads `wired.logex`, the same plant with
 `full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
 `broken.logex`, a mistake on each of its last five lines:
 
@@ -2877,7 +2879,9 @@ show.(fresh, "from image   ")
 
 {:ok, ld} = File.read("tally.ld")
 {:ok, recounted} = Logex.compile(String.replace(ld, "boxes ctu", "boxes ctu_int"), name: "tally")
-{fresh, dropped} = Logex.Runtime.start(%{plant | programs: %{"tally" => recounted}}, image)
+{:ok, text} = File.read("tally.logex")
+{:ok, recounting} = Logex.Configuration.compile("tally", text, %{"tally" => recounted})
+{fresh, dropped} = Logex.Runtime.start(recounting, image)
 show.(fresh, "a ctu_int    ")
 IO.inspect(dropped)
 

@@ -228,7 +228,8 @@ the words `retain` and `non_retain`, and M6-2, the warm restart in the core, lan
 same day in one push, and M6-3, retained globals, the same day with the maintainer's
 answers to their six readings (decisions 293–298), its own eight readings answered and
 built on 2026-10-29 (decisions 299–306), and M6-4, the image, the same day, its five
-readings put to the maintainer, and the other five are planned.
+readings and the three its review raised put to the maintainer, and the other five are
+planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -9295,7 +9296,9 @@ done-when reads the next store write; and last the contract walk and the documen
   run again as a check returning nothing. *Cost* against `edd5c98`
   (`scratchpad/m6/cost64_{base,now}.txt`), a plant of 1 to 64 motor instances retaining
   nothing: `compile/3`, `check/1` and `start/1` within 24 to 512 reductions (0.06 to
-  0.2%), the device guard and one pass of the globals; a cycle in exactly the reductions
+  0.2%), the device guard and one pass of the globals (on a plant of more points the
+  review of M6-4 measured more, and decision 300's guard was narrowed: M6-4's review,
+  item 9); a cycle in exactly the reductions
   it took; a restart, warm or cold, 4 to 7 more, the tasks' sample clause; `print/1` 12
   fewer. README's "A retained global" is run again, `retained.exs`, its broken file a
   line longer for decision 300. 2280 tests (11 doctests), up from 2275.
@@ -9308,7 +9311,8 @@ done-when reads the next store write; and last the contract walk and the documen
   held `b1`, `n` and `x`, an older `b`'s tags, after a cancel that followed an untest,
   where the walk asserts a prune leaves each instance holding exactly what its program
   declares; the walk at `edd5c98` fails the same way with that one draw added, so the
-  gap is older than this work, and the walk keeps its main stream as it was. An
+  gap is older than this work, and the walk keeps its main stream as it was; the review
+  of M6-4 found it at 7 of 30 fresh seeds, about one in four, at `edd5c98` too. An
   operator sees nothing while it lasts, the tags being unread and `get/2` refusing a path
   the program does not declare (checked); whether an edit that later declares such a tag
   again meets its old value rather than starting it was not checked (**unverified**). The
@@ -9459,6 +9463,108 @@ done-when reads the next store write; and last the contract walk and the documen
   order, so a tag both retyped and made unretained reports `{:retyped, ...}`; and a lone
   instance's var_inputs start at 0, the host's to set with `put_inputs/3`, where a warm
   restart keeps them. Neither is put as a question.
+
+  *The review of M6-4 answered* (2026-10-29, nine findings and two notes, nothing a crash
+  or a wrong value at run time), each fix with a test that fails when it alone is
+  reverted:
+
+  1. *Decision 301 missed two placements.* A qualifier where the initial value goes,
+     `var_global total dint retain 0`, or before or among an array's initial list,
+     `var_global x int[2] retain 1 2` and `… 1 retain 2`, only named its global, the value
+     after it read as an extra word, so `t1.eye total` beside it, a bool wired to a dint,
+     was told nothing; and `at retain panel.i.0` took `retain` for the location and told
+     "unexpected `panel.i.0`". Each is now read on past the qualifier as the line without
+     it reads, told where the qualifier goes, its global declared and its uses checked
+     (`Logex.Configuration.Text`'s `initial/2`, `listed/4` and `at/4`).
+     *Provisional:* `var_global x bool at retain`, the line ending on the qualifier, is
+     read as the location `retain`, as before, which check/1 refuses as no location, so
+     that a global printed with any location reads back to it, the configuration round
+     trip's property (question 6 below).
+  2. *A subscript that is no digits raised Erlang's own error.* An image path `tl[x].acc`
+     or `tl[ 1].acc` raised "not a textual representation of an integer" and stopped the
+     other lines; each subscript is now checked before it is read, and the path is a
+     pinned line, "`values` holds \"tl[x].acc\", which is no path", beside the rest.
+  3. *A subscript with a leading zero* passed the image's check and was then dropped as
+     `:unretained`, which was false. An image names an element by its subscripts' values
+     in decimal, as `retained/2` writes them, so `tl[01].acc` is now a path no logic names,
+     a line of the refusal (*provisional*, question 7 below).
+  4. *A kind under a dropped kind, three levels down,* was the survivor of the review's 28
+     mutants: `own_kind` giving `{:ok, …}` there reported `{"a.b.t", :undeclared}` beside
+     `{"a", {:retyped, "outer", :dint}}`. A test of a dropped kind with kinds three levels
+     below it now kills it, and a second form found while checking the fix, the first
+     level below silenced and the next taken as matched unjudged, which a test two levels
+     deep let through.
+  5. *Path order was the path's text,* `g[10].k` before `g[2].k`. The dropped list of
+     `instance/2` and `start/2` is now in path order segment by segment, an element by its
+     subscripts' values (`Logex.Image.ordered/1`), pinned at `cell[12]` and `cell[2,11]`.
+  6. *Decision 305 through the runner.* `retain_configuration_test.exs` now runs it through
+     `Logex.Runner.restart/2` on the manual clock: warm keeps a retained `arm` at 1 and
+     fires nothing, cleared and set again it fires once, cold puts it at 0; an unretained
+     `arm` of initial value 1 fires in the first round after either restart (decision 51).
+     Run 50 times under load on four cores, 50 passed.
+  7. *The walks at fresh seeds.* The image walk missed `:iw_added` at 11 of 30 fresh
+     seeds; a block's `z` is now added or taken away two times in five more, by the same
+     one draw, and at 60 fresh seeds of two families, `{2026, 11, n}` and `{7, 7, n}`,
+     the walk passes with its reach whole every time (`m6/r4seeds.out`). The edit walk's
+     two misses are older than this work, as the review confirmed at `edd5c98`: the
+     superseded edit's leftover tags, the question below "Found while building", fail
+     about one fresh seed in four (7 of 30), not the rare case its paragraph implied; and
+     `:resumed_by_tt` is missed at 8 of 30. Neither walk's main stream is moved, since a
+     draw more there meets that open question at the pinned seed; both hold at the pinned
+     seed and are put with the question.
+  8. *`@draws` listed helpers that draw nothing.* `iw_misfit`, `iw_type_word`,
+     `iw_rungs`, `iw_cell_text`, `iw_text` and the older `ce_text` are now written in
+     clauses and out of `@draws`, decision 264's rule.
+  9. *The cost on a plant of more points.* On the review's plant, 64 motors with 129
+     located globals of 193, measured in a process the collector does not visit (with it,
+     a reading moves by up to 0.8% from build to build with no change in the calls made,
+     which call counts show, the collector's work counted in reductions): against
+     `edd5c98`, `compile/3` 759 more (0.19%), `check/1` 104 (0.03%), `start/1` 1,236
+     (0.35%), a cycle within 4 and `print/1` the same; at 16 motors 154 to 157 more each.
+     The record's "+24 to +512" was measured on a plant of fewer points and is
+     superseded by these. Decision 300's device check had cost some 17 reductions a
+     located global wherever a device's first letter and length were a keyword's,
+     `drive` taking `dword`'s shape; it now looks at the first two letters, so `drive`
+     costs what `xrive` does, a test pinning it, and the rest is decision 306's one pass
+     of the globals, about 5 a global (`m6/r4cost_nogc.txt`).
+
+  *Mutation table.* 12 mutants, each a fix reverted alone in a work copy and judged by
+  the full suite's exit code, all red (`m6/r4mut/run.log` and `run2.log`): the reader's
+  three placements read on and `at`'s need of a following name (four), the subscript
+  read before its check, a leading zero taken, both forms of the kind under a dropped
+  kind (the first form survived the test as first written, three levels deep, and the
+  test was made four), the path order of a lone instance's drops and of a resource's,
+  decision 305's kept sample through the runner, and the device guard's two letters.
+  2306 tests (11 doctests), up from 2302; code `13308d8`.
+
+  The notes: README's `retained.exs` now compiles the `ctu_int` plant from the
+  configuration's text with `Logex.Configuration.compile/3`, so that what it starts is
+  checked whole, where it swapped a program type into the struct; run again, its output
+  is unchanged. And the review's possible question on decision 305 is put, verified:
+
+  6. *`at retain` at a line's end.* `var_global x bool at retain` is read as a location
+     named `retain`, refused by check/1 as no location ("`retain` is not a location: …"), where
+     `at retain panel.i.0` is told the qualifier goes after `var_global`. An operator
+     editing the file sees "no location" rather than "`retain` comes straight after
+     `var_global`". The options: (a) as built, the round trip kept for any location a
+     struct holds; (b) told the qualifier's place there too, a global built from Elixir
+     with `at: "retain"` then printing to text that does not read back to it.
+  7. *A subscript not written as its value in an image.* `tl[01].acc` is refused as no
+     path, the whole image refused, where the host or, from M6-5, a person editing the
+     store wrote it. The options: (a) as built, refused, the image naming each element
+     one way; (b) matched by its value, `tl[01]` as `tl[1]`, a store edited by hand
+     loading as the person meant; (c) dropped, reported in the dropped list, the start
+     going on.
+  8. *A rise of a retained trigger logic wrote just before a trip.* Logic in cycle *k*
+     latches a retained `single` `arm` after the cycle sampled it at 0; the runner trips
+     before cycle *k*+1, whose sample would have seen the rise and run the event task.
+     After a warm restart the last sample is the kept 1 (decision 305), so the event task
+     never runs for that rise (verified through `Logex.Runtime.cycle/3`, `m6/r4q305.exs`).
+     An operator who saw the latch lamp come on sees the event task's work never done.
+     The options: (a) as built, nothing fires on a warm start, as the decision says; (b)
+     the trigger's last sample kept as resource state across a warm restart, so a rise
+     logic wrote after the sample fires in the first cycle, and one already seen does
+     not.
 - **M6-5 · The store, read and written at events.** `Logex.Retain`, internal, its
   `encode/1` and `decode!/2` and the atomic write and read, the forces file's write rule
   shared rather than copied (decision 276), its header naming the configuration and the

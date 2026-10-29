@@ -350,7 +350,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   before what is under it, declared, of exactly its kind, retained, and each value
   declared, of exactly its type, retained and fitting (`fits?/2`, a state's rule), the
   kept values laid over the fresh env in one walk of the retained paths, an array of
-  instances' tuple built once a row. `Logex.Runtime` alone builds the resource
+  instances' tuple built once a row; since M6-4's review the dropped in path order
+  segment by segment, an element by its subscripts' values (`ordered/1`, which
+  `Logex.Runtime.start/2` reads too), and each subscript of an image's path checked as
+  digits written as its value before it is read, `tl[01]` and `tl[x]` no path.
+  `Logex.Runtime` alone builds the resource
 - `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
   one place an array's shape and values are read and made: its type `{:array, type,
   dims}`, one to three sizes, 65,536 elements at most (the spike's limit, provisional),
@@ -482,8 +486,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `retain`: …"), `non_retain` there taken (provisional); a device named `retain` or
   `non_retain` refused ("`Retain` is a keyword and cannot name a device"), since decision
   300 a device named by any configuration keyword, in any case ("`program` is a keyword
-  and cannot name a device"), looked up only where a guard finds its first letter and
-  length among the keywords' (`@keyword_shapes`), a task, a
+  and cannot name a device"), looked up only where a guard finds its first two letters,
+  each in either case, and its length among the keywords' (`@keyword_shapes`, two
+  letters since M6-4's review, so `drive` is not lowercased for `dword`'s shape, a test
+  holding it at no cost), a task, a
   global, an instance and a program type so named refused as every configuration keyword
   is; and a retained var_output a connection wires straight to an output point, or to an
   element of an array of them, warned at the connection's line, "`t1.lamp` is retained
@@ -507,7 +513,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   line told where it goes, a broken line for its qualifiers alone still naming its
   global, since decision 301 declaring it, read on past its qualifiers with none, its
   uses checked, one broken another way too only naming it (`still_declared/1`,
-  `placeholder/1`), and both words keywords, place `:qualifier`, by decision 298): its words as data, `keywords/0`, which `naming_test.exs`
+  `placeholder/1`), since M6-4's review one where the initial value goes, among an
+  array's initial list and before the location, `at retain panel.i.0`, read on too,
+  one the line ends on, `at retain`, read as the location as before (provisional), each
+  word told a qualifier first by `may_qualify/1`'s guard, its length and first letter,
+  and both words keywords, place `:qualifier`, by decision 298): its words as data, `keywords/0`, which `naming_test.exs`
   reads; `read/1`, a recursive descent over
   `Logex.Lexer`'s tokens, not `Logex.Parser`'s, giving the elements of a configuration in
   line order, each with its line, or a `:configure` diagnostic with its column for each
@@ -1497,7 +1507,10 @@ retained a warm restart in no more reductions than a cold one and a cycle in exa
 reductions of the same plant with its unlocated globals retained, and since decisions
 299 to 306 every configuration keyword refused as a device's name in two cases, a line
 refused for its qualifiers alone declaring its global with its uses checked, and
-`Logex.Configuration.Global.new!/3` with every refusal pinned,
+`Logex.Configuration.Global.new!/3` with every refusal pinned, and since M6-4's review a
+qualifier where the initial value goes, among an array's list and before the location
+read on past, decision 305 through `Logex.Runner.restart/2` on the manual clock, and a
+device's keyword check at no cost where no keyword shares its first two letters and length,
 `retain_image_test.exs` M6-4's retained image: `retained/2`'s every leaf, kind and type,
 no timer's `last` at any depth, `instance/2` from the same program's image scanning as its
 warm restart does, each retained timer at 0, every reason of decision 277's matching from
@@ -1512,7 +1525,10 @@ and globals changed in a resource, `retained/1` during an edit, every host mista
 whole, a hand edit of the retained paths, and its growth in reductions, the take-out
 unchanged by an unretained array of 16,384 and linear in the retained count, the matching
 linear in the image, an array of instances' among it, and a configuration that retains
-nothing starting from its empty image within 120 reductions of `start/1`,
+nothing starting from its empty image within 120 reductions of `start/1`, and since
+M6-4's review a subscript that is no digits or not written as its value a pinned line, a
+kind dropped silencing kinds three levels below it, and the dropped in path order by the
+subscripts' values,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
