@@ -3451,6 +3451,10 @@ defmodule Logex.ConfigurationTest do
   # A configuration from Elixir as compile/3 reads it back from its printed text: its
   # tasks, globals, instances and connections numbered from line 1 in that order, and its
   # warnings at their elements' lines, each element named first in its warning.
+  # Decision 306: a retained global a connection drives from an unretained var_output is
+  # warned at the connection's line; every other warning here is at a task's or a global's.
+  @driven_by ~r/is retained but driven by `([^`]+)`/
+
   defp numbered(config) do
     {[tasks, globals, instances, connections], _next} =
       Enum.map_reduce(
@@ -3460,6 +3464,7 @@ defmodule Logex.ConfigurationTest do
       )
 
     lined = Map.new(tasks ++ globals, &{&1.name, &1.line})
+    wired = Map.new(connections, &{"#{&1.instance}.#{&1.member}", &1.line})
 
     %{
       config
@@ -3469,10 +3474,17 @@ defmodule Logex.ConfigurationTest do
         connections: connections,
         warnings:
           Enum.map(config.warnings, fn warning ->
-            [name] = Regex.run(~r/`([^`]+)`/, warning.message, capture: :all_but_first)
-            %{warning | line: Map.fetch!(lined, name)}
+            driver = Regex.run(@driven_by, warning.message, capture: :all_but_first)
+            %{warning | line: warned_at(driver, warning.message, {lined, wired})}
           end)
     }
+  end
+
+  defp warned_at([driver], _message, {_lined, wired}), do: Map.fetch!(wired, driver)
+
+  defp warned_at(nil, message, {lined, _wired}) do
+    [name] = Regex.run(~r/`([^`]+)`/, message, capture: :all_but_first)
+    Map.fetch!(lined, name)
   end
 
   # A configuration new!/1 accepts: up to three tasks, periodic, with a single (M2-6) or

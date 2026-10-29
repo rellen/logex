@@ -212,7 +212,7 @@ defmodule Logex.ApiContractTest do
   @draws ~w(
     ar_block ar_declarations ar_divisor ar_initial ar_program ar_source ar_text
     ay_rung ay_source ay_value ce_blocks ce_candidate ce_change ce_located
-    ce_mistakes ce_op ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
+    ce_mistakes ce_op ce_qualifiers ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
     ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program rw_op rw_program
     ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
     jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
@@ -1256,7 +1256,11 @@ defmodule Logex.ApiContractTest do
     :order,
     :priority,
     # Decision 129 (M4-2): a task's watchdog, which a switch writes nothing for.
-    :watchdog
+    :watchdog,
+    # Decision 302: a global's qualifier, added or taken away, which a switch writes
+    # nothing for.
+    :retain_added,
+    :retain_removed
   ]
 
   # The kinds only a configuration's edit gives, which the walk of a lone instance's edit
@@ -1272,7 +1276,9 @@ defmodule Logex.ApiContractTest do
     :next_due,
     :order,
     :priority,
-    :watchdog
+    :watchdog,
+    :retain_added,
+    :retain_removed
   ]
 
   @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resume_undone, :resumed]
@@ -4271,7 +4277,9 @@ defmodule Logex.ApiContractTest do
     globals =
       for g <- spec.globals,
           do:
-            "var_global #{g.name} #{g.type}" <>
+            "var_global " <>
+              if(Map.get(g, :retain), do: "#{g.retain} ", else: "") <>
+              "#{g.name} #{g.type}" <>
               if(g.at, do: " at #{g.at}", else: "") <>
               if(g.initial, do: " #{g.initial}", else: "")
 
@@ -4345,7 +4353,35 @@ defmodule Logex.ApiContractTest do
         if(:rand.uniform(3) == 1, do: [pick(@ce_refused)], else: [])
 
     spec = Enum.reduce(changes, spec, &ce_change/2)
-    ce_wire(spec, :rewire not in changes)
+    ce_wire(ce_qualifiers(spec), :rewire not in changes)
+  end
+
+  # Decision 302: each unlocated global's qualifier drawn again, one candidate in two, from
+  # a stream of its own, so that every other draw of the walk is the one it was before
+  # decision 302 and its reach, held at its seed, stands; `:retain_added` and
+  # `:retain_removed` join the kinds it must reach.
+  defp ce_qualifiers(spec) do
+    state = Process.get(:ce_retain_rng, :rand.seed_s(:exsss, {2026, 10, 29}))
+    {draw, state} = :rand.uniform_s(2, state)
+
+    {globals, state} =
+      Enum.map_reduce(spec.globals, state, fn g, state ->
+        {roll, state} = :rand.uniform_s(6, state)
+
+        cond do
+          draw == 1 or g.at != nil ->
+            {g, state}
+
+          roll <= 3 ->
+            {Map.put(g, :retain, Enum.at([nil, :retain, :non_retain], roll - 1)), state}
+
+          true ->
+            {g, state}
+        end
+      end)
+
+    Process.put(:ce_retain_rng, state)
+    %{spec | globals: globals}
   end
 
   # A new version of a type, `k` and its timer's kind kept; or one that keeps all but its
@@ -5099,6 +5135,13 @@ defmodule Logex.ApiContractTest do
   defp ce_pruned_to(:assemble, w), do: w.o
   defp ce_pruned_to(_cancel, w), do: elem(w.c, 0)
 
+  # Decision 302, restated: `retain` alone retains, `non_retain` and none are one.
+  defp ce_retained(%{retain: :retain}), do: true
+  defp ce_retained(_global), do: false
+
+  defp ce_requalified(true), do: :retain_added
+  defp ce_requalified(false), do: :retain_removed
+
   defp ce_pruned_reach(:assemble), do: :assembled
   defp ce_pruned_reach(_cancel), do: :cancelled_untested
 
@@ -5157,6 +5200,13 @@ defmodule Logex.ApiContractTest do
           o = old[g.name],
           o != nil and (o.initial || 0) != (g.initial || 0),
           do: {:initial_changed, g.name, {o.initial || 0, g.initial || 0}}
+        ) ++
+        for(
+          g <- to.globals,
+          Map.has_key?(before.globals, g.name),
+          o = old[g.name],
+          o != nil and ce_retained(o) != ce_retained(g),
+          do: {ce_requalified(ce_retained(g)), g.name, later.globals[g.name]}
         ) ++ ce_held(from, to, later)
 
     kept =
@@ -5220,7 +5270,7 @@ defmodule Logex.ApiContractTest do
             :unwritten
           ] or
             (not String.contains?(to_string(name), ".") and
-               kind in [:added, :initial_changed, :held, :pruned]),
+               kind in [:added, :initial_changed, :held, :pruned, :retain_added, :retain_removed]),
           do: entry
 
     assert given == restated

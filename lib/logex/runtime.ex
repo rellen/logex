@@ -176,8 +176,10 @@ defmodule Logex.Runtime do
     the continuous task (M4-2) is never due and keeps an overlap count of 0, and no edit
     adds or removes it, or makes a task continuous or timed (decision 129);
   - a task's trigger (M2-6), the last sample of its `single`, is 0 at `start/1` and by
-    `restart/2`, so a trigger already 1 fires in the next cycle, and a cycle samples it
-    once, after the input merge and before any scan. An edit's switch keeps it, so a
+    `restart/2`, so a trigger already 1 fires in the next cycle, but since decision 305 a
+    warm `restart/2`'s for a `single` the configuration declares `retain`, the value it
+    kept, so a trigger kept at 1 fires on no rising edge (decision 274); and a cycle
+    samples it once, after the input merge and before any scan. An edit's switch keeps it, so a
     switch fires no event, and its accept refuses a changed `single`, or an `interval`
     added to or removed from a task with one, while the plant runs (§4.9);
   - the generation (OE-2), the count of the configuration edits' steps taken on the
@@ -775,27 +777,27 @@ defmodule Logex.Runtime do
   `start/1` left it, but for its clock and its input image, which it keeps: every other
   global back at its initial value, each instance through `restart/3`, every task with an
   interval due at the next cycle, every trigger's last sample 0, so a trigger already 1
-  fires in it, and every overlap count 0. An instance a configuration edit set aside is
+  fires in it, but at `:warm` a retained `single`'s, which is the value it kept, so it
+  fires only on a real rising edge (decision 305, decision 274's rule), and every
+  overlap count 0. An instance a configuration edit set aside is
   dropped, and the edit's generation kept (OE-2). Keeping the input image is what keeps
   `scan/2` with `restart/3` and a one-instance configuration in agreement across a
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
 
-  Two readings the record does not settle, provisional since M6-3's review: a retained
-  global that is a task's `single`, kept at 1 by a warm restart, is a trigger already 1,
-  its last sample 0 as after every restart, so its event task runs in the first cycle
-  with no rising edge, as an input point's trigger already 1 does (decision 51); and a
-  retained global a connection drives from a var_output its program does not retain
+  A retained global a connection drives from a var_output its program does not retain
   keeps its value only until that instance's first run, whose copy-out writes the
-  var_output, back at its initial value, over it.
+  var_output, back at its initial value, over it, which `Logex.Configuration.check/1`
+  warns of (decision 306).
   """
   def restart(runtime, mode) do
     %__MODULE__{now: now, config: config} = runtime = runtime!(runtime)
     mode!(mode)
+    globals = Map.new(config.globals, &{&1.name, restarted(&1, runtime, mode)})
 
     %{
       runtime
-      | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime, mode)}),
+      | globals: globals,
         instances:
           Map.new(runtime.instances, fn {name, state} ->
             restarted =
@@ -807,10 +809,30 @@ defmodule Logex.Runtime do
 
             {name, detached(restarted, runtime.wiring, name)}
           end),
-        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)}),
+        tasks:
+          Map.new(
+            config.tasks,
+            &{&1.name, sampled(task_state(&1, now), &1, {mode, globals, config})}
+          ),
         aside: %{}
     }
   end
+
+  # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger:
+  # after a warm restart the last sample of a `single` the configuration declares `retain`
+  # is the value it kept, so a trigger kept at 1 is no rising edge and its event task waits
+  # for a real one. Every other trigger's last sample is 0, as after every cold restart, so
+  # an input point already 1 still fires in the first cycle (decision 51).
+  defp sampled(%{last: _} = state, %Configuration.Task{single: single}, {:warm, globals, config}),
+    do: kept_sample(retained_single?(config.globals, single), state, Map.fetch!(globals, single))
+
+  defp sampled(state, _task, _restart), do: state
+
+  defp retained_single?(globals, single),
+    do: Enum.any?(globals, &match?(%Configuration.Global{name: ^single, retain: :retain}, &1))
+
+  defp kept_sample(true, state, value), do: %{state | last: value}
+  defp kept_sample(false, state, _value), do: state
 
   # M6-3 (decisions 268 and 271): a warm restart keeps a retained global's value, which no
   # located global is; every other global as a cold restart puts it.
@@ -845,7 +867,8 @@ defmodule Logex.Runtime do
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
-  # start/1 and by restart/2, so a trigger already 1 fires in the next cycle. The
+  # start/1 and by restart/2, so a trigger already 1 fires in the next cycle, a warm
+  # restart's of a retained single the value it kept (sampled/3, decision 305). The
   # continuous task (M4-2) has no due time and never overlaps: overlaps/1 lists it at 0,
   # and next_due_in/1 counts it not.
   defp task_state(%Configuration.Task{continuous: true}, _due),

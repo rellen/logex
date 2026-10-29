@@ -125,6 +125,22 @@ defmodule Logex.Configuration do
   `var_global` line writes with more digits than its real keeps is warned of, in decision
   219's words, at its line. A name with brackets names nothing else in a configuration.
 
+  **Retained globals** (M6-3, `docs/organisation.md` §4.13, decisions 268, 271, 272 and
+  298 to 306). A global may be `retain` or `non_retain`, `var_global retain total_boxes
+  dint 0`, which `Logex.Runtime.restart/2` with `:warm` keeps; a located global takes no
+  `retain`, `non_retain` there taken (decision 299). No configuration keyword names
+  anything in a configuration, a global, an instance, a task, a program type or, since
+  decision 300, a device, in any case, "`program` is a keyword and cannot name a device".
+  Two warnings, each at the connection's line, each seeing a direct connection only, which
+  logic that reads a retained value and writes an output another way, or a write through a
+  `var_external`, is not (decision 303): a retained var_output wired straight to an output
+  point, or to an element of an array of them, "`m1.run` is retained and drives the output
+  `motor_q`: after a warm start it is written in the first round" (decision 272), looked
+  for only where a program type retains anything; and since decision 306 a retained global,
+  or an element of one, driven by a var_output its program does not retain, "`total` is
+  retained but driven by `w1.count`, which is not: the first round writes over it",
+  looked for only where a global is retained.
+
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
   `Logex.Compiler.instructionize/2` raises on a tree no source could say: a configuration
@@ -227,12 +243,112 @@ defmodule Logex.Configuration do
     line's qualifier, as a `%Logex.Tag{}`'s is: `:retain` for `var_global retain
     total_boxes dint 0`, which `Logex.Runtime.restart/2` with `:warm` keeps, `:non_retain`
     for `var_global non_retain count dint`, which states the default, and nil for a line
-    with none, which is not retained. A located global takes no `:retain`. From Elixir the
-    struct is built by hand, so it carries the atom, as a tag's struct does (decision 296's
-    note).
+    with none, which is not retained. A located global takes no `:retain`. From Elixir,
+    since decision 304, `new!/3` takes the qualifier as `Logex.Tag.new!/5` does, the line's
+    own word as an option; the struct built by hand carries the atom, as a tag's does.
     """
     @enforce_keys [:name, :type]
     defstruct [:name, :type, initial: nil, at: nil, line: nil, retain: nil]
+
+    @doc """
+    A global from Elixir, as a `var_global` line says it (decision 304, the maintainer,
+    2026-10-29): `new!("total_boxes", :dint, initial: 0, retain: true)` for `var_global
+    retain total_boxes dint 0`, `non_retain: true` for `var_global non_retain …`, and
+    `at: "panel.i.0"` for a location; `false` or no option for a line with no qualifier.
+    The qualifier is decision 296's keyword option, as `Logex.Tag.new!/5` takes it, and is
+    refused in its words, each a line of one `ArgumentError`, before anything else is read:
+    options that are no keyword list; an option of another name; a `retain:` or
+    `non_retain:` that is neither `true` nor `false`; an option given twice; and both
+    `true`, as a line takes `retain` or `non_retain`, not both. What the global's name,
+    type, initial value and location say is `Logex.Configuration.check/1`'s, which
+    `Logex.Configuration.new!/1` runs, as for a struct built by hand. The struct's `retain`
+    keeps the atom, `:retain`, `:non_retain` or nil.
+    """
+    def new!(name, type, options \\ []),
+      do: built!(options, %__MODULE__{name: name, type: type})
+
+    # Decision 304: the options, read in clauses, every problem a line, as Logex.Tag's are.
+    @qualifiers [:retain, :non_retain]
+    @others [:initial, :at]
+
+    defp built!(options, global) when is_list(options),
+      do: options(options, options, global, %{}, [])
+
+    defp built!(options, global), do: raise(ArgumentError, shape(options, global.name))
+
+    defp options([], _all, global, seen, problems),
+      do: chosen(seen, global, Enum.reverse(problems))
+
+    defp options([{key, _value} | rest], all, global, seen, problems)
+         when is_map_key(seen, key),
+         do:
+           options(rest, all, global, seen, [
+             "`#{key}:` is given twice for #{label(global.name)}" | problems
+           ])
+
+    defp options([{key, value} | rest], all, global, seen, problems)
+         when key in @qualifiers and is_boolean(value),
+         do: options(rest, all, global, Map.put(seen, key, value), problems)
+
+    defp options([{key, value} | rest], all, global, seen, problems) when key in @qualifiers,
+      do:
+        options(rest, all, global, Map.put(seen, key, value), [
+          "`#{key}:` for #{label(global.name)} takes true or false, found #{inspect(value)}"
+          | problems
+        ])
+
+    defp options([{key, value} | rest], all, global, seen, problems) when key in @others,
+      do: options(rest, all, global, Map.put(seen, key, value), problems)
+
+    defp options([{key, value} | rest], all, global, seen, problems) when is_atom(key),
+      do:
+        options(rest, all, global, Map.put(seen, key, value), [
+          "unknown option #{inspect(key)} for #{label(global.name)}: " <>
+            "Logex.Configuration.Global.new!/3 takes `initial:`, `at:`, `retain:` and " <>
+            "`non_retain:`"
+          | problems
+        ])
+
+    defp options(_improper, all, global, _seen, _problems),
+      do: raise(ArgumentError, shape(all, global.name))
+
+    # Every problem a line of the one message, both `true` the last of them.
+    defp chosen(%{retain: true, non_retain: true}, global, problems),
+      do:
+        raise(
+          ArgumentError,
+          Enum.join(
+            problems ++
+              [
+                "#{label(global.name)} takes `retain: true` or `non_retain: true`, not both, " <>
+                  "as a `var_global` line takes `retain` or `non_retain`, not both"
+              ],
+            "\n"
+          )
+        )
+
+    defp chosen(_seen, _global, [_ | _] = problems),
+      do: raise(ArgumentError, Enum.join(problems, "\n"))
+
+    defp chosen(seen, global, []),
+      do: %{
+        global
+        | initial: Map.get(seen, :initial),
+          at: Map.get(seen, :at),
+          retain: qualifier(seen)
+      }
+
+    defp qualifier(%{retain: true}), do: :retain
+    defp qualifier(%{non_retain: true}), do: :non_retain
+    defp qualifier(_seen), do: nil
+
+    defp shape(options, name),
+      do:
+        "the options of #{label(name)} are a keyword list of `initial:`, `at:`, " <>
+          "`retain: true` or `non_retain: true`, found #{inspect(options)}"
+
+    defp label(name) when is_binary(name), do: "`#{name}`"
+    defp label(name), do: inspect(name)
 
     @type t :: %__MODULE__{
             name: String.t(),
@@ -280,9 +396,18 @@ defmodule Logex.Configuration do
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
-  # Decision 298: the qualifiers, which name nothing in a configuration file, a device
-  # among it.
-  @qualifier_words ["retain", "non_retain"]
+  # Decision 300 (the maintainer, 2026-10-29), widening decision 298: no word of a
+  # configuration file's lines names a device, in any case, so a device's name is looked
+  # up among them only where its first letter, in either case, and its length are one of
+  # theirs, which a guard reads.
+  @device_keywords Map.new(Logex.Configuration.Text.keywords(), &{&1, true})
+  @keyword_shapes Map.new(
+                    for(
+                      word <- Logex.Configuration.Text.keywords(),
+                      first <- [String.first(word), String.upcase(String.first(word))],
+                      do: {{first, byte_size(word)}, true}
+                    )
+                  )
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
@@ -840,7 +965,9 @@ defmodule Logex.Configuration do
     {Enum.map(diagnostics, &%{&1 | file: file}),
      Enum.map(
        warnings({tasks, globals, instances}, wiring, externals, triggers) ++
-         timed(world) ++ retained_outputs(retaining(programs), wiring.driven, {world, globals}),
+         timed(world) ++
+         retained_outputs(retaining(programs), wiring.driven, {world, globals}) ++
+         overwritten(retained_globals(globals), wiring.driven, {world, connections}),
        &%{&1 | file: file}
      )
      |> Enum.sort_by(&line_order/1)}
@@ -2036,11 +2163,18 @@ defmodule Logex.Configuration do
           "and its address has no leading zero, so it is written `#{spelling(address)}`"
       )
 
-  # Decision 298: a qualifier names no device, as it names nothing else in a configuration
-  # file, a global's own name refused or not.
+  # Decision 300: a configuration keyword names no device, as it names nothing else in a
+  # configuration file (decision 298 for the two qualifiers), a global's own name refused
+  # or not.
   defp at_spelled({:ok, {device, _io, _fields}} = spelled, global, keeps, acc)
-       when byte_size(device) in [6, 10],
-       do: device_word(String.downcase(device) in @qualifier_words, spelled, global, {keeps, acc})
+       when is_map_key(@keyword_shapes, {binary_part(device, 0, 1), byte_size(device)}),
+       do:
+         device_word(
+           is_map_key(@device_keywords, String.downcase(device)),
+           spelled,
+           global,
+           {keeps, acc}
+         )
 
   defp at_spelled({:ok, _address}, _global, false, acc), do: acc
 
@@ -3374,6 +3508,42 @@ defmodule Logex.Configuration do
   end
 
   defp root(name), do: hd(:binary.split(name, "["))
+
+  # Decision 306 (the maintainer, 2026-10-29): a retained global a connection drives from a
+  # var_output its program does not retain is told that the driving instance's first run
+  # after a warm start writes over the kept value, at the connection's line, an element of
+  # a global array or of a var_output array by its element. A var_output the program
+  # retains, by its own line or, by decision 270, the nearest mark, keeps its value too and
+  # is told nothing. The retained globals are found first, one pass of the globals, so a
+  # configuration that retains none looks at no connection. The warnings come in the order
+  # the connections are declared, so that one from Elixir, which has no lines, is in the
+  # order its text's lines give.
+  defp retained_globals(globals),
+    do: for(%Global{retain: :retain, name: name} <- globals, do: name)
+
+  defp overwritten([], _driven, _given), do: []
+
+  defp overwritten(names, driven, {world, connections}) do
+    kept = MapSet.new(names)
+    order = connections |> Enum.with_index() |> Map.new()
+
+    for {target, %Connection{instance: instance, member: member} = connection} <- driven,
+        MapSet.member?(kept, root(target)),
+        {:ok, {_instance, %Program{retained: retained}}} <- [Map.fetch(world.runnable, instance)],
+        not kept_by(retained, root(member)) do
+      {Map.get(order, connection),
+       warning(
+         connection.line,
+         "`#{target}` is retained but driven by `#{instance}.#{member}`, which is not: the " <>
+           "first round writes over it"
+       )}
+    end
+    |> Enum.sort()
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  defp kept_by(nil, _member), do: false
+  defp kept_by(retained, member), do: member in retained
 
   # M2-4 (decision 48): each instance that writes a global through its var_external after
   # an earlier one does, in line order, is told the first; and each that writes one a

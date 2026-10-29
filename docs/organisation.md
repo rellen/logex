@@ -1895,6 +1895,8 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:instance_pruned` | instance | its program type | assemble, cancel; a first test, what a superseded edit set aside (decision 66) | write: its state dropped |
 | `:added` | global | its initial value | a switch | write: `Logex.Configuration.initial/1` |
 | `:initial_changed` | global | `{old, new}` | a switch | fact: the running value is kept (decision 44) |
+| `:retain_added` | global | the value it holds | a switch | fact: nothing written; the next warm restart keeps it (decisions 278 and 302) |
+| `:retain_removed` | global | the value it holds | a switch | fact: nothing written; the next warm restart puts it back (decisions 278 and 302) |
 | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused (decision 66) | write |
 | `:held` | global | its value | every step | fact: nothing drives it any more (decision 20; decision 58) |
 | `:interval` | task | `{old, new}` ms | a switch | fact |
@@ -2028,10 +2030,10 @@ above and `Logex.Runtime`'s one-rule section:
 | the clock, `now` | 0 | `+ elapsed_ms` | kept | never touched | — | — | never touched |
 | the input image | 0 | the inputs merged | kept | kept | refused: located I/O | refused | kept |
 | an output point's value | 0 | its driver's write | 0 | kept; held and reported where nothing drives it | refused | refused | kept; held reported |
-| an unlocated global | `Logex.Configuration.initial/1` | copy-out, var_external writes | `Logex.Configuration.initial/1` | kept; `:initial_changed` (decision 44) | `Logex.Configuration.initial/1`, `:added`, at the switch that first finds it missing | kept unused | pruned, `:pruned` |
+| an unlocated global | `Logex.Configuration.initial/1` | copy-out, var_external writes | `Logex.Configuration.initial/1`; at `:warm` a retained one kept (M6-3) | kept; `:initial_changed` (decision 44); `:retain_added`, `:retain_removed` (decision 302) | `Logex.Configuration.initial/1`, `:added`, at the switch that first finds it missing | kept unused | pruned, `:pruned` |
 | a task's `next_due` | 0 | whole intervals | the kept `now` | kept; a changed interval gives `min(next_due, now + new)` (decision 40) | refused | refused | kept |
 | a task's overlap count | 0 | `+ missed` | 0 | kept | — | — | kept |
-| an event task's last sample | 0 | sampled once | 0 | kept: no switch fires an event | refused | refused | kept |
+| an event task's last sample | 0 | sampled once | 0; at `:warm` a retained `single`'s kept value (decision 305) | kept: no switch fires an event | refused | refused | kept |
 | `generation` | 0 | kept | kept | `+ 1` | — | — | `+ 1` |
 | the instances set aside, `aside` | none | kept, never scanned | dropped: the next switch starts each again, `:instance_added` (decision 65) | — | — | an instance only the configuration stopped runs, and a retyped one's old state, set aside | pruned, `:instance_pruned` |
 | a kept instance's env | `Logex.Runtime.instance/1` | `call/4` | `restart/3` | OE-1's per-instance switch, by path, between decision 45's merge and split | — | — | OE-1's prune, by path |
@@ -4211,7 +4213,8 @@ suffixes.
 ### 4.13 Retained values and a true warm restart (Milestone 6)
 
 **Designed and decided 2026-10-27; M6-1, the words, M6-2, the warm restart in the
-core, and M6-3, retained globals, landed the same day, the rest not yet built** (`PLAN.md` §3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
+core, and M6-3, retained globals, landed the same day, and M6-3's eight readings
+answered on 2026-10-29, decisions 299 to 306, the rest not yet built** (`PLAN.md` §3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
 is not": today a warm restart is a cold one, so a counter's count, a totaliser's total or
 a timer's accumulated time is lost when the runner restarts, crashes or the VM stops. A
 design pass on `3a7c2eb` read IEC 61131-3 Ed 2:2003 and Ed 3:2013 in full and Ed 4:2025
@@ -4390,7 +4393,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   question 6.)* *(Answered 2026-10-27: readings 2 and 3 confirmed, decisions 294 and 295;
   from Elixir the qualifier is a keyword option, `Logex.Tag.new!("c", :dint, :var, nil,
   retain: true)`, decision 296; and both words reserved in a configuration file too,
-  decision 298, which M6-3 builds.)*
+  decision 298, which M6-3 builds.)* *(Answered 2026-10-29, M6-3's readings: every
+  configuration keyword refused as a device's name, decision 300; a `var_global` line
+  refused for its qualifiers alone declares its global, decision 301; and a global from
+  Elixir through `Logex.Configuration.Global.new!/3`, decision 304.)*
 - *The sections* (decision 268): a program's `var` and `var_output`; a block's `var`,
   `var_input` and `var_output`; a configuration's `var_global`, `non_retain` there too.
   Refused: a program's `var_input`, told that it holds the host's value, which every
@@ -4443,7 +4449,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   global that is one, "`m1.run` is retained and drives the output `motor_q`: after a warm
   start it is written in the first round", a direct connection only, which it says; and
   README's "What logex is not" says that logic reading a retained bit can switch an
-  output on in the first round.
+  output on in the first round. *(Decision 303, 2026-10-29: the message stays, and README,
+  this section and `Logex.Configuration`'s moduledoc state that only a direct connection
+  is seen. Decision 306: a retained global a connection drives from a var_output its
+  program does not retain is warned at the connection's line, "`total` is retained but
+  driven by `w1.count`, which is not: the first round writes over it", since that
+  instance's first run writes over the kept value. Decision 305: a retained global that
+  is a task's `single` starts its trigger's last sample at the value it kept, so nothing
+  fires on a warm start.)*
 - *A timer across the outage* (decision 273): not counted. `.acc` and the bits are kept,
   `last` is never written to the store, and each retained timer starts with `last` equal
   to the `now` it starts at, a warm `restart/2` of a live resource setting it to that
@@ -4534,7 +4547,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
-  `Logex.Configuration.Edit` and `@configuration_kinds`; the switch writes nothing. The
+  `Logex.Configuration.Edit` and `@configuration_kinds`; the switch writes nothing.
+  *(Decision 302, 2026-10-29: a global's two kinds are built now, with M6-3's answers, by
+  the global's name with the value it holds; M6-7 brings a program's tags.)* The
   next store write follows the program running, so a tag whose `retain` is removed keeps
   its value until the next restart and is then initialised; a crash while an edit is
   tested leaves a store of the candidate's values, which a fresh start meets by decision
@@ -5343,6 +5358,9 @@ to OE-2.
     `{:initial_changed, name, {old, new}}`, its running value kept, as decision 29 reports
     a tag's; or say nothing. *Recommend reporting it,* one rule for two kinds of state,
     which extends decision 29 to globals. Adopted.
+    *(Decision 302, 2026-10-29: a kept global whose qualifier an edit changes is reported
+    `:retain_added` or `:retain_removed` beside `:initial_changed`, built with M6-3's
+    answers.)*
     *(Amended 2026-10-27 by decisions 277 and 278, for Milestone 6, not yet built: a
     running value kept until a restart is, for a retained global or tag, kept by a warm
     restart still, only a cold restart taking the new initial value; and a store read at a
@@ -10794,7 +10812,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      direction, a retained global a connection drives from a var_output its program does
      not retain, `var_global retain total dint 0` driven by `w1.count`, keeps its value
      through a warm restart only until `w1`'s first run, whose copy-out writes the
-     var_output, back at its initial value, over it, with no warning.)*
+     var_output, back at its initial value, over it, with no warning.)* *(Decision 299,
+     2026-10-29: `non_retain` on a located global confirmed. Decision 303: the message
+     stays, the direct-connection limit stated in README and the documents. Decision 306:
+     the reverse direction warned of at the connection's line, "`total` is retained but
+     driven by `w1.count`, which is not: the first round writes over it".)*
 273. **A running timer across a power failure (Milestone 6).** The lube `rto` at 62 hours
      and the fan's `tof` in its run-on.
      - Not counted: `.acc` and the bits kept, each retained timer's `last` set to the
@@ -10836,7 +10858,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `single` is no program's edge. Its last sample is 0 after every `restart/2` (M2-6),
      so a retained global that is a `single`, kept at 1 by a warm restart, is a trigger
      already 1 and runs its event task in the first cycle, decision 51's rule for an
-     input point's trigger, with no rising edge.)*
+     input point's trigger, with no rising edge.)* *(Decision 305, 2026-10-29: changed, a
+     retained `single`'s last sample after a warm restart is the value it kept, so
+     nothing fires on a warm start; a cold restart and an input point's trigger as
+     before.)*
 275. **Where the store lives and when it is written (Milestone 6).** logex has no
      battery-backed memory; the host's disk stands in for it.
      - *Where:* a path the host names, `retain:`, as `forces:` is (decision 127); with
@@ -10909,7 +10934,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      (decision 65).
 
      **Taken: `:retain_added` and `:retain_removed`, report only** (the maintainer,
-     2026-10-27), as recommended. Decision 44 is annotated.
+     2026-10-27), as recommended. Decision 44 is annotated. *(Decision 302, 2026-10-29: a
+     global's two kinds are built ahead of M6-7, by its name with the value it holds,
+     `non_retain` and none one; M6-7 brings a program's tags.)*
 279. **A pre-scan in the conventional family's sense (Milestone 6).** The conventional
      family needs one because it keeps everything (RM094N p.47); under decision 266 logex
      puts back everything unmarked by `initial_env/1`, and an `ote` writes 0 on a
@@ -11109,7 +11136,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      undeclared.
 
      **Taken: confirmed, a line refused only for its qualifier still declares its tag**
-     (the maintainer, 2026-10-27), as built.
+     (the maintainer, 2026-10-27), as built. *(Decision 301, 2026-10-29: so does a
+     configuration file's `var_global` line, without its qualifier.)*
 295. **A qualifier out of its place (Milestone 6),** the third reading: `var count retain
      dint` and `var count dint retain` refused, told "`retain` comes straight after the
      section word, as in `var retain count dint`", rather than taken in either place.
@@ -11136,7 +11164,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `:non_retain` or nil. *(Provisional, the record's reading: a configuration's global
      from Elixir is a `%Logex.Configuration.Global{}` built by hand, with no function to
      take an option, so it carries the struct's atom, `retain: :retain`, as a tag's
-     struct does, M6-3.)*
+     struct does, M6-3.)* *(Decision 304, 2026-10-29: `Logex.Configuration.Global.new!/3`
+     takes the same options, refused in the same words.)*
 297. **`Program.retained`'s paths (Milestone 6),** the fifth reading: a sorted list of
      strings, a path whole where everything under it is retained, otherwise each retained
      member, an array of block instances' members by `[*]`.
@@ -11156,7 +11185,95 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      which M6-3's commit says. *(Landed with M6-3, 2026-10-27: `keywords/0` holds both,
      place `:qualifier`; a device so named is refused too, "`Retain` is a keyword and
      cannot name a device", where a device named by another configuration keyword is
-     still taken, provisional.)*
+     still taken, provisional.)* *(Decision 300, 2026-10-29: every configuration keyword
+     refused as a device's name. Decision 301: a `var_global` line refused for its
+     qualifiers alone declares its global, decision 294's rule.)*
+
+299. **`non_retain` on a located global (Milestone 6),** the first of M6-3's readings
+     (`PLAN.md`, M6-3's status): `var_global non_retain lamp_q bool at panel.q.0` taken,
+     where `retain` there is refused (decision 272), the word stating the default.
+
+     **Taken: confirmed, `non_retain` on a located global is accepted** (the maintainer,
+     2026-10-29), as built. `retain_configuration_test.exs` pins it, as it did.
+300. **A device named by a configuration keyword (Milestone 6),** the second reading:
+     decision 298 refused a device named `retain` or `non_retain`, but `var_global x bool
+     at task.i.0` still named a device `task`, where a global, an instance, a task or a
+     program type so named is refused.
+
+     **Taken: changed, no configuration keyword names a device** (the maintainer,
+     2026-10-29): every word of `Logex.Configuration.Text.keywords/0`, `program`, `at`,
+     `task`, a type word and the rest, in any case, is refused as a device's name at its
+     global's line, "`program` is a keyword and cannot name a device", the device as
+     written, from text and from Elixir. A plant file whose card is named so stops
+     loading, which the commit says. A device's name is looked up among the keywords only
+     where its length is one of theirs, so a configuration pays about a reduction a
+     located global for it.
+301. **A configuration line refused for its qualifier alone (Milestone 6),** the third
+     reading: `var_global retain retain total_boxes dint` one diagnostic, its global only
+     named (decision 42), so that `t1.eye total_boxes` beside it, a bool connected to a
+     dint, was told nothing.
+
+     **Taken: changed, decision 294's rule in a configuration file** (the maintainer,
+     2026-10-29): a `var_global` line refused only for its qualifiers, given twice, both,
+     or out of their place, after the name, the type, the initial value or the location,
+     is read on without them and declares its global with no qualifier, its declaration
+     and its uses checked as any line's; one broken another way too, a delimiter or an
+     extra word among it, only names its global, as every broken line does.
+302. **An edit that only changes a global's qualifier (Milestone 6),** the fourth reading:
+     an online edit adding `retain` to `var_global total_boxes dint 0` was accepted and
+     reported nothing until M6-7.
+
+     **Taken: changed, reported now** (the maintainer, 2026-10-29): decision 278's report
+     kinds come forward for a global, `{:retain_added, name, value}` and
+     `{:retain_removed, name, value}`, by the global's name, at every switch, the
+     accept's forecast among them, the value the global holds, which the next warm
+     restart keeps or puts back, nothing written; rows of `Logex.Configuration.Edit`'s
+     table and §4.9's, and of `@report_kinds` and `@configuration_kinds`. M6-7 then covers
+     a program's tags. *(Provisional, the record's reading: `non_retain` and no qualifier
+     are one, neither retained, so a change between them reports nothing; the detail is
+     the value the global holds, an array's as a list, as `:held` gives it.)*
+303. **The warning's words (Milestone 6),** the fifth reading: decision 272's warning is
+     given per connection and does not itself say that only a direct connection is seen.
+
+     **Taken: confirmed, the message stays and the limit is stated in README and the
+     documents** (the maintainer, 2026-10-29). README's "A retained global", §4.13 and
+     `Logex.Configuration`'s moduledoc say that only a direct connection is seen.
+304. **A global's qualifier from Elixir (Milestone 6),** the sixth reading: a global built
+     by hand carried the struct's atom, `%Logex.Configuration.Global{retain: :retain}`,
+     with no function to take decision 296's option.
+
+     **Taken: changed, a constructor** (the maintainer, 2026-10-29):
+     `Logex.Configuration.Global.new!(name, type, options)`, beside the configuration's
+     other Elixir structs, its options `initial:`, `at:` and decision 296's `retain: true`
+     or `non_retain: true`, refused in `Logex.Tag.new!/5`'s words, each a line of one
+     `ArgumentError`: options that are no keyword list, an option of another name, a
+     qualifier neither `true` nor `false`, an option given twice, and both `true`. The
+     struct's `retain` field stays, and what the global's name, type, initial value and
+     location say is `Logex.Configuration.check/1`'s, as for a struct built by hand.
+305. **A retained global that is a task's `single` (Milestone 6),** M6-3's review's
+     seventh question: a warm restart kept `arm` at 1, and the trigger's last sample went
+     back to 0, so the first cycle ran the event task though `arm` never rose.
+
+     **Taken: changed, decision 274's rule for a trigger** (the maintainer, 2026-10-29):
+     after a warm restart the last sample of a `single` the configuration declares
+     `retain` is the value it kept, so an event task whose retained trigger was 1 waits
+     for a real rising edge; nothing fires on a warm start. A cold restart still starts
+     every trigger's last sample at 0, and decision 51 stands for an input point's
+     trigger, which no `retain` can mark (decision 272), and for an unretained global's,
+     put back at its initial value.
+306. **A retained global a connection drives (Milestone 6),** M6-3's review's eighth
+     question: `var_global retain total dint 0` driven by `w1.count`, which `w1` does not
+     retain, kept its 2 through a warm restart only until `w1`'s first run copied its
+     `count`, back at 0, over it, with no warning.
+
+     **Taken: changed, a warning** (the maintainer, 2026-10-29): at the connection's line,
+     "`total` is retained but driven by `w1.count`, which is not: the first round writes
+     over it", an element of a global array or of a var_output array in the same words by
+     element, "`totals[0]` is retained but driven by `w1.os[1]`, …"; a var_output its
+     program retains, by its own line, decision 270's nearest mark, is told nothing, nor
+     is a global that is not retained. Like decision 272's, it sees a direct connection
+     only: a write through a `var_external` is not a connection. It is looked for only
+     where a global is retained, one pass of the globals.
 
 ---
 

@@ -91,7 +91,11 @@ defmodule Logex.Configuration.Edit do
     finds it missing; one only the configuration stopped declares is kept unused, so an
     instance set aside that reads it finds it if it comes back; and a kept global whose
     initial value changed keeps its running value until `Logex.Runtime.restart/2`,
-    `{:initial_changed, name, {old, new}}` (decision 44);
+    `{:initial_changed, name, {old, new}}` (decision 44); and since decision 302 a kept
+    global whose `retain` the edit adds or takes away keeps its value, nothing written,
+    `{:retain_added, name, value}` or `{:retain_removed, name, value}`, the value it holds,
+    which the next warm restart keeps or puts back (decision 278), `non_retain` and no
+    qualifier one;
   - a task whose interval changed is next due at `min(next_due, now + new interval)`
     (decision 40), `{:interval, task, {old, new}}`, and `{:next_due, task, {from, to}}`
     where that moves it, `now` the step's time: the resource's, plus the `elapsed_ms`
@@ -159,6 +163,8 @@ defmodule Logex.Configuration.Edit do
   | `:instance_pruned` | instance | its program type: its state dropped | assemble, cancel; a first test, what a superseded edit set aside |
   | `:added` | global | the initial value it starts at | a switch |
   | `:initial_changed` | global | `{old, new}`: the running value is kept until a restart | a switch |
+  | `:retain_added` | global | the value it holds, which a warm restart now keeps; nothing is written (decision 302) | a switch |
+  | `:retain_removed` | global | the value it holds, which a warm restart no longer keeps; nothing is written (decision 302) | a switch |
   | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused |
   | `:held` | global | its value, which nothing drives any more | every step |
   | `:interval` | task | `{old, new}`, in ms | a switch |
@@ -1007,14 +1013,36 @@ defmodule Logex.Configuration.Edit do
     was = by_name(from.globals)
 
     Enum.reduce(to.globals, {values, []}, fn global, {values, reports} ->
-      global_moved(
-        Map.fetch(values, global.name),
-        Map.get(was, global.name),
-        global,
-        {values, reports}
-      )
+      was = Map.get(was, global.name)
+
+      Map.fetch(values, global.name)
+      |> global_moved(was, global, {values, reports})
+      |> requalified(was, global)
     end)
   end
+
+  # Decision 302 (the maintainer, 2026-10-29), decision 278's report for a global: a kept
+  # global whose qualifier the edit changes from no `retain` to `retain`, or back, is
+  # reported by its name with the value it holds, which the next warm restart keeps or no
+  # longer keeps, and nothing is written. `non_retain` and none are one, neither retained,
+  # so a change between them reports nothing (provisional).
+  defp requalified(acc, nil, _global), do: acc
+
+  defp requalified(acc, %Configuration.Global{retain: :retain}, %Configuration.Global{
+         retain: :retain
+       }),
+       do: acc
+
+  defp requalified({values, reports}, %Configuration.Global{retain: :retain}, global),
+    do: {values, [{:retain_removed, global.name, requalified_value(values, global)} | reports]}
+
+  defp requalified({values, reports}, _was, %Configuration.Global{retain: :retain} = global),
+    do: {values, [{:retain_added, global.name, requalified_value(values, global)} | reports]}
+
+  defp requalified(acc, _was, _global), do: acc
+
+  defp requalified_value(values, global),
+    do: reported(global.type, Map.fetch!(values, global.name))
 
   defp global_moved(:error, _was, global, {values, reports}) do
     value = Configuration.initial(global)

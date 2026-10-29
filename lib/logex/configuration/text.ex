@@ -77,7 +77,11 @@ defmodule Logex.Configuration.Text do
   message. A line broken by `(`, `|` or `)` is read up to the delimiter for this. A
   `program` line broken before its instance's name, its delimiters aside, gives
   `{:declared, line, %{kind: :instance, name: nil}}`, which names nothing, so that a
-  configuration is not also told it declares no `program`.
+  configuration is not also told it declares no `program`. Since decision 301
+  (2026-10-29) a `var_global` line broken for its qualifiers alone, given twice, both or
+  out of their place, is read on past them and gives its global itself, with no
+  qualifier, among the entries, so that its declaration and its uses are checked as a
+  `.ld` line's are (decision 294); one broken another way too gives the placeholder.
 
   **Keywords**, `keywords/0`, are matched in any case, and names are not folded. Each
   Milestone 2 item brings its own words (`docs/organisation.md` §4.10). M2-2's are
@@ -347,7 +351,14 @@ defmodule Logex.Configuration.Text do
   defp before_delimiter(words), do: placeholders(line(words))
 
   defp placeholders({:ok, entry}), do: declared(entry)
-  defp placeholders({:error, _problem, declared}), do: declared
+
+  defp placeholders({:error, _problem, declared}),
+    do: Enum.flat_map(declared, &placeholder/1)
+
+  # Decision 301: a line refused for its qualifier alone declares its global, an element,
+  # but one broken by a delimiter as well only names it.
+  defp placeholder({:declared, _line, _named} = placeholder), do: [placeholder]
+  defp placeholder(element), do: declared(element)
 
   # A `program` line broken before its instance's name, delimiters aside, still declares
   # a program, one it cannot name: a configuration it is in is not told it declares none.
@@ -558,17 +569,18 @@ defmodule Logex.Configuration.Text do
   defp second_word(nil, token, {rest, {retain, _word, first}, line}),
     do: qualified(unqualified([token | rest], first, line), retain)
 
-  # Decision 42's rule for a broken configuration line, not decision 294's for a `.ld`
-  # line: a line refused for its qualifiers alone still names its global, so that nothing
-  # that names it is reported again, but declares no global whose uses are checked
-  # (M6-3's provisional reading 3).
+  # Decision 301 (the maintainer, 2026-10-29), decision 294's rule in a configuration
+  # file: a line refused for its qualifiers alone, given twice or both, is read on without
+  # them and declares its global with none, so its uses are checked; one broken another way
+  # too only names it, as every broken line does (decision 42).
   defp second_word(_second, {:name, _, second} = token, {rest, {_retain, word, first}, line}),
     do:
       {:error, fail(token, both(String.downcase(second) == String.downcase(word), word, second)),
-       still_named(unqualified(rest, first, line))}
+       still_declared(unqualified(rest, first, line))}
 
-  defp still_named({:ok, global}), do: declared(global)
-  defp still_named({:error, _diagnostic, declared}), do: declared
+  # The global read on holds no qualifier: only a line read whole is given one (qualified/2).
+  defp still_declared({:ok, global}), do: [global]
+  defp still_declared({:error, _diagnostic, declared}), do: declared
 
   defp both(true, word, second),
     do:
@@ -581,15 +593,17 @@ defmodule Logex.Configuration.Text do
   defp qualified({:ok, global}, retain), do: {:ok, %{global | retain: retain}}
   defp qualified(broken, _retain), do: broken
 
-  # A qualifier anywhere else on a `var_global` line is told where it goes.
-  defp misplaced(token, word, global),
+  # A qualifier anywhere else on a `var_global` line is told where it goes, and since
+  # decision 301 the line is read on past it, `rest` read as it would have been, so that a
+  # line refused for its qualifier alone declares its global with none.
+  defp misplaced(token, word, global, read_on),
     do:
       {:error,
        fail(
          token,
          "`#{word}` comes straight after `var_global`, as in " <>
            "`var_global #{String.downcase(word)} #{global.name} #{example_type(global.type)}`"
-       ), declared(global)}
+       ), still_declared(read_on.())}
 
   defp example_type(nil), do: "dint"
   defp example_type(type), do: type_text(type)
@@ -647,8 +661,8 @@ defmodule Logex.Configuration.Text do
   defp type_word(key, _word, _token, {rest, global}) when is_map_key(@types, key),
     do: initial(rest, %{global | type: Map.fetch!(@types, key)})
 
-  defp type_word(key, word, token, {_rest, global}) when is_map_key(@qualifiers, key),
-    do: misplaced(token, word, global)
+  defp type_word(key, word, token, {rest, global}) when is_map_key(@qualifiers, key),
+    do: misplaced(token, word, global, fn -> typed(rest, global, token) end)
 
   # M5-11 (decision 151): an array's type word, `int[8]` or `real[4,8]`, its sizes literal
   # numbers, then an initial list of one literal an element, as a declaration line's, which
@@ -730,8 +744,8 @@ defmodule Logex.Configuration.Text do
     do: at(String.downcase(word), token, rest, global)
 
   # M6-3: a qualifier after the location is told where it goes.
-  defp located([{:name, _, word} = token | _rest], global) when byte_size(word) in [6, 10],
-    do: late(is_map_key(@qualifiers, String.downcase(word)), token, word, global)
+  defp located([{:name, _, word} = token | rest], global) when byte_size(word) in [6, 10],
+    do: late(is_map_key(@qualifiers, String.downcase(word)), token, word, {rest, global})
 
   # A number after the initial value, or anything after the location.
   defp located([extra | _rest], global),
@@ -746,15 +760,16 @@ defmodule Logex.Configuration.Text do
        fail(at_found(rest, token), "`at` needs a location, as in `at panel.i.0`" <> found(rest)),
        declared(global)}
 
-  defp at(key, {:name, _, word} = token, _rest, global) when is_map_key(@qualifiers, key),
-    do: misplaced(token, word, global)
+  defp at(key, {:name, _, word} = token, rest, global) when is_map_key(@qualifiers, key),
+    do: misplaced(token, word, global, fn -> located(rest, global) end)
 
   defp at(_word, token, _rest, global),
     do: {:error, fail(token, after_global(token, global)), declared(global)}
 
-  defp late(true, token, word, global), do: misplaced(token, word, global)
+  defp late(true, token, word, {rest, global}),
+    do: misplaced(token, word, global, fn -> located(rest, global) end)
 
-  defp late(false, token, _word, global),
+  defp late(false, token, _word, {_rest, global}),
     do: {:error, fail(token, after_global(token, global)), declared(global)}
 
   defp after_global(token, global),
