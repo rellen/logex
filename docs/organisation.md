@@ -10937,7 +10937,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      changed number on its instruction until a cold start, and an image of another
      configuration or program refused as the host's mistake, a line naming both, each
      provisional and put to the maintainer, `PLAN.md` M6-4's questions. `status/1`'s
-     report is M6-5's.)*
+     report is M6-5's. Since the review of M6-4, path order is segment by segment, an
+     element by its subscripts' values, `g[2].k` before `g[10].k`, where the path's text
+     had put it after; and an image's path names an element by its subscripts' values as
+     written in decimal, `tl[1].acc`, one written otherwise, `tl[01].acc`, or with no
+     digits, `tl[x].acc`, a path no logic names, a line of the image's refusal,
+     provisional.)*
 278. **An online edit that adds or removes a qualifier (Milestone 6).** An edit that only
      changes `retain` changes no value, the plan comparing tags by name and kind.
      *Recommended: two report kinds, `:retain_added` and `:retain_removed`, by path*, rows
@@ -11230,7 +11235,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      written, from text and from Elixir. A plant file whose card is named so stops
      loading, which the commit says. A device's name is looked up among the keywords only
      where its length is one of theirs, so a configuration pays about a reduction a
-     located global for it.
+     located global for it. *(Since the review of M6-4, 2026-10-29: only where its first
+     two letters, each in either case, and its length are a keyword's; the first letter
+     alone had `drive` lowercased and looked up for `dword`'s shape, some 17 reductions a
+     located global, which `retain_configuration_test.exs` now holds at none.)*
 301. **A configuration line refused for its qualifier alone (Milestone 6),** the third
      reading: `var_global retain retain total_boxes dint` one diagnostic, its global only
      named (decision 42), so that `t1.eye total_boxes` beside it, a bool connected to a
@@ -11241,7 +11249,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      or out of their place, after the name, the type, the initial value or the location,
      is read on without them and declares its global with no qualifier, its declaration
      and its uses checked as any line's; one broken another way too, a delimiter or an
-     extra word among it, only names its global, as every broken line does.
+     extra word among it, only names its global, as every broken line does. *(Since the
+     review of M6-4, 2026-10-29, which found two places the reader missed: a qualifier
+     where the initial value goes, `var_global total dint retain 0`, or among an array's
+     initial list, `var_global x int[2] 1 retain 2`, is read on past too, the value or
+     the list read as the line without it reads; and one where the location goes, before
+     it, `at retain panel.i.0`, is told where it goes and the location read on, where it
+     was taken for the location. One the line ends on, `at retain`, is still read as the
+     location, which check/1 refuses as none, so that a global printed with any location
+     reads back to it, the round trip; provisional, `PLAN.md` M6-4's review's questions.)*
 302. **An edit that only changes a global's qualifier (Milestone 6),** the fourth reading:
      an online edit adding `retain` to `var_global total_boxes dint 0` was accepted and
      reported nothing until M6-7.
@@ -11283,7 +11299,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      for a real rising edge; nothing fires on a warm start. A cold restart still starts
      every trigger's last sample at 0, and decision 51 stands for an input point's
      trigger, which no `retain` can mark (decision 272), and for an unretained global's,
-     put back at its initial value.
+     put back at its initial value. *(Since the review of M6-4, 2026-10-29, tested through
+     `Logex.Runner.restart/2` on the manual clock too. A rise logic writes into a retained
+     `single` after that cycle's sample is never seen if the runner trips before the next
+     cycle, the warm restart taking the risen value as the last sample; as the decision
+     says, nothing fires on a warm start, and the question is put, `PLAN.md` M6-4's
+     review's questions.)*
 306. **A retained global a connection drives (Milestone 6),** M6-3's review's eighth
      question: `var_global retain total dint 0` driven by `w1.count`, which `w1` does not
      retain, kept its 2 through a warm restart only until `w1`'s first run copied its

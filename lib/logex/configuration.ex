@@ -398,14 +398,17 @@ defmodule Logex.Configuration do
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
   # Decision 300 (the maintainer, 2026-10-29), widening decision 298: no word of a
   # configuration file's lines names a device, in any case, so a device's name is looked
-  # up among them only where its first letter, in either case, and its length are one of
-  # theirs, which a guard reads.
+  # up among them only where its first two letters, each in either case, and its length
+  # are one of theirs, which a guard reads; since the review of M6-4 two letters, where one
+  # took `drive` for `dword`'s shape and lowercased it to look it up.
   @device_keywords Map.new(Logex.Configuration.Text.keywords(), &{&1, true})
   @keyword_shapes Map.new(
                     for(
                       word <- Logex.Configuration.Text.keywords(),
-                      first <- [String.first(word), String.upcase(String.first(word))],
-                      do: {{first, byte_size(word)}, true}
+                      <<a::binary-size(1), b::binary-size(1), _::binary>> = word,
+                      first <- Enum.uniq([a, String.upcase(a)]),
+                      second <- Enum.uniq([b, String.upcase(b)]),
+                      do: {{first <> second, byte_size(word)}, true}
                     )
                   )
   @interval 1..2_147_483_647
@@ -2169,7 +2172,8 @@ defmodule Logex.Configuration do
   # configuration file (decision 298 for the two qualifiers), a global's own name refused
   # or not.
   defp at_spelled({:ok, {device, _io, _fields}} = spelled, global, keeps, acc)
-       when is_map_key(@keyword_shapes, {binary_part(device, 0, 1), byte_size(device)}),
+       when byte_size(device) > 1 and
+              is_map_key(@keyword_shapes, {binary_part(device, 0, 2), byte_size(device)}),
        do:
          device_word(
            is_map_key(@device_keywords, String.downcase(device)),

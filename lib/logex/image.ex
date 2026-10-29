@@ -445,22 +445,28 @@ defmodule Logex.Image do
   defp segment(nil, name, {rest, done, path}),
     do: segment_named(Declarations.name?(name), {name, nil}, {rest, done, path})
 
+  # Since the review of M6-4 each subscript is checked before it is read, and must be
+  # written as its value, `tl[1]` and never `tl[01]`, as the image names an element.
   defp segment({name, subscripts}, whole, {rest, done, path}),
     do:
-      segment_named(
+      subscripted(
         Declarations.name?(name) and String.ends_with?(whole, "]") and
-          Enum.all?(subscripts, &digits?/1),
-        {name, Enum.map(subscripts, &String.to_integer/1)},
+          Enum.all?(subscripts, &value?/1),
+        {name, subscripts},
         {rest, done, path}
       )
+
+  defp subscripted(true, {name, subscripts}, at),
+    do: segment_named(true, {name, Enum.map(subscripts, &String.to_integer/1)}, at)
+
+  defp subscripted(false, segment, at), do: segment_named(false, segment, at)
 
   defp segment_named(true, segment, {rest, done, path}),
     do: segments(rest, [segment | done], path)
 
   defp segment_named(false, _segment, {_rest, _done, path}), do: {:error, path}
 
-  defp digits?(<<>>), do: false
-  defp digits?(text), do: String.match?(text, ~r/\A[0-9]+\z/)
+  defp value?(text), do: String.match?(text, ~r/\A(0|[1-9][0-9]*)\z/)
 
   # The kinds key of an instance: its segments, its own subscript left off.
   defp key(segments) do
@@ -497,11 +503,14 @@ defmodule Logex.Image do
         )
       end)
 
-    {laid(program, env, kept),
-     dropped |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&prefixed(&1, prefix))}
+    {laid(program, env, kept), dropped |> ordered() |> Enum.map(&prefixed(&1, prefix))}
   end
 
   defp prefixed({path, reason}, prefix), do: {prefix <> path, reason}
+
+  # Since the review of M6-4, drops in path order segment by segment, an element by its
+  # subscripts' values, `g[2].k` before `g[10].k`, where the path's text put it after.
+  def ordered(dropped), do: Enum.sort_by(dropped, fn {path, _reason} -> parsed(path) end)
 
   # What a program retains, its kinds and values, from its fresh env.
   defp wanted(%Program{retained: nil}, _env), do: {%{}, %{}}

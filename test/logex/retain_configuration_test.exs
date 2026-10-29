@@ -322,7 +322,12 @@ defmodule Logex.RetainConfigurationTest do
             "var_global retain non_retain total_boxes dint",
             "var_global total_boxes retain dint",
             "var_global total_boxes dint 0 non_retain",
-            "var_global total_boxes dint non_retain"
+            "var_global total_boxes dint non_retain",
+            # Since the review of M6-4: a qualifier where the initial value goes, or where
+            # the location goes (below), read on past too.
+            "var_global total_boxes dint retain 0",
+            "var_global total_boxes dint RETAIN 0",
+            "var_global total_boxes dint non_retain -7"
           ] do
         assert [_qualifier, "3: `t1.eye` is a bool, but `total_boxes` is a dint (line 1)"] =
                  messages(compiled("#{line}\nprogram t1 tally\nt1.eye total_boxes\n")),
@@ -354,6 +359,33 @@ defmodule Logex.RetainConfigurationTest do
 
       assert {:error, [_], [{:declared, 1, %{kind: :global, name: "total_boxes"}}]} =
                read("var_global total_boxes retain dint (")
+
+      # Since the review of M6-4, an array's initial list read on past a qualifier before
+      # it or among it, and a location past one where the location goes, each told where
+      # the qualifier goes, the global declared as the line without it is.
+      for {line, column, global} <- [
+            {"var_global x int[2] retain 1 2", 21,
+             %Global{name: "x", type: {:array, :int, [2]}, initial: [1, 2], line: 1}},
+            {"var_global x int[2] 1 non_retain 2", 23,
+             %Global{name: "x", type: {:array, :int, [2]}, initial: [1, 2], line: 1}},
+            {"var_global x int[2] 1 2 retain", 25,
+             %Global{name: "x", type: {:array, :int, [2]}, initial: [1, 2], line: 1}},
+            {"var_global x dint retain 5", 19,
+             %Global{name: "x", type: :dint, initial: 5, line: 1}},
+            {"var_global x bool at retain panel.i.0", 22,
+             %Global{name: "x", type: :bool, at: "panel.i.0", line: 1}}
+          ] do
+        assert {:error, [%Logex.Diagnostic{column: ^column, message: message}], [^global]} =
+                 read(line),
+               line
+
+        assert message =~ "comes straight after `var_global`", line
+      end
+
+      # One the line ends on is read as the location, as before, so that a global printed
+      # with any location reads back to it, which check/1 judges.
+      assert read("var_global x bool at retain") ==
+               {:ok, [%Global{name: "x", type: :bool, at: "retain", line: 1}]}
     end
   end
 
@@ -430,6 +462,28 @@ defmodule Logex.RetainConfigurationTest do
           connections: [%Connection{instance: "p", member: "eye", to: "e"}]
         )
       end
+    end
+
+    # Since the review of M6-4: a device's name is looked up among the keywords only where
+    # its first two letters and its length are a keyword's, so `drive` costs what `xrive`
+    # does, where its first letter and length, `dword`'s, had it lowercased and looked up,
+    # some 17 reductions a located global; one of a keyword's shape, `dwive`, still pays it.
+    test "a device's keyword check costs nothing where no keyword shares its first two " <>
+           "letters and length (decision 300)" do
+      check = fn device ->
+        source =
+          Enum.map_join(0..31, "", fn i ->
+            "var_global e#{i} bool at #{device}.i.#{i}\n" <>
+              "var_global l#{i} bool at #{device}.q.#{i}\n" <>
+              "program p#{i} plain\n  p#{i}.eye e#{i}\n  p#{i}.lamp l#{i}\n"
+          end)
+
+        assert {:ok, config} = compiled(source)
+        reductions(fn -> Configuration.check(config) end)
+      end
+
+      assert check.("drive") == check.("xrive")
+      assert check.("dwive") >= check.("xrive") + 8 * 64
     end
 
     test "an element of either word, at a connection's far end or as a task's single, is " <>
@@ -1255,7 +1309,98 @@ defmodule Logex.RetainConfigurationTest do
 
       Runner.stop(runner)
     end
+
+    # Since the review of M6-4, decision 305 through the runner on the manual clock: a
+    # retained single kept at 1 by a warm Logex.Runner.restart/2 fires nothing until it is
+    # cleared and set again; a cold one puts it back at 0; an unretained single whose
+    # initial value is 1 fires in the first round after a warm restart, as decision 51 has
+    # every restart's first sample.
+    test "Runner.restart/2 :warm keeps a retained single's last sample (decision 305)" do
+      {:ok, arming} =
+        Logex.compile(
+          "var_input eye bool\nvar_input clear bool\nvar_external arm bool\n" <>
+            "xic eye otl arm\nxic clear otu arm",
+          name: "arming"
+        )
+
+      {:ok, counting} =
+        Logex.compile("var_external hits dint\nadd hits 1 hits", name: "counting")
+
+      for qualifier <- ["retain ", ""] do
+        source = """
+        task fast interval 10 priority 1
+        task ev single arm priority 0
+        var_global eye_1 bool at panel.i.0
+        var_global clr bool at panel.i.1
+        var_global #{qualifier}arm bool #{initial(qualifier)}
+        var_global retain hits dint
+        program a1 arming with fast
+          a1.eye eye_1
+          a1.clear clr
+        program c1 counting with ev
+        """
+
+        types = %{"arming" => arming, "counting" => counting}
+        assert {:ok, config} = Configuration.compile("plant", source, types)
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {Manual, clock},
+            poll: 10
+          )
+
+        state = fn -> {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} end
+
+        press = fn point ->
+          Sim.set(panel, [point], 1)
+          Manual.advance(clock, 10)
+          Sim.set(panel, [point], 0)
+          Manual.advance(clock, 30)
+        end
+
+        trip_and = fn mode ->
+          Sim.fail(panel, :read, {:error, :eio})
+          Manual.advance(clock, 10)
+          assert %{status: :tripped} = Runner.status(runner)
+          assert Runner.restart(runner, mode) == :ok
+          Manual.advance(clock, 50)
+          state.()
+        end
+
+        # Clear, then arm: one run of `ev` on the eye's rising edge, and, unretained, one
+        # more at the start, where `arm` starts at 1.
+        press.(1)
+        press.(0)
+        warm = trip_and.(:warm)
+        # Cleared and set again after the warm restart: a real rising edge, one run more.
+        press.(1)
+        press.(0)
+        rearmed = state.()
+        cold = trip_and.(:cold)
+        # Pressed again with `arm` where the cold restart put it.
+        press.(0)
+        assert [warm, rearmed, cold, state.()] == seen(qualifier), qualifier
+
+        Runner.stop(runner)
+      end
+    end
   end
+
+  defp initial("retain "), do: 0
+  defp initial(""), do: 1
+
+  # Retained: `arm` kept at 1 by the warm restart with its last sample, so nothing fires
+  # (hits stays 1, retained); cold, both at 0 and nothing fires until the eye sets `arm`.
+  defp seen("retain "), do: [{1, 1}, {1, 2}, {0, 0}, {1, 1}]
+
+  # Unretained, its initial value 1: each restart puts it back at 1 and its first sample
+  # of 1 runs `ev` in the first round (decision 51), warm (hits 2 to 3, retained) and
+  # cold (0 to 1); the eye's press then sets nothing new, so no edge.
+  defp seen(""), do: [{1, 3}, {1, 4}, {1, 1}, {1, 1}]
 
   # A setter that adds to an int array's element, a real and an lreal on each press, each
   # a global it reads through a var_external.

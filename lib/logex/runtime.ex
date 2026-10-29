@@ -793,7 +793,7 @@ defmodule Logex.Runtime do
       )
 
     {%{runtime | globals: globals, instances: instances, tasks: tasks},
-     Enum.sort_by(dropped_globals ++ dropped_instances, &elem(&1, 0))}
+     Image.ordered(dropped_globals ++ dropped_instances)}
   end
 
   defp restored({name, image}, config, {instances, dropped}),

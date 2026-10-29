@@ -212,10 +212,10 @@ defmodule Logex.ApiContractTest do
   @draws ~w(
     ar_block ar_declarations ar_divisor ar_initial ar_program ar_source ar_text
     ay_rung ay_source ay_value ce_blocks ce_candidate ce_change ce_located
-    ce_mistakes ce_op ce_qualifiers ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
+    ce_mistakes ce_op ce_qualifiers ce_sink ce_source ce_source_of ce_spec ce_walk
     ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program rw_op rw_program
-    iw_spec iw_qualifier iw_changed iw_tag_change iw_member_change iw_input iw_corrupt iw_misfit
-    iw_mistakes iw_cell_text iw_text iw_type_word iw_rungs
+    iw_spec iw_qualifier iw_changed iw_tag_change iw_member_change iw_input iw_corrupt
+    iw_mistakes
     ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
     jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
     pc_text pc_texts re_source re_text source tm_maybe tm_op tm_program tm_rungs
@@ -4270,25 +4270,25 @@ defmodule Logex.ApiContractTest do
       for t <- spec.tasks,
           do:
             "task #{t.name}" <>
-              if(t.continuous, do: " continuous", else: "") <>
-              if(t.single, do: " single #{t.single}", else: "") <>
-              if(t.interval, do: " interval #{t.interval}", else: "") <>
-              if(t.priority, do: " priority #{t.priority}", else: "") <>
-              if(t.watchdog, do: " watchdog #{t.watchdog}", else: "")
+              ce_opt(t.continuous, " continuous") <>
+              ce_opt(t.single, " single #{t.single}") <>
+              ce_opt(t.interval, " interval #{t.interval}") <>
+              ce_opt(t.priority, " priority #{t.priority}") <>
+              ce_opt(t.watchdog, " watchdog #{t.watchdog}")
 
     globals =
       for g <- spec.globals,
           do:
             "var_global " <>
-              if(Map.get(g, :retain), do: "#{g.retain} ", else: "") <>
+              ce_opt(Map.get(g, :retain), "#{Map.get(g, :retain)} ") <>
               "#{g.name} #{g.type}" <>
-              if(g.at, do: " at #{g.at}", else: "") <>
-              if(g.initial, do: " #{g.initial}", else: "")
+              ce_opt(g.at, " at #{g.at}") <>
+              ce_opt(g.initial, " #{g.initial}")
 
     programs =
       for i <- spec.instances do
         Enum.join(
-          ["program #{i.name} #{i.type}" <> if(i.task, do: " with #{i.task}", else: "")] ++
+          ["program #{i.name} #{i.type}" <> ce_opt(i.task, " with #{i.task}")] ++
             for(
               {member, to} <- Enum.sort(Map.get(spec.wiring, i.name, %{})),
               do: "  #{i.name}.#{member} #{to}"
@@ -4299,6 +4299,11 @@ defmodule Logex.ApiContractTest do
 
     Enum.join([Enum.join(tasks, "\n"), Enum.join(globals, "\n") | programs], "\n\n") <> "\n"
   end
+
+  # A part of a line where its field is set, as `if` read it: nil and false are unset.
+  defp ce_opt(nil, _text), do: ""
+  defp ce_opt(false, _text), do: ""
+  defp ce_opt(_value, text), do: text
 
   defp ce_programs(spec) do
     blk = ce_blocks(spec.blocks)
@@ -11558,12 +11563,19 @@ defmodule Logex.ApiContractTest do
     end
   end
 
+  # Since the review of M6-4, `z` is added or taken away two times in five as well, the
+  # same one draw, so that a member a block's new version adds beside a kept one,
+  # `iw_added`, is reached at fresh seeds, where 11 of 30 missed it.
   defp iw_member_change({"z", kind, q}) do
     case :rand.uniform(5) do
       1 -> {"z", pick([:dint, nil]), q}
+      n when n in [2, 3] -> {"z", iw_toggled(kind), q}
       _ -> {"z", kind, q}
     end
   end
+
+  defp iw_toggled(nil), do: :dint
+  defp iw_toggled(:dint), do: nil
 
   defp iw_input, do: %{"eye" => pick([0, 1]), "run" => pick([0, 1, 1])}
 
@@ -11580,14 +11592,10 @@ defmodule Logex.ApiContractTest do
     end
   end
 
-  defp iw_misfit(type) do
-    case type do
-      :bool -> 2
-      :dint -> 5_000_000_000
-      :int -> 40_000
-      {:array, _, _} -> [1]
-    end
-  end
+  defp iw_misfit(:bool), do: 2
+  defp iw_misfit(:dint), do: 5_000_000_000
+  defp iw_misfit(:int), do: 40_000
+  defp iw_misfit({:array, _, _}), do: [1]
 
   # Now and then a host's mistake at one of the four doors.
   defp iw_mistakes(q, s, image) do
@@ -11609,13 +11617,13 @@ defmodule Logex.ApiContractTest do
     decls =
       for {m, kind, q} <- cell, kind != nil, do: "var #{iw_word(q)}#{m} #{iw_type_word(kind)}"
 
-    rungs =
-      for {m, kind, _q} <- cell, kind != nil do
-        if kind in [:ton, :tof], do: "xic go #{kind} #{m} 30", else: "xic go add #{m} 1 #{m}"
-      end
+    rungs = for {m, kind, _q} <- cell, kind != nil, do: iw_cell_rung(m, kind)
 
     Enum.join(["function_block cell", "var_input go bool"] ++ decls ++ rungs, "\n")
   end
+
+  defp iw_cell_rung(m, kind) when kind in [:ton, :tof], do: "xic go #{kind} #{m} 30"
+  defp iw_cell_rung(m, _kind), do: "xic go add #{m} 1 #{m}"
 
   defp iw_text(spec) do
     decls = for {name, kind, q} <- spec.tags, do: "var #{iw_word(q)}#{name} #{iw_type_word(kind)}"
@@ -11628,24 +11636,16 @@ defmodule Logex.ApiContractTest do
     )
   end
 
-  defp iw_type_word(kind) do
-    case kind do
-      {:array, type, n} -> "#{type}[#{n}]"
-      {:cells, n} -> "cell[#{n}]"
-      atom -> Atom.to_string(atom)
-    end
-  end
+  defp iw_type_word({:array, type, n}), do: "#{type}[#{n}]"
+  defp iw_type_word({:cells, n}), do: "cell[#{n}]"
+  defp iw_type_word(atom) when is_atom(atom), do: Atom.to_string(atom)
 
-  defp iw_rungs(name, kind) do
-    case kind do
-      k when k in [:dint, :int] -> ["xic eye add #{name} 1 #{name}"]
-      {:array, _, _} -> ["xic eye add #{name}[1] 1 #{name}[1]"]
-      k when k in [:ctu, :ctu_int] -> ["xic eye ctu #{name} 100"]
-      k when k in [:ton, :tof] -> ["xic run #{k} #{name} 30"]
-      :cell -> ["cal #{name} run"]
-      {:cells, _} -> ["cal #{name}[0] eye", "cal #{name}[1] run"]
-    end
-  end
+  defp iw_rungs(name, k) when k in [:dint, :int], do: ["xic eye add #{name} 1 #{name}"]
+  defp iw_rungs(name, {:array, _, _}), do: ["xic eye add #{name}[1] 1 #{name}[1]"]
+  defp iw_rungs(name, k) when k in [:ctu, :ctu_int], do: ["xic eye ctu #{name} 100"]
+  defp iw_rungs(name, k) when k in [:ton, :tof], do: ["xic run #{k} #{name} 30"]
+  defp iw_rungs(name, :cell), do: ["cal #{name} run"]
+  defp iw_rungs(name, {:cells, _}), do: ["cal #{name}[0] eye", "cal #{name}[1] run"]
 end
 
 defmodule Logex.ApiContractTest.RunnerWalk do

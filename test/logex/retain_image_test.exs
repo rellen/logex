@@ -332,6 +332,54 @@ defmodule Logex.RetainImageTest do
       assert dropped == [{"c", {:retyped, "cell", "cellx"}}]
     end
 
+    # Since the review of M6-4: a kind dropped is reported once, and every kind below it,
+    # two levels down and more, is passed over in silence, as every value under it is.
+    test "a kind dropped silences the kinds two levels and more below it" do
+      inner = block!("function_block inner\nvar_input go bool\nvar t ton\nxic go ton t 9")
+
+      mid = block!("function_block mid\nvar_input go bool\nvar c inner\ncal c go", [inner])
+
+      outer =
+        block!("function_block outer\nvar_input go bool\nvar b mid\ncal b go", [mid, inner])
+
+      p = c!("var_input go bool\nvar retain a outer\ncal a go", [outer, mid, inner])
+      image = Runtime.retained(p, scans(p, Runtime.instance(p), [%{"go" => 1}]))
+      assert Map.keys(image.kinds) == ["a", "a.b", "a.b.c", "a.b.c.t"]
+
+      q = c!("var_input go bool\nvar retain a dint\nxic go add a 1 a")
+      assert {_started, [{"a", {:retyped, "outer", :dint}}]} = Runtime.instance(q, image)
+    end
+
+    # Since the review of M6-4: path order is by segment, an element by its subscripts'
+    # values, so `g[2].k` comes before `g[10].k`, in a lone instance's drops and a
+    # resource's.
+    test "drops are in path order by the subscripts' values, not by the path's text" do
+      old = block!("function_block cell\nvar_input go bool\nvar retain k dint\nxic go add k 1 k")
+      new = block!("function_block cell\nvar_input go bool\nvar retain k int\nxic go add k 1 k")
+      src = "var_input go bool\nvar retain g cell[12]\nvar retain h cell[2,11]\ncal g[0] go"
+      p = c!(src, [old])
+      image = Runtime.retained(p, Runtime.instance(p))
+      {_started, dropped} = Runtime.instance(c!(src, [new]), image)
+
+      assert Enum.map(dropped, &elem(&1, 0)) ==
+               for(i <- 0..11, do: "g[#{i}].k") ++
+                 for(i <- 0..1, j <- 0..10, do: "h[#{i},#{j}].k")
+
+      config = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [old], "motor")})
+      runtime = Runtime.start(config)
+      image = Runtime.retained(runtime)
+      changed = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [new], "motor")})
+      {_runtime, dropped} = Runtime.start(changed, image)
+
+      assert Enum.take(Enum.map(dropped, &elem(&1, 0)), 3) == [
+               "m1.g[0].k",
+               "m1.g[1].k",
+               "m1.g[2].k"
+             ]
+
+      assert Enum.at(dropped, 10) == {"m1.g[10].k", {:retyped, :dint, :int}}
+    end
+
     test "an instance or a path no longer retained is reported once, nothing under it" do
       p =
         c!(
@@ -747,6 +795,12 @@ defmodule Logex.RetainImageTest do
           "tl.acc" => {:dint, 1},
           "tl[0,1].acc" => {:dint, 1},
           "tl[2].acc" => {:dint, 1},
+          # Since the review of M6-4, a subscript that is no digits a line too, where
+          # reading it as a number raised, and one not written as its value, `01`.
+          "tl[ 1].acc" => {:dint, 1},
+          "tl[-1].acc" => {:dint, 1},
+          "tl[01].acc" => {:dint, 1},
+          "tl[x].acc" => {:dint, 1},
           "w[1]" => {:dint, 1}
         })
 
@@ -775,8 +829,12 @@ defmodule Logex.RetainImageTest do
               "timer starts at the start's `now`",
             "`values` holds `q.r`, under `q`, which `kinds` does not hold",
             "`values` holds `tl.acc`, under `tl`, an array of instances, by no element",
+            "`values` holds \"tl[ 1].acc\", which is no path",
+            "`values` holds \"tl[-1].acc\", which is no path",
             "`values` holds `tl[0,1].acc`, by an element outside `tl`'s sizes",
+            "`values` holds \"tl[01].acc\", which is no path",
             "`values` holds `tl[2].acc`, by an element outside `tl`'s sizes",
+            "`values` holds \"tl[x].acc\", which is no path",
             "`values` holds `w[1]`, an element: an array is retained whole"
           ],
           "\n"

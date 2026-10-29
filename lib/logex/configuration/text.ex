@@ -139,6 +139,13 @@ defmodule Logex.Configuration.Text do
   # global's `retain`.
   @qualifiers %{"retain" => :retain, "non_retain" => :non_retain}
 
+  # A word that may be a qualifier, told in a guard by its length and its first letter in
+  # either case, as `Logex.Declarations` tells one, so that since the review of M6-4 a
+  # location such as `drive.q.10`, ten bytes, is not lowercased to be looked up.
+  defguardp may_qualify(word)
+            when (byte_size(word) == 6 and binary_part(word, 0, 1) in ["r", "R"]) or
+                   (byte_size(word) == 10 and binary_part(word, 0, 1) in ["n", "N"])
+
   @types Map.new(Declarations.elementary(), &{Declarations.word(&1), &1})
   # M5-10: the reals, whose globals take a real initial value.
   @reals Declarations.reals()
@@ -535,7 +542,7 @@ defmodule Logex.Configuration.Text do
   # M6-3: a qualifier straight after `var_global`, then the line as before, the global
   # holding it; one after it, given twice or both, is the line's one mistake.
   defp global([{:name, _, word} = token | rest], first, line)
-       when byte_size(word) in [6, 10],
+       when may_qualify(word),
        do: qualifier(Map.get(@qualifiers, String.downcase(word)), token, {rest, first, line})
 
   defp global(rest, first, line), do: unqualified(rest, first, line)
@@ -555,7 +562,7 @@ defmodule Logex.Configuration.Text do
        ), []}
 
   defp after_qualifier([{:name, _, second} = token | rest], {retain, word, first}, line)
-       when byte_size(second) in [6, 10],
+       when may_qualify(second),
        do:
          second_word(
            Map.get(@qualifiers, String.downcase(second)),
@@ -701,9 +708,29 @@ defmodule Logex.Configuration.Text do
   defp listed([value | rest], global, type, values) when is_literal(value),
     do: listed(rest, global, type, [held(type, Parser.value(value)) | values])
 
-  defp listed(rest, global, _type, []), do: located(rest, global)
+  # Decision 301: a qualifier among an array's initial values, or before them, is told
+  # where it goes and the list read on past it, as the line without it reads.
+  defp listed([{:name, _, word} = token | rest], global, type, values)
+       when may_qualify(word),
+       do:
+         listed_word(
+           is_map_key(@qualifiers, String.downcase(word)),
+           token,
+           {rest, global},
+           {type, values}
+         )
 
-  defp listed(rest, global, _type, values),
+  defp listed(rest, global, _type, values), do: list_done(rest, global, values)
+
+  defp listed_word(true, {:name, _, word} = token, {rest, global}, {type, values}),
+    do: misplaced(token, word, global, fn -> listed(rest, global, type, values) end)
+
+  defp listed_word(false, token, {rest, global}, {_type, values}),
+    do: list_done([token | rest], global, values)
+
+  defp list_done(rest, global, []), do: located(rest, global)
+
+  defp list_done(rest, global, values),
     do: located(rest, %{global | initial: Enum.reverse(values)})
 
   defp unknown_type(%FbType{name: type}, _word, name),
@@ -724,7 +751,17 @@ defmodule Logex.Configuration.Text do
   defp initial([value | rest], global) when is_literal(value),
     do: located(rest, %{global | initial: held(global.type, Parser.value(value))})
 
+  # Decision 301: a qualifier where the initial value goes, `var_global total dint retain
+  # 0`, is told where it goes and the value read on past it, as the line without it reads.
+  defp initial([{:name, _, word} = token | rest], global) when may_qualify(word),
+    do: initial_word(is_map_key(@qualifiers, String.downcase(word)), token, {rest, global})
+
   defp initial(rest, global), do: located(rest, global)
+
+  defp initial_word(true, {:name, _, word} = token, {rest, global}),
+    do: misplaced(token, word, global, fn -> initial(rest, global) end)
+
+  defp initial_word(false, token, {rest, global}), do: located([token | rest], global)
 
   # M5-10 (decision 156): a real global's real initial value is read as the real's nearest
   # value, so that `print/1` spells it as the shortest text that reads back to it, and the
@@ -744,12 +781,26 @@ defmodule Logex.Configuration.Text do
     do: at(String.downcase(word), token, rest, global)
 
   # M6-3: a qualifier after the location is told where it goes.
-  defp located([{:name, _, word} = token | rest], global) when byte_size(word) in [6, 10],
+  defp located([{:name, _, word} = token | rest], global) when may_qualify(word),
     do: late(is_map_key(@qualifiers, String.downcase(word)), token, word, {rest, global})
 
   # A number after the initial value, or anything after the location.
   defp located([extra | _rest], global),
     do: {:error, fail(extra, after_global(extra, global)), declared(global)}
+
+  # Decision 301: a qualifier where the location goes, before the location, `at retain
+  # panel.i.0`, is told where it goes and the location read on past it. One the line ends
+  # on is read as the location, as before, so that a global printed with any location
+  # reads back to it, which check/1 judges.
+  defp at("at", token, [{:name, _, location} = word, {:name, _, _} = next | rest], global)
+       when may_qualify(location),
+       do:
+         at_word(
+           is_map_key(@qualifiers, String.downcase(location)),
+           token,
+           [word, next | rest],
+           global
+         )
 
   defp at("at", _token, [{:name, _, location} | rest], global),
     do: located(rest, %{global | at: location})
@@ -765,6 +816,12 @@ defmodule Logex.Configuration.Text do
 
   defp at(_word, token, _rest, global),
     do: {:error, fail(token, after_global(token, global)), declared(global)}
+
+  defp at_word(true, token, [{:name, _, word} = qualifier | rest], global),
+    do: misplaced(qualifier, word, global, fn -> at("at", token, rest, global) end)
+
+  defp at_word(false, _token, [{:name, _, location} | rest], global),
+    do: located(rest, %{global | at: location})
 
   defp late(true, token, word, {rest, global}),
     do: misplaced(token, word, global, fn -> located(rest, global) end)
