@@ -2821,13 +2821,14 @@ program t1 tally
 `retained.exs` counts four boxes, restarts warm, counts two more, the first under the
 eye as it restarts, and restarts cold; then it loads `wired.logex`, the same plant with
 `full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
-`broken.logex`, a mistake on each of its last four lines:
+`broken.logex`, a mistake on each of its last five lines:
 
 ```
 var_global eye_1              bool at panel.i.0
 var_global retain case_lamp   bool at panel.q.0
 var_global total_boxes retain dint
 var_global retain non_retain total dint
+var_global eye_2              bool at program.i.1
 program retain tally
 ```
 
@@ -2881,7 +2882,8 @@ wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_
 broken.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
 broken.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
 broken.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
-broken.logex: line 5: `retain` is a keyword and cannot name an instance
+broken.logex: line 5: `program` is a keyword and cannot name a device
+broken.logex: line 6: `retain` is a keyword and cannot name an instance
 ```
 
 - A warm restart, `Logex.Runtime.restart(runtime, :warm)`, keeps a global its line marks
@@ -2896,21 +2898,40 @@ broken.logex: line 5: `retain` is a keyword and cannot name an instance
   is not, and reads 0 until the first round copies `full` out. Wired straight to an output
   point, a retained var_output is written there in the first round after a warm start,
   which the configuration warns of; logic that reads a retained value and writes an
-  output another way is not seen (decision 272).
+  output another way is not seen (decision 272): the warning sees a direct connection
+  only, and does not say so itself (decision 303).
 - The other way round, a retained global a connection drives is written over by the
   var_output it is wired to at that instance's first run after the restart: where the
   program does not retain the var_output, the kept value lasts until then and is then the
-  var_output's initial value, with no warning; and a retained global that is a task's `single`, kept at
-  1, runs its event task in the first round after a warm restart, as a trigger already 1
-  does. Both are provisional, questions for the maintainer (`PLAN.md`'s M6-3).
+  var_output's initial value, which the configuration warns of at the connection's line,
+  "`total` is retained but driven by `w1.count`, which is not: the first round writes
+  over it", an element of an array by its element, and where it retains it, nothing is
+  lost and nothing is said (decision 306). A write through a `var_external`, as `tally`'s
+  to `total_boxes`, is no connection and is not warned of.
+- A retained global that is a task's `single`, kept at 1 by a warm restart, is no rising
+  edge: its event task waits for a real one, as nothing fires on a warm start (decision
+  305, decision 274's rule). A cold restart puts it back with its trigger, and an input
+  point's trigger already 1 still runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and
   an output point starts at 0 until logic writes it, so no output comes back on from a
   kept value. `retain` and `non_retain` are reserved in a configuration file as in a `.ld`
   file, in any case: nothing is named by either, a global, an instance, a task, a program
-  type or a device (decision 298).
-- From Elixir a global's qualifier is its struct's field, `%Logex.Configuration.Global{name:
-  "total_boxes", type: :dint, initial: 0, retain: :retain}`, which
-  `Logex.Configuration.Text.print/1` prints as the line above.
+  type or a device (decision 298), and no configuration keyword names a device,
+  `program.i.1` refused (decision 300), which breaks a plant file whose card is named
+  `program`, `at`, `task` or another of its words. A line refused for its qualifier
+  alone, `total_boxes` on line 3, still declares its global, without the qualifier, so
+  its declaration and its uses are checked (decision 301). `non_retain` on a located
+  global is taken, stating the default (decision 299).
+- From Elixir a global is `Logex.Configuration.Global.new!("total_boxes", :dint, initial:
+  0, retain: true)`, its qualifier the line's own word as an option, as
+  `Logex.Tag.new!/5` takes it, `non_retain: true` for `non_retain`, and each mistake in
+  its options refused in the same words (decision 304); the struct it gives,
+  `%Logex.Configuration.Global{retain: :retain}`, `Logex.Configuration.Text.print/1`
+  prints as the line above.
+- An online edit that only adds `retain` to a global, or takes it away, reports
+  `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
+  writes nothing; the next warm restart follows the configuration running (decision
+  302). A program's tags follow with M6-7.
 - Retained globals are kept in memory only, as a program's are; the store on disk that
   keeps them across a crash is still to land (Milestone 6, "Settled, not yet landed",
   above).

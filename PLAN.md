@@ -226,7 +226,8 @@ decisions 266–285), the maintainer answering its twenty questions as recommend
 three its close's review raised the same day (decisions 290–292); of its nine items, M6-1,
 the words `retain` and `non_retain`, and M6-2, the warm restart in the core, landed the
 same day in one push, and M6-3, retained globals, the same day with the maintainer's
-answers to their six readings (decisions 293–298), and the other six are planned.
+answers to their six readings (decisions 293–298), its own eight readings answered and
+built on 2026-10-29 (decisions 299–306), and the other six are planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -8879,7 +8880,7 @@ done-when reads the next store write; and last the contract walk and the documen
 | M6-4 | The image: `Runtime.retained/1,2`, `start/2`, `instance/2`, the matching | 273, 277, 282 | M6-3 | L |
 | M6-5 | The store, read and written at events, `retain:` and `start:` | 271, 275, 276, 284, 285, 291, 292 | M6-4 | L |
 | M6-6 | The periodic writer, `retain_period:` | 275 | M6-5 | M |
-| M6-7 | Online edits: `:retain_added` and `:retain_removed` | 278 | M6-5, M6-6 | M |
+| M6-7 | Online edits: `:retain_added` and `:retain_removed` for a program's tags (a global's since decision 302) | 278, 302 | M6-5, M6-6 | M |
 | M6-8 | The contract walk | all | M6-7 | L |
 | M6-9 | The documents | all | M6-8 | S |
 
@@ -9152,7 +9153,8 @@ done-when reads the next store write; and last the contract walk and the documen
   global more (0.1 to 0.4%), the qualifier's host check and the device-name guard; and
   `print/1` about 10 a global more (2%). 2268 tests (11 doctests), up from 2253.
 
-  *Provisional readings of M6-3*, each a question for the maintainer:
+  *Provisional readings of M6-3*, each a question for the maintainer *(all eight answered
+  on 2026-10-29, decisions 299 to 306, below)*:
   1. *`non_retain` on a located global.* `var_global non_retain lamp_q bool at panel.q.0`
      is taken, where `retain` there is refused (decision 272). An operator sees nothing
      different: an output point starts at 0 and an input point is read at every start
@@ -9233,6 +9235,88 @@ done-when reads the next store write; and last the contract walk and the documen
      output points: "`total` is retained but driven by `w1.count`, which is not: the first
      round writes over it"; (c) refused. IEC and Siemens leave this to the programmer, and
      Logix has no qualifier.
+  **The maintainer's answers to M6-3's eight readings** (2026-10-29, decisions 299 to
+  306, `docs/organisation.md` §7), recorded and built together. Two confirm what was
+  built, six change it:
+  - *`non_retain` on a located global* (299): confirmed, taken.
+  - *A device named by a configuration keyword* (300): changed. Every word of
+    `Logex.Configuration.Text.keywords/0`, in any case, is refused as a device's name at
+    its global's line, "`program` is a keyword and cannot name a device", from text and
+    from Elixir. A plant file whose card is named `program`, `at`, `task` or another of
+    the words stops loading. A device's name is looked up among the keywords only where a
+    guard finds its first letter and length among theirs.
+  - *A line refused for its qualifier alone* (301): changed, decision 294's rule. A
+    `var_global` line refused only for a qualifier given twice, both or out of place is
+    read on past it and declares its global with no qualifier, its declaration and uses
+    checked; one broken another way too still only names it (decision 42).
+  - *An edit that only changes a global's qualifier* (302): changed. A switch, and so
+    accept's forecast, reports `{:retain_added, name, value}` or `{:retain_removed, name,
+    value}` by the global's name, with the value it holds, an array's as a list, and writes
+    nothing; rows of `Logex.Configuration.Edit`'s table and §4.9's, and of
+    `@report_kinds` and `@configuration_kinds`, which the configuration edit's walk now
+    reaches. M6-7 covers a program's tags. *(Provisional: `non_retain` and none are one, so
+    a change between them reports nothing.)*
+  - *The warning's words* (303): confirmed, the message as built, the direct-connection
+    limit stated in README, §4.13 and `Logex.Configuration`'s moduledoc.
+  - *A global's qualifier from Elixir* (304): changed. `Logex.Configuration.Global.new!(name,
+    type, options)`, its options `initial:`, `at:`, `retain: true` and `non_retain: true`,
+    refused in `Logex.Tag.new!/5`'s words, a pinned line each; the struct's field stays.
+  - *A retained `single`* (305): changed, decision 274's rule. After a warm restart a
+    retained `single`'s last sample is the value it kept, so its event task waits for a real
+    rising edge; a cold restart and an input point's trigger as before (decision 51).
+  - *A retained global a connection drives* (306): changed. A warning at the connection's
+    line, "`total` is retained but driven by `w1.count`, which is not: the first round
+    writes over it", an element of a global array or a var_output array by its element, a
+    var_output its program retains told nothing, looked for only where a global is
+    retained.
+
+  Tests (`retain_configuration_test.exs`): the provisional tests of readings 3, 4, 7 and
+  8 rewritten to the answers, each saying what changed, and new tests of every keyword as
+  a device's name in two cases, `Global.new!/3` and every refusal, a qualifier-only edit
+  of every pair of qualifiers, a retained `single` beside an unretained one and an input
+  point's, and decision 306's warning by element, from text and from Elixir;
+  `configuration_test.exs`'s round trip now numbers a warning at a connection's line by
+  its connection, the generator having drawn retained globals that a var_output drives;
+  the configuration edit's walk in `api_contract_test.exs` draws each unlocated global's
+  qualifier again in one candidate in two, from a random stream of its own so that every
+  other draw is the one it was, and restates both kinds from the two configurations.
+  *Mutation table* (`scratchpad/m6/m64mut/run.log`): 25 mutants, each judged by the full
+  suite, 25 red: the device refusal's three (only the two qualifiers, the guard's first
+  letter in lower case only, the name not folded), the reader's three (a line refused
+  twice, both or misplaced only naming its global, a delimiter-broken one declaring it),
+  the edit's four (no report, the kinds swapped, `non_retain` read as retained, an array's
+  value not as a host's), `Global.new!/3`'s six, the trigger's three (its sample 0, a kept
+  value read cold too, every single's kept value read), and the warning's six (never
+  given, a retained var_output warned, any driven global warned, the driven map's order,
+  an element far end missed, a var_output's element looked up as itself); the last
+  survived the first run and is red since a retained var_output array wired by element
+  was added to the test, and the first form of "never given" crashed the check and was
+  run again as a check returning nothing. *Cost* against `edd5c98`
+  (`scratchpad/m6/cost64_{base,now}.txt`), a plant of 1 to 64 motor instances retaining
+  nothing: `compile/3`, `check/1` and `start/1` within 24 to 512 reductions (0.06 to
+  0.2%), the device guard and one pass of the globals; a cycle in exactly the reductions
+  it took; a restart, warm or cold, 4 to 7 more, the tasks' sample clause; `print/1` 12
+  fewer. README's "A retained global" is run again, `retained.exs`, its broken file a
+  line longer for decision 300. 2280 tests (11 doctests), up from 2275.
+
+  *Found while building, a question for the maintainer.* A configuration edit superseded
+  while testing (decision 66) leaves a kept instance's tags that its running program no
+  longer declares, from the version the superseded edit switched from, and no later
+  prune drops them, since each prunes by its own two versions; only a restart does. The
+  edit walk met it when one draw more was taken from its main stream: `m4` running `b`
+  held `b1`, `n` and `x`, an older `b`'s tags, after a cancel that followed an untest,
+  where the walk asserts a prune leaves each instance holding exactly what its program
+  declares; the walk at `edd5c98` fails the same way with that one draw added, so the
+  gap is older than this work, and the walk keeps its main stream as it was. An
+  operator sees nothing while it lasts, the tags being unread and `get/2` refusing a path
+  the program does not declare (checked); whether an edit that later declares such a tag
+  again meets its old value rather than starting it was not checked (**unverified**). The
+  options: (a) as built, the leftovers kept until
+  a restart; (b) decision 66 widened: at an edit's first test each kept instance's tags
+  its running program does not declare dropped and reported by path, `:pruned`, as a
+  superseded edit's instances and globals are; (c) every prune drops whatever the kept
+  program does not declare, whatever left it.
+
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with
   decision 277's matching and its dropped report, the image checked as a host's state is
   (decisions 171 to 188). *Done when* a resource started from another resource's image
@@ -9289,12 +9373,16 @@ done-when reads the next store write; and last the contract walk and the documen
   *Size M.*
 
   **Status: not started.**
-- **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit` and
-  `Logex.Configuration.Edit`, rows of their tables and §4.9's, `@report_kinds` and
-  `@configuration_kinds`; decision 44 annotated as landed. It needs M6-6 as well as M6-5:
+- **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit`, for a
+  program's tags, members, arrays and instances, by path, rows of its table and §4.9's;
+  decision 44 annotated as landed. *(Since decision 302, 2026-10-29, a global's two kinds
+  are built, by the global's name, in `Logex.Configuration.Edit`, its table, §4.9's,
+  `@report_kinds` and `@configuration_kinds`, a lone instance's walk still to reach them
+  by path; M6-7 brings the program's tags, a configuration's instances reporting them
+  by path beside the global's.)* It needs M6-6 as well as M6-5:
   a crash writes no store, so the candidate's values reach it only by a period's write.
   *Done when* an edit that only
-  changes a qualifier reports it by path and writes nothing; the next store write and
+  changes a tag's qualifier reports it by path and writes nothing; the next store write and
   the next warm restart follow the program running; and a crash while a candidate is
   tested, then a fresh start with the original configuration, meets the candidate's
   store by decision 277's matching. *Size M.*
