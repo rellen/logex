@@ -2201,6 +2201,8 @@ defmodule Logex.RuntimeTest do
       # into the resource. M4-3: the cycle in steps, internal too (decision 118), which the
       # runner times: cycle_steps/3, cycle_step/2 and cycle_outputs/1. Decision 190:
       # fresh/1, internal, a new instance of a program a configuration's check has checked.
+      # M6-4 (decision 282): the retained image, retained/1 and /2 taking it out, start/2
+      # and instance/2 laying it over a new resource or instance.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
@@ -2215,14 +2217,18 @@ defmodule Logex.RuntimeTest do
                  get: 2,
                  get!: 2,
                  instance: 1,
+                 instance: 2,
                  next_due_in: 1,
                  overlaps: 1,
                  put_inputs: 3,
                  restart: 2,
                  restart: 3,
+                 retained: 1,
+                 retained: 2,
                  scan: 2,
                  scan: 3,
-                 start: 1
+                 start: 1,
+                 start: 2
                ]
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:

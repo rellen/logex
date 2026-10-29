@@ -14,6 +14,10 @@ defmodule Logex.Runtime do
     configuration of one instance, whose var_inputs are the host's input image.
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
+  - `retained/2` and `retained/1` take a lone instance's or a resource's retained values
+    out as plain data, the retained image, and `instance/2` and `start/2` start a new one
+    from an image, giving what they dropped (M6-4, `docs/organisation.md` §4.13,
+    decisions 273, 277 and 282).
   - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2`, `get!/2` and `restart/2` run a
     configuration (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
     Since M4-3 `cycle/3` is the composition of three internal steps, hidden as `edited/2`
@@ -139,7 +143,8 @@ defmodule Logex.Runtime do
     since M6-3 at a warm `restart/2` but for a global the configuration declares `retain`
     (decisions 268 and 271), whose value it keeps, a var_external of it reading the kept
     value, no located global being one (decision 272); at a cold one every such global too;
-    and
+    since M6-4 at `start/2` but for a retained global its image holds of exactly its type,
+    fitting it, whose value it takes (decision 277); and
     at the switch that first finds one the configuration started declares missing. A kept
     one whose initial value an edit changes keeps its running value until `restart/2`
     (decision 44); one only the configuration stopped declares is kept unused until
@@ -153,7 +158,10 @@ defmodule Logex.Runtime do
     `last` set to the instance's own `now`, its last scan's, so the time before the
     restart since the timer last ran is not counted (decision 273, decision 188 holding),
     and puts back every other, a cold one every path; an instance set
-    aside is dropped either way (decision 65). A cycle reports the faults of its scan as events and
+    aside is dropped either way (decision 65); and since M6-4 `start/2` starts one as
+    `start/1` does and lays the image's values over it where decision 277's matching keeps
+    them, each retained timer's `last` the start's `now`, 0 (decision 273), as
+    `instance/2` does a lone one. A cycle reports the faults of its scan as events and
     keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
     and an edit's switch find it so. An edit's switch moves a kept one by its program
     type's plan (`Logex.Edit`'s rules, by path), its `now` set to the resource's after fix
@@ -178,7 +186,8 @@ defmodule Logex.Runtime do
   - a task's trigger (M2-6), the last sample of its `single`, is 0 at `start/1` and by
     `restart/2`, so a trigger already 1 fires in the next cycle, but since decision 305 a
     warm `restart/2`'s for a `single` the configuration declares `retain`, the value it
-    kept, so a trigger kept at 1 fires on no rising edge (decision 274); and a cycle
+    kept, so a trigger kept at 1 fires on no rising edge (decision 274), and since M6-4
+    `start/2`'s for a `single` the image put back, that value, every other 0; and a cycle
     samples it once, after the input merge and before any scan. An edit's switch keeps it, so a
     switch fires no event, and its accept refuses a changed `single`, or an `interval`
     added to or removed from a task with one, while the plant runs (§4.9);
@@ -341,6 +350,7 @@ defmodule Logex.Runtime do
   }
 
   alias Logex.FbType.Member
+  alias Logex.Image
   import Logex.Declarations, only: [is_elementary: 1, is_fitting: 2]
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
@@ -448,6 +458,52 @@ defmodule Logex.Runtime do
   def instance(program) do
     checked!(program)
     fresh(program)
+  end
+
+  @doc """
+  A new instance of `program` started from a retained image, `{state, dropped}` (M6-4,
+  `docs/organisation.md` §4.13, decisions 273, 277 and 282): the instance `instance/1`
+  makes, each value of `image` laid over it where the program declares its path retained,
+  of exactly the stored type, an array of the stored sizes, under instances of the stored
+  kinds, and the value fits it as a state's does (decisions 171 to 188), a user block's
+  instance matched member by member and an array of instances element by element; and
+  `dropped`, every other value of the image, by its path, once, in path order, with its
+  reason (see `start/2`). A path the program retains that the image does not hold starts
+  by `Logex.Program.initial_env/1`, and a value whose initial value changed keeps the
+  stored one. A retained timer's `last` is never in an image, so each starts at the
+  instance's `now`, 0, and the first scan is marked first, so no edge fires on it
+  (decisions 273 and 274).
+
+  `image` is what `retained/2` gives, `%{program: name, kinds: kinds, values: values}`. An
+  image that is not one, a path no logic could name, an element of an array, an entry
+  under an instance whose kind it does not hold, a timer's `last`, or an image of another
+  program, is the host's mistake: one `ArgumentError`, a line each.
+  """
+  def instance(program, image) do
+    checked!(program)
+    Image.lone!(image, program)
+    %Instance{env: env} = state = fresh(program)
+    {env, dropped} = Image.matched(program, env, image, "")
+    {%{state | env: env}, dropped}
+  end
+
+  @doc """
+  A lone instance's retained image (M6-4, decision 282): `%{program: name, kinds: kinds,
+  values: values}`, every value the program retains by its path inside the instance, as
+  logic names it, plain data that `instance/2` takes. `values` maps each retained leaf to
+  `{type, value}`, `"boxes.cv"` to `{:dint, 41}`, its type an elementary type's atom or an
+  array of one, `{:array, :int, [8]}`, its value as a state holds it, an array as a host
+  gives one, a list, a list of lists for more dimensions; `kinds` maps each instance on
+  the way to a leaf to its kind, `"boxes"` to `"ctu"`, a user block's by its name and an
+  array of instances `{:array, "ton", [4]}`, its elements' members named by their
+  subscripts' values, `"lane_t[2].acc"`. A timer's `last` is never in it (decision 273).
+  A program that retains nothing gives empty maps. Its cost is the retained values' and
+  the program's retained paths', besides the state's check.
+  """
+  def retained(program, state) do
+    program!(program)
+    %Instance{env: env} = state!(state, program)
+    Image.of(program, env)
   end
 
   # Decision 190: a new instance of a program already checked where it was handed in, a
@@ -681,6 +737,120 @@ defmodule Logex.Runtime do
         ArgumentError,
         "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: #{inspect(other)}"
       )
+
+  @doc """
+  A resource running `config` started from a retained image, `{runtime, dropped}` (M6-4,
+  `docs/organisation.md` §4.13, decisions 273, 277, 282 and 305): the resource `start/1`
+  makes, each retained global and each value an instance's program retains laid over it
+  by decision 277's matching, and the rest dropped and reported. A stored value is kept
+  only where the configuration has an instance of its name running the same program type,
+  whose program declares the path retained, of exactly the stored type (a widened type, an
+  array resized and an instance of another kind among what is not), under instances of the
+  stored kinds, and the value fits it as a state's does (decisions 171 to 188); a global
+  only where the configuration declares a global of its name, retained, of exactly its
+  type, the value fitting. A user block's instance is matched member by member, a member
+  its new version adds starting at its initial value, and an array of instances element
+  by element where its sizes are unchanged; a value whose initial value changed keeps the
+  stored one, as decision 44 keeps a running one; and a path newly retained starts at its
+  initial value, unreported. Each retained timer starts with `last` at the start's `now`,
+  0, so the outage is not counted (decision 273); every scan's first is marked first
+  (decision 274); and a task's `single` that the image put back starts its trigger's last
+  sample at that value, as a warm `restart/2` does (decision 305), so a trigger kept at 1
+  fires on no rising edge, every other at 0 as `start/1` has it. So a resource started
+  from another's image cycles as that one does after a warm `restart/2`, given the same
+  inputs.
+
+  `dropped` lists each value not kept once, in path order, `{path, reason}`, a path
+  whole where everything under it went: `{"m1", :undeclared}` for an instance the
+  configuration does not declare and `{"m1", {:retyped, "motor", "pump"}}` for one that
+  runs another program type; `:undeclared` for a global, tag or member it does not
+  declare; `{:retyped, stored, now}` for a type or kind changed, `{:resized, from, to}`
+  for an array's or an array of instances' sizes; `:unretained` where the qualifier went;
+  and `:misfit` for a value of the right type that does not fit it.
+
+  `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
+  instances: instances}`, each instance's a lone image (`retained/2`). One that is not, or
+  whose parts are not, or one of another configuration, which a line naming both tells,
+  is the host's mistake: one `ArgumentError`, a line each, after `config`'s own check.
+  The matching forgives a changed program, never a broken image.
+  """
+  def start(config, image) do
+    %__MODULE__{} = runtime = start(config)
+    Image.resource!(image, config)
+
+    {globals, dropped_globals, kept} =
+      Image.matched_globals(config.globals, runtime.globals, image.globals)
+
+    {instances, dropped_instances} =
+      image.instances
+      |> Enum.sort()
+      |> Enum.reduce({runtime.instances, []}, &restored(&1, config, &2))
+
+    tasks =
+      Map.new(
+        config.tasks,
+        &{&1.name, put_back(Map.fetch!(runtime.tasks, &1.name), &1, {kept, globals})}
+      )
+
+    {%{runtime | globals: globals, instances: instances, tasks: tasks},
+     Enum.sort_by(dropped_globals ++ dropped_instances, &elem(&1, 0))}
+  end
+
+  defp restored({name, image}, config, {instances, dropped}),
+    do:
+      restored_as(
+        Enum.find(config.instances, &(&1.name == name)),
+        {name, image},
+        config,
+        {instances, dropped}
+      )
+
+  defp restored_as(nil, {name, _image}, _config, {instances, dropped}),
+    do: {instances, [{name, :undeclared} | dropped]}
+
+  defp restored_as(%{type: type}, {name, %{program: program}}, _config, {instances, dropped})
+       when type != program,
+       do: {instances, [{name, {:retyped, program, type}} | dropped]}
+
+  defp restored_as(%{type: type}, {name, image}, config, {instances, dropped}) do
+    %Instance{env: env} = state = Map.fetch!(instances, name)
+    {env, more} = Image.matched(Map.fetch!(config.programs, type), env, image, name <> ".")
+    {Map.put(instances, name, %{state | env: env}), Enum.reverse(more, dropped)}
+  end
+
+  # Decision 305's rule at a start from an image: a `single` the image put back starts
+  # its trigger's last sample at that value.
+  defp put_back(%{last: _} = state, %Configuration.Task{single: single}, {kept, globals}),
+    do: kept_sample(single in kept, state, Map.fetch!(globals, single))
+
+  defp put_back(state, _task, _kept), do: state
+
+  @doc """
+  A resource's retained image (M6-4, decision 282), plain data that `start/2` takes:
+  `%{configuration: name, globals: globals, instances: instances}`, `globals` each global
+  the configuration declares `retain` by name to `{type, value}`, an array's value a list,
+  and `instances` each instance the resource runs whose program retains anything, by
+  name, to its lone image (`retained/2`), its program type and each retained value by
+  its path inside the instance. An instance an edit set aside is not in it, and during an
+  edit the program running is the one read (decision 278). A timer's `last` is never in
+  it (decision 273). Its cost is the retained values' and the paths', with one step for
+  each global and instance declared, whatever else the resource holds.
+  """
+  def retained(runtime) do
+    %__MODULE__{config: config, globals: globals, instances: instances} = runtime!(runtime)
+
+    %{
+      configuration: config.name,
+      globals: Image.globals(config.globals, globals),
+      instances:
+        for(
+          {name, %Instance{type: type, env: env}} <- instances,
+          %Program{retained: [_ | _]} = program <- [Map.fetch!(config.programs, type)],
+          into: %{},
+          do: {name, Image.of(program, env)}
+        )
+    }
+  end
 
   @doc """
   One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,

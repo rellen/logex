@@ -214,6 +214,8 @@ defmodule Logex.ApiContractTest do
     ay_rung ay_source ay_value ce_blocks ce_candidate ce_change ce_located
     ce_mistakes ce_op ce_qualifiers ce_sink ce_source ce_source_of ce_spec ce_text ce_walk
     ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program rw_op rw_program
+    iw_spec iw_qualifier iw_changed iw_tag_change iw_member_change iw_input iw_corrupt iw_misfit
+    iw_mistakes iw_cell_text iw_text iw_type_word iw_rungs
     ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
     jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
     pc_text pc_texts re_source re_text source tm_maybe tm_op tm_program tm_rungs
@@ -11151,6 +11153,498 @@ defmodule Logex.ApiContractTest do
         "xic run ton lng 30000000"
 
     %{quals: quals, cell: cell, program: program}
+  end
+
+  # ---- M6-4: an image round-tripped through a changed program ---------------------------
+
+  # M6-4 (docs/organisation.md §4.13, decisions 273, 277 and 282): 60 seeded programs of
+  # six tags, each of a kind and a qualifier drawn, a dint, an int, an array of three or
+  # four, a typed or plain counter, a ton or a tof, a block `cell` or an array of two or
+  # three of them, `cell`'s own members' kinds and qualifiers drawn too, scanned at random;
+  # their image taken by `Logex.Runtime.retained/2`, now and then one value made a misfit;
+  # and a changed program drawn from each, a tag kept, renamed, removed, retyped, resized
+  # or requalified, `cell` a new version whose members are retyped, added, removed or
+  # requalified, which `instance/2` starts from the image. The state and the dropped list
+  # are checked against decision 277 restated from the two specs alone, without
+  # `Logex.Program` or `Logex.Image`: a stored kind or value kept only where the changed
+  # program declares its path, of exactly its type, retained, the value fitting, under
+  # kinds that were each kept, the first failure its reason, once, nothing under it; every
+  # other path at the changed program's first value, each kept timer's `last` the start's
+  # `now`, 0. An unchanged program's start scans as its warm restart does, and every host
+  # mistake of the four doors is an `ArgumentError`. Its reach: a value kept, each reason,
+  # a member kept beside a member dropped, a member a block adds started, a kept timer
+  # rebased, the unchanged scans and a mistake.
+  @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
+               iw_member iw_added iw_rebased iw_same_scans iw_mistake)a
+
+  test "an image round-trips through a changed program: kept by instance, path, exact " <>
+         "type, retain and fit, the rest dropped once with its reason" do
+    :rand.seed(:exsss, {2026, 10, 2904})
+
+    for _ <- 1..60 do
+      old = iw_spec()
+      new = iw_changed(old)
+      {p, q} = {iw_compile(old), iw_compile(new)}
+      s = iw_scans(p, Runtime.instance(p), :rand.uniform(12))
+      image = Runtime.retained(p, s)
+      {image, corrupt} = iw_corrupt(image, iw_retained_leaves(old))
+      {started, dropped} = Runtime.instance(q, image)
+
+      {expected, expected_dropped} =
+        iw_expected(old, new, {s.env, Runtime.instance(q).env}, corrupt)
+
+      assert dropped == expected_dropped
+      assert started.env == expected
+      assert %Instance{first: true, now: 0, ons_blocked: []} = started
+      iw_reached(old, new, {s, started, dropped})
+      iw_same(old == new and corrupt == nil, {p, s, image})
+      iw_mistake(iw_mistakes(q, s, image))
+    end
+
+    assert Process.get(:iw_reach, MapSet.new()) == MapSet.new(@iw_reach)
+  end
+
+  defp iw_compile(spec) do
+    {:ok, cell} = Logex.compile(iw_cell_text(spec.cell), name: "cell")
+    {:ok, program} = Logex.compile(iw_text(spec), name: "iw", types: [cell])
+    program
+  end
+
+  defp iw_scans(program, state, 0), do: {program, state} |> elem(1)
+
+  defp iw_scans(program, state, n) do
+    {_out, state} =
+      Runtime.call(program, state, iw_input(), %Scan{now: state.now + 10, first: state.first})
+
+    iw_scans(program, state, n - 1)
+  end
+
+  # The rule restated: each leaf of a spec with its path, its keys into an env, its type,
+  # whether the nearest mark retains it, and the kinds above it, outermost first.
+  @iw_counter [
+    {"cu", :bool},
+    {"r", :bool},
+    {"pv", :dint},
+    {"q", :bool},
+    {"cv", :dint},
+    {"ov", :bool}
+  ]
+  @iw_timer [{"pre", :dint}, {"acc", :dint}, {"dn", :bool}, {"tt", :bool}, {"en", :bool}]
+
+  defp iw_leaves(spec),
+    do:
+      Enum.flat_map(spec.tags, fn {name, kind, q} ->
+        iw_tag(name, kind, iw_mark(q, false), spec.cell)
+      end)
+
+  defp iw_retained_leaves(spec), do: Enum.filter(iw_leaves(spec), & &1.retained)
+
+  defp iw_mark(:retain, _held), do: true
+  defp iw_mark(:non_retain, _held), do: false
+  defp iw_mark(nil, held), do: held
+
+  defp iw_tag(name, kind, flag, _cell) when kind in [:dint, :int],
+    do: [%{path: name, at: [name], type: kind, retained: flag, above: []}]
+
+  defp iw_tag(name, {:array, type, n}, flag, _cell),
+    do: [%{path: name, at: [name], type: {:array, type, [n]}, retained: flag, above: []}]
+
+  defp iw_tag(name, :ctu, flag, _cell),
+    do: iw_members(name, [name], @iw_counter, flag, [{name, "ctu"}])
+
+  defp iw_tag(name, :ctu_int, flag, _cell),
+    do: iw_members(name, [name], iw_int_counter(), flag, [{name, "ctu_int"}])
+
+  defp iw_tag(name, timer, flag, _cell) when timer in [:ton, :tof],
+    do: iw_members(name, [name], @iw_timer, flag, [{name, Atom.to_string(timer)}])
+
+  defp iw_tag(name, :cell, flag, cell), do: iw_cell(name, [name], flag, cell, [{name, "cell"}])
+
+  defp iw_tag(name, {:cells, n}, flag, cell),
+    do:
+      Enum.flat_map(0..(n - 1), fn i ->
+        iw_cell("#{name}[#{i}]", [name, {:el, i}], flag, cell, [{name, {:array, "cell", [n]}}])
+      end)
+
+  defp iw_int_counter,
+    do: Enum.map(@iw_counter, &iw_int_member/1)
+
+  defp iw_int_member({m, :dint}) when m in ["pv", "cv"], do: {m, :int}
+  defp iw_int_member(member), do: member
+
+  defp iw_members(path, at, members, flag, above),
+    do:
+      Enum.map(members, fn {m, type} ->
+        %{path: "#{path}.#{m}", at: at ++ [m], type: type, retained: flag, above: above}
+      end)
+
+  defp iw_cell(path, at, flag, cell, above),
+    do:
+      [%{path: "#{path}.go", at: at ++ ["go"], type: :bool, retained: flag, above: above}] ++
+        Enum.flat_map(cell, &iw_cell_member(&1, {path, at, flag, above}))
+
+  defp iw_cell_member({_m, nil, _q}, _at), do: []
+
+  defp iw_cell_member({m, timer, q}, {path, at, flag, above}) when timer in [:ton, :tof],
+    do:
+      iw_members(
+        "#{path}.#{m}",
+        at ++ [m],
+        @iw_timer,
+        iw_mark(q, flag),
+        above ++ [{"#{path}.#{m}", Atom.to_string(timer)}]
+      )
+
+  defp iw_cell_member({m, type, q}, {path, at, flag, above}),
+    do: [
+      %{path: "#{path}.#{m}", at: at ++ [m], type: type, retained: iw_mark(q, flag), above: above}
+    ]
+
+  # What a spec declares at each path, a leaf's type or a kind, retained or not.
+  defp iw_declared(spec) do
+    leaves = iw_leaves(spec)
+
+    Map.new(Enum.map(leaves, &{&1.path, &1.type}) ++ Enum.flat_map(leaves, & &1.above))
+  end
+
+  defp iw_retained_kinds(spec),
+    do: MapSet.new(for leaf <- iw_retained_leaves(spec), {key, _} <- leaf.above, do: key)
+
+  defp iw_expected(old, new, {old_env, fresh}, corrupt) do
+    declared = iw_declared(new)
+    retained = MapSet.new(Enum.map(iw_retained_leaves(new), & &1.path))
+    kinds = iw_retained_kinds(new)
+    stored = iw_retained_leaves(old)
+    stored_kinds = stored |> Enum.flat_map(& &1.above) |> Enum.uniq() |> Enum.sort()
+
+    {bad, dropped} =
+      Enum.reduce(stored_kinds, {MapSet.new(), []}, fn {key, kind}, {bad, dropped} ->
+        iw_kind(iw_above_bad?(key, stored, bad), {key, kind}, {declared, kinds}, {bad, dropped})
+      end)
+
+    {env, dropped} =
+      Enum.reduce(stored, {fresh, dropped}, fn leaf, acc ->
+        iw_value(
+          Enum.any?(leaf.above, fn {k, _} -> MapSet.member?(bad, k) end),
+          leaf,
+          {declared, retained, corrupt, old_env},
+          acc
+        )
+      end)
+
+    {env, Enum.sort_by(dropped, &elem(&1, 0))}
+  end
+
+  # Whether a kind lies under one already dropped.
+  defp iw_above_bad?(key, stored, bad),
+    do:
+      Enum.any?(stored, fn leaf ->
+        iw_under?(Enum.map(leaf.above, &elem(&1, 0)), key, bad)
+      end)
+
+  defp iw_under?(keys, key, bad),
+    do: key in keys and Enum.any?(Enum.take_while(keys, &(&1 != key)), &MapSet.member?(bad, &1))
+
+  defp iw_kind(true, {key, _kind}, _new, {bad, dropped}), do: {MapSet.put(bad, key), dropped}
+
+  defp iw_kind(false, {key, kind}, {declared, kinds}, {bad, dropped}),
+    do:
+      iw_kind_judged(
+        iw_judged(kind, Map.get(declared, key), MapSet.member?(kinds, key)),
+        key,
+        {bad, dropped}
+      )
+
+  defp iw_kind_judged(:ok, _key, acc), do: acc
+
+  defp iw_kind_judged(reason, key, {bad, dropped}),
+    do: {MapSet.put(bad, key), [{key, reason} | dropped]}
+
+  defp iw_judged(_stored, nil, _retained), do: :undeclared
+  defp iw_judged(stored, stored, true), do: :ok
+  defp iw_judged(stored, stored, false), do: :unretained
+  defp iw_judged({:array, t, from}, {:array, t, to}, _retained), do: {:resized, from, to}
+  defp iw_judged(stored, now, _retained), do: {:retyped, stored, now}
+
+  defp iw_value(true, _leaf, _new, acc), do: acc
+
+  defp iw_value(false, leaf, {declared, retained, corrupt, old_env}, {env, dropped}),
+    do:
+      iw_value_judged(
+        iw_fit(
+          iw_judged(leaf.type, Map.get(declared, leaf.path), MapSet.member?(retained, leaf.path)),
+          leaf.path == corrupt
+        ),
+        leaf,
+        old_env,
+        {env, dropped}
+      )
+
+  defp iw_fit(:ok, true), do: :misfit
+  defp iw_fit(judged, _corrupt), do: judged
+
+  defp iw_value_judged(:ok, leaf, old_env, {env, dropped}),
+    do: {iw_put(env, leaf.at, iw_get(old_env, leaf.at)), dropped}
+
+  defp iw_value_judged(reason, leaf, _old_env, {env, dropped}),
+    do: {env, [{leaf.path, reason} | dropped]}
+
+  defp iw_get(value, []), do: value
+  defp iw_get(values, [{:el, i} | rest]), do: iw_get(elem(values, i), rest)
+  defp iw_get(map, [key | rest]), do: iw_get(Map.fetch!(map, key), rest)
+
+  defp iw_put(_value, [], new), do: new
+
+  defp iw_put(values, [{:el, i} | rest], new),
+    do: put_elem(values, i, iw_put(elem(values, i), rest, new))
+
+  defp iw_put(map, [key | rest], new),
+    do: Map.put(map, key, iw_put(Map.fetch!(map, key), rest, new))
+
+  defp iw_reached(old, new, {s, started, dropped}) do
+    reasons = Enum.map(dropped, &iw_reason(elem(&1, 1)))
+
+    for r <- ~w(iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit)a,
+        do: iw_reach(r, r in reasons)
+
+    kept = iw_kept(old, new, dropped)
+    iw_reach(:iw_kept, kept != [])
+
+    iw_reach(
+      :iw_member,
+      Enum.any?(kept, fn leaf ->
+        leaf.above != [] and Enum.any?(dropped, &iw_beside?(&1, leaf))
+      end)
+    )
+
+    iw_reach(:iw_added, iw_added?(old, new, kept))
+    iw_reach(:iw_rebased, Enum.any?(kept, &iw_rebased?(&1, s, started)))
+  end
+
+  defp iw_reason({reason, _, _}), do: :"iw_#{reason}"
+  defp iw_reason(reason), do: :"iw_#{reason}"
+
+  # The stored leaves the changed program kept: those of the old spec's retained leaves
+  # not dropped and under no dropped kind.
+  defp iw_kept(old, _new, dropped) do
+    paths = Enum.map(dropped, &elem(&1, 0))
+
+    Enum.reject(iw_retained_leaves(old), fn leaf ->
+      leaf.path in paths or Enum.any?(leaf.above, fn {k, _} -> k in paths end) or
+        Enum.any?(paths, &String.starts_with?(leaf.path, &1 <> "."))
+    end)
+  end
+
+  defp iw_beside?({path, _reason}, leaf),
+    do: String.starts_with?(path, elem(List.last(leaf.above), 0) <> ".") and path != leaf.path
+
+  defp iw_added?(old, new, kept),
+    do:
+      Enum.any?(iw_leaves(new), fn leaf ->
+        leaf.above != [] and Enum.any?(kept, &(&1.above == leaf.above)) and
+          not Enum.any?(iw_leaves(old), &(&1.path == leaf.path))
+      end)
+
+  defp iw_rebased?(%{path: path, at: at}, s, started),
+    do: String.ends_with?(path, ".acc") and iw_rebased_at(Enum.drop(at, -1), s, started)
+
+  defp iw_rebased_at(at, s, started),
+    do:
+      Map.get(iw_get(s.env, at), "last", 0) != 0 and Map.get(iw_get(started.env, at), "last") == 0
+
+  defp iw_reach(atom, true),
+    do: Process.put(:iw_reach, MapSet.put(Process.get(:iw_reach, MapSet.new()), atom))
+
+  defp iw_reach(_atom, false), do: :ok
+
+  # An unchanged program's start scans as its warm restart does.
+  defp iw_same(false, _at), do: :ok
+
+  defp iw_same(true, {p, s, image}) do
+    {started, []} = Runtime.instance(p, image)
+
+    Enum.reduce(1..8, {started, Runtime.restart(p, s, :warm)}, fn _, {a, b} ->
+      input = iw_input()
+      {out_a, a} = Runtime.call(p, a, input, %Scan{now: a.now + 10, first: a.first})
+      {out_b, b} = Runtime.call(p, b, input, %Scan{now: b.now + 10, first: b.first})
+      assert out_a == out_b
+      assert Runtime.retained(p, a) == Runtime.retained(p, b)
+      {a, b}
+    end)
+
+    iw_reach(:iw_same_scans, true)
+  end
+
+  defp iw_mistake(nil), do: :ok
+
+  defp iw_mistake(fun) do
+    assert_raise ArgumentError, fun
+    iw_reach(:iw_mistake, true)
+  end
+
+  # ---- the draws ------------------------------------------------------------------------
+
+  @iw_kinds [
+    :dint,
+    :int,
+    {:array, :int, 3},
+    {:array, :int, 4},
+    {:array, :dint, 3},
+    :ctu,
+    :ctu_int,
+    :ton,
+    :tof,
+    :cell,
+    {:cells, 2},
+    {:cells, 3}
+  ]
+
+  defp iw_spec do
+    %{
+      tags: for(name <- ~w(a b c d e f), do: {name, pick(@iw_kinds), iw_qualifier()}),
+      cell: [
+        {"k", pick([:dint, :dint, :int]), iw_qualifier()},
+        {"t", pick([:ton, :tof]), iw_qualifier()},
+        {"z", pick([:dint, nil]), iw_qualifier()}
+      ]
+    }
+  end
+
+  defp iw_qualifier, do: pick([nil, :retain, :retain, :non_retain])
+
+  defp iw_changed(spec) do
+    case :rand.uniform(4) do
+      1 ->
+        spec
+
+      _ ->
+        %{
+          tags: Enum.flat_map(spec.tags, &iw_tag_change/1),
+          cell: Enum.map(spec.cell, &iw_member_change/1)
+        }
+    end
+  end
+
+  defp iw_tag_change({name, kind, q} = tag) do
+    case :rand.uniform(10) do
+      1 -> [{name <> "x", kind, q}]
+      2 -> []
+      3 -> [{name, pick(@iw_kinds), q}]
+      4 -> [{name, kind, iw_qualifier()}]
+      5 -> [{name, iw_resize(kind), q}]
+      _ -> [tag]
+    end
+  end
+
+  defp iw_resize({:array, type, 3}), do: {:array, type, 4}
+  defp iw_resize({:array, type, 4}), do: {:array, type, 3}
+  defp iw_resize({:cells, 2}), do: {:cells, 3}
+  defp iw_resize({:cells, 3}), do: {:cells, 2}
+  defp iw_resize(kind), do: kind
+
+  defp iw_member_change({"k", kind, q}) do
+    case :rand.uniform(6) do
+      1 -> {"k", pick([:dint, :int, nil]), q}
+      2 -> {"k", kind, iw_qualifier()}
+      _ -> {"k", kind, q}
+    end
+  end
+
+  defp iw_member_change({"t", kind, q}) do
+    case :rand.uniform(6) do
+      1 -> {"t", pick([:ton, :tof]), q}
+      2 -> {"t", kind, iw_qualifier()}
+      _ -> {"t", kind, q}
+    end
+  end
+
+  defp iw_member_change({"z", kind, q}) do
+    case :rand.uniform(5) do
+      1 -> {"z", pick([:dint, nil]), q}
+      _ -> {"z", kind, q}
+    end
+  end
+
+  defp iw_input, do: %{"eye" => pick([0, 1]), "run" => pick([0, 1, 1])}
+
+  # One retained value made a misfit now and then: `{image, path}`, or `{image, nil}`.
+  defp iw_corrupt(image, leaves) do
+    case {:rand.uniform(4), leaves} do
+      {1, [_ | _]} ->
+        leaf = pick(leaves)
+        {type, _value} = Map.fetch!(image.values, leaf.path)
+        {%{image | values: Map.put(image.values, leaf.path, {type, iw_misfit(type)})}, leaf.path}
+
+      _ ->
+        {image, nil}
+    end
+  end
+
+  defp iw_misfit(type) do
+    case type do
+      :bool -> 2
+      :dint -> 5_000_000_000
+      :int -> 40_000
+      {:array, _, _} -> [1]
+    end
+  end
+
+  # Now and then a host's mistake at one of the four doors.
+  defp iw_mistakes(q, s, image) do
+    junk = pick(@junk)
+
+    case :rand.uniform(6) do
+      1 -> fn -> Runtime.instance(q, junk) end
+      2 -> fn -> Runtime.retained(junk, s) end
+      3 -> fn -> Runtime.retained(q, junk) end
+      4 -> fn -> Runtime.instance(q, %{image | values: Map.put(image.values, "a", {junk, 0})}) end
+      _ -> nil
+    end
+  end
+
+  defp iw_word(nil), do: ""
+  defp iw_word(q), do: "#{q} "
+
+  defp iw_cell_text(cell) do
+    decls =
+      for {m, kind, q} <- cell, kind != nil, do: "var #{iw_word(q)}#{m} #{iw_type_word(kind)}"
+
+    rungs =
+      for {m, kind, _q} <- cell, kind != nil do
+        if kind in [:ton, :tof], do: "xic go #{kind} #{m} 30", else: "xic go add #{m} 1 #{m}"
+      end
+
+    Enum.join(["function_block cell", "var_input go bool"] ++ decls ++ rungs, "\n")
+  end
+
+  defp iw_text(spec) do
+    decls = for {name, kind, q} <- spec.tags, do: "var #{iw_word(q)}#{name} #{iw_type_word(kind)}"
+    rungs = Enum.flat_map(spec.tags, fn {name, kind, _q} -> iw_rungs(name, kind) end)
+
+    Enum.join(
+      ["var_input eye bool", "var_input run bool", "var_output lamp bool"] ++
+        decls ++ ["xic eye ote lamp"] ++ rungs,
+      "\n"
+    )
+  end
+
+  defp iw_type_word(kind) do
+    case kind do
+      {:array, type, n} -> "#{type}[#{n}]"
+      {:cells, n} -> "cell[#{n}]"
+      atom -> Atom.to_string(atom)
+    end
+  end
+
+  defp iw_rungs(name, kind) do
+    case kind do
+      k when k in [:dint, :int] -> ["xic eye add #{name} 1 #{name}"]
+      {:array, _, _} -> ["xic eye add #{name}[1] 1 #{name}[1]"]
+      k when k in [:ctu, :ctu_int] -> ["xic eye ctu #{name} 100"]
+      k when k in [:ton, :tof] -> ["xic run #{k} #{name} 30"]
+      :cell -> ["cal #{name} run"]
+      {:cells, _} -> ["cal #{name}[0] eye", "cal #{name}[1] run"]
+    end
   end
 end
 

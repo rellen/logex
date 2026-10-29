@@ -1993,7 +1993,9 @@ defmodule Logex.Configuration do
   The one rule for a new global (`docs/organisation.md` §4.9), as
   `Logex.Program.initial_env/1` is for a tag: `Logex.Runtime.start/1` starts every global
   by it, `Logex.Runtime.restart/2` every global but an input point, whose value it keeps,
-  and `Logex.Configuration.Edit`, the edit of a running configuration (OE-2), each
+  and since M6-3 at `:warm` a retained one, and since M6-4 `Logex.Runtime.start/2` every
+  global but a retained one whose value its image holds, of exactly its type and fitting
+  it (decision 277), and `Logex.Configuration.Edit`, the edit of a running configuration (OE-2), each
   global it adds, at the switch that first finds it missing. The edit's exceptions, for a
   global the resource already holds: a kept global keeps its value until a restart, a
   changed `initial` included, which the switch reports (decision 44); one the

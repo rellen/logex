@@ -129,7 +129,11 @@ defmodule Logex.Program do
   the state handed in holds and fits, a retained timer's `last` set to the instance's
   `now`, its last scan's (decision 188); every other path starts by this rule, as at a cold restart, the var_inputs kept
   as ever. A path nothing marks is not retained, so a program that marks nothing restarts
-  warm exactly as cold. An online edit's switch writes no value for a qualifier (decision
+  warm exactly as cold. Since M6-4 (decisions 273, 277 and 282) the same rule starts an
+  instance from a retained image, `Logex.Runtime.instance/2` and `start/2`: a retained
+  path keeps the image's value where it fits, of exactly its type under instances of the
+  stored kinds, and otherwise starts by this rule, a retained timer's `last` at the
+  start's `now`. An online edit's switch writes no value for a qualifier (decision
   278, M6-7).
   """
   def initial_env(%__MODULE__{} = program),
