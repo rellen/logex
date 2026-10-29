@@ -51,7 +51,29 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   value the resource holds, which a var_external of it reads, every other global as a
   cold restart puts it (decisions 268 and 271), and since decision 305 a retained
   `single`'s last sample the value it kept (`sampled/3`), so nothing fires on a warm
-  start, every other trigger's 0, with the host contract in its moduledoc: a host
+  start, every other trigger's 0, and since M6-4 (decisions 273, 277 and 282) the
+  retained image, plain data, through `lib/logex/image.ex`: `retained/2`, a lone
+  instance's, `%{program: name, kinds: kinds, values: values}`, each retained leaf by
+  its path inside the instance to `{type, value}`, `"boxes.cv"` to `{:dint, 41}`, an
+  array as a host's list, and each instance on the way to its kind, `"boxes"` to
+  `"ctu"`, an array of instances `{:array, "ton", [4]}`, never a timer's `last`;
+  `retained/1`, a resource's, `%{configuration: name, globals: globals, instances:
+  instances}`, each retained global and each instance whose program retains anything,
+  none set aside, the program running read during an edit, its cost the retained
+  values' with one step a global and an instance; `instance/2` and `start/2`, a new
+  instance or resource with an image laid over it by decision 277's matching, `{state,
+  dropped}` and `{runtime, dropped}`: a value kept where the program declares its path
+  retained, of exactly its type, under instances of the stored kinds, fitting as a
+  state's value does, a user block's instance member by member and an array of
+  instances element by element, the rest `{path, reason}` once, in path order, a path
+  whole where everything under it went (`:undeclared`, `{:retyped, stored, now}`,
+  `{:resized, from, to}`, `:unretained`, `:misfit`, and an instance's `{:retyped,
+  program, now}`), each retained timer at the start's `now`, 0, `first: true`, a
+  `single` the image put back starting its trigger's last sample at that value
+  (decision 305); every image no host could take from logex, another configuration's or
+  another program's among it, one `ArgumentError` a line each, pinned, and a take-out
+  over retained paths edited by hand a pinned line (decision 194's pattern); with the
+  host contract in its moduledoc: a host
   mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rungs/3`,
   the one rung loop, a program's and a block body's (M3-5), `series/3`, `element/3`, and
   the instruction clauses of `evaluate/3`, each threading the scan's read-only
@@ -320,6 +342,15 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the array whole refused in pinned words; and a state's array of instances checked whole,
   a tuple of its sizes, each element its type's map, at depth in a block. A program of no
   array of instances scans rung for rung in exactly what it did at `aa41f4d`.
+- `lib/logex/image.ex` — `Logex.Image`, internal (no moduledoc, M6-4, decisions 273, 277
+  and 282), the retained image: `of/2`, a lone instance's, one walk of the program's
+  `retained` paths, so its cost is the retained values' whatever else the state holds,
+  and `globals/2`; `lone!/2` and `resource!/2`, an image checked, a line each; and
+  `matched/4` and `matched_globals/3`, decision 277's matching, each stored kind judged
+  before what is under it, declared, of exactly its kind, retained, and each value
+  declared, of exactly its type, retained and fitting (`fits?/2`, a state's rule), the
+  kept values laid over the fresh env in one walk of the retained paths, an array of
+  instances' tuple built once a row. `Logex.Runtime` alone builds the resource
 - `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
   one place an array's shape and values are read and made: its type `{:array, type,
   dims}`, one to three sizes, 65,536 elements at most (the spike's limit, provisional),
@@ -1467,6 +1498,21 @@ reductions of the same plant with its unlocated globals retained, and since deci
 299 to 306 every configuration keyword refused as a device's name in two cases, a line
 refused for its qualifiers alone declaring its global with its uses checked, and
 `Logex.Configuration.Global.new!/3` with every refusal pinned,
+`retain_image_test.exs` M6-4's retained image: `retained/2`'s every leaf, kind and type,
+no timer's `last` at any depth, `instance/2` from the same program's image scanning as its
+warm restart does, each retained timer at 0, every reason of decision 277's matching from
+source (renamed, narrowed, widened, resized, retyped, a qualifier removed, an instance and
+a timer retyped, a block's member added, retyped, removed and unretained, member by member
+and in an array of its instances, a block renamed), a changed initial value keeping the
+stored one and a path newly retained starting at its own, misfits of every kind,
+`start/2`'s done-when over seeded cycles (outputs, events a restart's `now` earlier,
+globals and images all equal to the original's after a warm restart), a kept `single` at 1
+firing on no edge and a dropped one starting as `start/1` has it, instances, program types
+and globals changed in a resource, `retained/1` during an edit, every host mistake pinned
+whole, a hand edit of the retained paths, and its growth in reductions, the take-out
+unchanged by an unretained array of 16,384 and linear in the retained count, the matching
+linear in the image, an array of instances' among it, and a configuration that retains
+nothing starting from its empty image within 120 reductions of `start/1`,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1556,7 +1602,14 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   state against decisions 270, 271, 273 and 274 restated from the drawn qualifiers
   alone, its reach eight `rw_` atoms, and since M6-2's review a `tp`, an `osr`'s two bits,
   a real, a 2-D array, a typed counter and a long timer among its tags, a ninth,
-  `rw_types_kept`
+  `rw_types_kept`; and since M6-4 a walk of 60 seeded programs of six tags of drawn kinds
+  and qualifiers and a block whose members' are drawn, each scanned, its image taken by
+  `retained/2`, now and then a value made a misfit, and laid by `instance/2` over a
+  changed program drawn from it (a tag renamed, removed, retyped, resized or requalified,
+  the block's members retyped, added, removed or requalified), its state and dropped list
+  against decision 277 restated from the two specs alone, an unchanged program's start
+  scanning as its warm restart does, and a host mistake at each of the four doors, its
+  reach eleven `iw_` atoms
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a

@@ -336,8 +336,13 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   by a warm restart, refused on a located global, a retained var_output wired to an
   output point warned of, and both words reserved in a configuration file too, so that a
   plant file naming a global, an instance, a task, a program type or a device `retain` or
-  `non_retain` no longer loads. Still to land: the image a resource
-  starts from; and a store the runner writes on the host's disk every second and at a
+  `non_retain` no longer loads. Landed, M6-4: the image, in the core alone, every
+  retained value of an instance or a resource as plain data by its path,
+  `Logex.Runtime.retained/2` and `retained/1`, which `instance/2` and `start/2` start a
+  new one from, keeping a value only where the program declares its path retained, of
+  exactly its type, and it fits, and dropping and reporting the rest, so a program
+  changed since lets its unchanged values through. Still to land: a store the runner
+  writes on the host's disk every second and at a
   trip, a stop and a cold restart, read at a fresh start, warm unless `start: :cold`, so
   that until then a crash or a stopped VM keeps nothing. `persistent` is deferred and
   stays unreserved.
@@ -2819,7 +2824,8 @@ program t1 tally
 ```
 
 `retained.exs` counts four boxes, restarts warm, counts two more, the first under the
-eye as it restarts, and restarts cold; then it loads `wired.logex`, the same plant with
+eye as it restarts, takes the plant's retained image and restarts cold; starts a new
+resource from the image, and another whose program counts in a `ctu_int`; then it loads `wired.logex`, the same plant with
 `full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
 `broken.logex`, a mistake on each of its last five lines:
 
@@ -2852,17 +2858,28 @@ end
 
 {rt, _, _} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, %{})
 
-rt
-|> boxes.(4)
-|> show.("four boxes   ")
-|> Logex.Runtime.restart(:warm)
-|> show.("warm restart ")
-|> boxes.(1)
-|> show.("first box    ")
-|> boxes.(1)
-|> show.("one more     ")
-|> Logex.Runtime.restart(:cold)
-|> show.("cold restart ")
+rt =
+  rt
+  |> boxes.(4)
+  |> show.("four boxes   ")
+  |> Logex.Runtime.restart(:warm)
+  |> show.("warm restart ")
+  |> boxes.(1)
+  |> show.("first box    ")
+  |> boxes.(1)
+  |> show.("one more     ")
+
+image = Logex.Runtime.retained(rt)
+rt |> Logex.Runtime.restart(:cold) |> show.("cold restart ")
+
+{fresh, []} = Logex.Runtime.start(plant, image)
+show.(fresh, "from image   ")
+
+{:ok, ld} = File.read("tally.ld")
+{:ok, recounted} = Logex.compile(String.replace(ld, "boxes ctu", "boxes ctu_int"), name: "tally")
+{fresh, dropped} = Logex.Runtime.start(%{plant | programs: %{"tally" => recounted}}, image)
+show.(fresh, "a ctu_int    ")
+IO.inspect(dropped)
 
 {:ok, wired} = Logex.Configuration.compile_file("wired.logex")
 Enum.each(wired.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
@@ -2878,6 +2895,9 @@ warm restart   total_boxes=4 t1.boxes.cv=4 case_full=0
 first box      total_boxes=4 t1.boxes.cv=4 case_full=1
 one more       total_boxes=5 t1.boxes.cv=5 case_full=1
 cold restart   total_boxes=0 t1.boxes.cv=0 case_full=0
+from image     total_boxes=5 t1.boxes.cv=5 case_full=0
+a ctu_int      total_boxes=5 t1.boxes.cv=0 case_full=0
+[{"t1.boxes", {:retyped, "ctu", "ctu_int"}}]
 wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_lamp`: after a warm start it is written in the first round
 broken.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
 broken.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
@@ -2894,6 +2914,18 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   [`docs/organisation.md`](docs/organisation.md) §7).
 - The first scan after any start counts no edge: the box under the eye as the plant
   restarts is not counted, as on a first start (decision 274).
+- `Logex.Runtime.retained/1` takes every retained value of the resource out as plain
+  data, the retained image, `%{configuration: "tally", globals: %{"total_boxes" =>
+  {:dint, 5}}, instances: %{"t1" => %{program: "tally", kinds: %{"boxes" => "ctu"},
+  values: %{"boxes.cv" => {:dint, 5}, ...}}}}`, each value by its path with its type and
+  never a timer's `last`; `Logex.Runtime.start/2` starts a new resource from it, as
+  `start/1` does, with each value laid over it where the program declares its path
+  retained, of exactly its type, and the value fits, and gives back what it dropped,
+  each once by its path with its reason. A counter made a `ctu_int` is an instance of
+  another kind, so its count is dropped, `{"t1.boxes", {:retyped, "ctu", "ctu_int"}}`,
+  and starts at 0, while the total, unchanged, is kept (`PLAN.md`'s M6-4; decision 277 in
+  [`docs/organisation.md`](docs/organisation.md) §7). `Logex.Runtime.retained/2` and
+  `instance/2` do the same for a lone instance. Nothing writes the image to disk yet.
 - `full` is retained, so the warm restart keeps it, but `case_full`, the global it drives,
   is not, and reads 0 until the first round copies `full` out. Wired straight to an output
   point, a retained var_output is written there in the first round after a warm start,

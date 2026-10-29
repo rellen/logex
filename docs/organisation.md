@@ -4214,7 +4214,8 @@ suffixes.
 
 **Designed and decided 2026-10-27; M6-1, the words, M6-2, the warm restart in the
 core, and M6-3, retained globals, landed the same day, and M6-3's eight readings
-answered on 2026-10-29, decisions 299 to 306, the rest not yet built** (`PLAN.md` §3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
+answered on 2026-10-29, decisions 299 to 306, and M6-4, the image, landed the same
+day, the rest not yet built** (`PLAN.md` §3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
 is not": today a warm restart is a cold one, so a counter's count, a totaliser's total or
 a timer's accumulated time is lost when the runner restarts, crashes or the VM stops. A
 design pass on `3a7c2eb` read IEC 61131-3 Ed 2:2003 and Ed 3:2013 in full and Ed 4:2025
@@ -4361,7 +4362,9 @@ lube timer at 0, the fan off and the conveyor off until start is pressed.
 `var retain count dint` and `var non_retain jog bool` compile, both words reserved, and
 `restart/3` and `restart/2` with `:warm` keep what is marked, as "The design, as decided"
 says; since M6-3 `var_global retain total_boxes dint 0` too, kept by a warm `restart/2`;
-the store and the image are still to land.)*
+the store and the image are still to land.)* *(Since M6-4, 2026-10-29, the image has
+landed: `Logex.Runtime.retained/1` and `retained/2` take it out, and `start/2` and
+`instance/2` start from it by decision 277's matching; the store is still to land.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -10923,7 +10926,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: match by instance, type, path, exact type and fit, member by member; the
      rest dropped and reported in `status/1`; only a malformed file refused** (the
-     maintainer, 2026-10-27), as recommended.
+     maintainer, 2026-10-27), as recommended. *(Landed in the core with M6-4, 2026-10-29:
+     `Logex.Runtime.start/2` and `instance/2` give `{runtime, dropped}` and `{state,
+     dropped}`, each dropped value once in path order, `{path, reason}`, a stored kind
+     judged before what is under it and reported alone where it goes, `:undeclared`,
+     `{:retyped, stored, now}`, `{:resized, from, to}`, `:unretained` or `:misfit`, in
+     that order of judging, an instance of another program type `{:retyped, program,
+     now}`; a misfit judged by a state's rule (decisions 171 to 188), a real's value no
+     integer; a built-in's preset matched as any member, so a stored `.pre` outlives a
+     changed number on its instruction until a cold start, and an image of another
+     configuration or program refused as the host's mistake, a line naming both, each
+     provisional and put to the maintainer, `PLAN.md` M6-4's questions. `status/1`'s
+     report is M6-5's.)*
 278. **An online edit that adds or removes a qualifier (Milestone 6).** An edit that only
      changes `retain` changes no value, the plan comparing tags by name and kind.
      *Recommended: two report kinds, `:retain_added` and `:retain_removed`, by path*, rows
@@ -10971,7 +10985,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `%Logex.Instance{}`.
 
      **Taken: a pure core image and a runner-owned file** (the maintainer, 2026-10-27), as
-     recommended, with the names `retained`, `start/2` and `retain_period:`.
+     recommended, with the names `retained`, `start/2` and `retain_period:`. *(Landed in
+     the core with M6-4, 2026-10-29: `retained/1`, `%{configuration: name, globals:
+     globals, instances: instances}`, and `retained/2`, `%{program: name, kinds: kinds,
+     values: values}`, each retained leaf by its path inside its instance to `{type,
+     value}`, an array as a host's list, and each instance on the way to its kind, never a
+     timer's `last` (the shape provisional, `PLAN.md` M6-4's first question); `start/2`
+     and `instance/2` as recommended, every image no host could take from logex refused a
+     line each, and a `single` the image put back starting its trigger's last sample at
+     that value, as decision 305 has a warm restart. The rule beside `initial_env/1` is
+     stated in `Logex.Program`, a global's beside `Configuration.initial/1`.)*
 283. **What the scope leaves out (Milestone 6).** *Recommended: §4.13's deferred list*,
      `persistent`, `program retain`, `VAR_CONFIG` (Milestone 13's), `constant`, one
      element of an array, a retained located global, a hot restart, an outage's wall

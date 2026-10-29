@@ -227,7 +227,8 @@ three its close's review raised the same day (decisions 290–292); of its nine 
 the words `retain` and `non_retain`, and M6-2, the warm restart in the core, landed the
 same day in one push, and M6-3, retained globals, the same day with the maintainer's
 answers to their six readings (decisions 293–298), its own eight readings answered and
-built on 2026-10-29 (decisions 299–306), and the other six are planned.
+built on 2026-10-29 (decisions 299–306), and M6-4, the image, the same day, its five
+readings put to the maintainer, and the other five are planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -9327,7 +9328,137 @@ done-when reads the next store write; and last the contract walk and the documen
   and every retained timer starts at the start's `now` (decision 188 holding); and the
   take-out's cost is bounded in the retained count. *Size L.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-29** (`48ed0b9`). As the entry says, in the core alone,
+  through `lib/logex/image.ex`, `Logex.Image`, internal: `Logex.Runtime.retained/2` takes
+  a lone instance's image, `%{program: name, kinds: kinds, values: values}`, each retained
+  leaf by its path inside the instance to `{type, value}` (`"boxes.cv"` to `{:dint, 41}`,
+  `"w"` to `{{:array, :int, [3]}, [0, 4, 0]}`, an array a host's list) and each instance
+  on the way to its kind (`"boxes"` to `"ctu"`, `"s1"` to `"seal"`, `"tl"` to `{:array,
+  "ton", [2]}`), never a timer's `last`, in one walk of `Program.retained`'s paths;
+  `retained/1` a resource's, `%{configuration: name, globals: globals, instances:
+  instances}`, each retained global and each instance whose program retains anything,
+  none set aside, the program running during an edit; `instance/2` and `start/2` start a
+  new instance or resource and lay the image over it by decision 277's matching, giving
+  `{state, dropped}` and `{runtime, dropped}`. Each stored kind is judged before what is
+  under it, and each value after its kinds: declared, of exactly its type or kind, an
+  array of the stored sizes, retained by the changed program, and, a value, fitting it as
+  a state's value does (decisions 171 to 188, `Logex.Image.fits?/2`); the first that
+  fails is its reason, `:undeclared`, `{:retyped, stored, now}`, `{:resized, from, to}`,
+  `:unretained` or `:misfit`, reported once, in path order, nothing under a dropped kind
+  reported, an instance of another program type `{"m1", {:retyped, "motor", "pump"}}`; a
+  user block's instance member by member and an array of instances element by element;
+  a changed initial value keeping the stored one; a path newly retained starting at its
+  own, unreported. Each retained timer starts with `last` at the start's `now`, 0, so the
+  state check's decision 188 holds; `first` is true; and a `single` the image put back
+  starts its trigger's last sample at that value, as decision 305 has a warm `restart/2`,
+  so the resource cycles as the warm-restarted original does. An image no host could take
+  from logex is one `ArgumentError`, a line each, pinned: no map of its parts, a path no
+  logic names, an element entry (an array is retained whole), a kind or a type of no
+  shape, an entry under an instance whose kind it does not hold or by an element outside
+  its array, a path both a kind and a value, a timer's `last`, and an image of another
+  configuration or program, a line naming both; a take-out over retained paths edited by
+  hand a pinned line, decision 194's pattern. The rule beside `initial_env/1` is stated
+  in `Logex.Program`'s doc and a global's in `Configuration.initial/1`'s, and the one-rule
+  section of `Logex.Runtime`'s moduledoc gains `start/2`'s rows. `Logex.Runtime`'s public
+  surface, which `runtime_test.exs` pins, gains `retained/1`, `retained/2`, `instance/2`
+  and `start/2`, named in the pin's comment.
+
+  Every clause of the done-when has its test in `retain_image_test.exs`: a resource of
+  three tasks, an event task on a retained `single`, a retained global shared through
+  `var_external`, a counter, an `rto`, an array, an array of timers, a block and a real
+  started from another's image twelve times over seeded cycles, each next 25 cycles'
+  outputs, events (their times the restart's `now` earlier), globals and images exactly
+  those of the original after a warm restart; every mismatch the entry names, each
+  dropped or kept with its reason, from source, a lone instance's and a resource's;
+  misfits of every kind, a dint past its range, a bool of 2, a `real` no single holds, an
+  integer in an `lreal`, −0.0, a list of the wrong length and an element outside its type;
+  no timer's `last` in an image at any depth, each starting at 0 and scanning; and the
+  growth. The contract walk (`api_contract_test.exs`) round-trips an image through a
+  changed program: 60 seeded programs of six tags of drawn kinds and qualifiers and a
+  block whose own members' are drawn, scanned, their image taken, now and then a value
+  made a misfit, laid by `instance/2` over a changed program drawn from each (a tag
+  renamed, removed, retyped, resized or requalified, the block's members retyped, added,
+  removed or requalified), the state and the dropped list against decision 277 restated
+  from the two specs alone, an unchanged program's start scanning as its warm restart
+  does, and a host mistake at each of the four doors, its reach eleven `iw_` atoms, its
+  draws in `@draws` and its oracle in clauses.
+
+  *Cost.* Nothing that ran before changes: against `6b32b51`, a plant of 1 to 16
+  motors compiles, checks, starts, cycles and restarts warm and cold in exactly the
+  reductions it did, and a lone motor makes its instance, scans and restarts in exactly
+  them (`instance` 453, `scan` 547, `warm` 476); at 64 motors every figure is within the
+  run's noise, under 0.25%. The take-out is bounded in the retained count: a resource
+  that also holds an unretained `int[16384]` takes out its 20 retained dints in exactly
+  the reductions of one holding an `int[16]`, 585, and 160 retained dints cost under 4.4
+  times 40. The matching grows linearly in the image, an array of 2048 retained timers
+  under 4.6 times 512, the tuple built once a row. A configuration that retains nothing
+  starts from its empty image within 120 reductions of `start/1` (145 for one motor, 1426
+  for 64, about 22 an instance), and its take-out costs about 12 an instance.
+
+  *Mutation table.* 46 mutants, each a rule of `Logex.Image` or of the four
+  doors in `Logex.Runtime` broken alone in a work copy and judged by the full suite's exit
+  code, all 46 red (the log: `m6/m64imut/run.log` and `run2.log` in the session's
+  scratchpad): the take-out (an array taken as a tuple, a timer's `last` taken, an
+  element given a kind, an array of instances' or a path's instance given none, a global
+  array not in a host's form); the image's check (another configuration's or program's
+  image taken, any kind word, any type, an array past 65,536 elements, an element entry,
+  a path both kind and value, a timer's `last`, an entry under no kind, an element
+  outside its array, a path that is none, a name that is none); the matching (a kind
+  not compared, a resize as a retype, an unretained path kept, an undeclared one
+  unreported, a value under a dropped kind not silenced, a kind under one reported, a
+  misfit kept, a real any float, a kept value not laid over, a kept array laid as a list,
+  the dropped unsorted, a resource's paths unprefixed); the globals (another type, an
+  unretained one and a misfit kept, an undeclared one unreported); and the doors (a kept
+  `single`'s trigger at 0, a dropped one's kept, another program type matched, a missing
+  instance unreported, `retained/1` taking an instance that retains nothing or every
+  global, `instance/2` and `start/2` checking no image, `instance/2` taking a program's
+  shape alone, `retained/2` checking no state, a hand edit's take-out unpinned, `start/2`'s
+  dropped unsorted). Three first forms changed nothing and were built again as real
+  mutants, red (a clause added after the one it meant to shadow, twice, and a list
+  index off by one that dropped the undeclared global's mutant); and one survived because
+  its rule was dead code, an element's subscripts checked against its array's sizes in
+  the matching, which the array's kind, matched sizes and all, and the image's check
+  already hold, so the check was taken out.
+
+  *Provisional readings, put to the maintainer.* Where the record is silent the item took
+  the reading nearest the record, IEC and Logix, each marked so in the code and in §4.13:
+
+  1. *The image's shape*: a lone instance's `%{program:, kinds:, values:}`, its paths
+     inside the instance, a resource's `%{configuration:, globals:, instances:}`, an
+     array a host's list, kinds apart from values so that a `ton` retyped to a `tof`,
+     whose members are the same, is told by its kind. An operator sees nothing of it until
+     M6-5 writes it to disk; a host reads it. The options: (a) as built; (b) flat by full
+     path as decision 276's store lines are, `%{"m1.boxes" => {:instance, "ctu"},
+     "m1.boxes.cv" => {:dint, 41}}`, one map for a whole resource.
+  2. *A built-in's preset in the image.* The preset, a timer's `.pre` and a counter's
+     `.pv`, is matched as any member is, so a program whose `rto lube 360000000` became
+     `rto lube 180000000` and that starts warm from its store keeps greasing at 100 hours
+     until a cold start: decision 277's "a changed initial value keeps the stored one",
+     the preset being, in logex, the instance's initial input. An edit's switch moves it
+     instead, `{:preset, "lube", {360000000, 180000000}}` (decisions 23 and 27). The
+     options: (a) as built, the stored preset kept; (b) the preset follows the program
+     wherever its instruction gives one, as an edit's switch moves it, reported in the
+     dropped list or a list of its own.
+  3. *An image of another configuration or program* is refused as the host's mistake, a
+     line naming both, decision 285's rule for a store carried into the core, so a
+     renamed configuration starts from its image only once the host renames the image,
+     and a lone instance only from an image of its program's name. The options: (a) as
+     built; (b) everything dropped and reported, `{"", :undeclared}`, the start going on.
+  4. *How the dropped are named in an array of instances.* A member a block's new version
+     retypes is reported once an element, `cs[0].j` and `cs[1].j`, where decision 259's
+     messages write `cs[*].j`; a whole array resized once, at the array. An operator
+     reading the start's report of `gates gate[64]` sees 64 lines for one change. The
+     options: (a) as built, each element; (b) `cs[*].j` once where every element drops the
+     member for the one reason.
+  5. *A value of no type's form.* An image's `{:real, 5}`, an integer where a `real` is
+     stored, is a misfit and dropped, as a state handed in is refused it, where a host's
+     input of 5 into a `real` is stored as 5.0. The options: (a) as built, a state's rule;
+     (b) a host's input's rule, held at its nearest real.
+
+  The order of judging, declared, type, retained and fit, is the record's list read in
+  order, so a tag both retyped and made unretained reports `{:retyped, ...}`; and a lone
+  instance's var_inputs start at 0, the host's to set with `put_inputs/3`, where a warm
+  restart keeps them. Neither is put as a question.
 - **M6-5 · The store, read and written at events.** `Logex.Retain`, internal, its
   `encode/1` and `decode!/2` and the atomic write and read, the forces file's write rule
   shared rather than copied (decision 276), its header naming the configuration and the
@@ -9444,7 +9575,8 @@ before another, and says so.
 
 - **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
   2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
-  266–285; M6-1, M6-2 and M6-3 landed the same day, the rest not yet built.)* Today a warm restart is a
+  266–285; M6-1, M6-2 and M6-3 landed the same day, and M6-4 on 2026-10-29, the rest
+  not yet built.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store
