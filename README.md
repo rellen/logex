@@ -3090,9 +3090,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
-- A runner that crashes or is killed writes nothing (decision 292): its next fresh start
+- A runner that crashes or is killed writes nothing (decision 292), and nor, as built,
+  does one its parent shuts down, a supervisor's orderly shutdown among them, which
+  zeroes and closes as before (provisional, put to the maintainer): its next fresh start
   comes back to the last write. Until M6-6's write every second, that is the start's, the
   last trip's, stop's or cold restart's.
+- The store and the forces file are two files: `retain:` naming the forces file, however
+  each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
+  `.tmp` the other is written through, is refused at start, a pinned line.
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
@@ -4511,8 +4516,10 @@ in every cycle's outputs at the value it holds.
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
   tag's type or array's size; a jump forward only; retained values kept across a crash
   only by a runner given a store, a file on the host's disk and not battery-backed
-  memory, written at a trip, a stop, a cold restart and a fresh start and not yet every
-  second, so a crash or a kill loses whatever changed since the last of those writes, and
+  memory, written at a trip, a stop, a cold restart and a fresh start with `start: :cold`
+  or no store file, never at a warm fresh start from a store, and not yet every second, so
+  a crash, a kill or a supervisor's shutdown loses whatever changed since the last of
+  those writes, and
   a power failure just after a write may bring back the one before it, the rename not
   made durable ("The store on disk", above); and forcing
   for inputs only, an output never forced.

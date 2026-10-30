@@ -7221,7 +7221,10 @@ question put, as decisions 111 and 112 were.
      it records its configuration, and a store of another configuration is refused.)*
      *(Landed with M6-5, 2026-10-30: the write rule is one function, `Logex.Retain.
      written/2`, which the forces file and the store share, as is the reading of a number,
-     `Logex.Retain.number/1`.)*
+     `Logex.Retain.number/1`.)* *(Since M6-5's review, 2026-10-30: the store and the forces
+     file are two files however each is named, `./x` and `x` one file by `Path.expand/1`,
+     and neither may be the `.tmp` the other is written through, which each write would
+     replace with its own text, a pinned line each at start.)*
 
 128. **The bound on the runner's own time between steps (Milestone 4),** following
      decision 125, asked after M4-1's review. Between rounds the runner waits, serves a
@@ -10940,7 +10943,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as one that crashes (provisional). The first round's `{:retain, …}` event a fresh
      start owes reaches no subscriber, none being able to subscribe before `start_link/1`
      returns: `status/1` carries the store's age and the drops (provisional). The writer
-     process and the period are M6-6's.)*
+     process and the period are M6-6's.)* *(Since M6-5's review, 2026-10-30: the trip's
+     write after every output 0 pinned by a test of its own, a major fault's trip, where
+     only its being written was; and a runner its parent shuts down, a supervisor's orderly
+     shutdown among them, pinned writing none, still provisional and put to the maintainer
+     again with what an operator loses, the review recommending that a parent's shutdown
+     write as `stop/2` does.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
@@ -10958,7 +10966,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      value; a line of no shape, an unknown type or kind, a wrong count of values, a line
      before any `instance`, one not under its instance and a second line naming one thing
      each a line of the refusal, and what its image holds judged by
-     `Logex.Runtime.start/2`, each of its lines naming the store.)*
+     `Logex.Runtime.start/2`, each of its lines naming the store.)* *(Since M6-5's review,
+     2026-10-30: a type word or a kind with sizes is read by the store's own rule, one `[`,
+     one to three sizes, each a whole number above 0, 65,536 elements at most, and the `]`
+     that ends the word, so that a hand edit's `real[3a]`, `int[2#]` or `real[]]`, which
+     raised a `FunctionClauseError`, and `int[0]`, told how many values it holds, are each
+     a line of the refusal; and a header's time at an offset other than UTC is refused.)*
 277. **A changed program or configuration meeting an old store (Milestone 6).** The host
      stops the plant, changes the program, a new tag, a counter made a `ctu_int`, an array
      grown from 8 to 16, and starts it fresh from the old store.

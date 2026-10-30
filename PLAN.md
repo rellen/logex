@@ -9835,6 +9835,12 @@ done-when reads the next store write; and last the contract walk and the documen
      by its supervisor gets back, at the next start, what the last trip, stop or cold
      restart wrote, and from M6-6 the last period's. The options: (a) as built, only
      `stop/2` writes; (b) a parent's shutdown writes as `stop/2` does, after the zeros.
+     *(M6-5's review: the runner traps exits, so a supervisor's `:shutdown`, which
+     `systemctl stop` or `Application.stop/1` gives, runs its `terminate/2`, which zeroes
+     and closes and writes nothing: a box counter at 10,000 after a shift comes back at
+     its start-of-shift value until M6-6, and at the last period's after it. The review
+     recommends (b). Pinned as built by "a parent's shutdown writes nothing
+     (provisional)", which (b) would turn round.)*
   5. *A cold restart a device refuses* (decision 291). The write comes before the release
      and the reads, so a cold restart refused by a card still bad has written the store
      with the initial values while the resource in memory keeps the old ones: a warm
@@ -9847,7 +9853,10 @@ done-when reads the next store write; and last the contract walk and the documen
      (b) the event held and sent to the first subscriber.
   7. *`retain:` naming the forces file* is refused, "the runner's retain: and forces: name
      one file", where the two writes would overwrite each other. The options: (a) as
-     built; (b) taken.
+     built; (b) taken. *(Since M6-5's review the refusal holds however the paths are
+     spelled, `./x` and `x` one file, and refuses either naming the `.tmp` the other is
+     written through, `retain: "x.tmp"` beside `forces: "x"`, which made every force write
+     replace the store with the forces file's text.)*
 
   *Mutation table* (`scratchpad/m6/m65mut2/run.log`): 40 mutants, each one rule broken alone in a
   work copy of the code, all 40 red, each by a test of its own rule in
@@ -9877,7 +9886,7 @@ done-when reads the next store write; and last the contract walk and the documen
   *Cost* against `aaae2bb` (`scratchpad/m6/m65s/cost.exs`, a plant of 1, 16 and 64 tally
   instances through the runner on the manual clock, the runner's own reductions over 200
   rounds, a trip and a cold restart; `cost_base.txt` and `cost_now.txt`): a runner with no
-  `retain:` runs its rounds, trips and restarts cold within the run's own noise, the
+  `retain:` runs its rounds, trips and restarts cold within the run's own noise (a few percent either way for the cold restart, M6-5's review's seventh finding below), the
   rounds 289,267 to 5,901,427 against 289,705 to 5,900,578 at the base, a trip 2
   reductions more, a clause; a cold restart with no store first took 25% to 45% more, the
   image of the restarted resource built and passed to a write that did not happen, and
@@ -9886,6 +9895,63 @@ done-when reads the next store write; and last the contract walk and the documen
   the text, and a cold restart about 920; the store's text is written and read in
   reductions linear in its lines (a growth test).
   2344 tests (11 doctests), up from 2316.
+
+  *M6-5's review* (2026-10-30, `scratchpad/m6/r5`) found two high, two medium and five
+  low findings; each is answered so, a test of its own failing where the answer is
+  reverted:
+
+  1. *The runner walk failed at 17 of 30 fresh seed families* (high): its model read the
+     store after `start_link/1` returned, and a fresh start's first round that trips,
+     forces from the forces file making a major fault, had written it again by then. The
+     runner was right. The model now reads the store before the start (`store_text/1`),
+     the first round's trip writing it as any trip does; an atom,
+     `:store_tripped_at_start`, holds the walk to such a start, which the family
+     `{2026, 10, n}` never reached, so the seed moved to `{4101, 10, n}`, where every atom
+     is reached and the model read the old way fails. Of `{4101..4130, 10, n}` every walk
+     passes (`scratchpad/m6/r6seeds.out`), eleven reaching every atom, the rest missing
+     `:store_tripped_at_start` or one of `:zero_at_stop`, `:array_unforced` and
+     `:next_due_from_step`, rare by their nature.
+  2. *A hand-edited store crashed the start* (high): a type word with sizes went to
+     `Logex.Declarations.array_word/1`, which trusts the lexer, so `real[3a]`, `int[2#]`
+     and `real[]]` raised a `FunctionClauseError`, and `int[0]` and `int[-1]` were told
+     how many values they hold. A type word and a kind with sizes are now read by the
+     store's own rule (`sized_word/1`): one `[`, one to three sizes, each a whole number
+     above 0 that `number/1` reads, 65,536 elements at most, and the `]` that ends the
+     word, so `ton[3a` and `ton[4[`, which read as `ton[3]` and `ton[4]`, are refused
+     too; each a line of the refusal, decoded and at a runner's start.
+  3. *The trip's write order was not pinned* (medium): a test now trips the runner by a
+     major fault, so the device's 0 is the runner's and not its own latch's, and sees the
+     0 meet the store as the start wrote it, the trip's write after.
+  4. *Provisional reading 4 loses a shift on an orderly shutdown* (medium): left
+     provisional, as a question for the maintainer (reading 4 above), and pinned as built.
+  5. *Survivors R7 and R2* (low): a header's time at `+05:00` or `-01:00` is refused,
+     `Z` and `+00:00` taken; and `m1. dint 1` and `m1. ton`, which name nothing inside
+     their instance, are refused.
+  6. *`retain:` beside `forces:` by string equality* (low): the two are now compared by
+     `Path.expand/1`, and neither may be the other's `.tmp`, three pinned lines (reading 7
+     above).
+  7. *The cold restart's cost* (low): "within noise" was loose. Measured again, three runs
+     each, a runner with no `retain:` restarts cold at 64 instances in 49,248 to 49,313
+     reductions against 49,247 to 49,249 at `aaae2bb` (up to +0.13%), and at 16 in 13,013
+     to 13,098 against 13,090 to 13,539, a trip in 423 to 504 against 421 to 437
+     (`scratchpad/m6/cost_base2.txt` and `cost_now2.txt`); the counts move between runs of
+     one build here, and the review measured +2.7% and −3% on its own, so the change is a
+     few percent either way, likely the runner's state map's layout, two keys more, and
+     no clause a restart pays for.
+  8. *The decision 300 test flaked* (low), at the base too: the reduction count of one
+     configuration's check moves by up to 3 between two measures in one run, where the
+     test held `drive` and `xrive` equal; the least of three moved too. It now holds them
+     within 16 over the 64 located globals, a quarter of a reduction a global, where the
+     lookup it guards against costs about 1,088 (a mutant that looks every device up
+     fails by that); 60 runs alone, none failing, where 2 in 30 had.
+  9. *README's "a fresh start" was inexact* (low): "What logex is not" now says a fresh
+     start writes with `start: :cold` or no store file, never warm from a store, and that
+     a supervisor's shutdown loses what changed since the last write, as built.
+
+  The review's mutants, again: U1, the trip's write before its zeros, R7, R2, the store's
+  own size rule reverted, the walk's model reading after the start, the `.tmp` and
+  spelling checks reverted, and the keyword lookup made for every device, each red, by
+  its own file and so by the full suite. 2350 tests (11 doctests), up from 2344.
 - **M6-6 · The periodic writer.** `retain_period:`, its range settled (the record
   suggests 100 to 3,600,000 ms), the writer process, latest wins, the failed write's
   event `{:retain, {:error, reason}}` and status (decision 275). *Done when* a runner

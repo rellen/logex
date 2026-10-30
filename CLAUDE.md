@@ -380,7 +380,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   name, `{image, written_at}`, any number the lexer reads, a real at its type's nearest
   value, every line it cannot read a line of one `ArgumentError`, `<path>: line <n>: …`,
   in line order, a store of another configuration at its second line, naming both and
-  `start: :cold` (decision 285); `written/2`, the forces file's atomic write, `.tmp`,
+  `start: :cold` (decision 285), since M6-5's review a type word or kind with sizes read
+  by its own rule (`sized_word/1`: one `[`, sizes of `number/1` above 0, one to three and
+  65,536 elements at most, and the `]` that ends it), `real[3a]` or `int[0]` refused in
+  its words where it reached a reader that trusts the lexer, and a header's time at an
+  offset other than UTC refused; `written/2`, the forces file's atomic write, `.tmp`,
   synced, closed and renamed over, shared with the store; and `number/1`, the forces
   file's reading of a number, shared too; linear in the store's lines (a growth test)
 - `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
@@ -1268,7 +1272,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   rounds, a round the inputs taken, the cycle's steps run (`cycle_steps/3`, decision 118)
   and the outputs written. `start_link/1` takes `configuration:`, `io:`, `clock:`,
   `poll:` (10 ms), `overhead:` (20%, 10 to 90), `idle:` (500 ms), `forces:` (a path, none
-  unless set, M4-5, decision 127), since M6-5 `retain:` (a path, none unless set) and
+  unless set, M4-5, decision 127), since M6-5 `retain:` (a path, none unless set, never
+  the forces file however either is spelled, `Path.expand/1`'s, nor the `.tmp` either is
+  written through, since M6-5's review, a pinned line each) and
   `start:` (`:warm` or `:cold`, `:warm` unless set, refused without `retain:`,
   provisional), and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
   `Runtime.start/1` and the bindings as `Logex.IO.bind!/2` check them, in their words; it
@@ -1590,7 +1596,12 @@ none, a cold restart whose write fails changing nothing, a trip's failed write r
 a changed program's drops in `status/1`, a store of another configuration or no store's
 shape refused naming the store, a retained bit written only by the first round, decision
 284's second trip warm and none cold, a runner with no store taking no image out
-(traced), and the store's text linear in its lines,
+(traced), and the store's text linear in its lines, and since M6-5's review a hand
+edit's sizes no array has refused a line each, decoded and at a start, a header's time
+at another offset and a path naming nothing inside its instance refused, a trip's write
+after every output 0 (a major fault's trip, so the device's 0 meets the start's store),
+a parent's shutdown writing nothing (provisional), and the store and the forces file one
+file named two ways or each other's `.tmp` refused,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1694,7 +1705,8 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   whose retained count and a retained global it adds to the store keeps, its model
   restating each write, the first start's, a trip's and a cold restart's before its
   release, and laying the last over a fresh start after a crash, the store's lines
-  checked, its reach `:store_restored` and `:cold_store`
+  checked, since M6-5's review as the start reads them, before a first round whose trip
+  writes the store again, its reach `:store_restored` and `:cold_store`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
