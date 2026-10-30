@@ -343,11 +343,12 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   exactly its type, and it fits, and dropping and reporting the rest, so a program
   changed since lets its unchanged values through, a timer's or counter's preset
   following the program rather than the image, and since the maintainer's answers of
-  2026-10-30 a retained trigger's last sample kept with it. Still to land: a store the runner
-  writes on the host's disk every second and at a
-  trip, a stop and a cold restart, read at a fresh start, warm unless `start: :cold`, so
-  that until then a crash or a stopped VM keeps nothing. `persistent` is deferred and
-  stays unreserved.
+  2026-10-30 a retained trigger's last sample kept with it. Landed, M6-5: the store, a
+  file on the host's disk a runner given `retain:` writes the image into at a trip, a
+  stop and a cold restart, and a fresh start reads, warm unless `start: :cold` ("The
+  store on disk", below). Still to land: its write every second, so that until then a
+  crash keeps only what the last trip, stop, cold restart or start wrote, and an online
+  edit's report of a program's qualifier. `persistent` is deferred and stays unreserved.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -2938,8 +2939,8 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   instances drops alike is reported once, `gates[*].j` (decision 310); an integer stored
   for a real is taken at its nearest real, as a host's input is (decision 311); and an
   element named with leading zeros, `tl[01]`, is the element of its value (decision 312).
-  `Logex.Runtime.retained/2` and `instance/2` do the same for a lone instance. Nothing
-  writes the image to disk yet.
+  `Logex.Runtime.retained/2` and `instance/2` do the same for a lone instance. The
+  runner writes the image to disk, below.
 - `full` is retained, so the warm restart keeps it, but `case_full`, the global it drives,
   is not, and reads 0 until the first round copies `full` out. Wired straight to an output
   point, a retained var_output is written there in the first round after a warm start,
@@ -2981,9 +2982,124 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision
   302). A program's tags follow with M6-7.
-- Retained globals are kept in memory only, as a program's are; the store on disk that
-  keeps them across a crash is still to land (Milestone 6, "Settled, not yet landed",
-  above).
+- In the core retained values are kept in memory only, as a program's are; the runner's
+  store, below, keeps them across a crash.
+
+### The store on disk
+
+A runner given `retain:` keeps the plant's retained image in a file on the host's disk,
+the stand-in for a controller's battery-backed memory. `kept.exs` runs `tally.logex`,
+above, through the runner on the manual clock, its panel a simulated device: it counts
+four boxes and stops the runner, which writes the store; starts it fresh, warm from the
+store; starts it again with `start: :cold`; and starts it from a store edited to name
+another configuration:
+
+```elixir
+alias Logex.IO.Sim
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+
+{:ok, plant} = Logex.Configuration.compile_file("tally.logex")
+File.rm("tally.retain")
+
+# The manual clock, its wall clock 2026-10-30T14:00:00Z.
+{:ok, clock} = Manual.start_link(now: 1_793_368_800_000)
+{:ok, panel} = Sim.start_link(clock: clock)
+
+opts = [
+  configuration: plant,
+  io: %{"panel" => {Sim, sim: panel}},
+  clock: {Manual, clock},
+  retain: "tally.retain"
+]
+
+show = fn runner, label ->
+  IO.puts("#{label}  total_boxes=#{Runner.get!(runner, "total_boxes")} " <>
+            "t1.boxes.cv=#{Runner.get!(runner, "t1.boxes.cv")} " <>
+            "case_full=#{Runner.get!(runner, "case_full")}")
+end
+
+{:ok, runner} = Runner.start_link(opts)
+
+for eye <- [1, 0, 1, 0, 1, 0, 1, 0] do
+  Sim.set(panel, [0], eye)
+  Manual.advance(clock, 1000)
+end
+
+show.(runner, "four boxes  ")
+IO.inspect(Runner.stop(runner), label: "stop")
+IO.write(File.read!("tally.retain"))
+
+{:ok, runner} = Runner.start_link(opts)
+show.(runner, "fresh start ")
+IO.inspect(Runner.status(runner).retain.written_at, label: "written_at")
+:ok = Runner.stop(runner)
+
+{:ok, runner} = Runner.start_link(opts ++ [start: :cold])
+show.(runner, "start: :cold")
+:ok = Runner.stop(runner)
+
+File.write!("tally.retain", String.replace(File.read!("tally.retain"), "configuration tally", "configuration line_2"))
+
+try do
+  Runner.start_link(opts)
+rescue
+  error in ArgumentError -> IO.puts(error.message)
+end
+```
+
+```
+$ mix run kept.exs
+four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
+stop: :ok
+logex retain 1
+configuration tally written 2026-10-30T14:00:08Z
+global total_boxes dint 4
+instance t1 tally
+t1.boxes ctu
+t1.boxes.cu bool 0
+t1.boxes.cv dint 4
+t1.boxes.ov bool 0
+t1.boxes.pv dint 3
+t1.boxes.q bool 1
+t1.boxes.r bool 0
+t1.full bool 1
+fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
+written_at: ~U[2026-10-30 14:00:08Z]
+start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
+tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
+```
+
+- The store is text a person can read, and edit by hand where a retained value has
+  tripped the plant (decision 284): a header, `logex retain 1`; the configuration's name
+  and the time of the write on the host's wall clock, in UTC, which a clock gives through
+  its `wall_ms/1` (the manual clock's own time, read from the epoch); each retained global;
+  each retained `single`'s last sample, `trigger arm 0`; and each instance whose program
+  retains anything, then each instance on the way to a value with its kind and each value
+  with its type, in path order, an array's elements on one line, a real in the shortest
+  text that reads back to it, and never a timer's `last` (`PLAN.md`'s M6-5; decisions 275
+  and 276 in [`docs/organisation.md`](docs/organisation.md) §7).
+- It is written at every trip, of the resource as the trip left it, after every output is
+  0; at every `stop/2`, after every output is 0 and every device closed, which then answers
+  `:ok`, or `{:error, {:retain, reason}}` where the write failed, stopped all the same; at
+  every cold restart, before any device is released or read, so that a crash right after
+  it brings back none of what it discarded; and at a fresh start with `start: :cold`, or
+  with no store file, before any device is opened (decisions 271 and 291). Each write goes
+  to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
+  file is, so that a crash at any moment leaves the old store or the new. A write that
+  fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
+  subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
+  left tripped, every output still 0, and a fresh start whose write fails is not started.
+- A runner that crashes or is killed writes nothing (decision 292): its next fresh start
+  comes back to the last write. Until M6-6's write every second, that is the start's, the
+  last trip's, stop's or cold restart's.
+- A fresh start reads the store warm unless `start: :cold`, and starts the resource from
+  it as `Logex.Runtime.start/2` does, each value kept only where the configuration
+  retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
+  store's path, the time its header names and what the start dropped. A store of another
+  configuration, a line of no store's shape, or a store `Logex.Runtime.start/2` refuses is
+  the host's mistake, every problem a line, the runner not started (decision 285);
+  `start: :cold` reads none of it and writes a new store at once.
 
 ### An event task
 
@@ -4393,11 +4509,12 @@ in every cycle's outputs at the value it holds.
   array bounds, `ARRAY[1..8]`, nor a whole-array copy or fill; no byte or word partial
   access, `w.%B1`; no `round`, `ceil` or `floor`, and no conversion to or from a bool, a
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
-  tag's type or array's size; a jump forward only; retained values in memory only, a warm
-  restart keeping what a program marks `retain` while the runner lives, but nothing
-  surviving a crash, a kill or a stopped VM, the store on disk not yet built
-  (Milestone 6, "Settled, not yet landed", above), a configuration's retained global
-  likewise; and forcing
+  tag's type or array's size; a jump forward only; retained values kept across a crash
+  only by a runner given a store, a file on the host's disk and not battery-backed
+  memory, written at a trip, a stop, a cold restart and a fresh start and not yet every
+  second, so a crash or a kill loses whatever changed since the last of those writes, and
+  a power failure just after a write may bring back the one before it, the rename not
+  made durable ("The store on disk", above); and forcing
   for inputs only, an output never forced.
 
 ## Running it

@@ -9738,7 +9738,154 @@ done-when reads the next store write; and last the contract walk and the documen
   counter, `rto` and total, through the runner, killed and started fresh, against an
   oracle that knows nothing of logex. *Size L.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-30.** As the entry says, but where the readings below say
+  otherwise. `lib/logex/retain.ex`, `Logex.Retain`, internal: `encode/2`, a resource's
+  image as decision 276's text at a UTC time to the second, `logex retain 1`,
+  `configuration <name> written <time>`, `global`, `trigger` (decision 313), `instance`,
+  and each instance's kind and value lines in path order (`Logex.Image.ordered/1`, `t[2]`
+  before `t[10]`), an array's elements on one line, a real in `Logex.Real.spelled/2`'s
+  text, never a `last`; `decode!/2`, `{image, written_at}`, any number the lexer reads, a
+  real at its type's nearest value, a subscript by its value as `Logex.Runtime.start/2`
+  matches it (decision 312) and a stored preset reported as decision 308 has it, every
+  line it cannot read a line of one `ArgumentError`, `<path>: line <n>: …`, in line
+  order: a header of no store or of another version, no configuration line, a time that is
+  none, another configuration (naming both and `start: :cold`, decision 285), a line of no
+  shape, its words not one space apart among it, an unknown type or kind, a wrong count of
+  values, a value no number, a line before any `instance` or not under its instance, a
+  name that is none, and a second line naming one thing; `written/2`, the forces file's
+  write rule, which `Logex.Runner`'s forces file now calls rather than its own copy; and
+  `number/1`, the forces file's reading of a number, shared the same way. What a store's
+  image holds is judged by `Logex.Runtime.start/2`, each of its lines naming the store.
+  `Logex.Runner.Clock` gains an optional `wall_ms/1`, the monotonic clock's
+  `System.os_time/1` and the manual clock's its own time from the epoch.
+
+  The runner takes `retain:` and `start:`, checked in the caller after `forces:`, each in
+  both pinned messages of `start_link/1`'s options: a path, none unless set; `:warm` or
+  `:cold`, `:warm` unless set. A fresh start reads the store in the caller after the
+  forces file and lays it over the resource by `Logex.Runtime.start/2`, a file that does
+  not exist none; with `start: :cold` or no store file it writes the store at once, in the
+  caller, before any device is opened, a write that fails giving `{:error, {:retain,
+  reason}}` and starting nothing. A trip writes the resource as it left it, after every
+  output is 0; a cold `restart/2` writes the resource as it restarts it, after the forces
+  file is read and before any device is released or read, a write that fails answering
+  `{:error, {:retain, reason}}`, the runner tripped as it was; `stop/2` writes after every
+  output is 0 and every device closed, and answers `:ok` or `{:error, {:retain,
+  reason}}`, stopped all the same; a warm restart, a crash, a kill and any other
+  termination write none. Every write is synchronous, as the forces file's is, a failed one
+  `{:retain, {:error, reason}}` to subscribers, a default kind, and `failed` in
+  `status/1`'s `retain`, `%{path, written_at, failed, dropped}`, nil without `retain:`.
+  `runtime_test.exs`'s surface pin gains `Logex.Retain`, hidden, and the clock's optional
+  callback; `runner_test.exs`'s option and kind messages and `status/1` at start gain the
+  new words and `retain: nil`.
+
+  Every clause of the done-when has its test in `retain_store_test.exs`, on the manual
+  clock: a runner stopped, or tripped and killed, and started fresh restores its last
+  write, never an older one, and a write cut short leaves the store whole; a cold
+  restart's write is seen by the device's own read before it, so it precedes the release
+  and read, and a crash right after it restores none of what it discarded; a store that
+  does not read is refused a line each, one of another configuration naming both; `start:
+  :cold` ignores it and writes a new one at once; a cold restart whose write fails leaves
+  the runner tripped as it was, the store as it was, every output still 0 and no device
+  read or written; a fresh start whose write fails is not started, the reason given, no
+  device read or written; a `stop/2` whose write fails stops, every output 0 and the
+  device closed, and answers `{:error, {:retain, :eisdir}}`, its zeros seen by the
+  device's last write before the store changed, and every existing pin of its `:ok`
+  passes; a retained output-driving bit is written only by the first round; decision
+  284's retained subscript trips the plant again at a warm fresh start and not at a cold
+  one. Besides: a crash inside the runner (its `terminate/2` run) writing nothing, a warm
+  restart writing nothing, the write synced before its rename (traced), a runner with no
+  store taking no image out (traced), and the store's text linear in its lines. The
+  end-to-end Done-when is `end_to_end_test.exs`'s "the store in the plant (M6-5)": §4.4's
+  plant from files on disk with a retained box counter, `rto` and total through the runner
+  with a store, 400 seeded steps of eyes, kills, stops and trips each followed by a fresh
+  start, against an oracle that knows nothing of logex. The runner walk
+  (`api_contract_test.exs`) gives its runner a store wherever it gives it a forces file,
+  no draw added, its configurations a program, `keep`, whose retained count and a
+  retained global it adds to the store keeps; its model restates each write, the first
+  start's, a trip's and a cold restart's before its release, lays the last over a fresh
+  start after a crash and checks the store's lines, its reach `:store_restored` and
+  `:cold_store`, reached at its seed.
+
+  *Provisional readings, put to the maintainer.* Where the record is silent the item took
+  the reading nearest the record, IEC and Logix, each marked so in the code and in §7's
+  notes:
+
+  1. *`stop/2` is a call in effect, not in form* (decisions 116 and 275). The record makes
+     `stop/2` a call; a call waits on a runner suspended with `:sys.suspend/1` for ever,
+     where `GenServer.stop/3`, a system message, stops it, which `runner_test.exs` pins.
+     As built the caller names itself to the runner, stops it by `GenServer.stop/3`, and
+     the runner answers it as it terminates, after its zeros, its closes and its write: an
+     operator's stop returns `:ok` or `{:error, {:retain, reason}}` either way. The
+     options: (a) as built; (b) a true call, a suspended runner's stop then waiting until
+     it is resumed, and the pin changed.
+  2. *A clock without a wall clock* (decision 276). The header's time comes through the
+     clock's `wall_ms/1`, an optional callback; a host's own clock without it runs a
+     runner given no store, and one given `retain:` is refused at start, "the runner's
+     clock `MyClock` has no wall_ms/1, which a runner given retain: writes its store's time
+     by". The options: (a) as built; (b) the machine's wall clock, `System.os_time/1`,
+     whatever the clock, so a test's store names the real time; (c) `wall_ms/1` required
+     of every clock, a host's clock without it refused even with no store.
+  3. *`start:` with no store.* `start: :cold` or `start: :warm` given without `retain:` is
+     refused, "the runner keeps no store, so start: :cold has none to start from: start it
+     with retain: a path", as a force without `forces:` is. The options: (a) as built; (b)
+     taken and passed over, so a host may always say `start: :cold`.
+  4. *A termination that is not `stop/2`.* A runner whose parent shuts it down, a
+     supervisor's orderly shutdown among them, or whose clock goes down, writes no store,
+     as one that crashes (decision 292): the operator whose host application is shut down
+     by its supervisor gets back, at the next start, what the last trip, stop or cold
+     restart wrote, and from M6-6 the last period's. The options: (a) as built, only
+     `stop/2` writes; (b) a parent's shutdown writes as `stop/2` does, after the zeros.
+  5. *A cold restart a device refuses* (decision 291). The write comes before the release
+     and the reads, so a cold restart refused by a card still bad has written the store
+     with the initial values while the resource in memory keeps the old ones: a warm
+     restart next keeps the old values, and a crash before it brings back the initial
+     ones. The options: (a) as built, the cold restart asked for being taken as the
+     discard; (b) the old store written back where the restart is refused.
+  6. *The first round's `{:retain, …}` event* (§4.13). No subscriber can exist before
+     `start_link/1` returns, so the event a fresh start owes with the store's age and the
+     drops reaches no one; `status/1`'s `retain` carries both. The options: (a) as built;
+     (b) the event held and sent to the first subscriber.
+  7. *`retain:` naming the forces file* is refused, "the runner's retain: and forces: name
+     one file", where the two writes would overwrite each other. The options: (a) as
+     built; (b) taken.
+
+  *Mutation table* (`scratchpad/m6/m65mut2/run.log`): 40 mutants, each one rule broken alone in a
+  work copy of the code, all 40 red, each by a test of its own rule in
+  `retain_store_test.exs` or `clock_test.exs` (`run_own.log`, those two files alone),
+  and red too against those with `runner_test.exs` and `trip_test.exs` (`run2.log`): the
+  trip's write gone or of another resource (2); the stop's write gone, before the zeros,
+  its answer always `:ok`, the stopper not kept, a suspended runner's stopper not taken,
+  and a crash writing (6); the cold restart's write gone, of the tripped resource, its
+  failure ignored, after the release and read, and a warm restart writing (5); a fresh
+  start with no store file writing nothing, `start: :cold` reading the store, `start:`
+  cold by default, a failed fresh write starting anyway, its time not kept, the drops not
+  reported, and an image's refusal not naming the store (7); a failure not published, not
+  in `status/1`, a write not moving `written_at`, a success leaving `failed`, and
+  `:retain` no default kind (5); `retain:` taking the forces file, `start:` taken without
+  `retain:`, no wall-clock check (3); a write straight over the store and one not synced
+  (2); the version, another configuration, the spacing, a second line naming one thing, a
+  real not held at its nearest, the time and a line before any instance each not checked
+  (7); an instance's lines in the text's order (1); a cold restart with no store taking
+  an image out (1); and the manual clock's wall clock 0 (1). The first run, on the code
+  before its last fixes (`run1.log`), left five green, each given a test of its own since:
+  a crash writing (a crash inside the runner, its `terminate/2` run, after a box counted),
+  a warm restart writing (two seconds on, a write would name a later time), a write not
+  moving `written_at` (a trip's time in `status/1`), a write not synced (traced) and the
+  lines in the text's order (`t[2]` before `t[10]`); and one mutant was malformed and
+  rewritten.
+
+  *Cost* against `aaae2bb` (`scratchpad/m6/m65s/cost.exs`, a plant of 1, 16 and 64 tally
+  instances through the runner on the manual clock, the runner's own reductions over 200
+  rounds, a trip and a cold restart; `cost_base.txt` and `cost_now.txt`): a runner with no
+  `retain:` runs its rounds, trips and restarts cold within the run's own noise, the
+  rounds 289,267 to 5,901,427 against 289,705 to 5,900,578 at the base, a trip 2
+  reductions more, a clause; a cold restart with no store first took 25% to 45% more, the
+  image of the restarted resource built and passed to a write that did not happen, and
+  takes what it took since a clause passes it over, which `retain_store_test.exs` pins by
+  tracing. With a store a trip costs about 570 reductions an instance more, the image and
+  the text, and a cold restart about 920; the store's text is written and read in
+  reductions linear in its lines (a growth test).
+  2344 tests (11 doctests), up from 2316.
 - **M6-6 · The periodic writer.** `retain_period:`, its range settled (the record
   suggests 100 to 3,600,000 ms), the writer process, latest wins, the failed write's
   event `{:retain, {:error, reason}}` and status (decision 275). *Done when* a runner

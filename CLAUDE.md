@@ -369,6 +369,20 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `gates[*].j`, the innermost arrays first (`collapsed/2`); and since decision 313 a
   resource's `triggers` checked, a line each.
   `Logex.Runtime` alone builds the resource
+- `lib/logex/retain.ex` — `Logex.Retain`, internal (no moduledoc, M6-5, decisions 275,
+  276, 285 and 312), the store, which `Logex.Runner` alone reads and writes: `encode/2`,
+  a resource's retained image (`Logex.Runtime.retained/1`) as decision 276's text at a
+  UTC time to the second (`at/1`), `logex retain 1`, `configuration <name> written
+  <time>`, `global <name> <type> <value>`, `trigger <name> <sample>` (decision 313),
+  `instance <name> <program type>` and each instance's kind and value lines in path order
+  (`Logex.Image.ordered/1`), an array's elements in the elements' order, a real in
+  `Logex.Real.spelled/2`'s text; `decode!/2`, the text read back for a configuration's
+  name, `{image, written_at}`, any number the lexer reads, a real at its type's nearest
+  value, every line it cannot read a line of one `ArgumentError`, `<path>: line <n>: …`,
+  in line order, a store of another configuration at its second line, naming both and
+  `start: :cold` (decision 285); `written/2`, the forces file's atomic write, `.tmp`,
+  synced, closed and renamed over, shared with the store; and `number/1`, the forces
+  file's reading of a number, shared too; linear in the store's lines (a growth test)
 - `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
   one place an array's shape and values are read and made: its type `{:array, type,
   dims}`, one to three sizes, 65,536 elements at most (the spike's limit, provisional),
@@ -1183,7 +1197,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   §4.11), the behaviour the wall-clock runner reads time through, so that a test can
   move time: `now_ms/1`, `wake_at/4`, a message to a pid at an absolute time and no
   sooner, and `cancel/2`, a clock being `{module, term}`; its three checks, hidden,
-  `receiver!/1`, `time!/1` and `timer!/1`, give both clocks one message a rule.
+  `receiver!/1`, `time!/1` and `timer!/1`, give both clocks one message a rule; since
+  M6-5 an optional `wall_ms/1`, the host's wall clock in ms since the epoch, which a
+  runner given `retain:` writes its store's header by and requires (provisional), the
+  monotonic clock's `System.os_time/1` and the manual clock's its own time.
   `lib/logex/runner/clock/monotonic.ex`, `Logex.Runner.Clock.Monotonic`, is the
   machine's: `System.monotonic_time/1` in ms and `Process.send_after/4` to an absolute
   time, a time already past brought to now, since the VM refuses one from before it
@@ -1251,7 +1268,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   rounds, a round the inputs taken, the cycle's steps run (`cycle_steps/3`, decision 118)
   and the outputs written. `start_link/1` takes `configuration:`, `io:`, `clock:`,
   `poll:` (10 ms), `overhead:` (20%, 10 to 90), `idle:` (500 ms), `forces:` (a path, none
-  unless set, M4-5, decision 127) and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
+  unless set, M4-5, decision 127), since M6-5 `retain:` (a path, none unless set) and
+  `start:` (`:warm` or `:cold`, `:warm` unless set, refused without `retain:`,
+  provisional), and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
   `Runtime.start/1` and the bindings as `Logex.IO.bind!/2` check them, in their words; it
   then opens every device inside `init/1`, in device-name order, before it handles
   anything sent to it, so that a call or a stop by its name that comes first waits, and
@@ -1557,6 +1576,21 @@ and reported by its value, two that name one path refused, a drop every element 
 once at depth, `hs[*].ws[*].x`, elements that differ each, the image's `triggers` and each
 of their refusals, and a rise logic wrote after a trigger's last sample firing once after
 a start from the image and a warm restart,
+`retain_store_test.exs` M6-5's store on the manual clock: the text written for every part
+of an image and read back exactly, a hand edit's numbers by their values, every refusal of
+`decode!/2` pinned whole, `retain:` and `start:` and the clock's `wall_ms/1` checked in the
+caller, a fresh start writing the store at once with no file or with `start: :cold`, a
+write that fails starting nothing and opening no device, a stopped runner started fresh
+and a tripped one killed and started fresh restoring the last write, never an older one,
+a write cut short leaving the store whole, a kill and a crash inside the runner writing
+nothing (decision 292), `stop/2` writing after its zeros, seen by the device's own write,
+answering a failed write and a suspended runner's write, a cold restart's write seen by
+the device's read before it and a crash after it restoring none, a warm restart writing
+none, a cold restart whose write fails changing nothing, a trip's failed write reported,
+a changed program's drops in `status/1`, a store of another configuration or no store's
+shape refused naming the store, a retained bit written only by the first round, decision
+284's second trip warm and none cold, a runner with no store taking no image out
+(traced), and the store's text linear in its lines,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1655,7 +1689,12 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   scanning as its warm restart does, and a host mistake at each of the four doors, its
   reach eleven `iw_` atoms, and since decisions 308 and 310 its presets drawn and drawn
   again, a preset following the program restated, and a drop every element of an array
-  of cells makes once, `b[*].k`, thirteen
+  of cells makes once, `b[*].k`, thirteen; and since M6-5 the RunnerWalk's runner given a
+  store wherever it is given a forces file, its configurations holding a program, `keep`,
+  whose retained count and a retained global it adds to the store keeps, its model
+  restating each write, the first start's, a trip's and a cold restart's before its
+  release, and laying the last over a fresh start after a crash, the store's lines
+  checked, its reach `:store_restored` and `:cold_store`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -1800,7 +1839,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   and M6-3's, §4.4's plant with a retained `total_boxes` global shared through
   `var_external` and a retained counter, kept through `restart/2 :warm` and lost through
   `:cold`, from text and from files on disk, over 400 seeded steps against an oracle that
-  knows nothing of logex;
+  knows nothing of logex; and M6-5's, the same plant from files on disk with a retained
+  box counter, `rto` and total through the runner on the manual clock with a store, over
+  400 seeded steps of eyes, kills, stops and trips each followed by a fresh start, against
+  an oracle that knows nothing of logex and comes back to the last write;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
@@ -1913,7 +1955,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   own eight readings answered and built on 2026-10-29, decisions 299–306, every
   configuration keyword refused as a device's name, a qualifier-only refusal declaring its
   global, a global's qualifier edit reported, `Global.new!/3`, a retained `single` firing
-  on no warm start and a retained global an unretained var_output drives warned of: `var retain` and `var
+  on no warm start and a retained global an unretained var_output drives warned of, and
+  M6-4 (the image) the same day and the maintainer's answers to it, decisions 307–315, and
+  M6-5 (the store at its events) on 2026-10-30: `var retain` and `var
   non_retain`, both reserved, on a program's `var` and `var_output`, a block's three
   sections and `var_global`, the nearest mark on a member's path winning, a warm restart
   keeping what is marked and nothing else, a timer's outage not counted and no first-scan
