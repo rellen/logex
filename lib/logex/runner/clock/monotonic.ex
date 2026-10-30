@@ -35,6 +35,10 @@ defmodule Logex.Runner.Clock.Monotonic do
               __STACKTRACE__
   end
 
+  # M6-5 (decision 276): the machine's wall clock, for a store's header alone.
+  @impl Clock
+  def wall_ms(_clock), do: System.os_time(:millisecond)
+
   @impl Clock
   def cancel(_clock, timer) do
     Process.cancel_timer(Clock.timer!(timer))

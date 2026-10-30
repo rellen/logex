@@ -29,6 +29,8 @@ defmodule Logex.Runner.Clock.Manual do
     back.
   - `pending/1` gives the timers not yet delivered, in the order `advance/2` would deliver
     them.
+  - `wall_ms/1`, the wall clock a store's header is written by (M6-5), is its own time,
+    read as milliseconds since the Unix epoch.
 
   A receiver is an OTP process, a GenServer as the runner's and each device's are, which
   answers `:sys` once it has handled what it was sent; one that does not answer within
@@ -91,6 +93,11 @@ defmodule Logex.Runner.Clock.Manual do
         clock!(clock),
         {:wake_at, Clock.receiver!(pid), message, Clock.time!(at_ms)}
       )
+
+  # M6-5 (decision 276): its own time, read as milliseconds since the Unix epoch, so that
+  # a store's header is written deterministically, 1970-01-01T00:00:00Z at 0.
+  @impl Clock
+  def wall_ms(clock), do: now_ms(clock)
 
   @impl Clock
   def cancel(clock, timer), do: GenServer.call(clock!(clock), {:cancel, Clock.timer!(timer)})

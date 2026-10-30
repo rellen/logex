@@ -7114,4 +7114,182 @@ defmodule Logex.EndToEndTest do
       the_retained_done_when(plant, tally_plant())
     end
   end
+
+  # PLAN.md M6-5's end-to-end Done-when: §4.4's plant from files on disk with a retained
+  # box counter, a retained `rto` and a retained total, through the runner on the manual
+  # clock with a store, killed and started fresh, stopped and started fresh, and tripped,
+  # killed and started fresh. The oracle knows nothing of logex: each step holds the eye
+  # for two of the fast task's rounds; a box is counted where a round sees the eye risen
+  # since the round before, never in a start's first round; the lube timer adds 10 ms in a
+  # round that sees the eye on after one that saw it on; a fresh start comes back to what
+  # the last write held, the first start's, a stop's or a trip's, never what a crash
+  # discarded since.
+  describe "the store in the plant (M6-5)" do
+    @describetag :tmp_dir
+    @describetag capture_log: true
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @kept_ld """
+    var_input eye bool
+    var_external total_boxes dint
+    var retain boxes ctu
+    var retain lube rto
+    var e bool
+
+    xic eye ctu boxes 100000
+    xic eye ons e add total_boxes 1 total_boxes
+    xic eye rto lube 100000000
+    """
+
+    @kept """
+
+    var_global eye_1 bool at panel.i.8
+    var_global retain total_boxes dint 0
+
+    program tally tally with fast
+      tally.eye eye_1
+    """
+
+    defp kept_plant_on_disk(dir) do
+      {_programs, files} = shared_programs()
+      files = Map.merge(files, %{"tally.ld" => @kept_ld, "snapshot.ld" => @snapshot_ld})
+
+      for {name, text} <- Map.put(files, "plant.logex", whole_plant() <> @kept),
+          do: File.write!(Path.join(dir, name), text)
+
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    # The oracle's model: the three values, the eye the last round saw, whether the next
+    # round is a start's first, and what the last write held.
+    defp kept_model, do: %{now: {0, 0, 0}, eye: 0, stored: {0, 0, 0}}
+
+    defp kept_step({:eye, eye}, model), do: rounds(model, eye) |> rounds(eye)
+    defp kept_step(:kill, model), do: fresh(model)
+    defp kept_step(:stop, model), do: fresh(%{model | stored: model.now})
+    defp kept_step(:trip, model), do: fresh(%{model | stored: model.now})
+
+    # A fresh start's first round sees the eye as it was last set and counts nothing.
+    defp fresh(model), do: %{model | now: model.stored}
+
+    defp rounds(%{now: {total, cv, acc}, eye: last} = model, eye),
+      do: %{
+        model
+        | now: {total + rose(last, eye), cv + rose(last, eye), acc + held(last, eye)},
+          eye: eye
+      }
+
+    defp rose(0, 1), do: 1
+    defp rose(_last, _eye), do: 0
+
+    defp held(1, 1), do: 10
+    defp held(_last, _eye), do: 0
+
+    defp kept_steps(seed, n) do
+      :rand.seed(:exsss, seed)
+
+      for _ <- 1..n,
+          do: Enum.random(List.duplicate(:eye, 14) ++ [:kill, :stop, :trip]) |> kept_drawn()
+    end
+
+    defp kept_drawn(:eye), do: {:eye, Enum.random([0, 1])}
+    defp kept_drawn(event), do: event
+
+    # The runner's side of a step: the eye set and two fast rounds run; a kill; a stop; or
+    # a trip, the panel's read made to fail, and then a kill; each but the eye followed by
+    # a fresh start on the same store, once its devices' processes have gone.
+    defp kept_run({:eye, eye}, rig) do
+      Sim.set(rig.panel, [8], eye)
+      Manual.advance(rig.clock, 20)
+      rig
+    end
+
+    defp kept_run(:kill, rig), do: kept_started(killed_runner(rig))
+
+    defp kept_run(:stop, rig) do
+      assert Runner.stop(rig.runner) == :ok
+      kept_started(gone_devices(rig))
+    end
+
+    defp kept_run(:trip, rig) do
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped} = Runner.status(rig.runner)
+      kept_started(killed_runner(rig))
+    end
+
+    defp killed_runner(rig) do
+      Process.unlink(rig.runner)
+      ref = Process.monitor(rig.runner)
+      Process.exit(rig.runner, :kill)
+      assert_receive {:DOWN, ^ref, :process, _, :killed}
+      gone_devices(rig)
+    end
+
+    # Each sim's opener gone down, so that the next runner can open it (commit 2adf13a).
+    defp gone_devices(rig) do
+      for sim <- [rig.panel, rig.drive], do: holder_down(GenServer.call(sim, :holder))
+      rig
+    end
+
+    defp holder_down(nil), do: :ok
+
+    defp holder_down({pid, _device}) do
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, _, _}, 5000
+    end
+
+    defp kept_started(rig) do
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{status: :running, retain: %{dropped: []}} = Runner.status(runner)
+      %{rig | runner: runner}
+    end
+
+    defp kept_kind({:eye, _eye}), do: :eye
+    defp kept_kind(event), do: event
+
+    defp kept_values(runner),
+      do:
+        {Runner.get!(runner, "total_boxes"), Runner.get!(runner, "tally.boxes.cv"),
+         Runner.get!(runner, "tally.lube.acc")}
+
+    test "M6-5's Done-when: killed, stopped and tripped, a fresh start restores the last " <>
+           "write",
+         %{tmp_dir: dir} do
+      plant = kept_plant_on_disk(dir)
+      store = Path.join(dir, "plant.retain")
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      opts = [
+        configuration: plant,
+        io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+        clock: {Manual, clock},
+        retain: store
+      ]
+
+      rig = kept_started(%{clock: clock, panel: panel, drive: drive, opts: opts, runner: nil})
+      assert File.read!(store) =~ "configuration plant written 1970-01-01T00:00:00Z\n"
+      steps = kept_steps({2026, 10, 65}, 400)
+
+      {rig, model} =
+        Enum.reduce(steps, {rig, kept_model()}, fn step, {rig, model} ->
+          rig = kept_run(step, rig)
+          model = kept_step(step, model)
+          assert kept_values(rig.runner) == model.now, inspect(step)
+          {rig, model}
+        end)
+
+      # Every kind of step came, and the values a restore met were not all 0.
+      assert Enum.sort(Enum.uniq(Enum.map(steps, &kept_kind/1))) == [:eye, :kill, :stop, :trip]
+
+      assert elem(model.stored, 0) > 0 and elem(model.stored, 2) > 0
+      assert Runner.stop(rig.runner) == :ok
+    end
+  end
 end

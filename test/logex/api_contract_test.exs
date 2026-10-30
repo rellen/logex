@@ -11959,6 +11959,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     @impl true
     def cancel({clock, _test}, timer), do: Manual.cancel(clock, timer)
 
+    # M6-5: the manual clock's wall clock, which a runner given a store writes its header by.
+    @impl true
+    def wall_ms({clock, _test}), do: Manual.wall_ms(clock)
+
     defp lag({Logex.Runner, :init, 1}, clock, test),
       do: lagged(:ets.lookup(@table, {test, :lag}), clock)
 
@@ -12020,6 +12024,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   @programs %{
     "relay" => "var_input in bool\nvar_output out bool\nxic in ote out",
     "count" => "var_output n dint\nadd n 1 n",
+    # M6-5: a retained count and a retained global it adds to, which a runner's store keeps
+    # across a crash and a fresh start.
+    "keep" => "var_external kt dint\nvar retain k dint\nadd k 1 k\nadd kt 1 kt",
     "ratio" => "var_input d dint\nvar_output q dint\ndiv 1000 d q",
     # M5-9: a bit whose number the panel's dint gives, read while the panel's `pb` is
     # pressed: its -4 is out of range, a major fault (decisions 153 and 160).
@@ -12094,6 +12101,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # {:internal, message}; each kind of round (decisions 120, 122, 123 and 138); and each
   # step, refusal and fault.
   @runner_reach [
+    # M6-5: a fresh start that restored a count a store kept, and a cold restart's write.
+    :store_restored,
+    :cold_store,
     :ran,
     :fault,
     :overlap,
@@ -12173,7 +12183,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :down_while_tripped
   ]
 
-  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1])
+  @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
 
   # A draw: the tasks' intervals and watchdogs, an event task on a panel's or a drive's
   # input, a trigger logic writes, the continuous task declared or not, and the untimed
@@ -12202,7 +12212,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       Enum.join(
         tasks(d) ++
           Enum.map(@points, fn {name, type, at} -> "var_global #{name} #{type} at #{at}" end) ++
-          ["var_global cm dint", "var_global cs dint", "var_global g bool"] ++ instances(d),
+          ["var_global cm dint", "var_global cs dint", "var_global g bool"] ++
+          ["var_global retain kt dint"] ++ instances(d),
         "\n"
       ) <> "\n"
 
@@ -12231,7 +12242,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         "program b1 bit with fast\n  b1.n pd\n  b1.on pb",
         "program x1 index with fast\n  x1.n pd\n  x1.on pa",
         "program z1 zone with fast\n  z1.t pt\n  z1.h qs",
-        "program m2 mix with fast\n  m2.r dr\n  m2.w dw\n  m2.on pb\n  m2.go pa\n  m2.n pd\n  m2.u qu"
+        "program m2 mix with fast\n  m2.r dr\n  m2.w dw\n  m2.on pb\n  m2.go pa\n  m2.n pd\n  m2.u qu",
+        "program k1 keep with fast"
       ] ++
         optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
         optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
@@ -12360,6 +12372,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     sims = Map.new(reports, fn {name, r} -> {name, sim(r, manual)} end)
     file = pick([nil, Path.join(dir, "forces-#{seed}")])
     File.rm(file || Path.join(dir, "none"))
+    store = store_beside(file, dir, seed)
+    File.rm(Path.join(dir, "retain-#{seed}"))
 
     w = %{
       programs: programs,
@@ -12369,6 +12383,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       lossy: MapSet.new(),
       sims: sims,
       file: file,
+      store: store,
+      stored: nil,
       poll: pick([3, 5, 8]),
       idle: pick([400, 500]),
       overhead: pick([10, 20, 50, 90]),
@@ -12431,6 +12447,55 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     sim
   end
 
+  # M6-5: a runner given a forces file is given a store too, beside it, so that no draw is
+  # added and each walk is as it was but for what the store keeps.
+  defp store_beside(nil, _dir, _seed), do: nil
+  defp store_beside(_file, dir, seed), do: Path.join(dir, "retain-#{seed}")
+
+  # The model's resource at a fresh start (decision 271, restated): with no store, the
+  # configuration's; with a store and nothing written yet, the configuration's, written at
+  # once; and otherwise the last write's, which the store's lines hold, laid over it.
+  defp fresh_rt(%{store: nil}, config), do: {Runtime.start(config), nil}
+
+  defp fresh_rt(%{stored: nil}, config) do
+    rt = Runtime.start(config)
+    {rt, restated(rt)}
+  end
+
+  defp fresh_rt(%{stored: stored, store: store}, config) do
+    {kt, k} = stored
+    text = File.read!(store)
+    assert text =~ "\nglobal kt dint #{kt}\n"
+    assert text =~ "\ninstance k1 keep\nk1.k dint #{k}\n"
+    reach(:store_restored, k > 0)
+
+    image = %{
+      configuration: "plant",
+      globals: %{"kt" => {:dint, kt}},
+      instances: %{"k1" => %{program: "keep", kinds: %{}, values: %{"k" => {:dint, k}}}},
+      triggers: %{}
+    }
+
+    {elem(Runtime.start(config, image), 0), stored}
+  end
+
+  # What a store write holds of the model's resource: the retained global and the
+  # retained count, the only values the walk's programs retain.
+  defp restated(rt), do: {Runtime.get!(rt, "kt"), Runtime.get!(rt, "k1.k")}
+
+  # The writes at events (decisions 275 and 291): a trip's of the resource as it left it,
+  # and a cold restart's of the resource as the restart starts it, before any device is
+  # released or read, so whether or not a device then refuses it.
+  defp stored_at(%{store: nil} = w, _rt), do: w
+  defp stored_at(w, rt), do: %{w | stored: restated(rt)}
+
+  defp cold_stored(:cold, w) do
+    reach(:cold_store, w.store != nil)
+    stored_at(w, Runtime.restart(w.rt, :cold))
+  end
+
+  defp cold_stored(:warm, w), do: w
+
   # A runner started on the configuration, its first round run at once before it returns,
   # and the walk subscribed to every kind of event.
   defp started(w, config) do
@@ -12445,19 +12510,21 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         idle: w.idle,
         overhead: w.overhead,
         forces: w.file,
+        retain: w.store,
         steps: Walked
       )
 
     assert :ets.lookup(@table, {self(), :late}) == []
     reach(:late_open, late)
     :ok = Runner.subscribe(runner, [:overlap, :fault, :trip, :restart, :edit, :ran, :round])
-    rt = Runtime.start(config)
+    {rt, stored} = fresh_rt(w, config)
 
     w =
       Map.merge(w, %{
         runner: runner,
         config: config,
         rt: rt,
+        stored: stored,
         edit: nil,
         expect: [],
         status: :running,
@@ -12939,6 +13006,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # once more (decision 136). The device's own reason is the restart's, whatever it is.
   defp restart(w) do
     mode = pick([:cold, :warm])
+    w = cold_stored(mode, w)
     down = Enum.sort(MapSet.to_list(w.down))
     up = for name <- Enum.sort(Map.keys(w.sims)), Enum.all?(down, &(&1 > name)), do: name
 
@@ -13444,6 +13512,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp all_steps(_steps, w, _took), do: w
 
   defp tripped(w, reason) do
+    w = stored_at(w, w.rt)
+
     written =
       Map.new(w.sims, fn {name, _sim} ->
         {name, zeroed_unless_down(MapSet.member?(w.down, name), name, %{w | trip: reason})}

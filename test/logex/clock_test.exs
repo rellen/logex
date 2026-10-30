@@ -96,8 +96,17 @@ defmodule Logex.ClockTest do
   defp opaque(value), do: :erlang.binary_to_term(:erlang.term_to_binary(value))
 
   describe "Logex.Runner.Clock, the behaviour" do
-    test "is three callbacks, which both clocks implement" do
-      assert Enum.sort(Clock.behaviour_info(:callbacks)) == [cancel: 2, now_ms: 1, wake_at: 4]
+    # Since M6-5 a fourth, optional, the wall clock a store's header is written by, which
+    # both clocks implement too, the manual one as its own time (decision 276).
+    test "is three callbacks and an optional fourth, which both clocks implement" do
+      assert Enum.sort(Clock.behaviour_info(:callbacks)) ==
+               [cancel: 2, now_ms: 1, wake_at: 4, wall_ms: 1]
+
+      assert Clock.behaviour_info(:optional_callbacks) == [wall_ms: 1]
+      assert_in_delta Monotonic.wall_ms(nil), System.os_time(:millisecond), 1000
+      clock = clock()
+      Manual.advance(clock, 1250)
+      assert Manual.wall_ms(clock) == 1250
 
       for module <- [Monotonic, Manual] do
         behaviours = List.flatten(Keyword.get_values(module.module_info(:attributes), :behaviour))

@@ -2483,8 +2483,9 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Logex.Runner.Clock.__info__(:functions)) ==
                [receiver!: 1, time!: 1, timer!: 1]
 
+      # Since M6-5 an optional fourth, the wall clock a store's header is written by.
       assert Enum.sort(Logex.Runner.Clock.behaviour_info(:callbacks)) ==
-               [cancel: 2, now_ms: 1, wake_at: 4]
+               [cancel: 2, now_ms: 1, wake_at: 4, wall_ms: 1]
 
       {:docs_v1, _, _, _, _, _, clock_docs} = Code.fetch_docs(Logex.Runner.Clock)
 
@@ -2494,7 +2495,7 @@ defmodule Logex.RuntimeTest do
                [receiver!: 1, time!: 1, timer!: 1]
 
       assert Enum.sort(Logex.Runner.Clock.Monotonic.__info__(:functions)) ==
-               [cancel: 2, now_ms: 1, wake_at: 4]
+               [cancel: 2, now_ms: 1, wake_at: 4, wall_ms: 1]
 
       assert Enum.sort(Logex.Runner.Clock.Manual.__info__(:functions)) == [
                advance: 2,
@@ -2511,7 +2512,8 @@ defmodule Logex.RuntimeTest do
                start_link: 0,
                start_link: 1,
                terminate: 2,
-               wake_at: 4
+               wake_at: 4,
+               wall_ms: 1
              ]
 
       # M4-1: the adapter behaviour, with a point as plain data, a configuration's points
@@ -2611,6 +2613,12 @@ defmodule Logex.RuntimeTest do
              ]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Runner.Device)
+
+      # M6-5: the store, internal (no moduledoc), which the runner alone reads and writes.
+      assert Enum.sort(Logex.Retain.__info__(:functions)) ==
+               [at: 1, decode!: 2, encode: 2, number: 1, written: 2]
+
+      assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Retain)
     end
   end
 end

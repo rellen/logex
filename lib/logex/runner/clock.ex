@@ -16,6 +16,12 @@ defmodule Logex.Runner.Clock do
   - `cancel/2` stops a timer not yet delivered, and is `:ok` whether or not one was
     pending. A message already sent stays in its receiver's mailbox, so a receiver that
     cancels a timer ignores a stale message of it.
+  - `wall_ms/1`, optional since M6-5 (decision 276), is the host's wall clock, in whole
+    milliseconds since the Unix epoch, which a runner given `retain:` writes into its
+    store's header for a person and for `status/1`, and never times anything by: the
+    monotonic clock's is the machine's, `System.os_time/1`, and the manual clock's its own
+    time, read as milliseconds since the epoch. A clock without it runs a runner given no
+    store, and one given `retain:` is the host's mistake (provisional).
 
   A receiver is a process given by its pid; a time an integer; a timer the reference
   `wake_at/4` gave. Anything else is the host's mistake, an `ArgumentError`, whose
@@ -33,6 +39,11 @@ defmodule Logex.Runner.Clock do
 
   @doc "Stops a timer `wake_at/4` set, if it has not been delivered."
   @callback cancel(clock, timer :: reference) :: :ok
+
+  @doc "The host's wall clock, in whole milliseconds since the Unix epoch (M6-5)."
+  @callback wall_ms(clock) :: integer
+
+  @optional_callbacks wall_ms: 1
 
   @doc false
   # The checks both clocks make of what a host hands them, one message a rule.

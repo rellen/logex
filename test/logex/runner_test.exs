@@ -243,7 +243,8 @@ defmodule Logex.RunnerTest do
       for opts <- [:x, [1], %{configuration: nil}] do
         raises(
           "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-            "clock:, poll:, overhead:, idle:, forces: and name:, got: #{inspect(opts)}",
+            "clock:, poll:, overhead:, idle:, forces:, retain:, start: and name:, got: " <>
+            inspect(opts),
           fn -> Runner.start_link(opts) end
         )
       end
@@ -253,8 +254,8 @@ defmodule Logex.RunnerTest do
       {opts, _rig} = rig()
 
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces: and name:, " <>
-          "got: :pole",
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
+          "retain:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 10, period: 5]) end
       )
     end
@@ -272,8 +273,8 @@ defmodule Logex.RunnerTest do
 
       # An unknown key repeated is told as unknown.
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces: and name:, " <>
-          "got: :pole",
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
+          "retain:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
       )
     end
@@ -1976,7 +1977,8 @@ defmodule Logex.RunnerTest do
                runs: %{"fast" => {0, 500}, "trip" => {0, 500}},
                latest_wake: 0,
                refresh_gap: 0,
-               unzeroed: []
+               unzeroed: [],
+               retain: nil
              }
     end
 
@@ -2130,7 +2132,7 @@ defmodule Logex.RunnerTest do
       for kinds <- [:ran, [:ran, :rounds], ["ran"], [:round | :ran], [:ran, :round | :overlap]] do
         raises(
           "a runner's events are subscribed by a list of their kinds, among :overlap, " <>
-            ":fault, :trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}",
+            ":fault, :trip, :restart, :edit, :retain, :ran and :round, got: #{inspect(kinds)}",
           fn -> Runner.subscribe(runner, kinds) end
         )
       end
