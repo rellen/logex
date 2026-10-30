@@ -341,7 +341,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   `Logex.Runtime.retained/2` and `retained/1`, which `instance/2` and `start/2` start a
   new one from, keeping a value only where the program declares its path retained, of
   exactly its type, and it fits, and dropping and reporting the rest, so a program
-  changed since lets its unchanged values through. Still to land: a store the runner
+  changed since lets its unchanged values through, a timer's or counter's preset
+  following the program rather than the image, and since the maintainer's answers of
+  2026-10-30 a retained trigger's last sample kept with it. Still to land: a store the runner
   writes on the host's disk every second and at a
   trip, a stop and a cold restart, read at a fresh start, warm unless `start: :cold`, so
   that until then a crash or a stopped VM keeps nothing. `persistent` is deferred and
@@ -2921,15 +2923,23 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
 - `Logex.Runtime.retained/1` takes every retained value of the resource out as plain
   data, the retained image, `%{configuration: "tally", globals: %{"total_boxes" =>
   {:dint, 5}}, instances: %{"t1" => %{program: "tally", kinds: %{"boxes" => "ctu"},
-  values: %{"boxes.cv" => {:dint, 5}, ...}}}}`, each value by its path with its type and
-  never a timer's `last`; `Logex.Runtime.start/2` starts a new resource from it, as
+  values: %{"boxes.cv" => {:dint, 5}, ...}}}, triggers: %{}}`, each value by its path
+  with its type and never a timer's `last`, and `triggers` each retained global that is
+  a task's `single` with its last sample (decision 313); `Logex.Runtime.start/2` starts a new resource from it, as
   `start/1` does, with each value laid over it where the program declares its path
   retained, of exactly its type, and the value fits, and gives back what it dropped,
   each once by its path with its reason. A counter made a `ctu_int` is an instance of
   another kind, so its count is dropped, `{"t1.boxes", {:retyped, "ctu", "ctu_int"}}`,
   and starts at 0, while the total, unchanged, is kept (`PLAN.md`'s M6-4; decision 277 in
-  [`docs/organisation.md`](docs/organisation.md) §7). `Logex.Runtime.retained/2` and
-  `instance/2` do the same for a lone instance. Nothing writes the image to disk yet.
+  [`docs/organisation.md`](docs/organisation.md) §7). A timer's or counter's preset is
+  the program's, the number on its instruction, whatever the image holds, so `ctu boxes
+  3` made `ctu boxes 6` counts on to 6 from the kept count, the stored 3 reported,
+  `{"t1.boxes.pv", {:preset, 3, 6}}` (decision 308); a member every element of an array of
+  instances drops alike is reported once, `gates[*].j` (decision 310); an integer stored
+  for a real is taken at its nearest real, as a host's input is (decision 311); and an
+  element named with leading zeros, `tl[01]`, is the element of its value (decision 312).
+  `Logex.Runtime.retained/2` and `instance/2` do the same for a lone instance. Nothing
+  writes the image to disk yet.
 - `full` is retained, so the warm restart keeps it, but `case_full`, the global it drives,
   is not, and reads 0 until the first round copies `full` out. Wired straight to an output
   point, a retained var_output is written there in the first round after a warm start,
@@ -2944,10 +2954,13 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   over it", an element of an array by its element, and where it retains it, nothing is
   lost and nothing is said (decision 306). A write through a `var_external`, as `tally`'s
   to `total_boxes`, is no connection and is not warned of.
-- A retained global that is a task's `single`, kept at 1 by a warm restart, is no rising
-  edge: its event task waits for a real one, as nothing fires on a warm start (decision
-  305, decision 274's rule). A cold restart puts it back with its trigger, and an input
-  point's trigger already 1 still runs its task in the first cycle (decision 51).
+- A retained global that is a task's `single` keeps its last sample through a warm
+  restart, as the resource last took it, so one kept at 1 and sampled at 1 is no rising
+  edge and its event task waits for a real one (decision 305, decision 274's rule), and
+  one logic set after the last sample, just before a trip, runs its task once in the first
+  cycle (decision 313); a start from the image lays the sample back the same way. A cold
+  restart puts it back with its trigger, and an input point's trigger already 1 still
+  runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and
   an output point starts at 0 until logic writes it, so no output comes back on from a
   kept value. `retain` and `non_retain` are reserved in a configuration file as in a `.ld`

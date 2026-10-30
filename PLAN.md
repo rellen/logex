@@ -228,8 +228,9 @@ the words `retain` and `non_retain`, and M6-2, the warm restart in the core, lan
 same day in one push, and M6-3, retained globals, the same day with the maintainer's
 answers to their six readings (decisions 293–298), its own eight readings answered and
 built on 2026-10-29 (decisions 299–306), and M6-4, the image, the same day, its five
-readings and the three its review raised put to the maintainer, and the other five are
-planned.
+readings and the three its review raised, with the superseded edit's leftover tags found
+while building M6-3, answered by the maintainer and built on 2026-10-30 (decisions
+307–315), and the other five are planned.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -9320,7 +9321,8 @@ done-when reads the next store write; and last the contract walk and the documen
   a restart; (b) decision 66 widened: at an edit's first test each kept instance's tags
   its running program does not declare dropped and reported by path, `:pruned`, as a
   superseded edit's instances and globals are; (c) every prune drops whatever the kept
-  program does not declare, whatever left it.
+  program does not declare, whatever left it. *(Answered (c), decision 315, 2026-10-30, built
+  with M6-4's answers.)*
 
 - **M6-4 · The image.** `Logex.Runtime.retained/1,2`, `start/2` and `instance/2`, with
   decision 277's matching and its dropped report, the image checked as a host's state is
@@ -9424,7 +9426,7 @@ done-when reads the next store write; and last the contract walk and the documen
   the matching, which the array's kind, matched sizes and all, and the image's check
   already hold, so the check was taken out.
 
-  *Provisional readings, put to the maintainer.* Where the record is silent the item took
+  *Provisional readings, put to the maintainer* *(all five answered on 2026-10-30, decisions 307 to 311)*. Where the record is silent the item took
   the reading nearest the record, IEC and Logix, each marked so in the code and in §4.13:
 
   1. *The image's shape*: a lone instance's `%{program:, kinds:, values:}`, its paths
@@ -9433,7 +9435,7 @@ done-when reads the next store write; and last the contract walk and the documen
      whose members are the same, is told by its kind. An operator sees nothing of it until
      M6-5 writes it to disk; a host reads it. The options: (a) as built; (b) flat by full
      path as decision 276's store lines are, `%{"m1.boxes" => {:instance, "ctu"},
-     "m1.boxes.cv" => {:dint, 41}}`, one map for a whole resource.
+     "m1.boxes.cv" => {:dint, 41}}`, one map for a whole resource. *(Answered (a), decision 307.)*
   2. *A built-in's preset in the image.* The preset, a timer's `.pre` and a counter's
      `.pv`, is matched as any member is, so a program whose `rto lube 360000000` became
      `rto lube 180000000` and that starts warm from its store keeps greasing at 100 hours
@@ -9442,22 +9444,22 @@ done-when reads the next store write; and last the contract walk and the documen
      instead, `{:preset, "lube", {360000000, 180000000}}` (decisions 23 and 27). The
      options: (a) as built, the stored preset kept; (b) the preset follows the program
      wherever its instruction gives one, as an edit's switch moves it, reported in the
-     dropped list or a list of its own.
+     dropped list or a list of its own. *(Answered (b), decision 308: the preset follows the program, a stored one that differs reported in the dropped list.)*
   3. *An image of another configuration or program* is refused as the host's mistake, a
      line naming both, decision 285's rule for a store carried into the core, so a
      renamed configuration starts from its image only once the host renames the image,
      and a lone instance only from an image of its program's name. The options: (a) as
-     built; (b) everything dropped and reported, `{"", :undeclared}`, the start going on.
+     built; (b) everything dropped and reported, `{"", :undeclared}`, the start going on. *(Answered (a), decision 309.)*
   4. *How the dropped are named in an array of instances.* A member a block's new version
      retypes is reported once an element, `cs[0].j` and `cs[1].j`, where decision 259's
      messages write `cs[*].j`; a whole array resized once, at the array. An operator
      reading the start's report of `gates gate[64]` sees 64 lines for one change. The
      options: (a) as built, each element; (b) `cs[*].j` once where every element drops the
-     member for the one reason.
+     member for the one reason. *(Answered (b), decision 310.)*
   5. *A value of no type's form.* An image's `{:real, 5}`, an integer where a `real` is
      stored, is a misfit and dropped, as a state handed in is refused it, where a host's
      input of 5 into a `real` is stored as 5.0. The options: (a) as built, a state's rule;
-     (b) a host's input's rule, held at its nearest real.
+     (b) a host's input's rule, held at its nearest real. *(Answered (b), decision 311.)*
 
   The order of judging, declared, type, retained and fit, is the record's list read in
   order, so a tag both retyped and made unretained reports `{:retyped, ...}`; and a lone
@@ -9548,13 +9550,13 @@ done-when reads the next store write; and last the contract walk and the documen
      editing the file sees "no location" rather than "`retain` comes straight after
      `var_global`". The options: (a) as built, the round trip kept for any location a
      struct holds; (b) told the qualifier's place there too, a global built from Elixir
-     with `at: "retain"` then printing to text that does not read back to it.
+     with `at: "retain"` then printing to text that does not read back to it. *(Answered (a), decision 314.)*
   7. *A subscript not written as its value in an image.* `tl[01].acc` is refused as no
      path, the whole image refused, where the host or, from M6-5, a person editing the
      store wrote it. The options: (a) as built, refused, the image naming each element
      one way; (b) matched by its value, `tl[01]` as `tl[1]`, a store edited by hand
      loading as the person meant; (c) dropped, reported in the dropped list, the start
-     going on.
+     going on. *(Answered (b), decision 312.)*
   8. *A rise of a retained trigger logic wrote just before a trip.* Logic in cycle *k*
      latches a retained `single` `arm` after the cycle sampled it at 0; the runner trips
      before cycle *k*+1, whose sample would have seen the rise and run the event task.
@@ -9564,10 +9566,149 @@ done-when reads the next store write; and last the contract walk and the documen
      The options: (a) as built, nothing fires on a warm start, as the decision says; (b)
      the trigger's last sample kept as resource state across a warm restart, so a rise
      logic wrote after the sample fires in the first cycle, and one already seen does
-     not.
+     not. *(Answered (b), decision 313, the image carrying each retained single's last sample too.)*
+
+  **The maintainer's answers to M6-4** (2026-10-30, decisions 307 to 315,
+  `docs/organisation.md` §7), recorded and built together. Three confirm what was built,
+  six change it:
+  - *The image's shape* (307): confirmed. A resource's image gains a fourth part,
+    `triggers`, by decision 313.
+  - *A built-in's preset* (308): changed. At a start from an image a timer's `.pre` and a
+    counter's `.pv` are the program's, the number on the instruction that runs the
+    instance, as an edit's switch moves it; `.acc` or `.cv`, the done bits and the edge
+    memory are kept. A stored preset that differs is reported in the list beside the
+    drops, `{"lube.pre", {:preset, 360000000, 180000000}}`; the list keeps its name,
+    `dropped`, every entry being a stored value the start did not keep, and a misfit
+    preset is `:misfit` as before (`Logex.Image`'s `fitted/4`, looked at only where a
+    value's last segment is a built-in's preset member, `@preset_members`).
+  - *An image of another configuration or program* (309): confirmed, refused.
+  - *The drops in an array of instances* (310): changed. Where every element drops the
+    same member for the same reason, once, `gates[*].j`, decision 259's path form, at any
+    depth, `hs[*].ws[*].x`, the innermost arrays first, a resource's after its instance's
+    name; where the elements differ, each by its element. `[*]` comes before any element
+    in path order (`collapsed/2`, `ordered/1`).
+  - *A value of no type's form* (311): changed. An integer stored for a `real` or an
+    `lreal`, a tag's, a member's, an array's element or a global's, is taken at its
+    nearest real, as a host's input is, one past the real's range a misfit; a float for
+    an integer or a bool, a value of no number, and a float that is no value of its real
+    are still misfits (`taken/2`).
+  - *A subscript not written as its value* (312): changed. `tl[01].acc` names `tl[1].acc`,
+    in `kinds` and `values`, a drop reported by the path logic names; a subscript that is
+    no digits still a line of the refusal, and two entries that name one path a line too,
+    "`values` holds `tl[01].acc` and `tl[1].acc`, which name one path, `tl[1].acc`". A
+    path is read once and made canonical only where a subscript starts with a 0.
+  - *A rise of a retained trigger just before a trip* (313): changed, restating decision
+    305. A warm `restart/2` keeps a retained `single`'s last sample as the resource took
+    it, not the value kept; `Logex.Runtime.retained/1` gives it, `triggers: %{"arm" =>
+    0}`, and `start/2` lays it back for a `single` the image put back; so a rise logic
+    made after the last sample fires once in the first cycle, and one already seen does
+    not. An image's `triggers` that are no map, a sample that is no bool's value or of a
+    global the image's `globals` do not hold are lines of its refusal; a `single` put back
+    with no sample, which only a host's own image lacks, starts at the value put back
+    (provisional, question 2 below).
+  - *`at retain` at a line's end* (314): confirmed, a location.
+  - *A superseded edit's leftover tags* (315): changed, option (c). Every prune of a
+    configuration edit, assemble and cancel after an untest, drops whatever a kept
+    instance's running program does not declare, at any depth, a member of a block and of
+    each element of an array of blocks among it, reported by path with the value it had,
+    `{:pruned, "m1.spare", 4}`, `Logex.Edit`'s existing `:pruned` kind, so no report kind
+    is added; only an instance the edit retyped or added is walked, an instance of one type
+    in both being pruned to exactly its program's tags by the type's plan as before.
+
+  Tests, each saying what changed: `retain_image_test.exs`'s member-by-member drops now
+  `cs[*].j`, its path-order test over elements that differ, its misfit test's `{:lreal, 1}`
+  kept as 1.0 and `g.pv` the program's 9 reported, its refusal test's `tl[01].acc` now the
+  one-path line, its pinned messages naming `triggers`, its kept-single test sampled at 1
+  and, new, a sample of 0 firing once and none firing nothing; and new tests of a preset
+  following the program (an `rto`'s and a `ctu`'s, an array of timers moved alike once
+  and one element alone, a misfit preset, a preset logic wrote), an integer for a real (a
+  lone instance's, an array's and a global's, past the range a misfit), a subscript with
+  leading zeros in `values` and `kinds` and two that name one path, `triggers` and each of
+  their refusals, decision 310 at 64 elements, beside an element that differs and at
+  `hs[*].ws[*].x`, and a rise logic wrote after a trigger's last sample firing once after
+  a start from the image and a warm restart. `retain_configuration_test.exs`: decision
+  313 through `restart/2`, and through `Logex.Runner.restart/2` on the manual clock, a
+  round that latches `arm` after `ev` sampled it tripping on an index fault before any
+  round samples it again, warm then running `ev` once and cold nothing, run 50 times
+  under load on four cores, 50 passed. `config_edit_test.exs`: decision 315's prune of a
+  tag and a seal block's member a superseded edit left in an instance the next edit
+  retypes, and of a member in each element of an array of blocks and in a block inside a
+  block. The walks: the image
+  walk draws its presets and draws them again in a changed program, restating decision
+  308, and restates decision 310 over its arrays of cells, its reach thirteen `iw_`
+  atoms, `iw_preset` and `iw_every` added; the configuration edit's walk takes its
+  qualifier draws from its main stream again, restates decision 315 at every prune, and
+  after its 500 configurations walks 150 more drawn toward what the 500 met only at some
+  seeds, each beginning with an edit tested and untested superseded by one tested,
+  untested and cancelled, a switch after three cycles, its timer a `tof` or a `tp`, an
+  instance retyped and superseding at one step in two, its reach `:pruned_left` added.
+  At the pinned seed and at 30 fresh ones, `{2026, 11, 1}` to `{2026, 11, 30}`, it passes
+  every time (`m6/seeds_f.out`); before the 150, `:resumed_by_tt` was missed at 9 of 22
+  fresh seeds and `:pruned_left` at three in four, and with the main stream's draws alone
+  the leftover gap itself failed at `{2026, 11, 8}`, as the question said.
+
+  *Provisional readings of the answers, put to the maintainer.* Where the answers are
+  silent the work took the reading nearest the record, IEC and Logix, each marked so in
+  the code and in §7:
+
+  1. *A preset logic wrote* (decision 308). With `xic setup move 5000 t1.pre`, an operator's
+     recipe changing the preset at run time, a warm restart after a trip keeps 5000, the
+     instance kept as it was (decision 271), but a fresh start from the store gives the
+     program's number again and reports `{"m1.t1.pre", {:preset, 5000, 3000}}`, so the
+     operator sees the recipe's preset survive a trip and not a power cycle. The options:
+     (a) as built; (b) a warm restart puts the program's preset back too, so both starts
+     agree and the recipe is lost at either; (c) a preset logic writes is kept at a start
+     from the store as well, the program's number only where no logic writes `.pre`.
+  2. *A `single` put back with no sample* (decision 313). An image of the host's own, or
+     a configuration whose retained `arm` became a task's `single` since its image was
+     taken, puts `arm` back at 1 with no sample: as built its event task does not run in
+     the first cycle, the value standing for the sample (decision 305's rule). The
+     options: (a) as built, nothing fires; (b) a sample of 0, as `start/1` has it, so the
+     event task runs once in the first cycle; (c) refused, an image whose retained `single`
+     has no sample being the host's mistake.
+  3. *How a drop names an element written with leading zeros* (decision 312). A store
+     edited by hand to `tl[01].acc 5000000000`, a misfit, is reported as `tl[1].acc`, the
+     path logic names, not as the person wrote it. The options: (a) as built, by value;
+     (b) as written in the store, so the person finds the line they typed.
+
+  *Mutation table* (`scratchpad/m6/m65mut/run.log`): 32 mutants, each one rule of the
+  answers broken alone in a work copy of the code and judged by the full suite's exit
+  code, all 32 red, each by a test of its own rule: decision 312's five (the strict
+  digits back, the matching's values or kinds keyed as written, the check's kinds keyed
+  as written, the one-path line gone); decision 310's four (no collapse, any group
+  collapsed, the outermost arrays first, `[*]` after the elements); decision 308's three
+  (no preset rule, the stored preset laid, the move unreported); decision 311's five (an
+  integer for a real a misfit, taken raw, a real array's elements not converted, one past
+  the range kept, a global's by the old rule); decision 313's nine (no samples taken,
+  `start/2` taking the value, a missing sample 0, a warm restart taking the value or 0,
+  every sample 0, and each of the three checks of `triggers` gone); and decision 315's six
+  (no prune of the undeclared, only an instance of one type walked, the top level only, no
+  array's elements, no block inside a block, the drop unreported). The block inside a
+  block survived its first run, `config_edit_test.exs`'s array test then holding no such
+  block, and is red since `outer` holding a `cell` was added to it. The suite's one
+  flaky test, `retain_configuration_test.exs`'s decision 300 cost test, which differs by
+  one reduction between `drive` and `xrive` about one run in three and did so at
+  `a480958` too, failed beside some mutants' own tests; no verdict rests on it.
+
+  *Cost* against `a480958` (`scratchpad/m6/cost.exs`, a plant of 1, 16 and 64 motor
+  instances, retaining nothing and retaining a counter, an `rto`, an array of timers and
+  two globals, one a `single`; in a process the collector does not visit,
+  `cost_base.txt` and `cost_now.txt`): `start/1`, a cycle and a warm and a cold
+  `restart/2` and an edit's test in exactly the reductions they took; `retained/1` 35 more, the
+  triggers' one pass of the tasks; an assemble 1.2% to 2.6% more, one clause an instance;
+  with nothing retained, `start/2` 28 to 38 fewer; and a start from an image where
+  something is retained 8.3% to 11.4% more (788,472 to 876,459 at 64 motors, where a
+  reading moved by up to 3.5% between two runs of one build), each
+  value's path read once and made canonical only where a subscript starts with a 0, and
+  only a value whose last segment is `pre` or `pv` looked at for its preset, where the
+  first form, reading each path three times, cost 62%. The growth tests of the matching
+  and the take-out hold as they were. 2316 tests (11 doctests), up from 2306.
+
 - **M6-5 · The store, read and written at events.** `Logex.Retain`, internal, its
   `encode/1` and `decode!/2` and the atomic write and read, the forces file's write rule
-  shared rather than copied (decision 276), its header naming the configuration and the
+  shared rather than copied (decision 276), every part of the image among its lines,
+  each retained `single`'s last sample too (decision 313), a subscript read by its value
+  (decision 312) and a preset following the program (decision 308), its header naming the configuration and the
   write's wall time through the runner's clock behaviour; the runner's `retain:` and
   `start:`, each checked in the caller in order, added to `@options` and both pinned
   messages; the read in the caller; the writes at a trip, a stop and a cold restart,

@@ -4364,7 +4364,14 @@ lube timer at 0, the fan off and the conveyor off until start is pressed.
 says; since M6-3 `var_global retain total_boxes dint 0` too, kept by a warm `restart/2`;
 the store and the image are still to land.)* *(Since M6-4, 2026-10-29, the image has
 landed: `Logex.Runtime.retained/1` and `retained/2` take it out, and `start/2` and
-`instance/2` start from it by decision 277's matching; the store is still to land.)*
+`instance/2` start from it by decision 277's matching; the store is still to land.)* *(Since
+the maintainer's answers to M6-4, 2026-10-30, decisions 307 to 315: a built-in's preset
+follows the program at a start from an image, the stored one reported; a drop every
+element of an array of instances makes alike is reported once, `gates[*].j`; an integer
+stored for a real is taken at its nearest real; a subscript with leading zeros names the
+element of its value; a resource's image carries each retained `single`'s last sample,
+`triggers`, which a warm restart keeps as the resource took it; and every prune of a
+configuration edit drops what a kept instance's running program does not declare.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -5666,6 +5673,11 @@ choices are §4.9's rules.
     same name. Cancel from accept still changes nothing but the generation (decision 64),
     so what it leaves waits for the next edit's first test or a restart. Adopted.
     *(Landed 2026-10-14.)*
+    *(Decision 315, 2026-10-30: a kept instance's tags a superseded edit switched in,
+    which no instance set aside or global holds, were left by every later prune where the
+    next edit retyped the instance; since then every prune drops whatever a kept
+    instance's running program does not declare, at any depth, reported by path,
+    `:pruned`.)*
 
 **Milestone 3's design, decided 2026-10-14.** A design pass on `970dede` surveyed the
 missing instruction set (`PLAN.md` §8: counters, the other timers, integer arithmetic,
@@ -10864,7 +10876,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      input point's trigger, with no rising edge.)* *(Decision 305, 2026-10-29: changed, a
      retained `single`'s last sample after a warm restart is the value it kept, so
      nothing fires on a warm start; a cold restart and an input point's trigger as
-     before.)*
+     before.)* *(Decision 313, 2026-10-30, restating 305: the last sample a warm restart keeps, and a resource's image carries, is the one the resource took, so a rise logic made after it fires once in the first cycle and one already seen does not.)*
 275. **Where the store lives and when it is written (Milestone 6).** logex has no
      battery-backed memory; the host's disk stands in for it.
      - *Where:* a path the host names, `retain:`, as `forces:` is (decision 127); with
@@ -10942,7 +10954,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      had put it after; and an image's path names an element by its subscripts' values as
      written in decimal, `tl[1].acc`, one written otherwise, `tl[01].acc`, or with no
      digits, `tl[x].acc`, a path no logic names, a line of the image's refusal,
-     provisional.)*
+     provisional.)* *(The maintainer's answers, 2026-10-30: the preset follows the program, a stored one that differs reported `{:preset, stored, now}`, decision 308; the refusal of another configuration's or program's image confirmed, decision 309; a drop every element of an array of instances makes alike reported once, `gates[*].j`, decision 310; an integer stored for a real taken at its nearest real, decision 311; a subscript with leading zeros matched by its value, decision 312.)*
 278. **An online edit that adds or removes a qualifier (Milestone 6).** An edit that only
      changes `retain` changes no value, the plan comparing tags by name and kind.
      *Recommended: two report kinds, `:retain_added` and `:retain_removed`, by path*, rows
@@ -10999,7 +11011,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and `instance/2` as recommended, every image no host could take from logex refused a
      line each, and a `single` the image put back starting its trigger's last sample at
      that value, as decision 305 has a warm restart. The rule beside `initial_env/1` is
-     stated in `Logex.Program`, a global's beside `Configuration.initial/1`.)*
+     stated in `Logex.Program`, a global's beside `Configuration.initial/1`.)* *(Decision 307, 2026-10-30: the shape confirmed; decision 313 adds a resource's `triggers`, each retained `single`'s last sample.)*
 283. **What the scope leaves out (Milestone 6).** *Recommended: §4.13's deferred list*,
      `persistent`, `program retain`, `VAR_CONFIG` (Milestone 13's), `constant`, one
      element of an array, a retained located global, a hot restart, an outage's wall
@@ -11304,7 +11316,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `single` after that cycle's sample is never seen if the runner trips before the next
      cycle, the warm restart taking the risen value as the last sample; as the decision
      says, nothing fires on a warm start, and the question is put, `PLAN.md` M6-4's
-     review's questions.)*
+     review's questions.)* *(Decision 313, 2026-10-30: changed, the actual last sample kept and carried by the image, so a rise logic wrote just before a trip fires once in the first cycle.)*
 306. **A retained global a connection drives (Milestone 6),** M6-3's review's eighth
      question: `var_global retain total dint 0` driven by `w1.count`, which `w1` does not
      retain, kept its 2 through a warm restart only until `w1`'s first run copied its
