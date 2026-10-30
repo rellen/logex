@@ -32,8 +32,8 @@ defmodule Logex.Runner do
   pins, and never a crash of the runner. Its child spec is `restart: :temporary`
   (decision 115): nothing starts it again that no person asked to start; and since M6-6's
   review its `shutdown:` is long enough for every device's close and the store's write,
-  `(devices + 2) * (idle + poll)` ms and never less than 5000 (`child_spec/1`,
-  provisional), so that a supervisor does not kill it before decision 316's write.
+  `(devices + 2) * (idle + poll)` ms and never less than 5000 (`child_spec/1`, decision
+  326), so that a supervisor does not kill it before decision 316's write.
 
   **Its devices** (decisions 112, 120, 124 and 125). Each bound device runs in a process
   of its own, linked to the runner, which holds its adapter's state and calls its
@@ -185,8 +185,8 @@ defmodule Logex.Runner do
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
     `last` never.
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
-    is 0; at every `stop/2`, and since decision 316 at its parent's orderly shutdown,
-    after every output is 0 and every device closed; at every cold restart, of the
+    is 0; at every `stop/2`, and since decisions 316 and 328 at every orderly exit, a
+    parent's shutdown or `:normal`, after every output is 0 and every device closed; at every cold restart, of the
     resource as it restarts it, before any device is released or read (decision 291),
     and where a device then refuses it, of the resource as the runner still holds it,
     after the refusal's zeros (decision 317); and at a fresh start with `start: :cold`, or with no store file,
@@ -206,12 +206,15 @@ defmodule Logex.Runner do
     every output is 0 and every device closed, a failure reported to the subscribers;
     the runner tells a shutdown by its reason alone, so `GenServer.stop(runner,
     :shutdown)` from any other process writes as its parent's does, its caller given
-    `:ok` and the failure only to the subscribers, where `stop/2` answers it
-    (provisional). A
-    runner that crashes or is killed, whose clock goes down, a shutdown of its own,
-    `{:shutdown, {:clock, reason}}`, or that ends for any other reason, a parent's
-    `:normal` among them (provisional), writes none (decision 292), so its next fresh
-    start meets the last write, a period's or an event's.
+    `:ok` and the failure only to the subscribers, where `stop/2` answers it (decision
+    327). Since decision 328 a `:normal` exit writes too, a parent's that ends `:normal`
+    and a `GenServer.stop(runner)` from any process, after the same zeros and closes, so
+    that every orderly exit writes. A runner that crashes or is killed, whose clock goes
+    down, a shutdown of its own, `{:shutdown, {:clock, reason}}`, or that ends for any
+    other reason, writes none (decision 292), so its next fresh start meets the last
+    write, a period's or an event's; and one whose devices cannot be opened, whose
+    `init/1` gives `{:error, {:io_init, device, reason}}` and so ends `:normal` with no
+    `terminate/2`, writes none either, the store as the caller left it.
   - *Its period* (M6-6, decision 275): every `retain_period:` ms, 1000 unless set, on a
     grid from the runner's start on its clock, as a periodic task's due times are, a due
     time passed while the runner was busy skipped, never made up, and none while tripped,
@@ -488,7 +491,7 @@ defmodule Logex.Runner do
   poll period in real time, the writer's write in progress, bounded the same, and the
   store's own write, given one more: `(devices + 2) * (idle + poll)` ms, and never less
   than the 5000 ms of any GenServer's spec, so a plant of a few devices keeps that
-  (provisional). `devices` is the number of devices `io:` binds; an option that is not
+  (decision 326). `devices` is the number of devices `io:` binds; an option that is not
   yet the runner's, which `start_link/1` refuses, counts as its default. A host that
   gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own.
   """
@@ -859,9 +862,11 @@ defmodule Logex.Runner do
   # 116 and 275); since decision 316 an orderly shutdown from the runner's parent, a
   # supervisor's `:shutdown` or a `{:shutdown, term}`, which the runner sees here as it
   # traps exits, writes it the same way, after the same zeros and closes, a failure
-  # reported to the subscribers; a runner that terminates for any other reason writes
-  # none, as one that crashes or is killed (decision 292), its clock gone among them, the
-  # runner's own exit, `{:shutdown, {:clock, reason}}`, told by its reason.
+  # reported to the subscribers, and so, since decision 327, does one from any process,
+  # and since decision 328 a `:normal` exit, its parent's or a `GenServer.stop/3`'s; a
+  # runner that terminates for any other reason writes none, as one that crashes or is
+  # killed (decision 292), its clock gone among them, the runner's own exit,
+  # `{:shutdown, {:clock, reason}}`, told by its reason.
   @impl GenServer
   def terminate(reason, %{queue: queue} = state) do
     for {from, _request} <- :queue.to_list(queue),
@@ -888,11 +893,16 @@ defmodule Logex.Runner do
     for {pid, ref} <- stoppers, do: send(pid, {ref, reply})
   end
 
-  # Decision 316: a parent's orderly shutdown writes the store as stop/2 does; the clock
-  # gone, which stops the runner as a shutdown of its own, and every other reason write
-  # none (decision 292). A clock that goes down while the shutdown writes names no time,
-  # so that write is none too.
+  # Decisions 316, 327 and 328: every orderly exit writes the store as stop/2 does, a
+  # parent's `:normal`, `:shutdown` or `{:shutdown, term}` and a `GenServer.stop/3` with
+  # one of them from any process, told by its reason alone; the clock gone, which stops
+  # the runner as a shutdown of its own, and every other reason, a crash's, write none
+  # (decision 292), as a kill, which runs no terminate/2, does. A clock that goes down
+  # while the shutdown writes names no time, so that write is none too. A runner whose
+  # devices cannot be opened never reaches here: its init/1 gives `{:error, reason}`, on
+  # which a GenServer calls no terminate/2, so it writes nothing.
   defp shut_down({:shutdown, {:clock, _reason}}, _state), do: :ok
+  defp shut_down(:normal, state), do: shutdown_store(state)
   defp shut_down(:shutdown, state), do: shutdown_store(state)
   defp shut_down({:shutdown, _term}, state), do: shutdown_store(state)
   defp shut_down(_crash, _state), do: :ok

@@ -989,7 +989,7 @@ defmodule Logex.RetainStoreTest do
     # `shutdown:`, which a GenServer's is 5000 ms; a runner's shutdown waits up to the idle
     # watchdog and a poll period on each device's close and on its writer before it writes,
     # so its spec gives it `(devices + 2) * (idle + poll)`, never less than 5000
-    # (provisional). Here a close that hangs with `idle: 5000` holds the shutdown 5010 ms,
+    # (decision 326, confirmed). Here a close that hangs with `idle: 5000` holds the shutdown 5010 ms,
     # past 5000, and the store is written all the same.
     @tag timeout: 60_000
     test "a supervisor waits for a shutdown whose close hangs to write the store",
@@ -1085,30 +1085,112 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) == written
     end
 
-    # Decision 316 names `:shutdown` and `{:shutdown, term}`: a parent that ends
-    # `:normal`, which a supervisor never gives, ends the runner `:normal` and writes none,
-    # as before (provisional).
-    test "a parent's :normal exit writes nothing (provisional)", %{tmp_dir: dir} do
+    # Decision 328 (the maintainer, 2026-10-30), changing M6-5's provisional reading,
+    # which pinned this exit writing nothing: a parent that ends `:normal` is an orderly
+    # exit, and the runner, which traps exits, writes the store as stop/2 does, every
+    # output 0 and every device closed first, and the next fresh start brings it back.
+    test "a parent's :normal exit writes the store after every output 0 and every device " <>
+           "closed",
+         %{tmp_dir: dir} do
       rig = rig(dir)
+      store = rig.store
       test = self()
+
+      opts =
+        Keyword.put(rig.opts, :io, %{
+          "panel" => {Watching, sim: rig.panel, store: store, test: test}
+        })
 
       parent =
         spawn(fn ->
-          {:ok, runner} = Runner.start_link(rig.opts)
+          {:ok, runner} = Runner.start_link(opts)
           send(test, {:runner, runner})
           receive do: (:end -> :ok)
         end)
 
       # The runner's start, in its parent, may take more than a moment under load.
       assert_receive {:runner, runner}, 5000
-      written = File.read!(rig.store)
+      started = File.read!(store)
       pressed(rig, [1, 0, 1])
       assert values(runner) == [2, 2, 1, 2]
+      flush()
       ref = Process.monitor(runner)
       send(parent, :end)
       assert_receive {:DOWN, ^ref, :process, ^runner, :normal}, 5000
+      assert_received {:written, %{[0] => 0}, {:ok, ^started}}
       assert Sim.closed?(rig.panel)
+      assert File.read!(store) =~ "global total_boxes dint 2\n"
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert values(runner) == [2, 2, 1, 2]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decisions 327 and 328: the runner tells an orderly exit by its reason alone, so a
+    # `GenServer.stop/3` from a process that is not its parent, `:normal` or `:shutdown`,
+    # writes the store too, and its caller is answered `:ok`.
+    test "a GenServer.stop from any process, :normal or :shutdown, writes the store",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      pressed(rig, [1, 0])
+      stopper = Task.async(fn -> GenServer.stop(runner) end)
+      assert Task.await(stopper, 10_000) == :ok
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) =~ "global total_boxes dint 1\n"
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      assert values(runner) == [1, 1, 1, 1]
+      pressed(rig, [1, 0, 1])
+      stopper = Task.async(fn -> GenServer.stop(runner, :shutdown) end)
+      assert Task.await(stopper, 10_000) == :ok
+      assert File.read!(rig.store) =~ "global total_boxes dint 3\n"
+    end
+
+    # Decision 327 (the maintainer, 2026-10-30): such a stop's caller is told `:ok` even
+    # where the write fails, the failure told to the subscribers, as any failed write is;
+    # stop/2 is the call that answers it. The runner is gone, so no status/1 reads it.
+    test "a GenServer.stop whose write fails answers :ok and tells the subscribers",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+
+      for reason <- [:normal, {:shutdown, :end_of_shift}] do
+        {:ok, runner} = Runner.start_link(rig.opts)
+        Process.unlink(runner)
+        :ok = Runner.subscribe(runner)
+        written = File.read!(rig.store)
+        pressed(rig, [1, 0, 1])
+        File.mkdir_p!(rig.store <> ".tmp")
+        stopper = Task.async(fn -> GenServer.stop(runner, reason) end)
+        assert Task.await(stopper, 10_000) == :ok
+        assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
+        assert Sim.closed?(rig.panel)
+        assert File.read!(rig.store) == written
+        File.rm_rf!(rig.store <> ".tmp")
+        opener_down(rig.panel)
+      end
+    end
+
+    # Decision 328: a runner whose devices cannot be opened ends `:normal` too, but from
+    # init/1, which gives `{:error, {:io_init, device, reason}}`, and a GenServer calls no
+    # terminate/2 there: no resource has run, and the store is left exactly as it was.
+    test "a runner whose device cannot be opened writes nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      written = File.read!(rig.store)
+      opener_down(rig.panel)
+      Manual.advance(rig.clock, 1000)
+
+      Sim.fail(rig.panel, :init, {:error, :unplugged})
+      assert Runner.start_link(rig.opts) == {:error, {:io_init, "panel", :unplugged}}
       assert File.read!(rig.store) == written
+      assert File.ls!(dir) == ["plant.retain"]
     end
 
     # Decision 275: the stop's zeros come before its write, which a device sees at its

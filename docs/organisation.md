@@ -11621,6 +11621,52 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `.tmp` the other is written through, is refused, a pinned line each.
 
      **Taken: confirmed, refused** (the maintainer, 2026-10-30).
+326. **How long a supervisor waits for a shutdown (Milestone 6),** M6-6's review's ninth
+     reading: a GenServer's child spec gives `shutdown:` 5000 ms, and decision 316's
+     shutdown waits up to the idle watchdog and a poll period on each device's close and
+     on the writer before it writes, so a plant whose closes hang was killed before its
+     write. The review gave the runner's child spec `(devices + 2) * (idle + poll)` ms,
+     never less than 5000: with the defaults a plant of up to eight devices keeps 5000 ms,
+     and one device with `idle: 5000` 15,030 ms; a shutdown longer than that is still
+     killed and writes nothing.
+
+     **Taken: confirmed, as built** (the maintainer, 2026-10-30): the child spec's
+     `shutdown:` computed so, never less than 5000, a host's own `shutdown:`, given by
+     `Supervisor.child_spec/2`, winning.
+327. **Who may shut the runner down with a write (Milestone 6),** M6-6's review's tenth
+     reading: the runner tells a shutdown by its reason, `:shutdown` or `{:shutdown,
+     term}`, not by who sent it, so `GenServer.stop(runner, :shutdown)` from any process
+     writes the store as its parent's shutdown does.
+
+     **Taken: confirmed, any process's** (the maintainer, 2026-10-30): any process's
+     `:shutdown` or `{:shutdown, term}` writes the store; its caller is told `:ok` even
+     where the write failed, the failure reaching the subscribers, `{:retain, {:error,
+     reason}}`, as any failed write's does (the runner gone, no `status/1` can be read of
+     it after); `Logex.Runner.stop/2` remains the call that returns the error, `{:error,
+     {:retain, reason}}`.
+328. **A parent's `:normal` exit (Milestone 6),** M6-5's reading left open by decision 316
+     and put again as M6-6's readings 8 and 11: a parent that ends `:normal`, which a
+     supervisor never gives, ended the runner `:normal` with every output 0 and every
+     device closed, but wrote no store, so the next fresh start met the last period's or
+     event's write.
+
+     **Taken: changed, a `:normal` exit writes the store as `stop/2` and a shutdown do**
+     (the maintainer, 2026-10-30), after every output is 0 and every device closed
+     (decisions 116 and 275), so that every orderly exit writes. *The reading (the
+     record's):* the runner traps exits, so a parent's `{:EXIT, parent, :normal}` reaches
+     `terminate/2` as `:normal`, and so does `GenServer.stop(runner)` or
+     `GenServer.stop(runner, :normal)` from any process, as decision 327 has the
+     shutdowns; each writes, its caller answered `:ok` and a failure told to the
+     subscribers. The orderly exits are three, `:normal`, `:shutdown` and `{:shutdown,
+     term}`, told by the reason alone; `{:shutdown, {:clock, reason}}`, the runner's own
+     exit when its clock goes down, is no orderly exit and writes nothing, nor do a crash
+     and a kill (decision 292). A runner whose devices cannot be opened ends `:normal`
+     too, but from `init/1`, which gives `{:error, {:io_init, device, reason}}`: a
+     GenServer calls no `terminate/2` on an `init/1` that fails, and no resource has run,
+     so it writes nothing, the store as the caller left it, a cold start's first write
+     the caller's own (decision 291). An exit of a linked process that is not the
+     runner's parent, `:normal` or not, reaches `handle_info/2`, a device's or the
+     writer's, and ends nothing.
 
 ---
 
