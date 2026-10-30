@@ -362,6 +362,134 @@ defmodule Logex.RetainStoreTest do
     end
   end
 
+  describe "a hand edit's header and paths (decisions 276 and 284)" do
+    # The header's time is UTC, as the runner writes it: a time at another offset names
+    # another moment than it seems to, and is refused, `Z` and `+00:00` taken.
+    test "a time at an offset other than UTC is refused" do
+      at = fn time -> "logex retain 1\nconfiguration plant written #{time}\n" end
+
+      for time <- ["2026-10-30T14:00:00+05:00", "2026-10-30T14:00:00-01:00"] do
+        raises(
+          "s: line 2: `#{time}` is no time a store is written at, in UTC, as " <>
+            "2026-10-27T14:00:00Z",
+          fn -> Retain.decode!(at.(time), {"s", "plant"}) end
+        )
+      end
+
+      for time <- ["2026-10-30T14:00:00Z", "2026-10-30T14:00:00+00:00"] do
+        assert {_image, ~U[2026-10-30 14:00:00Z]} = Retain.decode!(at.(time), {"s", "plant"})
+      end
+    end
+
+    # A line's path is the instance's name, a `.` and a path inside it: the name and a `.`
+    # alone name nothing inside it.
+    test "a path that names nothing inside its instance is refused" do
+      raises(
+        "s: line 4: `m1. dint 1` is not under the instance `m1` whose lines it follows\n" <>
+          "s: line 5: `m1. ton` is not under the instance `m1` whose lines it follows",
+        fn ->
+          Retain.decode!(
+            "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\n" <>
+              "instance m1 motor\nm1. dint 1\nm1. ton\n",
+            {"s", "plant"}
+          )
+        end
+      )
+    end
+  end
+
+  describe "a hand edit's sizes (decisions 276 and 284)" do
+    # A type word or a kind with sizes is read by the store's own rule, never handed to a
+    # reader that takes the lexer's word for the text: brackets or sizes no array has are
+    # refused as any word the store does not read, a line each, where `real[3a]`,
+    # `int[2#]` and `real[]]` raised a FunctionClauseError and `int[-1]` and `int[0]` were
+    # told how many values they hold.
+    test "brackets or sizes no array has are refused, a line each" do
+      words =
+        ~w(real[3a] int[2#] real[]] int[-1] int[0] int[] int[2 int[2]x int[2,] int[1,1,1,1]
+           int[65537] int[2.0] int[x] foo[2])
+
+      bad_kinds = ~w(ton[3a ton[4[ ton[2,0] ton[] ton[-1] ton[4]] ton[1,1,1,1])
+
+      # Each line its own path, so that none names what another names.
+      lines =
+        Enum.with_index(words, &"m1.v#{&2} #{&1} 1") ++
+          Enum.with_index(bad_kinds, &"m1.k#{&2} #{&1}")
+
+      text =
+        Enum.join(
+          [
+            "logex retain 1",
+            "configuration plant written 2026-10-30T14:00:00Z",
+            "instance m1 motor"
+          ] ++ lines,
+          "\n"
+        )
+
+      types =
+        for {word, n} <- Enum.with_index(words, 4),
+            do:
+              "s: line #{n}: `#{word}` is no type of a retained value: an elementary type's " <>
+                "word, or an array of one, as `int[8]`"
+
+      kinds =
+        for {kind, n} <-
+              Enum.with_index(
+                bad_kinds,
+                4 + length(words)
+              ),
+            do:
+              "s: line #{n}: `#{kind}` is no kind of instance: a built-in's or a block's " <>
+                "name, or an array of its instances, as `ton[4]`"
+
+      raises(Enum.join(types ++ kinds, "\n"), fn -> Retain.decode!(text, {"s", "plant"}) end)
+
+      # Each size any whole number the lexer reads, in either case of the type word, the
+      # largest array there is among them.
+      assert {%{instances: %{"m1" => m1}}, _at} =
+               Retain.decode!(
+                 Enum.join(
+                   [
+                     "logex retain 1",
+                     "configuration plant written 2026-10-30T14:00:00Z",
+                     "instance m1 motor",
+                     "m1.a INT[16#2] 1 2",
+                     "m1.b bool[1,1_0,1] " <> Enum.join(List.duplicate("0", 10), " "),
+                     "m1.c ton[2,3]",
+                     "m1.d sint[65536] " <> Enum.join(List.duplicate("0", 65_536), " ")
+                   ],
+                   "\n"
+                 ),
+                 {"s", "plant"}
+               )
+
+      assert m1.kinds == %{"c" => {:array, "ton", [2, 3]}}
+      assert m1.values["a"] == {{:array, :int, [2]}, [1, 2]}
+      assert {{:array, :bool, [1, 10, 1]}, _} = m1.values["b"]
+      assert {{:array, :sint, [65_536]}, _} = m1.values["d"]
+    end
+
+    test "a store whose sizes no array has starts nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+
+      for word <- ~w(real[3a] int[2#] real[]]) do
+        File.write!(
+          rig.store,
+          "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\n" <>
+            "global total_boxes #{word} 1 2 3\n"
+        )
+
+        raises(
+          "#{rig.store}: line 3: `#{word}` is no type of a retained value: an elementary " <>
+            "type's word, or an array of one, as `int[8]`",
+          fn -> Runner.start_link(rig.opts) end
+        )
+      end
+
+      assert Sim.reads(rig.panel) == 0
+    end
+  end
+
   describe "the runner's retain: and start: (decisions 271, 275 and 285)" do
     test "each checked in the caller, a pinned message each", %{tmp_dir: dir} do
       rig = rig(dir)
@@ -378,6 +506,39 @@ defmodule Logex.RetainStoreTest do
         "the runner's retain: and forces: name one file, #{inspect(rig.store)}: the store and " <>
           "the forces file are two files",
         fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store)) end
+      )
+
+      # One file named two ways is one file, and neither may be the `.tmp` the other is
+      # written through, which each write would replace with its own text.
+      raises(
+        "the runner's retain: #{inspect(rig.store)} and forces: " <>
+          "#{inspect(Path.join([dir, ".", "plant.retain"]))} name one file, " <>
+          "#{inspect(rig.store)}: the store and the forces file are two files",
+        fn ->
+          Runner.start_link(Keyword.put(rig.opts, :forces, Path.join([dir, ".", "plant.retain"])))
+        end
+      )
+
+      raises(
+        "the runner's retain: #{inspect(rig.store <> ".tmp")} is the file its forces: " <>
+          "#{inspect(rig.store)} is written through, each written whole to the `.tmp` beside " <>
+          "it and renamed over it: the store and the forces file are two files, neither the " <>
+          "other's `.tmp`",
+        fn ->
+          Runner.start_link(
+            rig.opts
+            |> Keyword.put(:forces, rig.store)
+            |> Keyword.put(:retain, rig.store <> ".tmp")
+          )
+        end
+      )
+
+      raises(
+        "the runner's forces: #{inspect(rig.store <> ".tmp")} is the file its retain: " <>
+          "#{inspect(rig.store)} is written through, each written whole to the `.tmp` beside " <>
+          "it and renamed over it: the store and the forces file are two files, neither the " <>
+          "other's `.tmp`",
+        fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> ".tmp")) end
       )
 
       for bad <- [:hot, nil, "warm"] do
@@ -415,6 +576,12 @@ defmodule Logex.RetainStoreTest do
 
       refute File.exists?(rig.store)
       assert Sim.reads(rig.panel) == 0
+
+      # Two files beside each other are two files.
+      {:ok, runner} =
+        Runner.start_link(Keyword.put(rig.opts, :forces, Path.join(dir, "plant.forces")))
+
+      assert Runner.stop(runner) == :ok
     end
 
     test "a runner given no retain: has no store and says so" do
@@ -683,6 +850,30 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) == written
     end
 
+    # Provisional reading 4, put to the maintainer: a runner its parent shuts down, as a
+    # supervisor's orderly shutdown does, zeroes and closes as before M6-5 but writes no
+    # store, as a crash writes none (decision 292); only stop/2 writes as it terminates.
+    # The next fresh start brings back what the last event wrote, the start's here.
+    test "a parent's shutdown writes nothing (provisional)", %{tmp_dir: dir} do
+      rig = rig(dir)
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      written = File.read!(rig.store)
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
+      ref = Process.monitor(runner)
+      Process.exit(runner, :shutdown)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) == written
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert values(runner) == [0, 0, 1, 0]
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 275: the stop's zeros come before its write, which a device sees at its
     # last write, and its answer after both.
     test "stop/2 writes the store after every output 0 and every device closed",
@@ -703,6 +894,36 @@ defmodule Logex.RetainStoreTest do
       assert_received {:written, %{[0] => 0}, {:ok, ^started}}
       assert Sim.closed?(rig.panel)
       assert File.read!(store) =~ "global total_boxes dint 2\n"
+    end
+
+    # Decision 275 and §4.13: a trip writes the store after every output is 0, never
+    # before, so that a long write holds no output on; the device's 0 meets the store as
+    # the start wrote it, and the trip's write follows. The trip is the runner's, a major
+    # fault, not the device's own, which latches and writes its 0 before the runner hears.
+    test "a trip writes the store after every output 0", %{tmp_dir: dir} do
+      rig = rig(dir)
+      store = rig.store
+
+      faulting =
+        String.replace(@tally, "var e bool\n", "var e bool\nvar w word\nvar n dint 16\n") <>
+          "xic clear otl w.[n]\n"
+
+      opts =
+        rig.opts
+        |> Keyword.put(:configuration, configured(@plant, programs(faulting)))
+        |> Keyword.put(:io, %{"panel" => {Watching, sim: rig.panel, store: store, test: self()}})
+
+      {:ok, runner} = Runner.start_link(opts)
+      pressed(rig, [1, 0, 1])
+      started = File.read!(store)
+      assert started =~ "global total_boxes dint 0\n"
+      flush()
+      Sim.set(rig.panel, [1], 1)
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: {:fault, "fast", "t1", _fault}} = Runner.status(runner)
+      assert_received {:written, %{[0] => 0}, {:ok, ^started}}
+      assert File.read!(store) =~ "global total_boxes dint 2\n"
+      assert Runner.stop(runner) == :ok
     end
 
     test "a stop whose write fails stops all the same and says so", %{tmp_dir: dir} do

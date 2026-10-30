@@ -482,7 +482,11 @@ defmodule Logex.RetainConfigurationTest do
         reductions(fn -> Configuration.check(config) end)
       end
 
-      assert check.("drive") == check.("xrive")
+      # Within 16 reductions over the 64 located globals, a quarter of one a global: the
+      # count itself moves by up to 3 between two measures of one configuration in one
+      # run (M6-5's review), so the equality this pinned failed about one run in fifteen,
+      # at the base too, where the lookup it guards against costs some 17 a global.
+      assert abs(check.("drive") - check.("xrive")) <= 16
       assert check.("dwive") >= check.("xrive") + 8 * 64
     end
 

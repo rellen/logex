@@ -2613,8 +2613,10 @@ defmodule Logex.Runner do
           "forces file are two files"
       )
 
-  defp retain!(path, _forces, {module, _clock}) when is_binary(path) and path != "",
-    do: walled!(function_exported?(module, :wall_ms, 1), module, path)
+  defp retain!(path, forces, {module, _clock}) when is_binary(path) and path != "" do
+    apart!(met(expanded(forces), Path.expand(path)), path, forces)
+    walled!(function_exported?(module, :wall_ms, 1), module, path)
+  end
 
   defp retain!(other, _forces, _clock),
     do:
@@ -2622,6 +2624,48 @@ defmodule Logex.Runner do
         ArgumentError,
         "the runner's retain: is the path of the file its retained values are kept in, a " <>
           "string, got: #{inspect(other)}"
+      )
+
+  # The store and the forces file are two files however each is named, `./plant.retain`
+  # and `plant.retain` one file, and neither is the `.tmp` the other is written through
+  # (decisions 127 and 275), which each write would replace with its own text.
+  defp expanded(nil), do: nil
+  defp expanded(forces), do: Path.expand(forces)
+
+  defp met(nil, _path), do: :apart
+  defp met(forces, path), do: meeting(forces, path, forces <> ".tmp", path <> ".tmp")
+
+  defp meeting(same, same, _forces_tmp, _path_tmp), do: {:one, same}
+  defp meeting(_forces, path, path, _path_tmp), do: :store_through
+  defp meeting(forces, _path, _forces_tmp, forces), do: :forces_through
+  defp meeting(_forces, _path, _forces_tmp, _path_tmp), do: :apart
+
+  defp apart!(:apart, _path, _forces), do: :ok
+
+  defp apart!({:one, expanded}, path, forces),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's retain: #{inspect(path)} and forces: #{inspect(forces)} name one " <>
+          "file, #{inspect(expanded)}: the store and the forces file are two files"
+      )
+
+  defp apart!(:store_through, path, forces),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's retain: #{inspect(path)} is the file its forces: #{inspect(forces)} " <>
+          "is written through, each written whole to the `.tmp` beside it and renamed over " <>
+          "it: the store and the forces file are two files, neither the other's `.tmp`"
+      )
+
+  defp apart!(:forces_through, path, forces),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's forces: #{inspect(forces)} is the file its retain: #{inspect(path)} " <>
+          "is written through, each written whole to the `.tmp` beside it and renamed over " <>
+          "it: the store and the forces file are two files, neither the other's `.tmp`"
       )
 
   defp walled!(true, _module, path), do: path

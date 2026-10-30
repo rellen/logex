@@ -288,16 +288,17 @@ defmodule Logex.Retain do
   defp inside(_other, name, _line, {text, n}, acc),
     do: problem(acc, n, "`#{text}` is not under the instance `#{name}` whose lines it follows")
 
-  defp read_line({:kind, kind}), do: kind(Array.split(kind), kind)
+  defp read_line({:kind, kind}), do: kind(sized_word(kind), kind)
   defp read_line({:value, type, values}), do: typed(type, values)
 
   # A kind: a built-in's or a block's name, or an array of its instances, `ton[4]`.
   defp kind(nil, kind), do: kind_named(Declarations.name?(kind), kind, kind)
 
   defp kind({name, sizes}, kind),
-    do: kind_named(Declarations.name?(name), {:array, name, sizes(sizes)}, kind)
+    do: kind_named(Declarations.name?(name), {:array, name, sizes}, kind)
 
-  defp kind_named(true, {:array, _name, :error}, kind), do: {:error, no_kind(kind)}
+  defp kind(:error, kind), do: {:error, no_kind(kind)}
+
   defp kind_named(true, kind, _text), do: {:ok, {:kind, kind}}
   defp kind_named(false, _kind, text), do: {:error, no_kind(text)}
 
@@ -305,6 +306,36 @@ defmodule Logex.Retain do
     do:
       "`#{kind}` is no kind of instance: a built-in's or a block's name, or an array of " <>
         "its instances, as `ton[4]`"
+
+  # A word with sizes, `int[8]` or `ton[2,3]`, as a store's text spells one: a word, one
+  # `[`, the sizes split by `,` and the `]` that ends the word, `{word, sizes}`, each size a
+  # whole number above 0 that `number/1` reads, an array's 1 to 3 of them and 65,536
+  # elements at most (decision 151); nil where the word holds no `[`; and `:error` where its
+  # brackets or its sizes are no array's, `real[]]`, `int[2#]`, `int[3a]` or `int[0]`, which
+  # only a hand edit writes (decision 284), so that every such line is refused in its own
+  # words and none reaches a reader that takes the lexer's word for the text.
+  defp sized_word(word), do: sized_parts(:binary.split(word, "["))
+
+  defp sized_parts([_word]), do: nil
+  defp sized_parts([base, rest]), do: bracket_closed(:binary.split(rest, "]"), base)
+
+  defp bracket_closed([inner, ""], base),
+    do: bounded(sizes(:binary.split(inner, ",", [:global])), base)
+
+  defp bracket_closed(_other, _base), do: :error
+
+  defp bounded(:error, _base), do: :error
+
+  defp bounded(sizes, base),
+    do:
+      bounded_at(
+        length(sizes) <= Array.max_dimensions() and Array.size(sizes) <= Array.max_elements(),
+        sizes,
+        base
+      )
+
+  defp bounded_at(true, sizes, base), do: {base, sizes}
+  defp bounded_at(false, _sizes, _base), do: :error
 
   defp sizes(texts), do: Enum.reduce_while(texts, [], &size/2) |> sized_list()
 
@@ -323,10 +354,13 @@ defmodule Logex.Retain do
   defp type(word), do: type_of(Map.fetch(@words, String.downcase(word)), word)
 
   defp type_of({:ok, type}, _word), do: {:ok, type}
-  defp type_of(:error, word), do: array_type(Declarations.array_word(word))
+  defp type_of(:error, word), do: array_type(sized_word(word))
 
-  defp array_type({:ok, type}), do: {:ok, type}
-  defp array_type(:error), do: :error
+  defp array_type({base, dims}), do: element_type(Map.fetch(@words, String.downcase(base)), dims)
+  defp array_type(_none), do: :error
+
+  defp element_type({:ok, type}, dims), do: {:ok, {:array, type, dims}}
+  defp element_type(:error, _dims), do: :error
 
   defp values_of(:error, _values, word),
     do:

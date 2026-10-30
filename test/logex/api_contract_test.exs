@@ -12101,9 +12101,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # {:internal, message}; each kind of round (decisions 120, 122, 123 and 138); and each
   # step, refusal and fault.
   @runner_reach [
-    # M6-5: a fresh start that restored a count a store kept, and a cold restart's write.
+    # M6-5: a fresh start that restored a count a store kept, and a cold restart's write;
+    # and since M6-5's review a fresh start from a store whose first round trips, which
+    # writes the store again before the start returns.
     :store_restored,
     :cold_store,
+    :store_tripped_at_start,
     :ran,
     :fault,
     :overlap,
@@ -12307,7 +12310,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # injections. Every atom is reached at this seed in about 20 s alone; of the 31 families
   # {2026, 10, n} and {3101..3130, 10, n}, 28 reached every atom, and no check failed in any.
   # Decisions 286 and 287 added a device killed while tripped and the close's last 0, two
-  # atoms; at this seed and at {3101..3106, 10, n} every atom is reached.
+  # atoms; at this seed and at {3101..3106, 10, n} every atom is reached. M6-5's review
+  # found the model read the store after a fresh start whose first round may trip and
+  # write it again, which failed 17 of the families {4101..4130, 10, n} and never the
+  # family {2026, 10, n}, which reaches no such start: the model reads it before the start,
+  # an atom, `:store_tripped_at_start`, holds the walk to such a start, and the seed moved
+  # to {4101, 10, n}, which reaches every atom. Of {4101..4130, 10, n} every walk passed,
+  # and the families that miss an atom miss that one, which only some reach, or one of
+  # `:zero_at_stop`, `:array_unforced` and `:next_due_from_step`, rare by their nature.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
@@ -12317,12 +12327,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     logs =
       for seed <- 1..45 do
-        :rand.seed(:exsss, {2026, 10, 19 + seed})
+        :rand.seed(:exsss, {4101, 10, 19 + seed})
         walk(programs, dir, seed, 70)
       end
 
     # From fresh processes, the first walk again, exactly.
-    :rand.seed(:exsss, {2026, 10, 20})
+    :rand.seed(:exsss, {4101, 10, 20})
     assert walk(programs, dir, 1, 70) == hd(logs)
 
     assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
@@ -12452,19 +12462,26 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp store_beside(nil, _dir, _seed), do: nil
   defp store_beside(_file, dir, seed), do: Path.join(dir, "retain-#{seed}")
 
+  # The store as the last runner left it, read before a fresh start, whose first round
+  # may trip and write it again (decision 275): what the start reads is checked, never what
+  # its own trip wrote after.
+  defp store_text(%{store: nil}), do: nil
+  defp store_text(%{stored: nil}), do: nil
+  defp store_text(%{store: store}), do: File.read!(store)
+
   # The model's resource at a fresh start (decision 271, restated): with no store, the
   # configuration's; with a store and nothing written yet, the configuration's, written at
-  # once; and otherwise the last write's, which the store's lines hold, laid over it.
-  defp fresh_rt(%{store: nil}, config), do: {Runtime.start(config), nil}
+  # once; and otherwise the last write's, which the store's lines hold, laid over it. A
+  # first round that trips then writes the store again, `tripped/2`'s `stored_at/2`.
+  defp fresh_rt(%{store: nil}, config, nil), do: {Runtime.start(config), nil}
 
-  defp fresh_rt(%{stored: nil}, config) do
+  defp fresh_rt(%{stored: nil}, config, nil) do
     rt = Runtime.start(config)
     {rt, restated(rt)}
   end
 
-  defp fresh_rt(%{stored: stored, store: store}, config) do
+  defp fresh_rt(%{stored: stored}, config, text) do
     {kt, k} = stored
-    text = File.read!(store)
     assert text =~ "\nglobal kt dint #{kt}\n"
     assert text =~ "\ninstance k1 keep\nk1.k dint #{k}\n"
     reach(:store_restored, k > 0)
@@ -12500,6 +12517,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # and the walk subscribed to every kind of event.
   defp started(w, config) do
     late = late_open()
+    text = store_text(w)
 
     {:ok, runner} =
       Runner.start_link(
@@ -12517,7 +12535,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert :ets.lookup(@table, {self(), :late}) == []
     reach(:late_open, late)
     :ok = Runner.subscribe(runner, [:overlap, :fault, :trip, :restart, :edit, :ran, :round])
-    {rt, stored} = fresh_rt(w, config)
+    {rt, stored} = fresh_rt(w, config, text)
 
     w =
       Map.merge(w, %{
@@ -12550,6 +12568,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
     w = consumed(w)
     w = first_round(Runner.status(w.runner).trip, w)
+    reach(:store_tripped_at_start, text != nil and w.status == :tripped)
     checked(%{w | subscribed: true})
   end
 
