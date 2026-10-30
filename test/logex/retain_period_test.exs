@@ -283,6 +283,43 @@ defmodule Logex.RetainPeriodTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # M6-6's review: a runner killed in the middle of a period's write, its writer
+    # writing the store's `.tmp`, which here is a pipe the test reads a little of, so that
+    # the writer is held inside its write; the writer goes down with its runner, the store
+    # is the last whole write, and a fresh start restores that.
+    test "a runner killed in the middle of a period's write restores the write before it",
+         %{tmp_dir: dir} do
+      text = String.replace(@tally, "var e bool\n", "var e bool\nvar retain big dint[20000]\n")
+      {:ok, tally} = Logex.compile(text, name: "tally")
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+      rig = rig(dir, configuration: config)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1, 100)
+      synced(runner)
+      before = File.read!(rig.store)
+      assert total(rig.store) == "1"
+      beside = rig.store <> ".tmp"
+      {_, 0} = System.cmd("mkfifo", [beside])
+      eye(rig, 0, 50)
+      eye(rig, 1, 50)
+      assert values(runner) == [2, 2, 1, 2]
+      writer = writer(runner)
+      ref = Process.monitor(writer)
+      {:ok, pipe} = :file.open(beside, [:read, :raw, :binary])
+      assert {:ok, "logex retain 1\n" <> _} = :file.read(pipe, 4096)
+      killed(runner)
+      :ok = :file.close(pipe)
+      assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
+      assert File.read!(rig.store) == before
+      # The writer may meet the pipe closed before its kill and drop the `.tmp` itself.
+      _ = File.rm(beside)
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert values(runner) == [1, 1, 1, 1]
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 316's shutdown and decision 292's crash measured against the period's: a
     # parent's shutdown writes the resource as it was, and a crash after a period brings
     # back that period's write.
@@ -544,6 +581,55 @@ defmodule Logex.RetainPeriodTest do
       assert Runner.status(runner).retain.failed == nil
       assert Runner.stop(runner) == :ok
     end
+
+    # M6-6's review: a writer that goes down while it holds a write, before the runner has
+    # handled its exit, is taken as gone by the event's wait at once, its write reported
+    # `{:down, reason}`, never waited on to the deadline and reported `:timeout`. The
+    # runner suspended keeps the exit in its mailbox; the stop, a system message, still
+    # reaches it.
+    test "a writer gone down before an event's write is not waited on", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1, 100)
+      synced(runner)
+      writer = writer(runner)
+      :sys.suspend(writer)
+      eye(rig, 0, 100)
+      :sys.suspend(runner)
+      ref = Process.monitor(writer)
+      Process.exit(writer, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^writer, :killed}
+      began = System.monotonic_time(:millisecond)
+      assert Runner.stop(runner) == :ok
+      assert System.monotonic_time(:millisecond) - began < 2500
+      assert_received {Runner, ^runner, {:retain, {:error, {:down, :killed}}}}
+      refute_received {Runner, ^runner, {:retain, {:error, :timeout}}}
+      assert File.read!(rig.store) =~ "global total_boxes dint 1\n"
+    end
+
+    # M6-6's review: a writer gone down while it holds no write is forgotten, and the next
+    # period's write is made by a new one, not handed to the one gone.
+    test "a writer gone down while idle is replaced at the next period", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1, 100)
+      synced(runner)
+      writer = writer(runner)
+      ref = Process.monitor(writer)
+      Process.exit(writer, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^writer, :killed}
+      _ = :sys.get_state(runner)
+      assert writer(runner) == nil
+      refute_received {Runner, ^runner, {:retain, _}}
+      eye(rig, 0, 50)
+      eye(rig, 1, 50)
+      assert writer(runner) not in [nil, writer]
+      synced(runner)
+      assert total(rig.store) == "2"
+      assert Runner.stop(runner) == :ok
+    end
   end
 
   describe "a trip and a restart" do
@@ -580,6 +666,62 @@ defmodule Logex.RetainPeriodTest do
       :erlang.trace_pattern({Logex.Retain, :written, 2}, false, [:global])
       assert writes_by() == [writer, runner]
       assert total(rig.store) == "3"
+      assert Runner.stop(runner) == :ok
+    end
+
+    # M6-6's review: the period's write a trip waits for is reported as every write is, so
+    # that one that fails is said, the trip's own after it.
+    test "a trip reports the failure of the period's write it waited for", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1, 100)
+      synced(runner)
+      writer = writer(runner)
+      :sys.suspend(writer)
+      eye(rig, 0, 100)
+      File.mkdir_p!(rig.store <> ".tmp")
+
+      spawn(fn ->
+        Process.sleep(50)
+        :sys.resume(writer)
+      end)
+
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, retain: %{failed: :eisdir}} = Runner.status(runner)
+      assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert total(rig.store) == "1"
+      assert Runner.stop(runner) == {:error, {:retain, :eisdir}}
+    end
+
+    # M6-6's review: a writer that does not answer a trip's wait by its deadline is killed,
+    # so that it cannot wake later and write an older image over the trip's.
+    test "a hung writer is killed at a trip's deadline and never writes after it",
+         %{tmp_dir: dir} do
+      rig = rig(dir, idle: 60)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1, 100)
+      synced(runner)
+      writer = writer(runner)
+      :sys.suspend(writer)
+      # The write held is the image at 200, of 2 boxes; the trip at 300, of 3.
+      eye(rig, 0, 50)
+      eye(rig, 1, 50)
+      eye(rig, 0, 50)
+      eye(rig, 1, 40)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      assert_received {Runner, ^runner, {:retain, {:error, :timeout}}}
+      tripped = File.read!(rig.store)
+      assert tripped =~ "global total_boxes dint 3\n"
+      refute Process.alive?(writer)
+      catch_exit(:sys.resume(writer))
+      Process.sleep(50)
+      assert File.read!(rig.store) == tripped
       assert Runner.stop(runner) == :ok
     end
 

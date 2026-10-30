@@ -30,7 +30,10 @@ defmodule Logex.Runner do
   `Logex.Runtime.start/1` checks it and the bindings as `Logex.IO.bind!/2` does, so a
   host's mistake is an `ArgumentError` in the host's own process, with a message a test
   pins, and never a crash of the runner. Its child spec is `restart: :temporary`
-  (decision 115): nothing starts it again that no person asked to start.
+  (decision 115): nothing starts it again that no person asked to start; and since M6-6's
+  review its `shutdown:` is long enough for every device's close and the store's write,
+  `(devices + 2) * (idle + poll)` ms and never less than 5000 (`child_spec/1`,
+  provisional), so that a supervisor does not kill it before decision 316's write.
 
   **Its devices** (decisions 112, 120, 124 and 125). Each bound device runs in a process
   of its own, linked to the runner, which holds its adapter's state and calls its
@@ -200,7 +203,11 @@ defmodule Logex.Runner do
     or in memory, a write-back that fails reported as any failed write, the runner tripped
     either way. Since decision 316 an orderly shutdown from the runner's parent, a
     supervisor's `:shutdown` or a `{:shutdown, term}`, writes as `stop/2` does, after
-    every output is 0 and every device closed, a failure reported to the subscribers. A
+    every output is 0 and every device closed, a failure reported to the subscribers;
+    the runner tells a shutdown by its reason alone, so `GenServer.stop(runner,
+    :shutdown)` from any other process writes as its parent's does, its caller given
+    `:ok` and the failure only to the subscribers, where `stop/2` answers it
+    (provisional). A
     runner that crashes or is killed, whose clock goes down, a shutdown of its own,
     `{:shutdown, {:clock, reason}}`, or that ends for any other reason, a parent's
     `:normal` among them (provisional), writes none (decision 292), so its next fresh
@@ -220,12 +227,17 @@ defmodule Logex.Runner do
     one before, latest wins. A write made is the store's age in `status/1`'s
     `written_at`; one that fails leaves the store as it was and is reported,
     `{:retain, {:error, reason}}` and `failed`, the plant running on; a writer gone down
-    is reported, `{:down, reason}`, and a new one writes the next (provisional). Every
+    is reported, `{:down, reason}`, and a new one writes the next (provisional), one gone
+    down while idle forgotten. Every
     write at an event waits first for the write in progress and drops the one pending,
     so that the event's is the last on disk: the trip's, the stop's, a shutdown's and a
     cold restart's, a writer that has not answered by the idle watchdog and a poll period,
-    in real time, killed, its write reported `:timeout` (provisional). So a crash or a
-    kill loses at most a period and the write in progress.
+    in real time, killed, its write reported `:timeout`, and one already gone down taken
+    as gone at once, `{:down, reason}` (provisional). So a crash or a kill loses what
+    changed since the last write made: at most a period and the write in progress while
+    writes succeed and the writer keeps up, but everything since the last good write
+    while they fail, a full disk's among them, and, while tripped, what an edit stepped
+    then changed, which no write takes until a restart.
   - *A fresh start* reads the store in the caller, after the forces file, warm unless
     `start: :cold`: a store laid over the resource by decision 277's matching
     (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
@@ -468,6 +480,38 @@ defmodule Logex.Runner do
     {start, name} = options!(opts)
     begun(first_write(start), start, name)
   end
+
+  @doc """
+  The child spec a supervisor starts a runner by, `restart: :temporary` (decision 115),
+  and, since M6-6's review, a `shutdown:` long enough for the orderly shutdown decision 316
+  writes the store at: every device's 0 and close, each bounded by the idle watchdog and a
+  poll period in real time, the writer's write in progress, bounded the same, and the
+  store's own write, given one more: `(devices + 2) * (idle + poll)` ms, and never less
+  than the 5000 ms of any GenServer's spec, so a plant of a few devices keeps that
+  (provisional). `devices` is the number of devices `io:` binds; an option that is not
+  yet the runner's, which `start_link/1` refuses, counts as its default. A host that
+  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own.
+  """
+  def child_spec(opts),
+    do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
+
+  @shutdown 5000
+
+  defp shutdown_ms(opts) when is_list(opts), do: shutdown_ms(Keyword.keyword?(opts), opts)
+  defp shutdown_ms(_opts), do: @shutdown
+
+  defp shutdown_ms(true, opts) do
+    each = within(Keyword.get(opts, :idle), 500) + within(Keyword.get(opts, :poll), 10)
+    max(@shutdown, (bound(Keyword.get(opts, :io)) + 2) * each)
+  end
+
+  defp shutdown_ms(false, _opts), do: @shutdown
+
+  defp within(ms, _default) when is_integer(ms) and ms in @interval, do: ms
+  defp within(_ms, default), do: default
+
+  defp bound(io) when is_map(io), do: map_size(io)
+  defp bound(_io), do: 0
 
   # M6-5 (decisions 271 and 291): a fresh start with `start: :cold`, or with no store file,
   # writes the store before any device is opened, here in the caller; a write that fails
@@ -2244,7 +2288,10 @@ defmodule Logex.Runner do
   # its due time, out of the slot's S ms, before the requests that waited; with none, at
   # the wake of its due time, or just after the round that runs at it or is running then,
   # its outputs written, so that a round owed at that time runs first. While tripped the
-  # runner takes none: the trip wrote the resource as it left it.
+  # runner takes none: the trip wrote the resource as it left it. (The trip cancels the
+  # runner's wake, so no wake and no round reaches period/2 while tripped, and its
+  # `status: :running` is a statement of that rule more than a guard: M6-6's review found
+  # its removal an equivalent mutant.)
   defp after_round(%{untimed: false} = state, now), do: period(state, now)
   defp after_round(state, _now), do: state
 
@@ -2304,12 +2351,19 @@ defmodule Logex.Runner do
   # event's write is the last on disk (decision 275). The wait is bounded as a device's
   # close is, by the idle watchdog and a poll period in real time; a writer that has not
   # answered by then is killed, its write reported failed, `:timeout`, the store the old
-  # or the new, and a new writer started at the next period (provisional).
+  # or the new, and a new writer started at the next period (provisional). A writer gone
+  # down before it answered, whose exit the runner has not yet handled, is taken as gone at
+  # once, its write reported `{:down, reason}` as writer_down/2 reports it, never waited on
+  # to its deadline (M6-6's review).
   defp drained_writer(%{retain: %{period: %{busy: true, writer: pid}}} = state) do
     receive do
       {Writer, ^pid, at, result} ->
         {_written, state} = noted(result, at, state)
         idled_writer(state, pid)
+
+      {:EXIT, ^pid, reason} ->
+        {_failed, state} = noted({:error, {:down, reason}}, nil, state)
+        idled_writer(state, nil)
     after
       state.idle + state.poll -> hung_writer(state, pid)
     end

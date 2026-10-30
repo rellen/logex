@@ -10468,6 +10468,7 @@ defmodule Logex.ApiContractTest do
   # restated from the text, and a subscript outside its dimension the instruction's major
   # fault, with the subscript read (decisions 153 and 154).
   @ia_reach [
+    :blocked_beside,
     :two_dimensions,
     :timed,
     :done,
@@ -10495,6 +10496,13 @@ defmodule Logex.ApiContractTest do
       program = ia_program(spec)
       ia_lone(spec, program, 14)
       ia_resource(spec, program, 4)
+    end
+
+    # Since M6-6's review, 80 more drawn toward a counter edit, a ctud's and no timer's, so
+    # that an up side blocked in the scan its down side counts comes up (`:blocked_beside`).
+    for _ <- 1..80 do
+      spec = %{ia_spec() | t_runs: [], c_kind: "ctud"}
+      ia_lone(spec, ia_program(spec), 14)
     end
 
     assert Process.get(:ia_reach, MapSet.new()) == MapSet.new(@ia_reach)
@@ -10939,35 +10947,39 @@ defmodule Logex.ApiContractTest do
 
   # The scan right after a switch that blocked a counter's memory: the counter counts no
   # edge, and every other rung runs as the oracle says; the block dropped by the scan.
+  # The block restated as IEC's edge memory already high: the blocked side sees no rising
+  # edge at its next run, whatever the other side of a ctud counts in the same scan.
+  # (Until M6-6's review it took the counter's net change and undid it where it rose, which
+  # missed an up side blocked while the down side counted: `cv` -2 run, -1 restated.)
   defp ia_blocked_scan({program, state, model, spec, now}, i) do
     inputs = ia_inputs(spec)
 
     {outputs, state2} =
       Runtime.call(program, state, inputs, %Scan{now: now + 10, first: state.first})
 
-    before = model.lc[[i]]
-    model = ia_scan(spec, model, inputs, now + 10, state.first)
-    # The blocked side counted nothing it would otherwise have counted.
-    counted = model.lc[[i]]["cv"] - before["cv"]
-
-    model =
-      ia_uncounted(
-        counted > 0 and before["r"] == 0 and Map.get(before, "ld", 0) == 0,
-        model,
-        {i, counted}
-      )
-
-    ia_assert(spec, model, state2, outputs)
+    blocked = ia_scan(spec, put_in(model, [:lc, [i], "cu"], 1), inputs, now + 10, state.first)
+    free = ia_unreached(fn -> ia_scan(spec, model, inputs, now + 10, state.first) end)
+    ia_beside(Enum.map([model, free, blocked], & &1.lc[[i]]["cv"]))
+    ia_assert(spec, blocked, state2, outputs)
     assert state2.ons_blocked == []
-    {program, state2, model, spec, now + 10}
+    {program, state2, blocked, spec, now + 10}
   end
 
-  defp ia_requalify(model, i), do: update_in(model, [:lc, [i]], &ia_qualified/1)
+  # Reached where the blocked up side would have counted while the counter's net change
+  # unblocked is none or down, its down side counting in the same scan: the case a reading
+  # of the net change misses.
+  defp ia_beside([before, free, blocked]) when free > blocked and free <= before,
+    do: ia_reached(:blocked_beside)
 
-  defp ia_uncounted(true, model, {i, counted}),
-    do: update_in(model, [:lc, [i], "cv"], &(&1 - counted)) |> ia_requalify(i)
+  defp ia_beside(_counts), do: :ok
 
-  defp ia_uncounted(false, model, _counted), do: model
+  # The scan as it would have run unblocked, which no run made: what it reaches is no reach.
+  defp ia_unreached(scan) do
+    reach = Process.get(:ia_reach, MapSet.new())
+    model = scan.()
+    Process.put(:ia_reach, reach)
+    model
+  end
 
   # In a resource, the inputs connected to constants and each member read by its path.
   defp ia_resource(spec, program, cycles) do

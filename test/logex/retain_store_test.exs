@@ -632,6 +632,27 @@ defmodule Logex.RetainStoreTest do
     defp gone(now, _at, _process), do: now
   end
 
+  # The manual clock, its wall clock gone once the agent it holds says so, so that a
+  # shutdown's write meets a clock that no longer names a time.
+  defmodule WallGone do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, _agent}), do: Manual.now_ms(clock)
+
+    @impl true
+    def wake_at({clock, _agent}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _agent}, timer), do: Manual.cancel(clock, timer)
+
+    @impl true
+    def wall_ms({clock, agent}), do: walled(Agent.get(agent, & &1), clock)
+
+    defp walled(true, _clock), do: exit(:gone)
+    defp walled(false, clock), do: Manual.wall_ms(clock)
+  end
+
   # The simulated device, which calls the function an agent holds before each read, so
   # that a test acts between a cold restart's own write and its write-back.
   defmodule Spoiling do
@@ -964,6 +985,50 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) =~ "global total_boxes dint 3\n"
     end
 
+    # M6-6's review: a supervisor kills a child that has not ended by its spec's
+    # `shutdown:`, which a GenServer's is 5000 ms; a runner's shutdown waits up to the idle
+    # watchdog and a poll period on each device's close and on its writer before it writes,
+    # so its spec gives it `(devices + 2) * (idle + poll)`, never less than 5000
+    # (provisional). Here a close that hangs with `idle: 5000` holds the shutdown 5010 ms,
+    # past 5000, and the store is written all the same.
+    @tag timeout: 60_000
+    test "a supervisor waits for a shutdown whose close hangs to write the store",
+         %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, supervisor} = Supervisor.start_link([{Runner, rig.opts}], strategy: :one_for_one)
+      [{Runner, runner, :worker, _}] = Supervisor.which_children(supervisor)
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
+      Sim.fail(rig.panel, :close, :hang)
+      ref = Process.monitor(runner)
+      begun = System.monotonic_time(:millisecond)
+      :ok = Supervisor.stop(supervisor)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 30_000
+      assert System.monotonic_time(:millisecond) - begun >= 5010
+      assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
+    end
+
+    test "a runner's child spec gives its shutdown the time its devices and store take" do
+      {:ok, clock} = Manual.start_link(now: @wall)
+      io = fn n -> Map.new(1..n, &{"d#{&1}", Sim}) end
+      base = [configuration: configured(), clock: {Manual, clock}, retain: "x.retain"]
+      spec = &Runner.child_spec(Keyword.merge(base, &1))
+
+      assert %{id: Runner, restart: :temporary, shutdown: 5000} = spec.(io: io.(1))
+      assert spec.(io: io.(1)).start == {Runner, :start_link, [Keyword.merge(base, io: io.(1))]}
+      assert spec.(io: io.(8)).shutdown == 5100
+      assert spec.(io: io.(9)).shutdown == 5610
+      assert spec.(io: io.(1), idle: 5000, poll: 20).shutdown == 15_060
+      assert spec.(io: io.(2), idle: 2000).shutdown == 8040
+      # An option start_link/1 refuses counts as its default; opts that are no keyword
+      # list give a GenServer's 5000.
+      assert spec.(io: io.(9), idle: 0, poll: :fast).shutdown == 5610
+      assert spec.(io: :none, idle: 3000).shutdown == 6020
+      assert Runner.child_spec(:nonsense).shutdown == 5000
+      assert Runner.child_spec([{"io", 1}]).shutdown == 5000
+      assert Supervisor.child_spec({Runner, base}, shutdown: 900).shutdown == 900
+    end
+
     # Decision 316: a shutdown's write that fails is reported as any failed write, the
     # runner down all the same and the store as it was.
     test "a parent's shutdown whose write fails is reported", %{tmp_dir: dir} do
@@ -1000,6 +1065,26 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) == written
     end
 
+    # Decision 316: a clock that goes down while the shutdown's write asks it the time
+    # names no time, so that write is none, and the runner ends as its parent shut it
+    # down, `:shutdown`, its devices zeroed and closed first, not as its clock's own exit.
+    test "a shutdown whose clock goes down as it writes writes nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, agent} = Agent.start_link(fn -> false end)
+      opts = Keyword.put(rig.opts, :clock, {__MODULE__.WallGone, {rig.clock, agent}})
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(opts)
+      written = File.read!(rig.store)
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
+      Agent.update(agent, fn _ -> true end)
+      ref = Process.monitor(runner)
+      Process.exit(runner, :shutdown)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) == written
+    end
+
     # Decision 316 names `:shutdown` and `{:shutdown, term}`: a parent that ends
     # `:normal`, which a supervisor never gives, ends the runner `:normal` and writes none,
     # as before (provisional).
@@ -1014,7 +1099,8 @@ defmodule Logex.RetainStoreTest do
           receive do: (:end -> :ok)
         end)
 
-      assert_receive {:runner, runner}
+      # The runner's start, in its parent, may take more than a moment under load.
+      assert_receive {:runner, runner}, 5000
       written = File.read!(rig.store)
       pressed(rig, [1, 0, 1])
       assert values(runner) == [2, 2, 1, 2]
