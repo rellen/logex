@@ -3086,8 +3086,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   every cold restart, before any device is released or read, so that a crash right after
   it brings back none of what it discarded, and, where a device then refuses the restart,
   again after its zeros with the values the runner still holds, so that a refused restart
-  changes nothing on disk or in memory (decision 317); at the runner's parent's orderly
-  shutdown, a supervisor's, as at `stop/2` (decision 316); and at a fresh start with `start: :cold`, or
+  changes nothing on disk or in memory (decision 317); at every orderly exit of the
+  runner, its parent's shutdown, a supervisor's, or its `:normal` exit, as at `stop/2`
+  (decisions 316 and 328); and at a fresh start with `start: :cold`, or
   with no store file, before any device is opened (decisions 271 and 291). Each write goes
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
   file is, so that a crash at any moment leaves the old store or the new. A write that
@@ -3112,10 +3113,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   loses everything since the last good write, and with a disk slower than the period
   more than a period; and while the runner is tripped nothing is written, so what an
   edit stepped then changes is lost to a crash before the next restart.
-- A runner is told a shutdown by its exit's reason, `:shutdown` or `{:shutdown, term}`,
-  so one a supervisor shuts down writes the store, and so does `GenServer.stop(runner,
+- A runner is told an orderly exit by its reason, `:normal`, `:shutdown` or
+  `{:shutdown, term}`, so one a supervisor shuts down writes the store, and so do a
+  parent that ends `:normal` and `GenServer.stop(runner)` or `GenServer.stop(runner,
   :shutdown)` from any process, whose caller is answered `:ok`, a failed write told only
-  to the subscribers; `Logex.Runner.stop/2` answers it. Its child spec gives the
+  to the subscribers; `Logex.Runner.stop/2` answers it (decisions 327 and 328). A runner
+  whose devices cannot be opened at its start writes nothing. Its child spec gives the
   shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
   supervisor waits for every device's close and the store's write before it kills the
   runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
@@ -4540,7 +4543,7 @@ in every cycle's outputs at the value it holds.
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
   tag's type or array's size; a jump forward only; retained values kept across a crash
   only by a runner given a store, a file on the host's disk and not battery-backed
-  memory, written at a trip, a stop, a supervisor's shutdown, a cold restart and a fresh
+  memory, written at a trip, a stop, every orderly exit, a cold restart and a fresh
   start with `start: :cold` or no store file, never at a warm fresh start from a store,
   and every `retain_period:`, a second unless set, so a crash or a kill loses whatever
   changed since the last of those writes made, at most a period and the write in

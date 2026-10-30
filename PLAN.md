@@ -10003,7 +10003,10 @@ done-when reads the next store write; and last the contract walk and the documen
   no store, so a box counter at 10,000 comes back at the last trip's, stop's or cold
   restart's count. The options: (a) as built, only the two reasons the answer names; (b)
   `:normal` from the parent writes too, every orderly reason OTP has writing alike.
-  Pinned by "a parent's :normal exit writes nothing (provisional)".
+  Pinned by "a parent's :normal exit writes nothing (provisional)". *Answered: (b),
+  changed (decision 328, 2026-10-30): every orderly exit writes; the test now pins the
+  write, "a parent's :normal exit writes the store after every output 0 and every device
+  closed".*
 
   *Mutation table* (`scratchpad/m6/m66mut/run1.log` and `run2.log`): 11 mutants, each one
   rule broken alone in a work copy and judged by the full suite's exit code, all 11 red,
@@ -10170,7 +10173,8 @@ done-when reads the next store write; and last the contract walk and the documen
      `status/1` gains the period and the time of the last take-out, `%{path, period,
      written_at, taken_at, failed, dropped}`.
   8. *Still open from M6-5's answers:* whether a parent's `:normal` exit writes the store,
-     which decision 316 names neither way (pinned writing none, provisional).
+     which decision 316 names neither way (pinned writing none, provisional). *Answered:
+     changed, it writes (decision 328, 2026-10-30), with reading 11 below.*
 
   2374 tests (11 doctests), up from 2357.
 
@@ -10244,17 +10248,62 @@ done-when reads the next store write; and last the contract walk and the documen
      built; (b) `shutdown: :infinity`, a hung disk then holding the supervisor's shutdown
      for ever; (c) every device closed at once rather than in device-name order (decision
      116), so the shutdown takes one close's time; (d) 5000 kept, the limit documented.
+     *Answered: (a), confirmed, a host's own `shutdown:` winning (decision 326,
+     2026-10-30).*
   10. *Who may shut the runner down with a write.* The runner tells a shutdown by its
      reason, `:shutdown` or `{:shutdown, term}`, not by who sent it, so
      `GenServer.stop(runner, :shutdown)` from any process writes the store as its
      parent's shutdown does, and its caller is answered `:ok` even where the write failed,
      the failure told only to the subscribers; `Logex.Runner.stop/2` answers it. The
      options: (a) as built; (b) only the parent's shutdown writes, any other process's
-     `:shutdown` as a `:normal` stop.
+     `:shutdown` as a `:normal` stop. *Answered: (a), confirmed, `stop/2` remaining the
+     call that returns the error (decision 327, 2026-10-30).*
   11. *Still open:* reading 8, whether a parent's `:normal` exit writes the store; the
-     review leans to writing it, since the zeros and the closes come first.
+     review leans to writing it, since the zeros and the closes come first. *Answered:
+     changed, every orderly exit writes (decision 328, 2026-10-30).*
 
   2382 tests (11 doctests), up from 2374.
+
+  *The maintainer's answers to readings 8 to 11* (2026-10-30, decisions 326 to 328): the
+  child spec's `shutdown:` confirmed as built (326); any process's `:shutdown` or
+  `{:shutdown, term}` confirmed to write, its caller told `:ok` and a failure told to the
+  subscribers, `stop/2` the call that returns it (327); and a `:normal` exit changed to
+  write the store as `stop/2` and a shutdown do, after every output is 0 and every device
+  closed (328). Built so: `terminate/2` tells the orderly exits by their reason alone,
+  `:normal`, `:shutdown` and `{:shutdown, term}`, so a parent's `{:EXIT, parent,
+  :normal}`, which the runner sees as it traps exits, and a `GenServer.stop(runner)` or
+  `GenServer.stop(runner, :normal)` from any process each write; `{:shutdown, {:clock,
+  reason}}`, the runner's own exit when its clock goes down, a crash and a kill write
+  none (decision 292). A runner whose devices cannot be opened ends `:normal` too, but
+  from `init/1`'s `{:error, {:io_init, device, reason}}`, on which a GenServer calls no
+  `terminate/2`, so it writes nothing, the store as the caller left it. In
+  `retain_store_test.exs` the provisional test that pinned a parent's `:normal` exit
+  writing nothing is replaced by one pinning the write, after every output 0 (seen by
+  the device's last write) and every device closed, and the next fresh start bringing it
+  back: the maintainer changed the rule, so that test's assertion, the store unchanged,
+  is now the wrong behaviour; nothing else of it is dropped, its parent and its `:DOWN`
+  `:normal` kept. Three tests are new: a `GenServer.stop/3` from a process that is not
+  the parent, `:normal` and `:shutdown`, writing and answered `:ok`; such a stop whose
+  write fails, `:normal` and `{:shutdown, term}`, answered `:ok` with
+  `{:retain, {:error, :eisdir}}` to the subscribers and the store as it was; and a
+  runner whose device cannot be opened leaving the store byte for byte and no `.tmp`.
+  The runner walk and the end-to-end store test draw only `stop/2` and kills, which these
+  answers do not change, so their models stand.
+
+  *Mutations*, each judged by the full suite's exit code (`scratchpad/m6/m67mut`): N1 a
+  `:normal` exit writing nothing; N2 its write before the closes; N3 a failed `init/1`
+  writing the store; N4 a crash writing; N5 a `{:shutdown, term}` writing nothing; N6 a
+  `:shutdown` writing nothing; N7 the clock's own exit writing; N8 the child spec's 5000
+  kept: all red. N3's first run met `mix format` and was run again formatted, red by the
+  failed init's test among seven. 50 runs of `retain_store_test.exs` under four busy
+  loops pass (`scratchpad/m6/r50s.out`), and the runner walk at the 30 fresh families
+  `{7301..7330, 10, n}` fails no check (`scratchpad/m6/seeds11.out`): 15 reach every
+  atom, and the rest miss only atoms rare by their nature, `:period_restored`,
+  `:store_tripped_at_start`, `:next_due_from_step`, `:zero_at_stop` or, once, `{:trip,
+  :round}`, as at M6-6. The edit walks run
+  no runner, so these answers cannot reach them, and were not run again.
+
+  2385 tests (11 doctests), up from 2382.
 - **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit`, for a
   program's tags, members, arrays and instances, by path, rows of its table and §4.9's;
   decision 44 annotated as landed. *(Since decision 302, 2026-10-29, a global's two kinds

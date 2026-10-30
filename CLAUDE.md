@@ -1269,7 +1269,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/runner.ex` — `Logex.Runner` (M4-3, `docs/organisation.md` §4.11), the
   wall-clock runner, a GenServer, `restart: :temporary` (decision 115), since M6-6's
   review its child spec's `shutdown:` `(devices + 2) * (idle + poll)` ms, never less than
-  5000, so that a supervisor waits for decision 316's write (provisional), the one piece of
+  5000, so that a supervisor waits for decision 316's write (decision 326), the one piece of
   logex that reads a clock: it owns one configuration's `%Logex.Runtime{}` and runs it in
   rounds, a round the inputs taken, the cycle's steps run (`cycle_steps/3`, decision 118)
   and the outputs written. `start_link/1` takes `configuration:`, `io:`, `clock:`,
@@ -1321,9 +1321,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `unzeroed` tried its 0 once more and closed, taken or not (decision 286), one that hangs
   killed at its deadline, the idle watchdog and a poll period, unclosed, and since M6-5
   the store written after them, a call in effect only (decision 321); since decision 316
-  a parent's `:shutdown` or `{:shutdown, term}` writing the store as `stop/2` does, the
-  clock gone down, `{:shutdown, {:clock, reason}}`, a crash, a kill and a parent's
-  `:normal` (provisional) writing none; and since decision 317 a cold restart a device
+  a parent's `:shutdown` or `{:shutdown, term}` writing the store as `stop/2` does, and
+  since decisions 327 and 328 every orderly exit, `:normal`, `:shutdown` or `{:shutdown,
+  term}`, a parent's or a `GenServer.stop/3`'s from any process, told by its reason, its
+  caller answered `:ok` and a failure told to the subscribers, the clock gone down,
+  `{:shutdown, {:clock, reason}}`, a crash and a kill writing none, nor a runner whose
+  devices cannot be opened, whose failed `init/1` runs no `terminate/2`; and since
+  decision 317 a cold restart a device
   refuses writing the store back, after the refusal's zeros, with the values the runner
   still holds, a failed write-back reported as any. Since M4-4 it traps exits, and a trip has one
   path (decision 113): scheduling stopped, every output 0 once through each device that
@@ -1631,7 +1635,11 @@ after every output 0 (a major fault's trip, so the device's 0 meets the start's 
 the store and the forces file one file named two ways or each other's `.tmp` refused,
 and since decision 316 a parent's shutdown, a `{:shutdown, term}` and a supervisor's
 writing the store after every output 0 and every device closed, its failure reported, a
-clock gone down, its wall clock still answering, and a parent's `:normal` writing none,
+clock gone down, its wall clock still answering, writing none, and since decisions 327
+and 328 a parent's `:normal` exit writing the store after every output 0 and every device
+closed, a `GenServer.stop/3` from another process, `:normal` or `:shutdown`, writing and
+answered `:ok`, its failure `:ok` with the subscribers told, and a runner whose device
+cannot be opened leaving the store byte for byte,
 and since decision 317 a cold restart a device refuses writing the store back after its
 zeros, a crash then restoring the trip's values, a refused warm restart writing nothing
 and a failed write-back reported, and since M6-6's review a supervisor waiting for a

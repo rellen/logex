@@ -46,7 +46,10 @@ values and a true warm restart, was designed and decided on 2026-10-27 (§4.13, 
 266–285), its words and the core's warm restart landing first, M6-1 and M6-2 on the same
 day; the four questions left open at Milestone 5's close
 were answered the same day and built, decisions 286–289, and the three questions their
-review raised answered the same day, decisions 290–292.** On 2026-09-28 the
+review raised answered the same day, decisions 290–292; M6-3 to M6-6 landed by
+2026-10-30, with the maintainer's answers to their readings, decisions 293–328, the last
+three, of 2026-10-30, the runner's shutdown time, any process's shutdown and a `:normal`
+exit each writing the store.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -4382,6 +4385,11 @@ shutdown, `:shutdown` or `{:shutdown, term}`, writes the store as `stop/2` does,
 a kill and the clock going down still none; and a cold restart a device then refuses
 writes the store back with the values the runner still holds, so a refused restart
 changes nothing on disk or in memory.)*
+*(Since the maintainer's answers of 2026-10-30, decisions 326 to 328: every orderly exit
+writes the store, a `:normal` exit as well as a shutdown, a parent's or a
+`GenServer.stop/3`'s from any process, its caller told `:ok` and a failure told to the
+subscribers, `stop/2` the call that returns it; a runner whose devices cannot be opened
+writes nothing.)*
 *(Since M6-6, 2026-10-30, the periodic writer has landed: a runner given `retain:` writes
 its store every `retain_period:` ms, 100 to 3,600,000, 1000 unless set, on a grid from
 its start, through a writer process of its own, latest wins, the image taken out between
@@ -4393,7 +4401,7 @@ a crash loses at most a period and the write in progress, as decision 292 has it
 writer keeps up with its period; while they fail a crash loses everything since the last
 good write, and while tripped an edit's values reach no store until a restart. A
 runner's child spec gives its shutdown `(devices + 2) * (idle + poll)` ms, never less
-than 5000, so that a supervisor waits for decision 316's write (provisional); and a
+than 5000, so that a supervisor waits for decision 316's write (decision 326); and a
 writer gone down before an event's write is taken as gone at once, `{:down, reason}`.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
@@ -4532,7 +4540,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   event's. *(Added after the review of decisions 286–289, 2026-10-27, the record's
   reading; confirmed by decision 292.)* *(Decision 316, 2026-10-30: a parent's orderly
   shutdown writes as `stop/2` does, after the zeros and the closes; decision 321: the
-  stop a call in effect only, so a suspended runner is still stopped.)* A fresh start
+  stop a call in effect only, so a suspended runner is still stopped; decision 328: a
+  `:normal` exit writes too, every orderly exit after the zeros and the closes.)* A
+  fresh start
   reports the store's age, its header's `written_at`, in `status/1` and in its first
   round's `{:retain, …}` event. The trip's write is of the resource as the trip left it,
   the one `get/2` reads and a warm `restart/2` keeps. A sync of the directory after the
@@ -10993,7 +11003,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      silent then killed, `:timeout`, and drops the pending one. Each of these readings
      where the record is silent is provisional and put to the maintainer, `PLAN.md` M6-6.
      A round of a runner with no store costs what it did, and one with a store and a long
-     period some 7 reductions more, 0.4%.)*
+     period some 7 reductions more, 0.4%.)* *(Decisions 326 to 328, 2026-10-30: the child
+     spec's `shutdown:`, `(devices + 2) * (idle + poll)` ms, never less than 5000,
+     confirmed; any process's `:shutdown` or `{:shutdown, term}` writing, its caller told
+     `:ok`, confirmed; and a `:normal` exit, a parent's or a `GenServer.stop/3`'s, writing
+     the store too, so that every orderly exit writes.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
@@ -11265,7 +11279,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      up to a period and one write. *(Landed with M6-5, 2026-10-30: a kill and a crash
      inside the runner each write none, pinned.)* *(Decision 316, 2026-10-30: a parent's
      orderly shutdown writes as `stop/2` does; a crash, a kill and the clock going down
-     still none.)*
+     still none.)* *(Decision 328, 2026-10-30: a `:normal` exit writes too, every orderly
+     exit writing; a crash, a kill and the clock going down still none, nor a runner whose
+     devices cannot be opened, whose failed `init/1` runs no `terminate/2`.)*
 293. **The first scan after a warm restart (Milestone 6),** the first of the six readings
      M6-1 and M6-2 left provisional (`PLAN.md`, M6-2's status): decision 273 sets a
      retained timer's `last` to its instance's `now`, its last scan's, so the time before
@@ -11554,14 +11570,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      had it, and a shutdown's write that meets the clock gone names no time and is none
      too. A parent that ends `:normal`, which a supervisor never gives and the answer does
      not name, ends the runner `:normal` and writes none (provisional, `PLAN.md`, the
-     answers to M6-5's readings). *(M6-6's review, 2026-10-30: `terminate/2` tells a
+     answers to M6-5's readings; *changed by decision 328, 2026-10-30: it writes*).
+     *(M6-6's review, 2026-10-30: `terminate/2` tells a
      shutdown by its reason alone, so a `GenServer.stop(runner, :shutdown)` from any
      process, not only the parent, writes the store too, its caller answered `:ok` and a
-     failure told only to the subscribers, `stop/2` answering it (provisional, a question
-     in `PLAN.md`'s M6-6); and a supervisor kills a child whose shutdown outlasts its
-     spec's `shutdown:`, a GenServer's 5000 ms, which ten devices whose close hangs
-     outlast with the defaults, so the runner's child spec gives `(devices + 2) * (idle +
-     poll)` ms, never less than 5000 (provisional, a question there too).)*
+     failure told only to the subscribers, `stop/2` answering it (confirmed, decision
+     327); and a supervisor kills a child whose shutdown outlasts its spec's `shutdown:`,
+     a GenServer's 5000 ms, which ten devices whose close hangs outlast with the defaults,
+     so the runner's child spec gives `(devices + 2) * (idle + poll)` ms, never less than
+     5000 (confirmed, decision 326).)*
 317. **A cold restart a device refuses (Milestone 6),** M6-5's fifth reading, changing
      it: the cold restart's write comes before the release and the reads (decision 291),
      so a cold restart refused by a card still bad had written the store with the initial
