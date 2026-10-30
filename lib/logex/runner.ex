@@ -21,8 +21,10 @@ defmodule Logex.Runner do
   `forces:`, the path of the file its forces are kept in (decision 127), none unless set,
   a runner without one taking no force, since M6-5 `retain:`, the path of its store, the
   file its retained values are kept in across a crash (decision 275), none unless set,
-  and `start:`, `:warm` or `:cold`, how a fresh start meets that store, `:warm` unless
-  set (decision 271), and `name:`, a name to register it under, as
+  since M6-6 `retain_period:`, how often it writes that store, 100 to 3,600,000 ms, 1000
+  unless set or nil (decision 275), and `start:`, `:warm` or `:cold`, how a fresh start
+  meets that store, `:warm` unless set (decision 271), each of the last two the host's
+  mistake without `retain:` (decision 323), and `name:`, a name to register it under, as
   `GenServer.start_link/3` takes one. It
   checks every option in the caller before anything starts, the configuration as
   `Logex.Runtime.start/1` checks it and the bindings as `Logex.IO.bind!/2` does, so a
@@ -202,7 +204,28 @@ defmodule Logex.Runner do
     runner that crashes or is killed, whose clock goes down, a shutdown of its own,
     `{:shutdown, {:clock, reason}}`, or that ends for any other reason, a parent's
     `:normal` among them (provisional), writes none (decision 292), so its next fresh
-    start meets the last write. The periodic writer, `retain_period:`, is M6-6's.
+    start meets the last write, a period's or an event's.
+  - *Its period* (M6-6, decision 275): every `retain_period:` ms, 1000 unless set, on a
+    grid from the runner's start on its clock, as a periodic task's due times are, a due
+    time passed while the runner was busy skipped, never made up, and none while tripped,
+    the trip's own write standing, a restart taking up the grid at its next due time
+    (provisional). The runner takes the retained image out between rounds, at a cost in
+    proportion to the retained values alone, as its own work: with untimed programs first
+    in the share's slot at or after the due time, out of its S ms and before the requests
+    that waited, and with none at a wake of its own, or just after the round due with it
+    or running then, so that the period never runs inside a round nor moves a round's
+    due time (decisions 108 and 122, provisional). A writer process of the runner's own,
+    linked to it, writes the image by the same rule as every write, so that a slow write
+    delays no round: while one is in progress the next waits, the newest replacing the
+    one before, latest wins. A write made is the store's age in `status/1`'s
+    `written_at`; one that fails leaves the store as it was and is reported,
+    `{:retain, {:error, reason}}` and `failed`, the plant running on; a writer gone down
+    is reported, `{:down, reason}`, and a new one writes the next (provisional). Every
+    write at an event waits first for the write in progress and drops the one pending,
+    so that the event's is the last on disk: the trip's, the stop's, a shutdown's and a
+    cold restart's, a writer that has not answered by the idle watchdog and a poll period,
+    in real time, killed, its write reported `:timeout` (provisional). So a crash or a
+    kill loses at most a period and the write in progress.
   - *A fresh start* reads the store in the caller, after the forces file, warm unless
     `start: :cold`: a store laid over the resource by decision 277's matching
     (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
@@ -398,7 +421,7 @@ defmodule Logex.Runner do
   alias Logex.{Configuration, Declarations, Fault, Runtime}
   alias Logex.Configuration.Edit
   alias Logex.IO.Point
-  alias Logex.Runner.{Clock, Device}
+  alias Logex.Runner.{Clock, Device, Writer}
 
   # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
   # steps, the one seam through which a test reaches a fault no host can cause, an
@@ -412,6 +435,7 @@ defmodule Logex.Runner do
     :idle,
     :forces,
     :retain,
+    :retain_period,
     :start,
     :name,
     :steps
@@ -426,6 +450,9 @@ defmodule Logex.Runner do
   # (decision 109); the share is the conventional table's span (decision 121).
   @interval 1..2_147_483_647
   @share 10..90
+
+  # A store's period, the record's range (decision 275, M6-6, provisional).
+  @period 100..3_600_000
 
   @doc """
   Starts a runner linked to the caller, every option checked first in the caller (see the
@@ -517,8 +544,9 @@ defmodule Logex.Runner do
   decision 287, after it, though its 0 was taken, until a restart; `[]` while running;
   and since M6-5 `retain`, nil for a runner given no `retain:`, and otherwise its store,
   `%{path: path, written_at: at, failed: reason, dropped: dropped}`: `written_at` the time
-  in the header of the store on disk, the last write's or, until a write, the one the
-  fresh start read, a UTC `DateTime` to the second, the store's age; `failed` the reason
+  in the header of the store on disk, the last write's, since M6-6 a period's among
+  them once its writer has made it, or, until a write, the one the fresh start read, a
+  UTC `DateTime` to the second, the store's age; `failed` the reason
   the last write failed, nil where it did not; and `dropped` what the fresh start's
   matching dropped, `{path, reason}` in path order, as `Logex.Runtime.start/2` gives it
   (decisions 275 and 277).
@@ -754,7 +782,14 @@ defmodule Logex.Runner do
   # A device's process gone down, which the runner traps: an I/O fault (decision 114), the
   # device opened again at the next restart. One it killed, or that stopped as it was
   # closed, is already none of its devices.
+  def handle_info({:EXIT, pid, reason}, %{retain: %{period: %{writer: pid}}} = state),
+    do: {:noreply, writer_down(state, reason)}
+
   def handle_info({:EXIT, pid, reason}, state), do: {:noreply, exited(pid, reason, state)}
+
+  # M6-6: the writer's answer to the period's write it was handed (decision 275).
+  def handle_info({Writer, pid, at, result}, %{retain: %{period: %{writer: pid}}} = state),
+    do: {:noreply, period_written(state, at, result)}
 
   # M6-5: the caller of stop/2, named before its stop, answered as the runner terminates.
   def handle_info({__MODULE__, :stopping, pid, ref}, state),
@@ -790,6 +825,7 @@ defmodule Logex.Runner do
 
     state = each_live(state, &Device.close/2)
     answered_stop(stoppers(state.stoppers), reason, state)
+    writer_stopped(state)
     :ok
   end
 
@@ -1479,7 +1515,7 @@ defmodule Logex.Runner do
       latest_wake: state.latest_wake,
       refresh_gap: state.refresh_gap,
       unzeroed: Enum.sort(state.unzeroed),
-      retain: state.retain
+      retain: shown_store(state.retain)
     }
 
   # Each event of a kind its subscriber named, sent, never awaited.
@@ -1564,6 +1600,7 @@ defmodule Logex.Runner do
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
+    at = now(start)
 
     singles =
       MapSet.new(
@@ -1572,12 +1609,12 @@ defmodule Logex.Runner do
             do: single
       )
 
-    Map.merge(start, %{
+    Map.merge(Map.drop(start, [:retain_period, :taker]), %{
       bindings:
         Map.new(start.devices, fn {name, module, opts, _points} -> {name, {module, opts}} end),
       devices: devices,
       pids: Map.new(devices, fn {name, pid, _points} -> {name, pid} end),
-      anchor: now(start),
+      anchor: at,
       logical: 0,
       rounds: 0,
       addresses:
@@ -1602,7 +1639,8 @@ defmodule Logex.Runner do
       places: Map.new(inputs, fn {device, point} -> {point.name, {device, point.address}} end),
       kick: [],
       written: %{},
-      stoppers: []
+      stoppers: [],
+      retain: periodic(start.retain, start.retain_period, start.taker, at)
     })
     |> scheduling(start.configuration)
   end
@@ -1747,8 +1785,11 @@ defmodule Logex.Runner do
 
   defp wake(true, late, state), do: rounded(%{state | latest_wake: max(state.latest_wake, late)})
 
-  defp wake(false, _late, state),
+  defp wake(false, _late, %{retain: nil} = state),
     do: heard_from(silent(state), state, &scheduled(refresh(&1, :idle)))
+
+  defp wake(false, _late, state),
+    do: heard_from(silent(state), state, &scheduled(waited(refresh(&1, :idle))))
 
   # Decision 122's slots: after C ms of the continuous task's rounds, at the end of the
   # round that completes them, the runner serves its own work for up to S ms, each request
@@ -1756,9 +1797,16 @@ defmodule Logex.Runner do
   # the manual clock a slot comes in the advance that runs that round, never at a later one
   # (decision 131). Only a configuration with untimed programs is served in slots: one
   # without serves its requests whenever it waits (decision 108).
-  defp slot(%{untimed: true, used: used, slots: {c, s}} = state) when used >= c do
+  defp slot(%{untimed: true, used: used, slots: {c, s}, retain: nil} = state) when used >= c do
     state = refresh(state, :idle)
     %{popped(:queue.out(state.queue), now(state) + s, state) | used: 0}
+  end
+
+  # M6-6: a runner given a store takes a period due out first in the slot, out of its S ms.
+  defp slot(%{untimed: true, used: used, slots: {c, s}} = state) when used >= c do
+    state = refresh(state, :idle)
+    now = now(state)
+    %{popped(:queue.out(state.queue), now + s, period(state, now)) | used: 0}
   end
 
   defp slot(state), do: state
@@ -2137,6 +2185,7 @@ defmodule Logex.Runner do
   defp kept_store(%{retain: nil} = state, _runtime), do: {:ok, state}
 
   defp kept_store(%{retain: retain} = state, runtime) do
+    state = drained_writer(state)
     at = wall(state.clock)
     text = Logex.Retain.encode(Runtime.retained(runtime), at)
     noted(Logex.Retain.written(retain.path, text), at, state)
@@ -2149,6 +2198,170 @@ defmodule Logex.Runner do
     published(state, [{:retain, {:error, reason}}])
     {{:error, {:retain, reason}}, %{state | retain: %{retain | failed: reason}}}
   end
+
+  # ---- the period's writes (M6-6, decision 275) -----------------------------------------
+
+  # A runner given a store writes it every `retain_period:` ms, on a grid from its start on
+  # its clock, as a periodic task's due times are, a due time passed while it was busy or
+  # tripped skipped, never made up (provisional); with no store, nothing. Its writer, a
+  # process of its own, is started at the first write it is given.
+  defp periodic(nil, nil, _taker, _at), do: nil
+
+  defp periodic(%{path: path} = retain, every, taker, at),
+    do:
+      Map.put(retain, :period, %{
+        path: path,
+        every: every,
+        from: at,
+        next: at + every,
+        taker: taker,
+        writer: nil,
+        busy: false,
+        pending: nil
+      })
+
+  # The period's state is the store's, under `retain`, so that a runner with no store
+  # holds nothing more than before (`status/1` shows the store without it).
+  defp put_period(%{retain: retain} = state, period),
+    do: %{state | retain: %{retain | period: period}}
+
+  defp shown_store(nil), do: nil
+  defp shown_store(retain), do: Map.delete(retain, :period)
+
+  # The next due time after `at`, on the grid.
+  defp next_due(%{every: every, from: from}, at), do: from + every * (div(at - from, every) + 1)
+
+  # A restart takes up the grid at its next due time after the restart: a warm one writes
+  # nothing of its own, and no due time passed while tripped is made up.
+  defp period_from(nil, _at), do: nil
+
+  defp period_from(%{period: periodic} = retain, at),
+    do: %{retain | period: %{periodic | next: next_due(periodic, at)}}
+
+  # The period's take-out is the runner's own work, between rounds, never inside one, and
+  # it moves no round's due time (decisions 108 and 122, restated for the period,
+  # provisional): with untimed programs, first in the share's slot that comes at or after
+  # its due time, out of the slot's S ms, before the requests that waited; with none, at
+  # the wake of its due time, or just after the round that runs at it or is running then,
+  # its outputs written, so that a round owed at that time runs first. While tripped the
+  # runner takes none: the trip wrote the resource as it left it.
+  defp after_round(%{untimed: false} = state, now), do: period(state, now)
+  defp after_round(state, _now), do: state
+
+  defp waited(%{untimed: false} = state), do: period(state, state.refreshed)
+  defp waited(state), do: state
+
+  # The period's own wake, where no round or refresh comes sooner: only a runner with no
+  # untimed program needs one, the share's slots coming every C ms otherwise.
+  defp soonest(round, refresh, %{period: %{next: next}}, false),
+    do: earliest(earliest(round, refresh), next)
+
+  defp soonest(nil, refresh, _periodic, _untimed), do: refresh
+  defp soonest(round, refresh, _periodic, _untimed), do: min(round, refresh)
+
+  defp period(%{retain: %{period: %{next: next} = periodic}, status: :running} = state, now)
+       when now >= next do
+    image = periodic.taker.retained(state.runtime)
+    at = wall(state.clock)
+    handed(put_period(state, %{periodic | next: next_due(periodic, now)}), {at, image})
+  end
+
+  defp period(state, _now), do: state
+
+  # The image handed to the writer where it is idle, and otherwise kept until it answers,
+  # the newest taken out replacing the one that waited, latest wins.
+  defp handed(%{retain: %{period: %{busy: true} = periodic}} = state, write),
+    do: put_period(state, %{periodic | pending: write})
+
+  defp handed(%{retain: %{period: periodic}} = state, {at, image}) do
+    pid = writer(periodic.writer, periodic.path)
+    Writer.write(pid, at, image)
+    put_period(state, %{periodic | writer: pid, busy: true})
+  end
+
+  defp writer(nil, path) do
+    {:ok, pid} = Writer.start_link(path)
+    pid
+  end
+
+  defp writer(pid, _path), do: pid
+
+  # The writer's answer: a write made is the store's age in `status/1`, one that failed
+  # reported as every failed write is, `{:retain, {:error, reason}}` and `failed`, the
+  # plant running on; and the image that waited, if any, handed on.
+  defp period_written(state, at, result) do
+    {_written, state} = noted(result, at, state)
+    next_write(put_period(state, %{state.retain.period | busy: false}))
+  end
+
+  defp next_write(%{retain: %{period: %{pending: nil}}} = state), do: state
+
+  defp next_write(%{retain: %{period: %{pending: write} = periodic}} = state),
+    do: handed(put_period(state, %{periodic | pending: nil}), write)
+
+  # Before a write at an event, a trip, a stop, a shutdown or a cold restart, the
+  # writer's write in progress waited for and any pending one dropped, so that the
+  # event's write is the last on disk (decision 275). The wait is bounded as a device's
+  # close is, by the idle watchdog and a poll period in real time; a writer that has not
+  # answered by then is killed, its write reported failed, `:timeout`, the store the old
+  # or the new, and a new writer started at the next period (provisional).
+  defp drained_writer(%{retain: %{period: %{busy: true, writer: pid}}} = state) do
+    receive do
+      {Writer, ^pid, at, result} ->
+        {_written, state} = noted(result, at, state)
+        idled_writer(state, pid)
+    after
+      state.idle + state.poll -> hung_writer(state, pid)
+    end
+  end
+
+  defp drained_writer(%{retain: %{period: %{} = periodic}} = state),
+    do: put_period(state, %{periodic | pending: nil})
+
+  defp drained_writer(state), do: state
+
+  defp idled_writer(state, pid),
+    do: put_period(state, %{state.retain.period | writer: pid, busy: false, pending: nil})
+
+  defp hung_writer(state, pid) do
+    killed_writer(pid)
+    {_failed, state} = noted({:error, :timeout}, nil, state)
+    idled_writer(state, nil)
+  end
+
+  defp killed_writer(nil), do: :ok
+
+  defp killed_writer(pid) do
+    ref = Process.monitor(pid)
+    Process.unlink(pid)
+    Process.exit(pid, :kill)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+    end
+
+    receive do
+      {:EXIT, ^pid, _reason} -> :ok
+    after
+      0 -> :ok
+    end
+  end
+
+  # A writer gone down, which the runner traps: the write it held reported failed,
+  # `{:down, reason}`, and the image that waited handed to a new one (provisional).
+  defp writer_down(%{retain: %{period: %{busy: true}}} = state, reason) do
+    {_failed, state} = noted({:error, {:down, reason}}, nil, state)
+    next_write(put_period(state, %{state.retain.period | writer: nil, busy: false}))
+  end
+
+  defp writer_down(state, _reason),
+    do: put_period(state, %{state.retain.period | writer: nil})
+
+  # The writer stopped as the runner terminates, after the stop's or the shutdown's write,
+  # which waited for it, or at once where the runner crashed: its write, if any, leaves
+  # the old store or the new.
+  defp writer_stopped(%{retain: %{period: %{writer: pid}}}), do: killed_writer(pid)
+  defp writer_stopped(_state), do: :ok
 
   # A restart (decision 113): every latch released, a device that does not answer its
   # release killed and marked down, as one that hung or went down while the runner was
@@ -2270,6 +2483,7 @@ defmodule Logex.Runner do
         unzeroed: MapSet.new(),
         anchor: at - state.logical,
         refreshed: at,
+        retain: period_from(state.retain, at),
         logic: Map.new(state.logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)
     }
 
@@ -2302,7 +2516,21 @@ defmodule Logex.Runner do
   # it took a millisecond or more, while untimed programs exist or logic changed a trigger
   # (decisions 122 and 123); at the next periodic due time, on the runner's clock, which
   # counts from `anchor` (§4.11); the earlier, a wake either way.
+  defp planned(%{retain: nil} = state, start, finish, again) do
+    next =
+      earliest(
+        back_to_back(again, start, finish),
+        due(Runtime.next_due_in(state.runtime), state)
+      )
+
+    scheduled(%{state | next_round: next})
+  end
+
+  # M6-6: a runner given a store and no untimed program takes a period due out first, its
+  # round's outputs written (see after_round/2).
   defp planned(state, start, finish, again) do
+    state = after_round(state, finish)
+
     next =
       earliest(
         back_to_back(again, start, finish),
@@ -2327,7 +2555,7 @@ defmodule Logex.Runner do
   # the last, its token making any earlier wake stale.
   defp scheduled(%{clock: {module, clock}, token: token} = state) do
     cancel(state.wake, state.clock)
-    at = earliest(state.next_round, state.refreshed + state.poll)
+    at = soonest(state.next_round, state.refreshed + state.poll, state.retain, state.untimed)
     token = token + 1
 
     %{
@@ -2483,6 +2711,7 @@ defmodule Logex.Runner do
     file = file!(Keyword.get(opts, :forces))
     store = retain!(Keyword.get(opts, :retain), file, clock)
     mode = start!(Keyword.fetch(opts, :start), store)
+    period = period!(Keyword.get(opts, :retain_period), store)
     devices = Logex.IO.bind!(configuration, io)
     steps = steps!(Keyword.get(opts, :steps, Runtime))
 
@@ -2510,6 +2739,8 @@ defmodule Logex.Runner do
        arrays: points.arrays,
        configuration: configuration,
        steps: steps,
+       taker: taker(function_exported?(steps, :retained, 1), steps),
+       retain_period: period,
        runtime: runtime,
        devices: devices,
        clock: clock,
@@ -2523,7 +2754,8 @@ defmodule Logex.Runner do
   defp takes(opts),
     do:
       "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-        "clock:, poll:, overhead:, idle:, forces:, retain:, start: and name:, got: " <>
+        "clock:, poll:, overhead:, idle:, forces:, retain:, retain_period:, start: and " <>
+        "name:, got: " <>
         inspect(opts)
 
   defp known!([]), do: :ok
@@ -2533,7 +2765,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
-          "retain:, start: and name:, got: #{inspect(key)}"
+          "retain:, retain_period:, start: and name:, got: #{inspect(key)}"
       )
 
   # A key given twice, the first repeated named: which of two values was meant is the
@@ -2745,6 +2977,35 @@ defmodule Logex.Runner do
         "the runner's start: is :warm, a fresh start from its store, or :cold, from the " <>
           "configuration's initial values, got: #{inspect(other)}"
       )
+
+  # M6-6 (decision 275): how often a runner given a store writes it, 1000 ms unless set or
+  # nil, as `forces:` and `retain:` take nil for none, a whole number of milliseconds from
+  # 100 to 3,600,000, the record's range (provisional); given to a runner that keeps no
+  # store, the host's mistake, as `start:` is (decision 323).
+  defp period!(nil, nil), do: nil
+  defp period!(nil, _store), do: 1000
+  defp period!(ms, store) when ms in @period and is_binary(store), do: ms
+
+  defp period!(ms, nil) when ms in @period,
+    do:
+      raise(
+        ArgumentError,
+        "the runner keeps no store, so retain_period: #{ms} has none to write: start it " <>
+          "with retain: a path"
+      )
+
+  defp period!(other, _store),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's retain_period: is how often it writes its store, a whole number of " <>
+          "ms from 100 to 3600000, got: #{inspect(other)}"
+      )
+
+  # The take-out a period makes: through the hidden seam's `retained/1` where its module
+  # has one, so that a test sees when it comes, and otherwise Logex.Runtime's.
+  defp taker(true, steps), do: steps
+  defp taker(false, _steps), do: Runtime
 
   # The store at a fresh start (decisions 271, 276, 277 and 285), read in the caller after
   # the forces file: none, nothing; `start: :cold`, not read, the store written at once;

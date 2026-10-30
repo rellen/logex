@@ -11921,6 +11921,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
 
+    # M6-6: a period's take-out, told to the walk with the clock's time.
+    def retained(runtime) do
+      {test, clock} = walk()
+      send(test, {:walked, self(), {:retained, Manual.now_ms(clock)}})
+      Runtime.retained(runtime)
+    end
+
     defp walk do
       [test | _] = Process.get(:"$ancestors")
       {test, :ets.lookup_element(@table, {test, :clock}, 2)}
@@ -12109,6 +12116,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_tripped_at_start,
     # Decision 317: a cold restart a device refused, its store written back.
     :cold_written_back,
+    # M6-6: a period's write taken out, in a configuration with untimed programs and in one
+    # with none, and a fresh start after a crash that met a period's write.
+    :period_written,
+    :period_in_slot,
+    :period_own_wake,
+    :period_restored,
     :ran,
     :fault,
     :overlap,
@@ -12386,6 +12399,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     File.rm(file || Path.join(dir, "none"))
     store = store_beside(file, dir, seed)
     File.rm(Path.join(dir, "retain-#{seed}"))
+    period = period_beside(store, seed)
 
     w = %{
       programs: programs,
@@ -12397,6 +12411,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       file: file,
       store: store,
       stored: nil,
+      period: period,
+      due: nil,
+      origin: nil,
+      late: 0,
+      by_period: false,
       poll: pick([3, 5, 8]),
       idle: pick([400, 500]),
       overhead: pick([10, 20, 50, 90]),
@@ -12464,6 +12483,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp store_beside(nil, _dir, _seed), do: nil
   defp store_beside(_file, dir, seed), do: Path.join(dir, "retain-#{seed}")
 
+  # M6-6: a store's period, drawn from the walk's seed rather than its random stream, so
+  # that each walk's draws are as they were: 100 ms, 105, between the fast task's rounds,
+  # 150 and 250 ms.
+  @periods [100, 105, 150, 250]
+
+  defp period_beside(nil, _seed), do: nil
+  defp period_beside(_store, seed), do: Enum.at(@periods, rem(seed, length(@periods)))
+
   # The store as the last runner left it, read before a fresh start, whose first round
   # may trip and write it again (decision 275): what the start reads is checked, never what
   # its own trip wrote after.
@@ -12482,11 +12509,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {rt, restated(rt)}
   end
 
-  defp fresh_rt(%{stored: stored}, config, text) do
+  defp fresh_rt(%{stored: stored} = w, config, text) do
     {kt, k} = stored
     assert text =~ "\nglobal kt dint #{kt}\n"
     assert text =~ "\ninstance k1 keep\nk1.k dint #{k}\n"
     reach(:store_restored, k > 0)
+    reach(:period_restored, w.by_period and k > 0)
 
     image = %{
       configuration: "plant",
@@ -12498,6 +12526,54 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {elem(Runtime.start(config, image), 0), stored}
   end
 
+  # M6-6, restated (decision 275): a store's period on a grid from the runner's start, its
+  # anchor, which the first round's elapsed time gives; a round that begins at or after a
+  # due time not yet taken counted, at most one with no untimed program, the period's own
+  # wake or the round due with it coming first, and with untimed programs at most C + 1,
+  # the share's slot coming after C ms of rounds (decision 122).
+  defp own_wake?(nil, _at), do: false
+  defp own_wake?(%{at: last}, at), do: at > last
+
+  defp due_unset(nil), do: nil
+  defp due_unset(_period), do: :unset
+
+  defp period_round(%{due: :unset} = w, at, elapsed),
+    do: %{w | origin: at - elapsed, due: at - elapsed + w.period}
+
+  defp period_round(%{due: due} = w, at, _elapsed) when is_integer(due) and at >= due do
+    w = %{w | late: w.late + 1}
+    bound = late_bound(untimed?(w.config), w.overhead)
+    assert w.late <= bound, "#{w.late} rounds began after the period due at #{due}"
+    w
+  end
+
+  defp period_round(w, _at, _elapsed), do: w
+
+  defp late_bound(false, _overhead), do: 1
+  defp late_bound(true, overhead), do: max(1, round((100 - overhead) / overhead)) + 1
+
+  defp grid_after(w, at), do: w.origin + w.period * (div(at - w.origin, w.period) + 1)
+
+  # A restart takes up the grid at its next due time after the restart.
+  defp period_restarted(%{due: nil} = w), do: w
+  defp period_restarted(w), do: %{w | due: grid_after(w, now(w)), late: 0}
+
+  # The writer's write handed on and answered, before a crash, so that the store holds
+  # the last period's write the model knows of.
+  defp writer_settled(w) do
+    {:links, links} = Process.info(w.runner, :links)
+
+    for pid <- links,
+        {:dictionary, dictionary} <- [Process.info(pid, :dictionary)],
+        dictionary[:"$initial_call"] == {Logex.Runner.Writer, :init, 1},
+        _ <- 1..2 do
+      :sys.get_state(pid)
+      :sys.get_state(w.runner)
+    end
+
+    drained(w)
+  end
+
   # What a store write holds of the model's resource: the retained global and the
   # retained count, the only values the walk's programs retain.
   defp restated(rt), do: {Runtime.get!(rt, "kt"), Runtime.get!(rt, "k1.k")}
@@ -12506,7 +12582,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # and a cold restart's of the resource as the restart starts it, before any device is
   # released or read, so whether or not a device then refuses it.
   defp stored_at(%{store: nil} = w, _rt), do: w
-  defp stored_at(w, rt), do: %{w | stored: restated(rt)}
+  defp stored_at(w, rt), do: %{w | stored: restated(rt), by_period: false}
 
   defp cold_stored(:cold, w) do
     reach(:cold_store, w.store != nil)
@@ -12540,6 +12616,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         overhead: w.overhead,
         forces: w.file,
         retain: w.store,
+        retain_period: w.period,
         steps: Walked
       )
 
@@ -12554,6 +12631,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         config: config,
         rt: rt,
         stored: stored,
+        due: due_unset(w.period),
+        late: 0,
         edit: nil,
         expect: [],
         status: :running,
@@ -12970,7 +13049,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp reconfigured(%{status: :running} = w, config) do
     reach(:untimed_added, untimed?(config) and not untimed?(w.config))
     reach(:untimed_taken, untimed?(w.config) and not untimed?(config))
-    %{w | config: config, longest: longest(w.longest, config), floor: now(w)}
+    %{w | config: config, longest: longest(w.longest, config), floor: now(w), late: 0}
   end
 
   defp reconfigured(w, config), do: %{w | config: config, longest: longest(w.longest, config)}
@@ -13056,6 +13135,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp restart(nil, mode, w) do
+    w = period_restarted(w)
     assert Runner.restart(w.runner, mode) == :ok
     reach(:"restart_#{mode}", true)
 
@@ -13122,7 +13202,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # 0 once, where it had not, and closes (decision 115); and a runner started again from
   # the same forces file comes back with every force (decision 127).
   defp crashed(w) do
-    w = settled(w)
+    w = writer_settled(settled(w))
     devices = device_pids(w.runner)
     watched = Enum.map(devices, fn {_name, pid} -> Process.monitor(pid) end)
     before = writes(w)
@@ -13402,7 +13482,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp record(w, {:steps, elapsed, inputs, at} = record) do
     assert w.status == :running, "a round ran while tripped: #{inspect(record)}"
     assert w.round == nil
-    w = logged(w, record)
+    w = logged(w, record) |> period_round(at, elapsed)
     kind = round_kind(w, inputs)
     timed!(w, kind, elapsed, at)
     inputs!(w, inputs, at)
@@ -13429,6 +13509,20 @@ defmodule Logex.ApiContractTest.RunnerWalk do
           trip: nil
         }
     }
+  end
+
+  # M6-6, restated (decision 275): a period's write taken out while running, between two
+  # rounds, at or after its due time, of the resource as the last round left it, which the
+  # store then holds; the next due time the grid's next after it, from the runner's start.
+  defp record(w, {:retained, at} = record) do
+    w = logged(w, record)
+    assert w.status == :running, "a period's write taken out while tripped"
+    assert w.round == nil, "a period's write taken out inside a round"
+    assert is_integer(w.due) and at >= w.due, "a period's write at #{at}, due #{inspect(w.due)}"
+    reach(:period_written, true)
+    reach(:period_in_slot, untimed?(w.config))
+    reach(:period_own_wake, not untimed?(w.config) and own_wake?(w.last, at))
+    %{w | stored: restated(w.rt), by_period: true, due: grid_after(w, at), late: 0}
   end
 
   defp record(w, {:step, task, ms} = record) do

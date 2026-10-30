@@ -243,8 +243,8 @@ defmodule Logex.RunnerTest do
       for opts <- [:x, [1], %{configuration: nil}] do
         raises(
           "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-            "clock:, poll:, overhead:, idle:, forces:, retain:, start: and name:, got: " <>
-            inspect(opts),
+            "clock:, poll:, overhead:, idle:, forces:, retain:, retain_period:, start: and " <>
+            "name:, got: " <> inspect(opts),
           fn -> Runner.start_link(opts) end
         )
       end
@@ -255,7 +255,7 @@ defmodule Logex.RunnerTest do
 
       raises(
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
-          "retain:, start: and name:, got: :pole",
+          "retain:, retain_period:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 10, period: 5]) end
       )
     end
@@ -274,7 +274,7 @@ defmodule Logex.RunnerTest do
       # An unknown key repeated is told as unknown.
       raises(
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
-          "retain:, start: and name:, got: :pole",
+          "retain:, retain_period:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
       )
     end

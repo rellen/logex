@@ -7123,7 +7123,10 @@ defmodule Logex.EndToEndTest do
   # since the round before, never in a start's first round; the lube timer adds 10 ms in a
   # round that sees the eye on after one that saw it on; a fresh start comes back to what
   # the last write held, the first start's, a stop's or a trip's, never what a crash
-  # discarded since.
+  # discarded since. Since M6-6 the runner writes its store every 105 ms too, from each
+  # start, and the oracle's last write is a period's where one came since: a period's
+  # write holds every round up to its due time, one due with a round after that round, and
+  # the next is 105 ms on.
   describe "the store in the plant (M6-5)" do
     @describetag :tmp_dir
     @describetag capture_log: true
@@ -7164,17 +7167,57 @@ defmodule Logex.EndToEndTest do
       plant
     end
 
-    # The oracle's model: the three values, the eye the last round saw, whether the next
-    # round is a start's first, and what the last write held.
-    defp kept_model, do: %{now: {0, 0, 0}, eye: 0, stored: {0, 0, 0}}
+    # The oracle's model: the three values, the eye the last round saw, what the last write
+    # held and whether a period made it, the time of the last round since the runner's
+    # start, the next period's due time, and how many fresh starts met a period's write.
+    @kept_period 105
 
-    defp kept_step({:eye, eye}, model), do: rounds(model, eye) |> rounds(eye)
+    defp kept_model,
+      do: %{
+        now: {0, 0, 0},
+        eye: 0,
+        stored: {0, 0, 0},
+        by_period: false,
+        t: 0,
+        next: @kept_period,
+        periods_met: 0
+      }
+
+    defp kept_step({:eye, eye}, model), do: round_at(model, eye) |> round_at(eye)
     defp kept_step(:kill, model), do: fresh(model)
-    defp kept_step(:stop, model), do: fresh(%{model | stored: model.now})
-    defp kept_step(:trip, model), do: fresh(%{model | stored: model.now})
+    defp kept_step(:stop, model), do: fresh(%{model | stored: model.now, by_period: false})
+    defp kept_step(:trip, model), do: fresh(%{model | stored: model.now, by_period: false})
 
-    # A fresh start's first round sees the eye as it was last set and counts nothing.
-    defp fresh(model), do: %{model | now: model.stored}
+    # A fresh start's first round sees the eye as it was last set and counts nothing; its
+    # periods count from it.
+    defp fresh(model),
+      do: %{
+        model
+        | now: model.stored,
+          t: 0,
+          next: @kept_period,
+          periods_met: model.periods_met + met(model.by_period)
+      }
+
+    defp met(true), do: 1
+    defp met(false), do: 0
+
+    # One round of the fast task, 10 ms after the last: a period due before it written at
+    # its own wake, before the round; one due with it written after it.
+    defp round_at(model, eye) do
+      t = model.t + 10
+
+      %{written(model, model.next < t) | t: t}
+      |> rounds(eye)
+      |> written_at_round()
+    end
+
+    defp written_at_round(model), do: written(model, model.next <= model.t)
+
+    defp written(model, false), do: model
+
+    defp written(model, true),
+      do: %{model | stored: model.now, by_period: true, next: model.next + @kept_period}
 
     defp rounds(%{now: {total, cv, acc}, eye: last} = model, eye),
       do: %{
@@ -7222,12 +7265,32 @@ defmodule Logex.EndToEndTest do
       kept_started(killed_runner(rig))
     end
 
+    # The runner killed between two periods, its last period's write made: the writer's
+    # write handed on and answered first (M6-6).
     defp killed_runner(rig) do
+      writer_done(store_writer(rig.runner), rig.runner)
       Process.unlink(rig.runner)
       ref = Process.monitor(rig.runner)
       Process.exit(rig.runner, :kill)
       assert_receive {:DOWN, ^ref, :process, _, :killed}
       gone_devices(rig)
+    end
+
+    defp store_writer(runner) do
+      {:links, links} = Process.info(runner, :links)
+      Enum.find(links, &(writer_call(Process.info(&1, :dictionary)) == {Runner.Writer, :init, 1}))
+    end
+
+    defp writer_call({:dictionary, dictionary}), do: dictionary[:"$initial_call"]
+    defp writer_call(nil), do: nil
+
+    defp writer_done(nil, runner), do: :sys.get_state(runner)
+
+    defp writer_done(writer, runner) do
+      :sys.get_state(writer)
+      :sys.get_state(runner)
+      :sys.get_state(writer)
+      :sys.get_state(runner)
     end
 
     # Each sim's opener gone down, so that the next runner can open it (commit 2adf13a).
@@ -7270,7 +7333,8 @@ defmodule Logex.EndToEndTest do
         configuration: plant,
         io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
         clock: {Manual, clock},
-        retain: store
+        retain: store,
+        retain_period: @kept_period
       ]
 
       rig = kept_started(%{clock: clock, panel: panel, drive: drive, opts: opts, runner: nil})
@@ -7289,6 +7353,8 @@ defmodule Logex.EndToEndTest do
       assert Enum.sort(Enum.uniq(Enum.map(steps, &kept_kind/1))) == [:eye, :kill, :stop, :trip]
 
       assert elem(model.stored, 0) > 0 and elem(model.stored, 2) > 0
+      # Some fresh starts met a period's write (M6-6).
+      assert model.periods_met > 0
       assert Runner.stop(rig.runner) == :ok
     end
   end

@@ -4382,6 +4382,13 @@ shutdown, `:shutdown` or `{:shutdown, term}`, writes the store as `stop/2` does,
 a kill and the clock going down still none; and a cold restart a device then refuses
 writes the store back with the values the runner still holds, so a refused restart
 changes nothing on disk or in memory.)*
+*(Since M6-6, 2026-10-30, the periodic writer has landed: a runner given `retain:` writes
+its store every `retain_period:` ms, 100 to 3,600,000, 1000 unless set, on a grid from
+its start, through a writer process of its own, latest wins, the image taken out between
+rounds as the runner's own work, in the share's slot where untimed programs run and at a
+wake of its own otherwise, never moving a round's due time; none while tripped; each
+write at an event first waits for the period's in progress and drops the one pending; so
+a crash loses at most a period and the write in progress, as decision 292 has it.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -10960,7 +10967,25 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      parent's `:shutdown` or `{:shutdown, term}` writes as `stop/2` does, after the zeros
      and the closes, the clock gone and a crash still none; a cold restart a device
      refuses writes the store back with the values the runner still holds; and the first
-     round's event reaching no one, `status/1` carrying it, confirmed.)*
+     round's event reaching no one, `status/1` carrying it, confirmed.)* *(Landed with
+     M6-6, 2026-10-30: `retain_period:` takes 100 to 3,600,000 ms, the record's range,
+     1000 unless set or nil, and is the host's mistake without `retain:`, as `start:` is
+     (decision 323); the due times are a grid from the runner's start on its clock, a due
+     time passed while the runner was busy skipped and none taken while tripped, a restart
+     taking up the grid at its next due time; the take-out is the runner's own work
+     between rounds, with untimed programs first in the share's slot at or after the due
+     time, out of its S ms (decision 122), and with none at a wake of its own or just after
+     the round due with it, so that it never runs inside a round nor moves a round's due
+     time; the writer, `Logex.Runner.Writer`, is handed one image at a time, the runner
+     keeping the newest that waits, and a write it makes is `status/1`'s `written_at`, one
+     that fails `{:retain, {:error, reason}}` and `failed`, the plant running on, a writer
+     gone down `{:down, reason}` and replaced at the next period; every event write, the
+     trip's, the stop's, a shutdown's and a cold restart's, waits first for the write in
+     progress, bounded by the idle watchdog and a poll period in real time, a writer still
+     silent then killed, `:timeout`, and drops the pending one. Each of these readings
+     where the record is silent is provisional and put to the maintainer, `PLAN.md` M6-6.
+     A round of a runner with no store costs what it did, and one with a store and a long
+     period some 7 reductions more, 0.4%.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
