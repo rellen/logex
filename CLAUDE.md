@@ -1267,7 +1267,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   and since M5-13's review `set/2,3` an address past `inputs:`, and `start_link/1` a key
   given twice, as the manual clock's and the runner's do
 - `lib/logex/runner.ex` — `Logex.Runner` (M4-3, `docs/organisation.md` §4.11), the
-  wall-clock runner, a GenServer, `restart: :temporary` (decision 115), the one piece of
+  wall-clock runner, a GenServer, `restart: :temporary` (decision 115), since M6-6's
+  review its child spec's `shutdown:` `(devices + 2) * (idle + poll)` ms, never less than
+  5000, so that a supervisor waits for decision 316's write (provisional), the one piece of
   logex that reads a clock: it owns one configuration's `%Logex.Runtime{}` and runs it in
   rounds, a round the inputs taken, the cycle's steps run (`cycle_steps/3`, decision 118)
   and the outputs written. `start_link/1` takes `configuration:`, `io:`, `clock:`,
@@ -1632,7 +1634,10 @@ writing the store after every output 0 and every device closed, its failure repo
 clock gone down, its wall clock still answering, and a parent's `:normal` writing none,
 and since decision 317 a cold restart a device refuses writing the store back after its
 zeros, a crash then restoring the trip's values, a refused warm restart writing nothing
-and a failed write-back reported,
+and a failed write-back reported, and since M6-6's review a supervisor waiting for a
+shutdown whose close hangs past 5000 ms and writing the store, the child spec's
+`shutdown:` pinned against the devices, `idle:` and `poll:`, and a shutdown whose wall
+clock goes down as it writes ending `:shutdown` with nothing written,
 `retain_period_test.exs` M6-6's periodic writer on the manual clock: `retain_period:`
 checked in the caller, a pinned line each, 1000 ms unless set and `status/1`'s
 `written_at` following each write, PLAN's Done-when (a runner killed between two periods
@@ -1647,7 +1652,11 @@ passed in a slow step skipped), a trip waiting for the write in progress, nothin
 while tripped and a restart taking up the grid, a hung writer killed at its deadline, a
 writer gone down reported and replaced, and its cost in reductions, the collector kept
 out, a long period within 10 reductions a round of no store and a period's take-out
-linear in the retained values,
+linear in the retained values, and since M6-6's review a writer gone down before an
+event's write taken as gone at once, `{:down, :killed}`, one gone while idle replaced, a
+trip reporting the failure of the period's write it waited for, a hung writer killed at a
+trip's deadline and never writing after it, and a runner killed in the middle of a
+period's write, its `.tmp` a pipe the test holds it in, restoring the write before it,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1692,7 +1701,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   move an element's preset or block a counter's edge memory, and in a resource read
   through `get/2`, against an oracle of each element as a scalar instance of its type,
   IEC's TON, CTU and CTUD and the gate's one-shot restated, its reach every kind
-  (`@ia_reach`) and the array forced and unforced whole; and since M5-15, the walks'
+  (`@ia_reach`) and the array forced and unforced whole, and since M6-6's review a blocked
+  edge memory restated as IEC's memory already high, where the oracle had undone the
+  counter's net change and missed a ctud's up side blocked as its down side counted, 80
+  more draws toward a counter's edit and `:blocked_beside` in its reach; and since M5-15, the walks'
   cross-type reach, in a module of its own, `Logex.ApiContractTest.CrossTypeWalk`, every
   ordered pair of the fifteen elementary types through `move`, each of the 182 conversions
   given a source and a destination of every type, `add` and `and` over every pair, and a

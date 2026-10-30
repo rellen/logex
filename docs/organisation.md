@@ -4389,6 +4389,12 @@ rounds as the runner's own work, in the share's slot where untimed programs run 
 wake of its own otherwise, never moving a round's due time; none while tripped; each
 write at an event first waits for the period's in progress and drops the one pending; so
 a crash loses at most a period and the write in progress, as decision 292 has it.)*
+*(Since M6-6's review, 2026-10-30: that bound holds while the writes succeed and the
+writer keeps up with its period; while they fail a crash loses everything since the last
+good write, and while tripped an edit's values reach no store until a restart. A
+runner's child spec gives its shutdown `(devices + 2) * (idle + poll)` ms, never less
+than 5000, so that a supervisor waits for decision 316's write (provisional); and a
+writer gone down before an event's write is taken as gone at once, `{:down, reason}`.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -10928,7 +10934,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
        share and a flash card's wear, Siemens warning against cyclic writes to load memory
        (A5E03461664-01 p.22); on change, which is every round while a timer runs; or at a
        period, `retain_period:`, and at every trip, `stop/2` and cold restart, a crash
-       losing at most a period and one write.
+       losing at most a period and one write. *(M6-6's review: while the writes succeed
+       and keep up with the period; while they fail, everything since the last good
+       write.)*
      - *How:* as the forces file is written, to `<path>.tmp`, synced, closed and renamed
        over the store, by a writer process of the runner's own so that a write delays no
        round, latest wins. A sync of the directory after the rename OTP probably cannot
@@ -11546,7 +11554,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      had it, and a shutdown's write that meets the clock gone names no time and is none
      too. A parent that ends `:normal`, which a supervisor never gives and the answer does
      not name, ends the runner `:normal` and writes none (provisional, `PLAN.md`, the
-     answers to M6-5's readings).
+     answers to M6-5's readings). *(M6-6's review, 2026-10-30: `terminate/2` tells a
+     shutdown by its reason alone, so a `GenServer.stop(runner, :shutdown)` from any
+     process, not only the parent, writes the store too, its caller answered `:ok` and a
+     failure told only to the subscribers, `stop/2` answering it (provisional, a question
+     in `PLAN.md`'s M6-6); and a supervisor kills a child whose shutdown outlasts its
+     spec's `shutdown:`, a GenServer's 5000 ms, which ten devices whose close hangs
+     outlast with the defaults, so the runner's child spec gives `(devices + 2) * (idle +
+     poll)` ms, never less than 5000 (provisional, a question there too).)*
 317. **A cold restart a device refuses (Milestone 6),** M6-5's fifth reading, changing
      it: the cold restart's write comes before the release and the reads (decision 291),
      so a cold restart refused by a card still bad had written the store with the initial

@@ -10173,6 +10173,88 @@ done-when reads the next store write; and last the contract walk and the documen
      which decision 316 names neither way (pinned writing none, provisional).
 
   2374 tests (11 doctests), up from 2357.
+
+  *M6-6's review* (2026-10-30, `scratchpad/m6/r6`) found two medium and four low
+  findings; each is answered so, a test of its own failing where the answer is reverted:
+
+  1. *A supervisor killed a shutdown before its write* (medium): a GenServer's child spec
+     gives `shutdown:` 5000 ms, and decision 316's shutdown waits up to the idle watchdog
+     and a poll period on each device's close and on the writer before it writes, so ten
+     devices whose close hangs, or one with `idle: 5000`, were killed first and wrote
+     nothing. `Logex.Runner.child_spec/1` now gives `(devices + 2) * (idle + poll)` ms,
+     never less than 5000, the devices those `io:` binds and an option `start_link/1`
+     refuses read as its default (reading 9 below). A test runs a supervisor over a
+     runner with `idle: 5000` whose close hangs, which ends `:shutdown` after 5010 ms with
+     the store written, where it was killed; another pins the spec against the devices,
+     `idle:` and `poll:`.
+  2. *The arrays-of-instances walk failed at fresh families* (medium, older than M6-6,
+     M5-14's walk): the runtime was right. The oracle restated a counter's blocked edge
+     memory by undoing the counter's net change where it rose, so a ctud whose up side was
+     blocked as its down side counted, `cv` -1 to -2 in the scan, was restated -1. It is
+     now restated as IEC's edge memory already high, `cu` 1 before the scan, exactly; an
+     atom, `:blocked_beside`, holds the walk to that case, which its pinned seed did not
+     reach, so 80 more specs are drawn toward a ctud's counter edit; the old restatement
+     fails at the pinned seed, and the families 7001 to 7006 pass.
+  3. *Five mutants survived* (low): R16, a hung writer left alive at a trip, is caught by
+     a test that kills it at the trip's deadline and sees it never write after; R28, the
+     write a trip waited for unrecorded, by a trip that reports its period's failed write
+     and its own; R7, no catch for the clock gone during a shutdown's write, by a shutdown
+     whose wall clock goes as it writes ending `:shutdown` with nothing written; R10, a
+     writer gone down while idle kept, by one killed while idle and replaced at the next
+     period. R4, the period's `status: :running`, is equivalent: the trip cancels the
+     runner's wake, so no wake and no round reaches the period while tripped; its comment
+     says so.
+  4. *A writer gone down held an event's write to its deadline* (low): the event's wait
+     now takes the writer's exit too, so a writer gone before the runner handled its exit
+     is taken as gone at once, its write reported `{:down, reason}` and not `:timeout`; a
+     test suspends the runner over the exit and stops it.
+  5. *The documents* (low): `terminate/2` tells a shutdown by its reason alone, so a
+     `GenServer.stop(runner, :shutdown)` from any process writes the store, its caller
+     answered `:ok` (reading 10 below); and "a crash loses at most a period" holds only
+     while the writes succeed and keep up, so the moduledoc, README, decision 275 and
+     §4.13 now say that a crash while writes fail loses everything since the last good
+     write, and one while tripped what an edit stepped then changed.
+  6. *No kill in the middle of a period's write* (low): a test makes the store's `.tmp` a
+     pipe, reads a little of the writer's text so that the writer is held inside its
+     write, kills the runner, and sees the writer go down with it, the store the write
+     before, and a fresh start restoring that (R20, a writer that writes the store in
+     place, fails it).
+
+  *Mutations*, each judged by the full suite's exit code (`scratchpad/m6/m66rmut`):
+  the review's survivors R16, R28, R7 and R10 red, and R20, a writer that writes the store
+  in place, red by the pipe's test too; F1, the child spec's 5000 kept, and F4, the
+  event's wait without the writer's exit, red; R4 alone passes, equivalent, as finding 3
+  says. The first run of these, which removed the build's manifest, left beams from before
+  the mutant and passed R16 and R28 wrongly; run again on a plain copy, each is red.
+
+  50 runs of `retain_period_test.exs` and `retain_store_test.exs` together under four
+  busy loops pass (`scratchpad/m6/r50r.out`); a first 15 under that load met the parent's
+  `:normal` test of decision 316 waiting 100 ms for its runner's start, too short there,
+  now 5000 ms, its only line changed. The runner walk at the 30 fresh
+  families `{7201..7230, 10, n}` fails no check (`scratchpad/m6/seeds10.out`): 8 reach
+  every atom, and the rest miss only atoms rare by their nature, as at M6-6, most often
+  `:store_tripped_at_start`, `:period_restored` and `:zero_at_stop`.
+
+  *Provisional readings, added by the review, put to the maintainer:*
+
+  9. *How long a supervisor waits for a shutdown.* The runner's child spec gives
+     `(devices + 2) * (idle + poll)` ms, never less than 5000: with the defaults a plant of
+     up to eight devices keeps 5000 ms, and one of a device with `idle: 5000` 15,030 ms.
+     A shutdown longer than that is still killed and writes nothing. The options: (a) as
+     built; (b) `shutdown: :infinity`, a hung disk then holding the supervisor's shutdown
+     for ever; (c) every device closed at once rather than in device-name order (decision
+     116), so the shutdown takes one close's time; (d) 5000 kept, the limit documented.
+  10. *Who may shut the runner down with a write.* The runner tells a shutdown by its
+     reason, `:shutdown` or `{:shutdown, term}`, not by who sent it, so
+     `GenServer.stop(runner, :shutdown)` from any process writes the store as its
+     parent's shutdown does, and its caller is answered `:ok` even where the write failed,
+     the failure told only to the subscribers; `Logex.Runner.stop/2` answers it. The
+     options: (a) as built; (b) only the parent's shutdown writes, any other process's
+     `:shutdown` as a `:normal` stop.
+  11. *Still open:* reading 8, whether a parent's `:normal` exit writes the store; the
+     review leans to writing it, since the zeros and the closes come first.
+
+  2382 tests (11 doctests), up from 2374.
 - **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit`, for a
   program's tags, members, arrays and instances, by path, rows of its table and §4.9's;
   decision 44 annotated as landed. *(Since decision 302, 2026-10-29, a global's two kinds

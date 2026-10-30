@@ -3105,9 +3105,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   tripped nothing is written but the trip's own write. Each write at an event waits for
   the period's in progress and drops the one waiting, so the event's is the last.
 - A runner that crashes or is killed writes nothing (decision 292), nor one whose clock
-  goes down: its next fresh start comes back to the last write, the last period's or the
-  start's, trip's, stop's, shutdown's or cold restart's, whichever came last, so a crash
-  loses at most a period and the write in progress.
+  goes down: its next fresh start comes back to the last write made, the last period's or
+  the start's, trip's, stop's, shutdown's or cold restart's, whichever came last. So a
+  crash loses at most a period and the write in progress while the writes succeed and
+  the writer keeps up with its period; while they fail, a full disk's among them, it
+  loses everything since the last good write, and with a disk slower than the period
+  more than a period; and while the runner is tripped nothing is written, so what an
+  edit stepped then changes is lost to a crash before the next restart.
+- A runner is told a shutdown by its exit's reason, `:shutdown` or `{:shutdown, term}`,
+  so one a supervisor shuts down writes the store, and so does `GenServer.stop(runner,
+  :shutdown)` from any process, whose caller is answered `:ok`, a failed write told only
+  to the subscribers; `Logex.Runner.stop/2` answers it. Its child spec gives the
+  shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
+  supervisor waits for every device's close and the store's write before it kills the
+  runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, is refused at start, a pinned line.
@@ -4532,7 +4543,9 @@ in every cycle's outputs at the value it holds.
   memory, written at a trip, a stop, a supervisor's shutdown, a cold restart and a fresh
   start with `start: :cold` or no store file, never at a warm fresh start from a store,
   and every `retain_period:`, a second unless set, so a crash or a kill loses whatever
-  changed since the last of those writes, at most a period and the write in progress, and
+  changed since the last of those writes made, at most a period and the write in
+  progress while they succeed and keep up, everything since the last good one while they
+  fail, and an edit stepped while tripped, and
   a power failure just after a write may bring back the one before it, the rename not
   made durable ("The store on disk", above); and forcing
   for inputs only, an output never forced.
