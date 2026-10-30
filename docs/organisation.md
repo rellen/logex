@@ -4377,6 +4377,11 @@ configuration edit drops what a kept instance's running program does not declare
 writes its configuration's retained image, decision 276's text, at every trip, `stop/2`
 and cold restart and at a fresh start with `start: :cold` or no store file, and a fresh
 start reads it warm unless `start: :cold`; the periodic writer is M6-6's.)*
+*(Since the maintainer's answers of 2026-10-30, decisions 316 to 325: a parent's orderly
+shutdown, `:shutdown` or `{:shutdown, term}`, writes the store as `stop/2` does, a crash,
+a kill and the clock going down still none; and a cold restart a device then refuses
+writes the store back with the values the runner still holds, so a refused restart
+changes nothing on disk or in memory.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -4443,6 +4448,7 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   | a crash, then a fresh start with a store, `start: :warm` (the default where `retain:` is given) | from the store, as of its last write | initial | read from the devices | 0, timers rebased (decision 273) | true |
   | a fresh start with `start: :cold`, or with no store file | initial; the store written at once | initial | read | 0 | true |
   | an orderly `stop/2`, then a fresh start | from the store, which `stop/2` wrote last | initial | read | 0 | true |
+  | a parent's orderly shutdown, then a fresh start (decision 316) | from the store, which the shutdown wrote last | initial | read | 0 | true |
   | a runner given no `retain:` | nothing survives a crash; a warm `restart/2` still keeps retained values in memory | initial | read | 0 | true |
 
   A fresh start with a store is warm unless `start: :cold`: naming a store is the host
@@ -4511,7 +4517,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   today, and every existing pin of `stop/2`'s `:ok` and its host mistakes holds. A
   runner that dies or is killed writes no store; its last write is the period's or an
   event's. *(Added after the review of decisions 286–289, 2026-10-27, the record's
-  reading; confirmed by decision 292.)* A fresh start
+  reading; confirmed by decision 292.)* *(Decision 316, 2026-10-30: a parent's orderly
+  shutdown writes as `stop/2` does, after the zeros and the closes; decision 321: the
+  stop a call in effect only, so a suspended runner is still stopped.)* A fresh start
   reports the store's age, its header's `written_at`, in `status/1` and in its first
   round's `{:retain, …}` event. The trip's write is of the resource as the trip left it,
   the one `get/2` reads and a warm `restart/2` keeps. A sync of the directory after the
@@ -10948,7 +10956,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      only its being written was; and a runner its parent shuts down, a supervisor's orderly
      shutdown among them, pinned writing none, still provisional and put to the maintainer
      again with what an operator loses, the review recommending that a parent's shutdown
-     write as `stop/2` does.)*
+     write as `stop/2` does.)* *(Answered 2026-10-30, decisions 316, 317 and 324: a
+     parent's `:shutdown` or `{:shutdown, term}` writes as `stop/2` does, after the zeros
+     and the closes, the clock gone and a crash still none; a cold restart a device
+     refuses writes the store back with the values the runner still holds; and the first
+     round's event reaching no one, `status/1` carrying it, confirmed.)*
 276. **The store's format (Milestone 6).** Text a person can read, as the forces file is
      (decision 140), or `:erlang.term_to_binary/1`. *Recommended: text, `path type value`
      a line*, under a header `logex retain 1` and a line naming the configuration and the
@@ -11208,7 +11220,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      run, on a start whose discarded values a crash could bring back, and the failure
      `{:error, {:retain, reason}}`, the store as it was. *(Landed with M6-5, 2026-10-30, as
      taken; `retain_store_test.exs` pins each, a device's adapter seeing the store as each
-     of its reads and writes finds it.)*
+     of its reads and writes finds it.)* *(Decision 317, 2026-10-30: a cold restart a
+     device then refuses writes the store back, after its zeros, with the values the
+     runner still holds.)*
 292. **A runner that crashes or is killed (Milestone 6),** the review's third question, on
      decision 275's reading that a runner that dies writes no store.
 
@@ -11216,7 +11230,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the last periodic or event write** (the maintainer, 2026-10-27), confirmed as the
      record reads it. README's "What logex is not" will say, with M6-9, that a crash loses
      up to a period and one write. *(Landed with M6-5, 2026-10-30: a kill and a crash
-     inside the runner each write none, pinned.)*
+     inside the runner each write none, pinned.)* *(Decision 316, 2026-10-30: a parent's
+     orderly shutdown writes as `stop/2` does; a crash, a kill and the clock going down
+     still none.)*
 293. **The first scan after a warm restart (Milestone 6),** the first of the six readings
      M6-1 and M6-2 left provisional (`PLAN.md`, M6-2's status): decision 273 sets a
      retained timer's `last` to its instance's `now`, its last scan's, so the time before
@@ -11412,8 +11428,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      entry of the list is still a stored value the start did not keep, so it keeps its
      name, `dropped`, the reason saying why; and a preset logic wrote, a `move` into
      `t.pre`, is the program's at a start too, where a warm restart, which keeps the
-     instance it restarts, keeps it (provisional, `PLAN.md` M6-4's answers' first
-     question).
+     instance it restarts, keeps it (confirmed, decision 318).
 309. **An image of another configuration or program (Milestone 6),** M6-4's third
      question: refused as the host's mistake, a line naming both, decision 285's rule
      carried into the core; or everything dropped and reported.
@@ -11449,7 +11464,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      reading (the record's):* two entries that name one path, `tl[01].acc` beside
      `tl[1].acc`, are a line of the refusal, "`values` holds `tl[01].acc` and `tl[1].acc`,
      which name one path, `tl[1].acc`", and a drop is reported by the path logic names,
-     `tl[1].acc` (provisional, `PLAN.md` M6-4's answers' third question).
+     `tl[1].acc` (confirmed, decision 320).
 313. **A rise of a retained trigger logic wrote just before a trip (Milestone 6),** M6-4's
      review's eighth question, restating decision 305: logic latched a retained `single`
      after the cycle sampled it at 0, the runner tripped before the next cycle, and the
@@ -11468,7 +11483,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      of a global its `globals` do not hold, are lines of its refusal. *The reading (the
      record's):* an image of the host's own that holds no sample for a `single` it puts
      back starts it at the value put back, so nothing fires, decision 305's rule
-     (provisional, `PLAN.md` M6-4's answers' second question).
+     (confirmed, decision 319).
 314. **`at retain` at a line's end (Milestone 6),** M6-4's review's sixth question:
      `var_global x bool at retain` read as the location `retain`, refused by `check/1` as
      no location, so that a global printed with any location reads back to it.
@@ -11488,6 +11503,84 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      pruned reported once. *The reading (the record's):* the existing `:pruned` kind by
      path, no new kind; and the edit walk's qualifier draws, kept on a stream of their own
      because one draw more from the main stream met this gap, are the main stream's again.
+316. **A parent's orderly shutdown (Milestone 6),** M6-5's fourth reading, changing it: a
+     runner whose parent shut it down, a supervisor's `:shutdown` that `systemctl stop` or
+     `Application.stop/1` gives, zeroed and closed but wrote no store, so a box counter at
+     10,000 after a shift came back at its start-of-shift value.
+
+     **Taken: changed, a parent's orderly shutdown writes the store as `stop/2` does**
+     (the maintainer, 2026-10-30): a `:shutdown` or a `{:shutdown, term}` from the
+     runner's parent, which `terminate/2` sees as the runner traps exits, writes the
+     store of the resource as the shutdown found it, after every output is 0 and every
+     device closed (decisions 116 and 275), a write that fails reported as any failed
+     write, `{:retain, {:error, reason}}` to the subscribers. A crash, a kill and the clock
+     going down still write nothing (decision 292). *The reading (the record's):* a clock
+     that goes down stops the runner by an exit of its own, `{:shutdown, {:clock,
+     reason}}`, the runner's stop and not its parent's; `terminate/2` is the one path both
+     take, and the clock's is told by its reason, so it writes nothing, as decision 292
+     had it, and a shutdown's write that meets the clock gone names no time and is none
+     too. A parent that ends `:normal`, which a supervisor never gives and the answer does
+     not name, ends the runner `:normal` and writes none (provisional, `PLAN.md`, the
+     answers to M6-5's readings).
+317. **A cold restart a device refuses (Milestone 6),** M6-5's fifth reading, changing
+     it: the cold restart's write comes before the release and the reads (decision 291),
+     so a cold restart refused by a card still bad had written the store with the initial
+     values while the resource in memory kept the old ones, and a crash before the next
+     restart brought back the initial ones.
+
+     **Taken: changed, the store written back** (the maintainer, 2026-10-30): a cold
+     restart that a device then refuses writes the store again with the values the runner
+     still holds, the resource as the trip left it, so that a refused restart changes
+     nothing on disk or in memory. A write-back that fails is reported as any failed write,
+     `failed` in `status/1`'s `retain` and `{:retain, {:error, reason}}` to the
+     subscribers; the runner stays tripped either way, the restart answered with the
+     device's reason. *The reading (the record's):* the write-back comes after the
+     refusal's zeros, every device that answers written 0 once more first, so that no
+     store write keeps an output on (§4.13); a refused warm restart wrote nothing and
+     writes nothing back.
+318. **A preset logic wrote (Milestone 6),** M6-4's answers' first provisional reading
+     (decision 308): with `xic setup move 5000 t1.pre`, a warm restart after a trip keeps
+     5000, the instance kept as it was (decision 271), and a start from the store gives
+     the program's number and reports `{"m1.t1.pre", {:preset, 5000, 3000}}`.
+
+     **Taken: confirmed, as built** (the maintainer, 2026-10-30).
+319. **A `single` put back with no sample (Milestone 6),** M6-4's answers' second
+     provisional reading (decision 313): an image of the host's own that puts a retained
+     `single` back at 1 with no sample starts the trigger at its value, so its event task
+     does not run in the first cycle.
+
+     **Taken: confirmed, nothing fires** (the maintainer, 2026-10-30).
+320. **How a drop names an element written with leading zeros (Milestone 6),** M6-4's
+     answers' third provisional reading (decision 312): a store edited by hand to
+     `tl[01].acc 5000000000`, a misfit, is reported as `tl[1].acc`, the path logic names.
+
+     **Taken: confirmed, by value** (the maintainer, 2026-10-30).
+321. **`stop/2` a call in effect (Milestone 6),** M6-5's first reading: the caller names
+     itself to the runner and stops it by `GenServer.stop/3`, a system message, and the
+     runner answers it as it terminates, so a runner suspended with `:sys.suspend/1` is
+     still stopped and still answers `:ok` or `{:error, {:retain, reason}}`.
+
+     **Taken: confirmed, a call in effect only** (the maintainer, 2026-10-30).
+322. **A clock without a wall clock (Milestone 6),** M6-5's second reading: a clock with
+     no `wall_ms/1` runs a runner given no store, and one given `retain:` is refused at
+     start.
+
+     **Taken: confirmed, refused where `retain:` is given** (the maintainer, 2026-10-30).
+323. **`start:` with no store (Milestone 6),** M6-5's third reading: `start:` given
+     without `retain:` is the host's mistake, as a force without `forces:` is.
+
+     **Taken: confirmed, refused** (the maintainer, 2026-10-30).
+324. **The first round's `{:retain, …}` event (Milestone 6),** M6-5's sixth reading: no
+     subscriber can exist before `start_link/1` returns, so the event a fresh start owes
+     with the store's age and the drops reaches no one; `status/1`'s `retain` carries
+     both.
+
+     **Taken: confirmed, as built** (the maintainer, 2026-10-30).
+325. **`retain:` naming the forces file (Milestone 6),** M6-5's seventh reading: the store
+     and the forces file naming one file, after `Path.expand/1`, or either naming the
+     `.tmp` the other is written through, is refused, a pinned line each.
+
+     **Taken: confirmed, refused** (the maintainer, 2026-10-30).
 
 ---
 

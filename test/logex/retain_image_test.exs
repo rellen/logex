@@ -729,7 +729,7 @@ defmodule Logex.RetainImageTest do
       refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
 
       # An image of the host's own that holds no sample for a single it puts back starts
-      # the trigger at the value put back, so nothing fires (provisional).
+      # the trigger at the value put back, so nothing fires (decision 319).
       {from_none, []} = Runtime.start(armed, %{kept | triggers: %{}})
       {_, _, events} = Runtime.cycle(from_none, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
       refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))

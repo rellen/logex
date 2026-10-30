@@ -608,6 +608,61 @@ defmodule Logex.RetainStoreTest do
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
   end
 
+  # A manual clock whose `now_ms/1` exits from `at` on in the runner, a clock gone down,
+  # while its devices still read it and its wall clock still answers, so that the runner
+  # is stopped by its clock and not tripped by a device, and a write at its end would
+  # name a time.
+  defmodule GoneNow do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, at}),
+      do: gone(Manual.now_ms(clock), at, Process.get(:"$initial_call"))
+
+    @impl true
+    def wake_at({clock, _at}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _at}, timer), do: Manual.cancel(clock, timer)
+
+    @impl true
+    def wall_ms({clock, _at}), do: Manual.wall_ms(clock)
+
+    defp gone(now, at, {Logex.Runner, :init, 1}) when now >= at, do: exit(:gone)
+    defp gone(now, _at, _process), do: now
+  end
+
+  # The simulated device, which calls the function an agent holds before each read, so
+  # that a test acts between a cold restart's own write and its write-back.
+  defmodule Spoiling do
+    @behaviour Logex.IO
+
+    @impl true
+    def check(device, points, opts), do: Sim.check(device, points, Keyword.take(opts, [:sim]))
+
+    @impl true
+    def init(device, points, opts) do
+      {:ok, state} = Sim.init(device, points, Keyword.take(opts, [:sim]))
+      {:ok, {state, opts[:before]}}
+    end
+
+    @impl true
+    def read({state, before}) do
+      Agent.get(before, & &1).()
+      wrapped(Sim.read(state), before)
+    end
+
+    @impl true
+    def write(values, {state, before}), do: wrapped(Sim.write(values, state), before)
+
+    defp wrapped({:ok, values, state}, before), do: {:ok, values, {state, before}}
+    defp wrapped({:ok, state}, before), do: {:ok, {state, before}}
+    defp wrapped({:error, reason, state}, before), do: {:error, reason, {state, before}}
+
+    @impl true
+    def close({state, _before}), do: Sim.close(state)
+  end
+
   defmodule NoWall do
     @behaviour Logex.Runner.Clock
 
@@ -850,28 +905,124 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) == written
     end
 
-    # Provisional reading 4, put to the maintainer: a runner its parent shuts down, as a
-    # supervisor's orderly shutdown does, zeroes and closes as before M6-5 but writes no
-    # store, as a crash writes none (decision 292); only stop/2 writes as it terminates.
-    # The next fresh start brings back what the last event wrote, the start's here.
-    test "a parent's shutdown writes nothing (provisional)", %{tmp_dir: dir} do
+    # Decision 316 (the maintainer, 2026-10-30), changing M6-5's reading 4, which wrote
+    # nothing here: a runner its parent shuts down, as a supervisor's orderly shutdown
+    # does, writes the store as stop/2 does, every output 0 and every device closed first,
+    # and the next fresh start brings back what the shutdown wrote.
+    test "a parent's shutdown writes the store after every output 0 and every device closed",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      store = rig.store
+
+      opts =
+        Keyword.put(rig.opts, :io, %{
+          "panel" => {Watching, sim: rig.panel, store: store, test: self()}
+        })
+
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(opts)
+      started = File.read!(store)
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
+      flush()
+      ref = Process.monitor(runner)
+      Process.exit(runner, :shutdown)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert_received {:written, %{[0] => 0}, {:ok, ^started}}
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.closed?(rig.panel)
+      assert File.read!(store) =~ "global total_boxes dint 2\n"
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert values(runner) == [2, 2, 1, 2]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 316: a `{:shutdown, term}` is a shutdown too, and so is a supervisor's, which
+    # the runner, `restart: :temporary`, takes as its parent's.
+    test "a supervisor's shutdown and a {:shutdown, term} write the store", %{tmp_dir: dir} do
       rig = rig(dir)
       Process.flag(:trap_exit, true)
       {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      ref = Process.monitor(runner)
+      Process.exit(runner, {:shutdown, :end_of_shift})
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:shutdown, :end_of_shift}}, 5000
+      assert File.read!(rig.store) =~ "global total_boxes dint 1\n"
+      opener_down(rig.panel)
+
+      {:ok, supervisor} = Supervisor.start_link([{Runner, rig.opts}], strategy: :one_for_one)
+      [{Runner, runner, :worker, _}] = Supervisor.which_children(supervisor)
+      assert values(runner) == [1, 1, 1, 1]
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [3, 3, 1, 3]
+      ref = Process.monitor(runner)
+      :ok = Supervisor.stop(supervisor)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) =~ "global total_boxes dint 3\n"
+    end
+
+    # Decision 316: a shutdown's write that fails is reported as any failed write, the
+    # runner down all the same and the store as it was.
+    test "a parent's shutdown whose write fails is reported", %{tmp_dir: dir} do
+      rig = rig(dir)
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      written = File.read!(rig.store)
+      pressed(rig, [1, 0, 1])
+      File.mkdir_p!(rig.store <> ".tmp")
+      ref = Process.monitor(runner)
+      Process.exit(runner, :shutdown)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) == written
+    end
+
+    # Decision 292, kept by decision 316: a clock that goes down stops the runner as a
+    # shutdown of its own, `{:shutdown, {:clock, reason}}`, not its parent's, and writes no
+    # store, even where the clock's wall clock still answers.
+    test "a runner whose clock goes down writes nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+      opts = Keyword.put(rig.opts, :clock, {__MODULE__.GoneNow, {rig.clock, @wall + 35}})
+      {:ok, runner} = Runner.start_link(opts)
+      written = File.read!(rig.store)
+      pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
+      Process.unlink(runner)
+      ref = Process.monitor(runner)
+      Manual.advance(rig.clock, 10)
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:shutdown, {:clock, :gone}}}, 5000
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) == written
+    end
+
+    # Decision 316 names `:shutdown` and `{:shutdown, term}`: a parent that ends
+    # `:normal`, which a supervisor never gives, ends the runner `:normal` and writes none,
+    # as before (provisional).
+    test "a parent's :normal exit writes nothing (provisional)", %{tmp_dir: dir} do
+      rig = rig(dir)
+      test = self()
+
+      parent =
+        spawn(fn ->
+          {:ok, runner} = Runner.start_link(rig.opts)
+          send(test, {:runner, runner})
+          receive do: (:end -> :ok)
+        end)
+
+      assert_receive {:runner, runner}
       written = File.read!(rig.store)
       pressed(rig, [1, 0, 1])
       assert values(runner) == [2, 2, 1, 2]
       ref = Process.monitor(runner)
-      Process.exit(runner, :shutdown)
-      assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      send(parent, :end)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :normal}, 5000
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written
-      opener_down(rig.panel)
-
-      {:ok, runner} = Runner.start_link(rig.opts)
-      assert values(runner) == [0, 0, 1, 0]
-      assert Runner.stop(runner) == :ok
     end
 
     # Decision 275: the stop's zeros come before its write, which a device sees at its
@@ -1017,6 +1168,94 @@ defmodule Logex.RetainStoreTest do
       assert Runner.restart(runner, :cold) == :ok
       assert %{status: :running, retain: %{failed: nil}} = Runner.status(runner)
       assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 317 (the maintainer, 2026-10-30), changing M6-5's reading 5: a cold restart
+    # a device then refuses writes the store back, after its zeros, with the values the
+    # runner still holds, so that the refusal changes nothing on disk or in memory, and a
+    # crash after it brings back what the trip kept, not the initial values the cold
+    # restart's own write held.
+    test "a cold restart a device refuses writes the store back", %{tmp_dir: dir} do
+      rig = rig(dir)
+
+      opts =
+        Keyword.put(rig.opts, :io, %{
+          "panel" => {Watching, sim: rig.panel, store: rig.store, test: self()}
+        })
+
+      {:ok, runner} = Runner.start_link(opts)
+      pressed(rig, [1, 0, 1])
+      tripped(rig, runner)
+      %{trip: trip} = Runner.status(runner)
+      at_trip = File.read!(rig.store)
+      assert at_trip =~ "global total_boxes dint 2\n"
+      Manual.advance(rig.clock, 2000)
+      flush()
+
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      assert {:error, {:io_init, "panel", _cause}} = Runner.restart(runner, :cold)
+
+      # The refusal's 0 meets the cold restart's own write; the write-back comes after it.
+      assert_received {:written, %{[0] => 0}, {:ok, cold}}
+      assert cold =~ "global total_boxes dint 0\n"
+      assert %{status: :tripped, trip: ^trip, retain: retain} = Runner.status(runner)
+      assert %{written_at: ~U[2026-10-30 14:00:02Z], failed: nil} = retain
+      assert values(runner) == [2, 2, 1, 2]
+      back = File.read!(rig.store)
+      assert back =~ "configuration plant written 2026-10-30T14:00:02Z\n"
+      assert String.replace(back, "14:00:02Z", "14:00:00Z") == at_trip
+      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      killed(runner)
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert values(runner) == [2, 2, 1, 2]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 317: a refused warm restart wrote nothing and writes nothing back.
+    test "a warm restart a device refuses writes nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      tripped(rig, runner)
+      at_trip = File.read!(rig.store)
+      Manual.advance(rig.clock, 2000)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      assert {:error, {:io_init, "panel", _cause}} = Runner.restart(runner, :warm)
+      assert File.read!(rig.store) == at_trip
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 317: a write-back that fails is reported as any failed write, `failed` in
+    # `status/1`'s `retain` and `{:retain, {:error, reason}}` to the subscribers, the
+    # runner tripped all the same; the store then holds the cold restart's own write.
+    test "a cold restart's write-back that fails is reported", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, agent} = Agent.start_link(fn -> fn -> :ok end end)
+
+      opts =
+        Keyword.put(rig.opts, :io, %{"panel" => {Spoiling, sim: rig.panel, before: agent}})
+
+      {:ok, runner} = Runner.start_link(opts)
+      pressed(rig, [1, 0, 1])
+      tripped(rig, runner)
+      %{trip: trip} = Runner.status(runner)
+      :ok = Runner.subscribe(runner)
+      tmp = rig.store <> ".tmp"
+      Agent.update(agent, fn _ -> fn -> File.mkdir_p!(tmp) end end)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+
+      assert {:error, {:io_init, "panel", _cause}} = Runner.restart(runner, :cold)
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
+      assert values(runner) == [2, 2, 1, 2]
+      assert File.read!(rig.store) =~ "global total_boxes dint 0\n"
+      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      File.rm_rf!(tmp)
+      Agent.update(agent, fn _ -> fn -> :ok end end)
+      assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
     end
 
     # A trip's write that fails is reported and the store left as it was.

@@ -180,9 +180,11 @@ defmodule Logex.Runner do
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
     `last` never.
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
-    is 0; at every `stop/2`, after every output is 0 and every device closed; at every
-    cold restart, of the resource as it restarts it, before any device is released or
-    read (decision 291); and at a fresh start with `start: :cold`, or with no store file,
+    is 0; at every `stop/2`, and since decision 316 at its parent's orderly shutdown,
+    after every output is 0 and every device closed; at every cold restart, of the
+    resource as it restarts it, before any device is released or read (decision 291),
+    and where a device then refuses it, of the resource as the runner still holds it,
+    after the refusal's zeros (decision 317); and at a fresh start with `start: :cold`, or with no store file,
     in the caller, before any device is opened. Each is synchronous, written whole to
     `<path>.tmp` beside it, flushed and renamed over it, the forces file's rule, so that a
     crash at any moment leaves the old store or the new. A write that fails leaves the
@@ -190,10 +192,17 @@ defmodule Logex.Runner do
     `failed` in `status/1`'s `retain`: a trip stays a trip; a cold restart leaves the
     runner tripped as it was, every output still 0 and no device released or read, and
     answers `{:error, {:retain, reason}}`; a stop stops all the same and answers it; and
-    a fresh start starts nothing and gives it. A runner that crashes or is killed, and one
-    that terminates for any other reason than `stop/2`, its clock gone or its parent's
-    exit, writes none (decision 292), so its next fresh start meets the last write. The
-    periodic writer, `retain_period:`, is M6-6's.
+    a fresh start starts nothing and gives it. Since decision 317 a cold restart that a
+    device then refuses writes the store back, after the refusal's zeros, with the values
+    the runner still holds, the trip's, so that a refused restart changes nothing on disk
+    or in memory, a write-back that fails reported as any failed write, the runner tripped
+    either way. Since decision 316 an orderly shutdown from the runner's parent, a
+    supervisor's `:shutdown` or a `{:shutdown, term}`, writes as `stop/2` does, after
+    every output is 0 and every device closed, a failure reported to the subscribers. A
+    runner that crashes or is killed, whose clock goes down, a shutdown of its own,
+    `{:shutdown, {:clock, reason}}`, or that ends for any other reason, a parent's
+    `:normal` among them (provisional), writes none (decision 292), so its next fresh
+    start meets the last write. The periodic writer, `retain_period:`, is M6-6's.
   - *A fresh start* reads the store in the caller, after the forces file, warm unless
     `start: :cold`: a store laid over the resource by decision 277's matching
     (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
@@ -206,8 +215,11 @@ defmodule Logex.Runner do
     and writes a new store at once.
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
     keeps retained values in memory, and `status/1`'s `retain` is nil. `start:` without
-    `retain:` is the host's mistake (provisional), as is `retain:` naming the forces file
-    and a clock with no `wall_ms/1`.
+    `retain:` is the host's mistake (decision 323), as are `retain:` naming the forces
+    file, after `Path.expand/1`, or the `.tmp` either is written through (decision 325),
+    and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
+    news, the store's age and its drops, reaches no subscriber, since none can exist
+    before `start_link/1` returns: `status/1`'s `retain` carries both (decision 324).
 
   **Forcing** (M4-5; decisions 117 and 127). `force(runner, point, value)` makes the
   runner read an input point, by its name, at `value`, whatever its device says: every
@@ -468,8 +480,8 @@ defmodule Logex.Runner do
   where the write failed, the runner stopped all the same; one with no store answers
   `:ok` as before. The stop is still a system message, served when the runner reaches it,
   never held for a slot and served by a runner suspended too: its caller names itself to
-  the runner first, and the runner answers it as it terminates (provisional, where the
-  record makes `stop/2` a call, since a call would wait on a suspended runner for ever).
+  the runner first, and the runner answers it as it terminates, a call in effect only,
+  since a call would wait on a suspended runner for ever (decision 321).
   """
   def stop(runner, reason \\ :normal) do
     pid = runner!(runner)
@@ -634,7 +646,11 @@ defmodule Logex.Runner do
   as it restarts it, before it releases or reads any device, so that a crash right after
   it brings back none of what it discarded (decisions 271 and 291): a write that fails
   answers `{:error, {:retain, reason}}`, the runner left tripped as it was, the store as
-  it was, every output still 0 and no device released or read. A warm restart writes none.
+  it was, every output still 0 and no device released or read; and since decision 317 a
+  cold restart a device then refuses writes the store back, after the refusal's zeros,
+  with the values the runner still holds, so that the refusal changes nothing on disk or
+  in memory, a write-back that fails reported as any failed write and the restart
+  answered with the device's reason all the same. A warm restart writes none.
   """
   def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
 
@@ -761,15 +777,19 @@ defmodule Logex.Runner do
   # Since M6-5 a stop/2's then writes the store, where one is named, of the resource as the
   # stop found it, its outputs 0 and its devices closed first, so that no store write keeps
   # an output on, and answers its caller, `:ok` or `{:error, {:retain, reason}}` (decisions
-  # 116 and 275); a runner that terminates for any other reason, its clock gone or its
-  # parent's exit, writes none, as one that crashes or is killed (decision 292).
+  # 116 and 275); since decision 316 an orderly shutdown from the runner's parent, a
+  # supervisor's `:shutdown` or a `{:shutdown, term}`, which the runner sees here as it
+  # traps exits, writes it the same way, after the same zeros and closes, a failure
+  # reported to the subscribers; a runner that terminates for any other reason writes
+  # none, as one that crashes or is killed (decision 292), its clock gone among them, the
+  # runner's own exit, `{:shutdown, {:clock, reason}}`, told by its reason.
   @impl GenServer
-  def terminate(_reason, %{queue: queue} = state) do
+  def terminate(reason, %{queue: queue} = state) do
     for {from, _request} <- :queue.to_list(queue),
         do: GenServer.reply(from, gone(self()))
 
     state = each_live(state, &Device.close/2)
-    answered_stop(stoppers(state.stoppers), state)
+    answered_stop(stoppers(state.stoppers), reason, state)
     :ok
   end
 
@@ -781,11 +801,27 @@ defmodule Logex.Runner do
     end
   end
 
-  defp answered_stop([], _state), do: :ok
+  defp answered_stop([], reason, state), do: shut_down(reason, state)
 
-  defp answered_stop(stoppers, state) do
+  defp answered_stop(stoppers, _reason, state) do
     {reply, _state} = kept_store(state, state.runtime)
     for {pid, ref} <- stoppers, do: send(pid, {ref, reply})
+  end
+
+  # Decision 316: a parent's orderly shutdown writes the store as stop/2 does; the clock
+  # gone, which stops the runner as a shutdown of its own, and every other reason write
+  # none (decision 292). A clock that goes down while the shutdown writes names no time,
+  # so that write is none too.
+  defp shut_down({:shutdown, {:clock, _reason}}, _state), do: :ok
+  defp shut_down(:shutdown, state), do: shutdown_store(state)
+  defp shut_down({:shutdown, _term}, state), do: shutdown_store(state)
+  defp shut_down(_crash, _state), do: :ok
+
+  defp shutdown_store(state) do
+    kept_store(state, state.runtime)
+    :ok
+  catch
+    :exit, {:shutdown, {:clock, _reason}} -> :ok
   end
 
   defp requested(false, request, state), do: answered(request, refresh(state, :idle))
@@ -2199,8 +2235,19 @@ defmodule Logex.Runner do
 
   # A device that cannot be opened leaves the runner tripped, every device that answers
   # latched again, its 0 written once more, as a restart that trips again does: one
-  # released and one opened again before it alike.
-  defp reopened({error, state}, _mode), do: {error, zeroed(state)}
+  # released and one opened again before it alike. Since decision 317 a cold restart so
+  # refused then writes the store back, after those zeros, with the values the runner
+  # still holds, the resource as the trip left it, so that the refusal changes nothing on
+  # disk or in memory; a write-back that fails is reported as any failed write, and the
+  # runner stays tripped either way, the restart answered with the device's reason.
+  defp reopened({error, state}, mode), do: {error, written_back(mode, zeroed(state))}
+
+  defp written_back(:cold, state) do
+    {_reply, state} = kept_store(state, state.runtime)
+    state
+  end
+
+  defp written_back(:warm, state), do: state
 
   # Every device that answers latched, its outputs written 0 once; and since decision 262
   # each device whose outputs are not known to be 0 named, one whose adapter did not take
@@ -2602,7 +2649,7 @@ defmodule Logex.Runner do
 
   # M6-5 (decisions 271, 275 and 285): the store, a path, or none, a runner whose
   # retained values survive no crash; never the forces file's, and read through a clock
-  # that gives the wall clock its header is written by (provisional).
+  # that gives the wall clock its header is written by (decisions 322 and 325).
   defp retain!(nil, _forces, _clock), do: nil
 
   defp retain!(path, path, _clock),
@@ -2679,7 +2726,7 @@ defmodule Logex.Runner do
       )
 
   # How a fresh start meets its store (decision 271): warm unless `start: :cold`, which a
-  # runner with no store has nothing to start from (provisional).
+  # runner with no store has nothing to start from (decision 323).
   defp start!(:error, _store), do: :warm
   defp start!({:ok, mode}, store) when mode in [:warm, :cold] and is_binary(store), do: mode
 

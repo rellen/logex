@@ -12107,6 +12107,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_restored,
     :cold_store,
     :store_tripped_at_start,
+    # Decision 317: a cold restart a device refused, its store written back.
+    :cold_written_back,
     :ran,
     :fault,
     :overlap,
@@ -12512,6 +12514,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp cold_stored(:warm, w), do: w
+
+  # Decision 317: a cold restart a device refuses writes the store back, after its zeros,
+  # with the resource the runner still holds, the trip's; a warm one wrote none.
+  defp refused_store(:cold, w) do
+    reach(:cold_written_back, w.store != nil)
+    stored_at(w, w.rt)
+  end
+
+  defp refused_store(:warm, w), do: w
 
   # A runner started on the configuration, its first round run at once before it returns,
   # and the walk subscribed to every kind of event.
@@ -13069,7 +13080,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
              {:error, {:io_init, device, refusal_cause(callback, device, how)}}
 
     reach(:"restart_#{callback}_refused", true)
-    w = consumed(w)
+    w = refused_store(mode, consumed(w))
 
     for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
       zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)

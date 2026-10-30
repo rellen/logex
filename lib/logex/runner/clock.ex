@@ -21,7 +21,7 @@ defmodule Logex.Runner.Clock do
     store's header for a person and for `status/1`, and never times anything by: the
     monotonic clock's is the machine's, `System.os_time/1`, and the manual clock's its own
     time, read as milliseconds since the epoch. A clock without it runs a runner given no
-    store, and one given `retain:` is the host's mistake (provisional).
+    store, and one given `retain:` is the host's mistake (decision 322).
 
   A receiver is a process given by its pid; a time an integer; a timer the reference
   `wake_at/4` gave. Anything else is the host's mistake, an `ArgumentError`, whose

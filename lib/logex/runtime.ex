@@ -768,8 +768,8 @@ defmodule Logex.Runtime do
   sample at the sample the image holds for it, as a warm `restart/2` keeps it (decisions
   305 and 313), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
   after the sample fires once, every other at 0 as `start/1` has it; one the image holds
-  no sample for, which only a host's own image lacks, at the value put back
-  (provisional). So a resource started from another's image cycles as that one does
+  no sample for, which only a host's own image lacks, at the value put back, so nothing
+  fires (decision 319). So a resource started from another's image cycles as that one does
   after a warm `restart/2`, given the same inputs, where the program writes no preset.
 
   `dropped` lists each value not kept once, in path order, `{path, reason}`, a path
@@ -843,7 +843,7 @@ defmodule Logex.Runtime do
   # sample the image holds for it, so that a rise logic made after that sample fires once
   # in the first cycle and one already seen does not; one the image holds no sample for,
   # which only a host's own image lacks, at the value put back, so nothing fires
-  # (provisional).
+  # (decision 319, confirmed by the maintainer, 2026-10-30).
   defp put_back(
          %{last: _} = state,
          %Configuration.Task{single: single},
