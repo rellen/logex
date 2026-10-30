@@ -1276,7 +1276,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the forces file however either is spelled, `Path.expand/1`'s, nor the `.tmp` either is
   written through, since M6-5's review, a pinned line each) and
   `start:` (`:warm` or `:cold`, `:warm` unless set, refused without `retain:`,
-  provisional), and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
+  decision 323), and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
   `Runtime.start/1` and the bindings as `Logex.IO.bind!/2` check them, in their words; it
   then opens every device inside `init/1`, in device-name order, before it handles
   anything sent to it, so that a call or a stop by its name that comes first waits, and
@@ -1315,7 +1315,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   monitored) and `unsubscribe/1`; and `stop/2`, every output 0 once and every device
   closed before it returns (decision 116), a tripped runner's device still named in
   `unzeroed` tried its 0 once more and closed, taken or not (decision 286), one that hangs
-  killed at its deadline, the idle watchdog and a poll period, unclosed. Since M4-4 it traps exits, and a trip has one
+  killed at its deadline, the idle watchdog and a poll period, unclosed, and since M6-5
+  the store written after them, a call in effect only (decision 321); since decision 316
+  a parent's `:shutdown` or `{:shutdown, term}` writing the store as `stop/2` does, the
+  clock gone down, `{:shutdown, {:clock, reason}}`, a crash, a kill and a parent's
+  `:normal` (provisional) writing none; and since decision 317 a cold restart a device
+  refuses writing the store back, after the refusal's zeros, with the values the runner
+  still holds, a failed write-back reported as any. Since M4-4 it traps exits, and a trip has one
   path (decision 113): scheduling stopped, every output 0 once through each device that
   answers, which latches, `{:trip, reason}`, the requests that waited answered, the
   resource kept for `get/2`, and `restart/2`, cold or warm, releasing every latch, a
@@ -1600,8 +1606,13 @@ shape refused naming the store, a retained bit written only by the first round, 
 edit's sizes no array has refused a line each, decoded and at a start, a header's time
 at another offset and a path naming nothing inside its instance refused, a trip's write
 after every output 0 (a major fault's trip, so the device's 0 meets the start's store),
-a parent's shutdown writing nothing (provisional), and the store and the forces file one
-file named two ways or each other's `.tmp` refused,
+the store and the forces file one file named two ways or each other's `.tmp` refused,
+and since decision 316 a parent's shutdown, a `{:shutdown, term}` and a supervisor's
+writing the store after every output 0 and every device closed, its failure reported, a
+clock gone down, its wall clock still answering, and a parent's `:normal` writing none,
+and since decision 317 a cold restart a device refuses writing the store back after its
+zeros, a crash then restoring the trip's values, a refused warm restart writing nothing
+and a failed write-back reported,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1706,7 +1717,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   restating each write, the first start's, a trip's and a cold restart's before its
   release, and laying the last over a fresh start after a crash, the store's lines
   checked, since M6-5's review as the start reads them, before a first round whose trip
-  writes the store again, its reach `:store_restored` and `:cold_store`
+  writes the store again, its reach `:store_restored` and `:cold_store`, and since
+  decision 317 a refused cold restart's write-back of the trip's resource,
+  `:cold_written_back`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a

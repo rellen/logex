@@ -9659,17 +9659,20 @@ done-when reads the next store write; and last the contract walk and the documen
      (a) as built; (b) a warm restart puts the program's preset back too, so both starts
      agree and the recipe is lost at either; (c) a preset logic writes is kept at a start
      from the store as well, the program's number only where no logic writes `.pre`.
+     *Answered: (a), confirmed (decision 318, 2026-10-30).*
   2. *A `single` put back with no sample* (decision 313). An image of the host's own, or
      a configuration whose retained `arm` became a task's `single` since its image was
      taken, puts `arm` back at 1 with no sample: as built its event task does not run in
      the first cycle, the value standing for the sample (decision 305's rule). The
      options: (a) as built, nothing fires; (b) a sample of 0, as `start/1` has it, so the
      event task runs once in the first cycle; (c) refused, an image whose retained `single`
-     has no sample being the host's mistake.
+     has no sample being the host's mistake. *Answered: (a), confirmed (decision 319,
+     2026-10-30).*
   3. *How a drop names an element written with leading zeros* (decision 312). A store
      edited by hand to `tl[01].acc 5000000000`, a misfit, is reported as `tl[1].acc`, the
      path logic names, not as the person wrote it. The options: (a) as built, by value;
-     (b) as written in the store, so the person finds the line they typed.
+     (b) as written in the store, so the person finds the line they typed. *Answered:
+     (a), confirmed (decision 320, 2026-10-30).*
 
   *Mutation table* (`scratchpad/m6/m65mut/run.log`): 32 mutants, each one rule of the
   answers broken alone in a work copy of the code and judged by the full suite's exit
@@ -9817,7 +9820,7 @@ done-when reads the next store write; and last the contract walk and the documen
      the runner answers it as it terminates, after its zeros, its closes and its write: an
      operator's stop returns `:ok` or `{:error, {:retain, reason}}` either way. The
      options: (a) as built; (b) a true call, a suspended runner's stop then waiting until
-     it is resumed, and the pin changed.
+     it is resumed, and the pin changed. *Answered: (a), confirmed (decision 321).*
   2. *A clock without a wall clock* (decision 276). The header's time comes through the
      clock's `wall_ms/1`, an optional callback; a host's own clock without it runs a
      runner given no store, and one given `retain:` is refused at start, "the runner's
@@ -9825,10 +9828,12 @@ done-when reads the next store write; and last the contract walk and the documen
      by". The options: (a) as built; (b) the machine's wall clock, `System.os_time/1`,
      whatever the clock, so a test's store names the real time; (c) `wall_ms/1` required
      of every clock, a host's clock without it refused even with no store.
+     *Answered: (a), confirmed (decision 322).*
   3. *`start:` with no store.* `start: :cold` or `start: :warm` given without `retain:` is
      refused, "the runner keeps no store, so start: :cold has none to start from: start it
      with retain: a path", as a force without `forces:` is. The options: (a) as built; (b)
-     taken and passed over, so a host may always say `start: :cold`.
+     taken and passed over, so a host may always say `start: :cold`. *Answered: (a),
+     confirmed (decision 323).*
   4. *A termination that is not `stop/2`.* A runner whose parent shuts it down, a
      supervisor's orderly shutdown among them, or whose clock goes down, writes no store,
      as one that crashes (decision 292): the operator whose host application is shut down
@@ -9840,23 +9845,28 @@ done-when reads the next store write; and last the contract walk and the documen
      and closes and writes nothing: a box counter at 10,000 after a shift comes back at
      its start-of-shift value until M6-6, and at the last period's after it. The review
      recommends (b). Pinned as built by "a parent's shutdown writes nothing
-     (provisional)", which (b) would turn round.)*
+     (provisional)", which (b) would turn round.)* *Answered: (b), changed (decision
+     316): a parent's `:shutdown` or `{:shutdown, term}` writes as `stop/2` does, the
+     clock gone and a crash still none.*
   5. *A cold restart a device refuses* (decision 291). The write comes before the release
      and the reads, so a cold restart refused by a card still bad has written the store
      with the initial values while the resource in memory keeps the old ones: a warm
      restart next keeps the old values, and a crash before it brings back the initial
      ones. The options: (a) as built, the cold restart asked for being taken as the
-     discard; (b) the old store written back where the restart is refused.
+     discard; (b) the old store written back where the restart is refused. *Answered: (b),
+     changed (decision 317).*
   6. *The first round's `{:retain, …}` event* (§4.13). No subscriber can exist before
      `start_link/1` returns, so the event a fresh start owes with the store's age and the
      drops reaches no one; `status/1`'s `retain` carries both. The options: (a) as built;
-     (b) the event held and sent to the first subscriber.
+     (b) the event held and sent to the first subscriber. *Answered: (a), confirmed
+     (decision 324).*
   7. *`retain:` naming the forces file* is refused, "the runner's retain: and forces: name
      one file", where the two writes would overwrite each other. The options: (a) as
      built; (b) taken. *(Since M6-5's review the refusal holds however the paths are
      spelled, `./x` and `x` one file, and refuses either naming the `.tmp` the other is
      written through, `retain: "x.tmp"` beside `forces: "x"`, which made every force write
-     replace the store with the forces file's text.)*
+     replace the store with the forces file's text.)* *Answered: (a), confirmed
+     (decision 325).*
 
   *Mutation table* (`scratchpad/m6/m65mut2/run.log`): 40 mutants, each one rule broken alone in a
   work copy of the code, all 40 red, each by a test of its own rule in
@@ -9952,6 +9962,69 @@ done-when reads the next store write; and last the contract walk and the documen
   own size rule reverted, the walk's model reading after the start, the `.tmp` and
   spelling checks reverted, and the keyword lookup made for every device, each red, by
   its own file and so by the full suite. 2350 tests (11 doctests), up from 2344.
+
+  *The answers to M6-5's readings* (the maintainer, 2026-10-30, `docs/organisation.md` §7
+  decisions 316 to 325, built at `cdc3535`). Of M6-5's seven readings and M6-4's
+  answers' three, two are changed and eight confirmed:
+
+  - *A parent's orderly shutdown* (316, reading 4): changed. A `:shutdown` or a
+    `{:shutdown, term}` from the runner's parent, a supervisor's among them, which
+    `terminate/2` sees as the runner traps exits, writes the store as `stop/2` does,
+    after every output is 0 and every device closed, a failed write reported to the
+    subscribers. A crash, a kill and the clock going down still write none (decision
+    292). The clock's stop and the parent's take one path, `terminate/2`, the clock's
+    told by its reason, `{:shutdown, {:clock, reason}}`, the runner's own exit, so it
+    writes nothing as the record had it; a shutdown's write that meets the clock gone
+    names no time and is none too. `retain_store_test.exs`'s "a parent's shutdown writes
+    nothing (provisional)" is replaced by one pinning the write, its zeros first and the
+    next fresh start restoring it; beside it a `{:shutdown, term}` and a supervisor's
+    `Supervisor.stop/1`, a failed write reported, and a clock whose `now_ms/1` goes down
+    while its wall clock answers writing nothing.
+  - *A cold restart a device refuses* (317, reading 5): changed. The store is written back,
+    after the refusal's zeros, with the values the runner still holds, the trip's, so a
+    refused restart changes nothing on disk or in memory; a write-back that fails is
+    reported as any failed write, `failed` and `{:retain, {:error, reason}}`, the runner
+    tripped either way and the restart answered with the device's reason. A refused warm
+    restart writes nothing. The runner walk's model restates it, its reach
+    `:cold_written_back`.
+  - Confirmed, as built: a preset logic wrote kept warm and the program's at a start from
+    the store (318); a `single` put back with no sample starting at its value (319); a
+    drop by the subscript's value, `tl[1].acc` (320); `stop/2` a call in effect only
+    (321); a clock with no `wall_ms/1` refused where `retain:` is given (322); `start:`
+    without `retain:` refused (323); the first round's `{:retain, …}` event reaching no
+    one, `status/1` carrying it (324); and `retain:` and `forces:` naming one file or
+    each other's `.tmp` refused (325). Their provisional marks in the code are now the
+    decisions'.
+
+  *Provisional reading, put to the maintainer.* *A parent that ends `:normal`*
+  (decision 316). The answer names `:shutdown` and `{:shutdown, term}`; a parent process
+  that ends normally, which a supervisor never does but a host's own process that started
+  the runner may, ends the runner `:normal`, and as built it zeroes and closes and writes
+  no store, so a box counter at 10,000 comes back at the last trip's, stop's or cold
+  restart's count. The options: (a) as built, only the two reasons the answer names; (b)
+  `:normal` from the parent writes too, every orderly reason OTP has writing alike.
+  Pinned by "a parent's :normal exit writes nothing (provisional)".
+
+  *Mutation table* (`scratchpad/m6/m66mut/run1.log` and `run2.log`): 11 mutants, each one
+  rule broken alone in a work copy and judged by the full suite's exit code, all 11 red,
+  each by a test of its own rule in `retain_store_test.exs`: a parent's `:shutdown` and a
+  `{:shutdown, term}` each writing none, the clock gone writing, any other end writing (a
+  parent's `:normal` and a crash inside the runner), the shutdown's write before the
+  closes (with `stop/2`'s, which shares the line), and its failure not reported (6);
+  no write-back (and the runner walk), a refused warm restart writing, the write-back
+  before the zeros, the write-back of the cold-restarted resource (and the runner walk),
+  and its failure not reported (5). Two, the failures not reported, were malformed at
+  their first run, reading the store's path of a runner given none, and were rewritten as
+  a write that publishes to no subscriber and keeps no `failed`, each red.
+
+  The new runner tests pass 50 runs of `retain_store_test.exs` under CPU load
+  (`scratchpad/m6/r50x.out`). The runner walk passes at its pinned seed, and of the 30
+  fresh families `{5101..5130, 10, n}` no check failed in any (`scratchpad/m6/seeds7.out`):
+  12 reach every atom and the rest miss only atoms rare by their nature,
+  `:store_tripped_at_start`, `:zero_at_stop`, `:next_due_from_step` or `:real_forced`,
+  as at M6-5's review; `:cold_written_back` is reached at all 30. Nothing a round runs is
+  touched, a shutdown's write and a refused cold restart's write-back each one clause,
+  so no cost was measured again. 2357 tests (11 doctests), up from 2350.
 - **M6-6 · The periodic writer.** `retain_period:`, its range settled (the record
   suggests 100 to 3,600,000 ms), the writer process, latest wins, the failed write's
   event `{:retain, {:error, reason}}` and status (decision 275). *Done when* a runner
