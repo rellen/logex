@@ -1028,6 +1028,71 @@ defmodule Logex.RetainConfigurationTest do
       assert Runtime.get!(cold, "c1.hits") == 0
     end
 
+    # Decision 313 (the maintainer, 2026-10-30), restating decision 305: the last sample a
+    # warm restart keeps is the one the resource took, not the value kept. Logic latches
+    # `arm` in the cycle after `ev` sampled it at 0, and the restart comes before the next
+    # cycle: the first cycle after it samples 1 against that 0 and runs `ev` once, as the
+    # next cycle would have with no restart. Under decision 305 alone it ran nothing.
+    test "a rise logic wrote after the trigger's last sample runs its event task once after " <>
+           "a warm restart (decision 313)" do
+      {:ok, arming} =
+        Logex.compile(
+          "var_input eye bool\nvar_input clear bool\nvar_external arm bool\n" <>
+            "xic eye otl arm\nxic clear otu arm",
+          name: "arming"
+        )
+
+      {:ok, counting} =
+        Logex.compile(
+          "var_external arm bool\nvar_external hits dint\nxic arm add hits 1 hits",
+          name: "counting"
+        )
+
+      source = """
+      task fast interval 10 priority 1
+      task ev single arm priority 0
+      var_global eye_1 bool at panel.i.0
+      var_global clr bool at panel.i.1
+      var_global retain arm bool
+      var_global retain hits dint
+      program a1 arming with fast
+        a1.eye eye_1
+        a1.clear clr
+      program c1 counting with ev
+      """
+
+      types = %{"arming" => arming, "counting" => counting}
+      assert {:ok, config} = Configuration.compile("plant", source, types)
+
+      ran = fn rt ->
+        {rt, _outputs, events} = Runtime.cycle(rt, 10, %{"eye_1" => 0, "clr" => 0})
+        {rt, Enum.count(events, &match?({:ran, "ev", "c1", _}, &1))}
+      end
+
+      # `ev` samples `arm` at 0 and then `a1` latches it, in the one cycle.
+      runtime = cycled(Runtime.start(config), [0, 1])
+      assert Runtime.get!(runtime, "arm") == 1
+      assert Runtime.get!(runtime, "hits") == 0
+
+      {_next, runs} = ran.(runtime)
+      assert runs == 1
+
+      warm = Runtime.restart(runtime, :warm)
+      {warm, runs} = ran.(warm)
+      assert runs == 1
+      assert Runtime.get!(warm, "hits") == 1
+      {warm, runs} = ran.(warm)
+      assert runs == 0
+
+      # Restarted warm again with `arm` sampled at 1 since, it is no edge.
+      {_warm, runs} = ran.(Runtime.restart(warm, :warm))
+      assert runs == 0
+
+      # Cold, `arm` is put back at 0 with its sample: nothing.
+      {_cold, runs} = ran.(Runtime.restart(runtime, :cold))
+      assert runs == 0
+    end
+
     test "an unretained single, or an input point, already 1 fires in the first cycle after " <>
            "any restart (decisions 51 and 305)" do
       {:ok, counting} =
@@ -1385,6 +1450,80 @@ defmodule Logex.RetainConfigurationTest do
         press.(0)
         assert [warm, rearmed, cold, state.()] == seen(qualifier), qualifier
 
+        Runner.stop(runner)
+      end
+    end
+  end
+
+  # Decision 313 through the runner on the manual clock (the maintainer, 2026-10-30): the
+  # round that latches `arm` after `ev` sampled it at 0 trips on `f1`'s index fault, before
+  # any round samples it again. The warm restart keeps the sample, 0, so its first round
+  # runs `ev` once, the rise logic made before the trip; decision 305 alone took the kept 1
+  # for the sample, and `ev` never ran for it.
+  describe "decision 313 through the runner" do
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    test "a rise logic wrote just before a trip runs its event task once after a warm " <>
+           "Runner.restart/2, and a cold one runs nothing" do
+      {:ok, arming} =
+        Logex.compile(
+          "var_input eye bool\nvar_input clear bool\nvar_external arm bool\n" <>
+            "xic eye otl arm\nxic clear otu arm",
+          name: "arming"
+        )
+
+      {:ok, counting} = Logex.compile("var_external hits dint\nadd hits 1 hits", name: "counting")
+
+      {:ok, faulting} =
+        Logex.compile(
+          "var_input eye bool\nvar w int[2]\nvar i dint\nxic eye move 5 i\nxic eye move 1 w[i]",
+          name: "faulting"
+        )
+
+      source = """
+      task fast interval 10 priority 1
+      task ev single arm priority 0
+      var_global eye_1 bool at panel.i.0
+      var_global clr bool at panel.i.1
+      var_global retain arm bool
+      var_global retain hits dint
+      program a1 arming with fast
+        a1.eye eye_1
+        a1.clear clr
+      program f1 faulting with fast
+        f1.eye eye_1
+      program c1 counting with ev
+      """
+
+      types = %{"arming" => arming, "counting" => counting, "faulting" => faulting}
+      assert {:ok, config} = Configuration.compile("plant", source, types)
+
+      for {mode, seen} <- [warm: {1, 1}, cold: {0, 0}] do
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {Manual, clock},
+            poll: 10
+          )
+
+        state = fn -> {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} end
+        Manual.advance(clock, 30)
+        assert state.() == {0, 0}
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        assert %{status: :tripped} = Runner.status(runner)
+        assert state.() == {1, 0}
+        Sim.set(panel, [0], 0)
+        Manual.advance(clock, 10)
+        assert Runner.restart(runner, mode) == :ok
+        Manual.advance(clock, 50)
+        assert state.() == seen, inspect(mode)
         Runner.stop(runner)
       end
     end

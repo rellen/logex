@@ -13,9 +13,11 @@ defmodule Logex.Image do
   # array of instances `{:array, "ton", [4]}`, its elements `lane_t[2].acc` by their
   # subscripts' values. A timer's `last` is never in it: each retained timer starts at
   # the start's `now` (decision 273). A resource's is `%{configuration: name, globals:
-  # globals, instances: instances}`, `globals` each retained global by name to `{type,
-  # value}` and `instances` each instance whose program retains anything by name to its
-  # image.
+  # globals, instances: instances, triggers: triggers}`, `globals` each retained global by
+  # name to `{type, value}`, `instances` each instance whose program retains anything by
+  # name to its image, and since decision 313 `triggers` each retained global that is a
+  # task's `single` by name to its last sample. The shape is decision 307's, the
+  # maintainer's confirmation of M6-4's; `triggers` decision 313's.
 
   import Logex.Declarations, only: [is_elementary: 1, is_fitting: 2]
 
@@ -23,6 +25,13 @@ defmodule Logex.Image do
   alias Logex.FbType.Member
 
   @reals Declarations.reals()
+
+  # Every built-in type's preset member, `pre` and `pv` (Logex.FbType.rules/1), so that a
+  # value is looked at for decision 308 only where its last segment is one.
+  @preset_members Logex.FbType.builtins()
+                  |> Map.values()
+                  |> Enum.map(&Logex.FbType.rules(&1).preset)
+                  |> Enum.uniq()
 
   # ---- taken out ----------------------------------------------------------------------
 
@@ -189,12 +198,17 @@ defmodule Logex.Image do
 
   # A resource's image, every problem a line of one ArgumentError, the matching forgiving
   # a changed configuration and never a broken image.
-  def resource!(%{configuration: name, globals: globals, instances: instances} = image, config)
-      when map_size(image) == 3 do
+  def resource!(
+        %{configuration: name, globals: globals, instances: instances, triggers: triggers} =
+          image,
+        config
+      )
+      when map_size(image) == 4 do
     lines =
       configuration_line(name, config.name) ++
         map_lines(globals, "globals", &global_lines/2) ++
-        map_lines(instances, "instances", &instance_lines/2)
+        map_lines(instances, "instances", &instance_lines/2) ++
+        map_lines(triggers, "triggers", &trigger_lines(&1, &2, globals))
 
     raised(lines)
   end
@@ -203,9 +217,35 @@ defmodule Logex.Image do
     do:
       raise(
         ArgumentError,
-        "a resource's retained image is a map of `configuration`, `globals` and `instances`, " <>
-          "as Logex.Runtime.retained/1 gives one, got: #{inspect(other)}"
+        "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>
+          "and `triggers`, as Logex.Runtime.retained/1 gives one, got: #{inspect(other)}"
       )
+
+  # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
+  # of a global the image holds.
+  defp trigger_lines(name, sample, globals),
+    do:
+      name_lines(name, "triggers") ++
+        sample_lines(sample, name) ++ held_lines(held_global?(globals, name), name)
+
+  defp sample_lines(sample, _name) when is_fitting(:bool, sample), do: []
+
+  defp sample_lines(sample, name),
+    do: [
+      "`triggers` holds #{inspect(name)} at #{inspect(sample)}, which is no last sample of " <>
+        "a trigger, a bool's value"
+    ]
+
+  defp held_global?(globals, name) when is_map(globals), do: Map.has_key?(globals, name)
+  defp held_global?(_globals, _name), do: true
+
+  defp held_lines(true, _name), do: []
+
+  defp held_lines(false, name),
+    do: [
+      "`triggers` holds #{inspect(name)}, which `globals` does not hold: a trigger's last " <>
+        "sample is kept only with its retained global"
+    ]
 
   # A lone instance's image.
   def lone!(image, %Program{name: name}) do
@@ -236,6 +276,8 @@ defmodule Logex.Image do
 
   defp program_line(_image, _program), do: []
 
+  defp map_lines(map, _what, _fun) when map_size(map) == 0 and not is_struct(map), do: []
+
   defp map_lines(map, _what, fun) when is_map(map) and not is_struct(map),
     do: map |> Enum.sort() |> Enum.flat_map(fn {key, value} -> fun.(key, value) end)
 
@@ -261,21 +303,42 @@ defmodule Logex.Image do
 
   defp singular("globals"), do: "global"
   defp singular("instances"), do: "instance"
+  defp singular("triggers"), do: "global"
 
   defp lone_lines(%{program: program, kinds: kinds, values: values} = image, at)
        when map_size(image) == 3 and is_map(kinds) and not is_struct(kinds) and is_map(values) and
               not is_struct(values) do
-    parsed_kinds = Map.new(kinds, fn {path, kind} -> {path, {parsed(path), kind}} end)
+    parsed_kinds = Map.new(kinds, fn {path, kind} -> {canonical(path), {parsed(path), kind}} end)
 
     program_lines(program, at) ++
-      Enum.flat_map(Enum.sort(parsed_kinds), &kind_lines(&1, parsed_kinds, at)) ++
-      Enum.flat_map(Enum.sort(values), &value_lines(&1, parsed_kinds, at))
+      Enum.flat_map(Enum.sort(kinds), &kind_lines(&1, parsed_kinds, at)) ++
+      one_path_lines(kinds, "`kinds`", at) ++
+      Enum.flat_map(Enum.sort(values), &value_lines(&1, parsed_kinds, at)) ++
+      one_path_lines(values, "`values`", at)
   end
 
   defp lone_lines(other, at),
     do: [
       "#{at}a retained image is a map of `program`, `kinds` and `values`, as " <>
         "Logex.Runtime.retained/2 gives one, got: #{inspect(other)}"
+    ]
+
+  # Decision 312: two entries whose paths name one element by its value, `tl[01].acc` and
+  # `tl[1].acc`, are one path given twice.
+  defp one_path_lines(map, what, at),
+    do:
+      map
+      |> Map.keys()
+      |> Enum.group_by(&canonical/1)
+      |> Enum.sort()
+      |> Enum.flat_map(&one_path(&1, what, at))
+
+  defp one_path({_path, [_one]}, _what, _at), do: []
+
+  defp one_path({path, paths}, what, at),
+    do: [
+      "#{at}#{what} holds #{paths |> Enum.sort() |> Enum.map_join(" and ", &"`#{&1}`")}, " <>
+        "which name one path, `#{path}`"
     ]
 
   defp program_lines(program, at) do
@@ -287,10 +350,12 @@ defmodule Logex.Image do
   defp program_named(false, program, at),
     do: ["#{at}the image's `program` is #{inspect(program)}, which names no program"]
 
-  defp kind_lines({path, {{:error, _}, _kind}}, _kinds, at),
+  defp kind_lines({path, kind}, kinds, at), do: kind_at(parsed(path), path, kind, kinds, at)
+
+  defp kind_at({:error, _}, path, _kind, _kinds, at),
     do: ["#{at}`kinds` holds #{inspect(path)}, which is no path"]
 
-  defp kind_lines({path, {segments, kind}}, kinds, at),
+  defp kind_at(segments, path, kind, kinds, at),
     do:
       kind_word_lines(kind, path, at) ++
         whole_lines(segments, path, "`kinds`", at) ++
@@ -322,7 +387,7 @@ defmodule Logex.Image do
     do:
       entry_lines(entry, "#{at}`values` holds `#{path}`") ++
         whole_lines(segments, path, "`values`", at) ++
-        both_lines(Map.has_key?(kinds, path), path, at) ++
+        both_lines(Map.has_key?(kinds, canonical(path)), path, at) ++
         clock_lines(segments, kinds, path, at) ++
         above_lines(segments, kinds, {path, "`values`"}, at)
 
@@ -445,8 +510,9 @@ defmodule Logex.Image do
   defp segment(nil, name, {rest, done, path}),
     do: segment_named(Declarations.name?(name), {name, nil}, {rest, done, path})
 
-  # Since the review of M6-4 each subscript is checked before it is read, and must be
-  # written as its value, `tl[1]` and never `tl[01]`, as the image names an element.
+  # Since the review of M6-4 each subscript is checked before it is read, digits alone;
+  # since decision 312 one written with leading zeros, `tl[01]`, names the element of its
+  # value, `tl[1]`, as a literal subscript in a rung does (decision 202).
   defp segment({name, subscripts}, whole, {rest, done, path}),
     do:
       subscripted(
@@ -466,7 +532,22 @@ defmodule Logex.Image do
 
   defp segment_named(false, _segment, {_rest, _done, path}), do: {:error, path}
 
-  defp value?(text), do: String.match?(text, ~r/\A(0|[1-9][0-9]*)\z/)
+  defp value?(text), do: String.match?(text, ~r/\A[0-9]+\z/)
+
+  # A path as logic names it, each subscript by its value (decision 312): `tl[01].acc` is
+  # `tl[1].acc`. A path that is none stays as it was, for the check's line.
+  defp canonical(path) when is_binary(path), do: zero_at(:binary.match(path, ["[0", ",0"]), path)
+  defp canonical(path), do: path
+
+  defp zero_at(:nomatch, path), do: path
+  defp zero_at(_found, path), do: canonical_of(parsed(path), path)
+
+  defp canonical_of({:error, _}, path), do: path
+  defp canonical_of(segments, path), do: zeroed(:binary.match(path, ["[0", ",0"]), segments, path)
+
+  # Only a subscript that starts with a 0 may be written otherwise than as its value.
+  defp zeroed(:nomatch, _segments, path), do: path
+  defp zeroed(_found, segments, _path), do: Enum.map_join(segments, ".", &written/1)
 
   # The kinds key of an instance: its segments, its own subscript left off.
   defp key(segments) do
@@ -485,7 +566,8 @@ defmodule Logex.Image do
   # once by its path, `prefix` before it, with its reason.
   def matched(%Program{} = program, env, %{kinds: kinds, values: values}, prefix) do
     wanted = wanted(program, env)
-    kinds = Map.new(kinds, fn {path, kind} -> {path, {parsed(path), kind}} end)
+    kinds = Map.new(kinds, &parsed_kind/1)
+    values = values |> Enum.map(&parsed_value/1) |> Enum.sort()
 
     {statuses, dropped} =
       Enum.reduce(Enum.sort(kinds), {%{}, []}, fn {path, _kind}, acc ->
@@ -494,23 +576,85 @@ defmodule Logex.Image do
       end)
 
     {kept, dropped} =
-      Enum.reduce(Enum.sort(values), {%{}, dropped}, fn {path, entry}, {kept, dropped} ->
+      Enum.reduce(values, {%{}, dropped}, fn {path, segments, entry}, {kept, dropped} ->
         valued(
-          above_ok?(parsed(path), statuses),
-          {path, entry},
-          {program, wanted},
+          above_ok?(segments, statuses),
+          {path, segments, entry},
+          {program, wanted, kinds},
           {kept, dropped}
         )
       end)
 
-    {laid(program, env, kept), dropped |> ordered() |> Enum.map(&prefixed(&1, prefix))}
+    {laid(program, env, kept),
+     dropped |> collapsed(kinds) |> ordered() |> Enum.map(&prefixed(&1, prefix))}
   end
 
   defp prefixed({path, reason}, prefix), do: {prefix <> path, reason}
 
+  # Each path read once, keyed as logic names it, a subscript by its value (decision 312).
+  defp parsed_kind({path, kind}) do
+    segments = parsed(path)
+    {canonical_of(segments, path), {segments, kind}}
+  end
+
+  defp parsed_value({path, entry}) do
+    segments = parsed(path)
+    {canonical_of(segments, path), segments, entry}
+  end
+
   # Since the review of M6-4, drops in path order segment by segment, an element by its
-  # subscripts' values, `g[2].k` before `g[10].k`, where the path's text put it after.
-  def ordered(dropped), do: Enum.sort_by(dropped, fn {path, _reason} -> parsed(path) end)
+  # subscripts' values, `g[2].k` before `g[10].k`, where the path's text put it after;
+  # since decision 310 `g[*].k`, every element's, before any one element's.
+  def ordered(dropped), do: Enum.sort_by(dropped, fn {path, _reason} -> order_key(path) end)
+
+  defp order_key(path), do: path |> :binary.split(".", [:global]) |> Enum.map(&order_segment/1)
+
+  defp order_segment(segment), do: order_split(Array.split(segment), segment)
+
+  defp order_split(nil, segment), do: {segment, []}
+  defp order_split({name, subscripts}, _segment), do: {name, Enum.map(subscripts, &order_of/1)}
+
+  defp order_of("*"), do: -1
+  defp order_of(digits), do: String.to_integer(digits)
+
+  # Decision 310 (the maintainer, 2026-10-30): where every element of an array of
+  # instances drops the same member for the same reason, the drop is reported once,
+  # `gates[*].j`, decision 259's path form; where the elements differ, each by its
+  # element. The innermost arrays first, so that an array of blocks inside one, each of
+  # whose elements drops `ws[*].x`, is reported `hs[*].ws[*].x`.
+  defp collapsed(dropped, kinds) do
+    kinds
+    |> Enum.flat_map(&instance_array/1)
+    |> Enum.sort_by(fn {key, _count} -> -length(:binary.split(key, ".", [:global])) end)
+    |> Enum.reduce(dropped, &collapsed_in/2)
+  end
+
+  defp instance_array({key, {_segments, {:array, _kind, dims}}}), do: [{key, Array.size(dims)}]
+  defp instance_array(_kind), do: []
+
+  defp collapsed_in({key, count}, dropped) do
+    {inside, rest} = Enum.split_with(dropped, &in_element?(&1, key <> "["))
+
+    inside
+    |> Enum.group_by(fn {path, reason} -> {element_rest(path, key), reason} end)
+    |> Enum.flat_map(&every_element(&1, key, count))
+    |> Kernel.++(rest)
+  end
+
+  defp in_element?({path, _reason}, start), do: String.starts_with?(path, start)
+
+  # What follows an element's subscripts, `j` for `gates[3].j`.
+  defp element_rest(path, key) do
+    [_subscripts, rest] =
+      :binary.split(binary_part(path, byte_size(key), byte_size(path) - byte_size(key)), "].")
+
+    rest
+  end
+
+  defp every_element({{rest, reason}, drops}, key, count) when length(drops) == count,
+    do: [{key <> "[*]." <> rest, reason}]
+
+  defp every_element({_group, drops}, _key, _count), do: drops
 
   # What a program retains, its kinds and values, from its fresh env.
   defp wanted(%Program{retained: nil}, _env), do: {%{}, %{}}
@@ -520,7 +664,7 @@ defmodule Logex.Image do
       Enum.reduce(paths, {%{}, %{}}, fn path, acc ->
         {_value, acc} =
           along(path, program, env, acc, fn path, type, value, {kinds, values} ->
-            {value, {kinds, Map.put(values, path, type)}}
+            {value, {kinds, Map.put(values, path, {type, value})}}
           end)
 
         acc
@@ -581,28 +725,93 @@ defmodule Logex.Image do
 
   defp valued(false, _entry, _at, acc), do: acc
 
-  defp valued(true, {path, {type, value}}, {program, {_kinds, wanted}}, {kept, dropped}) do
+  defp valued(
+         true,
+         {path, segments, {type, value}},
+         {program, {_kinds, wanted}, kinds},
+         {kept, dropped}
+       ) do
+    {now, fresh} = Map.get(wanted, path, {nil, nil})
+
     valued_as(
-      judged(type, Map.get(wanted, path), {path, parsed(path), program}, dropped),
+      judged(type, now, {path, segments, program}, dropped),
       {path, type, value},
+      {preset?(segments, kinds), fresh},
       {kept, dropped}
     )
   end
 
-  defp valued_as({:ok, dropped}, {path, type, value}, {kept, _dropped}),
-    do: fitted(fits?(type, value), {path, value}, {kept, dropped})
+  defp valued_as({:ok, dropped}, {path, type, value}, preset, {kept, _dropped}),
+    do: fitted(taken(type, value), path, preset, {kept, dropped})
 
-  defp valued_as({:dropped, dropped}, _entry, {kept, _dropped}), do: {kept, dropped}
+  defp valued_as({:dropped, dropped}, _entry, _preset, {kept, _dropped}), do: {kept, dropped}
 
-  defp fitted(true, {path, value}, {kept, dropped}), do: {Map.put(kept, path, value), dropped}
-  defp fitted(false, {path, _value}, {kept, dropped}), do: {kept, [{path, :misfit} | dropped]}
+  defp fitted({:ok, value}, path, {false, _fresh}, {kept, dropped}),
+    do: {Map.put(kept, path, value), dropped}
 
-  # A value fits as a state's does (decisions 171 to 188): an integer or a bool of its
-  # type's range, a real of its type's values, an array a host's list of its shape.
-  def fits?({:array, type, dims}, value), do: Array.listed?(value, dims, &fits?(type, &1))
-  def fits?(type, value) when is_fitting(type, value), do: true
-  def fits?(type, value) when type in @reals, do: Logex.Real.value?(type, value)
-  def fits?(_type, _value), do: false
+  # Decision 308 (the maintainer, 2026-10-30): a timer's or counter's preset follows the
+  # program, not the image, as an edit's switch moves it: the fresh instance's, the
+  # number on the instruction that runs it, is kept, and a stored one that differs is
+  # reported, `{"lube.pre", {:preset, 360000000, 180000000}}`; its `.acc` or `.cv`, its
+  # done bits and its edge memory are kept as any member is.
+  defp fitted({:ok, fresh}, _path, {true, fresh}, acc), do: acc
+
+  defp fitted({:ok, stored}, path, {true, fresh}, {kept, dropped}),
+    do: {kept, [{path, {:preset, stored, fresh}} | dropped]}
+
+  defp fitted(:misfit, path, _preset, {kept, dropped}), do: {kept, [{path, :misfit} | dropped]}
+
+  # Whether a path is a built-in instance's preset member, `pre` of a timer or `pv` of a
+  # counter (Logex.FbType.rules/1), its kind the stored one, which by now is the
+  # program's.
+  defp preset?(segments, kinds), do: preset_at(List.last(segments), segments, kinds)
+
+  defp preset_at({name, nil} = last, segments, kinds) when name in @preset_members,
+    do: preset_of(above_kind(segments, kinds), last)
+
+  defp preset_at(_last, _segments, _kinds), do: false
+
+  defp preset_of(kind, {name, nil}) when is_binary(kind),
+    do: preset_member(FbType.rules(FbType.builtin(kind))) == name
+
+  defp preset_of(_kind, _segment), do: false
+
+  defp preset_member(%{preset: member}), do: member
+  defp preset_member(nil), do: nil
+
+  # A stored value taken as a state's is (decisions 171 to 188), an integer or a bool of
+  # its type's range, a real of its type's values, an array a host's list of its shape:
+  # `{:ok, value}` or `:misfit`. Since decision 311 (the maintainer, 2026-10-30) an integer
+  # stored for a real is taken by a host input's rule, at its nearest real, one past the
+  # real's range a misfit; a float for an integer, or a value of no number, still one.
+  def taken({:array, type, dims}, list) when type in @reals,
+    do: listed(Array.listed?(list, dims, &match?({:ok, _}, taken(type, &1))), list, {type, dims})
+
+  def taken({:array, type, dims}, list),
+    do: listed(Array.listed?(list, dims, &match?({:ok, _}, taken(type, &1))), list, nil)
+
+  def taken(type, value) when is_fitting(type, value), do: {:ok, value}
+
+  def taken(type, value) when type in @reals and is_integer(value),
+    do: in_range(Logex.Real.in_range?(type, value), type, value)
+
+  def taken(type, value) when type in @reals,
+    do: real_value(Logex.Real.value?(type, value), value)
+
+  def taken(_type, _value), do: :misfit
+
+  defp in_range(true, type, value), do: {:ok, Logex.Real.nearest(type, value)}
+  defp in_range(false, _type, _value), do: :misfit
+
+  defp real_value(true, value), do: {:ok, value}
+  defp real_value(false, _value), do: :misfit
+
+  defp listed(false, _list, _real), do: :misfit
+  defp listed(true, list, nil), do: {:ok, list}
+  defp listed(true, list, {type, dims}), do: {:ok, reals(list, dims, type)}
+
+  defp reals(list, [_count], type), do: Enum.map(list, &elem(taken(type, &1), 1))
+  defp reals(list, [_count | dims], type), do: Enum.map(list, &reals(&1, dims, type))
 
   # The type a program declares at a path, in the image's words, or `:undeclared`.
   defp type_at([{name, index} | rest], %Program{tags: tags, blocks: blocks}),
@@ -678,12 +887,12 @@ defmodule Logex.Image do
        do: {values, [{name, :unretained} | dropped], kept}
 
   defp global(_global, {name, type, value}, acc),
-    do: fitted_global(fits?(type, value), {name, type, value}, acc)
+    do: fitted_global(taken(type, value), {name, type}, acc)
 
-  defp fitted_global(true, {name, type, value}, {values, dropped, kept}),
+  defp fitted_global({:ok, value}, {name, type}, {values, dropped, kept}),
     do: {Map.put(values, name, stored(type, value)), dropped, [name | kept]}
 
-  defp fitted_global(false, {name, _type, _value}, {values, dropped, kept}),
+  defp fitted_global(:misfit, {name, _type}, {values, dropped, kept}),
     do: {values, [{name, :misfit} | dropped], kept}
 
   defp stored({:array, _type, dims}, list), do: Array.from_list(list, dims, & &1)

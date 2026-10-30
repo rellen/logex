@@ -1366,6 +1366,109 @@ defmodule Logex.ConfigEditTest do
       assert Map.keys(runtime.globals) == Map.keys(Runtime.start(candidate).globals)
     end
 
+    # Decision 315 (the maintainer, 2026-10-30): every prune drops whatever a kept
+    # instance's running program does not declare, whatever left it there. Here an edit
+    # tested and untested leaves `spare`, which only its candidate's motor declares, in
+    # `m1`, and is superseded before any prune; the next edit retypes `m1`, so its type's
+    # plan prunes nothing of it. Until decision 315 `spare` stayed until a restart.
+    test "a tag a superseded edit left in a kept instance is dropped by the next prune, by " <>
+           "its path" do
+      runtime = running(60)
+      spare = String.replace(motor_ld(), "var halt bool", "var halt bool\nvar spare dint 4")
+      # Its seal block's new version holds a member more, `held`.
+      seal =
+        String.replace(seal_ld(), "var_output run bool", "var_output run bool\nvar held dint 9")
+
+      {first, _} = accepted(runtime, plant(plant_text(), programs(spare, seal)))
+      {first, runtime, _} = Edit.test(first, runtime)
+      {_first, runtime, _} = Edit.untest(first, runtime)
+      assert runtime.instances["m1"].env["spare"] == 4
+      assert runtime.instances["m1"].env["s1"]["held"] == 9
+
+      {:ok, other} =
+        Logex.compile(motor_ld(), name: "motor_b", types: [programs()["motor"].blocks["seal"]])
+
+      text = String.replace(plant_text(), "program m1 motor", "program m1 motor_b")
+      candidate = plant(text, Map.put(programs(), "motor_b", other))
+      {second, _} = accepted(runtime, candidate)
+      {second, runtime, report} = Edit.test(second, runtime)
+      refute Enum.any?(report, &match?({:pruned, "m1.spare", _}, &1))
+      {second, runtime, _} = Edit.untest(second, runtime)
+      assert runtime.instances["m1"].env["spare"] == 4
+      {kept, runtime, report} = Edit.cancel(second, runtime)
+      assert kept == plant()
+      assert {:pruned, "m1.spare", 4} in report
+      assert {:pruned, "m1.s1.held", 9} in report
+      assert {:pruned, "m2.spare", 4} in report
+      refute Map.has_key?(runtime.instances["m1"].env, "spare")
+      refute Map.has_key?(runtime.instances["m1"].env["s1"], "held")
+      assert Enum.count(report, &match?({:pruned, "m2.s1.held", 9}, &1)) == 1
+      refute Map.has_key?(runtime.instances["m2"].env, "spare")
+
+      assert Map.keys(runtime.instances["m1"].env) ==
+               Map.keys(Runtime.start(plant()).instances["m1"].env)
+
+      _ = second
+    end
+
+    test "a member a superseded edit left in each element of an array of blocks, and in a " <>
+           "block inside a block, is dropped by the next prune, by its path" do
+      cell = fn extra ->
+        {:ok, cell} =
+          Logex.compile(
+            "function_block cell\nvar_input go bool\nvar k dint\n#{extra}xic go add k 1 k",
+            name: "cell"
+          )
+
+        cell
+      end
+
+      typed = fn name, block ->
+        {:ok, outer} =
+          Logex.compile("function_block outer\nvar_input go bool\nvar c cell\ncal c go",
+            name: "outer",
+            types: [block]
+          )
+
+        {:ok, program} =
+          Logex.compile(
+            "var_input go bool\nvar cs cell[2]\nvar o outer\ncal cs[0] go\ncal cs[1] go\ncal o go",
+            name: name,
+            types: [outer, block]
+          )
+
+        program
+      end
+
+      config = fn type, block ->
+        programs = %{"p" => typed.("p", block), "q" => typed.("q", cell.(""))}
+
+        plant(
+          "task fast interval 10 priority 1\nprogram m1 #{type} with fast\n  m1.go 0\n",
+          programs
+        )
+      end
+
+      runtime = Runtime.start(config.("p", cell.("")))
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{})
+      {first, _} = accepted(runtime, config.("p", cell.("var extra dint 3\n")))
+      {first, runtime, _} = Edit.test(first, runtime)
+      {_first, runtime, _} = Edit.untest(first, runtime)
+      assert elem(runtime.instances["m1"].env["cs"], 1)["extra"] == 3
+      assert runtime.instances["m1"].env["o"]["c"]["extra"] == 3
+
+      {second, _} = accepted(runtime, config.("q", cell.("")))
+      {second, runtime, _} = Edit.test(second, runtime)
+      {second, runtime, _} = Edit.untest(second, runtime)
+      {_kept, runtime, report} = Edit.cancel(second, runtime)
+      assert {:pruned, "m1.cs[0].extra", 3} in report
+      assert {:pruned, "m1.cs[1].extra", 3} in report
+      assert {:pruned, "m1.o.c.extra", 3} in report
+      refute Map.has_key?(runtime.instances["m1"].env["o"]["c"], "extra")
+      refute Map.has_key?(elem(runtime.instances["m1"].env["cs"], 0), "extra")
+      refute Map.has_key?(elem(runtime.instances["m1"].env["cs"], 1), "extra")
+    end
+
     test "the report's writes rebuild the resource, the prunes written first" do
       runtime = running(60)
       {first, _} = accepted(runtime, plant(without_m2()))

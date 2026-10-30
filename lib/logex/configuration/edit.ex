@@ -138,9 +138,14 @@ defmodule Logex.Configuration.Edit do
   the resource to the configuration it keeps, each kept instance by its type's plan, by
   path, as `Logex.Edit` prunes one; every instance set aside, `{:instance_pruned, name,
   type}`; and every global the kept configuration does not declare, `{:pruned, name,
-  value}`. Cancel from accept changes nothing but the resource's generation, which it moves
-  on by one (decision 64), and reports `[]`, so what a superseded edit left stays, unused,
-  for the next edit's first test, or a restart, to drop.
+  value}`. Since decision 315 each prune drops, besides, whatever a kept instance holds
+  that its running program does not declare, at any depth, whatever left it there, a
+  tag an edit this one superseded switched in among it, `{:pruned, "m1.spare", 4}`, by
+  its path as `Logex.Edit`'s kind, where until then only the type's plan pruned it, so an
+  instance the edit retyped kept such a tag until a restart. Cancel from accept changes
+  nothing but the resource's generation, which it moves on by one (decision 64), and
+  reports `[]`, so what a superseded edit left stays, unused, for the next edit's first
+  test, its next prune, or a restart, to drop.
 
   **A restart during an edit** (decision 65) restarts the instances of the configuration
   the resource runs, drops those set aside and the globals only the other configuration
@@ -1194,6 +1199,13 @@ defmodule Logex.Configuration.Edit do
         pruned(instance, Map.get(froms, instance.name), {edit, direction}, acc)
       end)
 
+    {instances, reports} =
+      Enum.reduce(
+        to.instances,
+        {instances, reports},
+        &undeclared(&1, Map.get(froms, &1.name), to.programs, &2)
+      )
+
     keep = by_name(to.globals)
 
     {globals, gone} =
@@ -1219,4 +1231,89 @@ defmodule Logex.Configuration.Edit do
   end
 
   defp pruned(_added, _other, _context, acc), do: acc
+
+  # Decision 315 (the maintainer, 2026-10-30): every prune drops whatever a kept instance's
+  # running program does not declare, at any depth, whatever left it there, an edit this
+  # one superseded among them (decision 66), each reported `:pruned` by its path, as
+  # Logex.Edit reports a tag a prune drops. An instance of one type in both configurations
+  # the type's plan has pruned to exactly what its program declares, at any depth, so only
+  # one the edit retyped or added is walked here, and a prune of an edit that retypes
+  # nothing costs what it did.
+  defp undeclared(%{type: type}, type, _programs, acc), do: acc
+
+  defp undeclared(%{name: name, type: type}, _from, programs, {instances, reports}) do
+    program = Map.fetch!(programs, type)
+    %Instance{env: env} = state = Map.fetch!(instances, name)
+    {env, gone} = declared_only(env, Program.typed_tags(program), name, reports)
+    {Map.put(instances, name, %{state | env: env}), gone}
+  end
+
+  defp declared_only(env, tags, prefix, reports) do
+    {kept, gone} = Map.split_with(env, fn {name, _value} -> is_map_key(tags, name) end)
+
+    reports =
+      Enum.reduce(gone, reports, fn {name, value}, acc ->
+        [{:pruned, prefix <> "." <> name, value} | acc]
+      end)
+
+    Enum.reduce(tags, {kept, reports}, fn {name, %Tag{type: type}}, acc ->
+      inside(type, name, prefix, acc)
+    end)
+  end
+
+  # Inside a user block's instance, or each element of an array of them, the members its
+  # type declares; a built-in's members are fixed, and any other value holds none.
+  defp inside(type, name, prefix, {env, reports}),
+    do: inside_of(type, Map.get(env, name), {name, prefix}, {env, reports})
+
+  defp inside_of(%FbType{body: %Program{}} = type, %{} = map, {name, prefix}, {env, reports}) do
+    {map, reports} = members_only(map, type, prefix <> "." <> name, reports)
+    {Map.put(env, name, map), reports}
+  end
+
+  defp inside_of(
+         {:array, %FbType{body: %Program{}} = type, dims},
+         values,
+         {name, prefix},
+         {env, reports}
+       )
+       when is_tuple(values) do
+    {values, reports} = elements(values, dims, {type, prefix <> "." <> name, []}, reports)
+    {Map.put(env, name, values), reports}
+  end
+
+  defp inside_of(_type, _value, _at, acc), do: acc
+
+  defp members_only(map, %FbType{members: members} = type, path, reports) do
+    names = Map.new(members, &{&1.name, FbType.type_of(type, &1)})
+    {kept, gone} = Map.split_with(map, fn {name, _value} -> is_map_key(names, name) end)
+
+    reports =
+      Enum.reduce(gone, reports, fn {name, value}, acc ->
+        [{:pruned, path <> "." <> name, value} | acc]
+      end)
+
+    Enum.reduce(names, {kept, reports}, fn {name, type}, {map, reports} ->
+      {map, reports} = inside(type, name, path, {map, reports})
+      {map, reports}
+    end)
+  end
+
+  defp elements(values, [count], {type, path, above}, reports) do
+    {kept, reports} =
+      Enum.map_reduce(0..(count - 1), reports, fn i, reports ->
+        members_only(elem(values, i), type, Logex.Array.name(path, above ++ [i]), reports)
+      end)
+
+    {List.to_tuple(kept), reports}
+  end
+
+  defp elements(values, [count | dims], {type, path, above}, reports) do
+    {kept, reports} =
+      Enum.map_reduce(0..(count - 1), reports, fn i, reports ->
+        elements(elem(values, i), dims, {type, path, above ++ [i]}, reports)
+      end)
+
+    {List.to_tuple(kept), reports}
+  end
 end

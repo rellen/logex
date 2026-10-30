@@ -144,13 +144,15 @@ defmodule Logex.Runtime do
     (decisions 268 and 271), whose value it keeps, a var_external of it reading the kept
     value, no located global being one (decision 272); at a cold one every such global too;
     since M6-4 at `start/2` but for a retained global its image holds of exactly its type,
-    fitting it, whose value it takes (decision 277); and
+    fitting it, whose value it takes (decision 277), an integer for a real at its nearest
+    real (decision 311); and
     at the switch that first finds one the configuration started declares missing. A kept
     one whose initial value an edit changes keeps its running value until `restart/2`
     (decision 44); one only the configuration stopped declares is kept unused until
     assemble or cancel prunes it, or the first test of an edit that supersedes this one
     drops it (decision 66); and an output point nothing drives any more holds its
-    value (decision 20);
+    value (decision 20); and since decision 315 every prune drops a kept instance's tag
+    or member its running program does not declare, whatever left it there;
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
     restarts it through `restart/3`: since M6-2 a warm one keeps each path its program
@@ -160,8 +162,8 @@ defmodule Logex.Runtime do
     and puts back every other, a cold one every path; an instance set
     aside is dropped either way (decision 65); and since M6-4 `start/2` starts one as
     `start/1` does and lays the image's values over it where decision 277's matching keeps
-    them, each retained timer's `last` the start's `now`, 0 (decision 273), as
-    `instance/2` does a lone one. A cycle reports the faults of its scan as events and
+    them, a timer's or counter's preset the program's (decision 308), each retained
+    timer's `last` the start's `now`, 0 (decision 273), as `instance/2` does a lone one. A cycle reports the faults of its scan as events and
     keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
     and an edit's switch find it so. An edit's switch moves a kept one by its program
     type's plan (`Logex.Edit`'s rules, by path), its `now` set to the resource's after fix
@@ -185,9 +187,11 @@ defmodule Logex.Runtime do
     adds or removes it, or makes a task continuous or timed (decision 129);
   - a task's trigger (M2-6), the last sample of its `single`, is 0 at `start/1` and by
     `restart/2`, so a trigger already 1 fires in the next cycle, but since decision 305 a
-    warm `restart/2`'s for a `single` the configuration declares `retain`, the value it
-    kept, so a trigger kept at 1 fires on no rising edge (decision 274), and since M6-4
-    `start/2`'s for a `single` the image put back, that value, every other 0; and a cycle
+    warm `restart/2`'s for a `single` the configuration declares `retain` is kept, since
+    decision 313 the last sample the resource took, not the value kept, so a trigger
+    sampled at 1 fires on no rising edge (decision 274) and a rise logic wrote after the
+    sample fires once, and since M6-4 `start/2`'s for a `single` the image put back, the
+    sample the image holds for it (decision 313), every other 0; and a cycle
     samples it once, after the input merge and before any scan. An edit's switch keeps it, so a
     switch fires no event, and its accept refuses a changed `single`, or an `interval`
     added to or removed from a task with one, while the plant runs (§4.9);
@@ -470,14 +474,18 @@ defmodule Logex.Runtime do
   `dropped`, every other value of the image, by its path, once, in path order, with its
   reason (see `start/2`). A path the program retains that the image does not hold starts
   by `Logex.Program.initial_env/1`, and a value whose initial value changed keeps the
-  stored one. A retained timer's `last` is never in an image, so each starts at the
-  instance's `now`, 0, and the first scan is marked first, so no edge fires on it
-  (decisions 273 and 274).
+  stored one, but a timer's or counter's preset, `.pre` or `.pv`, is the program's, the
+  number on the instruction that runs it, a stored one that differs reported
+  `{:preset, stored, now}` (decision 308). A retained timer's `last` is never in an image,
+  so each starts at the instance's `now`, 0, and the first scan is marked first, so no
+  edge fires on it (decisions 273 and 274).
 
   `image` is what `retained/2` gives, `%{program: name, kinds: kinds, values: values}`. An
-  image that is not one, a path no logic could name, an element of an array, an entry
-  under an instance whose kind it does not hold, a timer's `last`, or an image of another
-  program, is the host's mistake: one `ArgumentError`, a line each.
+  element is named by its subscripts' values, a subscript with leading zeros, `tl[01]`,
+  by its value, `tl[1]` (decision 312). An image that is not one, a path no logic could
+  name, a subscript that is no digits, two paths that name one, an element of an array,
+  an entry under an instance whose kind it does not hold, a timer's `last`, or an image
+  of another program, is the host's mistake: one `ArgumentError`, a line each.
   """
   def instance(program, image) do
     checked!(program)
@@ -748,17 +756,21 @@ defmodule Logex.Runtime do
   array resized and an instance of another kind among what is not), under instances of the
   stored kinds, and the value fits it as a state's does (decisions 171 to 188); a global
   only where the configuration declares a global of its name, retained, of exactly its
-  type, the value fitting. A user block's instance is matched member by member, a member
-  its new version adds starting at its initial value, and an array of instances element
-  by element where its sizes are unchanged; a value whose initial value changed keeps the
-  stored one, as decision 44 keeps a running one; and a path newly retained starts at its
+  type, the value fitting, an integer stored for a real taken at its nearest real, as a
+  host's input is (decision 311). A user block's instance is matched member by member, a
+  member its new version adds starting at its initial value, and an array of instances
+  element by element where its sizes are unchanged; a value whose initial value changed
+  keeps the stored one, as decision 44 keeps a running one, but a timer's or counter's
+  preset follows the program (decision 308); and a path newly retained starts at its
   initial value, unreported. Each retained timer starts with `last` at the start's `now`,
   0, so the outage is not counted (decision 273); every scan's first is marked first
   (decision 274); and a task's `single` that the image put back starts its trigger's last
-  sample at that value, as a warm `restart/2` does (decision 305), so a trigger kept at 1
-  fires on no rising edge, every other at 0 as `start/1` has it. So a resource started
-  from another's image cycles as that one does after a warm `restart/2`, given the same
-  inputs.
+  sample at the sample the image holds for it, as a warm `restart/2` keeps it (decisions
+  305 and 313), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
+  after the sample fires once, every other at 0 as `start/1` has it; one the image holds
+  no sample for, which only a host's own image lacks, at the value put back
+  (provisional). So a resource started from another's image cycles as that one does
+  after a warm `restart/2`, given the same inputs, where the program writes no preset.
 
   `dropped` lists each value not kept once, in path order, `{path, reason}`, a path
   whole where everything under it went: `{"m1", :undeclared}` for an instance the
@@ -766,12 +778,19 @@ defmodule Logex.Runtime do
   runs another program type; `:undeclared` for a global, tag or member it does not
   declare; `{:retyped, stored, now}` for a type or kind changed, `{:resized, from, to}`
   for an array's or an array of instances' sizes; `:unretained` where the qualifier went;
-  and `:misfit` for a value of the right type that does not fit it.
+  `:misfit` for a value of the right type that does not fit it; and `{:preset, stored,
+  now}` for a timer's or counter's stored preset the program's replaced (decision 308).
+  Every entry is a stored value the start did not keep, so the list keeps its name. A
+  member every element of an array of instances drops for one reason is one entry,
+  `"m1.gates[*].j"`, decision 259's path form, at any depth, `hs[*].ws[*].x`; elements
+  that differ are each their own (decision 310).
 
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
-  instances: instances}`, each instance's a lone image (`retained/2`). One that is not, or
-  whose parts are not, or one of another configuration, which a line naming both tells,
-  is the host's mistake: one `ArgumentError`, a line each, after `config`'s own check.
+  instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
+  One that is not, or whose parts are not, a sample that is no bool's value or of a
+  global `globals` does not hold among them, or one of another configuration, which a
+  line naming both tells, is the host's mistake: one `ArgumentError`, a line each, after
+  `config`'s own check.
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -789,7 +808,8 @@ defmodule Logex.Runtime do
     tasks =
       Map.new(
         config.tasks,
-        &{&1.name, put_back(Map.fetch!(runtime.tasks, &1.name), &1, {kept, globals})}
+        &{&1.name,
+         put_back(Map.fetch!(runtime.tasks, &1.name), &1, {kept, globals, image.triggers})}
       )
 
     {%{runtime | globals: globals, instances: instances, tasks: tasks},
@@ -818,10 +838,23 @@ defmodule Logex.Runtime do
     {Map.put(instances, name, %{state | env: env}), Enum.reverse(more, dropped)}
   end
 
-  # Decision 305's rule at a start from an image: a `single` the image put back starts
-  # its trigger's last sample at that value.
-  defp put_back(%{last: _} = state, %Configuration.Task{single: single}, {kept, globals}),
-    do: kept_sample(single in kept, state, Map.fetch!(globals, single))
+  # Decision 313's rule at a start from an image (the maintainer, 2026-10-30, restating
+  # decision 305): a `single` the image put back starts its trigger's last sample at the
+  # sample the image holds for it, so that a rise logic made after that sample fires once
+  # in the first cycle and one already seen does not; one the image holds no sample for,
+  # which only a host's own image lacks, at the value put back, so nothing fires
+  # (provisional).
+  defp put_back(
+         %{last: _} = state,
+         %Configuration.Task{single: single},
+         {kept, globals, triggers}
+       ),
+       do:
+         kept_sample(
+           single in kept,
+           state,
+           Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
+         )
 
   defp put_back(state, _task, _kept), do: state
 
@@ -831,9 +864,11 @@ defmodule Logex.Runtime do
   the configuration declares `retain` by name to `{type, value}`, an array's value a list,
   and `instances` each instance the resource runs whose program retains anything, by
   name, to its lone image (`retained/2`), its program type and each retained value by
-  its path inside the instance. An instance an edit set aside is not in it, and during an
-  edit the program running is the one read (decision 278). A timer's `last` is never in
-  it (decision 273). Its cost is the retained values' and the paths', with one step for
+  its path inside the instance; and since decision 313 `triggers`, each retained global
+  that is a task's `single` by name to the last sample the resource took of it, 0 or 1,
+  so that a start lays it back as a warm `restart/2` keeps it. An instance an edit set
+  aside is not in it, and during an edit the program running is the one read (decision
+  278). A timer's `last` is never in it (decision 273). Its cost is the retained values' and the paths', with one step for
   each global and instance declared, whatever else the resource holds.
   """
   def retained(runtime) do
@@ -848,9 +883,31 @@ defmodule Logex.Runtime do
           %Program{retained: [_ | _]} = program <- [Map.fetch!(config.programs, type)],
           into: %{},
           do: {name, Image.of(program, env)}
-        )
+        ),
+      triggers: triggers(config, runtime.tasks)
     }
   end
+
+  # Decision 313: each retained global that is a task's `single`, by name, to that task's
+  # last sample of it, the first such task's in declaration order, every task sampling
+  # each trigger in the same cycle.
+  defp triggers(%Configuration{tasks: tasks, globals: globals}, states) do
+    retained = for %Configuration.Global{retain: :retain, name: name} <- globals, do: name
+
+    tasks
+    |> Enum.reverse()
+    |> Enum.flat_map(&trigger(&1, retained, states))
+    |> Map.new()
+  end
+
+  defp trigger(%Configuration.Task{single: single, name: name}, retained, states)
+       when is_binary(single),
+       do: sample_of(single in retained, single, Map.fetch!(states, name))
+
+  defp trigger(_task, _retained, _states), do: []
+
+  defp sample_of(true, single, %{last: last}), do: [{single, last}]
+  defp sample_of(false, _single, _state), do: []
 
   @doc """
   One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,
@@ -947,8 +1004,10 @@ defmodule Logex.Runtime do
   `start/1` left it, but for its clock and its input image, which it keeps: every other
   global back at its initial value, each instance through `restart/3`, every task with an
   interval due at the next cycle, every trigger's last sample 0, so a trigger already 1
-  fires in it, but at `:warm` a retained `single`'s, which is the value it kept, so it
-  fires only on a real rising edge (decision 305, decision 274's rule), and every
+  fires in it, but at `:warm` a retained `single`'s, which is kept as the resource last
+  took it, so a trigger sampled at 1 fires only on a real rising edge (decision 305,
+  decision 274's rule) and a rise logic wrote after that sample fires once (decision
+  313), and every
   overlap count 0. An instance a configuration edit set aside is
   dropped, and the edit's generation kept (OE-2). Keeping the input image is what keeps
   `scan/2` with `restart/3` and a one-instance configuration in agreement across a
@@ -982,19 +1041,30 @@ defmodule Logex.Runtime do
         tasks:
           Map.new(
             config.tasks,
-            &{&1.name, sampled(task_state(&1, now), &1, {mode, globals, config})}
+            &{&1.name, sampled(task_state(&1, now), &1, {mode, runtime.tasks, config})}
           ),
         aside: %{}
     }
   end
 
-  # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger:
-  # after a warm restart the last sample of a `single` the configuration declares `retain`
-  # is the value it kept, so a trigger kept at 1 is no rising edge and its event task waits
-  # for a real one. Every other trigger's last sample is 0, as after every cold restart, so
-  # an input point already 1 still fires in the first cycle (decision 51).
-  defp sampled(%{last: _} = state, %Configuration.Task{single: single}, {:warm, globals, config}),
-    do: kept_sample(retained_single?(config.globals, single), state, Map.fetch!(globals, single))
+  # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger, as
+  # decision 313 restates it (the maintainer, 2026-10-30): after a warm restart the last
+  # sample of a `single` the configuration declares `retain` is the one the resource took
+  # last, so a trigger kept at 1 that was sampled at 1 is no rising edge and its event task
+  # waits for a real one, and a rise logic wrote after that sample fires once in the first
+  # cycle. Every other trigger's last sample is 0, as after every cold restart, so an input
+  # point already 1 still fires in the first cycle (decision 51).
+  defp sampled(
+         %{last: _} = state,
+         %Configuration.Task{single: single, name: name},
+         {:warm, tasks, config}
+       ),
+       do:
+         kept_sample(
+           retained_single?(config.globals, single),
+           state,
+           Map.fetch!(Map.fetch!(tasks, name), :last)
+         )
 
   defp sampled(state, _task, _restart), do: state
 

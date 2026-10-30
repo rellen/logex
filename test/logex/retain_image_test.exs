@@ -299,9 +299,11 @@ defmodule Logex.RetainImageTest do
 
       {started, dropped} = Runtime.instance(q, image)
 
+      # Since decision 310 an array of instances every element of which drops a member for
+      # one reason reports it once, `cs[*].j`, where it gave `cs[0].j` and `cs[1].j`.
       assert dropped ==
                for(
-                 at <- ["c", "cs[0]", "cs[1]"],
+                 at <- ["c", "cs[*]"],
                  reason <- [
                    {"j", {:retyped, :dint, :int}},
                    {"m", :unretained},
@@ -353,31 +355,85 @@ defmodule Logex.RetainImageTest do
     # Since the review of M6-4: path order is by segment, an element by its subscripts'
     # values, so `g[2].k` comes before `g[10].k`, in a lone instance's drops and a
     # resource's.
+    # Since decision 310 an array every element of which drops `k` for one reason reports
+    # it once, so the order is shown here over elements that differ: each a misfit of its
+    # own, the rest kept.
     test "drops are in path order by the subscripts' values, not by the path's text" do
       old = block!("function_block cell\nvar_input go bool\nvar retain k dint\nxic go add k 1 k")
-      new = block!("function_block cell\nvar_input go bool\nvar retain k int\nxic go add k 1 k")
       src = "var_input go bool\nvar retain g cell[12]\nvar retain h cell[2,11]\ncal g[0] go"
       p = c!(src, [old])
       image = Runtime.retained(p, Runtime.instance(p))
-      {_started, dropped} = Runtime.instance(c!(src, [new]), image)
+      misfits = ~w(g[10].k g[2].k g[11].k h[1,10].k h[0,2].k h[1,2].k)
+      bad = Map.new(misfits, &{&1, {:dint, 37.5}})
+      {_started, dropped} = Runtime.instance(p, %{image | values: Map.merge(image.values, bad)})
 
       assert Enum.map(dropped, &elem(&1, 0)) ==
-               for(i <- 0..11, do: "g[#{i}].k") ++
-                 for(i <- 0..1, j <- 0..10, do: "h[#{i},#{j}].k")
+               ~w(g[2].k g[10].k g[11].k h[0,2].k h[1,2].k h[1,10].k)
 
       config = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [old], "motor")})
-      runtime = Runtime.start(config)
-      image = Runtime.retained(runtime)
-      changed = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [new], "motor")})
-      {_runtime, dropped} = Runtime.start(changed, image)
+      image = Runtime.retained(Runtime.start(config))
+      bad = Map.new(misfits, &{&1, {:dint, 37.5}})
+      instance = image.instances["m1"]
+      image = put_in(image.instances["m1"], %{instance | values: Map.merge(instance.values, bad)})
+      {_runtime, dropped} = Runtime.start(config, image)
 
       assert Enum.take(Enum.map(dropped, &elem(&1, 0)), 3) == [
-               "m1.g[0].k",
-               "m1.g[1].k",
-               "m1.g[2].k"
+               "m1.g[2].k",
+               "m1.g[10].k",
+               "m1.g[11].k"
              ]
 
-      assert Enum.at(dropped, 10) == {"m1.g[10].k", {:retyped, :dint, :int}}
+      assert Enum.at(dropped, 5) == {"m1.h[1,10].k", :misfit}
+    end
+
+    # Decision 310 (the maintainer, 2026-10-30): where every element of an array of
+    # instances drops the same member for the same reason, the drop is reported once,
+    # `gates[*].j`, decision 259's path form, at any depth, `hs[*].ws[*].x`; where the
+    # elements differ, each by its element. Until decision 310 every element was listed.
+    test "a member every element drops for one reason is reported once, `gates[*].j`, " <>
+           "and elements that differ one by one" do
+      old = block!("function_block gate\nvar_input go bool\nvar retain j dint\nvar retain k dint")
+      new = block!("function_block gate\nvar_input go bool\nvar retain j int\nvar retain k dint")
+      src = "var_input go bool\nvar retain gates gate[64]\ncal gates[0] go"
+      p = c!(src, [old])
+      image = Runtime.retained(p, Runtime.instance(p))
+
+      assert {_started, [{"gates[*].j", {:retyped, :dint, :int}}]} =
+               Runtime.instance(c!(src, [new]), image)
+
+      # One element's `k` a misfit and the rest kept: that element alone, beside the one
+      # drop of every element's `j`.
+      bad = Map.put(image.values, "gates[5].k", {:dint, nil})
+
+      assert {_started, [{"gates[*].j", {:retyped, :dint, :int}}, {"gates[5].k", :misfit}]} =
+               Runtime.instance(c!(src, [new]), %{image | values: bad})
+
+      # Every element's `k` a misfit, but one element's `j` too: `k` once, `j` by element.
+      bad =
+        image.values
+        |> Map.new(fn {path, {type, value}} -> {path, {type, misfit(path, value)}} end)
+
+      {_started, dropped} = Runtime.instance(p, %{image | values: bad})
+      assert dropped == [{"gates[*].k", :misfit}, {"gates[3].j", :misfit}]
+
+      # An array of blocks inside an array of blocks: one path, each array's `[*]`.
+      w1 = block!("function_block w\nvar_input go bool\nvar retain x bool")
+      w2 = block!("function_block w\nvar_input go bool\nvar retain x dint")
+      h1 = block!("function_block h\nvar_input go bool\nvar retain ws w[2]\ncal ws[0] go", [w1])
+      h2 = block!("function_block h\nvar_input go bool\nvar retain ws w[2]\ncal ws[0] go", [w2])
+      nested = "var_input go bool\nvar retain hs h[3]\ncal hs[0] go"
+      p = c!(nested, [h1, w1])
+      image = Runtime.retained(p, Runtime.instance(p))
+
+      assert {_started, [{"hs[*].ws[*].x", {:retyped, :bool, :dint}}]} =
+               Runtime.instance(c!(nested, [h2, w2]), image)
+
+      # A resource's, after its instance's name.
+      config = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [old], "motor")})
+      changed = plant("program m1 motor\nm1.go 0\n", %{"motor" => c!(src, [new], "motor")})
+
+      assert {_runtime, [{"m1.gates[*].j", {:retyped, :dint, :int}}]} =
+               Runtime.start(changed, Runtime.retained(Runtime.start(config)))
     end
 
     test "an instance or a path no longer retained is reported once, nothing under it" do
@@ -437,10 +493,16 @@ defmodule Logex.RetainImageTest do
 
       {started, dropped} = Runtime.instance(p, %{image | values: values})
 
+      # Since decision 311 an integer stored for a real, `x`'s 1 in an lreal, is taken at
+      # its nearest real, as a host's input is, where it was a misfit; and since decision
+      # 308 a counter's preset is the program's, 9, the stored 4 reported, where it was
+      # kept.
       assert dropped ==
-               Enum.map(~w(a b g.cv r w x y z), &{&1, :misfit})
+               Enum.map(~w(a b g.cv), &{&1, :misfit}) ++
+                 [{"g.pv", {:preset, 4, 9}}] ++ Enum.map(~w(r w y z), &{&1, :misfit})
 
-      assert started.env["g"]["pv"] == 4
+      assert started.env["g"]["pv"] == 9
+      assert started.env["x"] === 1.0
       assert started.env["a"] == 0 and started.env["w"] == {0, 0, 0}
 
       # An array's element outside its type drops the array whole.
@@ -544,6 +606,12 @@ defmodule Logex.RetainImageTest do
   defp shift({:ran, task, instance, now}, shift), do: {:ran, task, instance, now - shift}
   defp shift(event, _shift), do: event
 
+  defp misfit("gates[3].j", _value), do: nil
+  defp misfit(<<_::binary>> = path, value), do: misfit_k(String.ends_with?(path, ".k"), value)
+
+  defp misfit_k(true, _value), do: nil
+  defp misfit_k(false, value), do: value
+
   describe "start/2: a resource from an image (decisions 273, 277, 282 and 305)" do
     # PLAN M6-4's done-when: a resource started from another resource's image cycles
     # exactly as the original does after a warm restart, given the same inputs: its
@@ -586,7 +654,10 @@ defmodule Logex.RetainImageTest do
       end)
     end
 
-    test "every retained value and global is kept, the trigger of a single put back at 1 " <>
+    # Since decision 313 the image holds each retained single's last sample, `triggers`, and
+    # a start lays it back, so a trigger sampled at 1 fires on no rising edge, where until
+    # then the value put back stood for the sample (decision 305).
+    test "every retained value and global is kept, the trigger of a single sampled at 1 " <>
            "fires on no rising edge, and one dropped starts as start/1 has it" do
       config = plant()
 
@@ -606,6 +677,8 @@ defmodule Logex.RetainImageTest do
                "arm" => {:bool, 1},
                "hist" => {{:array, :int, [2]}, [0, 7]}
              }
+
+      assert image.triggers == %{"arm" => 1}
 
       {started, []} = Runtime.start(config, image)
 
@@ -637,10 +710,67 @@ defmodule Logex.RetainImageTest do
       {from_misfit, [{"arm", :misfit}]} = Runtime.start(armed, misfit)
       {_, _, events} = Runtime.cycle(from_misfit, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
       assert Enum.any?(events, &match?({:ran, "ev", "c1", _}, &1))
-      # Kept at 1, it does not.
-      kept = %{misfit | globals: %{"arm" => {:bool, 1}}}
+      # Kept at 1 and last sampled at 1, it does not.
+      kept = %{misfit | globals: %{"arm" => {:bool, 1}}, triggers: %{"arm" => 1}}
       {from_kept, []} = Runtime.start(armed, kept)
       {_, _, events} = Runtime.cycle(from_kept, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
+      refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+
+      # Decision 313: kept at 1 and last sampled at 0, the rise logic made after that
+      # sample, it fires once, in the first cycle.
+      rose = %{kept | triggers: %{"arm" => 0}}
+      {from_rose, []} = Runtime.start(armed, rose)
+
+      {from_rose, _, events} =
+        Runtime.cycle(from_rose, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
+
+      assert Enum.count(events, &match?({:ran, "ev", "c1", _}, &1)) == 1
+      {_, _, events} = Runtime.cycle(from_rose, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
+      refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+
+      # An image of the host's own that holds no sample for a single it puts back starts
+      # the trigger at the value put back, so nothing fires (provisional).
+      {from_none, []} = Runtime.start(armed, %{kept | triggers: %{}})
+      {_, _, events} = Runtime.cycle(from_none, 10, %{"eye_1" => 0, "run_1" => 0, "clr" => 0})
+      refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+    end
+
+    # Decision 313 (the maintainer, 2026-10-30), restating decision 305: the logic latches
+    # `arm` in the cycle after the event task sampled it at 0; the image taken then holds
+    # that 0, and a start from it fires the event task once, as the next cycle of the
+    # original would have, where decision 305 alone fired nothing.
+    test "a rise logic wrote after the trigger's last sample fires once after a start from " <>
+           "the image and after a warm restart, and not again" do
+      config = plant()
+      inputs = fn eye -> %{"eye_1" => eye, "run_1" => 0, "clr" => 0} end
+
+      # Cycle 2: `ev` samples `arm` at 0, then `a1` latches it on the eye.
+      runtime =
+        Enum.reduce([0, 1], Runtime.start(config), fn eye, rt ->
+          {rt, _, _} = Runtime.cycle(rt, 10, inputs.(eye))
+          rt
+        end)
+
+      assert Runtime.get!(runtime, "arm") == 1
+      image = Runtime.retained(runtime)
+      assert image.triggers == %{"arm" => 0}
+
+      {next, _, events} = Runtime.cycle(runtime, 10, inputs.(0))
+      assert Enum.count(events, &match?({:ran, "ev", "c1", _}, &1)) == 1
+
+      {started, []} = Runtime.start(config, image)
+      warm = Runtime.restart(runtime, :warm)
+
+      for rt <- [started, warm] do
+        {rt, _, events} = Runtime.cycle(rt, 10, inputs.(0))
+        assert Enum.count(events, &match?({:ran, "ev", "c1", _}, &1)) == 1
+        assert Runtime.get!(rt, "c1.hits") == Runtime.get!(next, "c1.hits")
+        {_, _, events} = Runtime.cycle(rt, 10, inputs.(0))
+        refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
+      end
+
+      # A cold restart puts `arm` back at 0 and its sample at 0: nothing fires.
+      {_, _, events} = Runtime.cycle(Runtime.restart(runtime, :cold), 10, inputs.(0))
       refute Enum.any?(events, &match?({:ran, "ev", _, _}, &1))
     end
 
@@ -799,6 +929,9 @@ defmodule Logex.RetainImageTest do
           # reading it as a number raised, and one not written as its value, `01`.
           "tl[ 1].acc" => {:dint, 1},
           "tl[-1].acc" => {:dint, 1},
+          # Since decision 312 a subscript with leading zeros names the element of its
+          # value, so `tl[01].acc` beside `tl[1].acc` is one path given twice, where it was
+          # no path.
           "tl[01].acc" => {:dint, 1},
           "tl[x].acc" => {:dint, 1},
           "w[1]" => {:dint, 1}
@@ -832,10 +965,10 @@ defmodule Logex.RetainImageTest do
             "`values` holds \"tl[ 1].acc\", which is no path",
             "`values` holds \"tl[-1].acc\", which is no path",
             "`values` holds `tl[0,1].acc`, by an element outside `tl`'s sizes",
-            "`values` holds \"tl[01].acc\", which is no path",
             "`values` holds `tl[2].acc`, by an element outside `tl`'s sizes",
             "`values` holds \"tl[x].acc\", which is no path",
-            "`values` holds `w[1]`, an element: an array is retained whole"
+            "`values` holds `w[1]`, an element: an array is retained whole",
+            "`values` holds `tl[01].acc` and `tl[1].acc`, which name one path, `tl[1].acc`"
           ],
           "\n"
         ),
@@ -855,8 +988,8 @@ defmodule Logex.RetainImageTest do
       image = Runtime.retained(Runtime.start(config))
 
       raises(
-        "a resource's retained image is a map of `configuration`, `globals` and `instances`, " <>
-          "as Logex.Runtime.retained/1 gives one, got: 5",
+        "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>
+          "and `triggers`, as Logex.Runtime.retained/1 gives one, got: 5",
         fn -> Runtime.start(config, opaque(5)) end
       )
 
@@ -944,6 +1077,187 @@ defmodule Logex.RetainImageTest do
       assert_raise ArgumentError, ~r/retained paths hold `zz`/, fn ->
         Runtime.instance(edited, Runtime.retained(p, s))
       end
+    end
+  end
+
+  describe "the maintainer's answers to M6-4 (decisions 308, 311, 312 and 313)" do
+    # Decision 308: a timer's or counter's preset follows the program, not the image; its
+    # accumulated value, done bits and edge memory are kept. Until decision 308 the stored
+    # preset was kept, as any member's value is.
+    test "a preset follows the program, the stored one reported where it differs, and " <>
+           "everything else the instance holds kept" do
+      src = fn lube, box ->
+        "var_input run bool\nvar_input eye bool\nvar retain lube rto\nvar retain boxes ctu\n" <>
+          "var retain tl ton[3]\nxic run rto lube #{lube}\nxic eye ctu boxes #{box}\n" <>
+          "xic run ton tl[0] 50\nxic run ton tl[1] 50\nxic run ton tl[2] 50"
+      end
+
+      p = c!(src.(360_000_000, 3))
+      s = scans(p, Runtime.instance(p), for(i <- 1..8, do: %{"run" => 1, "eye" => rem(i, 2)}))
+      assert s.env["boxes"]["q"] == 1 and s.env["boxes"]["cv"] == 3
+      image = Runtime.retained(p, s)
+
+      q = c!(src.(180_000_000, 9))
+      {started, dropped} = Runtime.instance(q, image)
+
+      assert dropped == [
+               {"boxes.pv", {:preset, 3, 9}},
+               {"lube.pre", {:preset, 360_000_000, 180_000_000}}
+             ]
+
+      assert started.env["lube"]["pre"] == 180_000_000
+      assert started.env["boxes"]["pv"] == 9
+
+      for {tag, members} <- [{"lube", ~w(acc dn en tt)}, {"boxes", ~w(cv q cu)}],
+          member <- members,
+          do: assert(started.env[tag][member] == s.env[tag][member], "#{tag}.#{member}")
+
+      # The same program: every preset as stored, nothing reported.
+      {same, []} = Runtime.instance(p, image)
+      assert same.env["lube"]["pre"] == 360_000_000
+
+      # An array of timers every element of whose preset moves alike: once (decision 310);
+      # one alone: by its element.
+      every = c!(String.replace(src.(360_000_000, 3), " 50", " 70"))
+
+      assert {_started, [{"tl[*].pre", {:preset, 50, 70}}]} = Runtime.instance(every, image)
+
+      one = c!(String.replace(src.(360_000_000, 3), "tl[1] 50", "tl[1] 70"))
+      assert {_started, [{"tl[1].pre", {:preset, 50, 70}}]} = Runtime.instance(one, image)
+
+      # A misfit preset is a misfit, the program's preset started.
+      bad = %{image | values: %{image.values | "lube.pre" => {:dint, nil}}}
+
+      assert {%Instance{env: %{"lube" => %{"pre" => 360_000_000}}}, [{"lube.pre", :misfit}]} =
+               Runtime.instance(p, bad)
+
+      # A preset logic wrote, `move`d into `.pre`, is the program's at a start too.
+      wrote = c!(src.(360_000_000, 3) <> "\nxic eye move 5 tl[2].pre")
+      s = scans(wrote, Runtime.instance(wrote), [%{"run" => 1, "eye" => 1}])
+      assert s.env["tl"] |> elem(2) |> Map.fetch!("pre") == 5
+
+      assert {_started, [{"tl[2].pre", {:preset, 5, 50}}]} =
+               Runtime.instance(wrote, Runtime.retained(wrote, s))
+    end
+
+    # Decision 311: a stored integer where a real is held is taken at its nearest real, as
+    # a host's input is; past the real's range, a float for an integer, or no number, a
+    # misfit. Until decision 311 every integer for a real was a misfit.
+    test "an integer stored for a real is taken at its nearest real, a lone instance's and " <>
+           "a global's" do
+      p =
+        c!(
+          "var_input go bool\nvar retain r real\nvar retain x lreal\nvar retain big real\n" <>
+            "var retain rs real[3]\nvar retain d dint\nvar retain n dint\nvar retain b bool"
+        )
+
+      image = Runtime.retained(p, Runtime.instance(p))
+
+      values =
+        Map.merge(image.values, %{
+          "r" => {:real, 16_777_217},
+          "x" => {:lreal, -3},
+          "big" => {:real, 2 ** 128},
+          "rs" => {{:array, :real, [3]}, [1, 2.5, 16_777_217]},
+          "d" => {:dint, 5.0},
+          "n" => {:dint, "5"},
+          "b" => {:bool, 1.0}
+        })
+
+      {started, dropped} = Runtime.instance(p, %{image | values: values})
+      assert dropped == Enum.map(~w(b big d n), &{&1, :misfit})
+      assert started.env["r"] === 16_777_216.0
+      assert started.env["x"] === -3.0
+      assert started.env["rs"] === {1.0, 2.5, 16_777_216.0}
+
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "var_global retain g real\nvar_global retain h dint\nprogram m1 m\n  m1.go 0",
+          %{"m" => p}
+        )
+
+      image = Runtime.retained(Runtime.start(config))
+      image = %{image | globals: %{"g" => {:real, 7}, "h" => {:dint, 7.0}}}
+      {runtime, [{"h", :misfit}]} = Runtime.start(config, image)
+      assert Runtime.get!(runtime, "g") === 7.0
+    end
+
+    # Decision 312: a subscript written with leading zeros names the element of its value,
+    # as a literal subscript in a rung does (decision 202); one that is no digits is still
+    # refused. Until decision 312 `tl[01]` was refused as no path.
+    test "a subscript with leading zeros matches the element of its value, and is reported by it" do
+      p = c!("var_input go bool\nvar retain tl ton[2]\nvar retain w dint\nxic go ton tl[1] 9")
+      s = scans(p, Runtime.instance(p), [%{"go" => 1}, %{"go" => 1}])
+      image = Runtime.retained(p, s)
+
+      values =
+        image.values
+        |> Map.drop(~w(tl[1].acc tl[1].dn))
+        |> Map.merge(%{"tl[01].acc" => {:dint, 7}, "tl[0001].dn" => {:bool, 1}})
+
+      {started, []} = Runtime.instance(p, %{image | values: values})
+      assert elem(started.env["tl"], 1)["acc"] == 7
+      assert elem(started.env["tl"], 1)["dn"] == 1
+
+      # A drop is reported by the path logic names, the subscript by its value.
+      bad = Map.put(Map.delete(values, "tl[01].acc"), "tl[01].acc", {:dint, nil})
+      assert {_started, [{"tl[1].acc", :misfit}]} = Runtime.instance(p, %{image | values: bad})
+
+      # In `kinds` too: an array of instances named with a leading zero inside a block.
+      cell =
+        block!("function_block cell\nvar_input go bool\nvar retain ts ton[2]\nxic go ton ts[0] 9")
+
+      q = c!("var_input go bool\nvar retain cs cell[2]\ncal cs[0] go", [cell])
+      image = Runtime.retained(q, Runtime.instance(q))
+      assert Map.has_key?(image.kinds, "cs[1].ts")
+
+      kinds =
+        image.kinds |> Map.delete("cs[1].ts") |> Map.put("cs[01].ts", image.kinds["cs[1].ts"])
+
+      assert {_started, []} = Runtime.instance(q, %{image | kinds: kinds})
+
+      raises(
+        "`kinds` holds `cs[01].ts` and `cs[1].ts`, which name one path, `cs[1].ts`",
+        fn -> Runtime.instance(q, %{image | kinds: Map.merge(image.kinds, kinds)}) end
+      )
+    end
+
+    # Decision 313: the image's `triggers`, each retained single's last sample by its
+    # global's name, a bool's value, of a global the image holds; any other a pinned line.
+    test "an image's triggers that are none, or that hold no sample of a retained global" do
+      config = plant()
+      image = Runtime.retained(Runtime.start(config))
+      assert image.triggers == %{"arm" => 0}
+
+      raises(
+        "the retained image's `triggers` are no map, got: 5",
+        fn -> Runtime.start(config, %{image | triggers: 5}) end
+      )
+
+      raises(
+        Enum.join(
+          [
+            "`triggers` holds \"a.b\", which names no global",
+            "`triggers` holds \"a.b\", which `globals` does not hold: a trigger's last " <>
+              "sample is kept only with its retained global",
+            "`triggers` holds \"arm\" at 2, which is no last sample of a trigger, a bool's value",
+            "`triggers` holds \"total2\", which `globals` does not hold: a trigger's last " <>
+              "sample is kept only with its retained global"
+          ],
+          "\n"
+        ),
+        fn ->
+          Runtime.start(config, %{image | triggers: %{"arm" => 2, "a.b" => 0, "total2" => 1}})
+        end
+      )
+
+      raises(
+        "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>
+          "and `triggers`, as Logex.Runtime.retained/1 gives one, got: " <>
+          inspect(Map.delete(image, :triggers)),
+        fn -> Runtime.start(config, Map.delete(image, :triggers)) end
+      )
     end
   end
 
@@ -1035,7 +1349,7 @@ defmodule Logex.RetainImageTest do
         )
 
       image = Runtime.retained(Runtime.start(config))
-      assert image == %{configuration: "plant", globals: %{}, instances: %{}}
+      assert image == %{configuration: "plant", globals: %{}, instances: %{}, triggers: %{}}
       plain = reductions(fn -> Runtime.start(config) end)
       from_image = reductions(fn -> Runtime.start(config, image) end)
       assert from_image <= plain + 120, "start/1 #{plain}, start/2 #{from_image}"

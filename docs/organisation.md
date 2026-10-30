@@ -11318,6 +11318,106 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      is a global that is not retained. Like decision 272's, it sees a direct connection
      only: a write through a `var_external` is not a connection. It is looked for only
      where a global is retained, one pass of the globals.
+307. **The image's shape (Milestone 6),** M6-4's first question: a lone instance's
+     `%{program:, kinds:, values:}`, its paths inside the instance, a resource's
+     `%{configuration:, globals:, instances:}`, an array a host's list, kinds apart from
+     values; or flat by full path, as decision 276's store lines are.
+
+     **Taken: confirmed, the shape as built** (the maintainer, 2026-10-30). *(A resource's
+     image gains a fourth part, `triggers`, by decision 313.)*
+308. **A built-in's preset in the image (Milestone 6),** M6-4's second question, changing
+     its reading: a program whose `rto lube 360000000` became `rto lube 180000000` and
+     that starts from its image kept greasing at 100 hours until a cold start, the stored
+     `.pre` matched as any member.
+
+     **Taken: changed, the preset follows the program, not the image** (the maintainer,
+     2026-10-30). At a start from an image, `Logex.Runtime.instance/2` and `start/2`, and
+     from M6-5's store, a timer's `.pre` and a counter's `.pv`, each built-in type's preset
+     member (`Logex.FbType.rules/1`), are the program's, the number on the instruction that
+     runs the instance, 0 where none runs it, as an edit's switch moves it (decisions 23
+     and 27); the accumulated value, `.acc` or `.cv`, the done bits and the edge memory are
+     kept as any member is. A stored preset that differs is reported beside the drops,
+     `{"lube.pre", {:preset, 360000000, 180000000}}`, `{path, {:preset, stored, now}}`, a
+     preset that does not fit `:misfit` as before. *The reading (the record's):* every
+     entry of the list is still a stored value the start did not keep, so it keeps its
+     name, `dropped`, the reason saying why; and a preset logic wrote, a `move` into
+     `t.pre`, is the program's at a start too, where a warm restart, which keeps the
+     instance it restarts, keeps it (provisional, `PLAN.md` M6-4's answers' first
+     question).
+309. **An image of another configuration or program (Milestone 6),** M6-4's third
+     question: refused as the host's mistake, a line naming both, decision 285's rule
+     carried into the core; or everything dropped and reported.
+
+     **Taken: confirmed, refused** (the maintainer, 2026-10-30).
+310. **How the drops are named in an array of instances (Milestone 6),** M6-4's fourth
+     question, changing its reading: a member a block's new version retyped was reported
+     once an element, `cs[0].j` and `cs[1].j`, sixty-four lines for `gates gate[64]`.
+
+     **Taken: changed, once, `gates[*].j`, where every element drops the same member for
+     the same reason** (the maintainer, 2026-10-30), decision 259's path form, at any
+     depth, `hs[*].ws[*].x` for an array of blocks inside one, a resource's after its
+     instance's name, `m1.gates[*].j`; where the elements differ, each is listed by its
+     element, `gates[5].k` beside `gates[*].j`. *The reading (the record's):* "the same
+     reason" is the same reason whole, so presets moved by different numbers are listed by
+     element; `gates[*].j` comes before any one element's drop in path order.
+311. **A value of no type's form (Milestone 6),** M6-4's fifth question, changing its
+     reading: an image's `{:real, 5}`, an integer where a `real` is stored, was a misfit.
+
+     **Taken: changed, a host input's rule** (the maintainer, 2026-10-30): an integer
+     stored for a `real` or an `lreal`, a global's, a tag's, a member's or an array's
+     element, is taken at its nearest real, as a host's input is (decision 166), 5 as
+     5.0 and 16777217 as 16777216.0 in a `real`, one past the real's range a misfit; a
+     float stored for an integer or a bool, or a value of no number, is still a misfit, and
+     a float that is no value of its real, 0.1 in a `real` or −0.0, still a state's misfit.
+312. **A subscript not written as its value in an image (Milestone 6),** M6-4's review's
+     seventh question, changing its reading: `tl[01].acc` was refused as no path.
+
+     **Taken: changed, matched by its value** (the maintainer, 2026-10-30), as a literal
+     subscript in a rung is (decision 202): a subscript of digits names the element of its
+     value, `tl[01]` as `tl[1]`, in `kinds` and `values`; a subscript that is no digits,
+     `tl[x]`, `tl[ 1]` or `tl[-1]`, is still no path, a line of the image's refusal. *The
+     reading (the record's):* two entries that name one path, `tl[01].acc` beside
+     `tl[1].acc`, are a line of the refusal, "`values` holds `tl[01].acc` and `tl[1].acc`,
+     which name one path, `tl[1].acc`", and a drop is reported by the path logic names,
+     `tl[1].acc` (provisional, `PLAN.md` M6-4's answers' third question).
+313. **A rise of a retained trigger logic wrote just before a trip (Milestone 6),** M6-4's
+     review's eighth question, restating decision 305: logic latched a retained `single`
+     after the cycle sampled it at 0, the runner tripped before the next cycle, and the
+     warm restart, taking the kept 1 for the last sample, never ran the event task for that
+     rise.
+
+     **Taken: changed, the actual last sample** (the maintainer, 2026-10-30). A warm
+     `restart/2` keeps a retained `single`'s last sample as the resource took it, not the
+     value kept, and a resource's image carries it, `triggers`, each retained global that
+     is a task's `single` by name to its last sample, `%{"arm" => 0}`, which `start/2`
+     lays back for a `single` the image put back; so a rise logic made after the last
+     sample fires once in the first cycle, and a rise already seen does not. A cold
+     restart, an input point's trigger and an unretained global's stay decision 51's, and
+     a `single` whose value the image does not put back starts at 0 as `start/1` has it.
+     An image's `triggers` that are no map, a sample that is no bool's value, or a sample
+     of a global its `globals` do not hold, are lines of its refusal. *The reading (the
+     record's):* an image of the host's own that holds no sample for a `single` it puts
+     back starts it at the value put back, so nothing fires, decision 305's rule
+     (provisional, `PLAN.md` M6-4's answers' second question).
+314. **`at retain` at a line's end (Milestone 6),** M6-4's review's sixth question:
+     `var_global x bool at retain` read as the location `retain`, refused by `check/1` as
+     no location, so that a global printed with any location reads back to it.
+
+     **Taken: confirmed, read as a location** (the maintainer, 2026-10-30).
+315. **A superseded edit's leftover tags (Milestone 6),** found while building M6-3: a
+     configuration edit superseded while testing (decision 66) left a kept instance's
+     tags that its running program no longer declares, which no later prune dropped, each
+     pruning by its own two versions, so only a restart did; the edit walk met it at about
+     one fresh seed in four.
+
+     **Taken: every prune drops whatever a kept instance's running program does not
+     declare** (the maintainer, 2026-10-30): assemble, and cancel after an untest, drop
+     from each kept instance, at any depth, every tag or member its running program does
+     not declare, whatever left it there, each reported by its path with the value it
+     had, `{:pruned, "m1.spare", 4}`, `Logex.Edit`'s kind, an instance its type's plan
+     pruned reported once. *The reading (the record's):* the existing `:pruned` kind by
+     path, no new kind; and the edit walk's qualifier draws, kept on a stream of their own
+     because one draw more from the main stream met this gap, are the main stream's again.
 
 ---
 

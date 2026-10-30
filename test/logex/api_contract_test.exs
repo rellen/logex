@@ -4012,6 +4012,7 @@ defmodule Logex.ApiContractTest do
     :round_trip_aside,
     :round_trip_next_due,
     :resumed_by_tt,
+    :pruned_left,
     :superseded,
     :superseded_aside,
     :superseded_global,
@@ -4033,30 +4034,15 @@ defmodule Logex.ApiContractTest do
     # reaches every kind and every refusal.
     :rand.seed(:exsss, {2026, 10, 19})
 
-    for _ <- 1..500 do
-      spec = ce_spec()
-      Process.put(:ce_timers, Map.new(spec.versions, fn {type, v} -> {type, v.timer} end))
-      {:ok, config} = ce_config(spec)
-      runtime = Runtime.start(config)
+    for _ <- 1..500, do: ce_configuration()
 
-      w = %{
-        rt: runtime,
-        model: ce_seed(runtime),
-        spec: spec,
-        e: nil,
-        c: nil,
-        stale: [],
-        passed: [],
-        sup: [],
-        round: nil,
-        prev: %{},
-        onsp: %{},
-        resumed: false,
-        o: nil
-      }
-
-      ce_walk(w, 50)
-    end
+    # Decision 315: then 150 configurations drawn toward what the 500 meet only now and
+    # then, an edit superseded while its candidate runs, whose leftovers every prune drops
+    # (`:pruned_left`), and a `tof` or `tp` resumed by its `.tt` (`:resumed_by_tt`), each
+    # missed at some fresh seeds in four (decision 315's verification, `PLAN.md`).
+    Process.put(:ce_bias, true)
+    for _ <- 1..150, do: ce_configuration(:scripted)
+    Process.delete(:ce_bias)
 
     assert Process.get(:ce_refused, MapSet.new()) == MapSet.new(Keyword.keys(@ce_refusals))
     assert Process.get(:ce_diagnosed, MapSet.new()) == MapSet.new(@ce_diagnostics)
@@ -4068,6 +4054,54 @@ defmodule Logex.ApiContractTest do
   # host would pass it.
   defp ce_opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
 
+  defp ce_configuration(bias \\ nil) do
+    spec = ce_spec()
+    Process.put(:ce_timers, Map.new(spec.versions, fn {type, v} -> {type, v.timer} end))
+    {:ok, config} = ce_config(spec)
+    runtime = Runtime.start(config)
+
+    w = %{
+      rt: runtime,
+      model: ce_seed(runtime),
+      spec: spec,
+      e: nil,
+      c: nil,
+      stale: [],
+      passed: [],
+      sup: [],
+      round: nil,
+      prev: %{},
+      onsp: %{},
+      resumed: false,
+      o: nil
+    }
+
+    ce_walk(ce_script(bias, w), 50)
+  end
+
+  # The configurations drawn toward a superseded edit's leftovers begin so: an edit tested
+  # and untested, superseded by one that is tested, untested and cancelled, each step
+  # checked as any step of the walk is, each switch after three cycles; a candidate
+  # refused leaves the rest to the walk.
+  defp ce_script(nil, w), do: w
+
+  defp ce_script(:scripted, w) do
+    w
+    |> ce_accept()
+    |> ce_scripted(:test)
+    |> ce_scripted(:untest)
+    |> ce_scripted(:accept)
+    |> ce_scripted(:test)
+    |> ce_scripted(:untest)
+    |> ce_scripted(:cancel)
+  end
+
+  # Each switch after a few cycles, so that a timer may be timing when it comes.
+  defp ce_scripted(%{e: nil} = w, _step), do: w
+  defp ce_scripted(w, :accept), do: ce_accept(w)
+  defp ce_scripted(w, :cancel), do: ce_step(:cancel, w)
+  defp ce_scripted(w, step), do: ce_step(step, Enum.reduce(1..3, w, fn _, w -> ce_cycle(w) end))
+
   defp ce_reach(name), do: reached(:ce_reach, name)
   defp ce_reach(name, true), do: ce_reach(name)
   defp ce_reach(_name, false), do: :ok
@@ -4077,15 +4111,19 @@ defmodule Logex.ApiContractTest do
   # One version of a program type, from one vocabulary, so that two versions share their
   # names: `x` a var_input, a var or none, which a switch makes live or unread; the timer
   # `t1`, of one kind for every version of its type (M3-2: a `ton`, a `tof`, a `tp` or an
-  # `rto`), run at one of two presets or none, its `.pre` written by logic now and
+  # `rto`; a `tof` or a `tp` alone in the configurations drawn toward a resume by `.tt`
+  # since decision 315), run at one of two presets or none, its `.pre` written by logic now and
   # then, and its `.dn` copied out or not, which holds an output; a one-shot whose rung
   # changes; `n` with an initial value that changes, or none; `k`, whose type a refused
   # draw changes; `g0` a var_external, a var or none, read and now and then written; and a
   # `blk` instance, two deep, run or not.
+  defp ce_timer_kinds(nil), do: ~w(ton ton tof tp rto)
+  defp ce_timer_kinds(true), do: ~w(tof tp)
+
   defp ce_version,
     do: %{
       x: pick([:input, :var, :none]),
-      timer: pick(~w(ton ton tof tp rto)),
+      timer: pick(ce_timer_kinds(Process.get(:ce_bias))),
       ton: pick([nil, 15, 30, 30, 45]),
       pre: pick([true, false, false]),
       out: pick([true, true, false]),
@@ -4357,37 +4395,33 @@ defmodule Logex.ApiContractTest do
   defp ce_candidate(spec) do
     changes =
       for(_ <- 1..:rand.uniform(3), do: pick(@ce_changes)) ++
-        if(:rand.uniform(3) == 1, do: [pick(@ce_refused)], else: [])
+        if(:rand.uniform(3) == 1, do: [pick(@ce_refused)], else: []) ++
+        ce_biased(Process.get(:ce_bias))
 
     spec = Enum.reduce(changes, spec, &ce_change/2)
     ce_wire(ce_qualifiers(spec), :rewire not in changes)
   end
 
-  # Decision 302: each unlocated global's qualifier drawn again, one candidate in two, from
-  # a stream of its own, so that every other draw of the walk is the one it was before
-  # decision 302 and its reach, held at its seed, stands; `:retain_added` and
-  # `:retain_removed` join the kinds it must reach.
+  # Decision 302: each unlocated global's qualifier drawn again, one candidate in two;
+  # `:retain_added` and `:retain_removed` join the kinds it must reach. Until decision 315
+  # these draws came from a stream of their own, since one draw more from the main stream
+  # met a superseded edit's leftover tags, which no prune dropped; since decision 315 every
+  # prune drops them, and the draws are the main stream's again, the walk passing at its
+  # pinned seed and at 30 fresh ones, `{2026, 11, 1}` to `{2026, 11, 30}`.
   defp ce_qualifiers(spec) do
-    state = Process.get(:ce_retain_rng, :rand.seed_s(:exsss, {2026, 10, 29}))
-    {draw, state} = :rand.uniform_s(2, state)
+    draw = :rand.uniform(2)
 
-    {globals, state} =
-      Enum.map_reduce(spec.globals, state, fn g, state ->
-        {roll, state} = :rand.uniform_s(6, state)
+    globals =
+      Enum.map(spec.globals, fn g ->
+        roll = :rand.uniform(6)
 
         cond do
-          draw == 1 or g.at != nil ->
-            {g, state}
-
-          roll <= 3 ->
-            {Map.put(g, :retain, Enum.at([nil, :retain, :non_retain], roll - 1)), state}
-
-          true ->
-            {g, state}
+          draw == 1 or g.at != nil -> g
+          roll <= 3 -> Map.put(g, :retain, Enum.at([nil, :retain, :non_retain], roll - 1))
+          true -> g
         end
       end)
 
-    Process.put(:ce_retain_rng, state)
     %{spec | globals: globals}
   end
 
@@ -4857,16 +4891,25 @@ defmodule Logex.ApiContractTest do
   # An edit open, now and then another accepted over it, which supersedes it (§4.9): the
   # running configuration's draws changed, the edit it supersedes never stepped again.
   defp ce_op(op, w) when op in 6..9 and w.e != nil do
-    case :rand.uniform(6) do
+    case :rand.uniform(ce_supersede(Process.get(:ce_bias))) do
       1 -> ce_accept(w)
       _ -> ce_step(pick([:test, :untest, :assemble, :cancel, :back, :back]), w)
     end
   end
 
   defp ce_op(9, w), do: ce_cycle(w)
+
   defp ce_op(10, w), do: ce_restart(w)
   defp ce_op(11, w), do: ce_stale(w)
   defp ce_op(12, w), do: ce_mistakes(w)
+
+  # Toward a superseded edit's leftovers: a new version of a type, which adds or drops a
+  # tag, and an instance retyped, whose prune its type's plan does not make.
+  defp ce_biased(nil), do: []
+  defp ce_biased(true), do: [pick([:version, :retype]), :retype]
+
+  defp ce_supersede(nil), do: 6
+  defp ce_supersede(true), do: 2
 
   defp ce_attempt(fun) do
     result = fun.()
@@ -5349,8 +5392,34 @@ defmodule Logex.ApiContractTest do
 
     given = for {_kind, name, _} = entry <- report, not String.contains?(name, "."), do: entry
     assert given == restated
+
+    # Decision 315: every tag a kept instance holds that its running program does not
+    # declare is dropped and reported by its path, whatever left it, an edit this one
+    # superseded among them.
+    left =
+      Enum.sort(
+        for {name, state} <- later.instances,
+            declared = Map.keys(to.programs[state.type].tags),
+            {tag, value} <- before.instances[name].env,
+            tag not in declared,
+            do: {:pruned, "#{name}.#{tag}", value}
+      )
+
+    assert for({:pruned, path, _} = entry <- report, ce_depth(path) == 1, do: entry) == left
+
+    ce_reach(
+      :pruned_left,
+      Enum.any?(left, fn {:pruned, path, _} ->
+        [name, _tag] = String.split(path, ".")
+        type = later.instances[name].type
+        not Enum.any?(from.instances, &(&1.name == name and &1.type == type))
+      end)
+    )
+
     ce_declared!(later, &MapSet.equal?/2)
   end
+
+  defp ce_depth(path), do: length(String.split(path, ".")) - 1
 
   # Decision 66: at an edit's first switch what the resource holds that the original does
   # not declare, which an edit this one superseded left, is dropped before the switch and
@@ -11178,9 +11247,13 @@ defmodule Logex.ApiContractTest do
   # `now`, 0. An unchanged program's start scans as its warm restart does, and every host
   # mistake of the four doors is an `ArgumentError`. Its reach: a value kept, each reason,
   # a member kept beside a member dropped, a member a block adds started, a kept timer
-  # rebased, the unchanged scans and a mistake.
+  # rebased, the unchanged scans and a mistake. Since the maintainer's answers to M6-4: a
+  # timer's or counter's preset, drawn and drawn again in a changed program, follows the
+  # program, a stored one that differs reported (decision 308), `iw_preset`; and a member
+  # every element of an array of cells drops for one reason reported once, `b[*].k`
+  # (decision 310), `iw_every`.
   @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
-               iw_member iw_added iw_rebased iw_same_scans iw_mistake)a
+               iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every)a
 
   test "an image round-trips through a changed program: kept by instance, path, exact " <>
          "type, retain and fit, the rest dropped once with its reason" do
@@ -11210,7 +11283,7 @@ defmodule Logex.ApiContractTest do
   end
 
   defp iw_compile(spec) do
-    {:ok, cell} = Logex.compile(iw_cell_text(spec.cell), name: "cell")
+    {:ok, cell} = Logex.compile(iw_cell_text(spec.cell, spec.presets), name: "cell")
     {:ok, program} = Logex.compile(iw_text(spec), name: "iw", types: [cell])
     program
   end
@@ -11255,13 +11328,15 @@ defmodule Logex.ApiContractTest do
     do: [%{path: name, at: [name], type: {:array, type, [n]}, retained: flag, above: []}]
 
   defp iw_tag(name, :ctu, flag, _cell),
-    do: iw_members(name, [name], @iw_counter, flag, [{name, "ctu"}])
+    do: iw_members(name, [name], @iw_counter, flag, [{name, "ctu"}]) |> iw_preset("pv")
 
   defp iw_tag(name, :ctu_int, flag, _cell),
-    do: iw_members(name, [name], iw_int_counter(), flag, [{name, "ctu_int"}])
+    do: iw_members(name, [name], iw_int_counter(), flag, [{name, "ctu_int"}]) |> iw_preset("pv")
 
   defp iw_tag(name, timer, flag, _cell) when timer in [:ton, :tof],
-    do: iw_members(name, [name], @iw_timer, flag, [{name, Atom.to_string(timer)}])
+    do:
+      iw_members(name, [name], @iw_timer, flag, [{name, Atom.to_string(timer)}])
+      |> iw_preset("pre")
 
   defp iw_tag(name, :cell, flag, cell), do: iw_cell(name, [name], flag, cell, [{name, "cell"}])
 
@@ -11270,6 +11345,10 @@ defmodule Logex.ApiContractTest do
       Enum.flat_map(0..(n - 1), fn i ->
         iw_cell("#{name}[#{i}]", [name, {:el, i}], flag, cell, [{name, {:array, "cell", [n]}}])
       end)
+
+  # A built-in's preset member, which follows the program (decision 308).
+  defp iw_preset(leaves, member),
+    do: Enum.map(leaves, &Map.put(&1, :preset, String.ends_with?(&1.path, "." <> member)))
 
   defp iw_int_counter,
     do: Enum.map(@iw_counter, &iw_int_member/1)
@@ -11299,6 +11378,7 @@ defmodule Logex.ApiContractTest do
         iw_mark(q, flag),
         above ++ [{"#{path}.#{m}", Atom.to_string(timer)}]
       )
+      |> iw_preset("pre")
 
   defp iw_cell_member({m, type, q}, {path, at, flag, above}),
     do: [
@@ -11337,8 +11417,32 @@ defmodule Logex.ApiContractTest do
         )
       end)
 
-    {env, Enum.sort_by(dropped, &elem(&1, 0))}
+    {env, dropped |> iw_every(old) |> Enum.sort_by(&elem(&1, 0))}
   end
+
+  # Decision 310 restated: a reason every element of an array of cells gives for one path
+  # under it, once, `b[*].k`; the elements at most three, the text's order is the
+  # subscripts'.
+  defp iw_every(dropped, old),
+    do: Enum.reduce(old.tags, dropped, &iw_every_in(&1, &2))
+
+  defp iw_every_in({name, {:cells, n}, _q}, dropped) do
+    pattern = ~r/\A#{name}\[(\d+)\]\.(.+)\z/
+
+    {inside, rest} = Enum.split_with(dropped, fn {path, _} -> path =~ pattern end)
+
+    inside
+    |> Enum.group_by(fn {path, reason} -> {List.last(Regex.run(pattern, path)), reason} end)
+    |> Enum.flat_map(&iw_every_group(&1, name, n))
+    |> Kernel.++(rest)
+  end
+
+  defp iw_every_in(_tag, dropped), do: dropped
+
+  defp iw_every_group({{under, reason}, group}, name, n) when length(group) == n,
+    do: [{"#{name}[*].#{under}", reason}]
+
+  defp iw_every_group({_key, group}, _name, _n), do: group
 
   # Whether a kind lies under one already dropped.
   defp iw_above_bad?(key, stored, bad),
@@ -11388,11 +11492,21 @@ defmodule Logex.ApiContractTest do
   defp iw_fit(:ok, true), do: :misfit
   defp iw_fit(judged, _corrupt), do: judged
 
+  defp iw_value_judged(:ok, %{preset: true} = leaf, old_env, {env, dropped}),
+    do: iw_preset_kept(iw_get(old_env, leaf.at), iw_get(env, leaf.at), leaf, {env, dropped})
+
   defp iw_value_judged(:ok, leaf, old_env, {env, dropped}),
     do: {iw_put(env, leaf.at, iw_get(old_env, leaf.at)), dropped}
 
   defp iw_value_judged(reason, leaf, _old_env, {env, dropped}),
     do: {env, [{leaf.path, reason} | dropped]}
+
+  # Decision 308 restated: the changed program's preset stands, a stored one that differs
+  # reported.
+  defp iw_preset_kept(same, same, _leaf, acc), do: acc
+
+  defp iw_preset_kept(stored, now, leaf, {env, dropped}),
+    do: {env, [{leaf.path, {:preset, stored, now}} | dropped]}
 
   defp iw_get(value, []), do: value
   defp iw_get(values, [{:el, i} | rest]), do: iw_get(elem(values, i), rest)
@@ -11409,8 +11523,10 @@ defmodule Logex.ApiContractTest do
   defp iw_reached(old, new, {s, started, dropped}) do
     reasons = Enum.map(dropped, &iw_reason(elem(&1, 1)))
 
-    for r <- ~w(iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit)a,
+    for r <- ~w(iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit iw_preset)a,
         do: iw_reach(r, r in reasons)
+
+    iw_reach(:iw_every, Enum.any?(dropped, fn {path, _} -> path =~ "[*]" end))
 
     kept = iw_kept(old, new, dropped)
     iw_reach(:iw_kept, kept != [])
@@ -11432,13 +11548,28 @@ defmodule Logex.ApiContractTest do
   # The stored leaves the changed program kept: those of the old spec's retained leaves
   # not dropped and under no dropped kind.
   defp iw_kept(old, _new, dropped) do
-    paths = Enum.map(dropped, &elem(&1, 0))
+    paths = Enum.flat_map(dropped, &iw_each(elem(&1, 0), old))
 
     Enum.reject(iw_retained_leaves(old), fn leaf ->
       leaf.path in paths or Enum.any?(leaf.above, fn {k, _} -> k in paths end) or
         Enum.any?(paths, &String.starts_with?(leaf.path, &1 <> "."))
     end)
   end
+
+  # A drop's paths, `b[*].k` each element's.
+  defp iw_each(path, old) do
+    [name | _] = String.split(path, "[")
+
+    for(
+      {^name, {:cells, n}, _q} <- old.tags,
+      i <- 0..(n - 1),
+      path =~ "[*]",
+      do: String.replace(path, "[*]", "[#{i}]", global: false)
+    ) ++ iw_whole(path =~ "[*]", path)
+  end
+
+  defp iw_whole(true, _path), do: []
+  defp iw_whole(false, path), do: [path]
 
   defp iw_beside?({path, _reason}, leaf),
     do: String.starts_with?(path, elem(List.last(leaf.above), 0) <> ".") and path != leaf.path
@@ -11506,6 +11637,7 @@ defmodule Logex.ApiContractTest do
 
   defp iw_spec do
     %{
+      presets: iw_presets(),
       tags: for(name <- ~w(a b c d e f), do: {name, pick(@iw_kinds), iw_qualifier()}),
       cell: [
         {"k", pick([:dint, :dint, :int]), iw_qualifier()},
@@ -11524,11 +11656,14 @@ defmodule Logex.ApiContractTest do
 
       _ ->
         %{
+          presets: pick([spec.presets, spec.presets, iw_presets()]),
           tags: Enum.flat_map(spec.tags, &iw_tag_change/1),
           cell: Enum.map(spec.cell, &iw_member_change/1)
         }
     end
   end
+
+  defp iw_presets, do: %{timer: pick([30, 40]), counter: pick([100, 60])}
 
   defp iw_tag_change({name, kind, q} = tag) do
     case :rand.uniform(10) do
@@ -11613,21 +11748,25 @@ defmodule Logex.ApiContractTest do
   defp iw_word(nil), do: ""
   defp iw_word(q), do: "#{q} "
 
-  defp iw_cell_text(cell) do
+  defp iw_cell_text(cell, presets) do
     decls =
       for {m, kind, q} <- cell, kind != nil, do: "var #{iw_word(q)}#{m} #{iw_type_word(kind)}"
 
-    rungs = for {m, kind, _q} <- cell, kind != nil, do: iw_cell_rung(m, kind)
+    rungs = for {m, kind, _q} <- cell, kind != nil, do: iw_cell_rung(m, kind, presets)
 
     Enum.join(["function_block cell", "var_input go bool"] ++ decls ++ rungs, "\n")
   end
 
-  defp iw_cell_rung(m, kind) when kind in [:ton, :tof], do: "xic go #{kind} #{m} 30"
-  defp iw_cell_rung(m, _kind), do: "xic go add #{m} 1 #{m}"
+  defp iw_cell_rung(m, kind, presets) when kind in [:ton, :tof],
+    do: "xic go #{kind} #{m} #{presets.timer}"
+
+  defp iw_cell_rung(m, _kind, _presets), do: "xic go add #{m} 1 #{m}"
 
   defp iw_text(spec) do
     decls = for {name, kind, q} <- spec.tags, do: "var #{iw_word(q)}#{name} #{iw_type_word(kind)}"
-    rungs = Enum.flat_map(spec.tags, fn {name, kind, _q} -> iw_rungs(name, kind) end)
+
+    rungs =
+      Enum.flat_map(spec.tags, fn {name, kind, _q} -> iw_rungs(name, kind, spec.presets) end)
 
     Enum.join(
       ["var_input eye bool", "var_input run bool", "var_output lamp bool"] ++
@@ -11640,12 +11779,15 @@ defmodule Logex.ApiContractTest do
   defp iw_type_word({:cells, n}), do: "cell[#{n}]"
   defp iw_type_word(atom) when is_atom(atom), do: Atom.to_string(atom)
 
-  defp iw_rungs(name, k) when k in [:dint, :int], do: ["xic eye add #{name} 1 #{name}"]
-  defp iw_rungs(name, {:array, _, _}), do: ["xic eye add #{name}[1] 1 #{name}[1]"]
-  defp iw_rungs(name, k) when k in [:ctu, :ctu_int], do: ["xic eye ctu #{name} 100"]
-  defp iw_rungs(name, k) when k in [:ton, :tof], do: ["xic run #{k} #{name} 30"]
-  defp iw_rungs(name, :cell), do: ["cal #{name} run"]
-  defp iw_rungs(name, {:cells, _}), do: ["cal #{name}[0] eye", "cal #{name}[1] run"]
+  defp iw_rungs(name, k, _p) when k in [:dint, :int], do: ["xic eye add #{name} 1 #{name}"]
+  defp iw_rungs(name, {:array, _, _}, _p), do: ["xic eye add #{name}[1] 1 #{name}[1]"]
+
+  defp iw_rungs(name, k, p) when k in [:ctu, :ctu_int],
+    do: ["xic eye ctu #{name} #{p.counter}"]
+
+  defp iw_rungs(name, k, p) when k in [:ton, :tof], do: ["xic run #{k} #{name} #{p.timer}"]
+  defp iw_rungs(name, :cell, _p), do: ["cal #{name} run"]
+  defp iw_rungs(name, {:cells, _}, _p), do: ["cal #{name}[0] eye", "cal #{name}[1] run"]
 end
 
 defmodule Logex.ApiContractTest.RunnerWalk do
