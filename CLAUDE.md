@@ -1274,7 +1274,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `poll:` (10 ms), `overhead:` (20%, 10 to 90), `idle:` (500 ms), `forces:` (a path, none
   unless set, M4-5, decision 127), since M6-5 `retain:` (a path, none unless set, never
   the forces file however either is spelled, `Path.expand/1`'s, nor the `.tmp` either is
-  written through, since M6-5's review, a pinned line each) and
+  written through, since M6-5's review, a pinned line each), since M6-6
+  `retain_period:` (100 to 3,600,000 ms, 1000 unless set or nil, refused without
+  `retain:` as `start:` is, provisional) and
   `start:` (`:warm` or `:cold`, `:warm` unless set, refused without `retain:`,
   decision 323), and `name:` (decision 121), each checked in the caller in order, each once, the configuration as
   `Runtime.start/1` and the bindings as `Logex.IO.bind!/2` check them, in their words; it
@@ -1401,6 +1403,24 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   round planned again from the last, so that a cut interval is next due where decision
   40 moves it, its `now` the step's time on the runner's clock, given to the switch as
   `elapsed_ms` since the last round, 0 while tripped (decision 139).
+  Since M6-6 (decision 275) a runner given `retain:` writes its store every
+  `retain_period:` ms on a grid from its start, a due time passed skipped and none while
+  tripped, a restart taking up the grid at its next due time, the image taken out between
+  rounds as the runner's own work, with untimed programs first in the share's slot at or
+  after the due time, out of S, and with none at a wake of its own or just after the round
+  due with it, never moving a round's due time (provisional), through the hidden seam's
+  `retained/1` where its module has one; its period's state under `retain`, so that a
+  runner with no store holds and does what it did per round, and one with a long period
+  costs some 7 reductions a round more; every write at an event first waits for the
+  writer's write in progress, bounded by the idle watchdog and a poll period in real time
+  and then killed, `:timeout`, and drops the one pending.
+  `lib/logex/runner/writer.ex`, `Logex.Runner.Writer`, internal (no moduledoc, M6-6), the
+  runner's writer, a GenServer linked to it and started at its first period's write: each
+  image it is handed encoded and written through `Logex.Retain.written/2` and answered,
+  `{Logex.Runner.Writer, pid, at, result}`, one at a time, the runner holding the newest
+  that waits, latest wins; a write that fails, or a writer gone down, `{:down, reason}`,
+  reported as every failed write is, the plant running on; stopped as the runner
+  terminates, after the stop's or a shutdown's write.
   `lib/logex/runner/device.ex`, `Logex.Runner.Device`, internal (no moduledoc), one
   GenServer for each bound device, linked to its runner: `open/1` calls the adapter's
   `init/3` and reads it once; it reads every poll period on the runner's clock, on a grid
@@ -1613,6 +1633,21 @@ clock gone down, its wall clock still answering, and a parent's `:normal` writin
 and since decision 317 a cold restart a device refuses writing the store back after its
 zeros, a crash then restoring the trip's values, a refused warm restart writing nothing
 and a failed write-back reported,
+`retain_period_test.exs` M6-6's periodic writer on the manual clock: `retain_period:`
+checked in the caller, a pinned line each, 1000 ms unless set and `status/1`'s
+`written_at` following each write, PLAN's Done-when (a runner killed between two periods
+restoring the earlier period's write, a slow write, the writer suspended, delaying no
+round and the newest image waiting winning, a write that fails leaving the old store,
+reported, the plant running on, a stop while a write is in progress waiting for it,
+dropping the pending one and writing last, traced, and one whose final write fails
+stopping and saying so), the period's place among the rounds told through the seam's
+`retained/1` (timed only at its own wake or after the round due with it, untimed first
+in the share's slot at 20% and 50%, every round at its time as with no store, a due time
+passed in a slow step skipped), a trip waiting for the write in progress, nothing written
+while tripped and a restart taking up the grid, a hung writer killed at its deadline, a
+writer gone down reported and replaced, and its cost in reductions, the collector kept
+out, a long period within 10 reductions a round of no store and a period's take-out
+linear in the retained values,
 `clauses_test.exs` decision 264's rule read from the syntax trees of the walks and the
 end-to-end tests: every conditional of `api_contract_test.exs` in a draw its module names
 in `@draws`, each draw a function of its module, `end_to_end_test.exs` holding none, and
@@ -1719,7 +1754,14 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   checked, since M6-5's review as the start reads them, before a first round whose trip
   writes the store again, its reach `:store_restored` and `:cold_store`, and since
   decision 317 a refused cold restart's write-back of the trip's resource,
-  `:cold_written_back`
+  `:cold_written_back`; and since M6-6 each store's `retain_period:` drawn from the walk's
+  seed, 100, 105, 150 or 250 ms, and the model restating each period's write, told by the
+  seam's `retained/1`: taken out only while running, between two rounds, at or after its
+  due time on the grid from the runner's start, at most one round begun after it with no
+  untimed program and C + 1 with, of the resource as the last round left it, the next the
+  grid's next, a restart's the grid's next after it, the writer settled before a crash so
+  that the fresh start meets the last period's write, its reach `:period_written`,
+  `:period_in_slot`, `:period_own_wake` and `:period_restored`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -1867,7 +1909,8 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   knows nothing of logex; and M6-5's, the same plant from files on disk with a retained
   box counter, `rto` and total through the runner on the manual clock with a store, over
   400 seeded steps of eyes, kills, stops and trips each followed by a fresh start, against
-  an oracle that knows nothing of logex and comes back to the last write;
+  an oracle that knows nothing of logex and comes back to the last write, since M6-6 a
+  period's every 105 ms among them, which holds every round up to its due time;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
@@ -1982,12 +2025,13 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   global, a global's qualifier edit reported, `Global.new!/3`, a retained `single` firing
   on no warm start and a retained global an unretained var_output drives warned of, and
   M6-4 (the image) the same day and the maintainer's answers to it, decisions 307–315, and
-  M6-5 (the store at its events) on 2026-10-30: `var retain` and `var
+  M6-5 (the store at its events) and M6-6 (the periodic writer) on 2026-10-30: `var retain` and `var
   non_retain`, both reserved, on a program's `var` and `var_output`, a block's three
   sections and `var_global`, the nearest mark on a member's path winning, a warm restart
   keeping what is marked and nothing else, a timer's outage not counted and no first-scan
   edge, and a store the runner writes on the host's disk, matched by name and type at a
-  fresh start, warm unless `start: :cold`; and the four questions left open at Milestone
+  fresh start, warm unless `start: :cold`, and written every `retain_period:` ms by a
+  writer process of the runner's own; and the four questions left open at Milestone
   5's close answered and built the same day, decisions 286–289: a stop of a tripped runner
   trying a device's untaken 0 once more, a device gone down while tripped named until a
   restart, a member's whole write beside a coil on its bit through a tag subscript warned,

@@ -346,9 +346,10 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   2026-10-30 a retained trigger's last sample kept with it. Landed, M6-5: the store, a
   file on the host's disk a runner given `retain:` writes the image into at a trip, a
   stop and a cold restart, and a fresh start reads, warm unless `start: :cold` ("The
-  store on disk", below). Still to land: its write every second, so that until then a
-  crash keeps only what the last trip, stop, cold restart or start wrote, and an online
-  edit's report of a program's qualifier. `persistent` is deferred and stays unreserved.
+  store on disk", below). Landed, M6-6: its write every `retain_period:`, a second
+  unless set, by a writer process of the runner's own, so that a crash loses at most a
+  period and the write in progress. Still to land: an online edit's report of a
+  program's qualifier. `persistent` is deferred and stays unreserved.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -3093,9 +3094,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
+- It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
+  grid from the runner's start (M6-6, decision 275): the runner takes the retained values
+  out between two rounds, as its own work, never inside a round and moving no round's
+  due time, with untimed programs in the share's slot ("Running a plant on the clock",
+  below) and otherwise at a wake of its own, and a writer process of its own writes them,
+  so that a slow disk delays no round; a write still in progress makes the next wait, the
+  newest replacing any that waited. `status/1`'s `written_at` follows each write made,
+  the store's age; one that fails is reported as above and the plant runs on. While
+  tripped nothing is written but the trip's own write. Each write at an event waits for
+  the period's in progress and drops the one waiting, so the event's is the last.
 - A runner that crashes or is killed writes nothing (decision 292), nor one whose clock
-  goes down: its next fresh start comes back to the last write. Until M6-6's write every
-  second, that is the start's, the last trip's, stop's, shutdown's or cold restart's.
+  goes down: its next fresh start comes back to the last write, the last period's or the
+  start's, trip's, stop's, shutdown's or cold restart's, whichever came last, so a crash
+  loses at most a period and the write in progress.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, is refused at start, a pinned line.
@@ -4519,8 +4531,8 @@ in every cycle's outputs at the value it holds.
   only by a runner given a store, a file on the host's disk and not battery-backed
   memory, written at a trip, a stop, a supervisor's shutdown, a cold restart and a fresh
   start with `start: :cold` or no store file, never at a warm fresh start from a store,
-  and not yet every second, so a crash or a kill loses whatever changed since the last of
-  those writes, and
+  and every `retain_period:`, a second unless set, so a crash or a kill loses whatever
+  changed since the last of those writes, at most a period and the write in progress, and
   a power failure just after a write may bring back the one before it, the rename not
   made durable ("The store on disk", above); and forcing
   for inputs only, an output never forced.

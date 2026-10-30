@@ -10036,7 +10036,143 @@ done-when reads the next store write; and last the contract walk and the documen
   within a measured bound of one without, the take-out bounded in the retained count.
   *Size M.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-30.** As the entry says, but where the readings below say
+  otherwise. `lib/logex/runner/writer.ex`, `Logex.Runner.Writer`, internal: a GenServer
+  linked to its runner, started at the first period's write, handed one image at a time
+  with its header's time, which it encodes and writes through `Logex.Retain.written/2`,
+  `<path>.tmp` synced, closed and renamed over the store, and answers `{Logex.Runner.Writer,
+  pid, at, result}`. The runner takes `retain_period:`, checked in the caller after
+  `start:`, in both pinned messages of `start_link/1`'s options; its period's state is
+  held under `retain`, so that a runner with no store holds exactly what it did. Every
+  `retain_period:` ms, on a grid from its start on its clock, the runner takes the
+  retained image out between rounds (`Logex.Runtime.retained/1`, through the hidden
+  seam's `retained/1` where a test's module has one) and hands it to the writer, or, while
+  a write is in progress, keeps it, the newest replacing the one that waited. A write made
+  moves `status/1`'s `written_at`, the store's age; one that fails is `{:retain, {:error,
+  reason}}` and `failed`, the store as it was and the plant running on. Every write at an
+  event, a trip's, a stop's, a shutdown's and a cold restart's, first waits for the
+  write in progress and drops the one pending, so that the event's is the last on disk.
+  As the runner terminates, after the stop's or the shutdown's write, it stops the writer.
+
+  Every clause of the done-when has its test in `retain_period_test.exs`, on the manual
+  clock: a runner killed between two periods restores the earlier period's write; a write
+  that fails leaves the old store, is reported, the plant running on, and the next
+  period's clears `failed`; a stop while a period's write is in progress waits for it,
+  drops the pending one and writes last, traced in the writer and the runner, and the
+  writer is gone after; a stop whose final write fails stops and answers `{:error,
+  {:retain, :eisdir}}`; a slow write, the writer suspended, delays no round, thirty rounds
+  run on their times while three periods come, the one between dropped and the newest
+  written; and a round with a store and a period of 3,600,000 ms costs within 10
+  reductions of one with none, a period's take-out growing linearly in the retained
+  values. Besides: `retain_period:`'s host mistakes, a pinned line each; 1000 ms unless
+  set, `written_at` moving each second; the period's place among the rounds, told through
+  the seam, at its own wake at 105 ms between the rounds at 100 and 110, just after the
+  round at 100 where one is due with it, with untimed programs in the share's slot at 103
+  at 20% and at 100 at 50%, every round at the time it has with no store; a due time
+  passed inside a slow step taken once and the grid's next after it; a shutdown writing
+  the resource as it was; a trip waiting for the write in progress and writing last;
+  nothing written while tripped and a warm restart taking up the grid at its next due
+  time; a hung writer killed at the idle watchdog and a poll period and the stop's write
+  made; and a writer gone down reported and replaced. 50 runs of the file and of the
+  end-to-end test under CPU load pass (`scratchpad/m6/r50p.out`). `runner_test.exs`'s
+  two option messages gain `retain_period:`; no other test line changed.
+
+  The end-to-end Done-when of M6-5, `end_to_end_test.exs`'s "the store in the plant", runs
+  its runner with `retain_period: 105`, its oracle restating each period's write, which
+  holds every round up to its due time, one due with a round after that round, from each
+  start, so a fresh start after a kill comes back to the last period's write where one
+  came since, the writer settled before each kill; it asserts some fresh starts met one.
+  The runner walk (`api_contract_test.exs`) gives each store a period from the walk's
+  seed, 100, 105, 150 or 250 ms, no draw added to its stream, and its model restates each
+  take-out the seam tells it of: only while running, between two rounds, at or after its
+  due time on the grid from the runner's start, at most one round begun after the due
+  time with no untimed program and C + 1 with, of the resource as the last round left it,
+  the next due the grid's next, a restart's the grid's next after it, and the writer
+  settled before a crash so that the fresh start meets the last period's write; its reach
+  `:period_written`, `:period_in_slot`, `:period_own_wake` and `:period_restored`, every
+  atom reached at its pinned seed. Of the 30 fresh families `{6101..6130, 10, n}` no check
+  failed in any (`scratchpad/m6/seeds9.out`): 10 reach every atom, and the rest miss only
+  atoms rare by their nature, `:store_tripped_at_start`, `:zero_at_stop`,
+  `:next_due_from_step`, `:array_unforced`, `:forced_trigger_pressed` or, in 7, the new
+  `:period_restored`, a crash after a period's write of a count above 0.
+
+  *Mutations*, each judged by the full suite's exit code (`scratchpad/m6/m66mut2`): P1 the
+  default 2000 ms; P2 the range from 1 ms; P3 a period taken without `retain:`; P4 the next
+  due time from the take-out, not the grid; P5 a restart keeping the stale due time; P6 an
+  untimed take-out after the round as well as in the slot; P7 a timed take-out before the
+  round due with it; P8 no wake of its own; P9 the oldest image waiting kept, not the
+  newest (it survived the first run, which waited one image only; its test now waits two,
+  and it is red); P10 no wait before an event write; P11 the pending image handed on at an
+  event; P12 a period's failure not reported; P13 `written_at` not moved by a period's
+  write; P14 no wait for the writer at all; P15 a writer gone down not reported; P16 the
+  writer left running at a stop; P17 none taken in the slot: all red. The walk alone
+  catches P4, P5 and P17, the end-to-end test P7, P8 and P10. P18, the slot's take-out
+  after its requests rather than before them, survives: on the manual clock a slot's work
+  takes no time, so the order inside it is not seen, and the reading that it comes first,
+  out of S, stands on the code alone.
+
+  *Cost*, against `a6680c9`, the runner's reductions a round over 200 rounds of the fast
+  task, the collector kept out by a large heap (`scratchpad/m6/m66cost`): with no store,
+  1281.7 timed and 1226 untimed, exactly as before; with a store and a period of
+  3,600,000 ms, 7 more a round, 1685.9 to 1692.9 for four retained counters, 0.4%; and at
+  a period of 100 ms the take-out adds some 1,600 reductions a period for 16 retained
+  counters and 5,900 for 64. With the collector at work the counts move by a few either
+  way, as the dummy key the parent was given showed.
+
+  *Provisional readings, put to the maintainer.* Where the record is silent the item took
+  the reading nearest the record, IEC and Logix, each marked so in the code:
+
+  1. *The range and its defaults.* `retain_period:` takes a whole number of ms from 100 to
+     3,600,000, the record's suggestion, 1000 unless set, nil as unset, as `forces:` and
+     `retain:` take nil; given without `retain:` it is refused, "the runner keeps no store,
+     so retain_period: 500 has none to write: start it with retain: a path", as `start:`
+     is (decision 323). The options: (a) as built; (b) a wider range, 10 ms at the least,
+     which an fsync every round of a fast plant comes near; (c) `retain_period:` without a
+     store taken and passed over.
+  2. *A grid from the start.* The periods are due at the start plus each whole period, as
+     a periodic task's are; a due time passed while the runner was stuck in a step is
+     taken once, just after it, and the next is the grid's next, none made up; a restart
+     takes up the grid at its next due time, so that a warm restart writes nothing at
+     once. Example: a period of 1000 ms, a runner stuck 2,500 ms in a step at 900 ms
+     writes once at 3,400 ms and next at 4,000. The options: (a) as built; (b) every period
+     counted from the last write, an event's among them, so that a cold restart at 1,700
+     ms is next written at 2,700.
+  3. *The take-out's place.* The take-out is the runner's own work between rounds: with
+     untimed programs first in the share's slot that comes at or after its due time, out
+     of its S ms, before the requests that waited, so up to C ms late, 4 ms at
+     20%; with none at a wake of its own, or just after the round due with it, its
+     outputs written, so the store holds that round. No round's due time moves for it.
+     The options: (a) as built; (b) every take-out just after the round in progress at its
+     due time, untimed or not, taking its time from the next round instead of from the
+     slot.
+  4. *Nothing written while tripped.* A tripped runner writes no period: the trip's write
+     is the resource as the trip left it, and nothing a round changes until a restart. An
+     edit stepped while tripped (decision 139) changes the resource, but its values reach
+     the store only at the next event or period after a restart. Example: tripped, the
+     operator tests an edit that adds a retained counter at 5; the host is then killed;
+     the fresh start brings the counter back at its initial value. The options: (a) as
+     built; (b) an edit's step while tripped writes the store, as a cold restart does.
+  5. *An event write waits for the period's.* Every write at an event waits for the write
+     in progress, in real time, for at most the idle watchdog and a poll period, as a
+     device's close is bounded, and a writer still silent then is killed, its write
+     reported `{:retain, {:error, :timeout}}`, the store the old or the new, the event's
+     written after. Example: a disk that hangs for 2 s holds a stop for 510 ms with the
+     defaults and then the stop writes, which may hang too. The options: (a) as built;
+     (b) an unbounded wait, which the record's "waits for it" reads plainly, a hung disk
+     then holding the stop for ever.
+  6. *A writer gone down.* A writer that goes down, which no host can cause through the
+     API, is reported `{:retain, {:error, {:down, reason}}}` where it held a write, and a
+     new one makes the next period's write, the image waiting handed to it. The options:
+     (a) as built; (b) the runner trips, `{:retain, ...}` among the trip reasons.
+  7. *The store's age in `status/1`.* `retain`'s shape is unchanged: `written_at` moves
+     with each write the writer makes, read when its answer comes, so between a take-out
+     and its answer the status shows the write before. The options: (a) as built; (b)
+     `status/1` gains the period and the time of the last take-out, `%{path, period,
+     written_at, taken_at, failed, dropped}`.
+  8. *Still open from M6-5's answers:* whether a parent's `:normal` exit writes the store,
+     which decision 316 names neither way (pinned writing none, provisional).
+
+  2374 tests (11 doctests), up from 2357.
 - **M6-7 · Online edits.** `:retain_added` and `:retain_removed` in `Logex.Edit`, for a
   program's tags, members, arrays and instances, by path, rows of its table and §4.9's;
   decision 44 annotated as landed. *(Since decision 302, 2026-10-29, a global's two kinds
