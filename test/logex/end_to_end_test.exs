@@ -7384,8 +7384,12 @@ defmodule Logex.EndToEndTest do
     alias Logex.Runner
     alias Logex.Runner.Clock.Manual
 
+    # The lube `rto` sits on a rung `hold` jumps over, so that while `hold` is on it does
+    # not run and its `last` falls behind the instance's `now`: a warm restart then sets it
+    # to `now` (decision 273), and the time it was frozen before the trip is not caught up.
     @life_ld """
     var_input eye bool
+    var_input hold bool
     var retain boxes ctu
     var retain total dint 1000
     var retain lube rto
@@ -7393,12 +7397,15 @@ defmodule Logex.EndToEndTest do
 
     xic eye ctu boxes 100000
     xic eye ons e add total 5 total
+    xic hold jmp past
     xic eye rto lube 100000000
+    lbl past
     """
 
     # The changed program: the total a lint, and a new retained tag at its initial value.
     @life_changed_ld """
     var_input eye bool
+    var_input hold bool
     var retain boxes ctu
     var retain total lint 1000
     var retain lube rto
@@ -7407,21 +7414,31 @@ defmodule Logex.EndToEndTest do
 
     xic eye ctu boxes 100000
     xic eye ons e add total 5 total
+    xic hold jmp past
     xic eye rto lube 100000000
+    lbl past
     """
 
     @life """
 
     var_global eye_1 bool at panel.i.8
+    var_global hold_1 bool at panel.i.9
 
     program box keep with fast
       box.eye eye_1
+      box.hold hold_1
     """
 
     @life_period 105
 
-    # The total's initial value, 1000 kg, and the count's and the timer's, 0.
-    @life_initial {1000, 0, 0}
+    # The walk's last steps: the lube timing, frozen by `hold` for 40 ms, a trip and a warm
+    # restart while it is frozen, and `hold` let go, so that its next run, 10 ms after the
+    # restart's round, catches up only those 10 ms, where a `last` the restart left behind
+    # `now` would catch up the 40 ms frozen before the trip too.
+    @life_frozen [{:eye, 1, 0}, {:eye, 1, 1}, {:eye, 1, 1}, :trip_warm, {:eye, 1, 0}]
+
+    # The total's initial value, 1000 kg, and the count's, the timer's and its `.en`, 0.
+    @life_initial {1000, 0, 0, 0}
 
     defp life_plant(dir, ld) do
       {_programs, files} = shared_programs()
@@ -7438,34 +7455,67 @@ defmodule Logex.EndToEndTest do
       plant
     end
 
-    # The oracle's model: the three values, the eye the last round saw, the motor's
+    # The oracle's model: the four values, the eye and the hold the last round saw, the
+    # time since the lube timer last ran before it (`ago`), whether a warm restart set the
+    # timer's `last` to `now` while it was frozen and timing (`rebased`), the motor's
     # contactor, the time on the clock, what the last write at an end or a start held and
     # each round since it, by its time, and its counts of what the walk met.
     defp life_model,
       do: %{
         now: @life_initial,
         eye: 0,
+        hold: 0,
+        ago: 0,
+        rebased: false,
         motor: 0,
         t: 0,
         written: @life_initial,
         since: [],
         changed: false,
-        met: %{period: 0, lost: 0, motor_on: 0, kept: 0}
+        met: %{period: 0, lost: 0, motor_on: 0, kept: 0, rebased: 0}
       }
 
-    defp life_round(%{now: {total, cv, acc}, eye: last} = model, eye) do
+    # A round, 10 ms on: the lube rung skipped while `hold` is on, and otherwise run, an
+    # rto timing while its rung was and is true adding every millisecond since it last
+    # ran, those it was skipped among them (decision 82), and starting on a rising rung.
+    defp life_round(%{now: {total, cv, acc, en}, eye: last} = model, eye) do
       t = model.t + 10
-      now = {total + 5 * rose(last, eye), cv + rose(last, eye), acc + held(last, eye)}
-      %{model | now: now, eye: eye, t: t, since: [{t, now} | model.since]}
+      {acc, en, ago, met} = lubed(model.hold, {acc, en, model.ago + 10}, eye, model)
+      now = {total + 5 * rose(last, eye), cv + rose(last, eye), acc, en}
+
+      %{
+        model
+        | now: now,
+          eye: eye,
+          ago: ago,
+          rebased: model.rebased and ago > 0,
+          met: met,
+          t: t,
+          since: [{t, now} | model.since]
+      }
     end
 
-    # A start: the values given, the last write theirs, the contactor off.
-    defp life_started(model, values),
+    defp lubed(1, {acc, en, ago}, _eye, model), do: {acc, en, ago, model.met}
+
+    defp lubed(0, {acc, 1, ago}, 1, model),
+      do: {acc + ago, 1, 0, %{model.met | rebased: model.met.rebased + rebased(model.rebased)}}
+
+    defp lubed(0, {acc, _en, _ago}, eye, model), do: {acc, eye, 0, model.met}
+
+    defp rebased(true), do: 1
+    defp rebased(false), do: 0
+
+    # A start: the values given, the last write theirs, the contactor off, the lube timer
+    # at the start's `now`, its first round run at once: with `hold` off the rto runs on
+    # the eye, its `.en` the eye's, adding nothing.
+    defp life_started(model, {total, cv, acc, en} = values),
       do: %{
         model
-        | now: values,
+        | now: {total, cv, acc, started_en(model.hold, en, model.eye)},
           written: values,
           since: [],
+          ago: 0,
+          rebased: false,
           motor: 0,
           met: %{
             model.met
@@ -7474,7 +7524,11 @@ defmodule Logex.EndToEndTest do
           }
       }
 
-    defp life_step({:eye, eye}, model), do: model |> life_round(eye) |> life_round(eye)
+    defp started_en(0, _en, eye), do: eye
+    defp started_en(1, en, _eye), do: en
+
+    defp life_step({:eye, eye, hold}, model),
+      do: %{model | hold: hold} |> life_round(eye) |> life_round(eye)
 
     defp life_step(:press, model),
       do: %{(model |> life_round(model.eye) |> life_round(model.eye)) | motor: 1}
@@ -7482,7 +7536,13 @@ defmodule Logex.EndToEndTest do
     # A kill's model is made once its restored values are read, in `life_checked/3`.
     defp life_step(:kill, model), do: model
     defp life_step(:stop, model), do: life_started(model, model.now)
-    defp life_step(:trip_warm, model), do: life_started(%{model | t: model.t + 10}, model.now)
+    # A warm restart: the lube timer, frozen and timing, set to `now`, so the time it was
+    # frozen before the trip is not caught up (decision 273), which the model marks.
+    defp life_step(:trip_warm, model),
+      do: %{
+        life_started(%{model | t: model.t + 10}, model.now)
+        | rebased: model.ago > 0 and elem(model.now, 3) == 1
+      }
 
     defp life_step(:trip_cold, model),
       do: life_started(%{model | t: model.t + 10}, @life_initial)
@@ -7492,26 +7552,29 @@ defmodule Logex.EndToEndTest do
 
     defp life_step(:start_cold, model), do: life_started(model, @life_initial)
 
-    defp life_step(:changed, %{now: {_total, cv, acc}} = model),
-      do: life_started(%{model | changed: true}, {1000, cv, acc})
+    defp life_step(:changed, %{now: {_total, cv, acc, en}} = model),
+      do: life_started(%{model | changed: true}, {1000, cv, acc, en})
 
     # A kill: what the fresh start restored, which must be what the last write held or a
-    # round's within the last period and one round before the kill.
+    # round's within the last period and one round before the kill, its `.en` as the
+    # start's first round leaves it, which `life_started/2` restates.
     defp life_killed(model, restored) do
       allowed = [
         model.written | for({t, v} <- model.since, t >= model.t - @life_period - 10, do: v)
       ]
 
-      assert restored in allowed, inspect({restored, allowed})
+      assert counted(restored) in Enum.map(allowed, &counted/1), inspect({restored, allowed})
 
       met = %{
         model.met
-        | period: model.met.period + differs(restored, model.written),
-          lost: model.met.lost + differs(restored, model.now)
+        | period: model.met.period + differs(counted(restored), counted(model.written)),
+          lost: model.met.lost + differs(counted(restored), counted(model.now))
       }
 
       life_started(%{model | met: met}, restored)
     end
+
+    defp counted({total, cv, acc, _en}), do: {total, cv, acc}
 
     defp differs(same, same), do: 0
     defp differs(_one, _other), do: 1
@@ -7524,16 +7587,19 @@ defmodule Logex.EndToEndTest do
       for i <- 1..n, do: life_drawn(i, Enum.random(kinds))
     end
 
+    # `hold` on through 20 steps in every 40, drawn from no stream, so that the steps drawn
+    # are as they were before it.
     defp life_drawn(200, _kind), do: :changed
-    defp life_drawn(_i, :eye), do: {:eye, Enum.random([0, 1])}
+    defp life_drawn(i, :eye), do: {:eye, Enum.random([0, 1]), div(rem(i, 40), 20)}
     defp life_drawn(_i, kind), do: kind
 
-    defp life_kind({:eye, _eye}), do: :eye
+    defp life_kind({:eye, _eye, _hold}), do: :eye
     defp life_kind(kind), do: kind
 
     # The runner's side of each step.
-    defp life_run({:eye, eye}, rig) do
+    defp life_run({:eye, eye, hold}, rig) do
       Sim.set(rig.panel, [8], eye)
+      Sim.set(rig.panel, [9], hold)
       Manual.advance(rig.clock, 20)
       rig
     end
@@ -7601,9 +7667,9 @@ defmodule Logex.EndToEndTest do
     defp life_values(runner),
       do:
         {Runner.get!(runner, "box.total"), Runner.get!(runner, "box.boxes.cv"),
-         Runner.get!(runner, "box.lube.acc")}
+         Runner.get!(runner, "box.lube.acc"), Runner.get!(runner, "box.lube.en")}
 
-    defp life_checked({:eye, _eye} = step, rig, model), do: life_compared(step, rig, model)
+    defp life_checked({:eye, _eye, _hold} = step, rig, model), do: life_compared(step, rig, model)
     defp life_checked(:press = step, rig, model), do: life_compared(step, rig, model)
 
     defp life_checked(:kill, rig, model) do
@@ -7648,7 +7714,7 @@ defmodule Logex.EndToEndTest do
 
       rig = %{clock: clock, panel: panel, drive: drive, opts: opts, dir: dir, runner: nil}
       rig = life_start(rig, opts)
-      steps = life_steps({2026, 10, 69}, 400)
+      steps = life_steps({2026, 10, 69}, 400) ++ @life_frozen
 
       {rig, model} =
         Enum.reduce(steps, {rig, life_model()}, fn step, {rig, model} ->
@@ -7676,6 +7742,10 @@ defmodule Logex.EndToEndTest do
       assert model.changed
       assert model.met.period > 0 and model.met.lost > 0 and model.met.motor_on > 0
       assert model.met.kept > 0
+
+      # A warm restart met the lube timer frozen and timing, and its next run caught up
+      # only the time since the restart.
+      assert model.met.rebased > 0
       assert elem(model.now, 1) > 0 and elem(model.now, 2) > 0
       assert Runner.stop(rig.runner) == :ok
     end

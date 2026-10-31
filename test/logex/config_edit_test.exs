@@ -1121,6 +1121,130 @@ defmodule Logex.ConfigEditTest do
       {runtime, _} = cycles(runtime, 1)
       assert Runtime.get!(runtime, "m2.t1.acc") == acc + 40
     end
+
+    # Three readings the record leaves open (provisional), each a question for the
+    # maintainer in `PLAN.md` M6-9: what the built rule does where the candidate scans
+    # between the two switches, where the instance comes back from aside, and where the
+    # candidate holds it unscanned. Each test pins the rule as built, so that an answer
+    # that changes it changes a test on purpose.
+    @oil "function_block oil\nvar_input go bool\nvar_output d bool\nvar lube rto\n\n" <>
+           "xic go rto lube 100000\nxic lube.dn ote d"
+
+    # The lube `rto` at four depths: a tag, an element of an array of timers, a block's
+    # timer and a timer in an element of an array of blocks, each with the rung that runs
+    # it and its path in a report.
+    @depths [
+      {"var lube rto\n", "xic run rto lube 100000\n", "lube"},
+      {"var lube rto[2]\n", "xic run rto lube[1] 100000\n", "lube[1]"},
+      {"var o1 oil\nvar dd bool\n", "cal o1 run dd\n", "o1.lube"},
+      {"var o1 oil[2]\nvar dd bool\n", "cal o1[1] run dd\n", "o1[1].lube"}
+    ]
+
+    defp depth_line(conveyor) do
+      {:ok, oil} = Logex.compile(@oil, name: "oil")
+      {:ok, program} = Logex.compile(conveyor, name: "conveyor", types: [oil])
+
+      line = String.replace(@line, ~r/^var_global oil_q.*\n|^  c1\.oiled.*\n/m, "")
+      assert {:ok, config} = Configuration.compile("line", line, %{"conveyor" => program})
+      config
+    end
+
+    # The original's lube timing from 0, run at 10 ms by `oiler`'s event, and a candidate
+    # that takes its rung out.
+    defp lube_at_ten({declared, rung, _path}) do
+      original =
+        "var_input run bool\nvar zz bool\n" <> declared <> "\n" <> rung <> "xic run ote zz\n"
+
+      runtime = Runtime.start(depth_line(original))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
+      {runtime, _} = ticked(runtime, 10)
+      {runtime, depth_line(String.replace(original, rung, ""))}
+    end
+
+    test "provisional: after a candidate's scan the resume takes the original's hold, " <>
+           "at every depth" do
+      for {_declared, _rung, path} = depth <- @depths do
+        {runtime, candidate} = lube_at_ten(depth)
+        {edit, _} = accepted(runtime, candidate)
+        {edit, runtime, _} = Edit.test(edit, runtime)
+        {runtime, _} = ticked(runtime, 0)
+        {edit, runtime, report} = Edit.untest(edit, runtime)
+        refute Enum.any?(report, &match?({:resumed, _, _}, &1)), path
+
+        # The original holds `c1` from 10 to 40 unscanned; the second test at 40, the
+        # candidate's one scan at 45 and the untest: the resume counts from the timer's
+        # last run at 10, 35 ms, not from the second test, 5 ms.
+        {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+        {edit, runtime, _} = Edit.test(edit, runtime)
+        {runtime, _} = ticked(runtime, 5)
+        {_edit, runtime, report} = Edit.untest(edit, runtime)
+        assert {:resumed, "c1." <> path, 35} in report, path
+        assert runtime.now == 45
+      end
+
+      # The tag's `acc` at its next run, 5 ms on: 15, the 30 ms the original held lost.
+      {runtime, candidate} = lube_at_ten(hd(@depths))
+      {edit, _} = accepted(runtime, candidate)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = ticked(runtime, 0)
+      {edit, runtime, _} = Edit.untest(edit, runtime)
+      {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = ticked(runtime, 5)
+      {_edit, runtime, _} = Edit.untest(edit, runtime)
+      assert %{"acc" => 10, "last" => 45} = runtime.instances["c1"].env["lube"]
+      {runtime, _} = ticked(runtime, 5)
+      assert Runtime.get!(runtime, "c1.lube.acc") == 15
+    end
+
+    test "provisional: one back from aside takes the original's hold before it" do
+      other = "var_input run bool\nvar x bool\n\nxic run ote x\n"
+      {:ok, program} = Logex.compile(other, name: "other")
+      line = String.replace(@line, "conveyor with", "other with")
+      line = String.replace(line, ~r/^  c1\.oiled.*\n/m, "")
+      {:ok, retyped} = Configuration.compile("line", line, %{"other" => program})
+
+      runtime = Runtime.start(line_with(@conveyor))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
+      {runtime, _} = ticked(runtime, 10)
+      assert %{"acc" => 10, "last" => 10} = runtime.instances["c1"].env["lube"]
+
+      # `c1` retyped, so each test sets the conveyor's instance aside: tested, the other
+      # program's scan at once, untested, back from aside with nothing to resume.
+      {edit, _} = accepted(runtime, retyped)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = ticked(runtime, 0)
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+
+      # The original holds `c1` from 10 to 40 unscanned; set aside at 40 and brought back
+      # at once, for no time aside, it resumes by the 30 ms the original held.
+      {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resumed, "c1.lube", 30} in report
+      {runtime, _} = ticked(runtime, 0)
+      assert Runtime.get!(runtime, "c1.lube.acc") == 10
+    end
+
+    test "provisional: the candidate's unscanned hold is caught up" do
+      runtime = Runtime.start(line_with(String.replace(@conveyor, "lube 30", "lube 100000")))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
+      {runtime, _} = ticked(runtime, 10)
+      candidate = String.replace(@conveyor, "xic run rto lube 30\n", "")
+      {edit, _} = accepted(runtime, line_with(candidate))
+
+      # Tested at 10, the candidate holds `c1` to 40 and never scans it; untested at 40,
+      # the original scanned last, so nothing is resumed and the 30 ms are caught up.
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      refute Enum.any?(report, &match?({:resume_undone, _, _}, &1))
+      assert %{"acc" => 10, "last" => 10} = runtime.instances["c1"].env["lube"]
+      {runtime, _} = ticked(runtime, 0)
+      assert Runtime.get!(runtime, "c1.lube.acc") == 40
+    end
   end
 
   describe "instances set aside and brought back (decisions 43, 57 and 65)" do
