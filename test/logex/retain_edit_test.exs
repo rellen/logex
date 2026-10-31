@@ -63,7 +63,8 @@ defmodule Logex.RetainEditTest do
       expected_test = [
         {:retain_added, "count", 5},
         {:retain_added, "lim", [1, 2, 3]},
-        {:retain_added, "t1", state.env["t1"]},
+        # Decision 329: an instance's value as the image keeps it, its `last` left out.
+        {:retain_added, "t1", Map.delete(state.env["t1"], "last")},
         {:retain_removed, "lamp", 1}
       ]
 
@@ -241,7 +242,9 @@ defmodule Logex.RetainEditTest do
       candidate = holding(cell(latch()), "retain ")
       state = scanned(running, 1)
       {:ok, _edit, forecast} = Edit.accept(running, candidate, state)
-      assert forecast == [{:retain_added, "c", state.env["c"]}]
+      # Decision 329: as the image keeps it, the array of instances inside a list.
+      one = %{"k" => 1, "s" => 1}
+      assert forecast == [{:retain_added, "c", %{"go" => 1, "l" => one, "ws" => [one, one]}}]
     end
 
     test "a member only one version of a block declares is in no change: the instance " <>
@@ -293,6 +296,165 @@ defmodule Logex.RetainEditTest do
       assert "c.l.k" in candidate.retained and "c.l" not in candidate.retained
       {:ok, _edit, forecast} = Edit.accept(running, candidate, scanned(running, 1))
       assert kinds(forecast) == [{:retain_added, "c.ws"}, {:retain_added, "hs[*].ws"}]
+    end
+  end
+
+  # Decision 329 (the maintainer, 2026-10-31): the value of a path that holds an instance,
+  # at any depth, is exactly what the retained image keeps of it: the members its type
+  # declares, each timer's `last` left out, and nothing the type does not declare.
+  defp timed_latch(q \\ "", t \\ ""),
+    do:
+      Logex.compile(
+        "function_block latch\nvar_input s bool\nvar #{q}k dint\nvar #{t}t ton\n" <>
+          "xic s add k 1 k\nxic s ton t 100",
+        name: "latch"
+      )
+      |> elem(1)
+
+  defp timed(latch, q \\ ""),
+    do:
+      compiled(
+        "var_input go bool\nvar #{q}s1 latch\nvar #{q}ts ton[2]\nvar #{q}hs latch[2]\n" <>
+          "cal s1 go\nton ts[0] 50\ncal hs[1] go",
+        [latch]
+      )
+
+  # A reported value laid out as the image's values, each leaf by its path: a map by its
+  # members, a list of maps by its elements' subscripts, a list of rows by both, and any
+  # other value a leaf, an elementary array's list among them.
+  defp laid(path, %{} = map), do: Enum.flat_map(map, fn {k, v} -> laid(path <> "." <> k, v) end)
+
+  defp laid(path, [%{} | _] = elements),
+    do: elements |> Enum.with_index() |> Enum.flat_map(fn {v, i} -> laid("#{path}[#{i}]", v) end)
+
+  defp laid(path, [[%{} | _] | _] = rows),
+    do:
+      for(
+        {row, i} <- Enum.with_index(rows),
+        {v, j} <- Enum.with_index(row),
+        leaf <- laid("#{path}[#{i},#{j}]", v),
+        do: leaf
+      )
+
+  defp laid(path, value), do: [{path, value}]
+
+  defp image_of(program, state),
+    do: Map.new(Runtime.retained(program, state).values, fn {path, {_type, v}} -> {path, v} end)
+
+  describe "an instance's value, as the image keeps it (decision 329)" do
+    test "a built-in instance, a block's instance holding a timer and arrays of each, " <>
+           "marked whole: no `last` at any depth, exactly the image's leaves" do
+      running = timed(timed_latch())
+      candidate = timed(timed_latch(), "retain ")
+      state = scanned(running, 2)
+      {:ok, edit, forecast} = Edit.accept(running, candidate, state)
+
+      timing = %{"acc" => 10, "dn" => 0, "en" => 1, "tt" => 1}
+      idle = %{"acc" => 0, "dn" => 0, "en" => 0, "tt" => 0}
+      at = fn timer, pre -> Map.put(timer, "pre", pre) end
+
+      assert forecast == [
+               {:retain_added, "hs",
+                [
+                  %{"k" => 0, "s" => 0, "t" => at.(idle, 100)},
+                  %{"k" => 2, "s" => 1, "t" => at.(timing, 100)}
+                ]},
+               {:retain_added, "s1", %{"k" => 2, "s" => 1, "t" => at.(timing, 100)}},
+               {:retain_added, "ts", [at.(timing, 50), at.(idle, 0)]}
+             ]
+
+      # The state holds every `last`; the report none.
+      assert state.env["s1"]["t"]["last"] == 20
+      assert elem(state.env["ts"], 0)["last"] == 20
+
+      {edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      assert tested == %{state | switched: true}
+
+      # Each reported value, laid out leaf by leaf, is the candidate's image, exactly.
+      laid = Map.new(for {_kind, path, value} <- report, leaf <- laid(path, value), do: leaf)
+      assert laid == image_of(candidate, tested)
+
+      # And untest's, the original's, the same values the other way.
+      {_edit, _untested, report} = Edit.untest(edit, tested)
+      assert report == for({_kind, path, value} <- forecast, do: {:retain_removed, path, value})
+    end
+
+    test "a `[*]` path whose member is a timer lists each element's without its `last`, " <>
+           "and a block's timer member alone is its map without it" do
+      running = timed(timed_latch())
+      candidate = timed(timed_latch("", "retain "))
+      state = scanned(running, 3)
+      {:ok, _edit, forecast} = Edit.accept(running, candidate, state)
+
+      timer = fn acc, en, pre ->
+        %{"acc" => acc, "dn" => 0, "en" => en, "tt" => en, "pre" => pre}
+      end
+
+      assert forecast == [
+               {:retain_added, "hs[*].t", [timer.(0, 0, 100), timer.(20, 1, 100)]},
+               {:retain_added, "s1.t", timer.(20, 1, 100)}
+             ]
+
+      # A 2-D array of a block's instances holding a timer: rows of maps, none a `last`.
+      grid = fn q ->
+        compiled("var_input go bool\nvar #{q}gs latch[2,2]\ncal gs[1,0] go", [timed_latch()])
+      end
+
+      state = scanned(grid.(""), 2)
+      {:ok, _edit, forecast} = Edit.accept(grid.(""), grid.("retain "), state)
+      off = %{"k" => 0, "s" => 0, "t" => timer.(0, 0, 100)}
+      on = %{"k" => 2, "s" => 1, "t" => timer.(10, 1, 100)}
+      assert forecast == [{:retain_added, "gs", [[off, off], [on, off]]}]
+    end
+
+    test "what the instance holds that its type does not declare is left out, as the " <>
+           "image leaves it, and stays in the state" do
+      running = timed(timed_latch())
+      candidate = timed(timed_latch(), "retain ")
+      state = scanned(running, 2)
+      left = put_in(state.env["s1"]["zz"], 9)
+      {:ok, edit, forecast} = Edit.accept(running, candidate, left)
+      assert {:retain_added, "s1", value} = List.keyfind(forecast, "s1", 1)
+      refute Map.has_key?(value, "zz")
+
+      assert value == %{"k" => 2, "s" => 1, "t" => Map.delete(state.env["s1"]["t"], "last")}
+
+      {_edit, tested, _report} = Edit.test(edit, left)
+      assert tested.env["s1"]["zz"] == 9
+    end
+
+    test "a configuration's instance: a timer's value without its `last`, by the " <>
+           "instance's name" do
+      source = fn q ->
+        {:ok, pump} =
+          Logex.compile("var_input run bool\nvar #{q}t ton\nxic run ton t 500", name: "pump")
+
+        {:ok, config} =
+          Configuration.compile(
+            "plant",
+            "task fast interval 10 priority 1\nvar_global run_i bool at panel.i.0\n" <>
+              "program p1 pump with fast\n  p1.run run_i\n",
+            %{"pump" => pump}
+          )
+
+        config
+      end
+
+      runtime =
+        Enum.reduce(1..3, Runtime.start(source.("")), fn _, rt ->
+          elem(Runtime.cycle(rt, 10, %{"run_i" => 1}), 0)
+        end)
+
+      {:ok, edit, forecast} = Configuration.Edit.accept(runtime, source.("retain "))
+
+      assert forecast == [
+               {:retain_added, "p1.t",
+                %{"acc" => 20, "dn" => 0, "en" => 1, "pre" => 500, "tt" => 1}}
+             ]
+
+      {_edit, _tested, report} = Configuration.Edit.test(edit, runtime)
+      assert report == forecast
     end
   end
 

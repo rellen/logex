@@ -11713,6 +11713,57 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the caller's own (decision 291). An exit of a linked process that is not the
      runner's parent, `:normal` or not, reaches `handle_info/2`, a device's or the
      writer's, and ends nothing.
+329. **An instance's value in a qualifier's report (Milestone 6),** M6-7's first reading:
+     `var fan_t ton` to `var retain fan_t ton` reported `{:retain_added, "fan_t", %{"acc"
+     => 0, "last" => 10, …}}`, the state's map, `last` among it, which the retained image
+     never holds (decision 273).
+
+     **Taken: changed, the value is what the image keeps** (the maintainer, 2026-10-31):
+     a value that holds an instance, at any depth, an instance whole, a user block's
+     instance holding a timer, an array of instances, a `[*]` path's element values and a
+     configuration instance's report alike, is the map of the members its type declares,
+     read by the type of the program the switch leads to (the candidate's at a test, the
+     original's at an untest), each timer's `last` left out, as `Logex.Image` leaves it,
+     and nothing the type does not declare, a superseded edit's leftover the state still
+     holds among it (decision 315), as the image never reads one; an array inside it a
+     list, as a host is given one. *What else the image leaves out, settled:* only those
+     two, a `:clock` member and a key no member names; every declared member, a
+     var_input's and a preset's among them (decision 308), is kept. The edit walks'
+     restated reports drop a timer's `last` at any depth, and the configuration edit's
+     walk `b1`'s member `m` where the version switched to declares none.
+330. **A `[*]` path's value (Milestone 6),** M6-7's second reading: one entry for an array
+     of a block's instances, `{:retain_added, "gates[*].count", [3, 3, 3, 3]}`, its value
+     a list in the elements' order, a 2-D array's a list of its rows, `[[2, 0, 0], [0, 0,
+     2]]`.
+
+     **Taken: confirmed, one `[*]` line, values in the elements' order, a 2-D array's a
+     list of rows** (the maintainer, 2026-10-31).
+331. **A mark moved inside an instance (Milestone 6),** M6-7's third reading: `var retain
+     s1 seal` to `var s1 seal` whose `count` the block now marks reports `s1.run` and
+     `s1.t` removed and nothing for `s1.count`, whose warm restart does not change.
+
+     **Taken: confirmed, only the paths whose warm-restart behaviour changes** (the
+     maintainer, 2026-10-31).
+332. **A member only one version declares (Milestone 6),** M6-7's fourth reading: `var s1
+     latch` to `var retain s1 latch` whose new version adds `m` reports `{:added, "s1.m",
+     0}` and `s1.k` and `s1.s` added, by member, not `s1` whole.
+
+     **Taken: confirmed, `:added`, the old members by member** (the maintainer,
+     2026-10-31).
+333. **Assemble and cancel (Milestone 6),** M6-7's fifth reading: neither reports a
+     qualifier, the switch having said it.
+
+     **Taken: confirmed, nothing about `retain`** (the maintainer, 2026-10-31).
+334. **A qualifier changed with the type (Milestone 6),** M6-7's sixth reading: `var count
+     dint` to `var retain count int` is refused for the type alone, the message silent on
+     `retain`.
+
+     **Taken: confirmed, the refusal names only the type change** (the maintainer,
+     2026-10-31).
+335. **A retained tag added (Milestone 6),** M6-7's seventh reading: `var retain spare dint
+     4` added reports `{:added, "spare", 4}` alone.
+
+     **Taken: confirmed, `:added` alone** (the maintainer, 2026-10-31).
 
 ---
 

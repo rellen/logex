@@ -227,16 +227,27 @@ defmodule Logex.Edit do
   a path, a node whole where every leaf of either program under it is in it,
   `{:retain_added, "s1", %{...}}` for an instance whose every member it retains now, and
   otherwise each node below it that is, `s1.count`, `gates[*].count` for that member of
-  every element of an array of instances, decision 310's form. A value is given as a
-  report gives one to a host, an array's as a list, an instance's as the state holds it,
-  and a `[*]` path's as a list of each element's, a list of lists for more dimensions,
-  `{:retain_added, "hs[*].ws[*].k", [[3, 3], [3, 3]]}`. A qualifier changed with the type
-  is refused for the type, as every type change is; the accept reports nothing else.
+  every element of an array of instances, decision 310's form, one entry for the array
+  (decision 330). A value is given as a report gives one to a host, an array's as a list,
+  and a `[*]` path's as a list of each element's in the elements' order, a 2-D array's a
+  list of its rows, `{:retain_added, "hs[*].ws[*].k", [[3, 3], [3, 3]]}` (decision 330);
+  and a value that holds an instance, at any depth, an instance whole, an array of
+  instances or a `[*]` path's elements, is exactly what the retained image (`retained/2`)
+  keeps of it: a map of the members its type declares, each timer's `last` left out and
+  nothing its type does not declare, `{:retain_added, "t1", %{"acc" => 20, "dn" => 0,
+  "en" => 1, "pre" => 100, "tt" => 1}}` (decision 329). A mark moved inside an instance
+  reports only the paths whose warm restart changes (decision 331); a member only one
+  version of a block declares is `:added` or `:pruned`, and the instance's other members
+  are reported member by member, not the instance whole (decision 332); a tag the
+  candidate adds retained is `:added` alone (decision 335). A qualifier changed with the
+  type is refused for the type alone, as every type change is, the message silent on the
+  qualifier (decision 334); the accept reports nothing else.
 
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the state to the tags of the program it keeps and reports its held outputs, and blocks
   no one-shot, so one the last switch blocked stays blocked until a scan runs it. Cancel
-  from accept changes nothing and reports `[]`.
+  from accept changes nothing and reports `[]`. Neither reports `:retain_added` nor
+  `:retain_removed`: the switch has said it (decision 333).
 
   **The report** is a list of `{kind, name, detail}`, sorted, with at most one entry per
   kind and name. The kinds are an open set, which a host must tolerate:

@@ -1285,6 +1285,8 @@ defmodule Logex.ApiContractTest do
 
   # What the walk must see happen, and its oracles check, at least once each.
   @edit_reach [
+    # Decision 329: a tag's value reported as the image keeps it, a timer's `last` out.
+    :retain_no_last,
     :diagnosed,
     :forecast,
     :plain_swap,
@@ -1841,7 +1843,7 @@ defmodule Logex.ApiContractTest do
           match?(%Tag{type: ^type}, from.tags[tag]),
           kept <- [retained_line?(to.source, tag)],
           kept != retained_line?(from.source, tag),
-          do: {retain_kind(kept), tag, Map.fetch!(later.env, tag)}
+          do: {retain_kind(kept), tag, image_kept(Map.fetch!(later.env, tag))}
 
     assert for(
              {kind, _, _} = entry <- report,
@@ -1849,7 +1851,22 @@ defmodule Logex.ApiContractTest do
              do: entry
            ) ==
              Enum.sort(expected)
+
+    edit_reach(
+      :retain_no_last,
+      Enum.any?(expected, fn {_kind, tag, value} -> is_map(value) and value != later.env[tag] end)
+    )
   end
+
+  # Decision 329, restated: a value is what the retained image keeps, a timer's map
+  # without its `last`, at any depth, and an array a list, as a host is given one.
+  defp image_kept(%{"pre" => _, "last" => _} = timer), do: image_kept(Map.delete(timer, "last"))
+  defp image_kept(%{} = map), do: Map.new(map, fn {key, value} -> {key, image_kept(value)} end)
+
+  defp image_kept(tuple) when is_tuple(tuple),
+    do: Enum.map(Tuple.to_list(tuple), &image_kept/1)
+
+  defp image_kept(value), do: value
 
   defp retained_line?(source, tag), do: source =~ ~r/^(var|var_output) retain #{tag} /m
 
@@ -4072,7 +4089,11 @@ defmodule Logex.ApiContractTest do
     # retention an edit changes.
     :retain_tag,
     :retain_block,
-    :retain_member
+    :retain_member,
+    # Decision 329: a value reported without a timer's `last`, and `b1` whole without a
+    # member the state holds that the version switched to does not declare.
+    :retain_no_last,
+    :retain_undeclared
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -5332,7 +5353,16 @@ defmodule Logex.ApiContractTest do
   defp ce_marked([_line, "non_retain"]), do: :non_retain
   defp ce_marked(_none), do: nil
 
-  defp ce_held_at(env, path), do: get_in(env, String.split(path, "."))
+  # Decision 329: `b1` whole as the image keeps it, the members the version switched to
+  # declares, `m` left out where its `blk` declares none, though the state still holds it.
+  defp ce_declared(value, "b1", to), do: ce_only(value, Map.has_key?(ce_members(to), "m"))
+  defp ce_declared(value, _path, _to), do: value
+
+  defp ce_only(value, true), do: value
+  defp ce_only(value, false), do: Map.delete(value, "m")
+
+  # Decision 329: as the image keeps it, a timer's `last` left out at any depth.
+  defp ce_held_at(env, path), do: image_kept(get_in(env, String.split(path, ".")))
 
   defp ce_retain_reach(["b1"]), do: :retain_block
   defp ce_retain_reach(["b1", _member]), do: :retain_member
@@ -5456,7 +5486,9 @@ defmodule Logex.ApiContractTest do
       for name <- kept,
           type = Enum.find(to.instances, &(&1.name == name)).type,
           {kind, path} <- ce_retains(from.programs[type], to.programs[type]),
-          do: {kind, "#{name}.#{path}", ce_held_at(later.instances[name].env, path)}
+          do:
+            {kind, "#{name}.#{path}",
+             ce_declared(ce_held_at(later.instances[name].env, path), path, to.programs[type])}
 
     restated =
       Enum.sort(
@@ -5491,6 +5523,19 @@ defmodule Logex.ApiContractTest do
 
     for {_kind, path, _value} <- retains,
         do: ce_reach(ce_retain_reach(tl(String.split(path, "."))))
+
+    for name <- kept,
+        type = Enum.find(to.instances, &(&1.name == name)).type,
+        {_kind, path} <- ce_retains(from.programs[type], to.programs[type]),
+        raw = get_in(later.instances[name].env, String.split(path, ".")) do
+      ce_reach(:retain_no_last, raw != image_kept(raw))
+
+      ce_reach(
+        :retain_undeclared,
+        path == "b1" and is_map_key(raw, "m") and
+          not Map.has_key?(ce_members(to.programs[type]), "m")
+      )
+    end
 
     ce_reach(
       :superseded_named_again,

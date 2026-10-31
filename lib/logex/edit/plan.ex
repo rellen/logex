@@ -201,8 +201,12 @@ defmodule Logex.Edit.Plan do
   # and the change is named as `retained` names a path, a node whole where every leaf of
   # either program under it is in it, `s1` for every member of `s1`, and otherwise each
   # node below that is, `s1.count`, `gates[*].count` for that member of every element
-  # (decision 310's form). `{test, untest}`: the second the first's kinds swapped. A pair of
-  # programs that retain nothing pays one clause.
+  # (decision 310's form), one entry for an array of a block's instances (decision 330).
+  # The maintainer confirmed each reading on 2026-10-31: the leaves whose warm restart
+  # changes (decision 331), a member one version alone declares out of the change
+  # (decision 332), and a tag the candidate adds retained `:added` alone (decision 335).
+  # `{test, untest}`: the second the first's kinds swapped. A pair of programs that retain
+  # nothing pays one clause.
   defp requalified(%{retained: nil}, %{retained: nil}), do: {[], []}
 
   defp requalified(from, to) do
@@ -213,8 +217,8 @@ defmodule Logex.Edit.Plan do
     added = collapsed(union, added)
     removed = collapsed(union, removed)
 
-    {marks(:retain_added, added) ++ marks(:retain_removed, removed),
-     marks(:retain_removed, added) ++ marks(:retain_added, removed)}
+    {marks(:retain_added, added, to) ++ marks(:retain_removed, removed, to),
+     marks(:retain_removed, added, from) ++ marks(:retain_added, removed, from)}
   end
 
   defp moved_mark({leaf, kept?}, was, acc), do: mark_moved(Map.fetch(was, leaf), leaf, kept?, acc)
@@ -283,7 +287,14 @@ defmodule Logex.Edit.Plan do
   defp node(true, path, _rests, _change), do: [path]
   defp node(false, path, rests, change), do: nodes(Enum.reject(rests, &(&1 == [])), path, change)
 
-  defp marks(kind, paths), do: for(path <- paths, do: {kind, joined(path), path})
+  # Decision 329: each path with its tag's type in the program the switch leads to, the
+  # candidate's for a test and the original's for an untest, whose state the switch leaves,
+  # so that its value is read by that type as the retained image reads it (Logex.Image).
+  defp marks(kind, paths, %{tags: tags}),
+    do: for([name | _] = path <- paths, do: {kind, joined(path), path, tags[name].type})
+
+  defp member_type(%FbType{members: members} = type, name),
+    do: FbType.type_of(type, Enum.find(members, &(&1.name == name)))
 
   # A program's tags with each instance's type itself (Logex.Program.typed_tags/1), as
   # every walk below reads them: a block's compiled body, which runs as a program too,
@@ -1069,24 +1080,51 @@ defmodule Logex.Edit.Plan do
   defp requalified([], _env, report), do: report
 
   defp requalified(paths, env, report),
-    do: for({kind, path, segments} <- paths, do: {kind, path, held_at(env, segments)}) ++ report
+    do:
+      for(
+        {kind, path, [name | segments], type} <- paths,
+        do: {kind, path, held_at(Map.get(env, name, 0), segments, type)}
+      ) ++ report
 
   # M6-7: the value at a retained path as a report gives it to a host, an array's as a
-  # list (M5-11), an instance's as the state holds it, a map of its members, and one of
-  # every element of an array of instances, `gates[*].count`, a list of each element's in
-  # the elements' order, a list of lists for more dimensions.
-  defp held_at(value, []), do: listed_held(value)
-  defp held_at(elements, ["[*]" | path]) when is_tuple(elements), do: every_held(elements, path)
-  defp held_at(%{} = map, [key | path]), do: held_at(Map.get(map, key, 0), path)
-  defp held_at(_not_a_map, _path), do: 0
+  # list (M5-11), and one of every element of an array of instances, `gates[*].count`, a
+  # list of each element's in the elements' order, a list of its rows for more dimensions
+  # (decision 330). Decision 329 (the maintainer, 2026-10-31): exactly what the retained
+  # image keeps (Logex.Image), so an instance's value, at any depth, is a map of the
+  # members its type declares, read by the type, each timer's `last` left out, a `:clock`
+  # the image never holds, and nothing the type does not declare, a superseded edit's
+  # leftover among it (decision 315).
+  defp held_at(value, [], type), do: imaged(value, type)
 
-  defp every_held(elements, path) when is_tuple(elements),
-    do: Enum.map(Tuple.to_list(elements), &every_held(&1, path))
+  defp held_at(elements, ["[*]" | path], {:array, type, dims}) when is_tuple(elements),
+    do: rows(elements, dims, &held_at(&1, path, type))
 
-  defp every_held(element, path), do: held_at(element, path)
+  defp held_at(%{} = map, [key | path], %FbType{} = type),
+    do: held_at(Map.get(map, key, 0), path, member_type(type, key))
 
-  defp listed_held(value) when is_tuple(value), do: Enum.map(Tuple.to_list(value), &listed_held/1)
-  defp listed_held(value), do: value
+  defp held_at(_not_a_map, _path, _type), do: 0
+
+  defp imaged(%{} = map, %FbType{members: members} = type),
+    do:
+      for(
+        member <- members,
+        kept = FbType.type_of(type, member),
+        kept != :clock,
+        into: %{},
+        do: {member.name, imaged(Map.get(map, member.name, 0), kept)}
+      )
+
+  defp imaged(values, {:array, type, dims}) when is_tuple(values),
+    do: rows(values, dims, &imaged(&1, type))
+
+  defp imaged(value, _type), do: value
+
+  # Each element of an array of `dims` given to `fun`, a list of its rows for more
+  # dimensions, the rightmost subscript fastest (Logex.Array).
+  defp rows(values, [_count], fun), do: Enum.map(Tuple.to_list(values), fun)
+
+  defp rows(values, [_count | dims], fun),
+    do: Enum.map(Tuple.to_list(values), &rows(&1, dims, fun))
 
   # M5-11: a value as a report gives it to a host, an array's as a list, a list of lists for
   # more dimensions, as a host's input takes one, where the state holds it whole.
