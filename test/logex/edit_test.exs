@@ -1277,6 +1277,37 @@ defmodule Logex.EditTest do
     end
   end
 
+  describe "a resume asks who has held the instance since the last switch (decision 336)" do
+    # The configuration edit's case is `config_edit_test.exs`'s, of the same name. A lone
+    # instance's clock moves only by its own scans, so no program holds it unscanned for
+    # any time and the time a resume takes is the program stopped's by construction: the
+    # same sequence finishes on time, as it did before decision 336.
+    test "a conveyor's lube timer, tested, untested, 30 ms with no scan, and tested and " <>
+           "untested at once, finishes on time" do
+      head = "var_input run bool\nvar_output oiled bool\nvar lube rto\n\n"
+      original = c!(head <> "xic run rto lube 30\nxic lube.dn ote oiled", "conveyor")
+      candidate = c!(head <> "xic lube.dn ote oiled", "conveyor")
+      {_, state} = run(original, [{0, %{"run" => 1}}, {10, %{}}])
+      assert %{"acc" => 10, "en" => 1, "last" => 10} = state.env["lube"]
+
+      {edit, state, _} = Edit.test(accept!(original, candidate, state), state)
+      {_, state} = Runtime.scan(candidate, state, 0)
+      {edit, state, report} = Edit.untest(edit, state)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+
+      # 30 ms in which the host scans nothing, as an event task's instance, then a test
+      # and an untest at once: the timer is given back exactly.
+      {edit, state, _} = Edit.test(edit, state)
+      {_edit, state, report} = Edit.untest(edit, state)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      assert %{"acc" => 10, "last" => 10} = state.env["lube"]
+
+      # Its next scan, 35 ms on, catches up the 35 ms, and the lube is done.
+      assert {%{"oiled" => 1}, %{env: %{"lube" => %{"dn" => 1}}}} =
+               Runtime.scan(original, state, 35)
+    end
+  end
+
   describe "an ons across a switch (decision 21; fixes F2, F3, F7)" do
     @d "var_input go bool\nvar_input a bool\nvar_input b bool\nvar_input q bool\nvar s9 bool\n" <>
          "var_output pulse bool\nvar_output y bool\n"

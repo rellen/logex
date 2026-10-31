@@ -2046,38 +2046,57 @@ defmodule Logex.ApiContractTest do
   defp timer!(%{"pre" => pre} = was, {tag, from, to}, {later, switched}, undo, {expected, next}) do
     {how, target} = pre_target(undo, pre, from, to)
     now = later.now
-    edit_reach(:undo_after_restart, switched and found?(undo) and was["last"] != now)
-    {was, undone} = resume_undone(was, undo, switched, now, tag)
+    found = was["last"]
+    edit_reach(:undo_after_restart, switched and found?(undo) and not left?(undo, found))
+    was = resume_undone(was, undo, switched)
+    # Decision 336: where no scan has run since this edit's last switch, a lone instance's
+    # `now` is still that switch's, so the program stopped has held it for no time.
+    since = since_switch(switched and undo != nil, now)
     resumed? = to != nil and was["en"] == 1 and was["last"] < now
     moved = Map.put(was, "pre", target)
-    assert later.env[tag] == resumed_to(resumed?, moved, now)
+    last = resumed_to(resumed?, was["last"], {now, since})
+    assert later.env[tag] == last_put(moved, last)
 
     entries =
-      preset_entries(tag, pre, target, to, was) ++
-        undone ++ resumed_entry(resumed?, tag, now, was["last"])
+      preset_entries(tag, pre, target, to, was) ++ last_entries(tag, found, last)
 
     edit_reach(how, target != pre or how == :pre_frozen)
-    {entries ++ expected, Map.put(next, tag, {target, pre, resumed_last(resumed?, was["last"])})}
+    {entries ++ expected, Map.put(next, tag, {target, pre, last_moved(found, last)})}
   end
 
   defp timer!(_not_a_timer, _timer, _later, _undo, acc), do: acc
 
-  defp resumed_to(true, moved, now), do: Map.put(moved, "last", now)
-  defp resumed_to(false, moved, _now), do: moved
+  # A map a plain swap left with no `last` keeps none.
+  defp last_put(timer, nil), do: timer
+  defp last_put(timer, last), do: Map.put(timer, "last", last)
 
-  defp resumed_entry(true, tag, now, last), do: [{:resumed, tag, now - last}]
-  defp resumed_entry(false, _tag, _now, _last), do: []
+  defp since_switch(true, now), do: now
+  defp since_switch(false, _now), do: nil
 
-  defp resumed_last(true, last), do: last
-  defp resumed_last(false, _last), do: nil
+  # A resume moves `last` on by the time since the later of it and the switch since which
+  # the program stopped has held the instance unscanned (decision 336), to `now` where none.
+  defp resumed_to(true, last, {now, since}), do: last + now - max(last, since || last)
+  defp resumed_to(false, last, _clock), do: last
 
-  # Where this edit's last switch resumed the timer and no scan has run since, its `last`,
-  # still at `now`, goes back to the one that switch found; not after a restart, which
-  # started the timer again.
-  defp resume_undone(%{"last" => now} = was, {_, _, last}, true, now, tag) when last != nil,
-    do: {Map.put(was, "last", last), [{:resume_undone, tag, now - last}]}
+  # The net move of `last`, on a resume and back a resume given back.
+  defp last_entries(tag, found, last) when last > found, do: [{:resumed, tag, last - found}]
+  defp last_entries(tag, found, last) when last < found, do: [{:resume_undone, tag, found - last}]
+  defp last_entries(_tag, _found, _last), do: []
 
-  defp resume_undone(was, _undo, _switched, _now, _tag), do: {was, []}
+  defp last_moved(same, same), do: nil
+  defp last_moved(found, left), do: {found, left}
+
+  defp left?({_, _, {_found, left}}, left), do: true
+  defp left?(_undo, _last), do: false
+
+  # Where this edit's last switch moved the timer's `last`, a resume or a resume given
+  # back, and no scan has run since, a `last` still where it left it goes back to the one
+  # that switch found (decision 336, both ways); not after a restart, which started the
+  # timer again.
+  defp resume_undone(%{"last" => left} = was, {_, _, {found, left}}, true),
+    do: Map.put(was, "last", found)
+
+  defp resume_undone(was, _undo, _switched), do: was
 
   defp found?({_, _, last}), do: last != nil
   defp found?(nil), do: false
@@ -4065,6 +4084,12 @@ defmodule Logex.ApiContractTest do
     :round_trip_back,
     :round_trip_started,
     :round_trip_joined,
+    # Decision 336: a round trip after the original held the instance unscanned, its
+    # timer behind the clock, given back exactly (`ce_script(:held, ...)`).
+    :round_trip_held,
+    # Decision 336: a resume by the time since the last switch alone, its `last` behind
+    # it, the time before it another program's hold.
+    :resumed_after_hold,
     :unscanned_switch,
     :restart_in_edit,
     :stale,
@@ -4126,6 +4151,13 @@ defmodule Logex.ApiContractTest do
     # by one that only moves `b1`'s `retain`, tested, untested and cancelled.
     for _ <- 1..10, do: ce_configuration(:leftover)
 
+    # Decision 336: then 20 drawn toward `{7613, 10, 19}`'s round trip, a test and an untest
+    # at once after the original has held the instance for some cycles since the untest
+    # before, unscanned where its task is slow or an event task (`:round_trip_held`): a
+    # test and an untest, each after three cycles, three cycles more, and a test and an
+    # untest with no cycle before either, the round trip giving back every timer exactly.
+    for _ <- 1..20, do: ce_configuration(:held)
+
     assert Process.get(:ce_refused, MapSet.new()) == MapSet.new(Keyword.keys(@ce_refusals))
     assert Process.get(:ce_diagnosed, MapSet.new()) == MapSet.new(@ce_diagnostics)
     assert Process.get(:ce_kinds, MapSet.new()) == MapSet.new(@report_kinds)
@@ -4155,6 +4187,7 @@ defmodule Logex.ApiContractTest do
       prev: %{},
       onsp: %{},
       resumed: false,
+      moves: %{},
       o: nil
     }
 
@@ -4178,6 +4211,18 @@ defmodule Logex.ApiContractTest do
     |> ce_scripted(:cancel)
   end
 
+  defp ce_script(:held, w) do
+    w
+    |> ce_cycled(3)
+    |> ce_forced(&ce_timer_dropped/1)
+    |> ce_scripted(:test)
+    |> ce_scripted(:untest)
+    |> ce_cycle(5)
+    |> ce_at_once(:test)
+    |> ce_at_once(:untest)
+    |> ce_scripted(:cancel)
+  end
+
   defp ce_script(:scripted, w) do
     w
     |> ce_accept()
@@ -4197,7 +4242,21 @@ defmodule Logex.ApiContractTest do
         versions: Map.new(spec.versions, fn {type, v} -> {type, %{v | blk: true}} end)
     }
 
+  # Toward `:round_trip_held`: every version runs `t1` on `in`, held at 1, and every
+  # instance on the slow task, which three cycles may not reach.
+  defp ce_spec_for(:held, spec),
+    do: %{
+      spec
+      | instances: for(i <- spec.instances, do: %{i | task: "slow"}),
+        versions: Map.new(spec.versions, fn {type, v} -> {type, %{v | ton: pick([15, 30])}} end),
+        wiring: Map.new(spec.wiring, fn {name, wires} -> {name, %{wires | "in" => 1}} end)
+    }
+
   defp ce_spec_for(_bias, spec), do: spec
+
+  # A candidate whose every version runs no instruction on `t1`.
+  defp ce_timer_dropped(spec),
+    do: %{spec | versions: Map.new(spec.versions, fn {type, v} -> {type, %{v | ton: nil}} end)}
 
   # A candidate made from the configuration running by `change`, accepted as any.
   defp ce_forced(w, change) do
@@ -4220,6 +4279,11 @@ defmodule Logex.ApiContractTest do
 
   defp ce_toggled(:retain), do: nil
   defp ce_toggled(_none), do: :retain
+
+  defp ce_cycled(w, n), do: Enum.reduce(1..n, w, fn _, w -> ce_cycle(w) end)
+
+  defp ce_at_once(%{e: nil} = w, _step), do: w
+  defp ce_at_once(w, step), do: ce_step(step, w)
 
   # Each switch after a few cycles, so that a timer may be timing when it comes.
   defp ce_scripted(%{e: nil} = w, _step), do: w
@@ -5267,7 +5331,7 @@ defmodule Logex.ApiContractTest do
     assert rt.config == ConfigEdit.running(next)
     ce_unmoved!(w.rt, rt, report)
     ce_rebuilt!(w.rt, rt, report, :switch)
-    ce_restated!(w.rt, rt, report, {:switch, step == :test and stage == :accepted})
+    ce_restated!(w.rt, rt, report, {:switch, step == :test and stage == :accepted, w.moves})
     ce_one_copy!(rt, ce_switched_to(step, w))
     ce_round!(step, w, rt, report)
     ce_reach(:model_after_switch)
@@ -5282,7 +5346,8 @@ defmodule Logex.ApiContractTest do
         passed: w.sup ++ w.passed,
         sup: [],
         round: ce_round_open(step, w.rt, report),
-        resumed: Enum.any?(report, &match?({:resumed, _, _}, &1))
+        resumed: Enum.any?(report, &match?({:resumed, _, _}, &1)),
+        moves: ce_moves(w.rt, report)
     }
   end
 
@@ -5311,6 +5376,35 @@ defmodule Logex.ApiContractTest do
         round: nil
     }
   end
+
+  # Decision 336: where no scan has run since this edit's last switch, the time of that
+  # switch, which a kept instance's `now` still holds (decision 56); otherwise, at the first
+  # test and for an instance back from aside, none.
+  defp ce_since(false, %{switched: true, now: since}), do: since
+  defp ce_since(_first_or_back, _state), do: nil
+
+  # What this edit's last switch moved a timer's `last` from, where it is still where that
+  # switch left it and no scan has run since.
+  defp ce_given_back(left, {found, left}, true), do: found
+  defp ce_given_back(last, _move, _switched), do: last
+
+  # Each move of a kept instance's timer's `last` a switch reports, by path, from the
+  # `last` it found to the one it left, for the next switch to give back.
+  defp ce_moves(before, report),
+    do:
+      Map.new(
+        for {kind, path, gap} <- report,
+            kind in [:resumed, :resume_undone],
+            [name | rest] = String.split(path, "."),
+            state = before.instances[name],
+            state != nil,
+            not Enum.any?(report, &match?({:instance_back, ^name, _}, &1)),
+            %{"last" => last} = get_in(state.env, rest),
+            do: {path, {last, ce_last_moved(kind, last, gap)}}
+      )
+
+  defp ce_last_moved(:resumed, last, gap), do: last + gap
+  defp ce_last_moved(:resume_undone, last, gap), do: last - gap
 
   defp ce_back(:testing), do: :untest
   defp ce_back(_stage), do: :test
@@ -5438,7 +5532,7 @@ defmodule Logex.ApiContractTest do
   # configurations' text and the resource before the step; and what a step leaves in every
   # running state, read from its program's text: a switch every tag its program declares
   # but a var_external, and a prune those alone.
-  defp ce_restated!(before, later, report, {:switch, first?}) do
+  defp ce_restated!(before, later, report, {:switch, first?, moves}) do
     {from, to} = {before.config, later.config}
     {before, dropped} = ce_left(before, from, first?)
     was = Map.new(from.tasks, &{&1.name, &1})
@@ -5608,12 +5702,21 @@ defmodule Logex.ApiContractTest do
 
     # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
     # timing; and, but at the first test, no start over a value the state already holds.
+    # Decision 336: a kept instance's timer first given back what this edit's last switch
+    # moved, where no scan has run since and its `last` is still where that switch left
+    # it, and then, where no scan has run since that switch, resumed only by the time
+    # since it, the program stopped's hold; one back from aside to the resource's clock.
+    back = for {:instance_back, name, _} <- report, do: name
+
     for {:resumed, path, gap} <- report do
       [name | rest] = String.split(path, ".")
       state = Map.merge(before.instances, before.aside)[name]
       times = ce_times(state.type, rest)
       %{^times => 1, "last" => last} = get_in(state.env, rest)
-      assert last + gap == later.now
+      since = ce_since(first? or name in back, state)
+      base = ce_given_back(last, moves[path], state.switched)
+      assert last + gap == base + later.now - max(base, since || base), path
+      ce_reach(:resumed_after_hold, since != nil and since > base)
       ce_reach(:resumed_by_tt, times == "tt")
     end
 
@@ -5950,6 +6053,7 @@ defmodule Logex.ApiContractTest do
             do: p
 
       ce_reach(:round_trip_started, paths != [])
+      ce_reach(:round_trip_held, ce_behind?(state, later.now))
       ce_reach(:round_trip_joined, Enum.any?(test_report, &match?({:joined, _, _}, &1)))
 
       expected =
@@ -5959,15 +6063,7 @@ defmodule Logex.ApiContractTest do
 
       expected =
         Enum.reduce(resumed, expected, fn path, env ->
-          undone? = Enum.any?(test_report, &match?({:resume_undone, ^path, _}, &1))
-
-          ce_resumed_back(
-            String.split(path, ".", parts: 2),
-            name,
-            {name in back, undone?},
-            later.now,
-            env
-          )
+          ce_resumed_back(String.split(path, ".", parts: 2), name, name in back, later.now, env)
         end)
 
       assert after_env == expected
@@ -6009,6 +6105,17 @@ defmodule Logex.ApiContractTest do
 
   defp ce_round!(_step, _w, _later, _report), do: :ok
 
+  # Decision 336: a kept instance unscanned since the switch before the test, `t1` timing
+  # with its `last` behind the resource's clock, whose round trip gives it back exactly.
+  defp ce_behind?(
+         %{switched: true, type: type, env: %{"t1" => %{"last" => last} = t1}},
+         now
+       )
+       when last < now,
+       do: Map.get(t1, ce_times(type, ["t1"])) == 1
+
+  defp ce_behind?(_state, _now), do: false
+
   defp ce_blocks_kept!(true, _later, _state, _back?), do: nil
 
   defp ce_blocks_kept!(false, later, state, back?),
@@ -6048,11 +6155,12 @@ defmodule Logex.ApiContractTest do
   defp ce_exempt(value, path, env), do: ce_write({:added, path, value}, env)
 
   # Decision 57: a timer of an instance back from aside resumes from the untest. Decision
-  # 56: so does one of a kept instance that the test gave back a resume of an earlier
-  # switch's, the clock having moved since with no scan of it: the known limit of §4.9's
-  # spike, time since the instance's last scan not counted.
-  defp ce_resumed_back([name, path], name, {back?, undone?}, now, env) when back? or undone? do
-    ce_reach(:round_trip_back, back?)
+  # 336: one of a kept instance comes back exactly as the test found it, where the test
+  # gave back a resume of an earlier switch's too, the clock having moved since with no
+  # scan of it: the untest gives back what the test gave back, and no time the original
+  # held is taken, where until decision 336 the time since the instance's last scan was.
+  defp ce_resumed_back([name, path], name, true, now, env) do
+    ce_reach(:round_trip_back)
     put_in(env, String.split(path, ".") ++ ["last"], now)
   end
 

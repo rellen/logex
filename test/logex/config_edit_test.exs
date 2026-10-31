@@ -1024,6 +1024,105 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
+  describe "a resume asks who has held the instance since the last switch (decision 336)" do
+    @conveyor """
+    var_input run bool
+    var_output oiled bool
+    var lube rto
+
+    xic run rto lube 30
+    xic lube.dn ote oiled
+    """
+
+    @line """
+    task oiler single tick priority 1
+
+    var_global tick bool at panel.i.0
+    var_global run bool at panel.i.1
+    var_global oil_q bool at panel.q.0
+
+    program c1 conveyor with oiler
+      c1.run run
+      c1.oiled oil_q
+    """
+
+    defp line_with(conveyor) do
+      {:ok, program} = Logex.compile(conveyor, name: "conveyor")
+      assert {:ok, config} = Configuration.compile("line", @line, %{"conveyor" => program})
+      config
+    end
+
+    # One cycle of `ms` with `tick` as given, and one at once with it 1, so that `c1`'s
+    # event task runs once at the clock's new time.
+    defp ticked(runtime, ms) do
+      {runtime, _, _} = Runtime.cycle(runtime, ms, %{"tick" => 0})
+      {runtime, outputs, [{:ran, "oiler", "c1", _}]} = Runtime.cycle(runtime, 0, %{"tick" => 1})
+      {runtime, outputs}
+    end
+
+    test "a conveyor's lube timer, tested, untested, 30 ms, and tested and untested at " <>
+           "once, finishes on time ({7613, 10, 19})" do
+      # The lube `rto` times from 0 under the original, run by `oiler`'s event: 10 ms by 10.
+      runtime = Runtime.start(line_with(@conveyor))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
+      {runtime, _} = ticked(runtime, 10)
+      assert %{"acc" => 10, "en" => 1, "last" => 10} = runtime.instances["c1"].env["lube"]
+
+      # A candidate that takes the lube rung out, tested, its scan at once, and untested:
+      # nothing is due back, the candidate having held `c1` for no time.
+      candidate = line_with(String.replace(@conveyor, "xic run rto lube 30\n", ""))
+      {edit, _} = accepted(runtime, candidate)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = ticked(runtime, 0)
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+
+      # The original holds `c1` for 30 ms its event task does not run it; tested and
+      # untested at once, the timer is given back exactly, the 30 ms the original's.
+      {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+      assert runtime.now == 40
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      assert %{"acc" => 10, "last" => 10} = runtime.instances["c1"].env["lube"]
+
+      # Its next run, at 45 ms, catches up the 35 ms since 10, and the lube is done.
+      {runtime, outputs} = ticked(runtime, 5)
+      assert Runtime.get!(runtime, "c1.lube.dn") == 1
+      assert outputs["oil_q"] == 1
+    end
+
+    test "an untest gives back what the test gave back, the clock having moved since with " <>
+           "no scan, so the time the original held is caught up" do
+      # `m2`, on the 50 ms task, last scanned at 50 with `t1` timing; the candidate takes
+      # `t1`'s rung out and scans `m2` at 100; the untest at 110 resumes `t1` by 60.
+      runtime = running(60)
+      motor = String.replace(motor_ld(), "xic motor ton t1 5000\n", "")
+      {edit, _} = accepted(runtime, plant(plant_text(), programs(motor)))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = cycles(runtime, 5)
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resumed, "m2.t1", 60} in report
+      assert last_of(runtime, "m2") == 110
+      acc = Runtime.get!(runtime, "m2.t1.acc")
+
+      # The original then holds `m2` from 110 to 140, unscanned; the test gives the resume
+      # back, and the untest at once gives back what the test gave back, so `t1` is as the
+      # test found it: the 30 ms the original held it are not taken.
+      {runtime, _} = cycles(runtime, 3)
+      assert runtime.instances["m2"].switched
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:resume_undone, "m2.t1", 60} in report
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resumed, "m2.t1", 60} in report
+      assert last_of(runtime, "m2") == 110
+
+      # `m2`'s next scan, at 150, catches up the 40 ms since 110.
+      {runtime, _} = cycles(runtime, 1)
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 40
+    end
+  end
+
   describe "instances set aside and brought back (decisions 43, 57 and 65)" do
     test "one removed is set aside, unscanned, and brought back by untest with its state" do
       runtime = running(60)

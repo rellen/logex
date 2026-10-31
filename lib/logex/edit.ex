@@ -82,15 +82,31 @@ defmodule Logex.Edit do
     preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
     restart would;
   - *a resume undone* (fix F11): where this edit's last switch resumed a timer and no
-    scan has run since (`switched`), a `last` still at `now` goes back to the one that
-    switch found, so a test and an untest with no scan between leave the original's
-    timers as they were. A resume an earlier edit's last switch made is not given back;
+    scan has run since (`switched`), a `last` still where that switch left it goes back
+    to the one that switch found, so a test and an untest with no scan between leave the
+    original's timers as they were; and since decision 336 so does a resume given back,
+    so the switch after a test that gave an untest's resume back gives it back in turn,
+    the timer as that test found it. A move an earlier edit's last switch made is not
+    given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
     when it last ran (its `last` before `now`, and `.en` 1 for a `ton` or an `rto`, `.tt` 1
     for a `tof` in its delay or a `tp` in its pulse, M3-2), resumes from the switch, where the
-    program stopped is the one that last scanned (as for one-shots, below): its `last`
-    becomes `now`, so the time no `ton` ran it is not caught up. Where the program started
-    last scanned, a test and an untest with no scan between, it left the timer as it is.
+    program stopped is the one that last scanned (as for one-shots, below), so the time no
+    `ton` ran it is not caught up. Decision 336: the rule asks too who has held the
+    instance since this edit's last switch. Where no scan has run since that switch, the
+    program stopped has held the instance only since it, so `last` moves on by `now -
+    max(last, that switch's time)`, the time before it another program's, which the timer
+    catches up as that program would have; where a scan has run since, or this edit made
+    no switch before, `last` becomes `now`. Where the program started last scanned, a test
+    and an untest with no scan between, it left the timer as it is. A lone instance's
+    clock moves only by its own scans, so the program stopped has held it unscanned for
+    no time and the rule takes what it did before decision 336; in a resource, where a
+    cycle moves the clock without scanning an instance, it keeps the time another program
+    held it, so a test and an untest at once after such a hold give every timer back
+    exactly.
+
+  A report names each move of `last` once, by its net: `:resumed` where it moves on,
+  `:resume_undone` where it moves back.
 
   Each move of `.pre` is reported as `:preset`. A `.pre` that stays, on a timer the
   program started runs, is reported as `:preset_kept` where it is not that program's
@@ -261,7 +277,7 @@ defmodule Logex.Edit do
   | `:preset` | `{from, to}`, the move of the timer's `.pre`, a counter's `.pv` | a switch |
   | `:preset_kept` | `{pre, preset}`: `.pre` (`.pv`) kept, not the preset of the instruction that runs it | a switch |
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0; for a counter, `{cv, pv}` | a switch |
-  | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
+  | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` but where the program stopped has held the instance unscanned only since the last switch, or a resume given back is given back in turn (decision 336) | a switch |
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
   | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it, its `osr` or `osf` sets no pulse; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |

@@ -76,7 +76,11 @@ defmodule Logex.Configuration.Edit do
     value as its own, `{:left, path, value}` (decision 25). A timer
     resumes from the resource's clock, and the switch gives the instance that clock as its
     `now`, fix F11's undo reading the instance's own `now` first, the time the last switch
-    gave it (decision 56);
+    gave it (decision 56), and since decision 336, where no scan has run since this edit's
+    last switch, taking only the time since that switch, the program stopped having held
+    the instance since then and the original's hold before it kept, and giving back what
+    that switch moved, so a test and an untest at once after the original held the
+    instance unscanned give every timer back exactly (`Logex.Edit`'s rules);
   - an instance only the configuration started runs, or one it runs as another program
     type (decision 43), which may run on another task (decision 61), comes back from
     aside where an earlier switch of this edit set it aside, as it was, its `now` the

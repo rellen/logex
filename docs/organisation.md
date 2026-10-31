@@ -1337,8 +1337,8 @@ rules, in order:
 | `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
 | `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
-| Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back | `{:resume_undone, t, ms}` |
-| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* | `{:resumed, t, ms}` |
+| Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back. *(Since decision 336, 2026-10-31: what that switch moved of `last`, a resume or a resume given back, goes back where `last` is still where it left it, so the switch after a give-back gives it back in turn, reported by the net move, `:resumed` or `:resume_undone`.)* | `{:resume_undone, t, ms}` |
+| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* *(Changed 2026-10-31 by decision 336: the rule asks too who has held the instance since this edit's last switch. Where no scan has run since it, F has held the instance only since that switch, so `last` moves on by `now - max(last, switch)`, the time before it another program's and left for the timer to catch up; otherwise it becomes `now` as before.)* | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
 | Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it. Not reported where a rule above started it, nor for a var_input of the program started, whose value a restart keeps. *(From Milestone 5, decision 157: a tag of every type, an array element by element, compared exactly as declared, `0` and `0.0` two values, so `var x real 0` edited to `var x real 0.0` is reported though both start at 0.0.)* | `{:initial_changed, n, {old, new}}` |
@@ -1812,7 +1812,8 @@ an untest with no cycle between leaves every instance's env as it was but for wh
 switch started and three things decided rules change: a tag the test joined to its global
 (decision 55), a timer of an instance back from aside (decision 57), and a timer whose
 earlier resume the test gave back after the clock moved (decision 56's known limit,
-below).)* *(Its round trip compared only each instance's env, the names set aside and
+below; since decision 336 the untest gives that back too, and the round trip allows
+nothing for it).)* *(Its round trip compared only each instance's env, the names set aside and
 the original's globals, though this note claimed the whole resource, which the review of
 the landing found on 2026-10-14. It now compares the rest too, and the resource is as it
 was but for those and what a switch's own rules set: each instance's `now` the resource's
@@ -2100,6 +2101,12 @@ as the test found it. It found one defect and one cost the record already accept
   scanned at 50 ms, frozen at 70 ms, resumed at 130 ms, 80 ms not caught up), and the
   decision was taken with it. It is a known limit, and the round trip a walk checks in a
   resource allows it: a timer the untest itself resumes ends at the untest's time.
+  *(Narrowed 2026-10-31 by decision 336: a switch made with no scan since this edit's
+  last switch takes only the time since that switch, and gives back what that switch
+  moved, so a round trip after a hold by another program, `{7613, 10, 19}`'s, gives every
+  kept timer back exactly, and the walk's round trip allows nothing for it; the limit
+  stands for the time before an edit's first switch and after a scan, as decision 56
+  measured it.)*
 
 *The forecast* is the report a test taken now would give: the switch computed over the
 runtime as it is, and thrown away. A test taken later reads the resource as it is then
@@ -5623,6 +5630,9 @@ choices are §4.9's rules.
     instance's own `now` for fix F11's undo, the time the last switch set, before it sets
     `now` to the resource's, or a cycle between a test and its untest would leave a
     resumed timer's `last` at the test's time, unreported.)* *(Landed 2026-10-13.)*
+    *(Narrowed 2026-10-31 by decision 336: where no scan has run since the edit's last
+    switch, a resume takes only the time since that switch; the measurement above, across
+    an edit's first switch, stands.)*
 57. **An instance brought back from aside: whether its timers catch up (OE-2).** An instance
     set aside, removed at test or the old state of a retyped one, comes back at untest, or
     at a second test for one only the candidate runs; its timers that were timing kept
@@ -5636,7 +5646,8 @@ choices are §4.9's rules.
     23's case, not decision 8's. Its one-shots need no block: their bits hold what they
     last received, so an edge they see on return is a real one. Adopted: an instance back
     from aside carries on from where it stopped, its timers do not catch up, and the report
-    says so. *(Landed 2026-10-13.)*
+    says so. *(Landed 2026-10-13.)* *(Unchanged by decision 336, which leaves an instance
+    back from aside resuming from the switch, as `config_edit_test.exs` pins.)*
 58. **How a held output is named in the report (OE-2).** A var_output a kept instance no
     longer writes gives OE-1's `{:held, "m1.run_lamp", v}` by path, and the output point
     it is connected to, `lamp_1`, holds too, `{:held, "lamp_1", v}`.
@@ -11768,6 +11779,56 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      4` added reports `{:added, "spare", 4}` alone.
 
      **Taken: confirmed, `:added` alone** (the maintainer, 2026-10-31).
+336. **A round trip's resume (Milestone 6),** M6-7's question `{7613, 10, 19}`, traced at
+     M6-8's review: `m2`, whose `rto` `t1` an event task runs, is tested at 140 ms by a
+     candidate that takes away `t1`'s rung, scanned by it, and untested at 140 ms; its
+     task does not run it for 30 ms, which the original holds; tested again at 170 ms and
+     untested at once, the untest resumed `t1` by 30 ms, `{:resumed, "m2.t1", 30}`,
+     since the program that last scanned `m2` was the candidate: a lube timer on a
+     conveyor finished 30 ms late after a test and an untest made back to back.
+
+     **Taken: changed (option a), the round trip's resume is a defect** (the maintainer,
+     2026-10-31): a timer resumed at an untest, or at any switch back, comes back with
+     exactly the time it had. The resume rule asks, beside who last scanned the instance,
+     who has held it since the last switch, so that time another program held, the
+     original's from the first untest to the second test here, is never taken from it.
+     *As built:* the edit's record of each instance keeps the time of its last switch,
+     `held` (`Logex.Edit.Plan`); where no scan has run since that switch (`switched`),
+     the program it started, which this switch stops, has held the instance only since
+     it, so a resume moves `last` on by `at - max(last, held)`, the time before left for
+     the timer to catch up, and none where `last` is behind it by no more; and a switch
+     gives back what this edit's last switch moved of a timer's `last`, a resume or a
+     resume given back, where no scan has run since and `last` is still where it left
+     it, so that a test that gives back an untest's resume, the clock having moved since
+     with no scan, is undone by the untest after it, the timer as the test found it.
+     Where a scan has run since the last switch, or this edit made none before, the
+     resume moves `last` to `at` as before, so decision 56's measurement (`m2` last
+     scanned at 50 ms by the original, frozen at 70 ms, resumed at 130 ms by 80 ms) and
+     §4.9's known limit across a first switch stand; and an instance back from aside
+     still resumes from the switch (decision 57). A lone instance's clock moves only by
+     its own scans, so no program holds it unscanned for any time, and its edit behaves
+     as it did, which 400 random sequences of scans, tests, untests, accepts and restarts
+     over an `rto` on a rung a jump may skip confirm, every report and state the same.
+     *A reading the record leaves open (provisional):* the time a program held an
+     instance unscanned before the first switch of an edit, decision 56's 20 ms, is still
+     taken; and after a resume is given back across a cycle with no scan (fix F11's undo,
+     decision 56's refinement), the next resume counts from that switch.
+337. **The suite's failure that named no test (Milestone 6),** M6-8's first question: one
+     run in seven of the full suite failed one test and printed none, `Result:
+     2406/2407 passed`.
+
+     **Taken: confirmed (b), left noted** (the maintainer, 2026-10-31): the gate names a
+     failed run's tests from ExUnit's failures manifest, as M6-8's review made it, and
+     nothing else is built; the failure has not come back in the runs since.
+338. **A block's retained `var` and `get/2` (Milestone 6),** M6-8's review's third
+     question: the store holds `s1.gs[0].j` for a block's own `var j`, a warm start puts
+     it back, and `Logex.Runtime.get/2` and `Logex.Runner.get/2` refuse the path, a `var`
+     of a block being hidden outside it (decision 33).
+
+     **Taken: confirmed (a), it stays hidden** (the maintainer, 2026-10-31), as IEC
+     61131-3 hides a function block's internal variables from outside it and Logix hides
+     an Add-On Instruction's local tags from other logic: a retained internal of a block
+     is seen through the block's outputs.
 
 ---
 
