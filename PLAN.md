@@ -10575,7 +10575,8 @@ done-when reads the next store write; and last the contract walk and the documen
   untest resumed `m2.t1`, an `rto` timing with its `last` 30 ms behind the resource's
   `now`, by 30 ms, `{:resumed, "m2.t1", 30}`, the test having resumed nothing, so its
   `last` came back 170 where the round trip wants 140. The edit's only change to that
-  type was `t1`'s `retain`; the walk's history before it was not traced.
+  type was `t1`'s `retain`; the walk's history before it was not traced. (M6-8's review
+  traced it, below: the candidate also takes away `t1`'s `rto` rung.)
 
   *A question it raises, for the maintainer.* An operator who tests an edit and at once
   untests it, before the plant scans again, expects every timer exactly as it was. Here
@@ -10666,7 +10667,8 @@ done-when reads the next store write; and last the contract walk and the documen
 
   Every earlier walk draws exactly as before: the draw's new key, `shelf`, is no draw, the
   life walk's steps are drawn only in its own walks, the restated store write reads `kt`
-  by `get/2` where it read it by `get!/2`, and the runner walk's table is owned by an
+  by `get/2` where it read it by `get!/2` (by `get!/2` again since M6-8's review, below),
+  and the runner walk's table is owned by an
   `Agent` that outlives either module, so that the two modules share it.
 
   *Mutation table* (`scratchpad/m6/m8w/mut`), 19 mutants in `lib/`, each judged by the
@@ -10715,6 +10717,146 @@ done-when reads the next store write; and last the contract walk and the documen
      19}`, a test then an untest resuming an `rto` by 30 ms, is a walk that existed before
      M6-8 and M6-8 changes none of its draws; it is left for the maintainer's answer to
      M6-7's three options rather than read here.
+  *M6-8's review* (2026-10-31) found no defect in decision 329 or in M6-8's code. It
+  found the walks short of their claims in seven places, each answered here, the walks'
+  code alone changed, no line of `lib/`:
+  1. *Five rules no walk reached*, of 20 mutants the review planted in the retention
+     rules and judged by the full suite: each is now walked, and each of the five fails
+     `api_contract_test.exs` alone. An integer stored for a real taken at its nearest
+     real (decision 311) and the drops' order by subscript value, `f[2].k` before
+     `f[10].k` (M6-4's review): M6-4's image walk runs 40 more programs after its 60,
+     seed `{2026, 10, 2905}`, drawn toward reals and arrays of eleven or twelve cells, one
+     to three retained values made misfits or, at a real, integers, its oracle ordering
+     the drops by value where it had ordered them as text, `iw_int_for_real` and
+     `iw_past_nine`. The store's `trigger` lines (decision 313): the life walk's trigger
+     `g`, which logic writes, is retained, its model keeping the last sample its task's
+     cycle took, 0 at a cold restart and kept at a warm one, so that a store's `trigger g`
+     line and a warm fresh start's sample are walked across every end and crash,
+     `life_trigger_kept`. The newest pending write winning (decision 275): a life step,
+     one of eleven, holds the runner's writer with `:sys.suspend/1` for three periods or
+     more and lets it go, the store then holding the model's last period write,
+     `life_latest_wins`. A 2-D array's report value as rows (decision 330): a walk of its
+     own, seed `{2026, 10, 3300}`, 120 pairs of versions of a program of a 2-D array, a 2-D
+     array of a block's instances, a 1-D array and a dint, every line's qualifier and the
+     block's members' drawn in each, accepted, tested and untested, each retain entry of
+     the test's report, its forecast and the untest's restated by the nearest mark with
+     its value as the image keeps it, its reach five `rq_` atoms.
+  2. *The life walk's oracle no longer comes from the code under test.* Its model's last
+     write is restated from the model's resource through `get/2` (`life_image/2`), never
+     taken by `Logex.Runtime.retained/1`; the store's text after its header is checked
+     whole against it, by the store's form restated, after every end and start; each warm
+     start's resource, which the model still builds by `start/2`, is held leaf by leaf
+     through `get/2` to the image restated, a value no drop names kept and every other
+     path at the configuration's first value. The block's member `j` is now a var_output,
+     which `get/2` reads, a `var` of a block being hidden outside it, so that
+     `s1.gs[0].j` and `s1.gs[1].j` are among the paths compared, and the second timer and
+     gate run on the first timer's done bit, so that the elements hold different values.
+     Two mutants of the kind the review described, an image naming every element of an
+     array of instances as its first, and a start laying element 0's value into element 1,
+     pass the life walk at `490719a` and fail it now. The resource walk's cold restart and
+     start hold each instance's first env to one restated from its program's text.
+  3. *The documents' claims made true*: the store is checked after a changed
+     configuration's start and end too (`life_changed_store`); one end in four of a
+     running runner trips it first, a device killed, so each kind of end is reached
+     tripped, `life_stop_tripped` to `life_gen_stop_tripped`; and the store write reads
+     `kt` by `get!/2` again, a changed configuration's write restated by the life walk
+     alone. 30 `life_` atoms.
+  4. *The resource walk redraws an instance's own qualifiers*: a program type's lines and
+     its block's members' drawn again now and then, `pp`'s `k` retyped and `m1.k`'s
+     stored value made a misfit, so that a resource's instance drops a member as
+     `:unretained`, retyped or a misfit, restated from the draws in decision 277's order,
+     kinds first; `rr_member_unretained`, `rr_member_retyped` and `rr_member_misfit`, 25
+     atoms.
+  5. *`{7613, 10, 19}` traced*, the question left the maintainer's (below).
+  6. *The suite's failure that named no test chased*: the suite run 15 times more on
+     `490719a` and on this work's trees, six plain and two under three busy loops at
+     `490719a`, and three gates and four timings after, never failed so again. The gate used for
+     these commits now reads ExUnit's failures manifest after a red run, so a failure
+     names its tests whatever the formatter printed. Under three busy loops the suite
+     timed out the runner walk and the life walk at ExUnit's 60 s, each named; both are
+     given 300 s, the configuration edit walk's. (The gate's script is the scratchpad's,
+     `m6/rv8fix/gate2.sh`; the repository is unchanged by it.)
+  7. *`:round_trip_started`*, a reach miss of the lone edit walk at some fresh families,
+     no check failing: at the families below it missed once, at `9210`, and `:misfit` at
+     `9209` and `9221`, as before; left as reaches rare by their nature.
+
+  *Mutation table* (`scratchpad/m6/rv8fix/mut_results.txt`), the review's 20 mutants and
+  two of the kind its second finding describes, each judged by the full suite at
+  `adb18f0`: 21 red and one green, the review's Q3, a test's `:retain_removed` value read
+  by the original's type, equivalent as M6-7 found (a node is reported whole only where
+  both programs declare the same leaves under it). Every red one now fails
+  `api_contract_test.exs` too, the review's five among them: I2 (an integer for a real a
+  misfit) and I3 (drops in text order) the image walk, E1 (no `trigger` lines) and N2
+  (the oldest pending write kept) the life walk, Q1 (rows flattened) the 2-D walk. Of the
+  two new ones, an image naming every element of an array of instances as its first is
+  caught at `490719a` too, by the changed start's drops; a start laying element 0's
+  value into element 1 passes the life walk at `490719a` and fails it now.
+
+  *The walks at 30 fresh families* `{9201..9230, ...}` (`scratchpad/m6/rv8fix/seeds3.sh`),
+  no check failing in any after the fix below: the image walk, the 2-D walk and the
+  resource walk pass all 30, every atom reached; the block edit's walk all 30; the
+  configuration edit's 29, `9221` missing `:resume_undone` alone; the lone edit's 27, the
+  others missing `:misfit` (2) or `:round_trip_started` (1); the life walk all 30, 26 of
+  them every atom, the others `:life_trigger_kept` (3, a sample of 1 in a store checked)
+  or `:life_k_retyped` (1); and the runner walk 15 every atom, the rest atoms rare by their
+  nature (`:store_tripped_at_start` 7, `:zero_at_stop` 6, `:store_unretained` 6,
+  `:period_restored` 3, `:next_due_from_step` 2, `:forced_trigger_pressed` 2 and
+  `:store_restored` 1). The life walk's first run of them failed three families, `9217`,
+  `9221` and `9230`, on its own model: a cold restart's write restated with the trigger's
+  sample as it stood before the restart, where the restart's resource holds 0. The model
+  was put right (`7f962fd`) and all 30 passed again.
+
+  *Run under load*: the life walk 50 times in one process under four busy loops on the
+  machine's four cores, passed all 50, about 55 s a walk of twenty, and again after the
+  model's fix under three, 50 of 50 (`scratchpad/m6/rv8fix/load2_ok.log`, `load.log`). A
+  first run, with the fresh families and the mutants on the machine as well, failed its
+  fifth on a device's open timing out in real time, `{:io_init, "drive", :timeout}`, the
+  load beyond any the brief asks.
+
+  *Cost*: no line of `lib/` changed, so no program's cost moved. The suite's wall time,
+  two runs each on four cores: 89.2 and 94.2 s at `490719a`, 84.1 and 84.9 s at
+  `7f962fd`, the noise larger than the walks' added work (the image walk's 40, the 2-D
+  walk's 120 edits and the life walk's held writer, some seconds together).
+
+  2408 tests (11 doctests), up from 2407.
+
+  *Questions it raises, for the maintainer* (M6-8's two above, restated with what the
+  review found).
+  1. *M6-7's question 7613, traced.* At `{7613, 10, 19}` the instance `m2`, whose `rto`
+     `t1` runs in an event task, is edited by a candidate that takes away the rung that
+     runs `t1` (`xic in rto t1 30`) and moves `t1`'s `retain`; it is one edit, no other
+     superseding it in between. Tested at 140 ms, the candidate scans `m2` once; untested
+     at 140 ms, nothing resumes, no time having passed; the event task then does not run
+     for 30 ms; tested again at 170 ms and untested at once, the untest resumes `t1` by 30
+     ms, `{:resumed, "m2.t1", 30}`, since the program that last scanned `m2` is still the
+     candidate. Those 30 ms were the original's, which ran `m2` from the first untest on
+     but had no scan, so the timer would have caught them up at its next scan. So "an
+     earlier edit's is unknown", option (b)'s reading, does not apply: it is the same
+     edit. The operator sees a lube timer on a conveyor finish 30 ms late after a test and
+     an untest made back to back. Options, by what the operator sees: (a) a defect in the
+     resume's rule, which should ask who has held the instance since the last switch as
+     well as who last scanned it, so the timer comes back as it was; (b) the rule right as
+     written, the walk's round trip relaxed where the last scan was the stopped
+     program's, and the 30 ms lost in this sequence documented; (c) left open. IEC
+     61131-3 has no online edit; Logix's test and untest of edits run the original's
+     timers as the original left them, and whether a Logix RTO not scanned catches up
+     the time is not checked here (unverified). The record's reading stays (a), not
+     built.
+  2. *The suite's failure that named no test.* REPRO. Options, by what a developer sees:
+     (a) the gate names a failed run's tests from ExUnit's manifest, as now, and the
+     suite is run until the unnamed failure comes back; (b) leave it noted. The reading
+     taken is (a) for the gate, (b) for the chase, provisional.
+  3. *A block's own `var` is retained but `get/2` cannot read it* (provisional, as it
+     was). The store holds `s1.gs[0].j` for a block's `var j`, and a warm start puts it
+     back, but `Logex.Runtime.get/2` and `Logex.Runner.get/2` refuse the path, a `var`
+     of a block being hidden outside it; the walk made `j` a var_output to read it. An
+     operator with a box counter kept inside a block can see the count survive a crash
+     only through the block's outputs. Options, by what the operator sees: (a) keep it
+     hidden, as IEC 61131-3 hides a function block's internal variables from outside and
+     Logix hides an Add-On Instruction's local tags from other logic; (b) let `get/2`
+     read a retained internal of a block for diagnostics, as Studio 5000 shows an AOI's
+     local tags in its monitor. The reading taken is (a), unchanged.
+
 - **M6-9 · The documents.** README: "Retained values", the trip's restart example run
   again warm, the `rto`'s "until `retain` lands" in "Three more timers", "Settled, not yet
   landed", and "What logex is not", whose "no retained values" clause is replaced and
