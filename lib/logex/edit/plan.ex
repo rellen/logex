@@ -181,12 +181,109 @@ defmodule Logex.Edit.Plan do
     forward = held(o, c)
     back = held(c, o)
     watched = Map.new(forward ++ back, &{&1, true})
+    {marked, unmarked} = requalified(o, c)
 
     %{
-      test: plan({:original, o}, c, forward, watched),
-      untest: plan({:candidate, c}, o, back, watched)
+      test: Map.put(plan({:original, o}, c, forward, watched), :requalified, marked),
+      untest: Map.put(plan({:candidate, c}, o, back, watched), :requalified, unmarked)
     }
   end
+
+  # M6-7 (decisions 278 and 302): each path whose retention the edit changes, a kept path
+  # retained by one program and not by the other, by decision 270's nearest mark as each
+  # program's `retained` settles it (Logex.Program.retained/2), so that `non_retain` and no
+  # qualifier are one and a mark moved between an instance and its members reports only the
+  # paths whose retention it changes. Each program's leaves are read from its tags, a user
+  # block's instance member by member at any depth and an array of them by `[*]`, as
+  # `retained` names them: a tag, an array of an elementary type and a built-in instance
+  # are each one leaf, kept whole. A leaf both programs declare whose retention differs is
+  # in the change, one either alone declares is not, `:added` and `:pruned` its reports;
+  # and the change is named as `retained` names a path, a node whole where every leaf of
+  # either program under it is in it, `s1` for every member of `s1`, and otherwise each
+  # node below that is, `s1.count`, `gates[*].count` for that member of every element
+  # (decision 310's form). `{test, untest}`: the second the first's kinds swapped. A pair of
+  # programs that retain nothing pays one clause.
+  defp requalified(%{retained: nil}, %{retained: nil}), do: {[], []}
+
+  defp requalified(from, to) do
+    was = leaves(from)
+    now = leaves(to)
+    union = Map.keys(Map.merge(was, now))
+    {added, removed} = Enum.reduce(now, {%{}, %{}}, &moved_mark(&1, was, &2))
+    added = collapsed(union, added)
+    removed = collapsed(union, removed)
+
+    {marks(:retain_added, added) ++ marks(:retain_removed, removed),
+     marks(:retain_removed, added) ++ marks(:retain_added, removed)}
+  end
+
+  defp moved_mark({leaf, kept?}, was, acc), do: mark_moved(Map.fetch(was, leaf), leaf, kept?, acc)
+
+  defp mark_moved({:ok, kept?}, _leaf, kept?, acc), do: acc
+
+  defp mark_moved({:ok, false}, leaf, true, {added, removed}),
+    do: {Map.put(added, leaf, true), removed}
+
+  defp mark_moved({:ok, true}, leaf, false, {added, removed}),
+    do: {added, Map.put(removed, leaf, true)}
+
+  defp mark_moved(:error, _leaf, _kept?, acc), do: acc
+
+  # Each leaf of a program's state, as a list of its path's segments, `["gates", "[*]",
+  # "count"]`, to whether the program retains it: whether `retained` names it or a node on
+  # its way. A var_external that is a global holds no state of the instance (OE-2).
+  defp leaves(%{tags: tags, shared: shared, retained: retained}) do
+    marked = Map.new(retained || [], &{segments(&1), true})
+
+    for {name, %Tag{type: type}} <- tags,
+        not is_map_key(shared, name),
+        leaf <- leaves_of([name], type),
+        into: %{},
+        do: {leaf, covered?(leaf, [], marked)}
+  end
+
+  defp leaves_of(path, %FbType{body: %Program{}, members: members} = type),
+    do: Enum.flat_map(members, &leaves_of(path ++ [&1.name], FbType.type_of(type, &1)))
+
+  defp leaves_of(path, {:array, %FbType{body: %Program{}} = type, _dims}),
+    do: leaves_of(path ++ ["[*]"], type)
+
+  defp leaves_of(path, _whole), do: [path]
+
+  defp covered?([], _seen, _marked), do: false
+
+  defp covered?([segment | rest], seen, marked) do
+    path = seen ++ [segment]
+    is_map_key(marked, path) or covered?(rest, path, marked)
+  end
+
+  defp segments(path),
+    do: Enum.flat_map(String.split(path, "."), &segment(String.split(&1, "[*]")))
+
+  defp segment([name, ""]), do: [name, "[*]"]
+  defp segment([name]), do: [name]
+
+  defp joined([first | rest]), do: Enum.reduce(rest, first, &join_segment/2)
+
+  defp join_segment("[*]", path), do: path <> "[*]"
+  defp join_segment(segment, path), do: path <> "." <> segment
+
+  defp collapsed(_union, change) when map_size(change) == 0, do: []
+  defp collapsed(union, change), do: nodes(union, [], change)
+
+  defp nodes(leaves, prefix, change),
+    do:
+      Enum.flat_map(Enum.group_by(leaves, &hd/1, &tl/1), fn {segment, rests} ->
+        node(prefix ++ [segment], rests, change)
+      end)
+
+  defp node(path, rests, change),
+    do: node(Enum.all?(rests, &is_map_key(change, path ++ &1)), path, rests, change)
+
+  defp node(true, path, _rests, _change), do: [path]
+  defp node(false, path, rests, change), do: nodes(Enum.reject(rests, &(&1 == [])), path, change)
+
+  defp marks(kind, paths), do: for(path <- paths, do: {kind, joined(path), path})
 
   # A program's tags with each instance's type itself (Logex.Program.typed_tags/1), as
   # every walk below reads them: a block's compiled body, which runs as a program too,
@@ -202,6 +299,8 @@ defmodule Logex.Edit.Plan do
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
+      # M6-7: the paths the program retains, decision 270's nearest mark (Logex.Program).
+      retained: program.retained,
       # M5-11: each array's sizes, by its name, so that a report gives a host an array as
       # a host is given one, a list (decision 151).
       arrays: for({name, %Tag{type: {:array, _, dims}}} <- tags, into: %{}, do: {name, dims}),
@@ -961,8 +1060,33 @@ defmodule Logex.Edit.Plan do
 
     {%{state | env: env, switched: true, ons_blocked: blocked, now: at},
      %{record | shown: shown, pre: pre, scanned: scanned},
-     Enum.sort(timed ++ inside ++ report ++ unwritten)}
+     Enum.sort(requalified(plan.requalified, env, timed ++ inside ++ report ++ unwritten))}
   end
+
+  # M6-7 (decisions 278 and 302): each path whose retention the edit changes, with the
+  # value it holds, which the next warm restart now keeps or no longer keeps; nothing is
+  # written. A plan of none pays one clause.
+  defp requalified([], _env, report), do: report
+
+  defp requalified(paths, env, report),
+    do: for({kind, path, segments} <- paths, do: {kind, path, held_at(env, segments)}) ++ report
+
+  # M6-7: the value at a retained path as a report gives it to a host, an array's as a
+  # list (M5-11), an instance's as the state holds it, a map of its members, and one of
+  # every element of an array of instances, `gates[*].count`, a list of each element's in
+  # the elements' order, a list of lists for more dimensions.
+  defp held_at(value, []), do: listed_held(value)
+  defp held_at(elements, ["[*]" | path]) when is_tuple(elements), do: every_held(elements, path)
+  defp held_at(%{} = map, [key | path]), do: held_at(Map.get(map, key, 0), path)
+  defp held_at(_not_a_map, _path), do: 0
+
+  defp every_held(elements, path) when is_tuple(elements),
+    do: Enum.map(Tuple.to_list(elements), &every_held(&1, path))
+
+  defp every_held(element, path), do: held_at(element, path)
+
+  defp listed_held(value) when is_tuple(value), do: Enum.map(Tuple.to_list(value), &listed_held/1)
+  defp listed_held(value), do: value
 
   # M5-11: a value as a report gives it to a host, an array's as a list, a list of lists for
   # more dimensions, as a host's input takes one, where the state holds it whole.

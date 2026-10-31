@@ -158,7 +158,9 @@ defmodule Logex.Configuration.Edit do
   by its path. Each kept instance's switch and prune give `Logex.Edit`'s kinds, by path,
   `{:preset, "m1.t1", {5000, 6000}}`, as its moduledoc's table says, among them a member
   input no logic of the instance's program writes any more, `{:unwritten, "m1.lube.r", 1}`
-  (decision 96). The configuration's:
+  (decision 96), and since M6-7 a path of the instance whose retention the edit changes,
+  `{:retain_added, "t1.boxes", %{...}}`, beside a global's by its name (decision 302).
+  The configuration's:
 
   | Kind | Name | Detail | Given by |
   |---|---|---|---|

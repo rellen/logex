@@ -211,6 +211,28 @@ defmodule Logex.Edit do
   removed its rung, which holds the timer at 0 until a restart. It asks nothing of the
   host. A timer's `.acc`, its own output, is not reported.
 
+  **Retention** (M6-7, decisions 270, 278 and 302). An edit that only adds or takes away
+  `retain` changes no value: a switch writes nothing for it, and reports each path whose
+  retention it changes, `{:retain_added, path, value}` or `{:retain_removed, path,
+  value}`, with the value the path holds, which the next warm restart (`Logex.Runtime`'s
+  `restart/3`) and the next retained image (`retained/2`) of the program running now keep
+  or no longer keep. A path's retention is each program's, by decision 270's nearest mark,
+  as its `retained` settles it, so `non_retain` and no qualifier are one, and a mark moved
+  between an instance and its members reports only the paths whose retention it changes,
+  nothing where the same paths are kept. The paths are the leaves of the state both
+  programs declare, a tag, an array of an elementary type and a built-in instance each one
+  leaf, a user block's instance member by member at any depth and an array of them by
+  `[*]`: a leaf whose retention differs is in the change, one only one program declares
+  is not (`:added` and `:pruned` report it), and the change is named as `retained` names
+  a path, a node whole where every leaf of either program under it is in it,
+  `{:retain_added, "s1", %{...}}` for an instance whose every member it retains now, and
+  otherwise each node below it that is, `s1.count`, `gates[*].count` for that member of
+  every element of an array of instances, decision 310's form. A value is given as a
+  report gives one to a host, an array's as a list, an instance's as the state holds it,
+  and a `[*]` path's as a list of each element's, a list of lists for more dimensions,
+  `{:retain_added, "hs[*].ws[*].k", [[3, 3], [3, 3]]}`. A qualifier changed with the type
+  is refused for the type, as every type change is; the accept reports nothing else.
+
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the state to the tags of the program it keeps and reports its held outputs, and blocks
   no one-shot, so one the last switch blocked stays blocked until a scan runs it. Cancel
@@ -234,6 +256,8 @@ defmodule Logex.Edit do
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:unwritten` | the value it keeps: a member input logic writes that the program stopped writes and the program started does not (decision 96) | a switch |
   | `:pruned` | the value it had | assemble, cancel |
+  | `:retain_added` | the value it holds, which a warm restart now keeps; nothing is written (decision 278) | a switch |
+  | `:retain_removed` | the value it holds, which a warm restart no longer keeps; nothing is written (decision 278) | a switch |
 
   The writes a report lists, `:added`, `:input`, `:preset`, `:resume_undone`, `:resumed`
   and `:pruned`, applied to the state before its step, give the state after it, with the

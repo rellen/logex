@@ -1278,9 +1278,7 @@ defmodule Logex.ApiContractTest do
     :next_due,
     :order,
     :priority,
-    :watchdog,
-    :retain_added,
-    :retain_removed
+    :watchdog
   ]
 
   @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resume_undone, :resumed]
@@ -1358,6 +1356,9 @@ defmodule Logex.ApiContractTest do
         Enum.take(["var_output n dint #{pick(["", "7", "9"])}"], pick([0, 1, 1])) ++
         typed("r", r) ++ typed("t1", t1) ++ timer_input(t1) ++ ons_tags(ons)
 
+    # M6-7: each line that may take a qualifier given one now and then.
+    declarations = Enum.map(declarations, &qualified/1)
+
     writable =
       ~w(a b c) ++
         for({name, "var"} <- inputs, do: name) ++
@@ -1377,6 +1378,24 @@ defmodule Logex.ApiContractTest do
 
     Enum.join(declarations ++ rungs, "\n")
   end
+
+  # M6-7 (decision 278): a qualifier drawn on a program's `var` or `var_output` line, the
+  # lines that may take one, none half the time; a variant redraws it. From a random
+  # stream of its own, so that every other draw of the walk, and so its reach, is as it
+  # was before M6-7.
+  defp qualified("var_output " <> rest), do: "var_output " <> qualifier() <> rest
+  defp qualified("var " <> rest), do: "var " <> qualifier() <> rest
+  defp qualified(line), do: line
+
+  defp qualifier do
+    stream = Process.get(:qualifier_stream, :rand.seed_s(:exsss, {2026, 10, 278}))
+    {n, stream} = :rand.uniform_s(4, stream)
+    Process.put(:qualifier_stream, stream)
+    Enum.at(["", "", "retain ", "non_retain "], n - 1)
+  end
+
+  defp unqualified(line),
+    do: String.replace(line, ~r/^(var|var_output) (retain|non_retain) /, "\\1 ")
 
   defp declared(_name, "none"), do: []
   defp declared(name, section), do: [{name, section}]
@@ -1433,6 +1452,7 @@ defmodule Logex.ApiContractTest do
     {declarations, rungs} = Enum.split_with(String.split(source, "\n"), &(&1 =~ ~r/^var/))
     n = "var_output n dint #{pick(["", "7", "9"])}"
     declarations = Enum.map(declarations, &String.replace(&1, ~r/^var_output n dint.*/, n))
+    declarations = Enum.map(declarations, &qualified(unqualified(&1)))
     ton = "ton t1 #{pick([0, 30, 5000])}"
     rungs = Enum.map(drop_one(rungs), &String.replace(&1, ~r/ton t1 \d+/, ton))
 
@@ -1450,7 +1470,7 @@ defmodule Logex.ApiContractTest do
 
   # The running program with a `ton` on its timer, where it declares one and runs none.
   defp with_ton(%Program{source: source} = p),
-    do: with_ton(source =~ ~r/^var t1 ton$/m and not (source =~ ~r/ ton t1 /), p)
+    do: with_ton(source =~ ~r/^var ((non_)?retain )?t1 ton$/m and not (source =~ ~r/ ton t1 /), p)
 
   defp with_ton(true, %Program{source: source}) do
     {:ok, program} = Logex.compile(source <> "\nxic go ton t1 #{pick([30, 5000])}", name: "p")
@@ -1737,6 +1757,7 @@ defmodule Logex.ApiContractTest do
 
     to = Edit.running(next)
     switched!(w.p, to, before, later, report, {name, stage})
+    requalified!(w.p, to, later, report)
     held!(w.p, to, report, later, w.points)
     pre = timers!(w.p, to, before, later, report, w.pre)
     scanned = ons!(sides(name, w), before, later, report, w.scanned)
@@ -1810,6 +1831,30 @@ defmodule Logex.ApiContractTest do
   defp write({:resume_undone, name, gap}, env), do: update_in(env, [name, "last"], &(&1 - gap))
   defp write({:pruned, name, _value}, env), do: Map.delete(env, name)
   defp write(_fact, env), do: env
+
+  # M6-7 (decisions 278 and 302): a tag both programs declare, of one type, whose line
+  # says `retain` in one program's text and not in the other's, reported with the value
+  # the state holds after the switch, which writes nothing for it.
+  defp requalified!(from, to, later, report) do
+    expected =
+      for {tag, %Tag{type: type}} <- to.tags,
+          match?(%Tag{type: ^type}, from.tags[tag]),
+          kept <- [retained_line?(to.source, tag)],
+          kept != retained_line?(from.source, tag),
+          do: {retain_kind(kept), tag, Map.fetch!(later.env, tag)}
+
+    assert for(
+             {kind, _, _} = entry <- report,
+             kind in [:retain_added, :retain_removed],
+             do: entry
+           ) ==
+             Enum.sort(expected)
+  end
+
+  defp retained_line?(source, tag), do: source =~ ~r/^(var|var_output) retain #{tag} /m
+
+  defp retain_kind(true), do: :retain_added
+  defp retain_kind(false), do: :retain_removed
 
   # A switch's rules, restated from the two programs: which tags start, at what value,
   # which inputs go live or unread, and which initial values changed.
@@ -2044,7 +2089,11 @@ defmodule Logex.ApiContractTest do
 
   # The timers a program declares, and the preset of the `ton` that runs one, from its text.
   defp timers_of(program),
-    do: for([_, tag] <- Regex.scan(~r/^var (\S+) ton$/m, program.source), do: tag)
+    do:
+      for(
+        [_, tag] <- Regex.scan(~r/^var (?:(?:non_)?retain )?(\S+) ton$/m, program.source),
+        do: tag
+      )
 
   defp ton_of(program, tag), do: preset_of(Regex.run(~r/(^|\s)ton #{tag} (\d+)/, program.source))
 
@@ -4018,7 +4067,12 @@ defmodule Logex.ApiContractTest do
     :superseded_global,
     :superseded_named_again,
     :stale_superseded,
-    :with_main
+    :with_main,
+    # M6-7: an instance's tag, its block instance whole, and a member of it, whose
+    # retention an edit changes.
+    :retain_tag,
+    :retain_block,
+    :retain_member
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -4136,12 +4190,15 @@ defmodule Logex.ApiContractTest do
     }
 
   defp ce_source(v) do
+    q = Map.new(Map.get(v, :q, %{}), fn {name, qualifier} -> {name, ce_word(qualifier)} end)
+
     decls =
       ["var_input in bool"] ++
         ce_x(v.x) ++
-        ["var_output out bool", "var_output q bool", "var_output r bool"] ++
-        ["var t1 #{v.timer}", "var sp dint 40", "var s bool", "var c bool", "var w bool"] ++
-        ce_n(v.n) ++ ["var k #{v.k}"] ++ ce_g(v.g) ++ ce_blk(v.blk)
+        ["var_output #{q["out"]}out bool", "var_output q bool", "var_output r bool"] ++
+        ["var #{q["t1"]}t1 #{v.timer}", "var sp dint 40", "var s bool", "var c bool"] ++
+        ["var w bool"] ++
+        ce_n(v.n, q["n"]) ++ ["var k #{v.k}"] ++ ce_g(v.g) ++ ce_blk(v.blk, q["b1"])
 
     rungs =
       ce_ton(v.timer, v.ton) ++
@@ -4158,13 +4215,16 @@ defmodule Logex.ApiContractTest do
   defp ce_x(:input), do: ["var_input x bool"]
   defp ce_x(:var), do: ["var x bool"]
   defp ce_x(:none), do: []
-  defp ce_n(nil), do: []
-  defp ce_n(n), do: ["var n dint #{n}"]
+  defp ce_n(nil, _q), do: []
+  defp ce_n(n, q), do: ["var #{q}n dint #{n}"]
   defp ce_g(:ext), do: ["var_external g0 bool"]
   defp ce_g(:var), do: ["var g0 bool"]
   defp ce_g(:none), do: []
-  defp ce_blk(true), do: ["var b1 blk"]
-  defp ce_blk(false), do: []
+  defp ce_blk(true, q), do: ["var #{q}b1 blk"]
+  defp ce_blk(false, _q), do: []
+
+  defp ce_word(nil), do: ""
+  defp ce_word(qualifier), do: "#{qualifier} "
   defp ce_ton(_timer, nil), do: []
   defp ce_ton(timer, preset), do: ["xic in #{timer} t1 #{preset}"]
   defp ce_ons(nil), do: []
@@ -4176,7 +4236,7 @@ defmodule Logex.ApiContractTest do
 
   # The two blocks, two deep: `leaf`'s timer at one of two presets, and `blk`'s member `m`
   # with an initial value that changes, or none.
-  defp ce_blocks(%{leaf: preset, m: m, ons: ons}) do
+  defp ce_blocks(%{leaf: preset, m: m, ons: ons} = blocks) do
     {:ok, leaf} =
       Logex.compile(
         "function_block leaf\nvar_input go bool\nvar_output done bool\nvar t ton\n\n" <>
@@ -4184,7 +4244,7 @@ defmodule Logex.ApiContractTest do
         name: "leaf"
       )
 
-    member = if m, do: "var m dint #{m}\n", else: ""
+    member = if m, do: "var #{ce_word(Map.get(blocks, :mq))}m dint #{m}\n", else: ""
     shot = %{nil => "", xic: "xic go ons e ote f\n", xio: "xio go ons e ote f\n"}[ons]
 
     {:ok, blk} =
@@ -4245,8 +4305,33 @@ defmodule Logex.ApiContractTest do
       wiring: %{}
     }
 
-    ce_wire(spec, false)
+    ce_wire(ce_instance_qualifiers(spec), false)
   end
+
+  # M6-7 (decision 278): each version's qualifiers on its `out`, `t1`, `n` and `b1` lines,
+  # and `blk`'s on its member `m`, drawn from a random stream of their own, so that every
+  # other draw of the walk, and so its reach, is as it was before M6-7.
+  defp ce_instance_qualifiers(spec),
+    do: %{
+      spec
+      | versions:
+          Map.new(spec.versions, fn {type, v} ->
+            {type, Map.put(v, :q, Map.new(~w(out t1 n b1), &{&1, ce_qualifier()}))}
+          end),
+        blocks: Map.put(spec.blocks, :mq, ce_qualifier())
+    }
+
+  defp ce_qualifier do
+    stream = Process.get(:ce_qualifier_stream, :rand.seed_s(:exsss, {2026, 10, 278}))
+    {n, stream} = :rand.uniform_s(4, stream)
+    Process.put(:ce_qualifier_stream, stream)
+    Enum.at([nil, nil, :retain, :non_retain], n - 1)
+  end
+
+  # One candidate in two, by the same stream, the qualifiers drawn again.
+  defp ce_requalify(spec), do: ce_requalify(ce_qualifier(), spec)
+  defp ce_requalify(nil, spec), do: spec
+  defp ce_requalify(_draw, spec), do: ce_instance_qualifiers(spec)
 
   # Every var_input of each instance connected, each var_output now and then to a point or
   # a global nothing else drives; with `keep?`, each instance keeps what it had where that
@@ -4399,7 +4484,7 @@ defmodule Logex.ApiContractTest do
         ce_biased(Process.get(:ce_bias))
 
     spec = Enum.reduce(changes, spec, &ce_change/2)
-    ce_wire(ce_qualifiers(spec), :rewire not in changes)
+    ce_wire(ce_requalify(ce_qualifiers(spec)), :rewire not in changes)
   end
 
   # Decision 302: each unlocated global's qualifier drawn again, one candidate in two;
@@ -5185,6 +5270,74 @@ defmodule Logex.ApiContractTest do
   defp ce_pruned_to(:assemble, w), do: w.o
   defp ce_pruned_to(_cancel, w), do: elem(w.c, 0)
 
+  # M6-7 (decisions 270 and 278), restated from the two versions' texts: a tag's line's
+  # `retain` alone retains it, `non_retain` and none one; inside `b1`, `blk`'s member `m`
+  # by its own line's qualifier where it has one and otherwise by `b1`'s, every other member
+  # by `b1`'s, `i1` whole; `b1` reported whole where every member of either version
+  # changes alike, and otherwise each member that changes.
+  defp ce_retains(from, to) do
+    tops =
+      for name <- ~w(out t1 n),
+          Map.has_key?(from.tags, name) and Map.has_key?(to.tags, name),
+          {was, now} = {ce_mark(from.source, name), ce_mark(to.source, name)},
+          was == :retain != (now == :retain),
+          do: {ce_requalified(now == :retain), name}
+
+    tops ++
+      ce_block_retains(Map.has_key?(from.tags, "b1") and Map.has_key?(to.tags, "b1"), from, to)
+  end
+
+  defp ce_block_retains(false, _from, _to), do: []
+
+  defp ce_block_retains(true, from, to) do
+    {was, now} = {ce_members(from), ce_members(to)}
+    all = Enum.uniq(Map.keys(was) ++ Map.keys(now))
+
+    changed =
+      for {member, kept} <- now,
+          Map.has_key?(was, member) and was[member] != kept,
+          do: {member, ce_requalified(kept)}
+
+    for kind <- [:retain_added, :retain_removed],
+        members = for({member, ^kind} <- changed, do: member),
+        entry <- ce_whole(Enum.sort(members) == Enum.sort(all), kind, members),
+        do: entry
+  end
+
+  defp ce_whole(_all?, _kind, []), do: []
+  defp ce_whole(true, kind, _members), do: [{kind, "b1"}]
+  defp ce_whole(false, kind, members), do: for(member <- members, do: {kind, "b1." <> member})
+
+  # Each member of a version's `b1`, `i1` whole, to whether it is retained.
+  defp ce_members(program) do
+    b1 = ce_mark(program.source, "b1") == :retain
+    blk = program.blocks["blk"].body.source
+
+    Map.merge(
+      Map.new(~w(go done i1 e f), &{&1, b1}),
+      ce_member_m(Regex.run(~r/^var ((?:non_)?retain )?m dint/m, blk), b1)
+    )
+  end
+
+  defp ce_member_m(nil, _b1), do: %{}
+  defp ce_member_m([_line], b1), do: %{"m" => b1}
+  defp ce_member_m([_line, ""], b1), do: %{"m" => b1}
+  defp ce_member_m([_line, "retain "], _b1), do: %{"m" => true}
+  defp ce_member_m([_line, "non_retain "], _b1), do: %{"m" => false}
+
+  defp ce_mark(source, name),
+    do: ce_marked(Regex.run(~r/^var(?:_output)? (\S+) #{name} /m, source))
+
+  defp ce_marked([_line, "retain"]), do: :retain
+  defp ce_marked([_line, "non_retain"]), do: :non_retain
+  defp ce_marked(_none), do: nil
+
+  defp ce_held_at(env, path), do: get_in(env, String.split(path, "."))
+
+  defp ce_retain_reach(["b1"]), do: :retain_block
+  defp ce_retain_reach(["b1", _member]), do: :retain_member
+  defp ce_retain_reach([_tag]), do: :retain_tag
+
   # Decision 302, restated: `retain` alone retains, `non_retain` and none are one.
   defp ce_retained(%{retain: :retain}), do: true
   defp ce_retained(_global), do: false
@@ -5297,10 +5450,19 @@ defmodule Logex.ApiContractTest do
           ce_moves_pre?(from.programs[type]) and not ce_moves_pre?(to.programs[type]),
           do: {:unwritten, "#{name}.t1.pre", later.instances[name].env["t1"]["pre"]}
 
+    # M6-7: each kept instance's paths whose retention its type's two versions' texts
+    # change, by the instance's name.
+    retains =
+      for name <- kept,
+          type = Enum.find(to.instances, &(&1.name == name)).type,
+          {kind, path} <- ce_retains(from.programs[type], to.programs[type]),
+          do: {kind, "#{name}.#{path}", ce_held_at(later.instances[name].env, path)}
+
     restated =
       Enum.sort(
         dropped ++
-          tasks ++ globals ++ stopped ++ started ++ shared ++ unwritten ++ ce_orders(from, to)
+          tasks ++
+          globals ++ stopped ++ started ++ shared ++ unwritten ++ retains ++ ce_orders(from, to)
       )
 
     given =
@@ -5317,13 +5479,18 @@ defmodule Logex.ApiContractTest do
             :joined,
             :left,
             :order,
-            :unwritten
+            :unwritten,
+            :retain_added,
+            :retain_removed
           ] or
             (not String.contains?(to_string(name), ".") and
-               kind in [:added, :initial_changed, :held, :pruned, :retain_added, :retain_removed]),
+               kind in [:added, :initial_changed, :held, :pruned]),
           do: entry
 
     assert given == restated
+
+    for {_kind, path, _value} <- retains,
+        do: ce_reach(ce_retain_reach(tl(String.split(path, "."))))
 
     ce_reach(
       :superseded_named_again,
@@ -12210,7 +12377,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :unzeroed_named,
     :zero_retried,
     :zero_at_stop,
-    :down_while_tripped
+    :down_while_tripped,
+    # M6-7: an edit taking `retain` off `keep`'s count or giving it back, a runner that
+    # crashed while a candidate ran started on the original, and a fresh start dropping a
+    # count the store holds as unretained (decision 277).
+    :keep_requalified,
+    :original_after_crash,
+    :store_unretained
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -12233,9 +12406,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         "l" => pick([20, 40]),
         "main" => pick([20, 30, 40, nil])
       },
-      extra: false
+      extra: false,
+      # M6-7: whether `keep` retains its count, drawn by the walk (below).
+      keep: true
     }
   end
+
+  # M6-7 (decision 278): `keep` with its count unretained, `var k dint`, a candidate's
+  # version of it now and then.
+  @keep_plain "var_external kt dint\nvar k dint\nadd k 1 k\nadd kt 1 kt"
 
   defp text(d),
     do:
@@ -12287,16 +12466,36 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp untimed_counter(_with, _main), do: "program c2 count\n  c2.n cm"
 
   defp configured(d, programs) do
-    {:ok, config} = Configuration.compile("plant", text(d), programs)
+    {:ok, config} = Configuration.compile("plant", text(d), keep_version(d.keep, programs))
     config
+  end
+
+  defp keep_version(true, programs), do: programs
+
+  defp keep_version(false, programs) do
+    {:ok, plain} = Logex.compile(@keep_plain, name: "keep")
+    Map.put(programs, "keep", plain)
+  end
+
+  # M6-7: a draw of the walk's own stream, seeded from the walk's seed, so that every
+  # other draw of the walk is as it was before M6-7.
+  defp own(n) do
+    {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_own))
+    Process.put(:rw_own, stream)
+    drawn
   end
 
   # A candidate: one or two changes a running plant takes, or a task added, which it
   # refuses.
   defp candidate(d) do
     changes = Enum.take_random([:fast, :fast, :slow, :wd, :c2, :c2, :refused], pick([1, 2]))
-    Enum.reduce(changes, d, &changed/2)
+    keep(own(2), Enum.reduce(changes, d, &changed/2))
   end
+
+  # M6-7: one candidate in two, by the walk's own stream, takes `retain` off `keep`'s
+  # count or gives it back.
+  defp keep(1, d), do: %{d | keep: not d.keep}
+  defp keep(_draw, d), do: d
 
   # An interval cut more often than lengthened, so that decision 40 moves its next due
   # time from the step's time (decision 139).
@@ -12355,11 +12554,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     logs =
       for seed <- 1..45 do
         :rand.seed(:exsss, {4101, 10, 19 + seed})
+        Process.put(:rw_own, :rand.seed_s(:exsss, {4101, 278, seed}))
         walk(programs, dir, seed, 70)
       end
 
     # From fresh processes, the first walk again, exactly.
     :rand.seed(:exsss, {4101, 10, 20})
+    Process.put(:rw_own, :rand.seed_s(:exsss, {4101, 278, 1}))
     assert walk(programs, dir, 1, 70) == hd(logs)
 
     assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
@@ -12383,6 +12584,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     caught =
       Enum.find_value(1..80, fn seed ->
         :rand.seed(:exsss, {2026, 11, seed})
+        Process.put(:rw_own, :rand.seed_s(:exsss, {2026, 278, seed}))
 
         try do
           walk(programs, dir, seed, 70)
@@ -12397,7 +12599,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp walk(programs, dir, seed, steps) do
-    d = draw()
+    # M6-7: a walk in three, by its own stream, starts with `keep`'s count unretained.
+    d = %{draw() | keep: own(3) > 1}
     config = configured(d, programs)
     {:ok, manual} = Manual.start_link()
     test = self()
@@ -12516,27 +12719,45 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # first round that trips then writes the store again, `tripped/2`'s `stored_at/2`.
   defp fresh_rt(%{store: nil}, config, nil), do: {Runtime.start(config), nil}
 
-  defp fresh_rt(%{stored: nil}, config, nil) do
+  defp fresh_rt(%{stored: nil} = w, config, nil) do
     rt = Runtime.start(config)
-    {rt, restated(rt)}
+    {rt, restated(rt, w.draws.running.keep)}
   end
 
   defp fresh_rt(%{stored: stored} = w, config, text) do
     {kt, k} = stored
     assert text =~ "\nglobal kt dint #{kt}\n"
-    assert text =~ "\ninstance k1 keep\nk1.k dint #{k}\n"
-    reach(:store_restored, k > 0)
-    reach(:period_restored, w.by_period and k > 0)
+    stored_count!(k, text)
+    reach(:store_restored, is_integer(k) and k > 0)
+    reach(:period_restored, w.by_period and is_integer(k) and k > 0)
 
     image = %{
       configuration: "plant",
       globals: %{"kt" => {:dint, kt}},
-      instances: %{"k1" => %{program: "keep", kinds: %{}, values: %{"k" => {:dint, k}}}},
+      instances: kept_count(k),
       triggers: %{}
     }
 
-    {elem(Runtime.start(config, image), 0), stored}
+    # M6-7: a count the store holds that the program started does not retain is dropped
+    # as unretained (decision 277), which status/1 says.
+    {rt, dropped} = Runtime.start(config, image)
+    assert dropped == unretained(k, w.draws.running.keep)
+    reach(:store_unretained, dropped != [])
+    {rt, stored}
   end
+
+  # M6-7: the count in the store's lines where the program that wrote it retained it, and
+  # no line of `k1` where it did not.
+  defp stored_count!(nil, text), do: refute(text =~ "\ninstance k1 ")
+  defp stored_count!(k, text), do: assert(text =~ "\ninstance k1 keep\nk1.k dint #{k}\n")
+
+  defp kept_count(nil), do: %{}
+
+  defp kept_count(k),
+    do: %{"k1" => %{program: "keep", kinds: %{}, values: %{"k" => {:dint, k}}}}
+
+  defp unretained(k, false) when is_integer(k), do: [{"k1.k", :unretained}]
+  defp unretained(_k, _keep), do: []
 
   # M6-6, restated (decision 275): a store's period on a grid from the runner's start, its
   # anchor, which the first round's elapsed time gives; a round that begins at or after a
@@ -12588,13 +12809,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # What a store write holds of the model's resource: the retained global and the
   # retained count, the only values the walk's programs retain.
-  defp restated(rt), do: {Runtime.get!(rt, "kt"), Runtime.get!(rt, "k1.k")}
+  defp restated(rt, keep), do: {Runtime.get!(rt, "kt"), count_kept(keep, rt)}
+
+  # M6-7: the count, where the program running retains it, and nil where an edit took its
+  # `retain` away.
+  defp count_kept(true, rt), do: Runtime.get!(rt, "k1.k")
+  defp count_kept(false, _rt), do: nil
 
   # The writes at events (decisions 275 and 291): a trip's of the resource as it left it,
   # and a cold restart's of the resource as the restart starts it, before any device is
   # released or read, so whether or not a device then refuses it.
   defp stored_at(%{store: nil} = w, _rt), do: w
-  defp stored_at(w, rt), do: %{w | stored: restated(rt), by_period: false}
+  defp stored_at(w, rt), do: %{w | stored: restated(rt, w.draws.running.keep), by_period: false}
 
   defp cold_stored(:cold, w) do
     reach(:cold_store, w.store != nil)
@@ -12990,6 +13216,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp accepted({:ok, edit, forecast}, {draw, candidate}, w) do
     assert Runner.accept(w.runner, candidate) == {:ok, forecast}
     reach(:accept, true)
+
+    # M6-7, restated from the two draws: `keep`'s count reported where its `retain` comes
+    # or goes, with the value the resource holds, which the switch writes nothing for.
+    assert for({kind, "k1.k", value} <- forecast, do: {kind, value}) ==
+             requalified_count(w.draws.running.keep, draw.keep, Runtime.get!(w.rt, "k1.k"))
+
+    reach(:keep_requalified, w.draws.running.keep != draw.keep)
     w = %{w | edit: edit, expect: [{:edit, :accept, forecast}]}
     w = put_in(w.draws.original, w.draws.running)
     checked(consumed(put_in(w.draws.candidate, draw)))
@@ -13000,6 +13233,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:accept_refused, true)
     checked(consumed(w))
   end
+
+  defp requalified_count(same, same, _k), do: []
+  defp requalified_count(false, true, k), do: [{:retain_added, k}]
+  defp requalified_count(true, false, k), do: [{:retain_removed, k}]
 
   defp edit_step(w, step) do
     w = settled(w)
@@ -13227,8 +13464,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     stopped!(w, before)
     reach(:crash, true)
     w = %{w | crashed: true, edit: nil}
-    started(w, w.config)
+    original_again(own(2), w)
   end
+
+  # M6-7: half the time a runner that crashed while a candidate ran starts again on the
+  # original configuration, meeting the candidate's store by decision 277's matching.
+  defp original_again(1, %{draws: %{running: running, original: original}} = w)
+       when original != nil and running != original do
+    reach(:original_after_crash, true)
+    started(put_in(w.draws.running, original), configured(original, w.programs))
+  end
+
+  defp original_again(_draw, w), do: started(w, w.config)
 
   defp device_pids(runner) do
     {:links, links} = Process.info(runner, :links)
@@ -13534,7 +13781,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:period_written, true)
     reach(:period_in_slot, untimed?(w.config))
     reach(:period_own_wake, not untimed?(w.config) and own_wake?(w.last, at))
-    %{w | stored: restated(w.rt), by_period: true, due: grid_after(w, at), late: 0}
+
+    %{
+      w
+      | stored: restated(w.rt, w.draws.running.keep),
+        by_period: true,
+        due: grid_after(w, at),
+        late: 0
+    }
   end
 
   defp record(w, {:step, task, ms} = record) do
