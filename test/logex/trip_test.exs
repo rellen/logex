@@ -1404,6 +1404,16 @@ defmodule Logex.TripTest do
   defp device_pid(runner, name),
     do: :sys.get_state(runner).devices |> List.keyfind(name, 0) |> elem(1)
 
+  # A device killed and its death waited for, then status/1 read, so that the runner's
+  # exit signal from it is not overtaken by the status call under load (as e60866a).
+  defp killed(runner, name) do
+    pid = device_pid(runner, name)
+    down = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^down, :process, _, :killed}, 5000
+    Runner.status(runner)
+  end
+
   # The trip's 0 written once, after the last value, and nothing after.
   defp zeroed_once(sim, last) do
     assert [%{[0] => 0}, %{[0] => ^last} | _] = Enum.reverse(Sim.writes(sim))
@@ -1677,8 +1687,7 @@ defmodule Logex.TripTest do
 
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 10)
-      Process.exit(device_pid(runner, "drive"), :kill)
-      Runner.status(runner)
+      killed(runner, "drive")
       Sim.fail(drive, :init, {:error, :refused})
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", :refused}}
 
@@ -1697,8 +1706,7 @@ defmodule Logex.TripTest do
 
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 10)
-      Process.exit(device_pid(runner, "drive"), :kill)
-      Runner.status(runner)
+      killed(runner, "drive")
 
       for reason <- [:unplugged, {:no_route, 3}] do
         Sim.fail(drive, :init, {:error, reason})
@@ -1858,8 +1866,7 @@ defmodule Logex.TripTest do
       Manual.advance(clock, 10)
       Sim.fail(panel, :read, {:error, :eio})
       Manual.advance(clock, 10)
-      Process.exit(device_pid(runner, "drive"), :kill)
-      Runner.status(runner)
+      killed(runner, "drive")
       Sim.fail(drive, :init, {:error, :refused})
       written = Sim.writes(panel)
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", :refused}}
