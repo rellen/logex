@@ -10923,7 +10923,9 @@ done-when reads the next store write; and last the contract walk and the documen
     a function block's internals and Logix an Add-On Instruction's local tags; its mark of
     provisional above dropped.
 
-  *Readings the record leaves open (provisional), a question for the maintainer.* The
+  *Readings the record leaves open (provisional), a question for the maintainer.*
+  *(Folded into M6-9's review's question 3, below, which finds the same loss at every
+  switch after a candidate's scan, not only an edit's first.)* The
   time a program held an instance unscanned before an edit's first switch is still taken
   by a later resume, as decision 56 measured it: `m2` on a 50 ms task, last scanned by the
   original at 50 ms, tested at 70 ms, scanned by the candidate at 100 ms and untested at
@@ -11062,11 +11064,13 @@ done-when reads the next store write; and last the contract walk and the documen
   oracle knows nothing of logex. It passed 50 runs of 50 with three cores busy, and fails
   where a warm restart is a cold one, where a fresh start ignores its store, where no
   period writes and where a cold restart writes no store, each a mutant of `lib/` run
-  against it (`scratchpad/m6/m9/e2e_mut.sh`).
+  against it (`scratchpad/m6/m9/e2e_mut.sh`), and since M6-9's review where a warm restart
+  leaves a retained timer's `last` behind `now`, its `rto` frozen by a `hold` jump (finding
+  4, below).
 
   | Clause | Shown by |
   |---|---|
-  | a box counter, a totaliser and a lubrication timer that a program marks `retain` keep their values across a warm restart | the one plant's trips restarted warm, through `Logex.Runner.restart/2`; `retain_test.exs`, "a box counter, a totaliser and an rto marked retain keep their values through a …", in the core, and "Runner.restart/2 :warm keeps what is retained, not counting the time it stood …" |
+  | a box counter, a totaliser and a lubrication timer that a program marks `retain` keep their values across a warm restart | the one plant's trips restarted warm, through `Logex.Runner.restart/2`, its lube timer frozen by `hold` and timing at one of them caught up only from the restart (decision 273); `retain_test.exs`, "a box counter, a totaliser and an rto marked retain keep their values through a …", in the core, and "Runner.restart/2 :warm keeps what is retained, not counting the time it stood …" |
   | across a runner killed and started fresh from its store, losing at most what changed in one store period and one write | the one plant's kills, each fresh start's values the last write's or a round's within 105 ms and one round, 10 ms, before the kill, a period's write met and something lost each reached; `retain_period_test.exs`, "a runner killed between two periods restores the earlier period's write" and "a runner killed in the middle of a period's write restores the write before it"; the M6-5 plant in `end_to_end_test.exs` |
   | and across a changed program, by name and type | the one plant's step 200, its retyped total dropped, `{"box.total", {:retyped, :dint, :lint}}` in `status/1`, and the count and the timer kept; `retain_image_test.exs`, "an instance, a program type or a global changed is dropped once by its path, …" and every reason of decision 277 from source; `retain_store_test.exs`, "a changed program's drops reported in status/1" |
   | a cold restart starts them at their initial values | the one plant's trips restarted cold and its `start: :cold`, the total back at 1000 kg; `retain_test.exs`'s and `retain_configuration_test.exs`'s cold restarts |
@@ -11098,10 +11102,98 @@ done-when reads the next store write; and last the contract walk and the documen
      (the period's range and its default, the grid from the start, the take-out's place,
      nothing written while tripped, an event write waiting for the period's, a writer gone
      down replaced, the store's age in `status/1`, each above under M6-6), decision 336's
-     first switch (M6-8's answers, above), and the one plant's "one write" above.
+     three (M6-9's review, below), and the one plant's "one write" above.
+
+  **M6-9's review** (2026-10-31, on `dc03bd7`), its four findings and what each became.
+  1. *Decision 336 gives a timer back exactly only where the candidate never scans
+     between the two switches.* The conveyor's lube `rto`, run by an event task, tested,
+     scanned by the candidate and untested at 10 ms, held by the original unscanned to
+     40 ms, tested, scanned once by the candidate at 45 ms and untested, is resumed by
+     35 ms, `{:resumed, "c1.lube", 35}`, where the candidate held it 5: the original's
+     30 ms are taken, at every depth, a tag, an `rto[2]` element, a block's timer and one
+     in an array of blocks. The built rule counts from the last switch only while no scan
+     has run since; counting from it after a scan too gives every timer back exactly but
+     changes decision 56's pinned 80 ms to 60, an 80 that holds 20 ms the original held
+     unscanned, so the record is at odds with itself. Not settled here: the rule as
+     built is pinned, provisional, by `config_edit_test.exs`, "provisional: after a
+     candidate's scan the resume takes the original's hold, at every depth", and put to
+     the maintainer below (question 3), folding in M6-8's answers' question on an edit's
+     first switch, which is this case. Decision 336's text, §4.9's known-limit note and
+     decision 56's note say so.
+  2. *An instance set aside and brought back takes the original's hold.* The same lube,
+     its program type changed by the candidate so that each test sets `c1` aside,
+     tested, scanned and untested at 10 ms, held by the original unscanned to 40, tested
+     and untested at once, is resumed by 30 ms though it was aside for none. Pinned as
+     built, provisional, "provisional: one back from aside takes the original's hold
+     before it", and put to the maintainer (question 4); decision 57's note says so.
+  3. *Mutant R9, "the program stopped scanned last" always true, passed the whole suite.*
+     In a lone instance it is equivalent, a lone clock moving only by its scans; in a
+     resource it is not: tested at 10 ms, the candidate holding `c1` unscanned to 40 and
+     untested, the built rule resumes nothing, the original having scanned last, so the
+     timer catches up the 30 ms the candidate held, acc 40, where R9 resumes by 30, acc
+     10. Pinned as built, provisional, "provisional: the candidate's unscanned hold is
+     caught up", which R9 fails, and put to the maintainer (question 5).
+  4. *The done sentence's plant did not see a retained timer's clock set at a warm
+     restart* (decision 273): its `rto` ran every round and the runner's clock stands
+     still while tripped, so `last` was `now` already. `keep.ld`'s `rto` now sits on a
+     rung a `hold` input, `panel.i.9`, jumps over, on through 20 steps in every 40 (drawn
+     from no stream, so the 400 steps are as they were); the oracle restates the `rto`'s
+     `.en` and the time since it last ran, a frozen timer timing catching up every
+     millisecond it was skipped (decision 82) and a warm restart setting it to `now`;
+     and the walk ends with the lube timing, frozen 40 ms, a trip restarted warm and
+     `hold` let go, its reach asserted. P1, a warm restart that leaves `last` alone, now
+     fails it, and the review's four other plant mutants and the builder's still do.
+     50 runs of 50 with three cores busy (`scratchpad/m6/m9b/e2e50.txt`).
+
+  *Mutation table* (`scratchpad/m6/m9b/`), each judged by the full suite.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | S1 | the last switch's time read after a scan too (question 3's option b) | 5, the provisional test and decision 56's pinned 80 ms among them |
+  | S2 | no resume back from aside | 5, decision 57's and the provisional aside test |
+  | S3 | the review's R9, the program stopped taken to have scanned last | 1, the provisional test of the candidate's unscanned hold |
+  | P1 | a warm restart leaves a retained timer's `last` alone | 4, the done sentence's plant among them |
+
+  **Put to the maintainer** (M6-9's review), the three readings decision 336 leaves
+  open, numbered after M6-9's two. They are one family, whose time a timer gets while one
+  program holds the instance and none scans it; an answer to one may answer the others.
+  3. *A resume after the candidate scans takes the time the original held before the
+     switch.* A conveyor's lube `rto` that an event task runs: tested, untested, 30 ms in
+     which the original holds the conveyor and no event comes, tested again, one event
+     while the candidate runs, untested: the lube finishes 30 ms late; with no event
+     during the second test it finishes on time (decision 336). A fan's run-on timer in a
+     50 ms task loses up to one task interval across a test and an untest an interval
+     apart, decision 56's 20 ms. Options, by what the operator sees: (a) as built, the
+     timer late by the original's unscanned hold whenever the candidate scans during the
+     test, decision 56's 80 ms pinned; (b) always count from the last switch, the timer
+     back exactly every time, decision 56's test changed to 60 ms; (c) left open. The
+     reading taken is (a), provisional.
+  4. *An instance back from aside takes the time the original held before it was set
+     aside.* The conveyor whose program type the candidate changes, so that a test sets
+     it aside: after the original's 30 ms unscanned, a test and an untest at once bring
+     the lube back 30 ms late though it was aside for no time. Options: (a) as built,
+     resumed from the timer's last run, decision 57's pinned 130 ms; (b) count only the
+     time aside, the lube on time here and decision 57's test changed to 120 ms; (c) left
+     open. The reading taken is (a), provisional.
+  5. *A candidate's unscanned hold is caught up where the original scanned last.* The
+     same lube, tested at 10 ms, the candidate holding the conveyor 30 ms with no event,
+     untested: the lube catches up those 30 ms, which the candidate, not running it,
+     held, and finishes 30 ms early; with an event during the test it finishes late by
+     question 3. Options: (a) as built, caught up; (b) the time a program that does not
+     run the timer held never counted, whoever scanned last, the lube on time here (a
+     lone instance unchanged, its clock moving only by its scans); (c) left open. The
+     reading taken is (a), provisional.
+
+  IEC 61131-3 has no online edit, and says nothing of a timer whose instruction is not
+  called for a while. Logix's test and untest of edits run the original's rungs or the
+  edited ones, so a timer on a rung only one of them holds is not scanned while the
+  other runs; whether a Logix TON or RTO not scanned for a while catches up the time
+  when next scanned true is not checked here (unverified), as M6-8's question said.
 
   The README examples' harness, the mutants and the cost of the one plant's runs are in
-  `scratchpad/m6/m9/`. 2412 tests (11 doctests), up from 2411.
+  `scratchpad/m6/m9/`. 2412 tests (11 doctests), up from 2411. M6-9's review's fixes: 2415 tests (11
+  doctests), up from 2412, the three provisional tests in `config_edit_test.exs`, and the
+  done sentence's plant changed in place.
 
 **What stays deferred**, each a later item or milestone (§4.13): `persistent`, not
 reserved (decision 280); `program retain` on a configuration's line (281); a retained

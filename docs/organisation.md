@@ -2110,7 +2110,9 @@ as the test found it. It found one defect and one cost the record already accept
   moved, so a round trip after a hold by another program, `{7613, 10, 19}`'s, gives every
   kept timer back exactly, and the walk's round trip allows nothing for it; the limit
   stands for the time before an edit's first switch and after a scan, as decision 56
-  measured it.)*
+  measured it, and an instance back from aside takes the original's hold before it was
+  set aside; whether either stands is put to the maintainer, with a candidate's unscanned
+  hold, which a timer catches up, `PLAN.md` M6-9's review and decision 336.)*
 
 *The forecast* is the report a test taken now would give: the switch computed over the
 runtime as it is, and thrown away. A test taken later reads the resource as it is then
@@ -5649,7 +5651,9 @@ choices are §4.9's rules.
     resumed timer's `last` at the test's time, unreported.)* *(Landed 2026-10-13.)*
     *(Narrowed 2026-10-31 by decision 336: where no scan has run since the edit's last
     switch, a resume takes only the time since that switch; the measurement above, across
-    an edit's first switch, stands.)*
+    an edit's first switch, stands, and whether it should, where counting from the switch
+    after a scan too would make it 60 ms, is put to the maintainer, `PLAN.md` M6-9's
+    review.)*
 57. **An instance brought back from aside: whether its timers catch up (OE-2).** An instance
     set aside, removed at test or the old state of a retyped one, comes back at untest, or
     at a second test for one only the candidate runs; its timers that were timing kept
@@ -5664,7 +5668,11 @@ choices are §4.9's rules.
     last received, so an edge they see on return is a real one. Adopted: an instance back
     from aside carries on from where it stopped, its timers do not catch up, and the report
     says so. *(Landed 2026-10-13.)* *(Unchanged by decision 336, which leaves an instance
-    back from aside resuming from the switch, as `config_edit_test.exs` pins.)*
+    back from aside resuming from the switch, as `config_edit_test.exs` pins: its timers
+    resume from their last run, so the time the original held the instance unscanned
+    before it was set aside is not caught up either, here 10 ms of the 130; whether only
+    the time aside should be, 120 ms here, is put to the maintainer, `PLAN.md` M6-9's
+    review.)*
 58. **How a held output is named in the report (OE-2).** A var_output a kept instance no
     longer writes gives OE-1's `{:held, "m1.run_lamp", v}` by path, and the output point
     it is connected to, `lamp_1`, holds too, `{:held, "lamp_1", v}`.
@@ -10785,10 +10793,11 @@ the rest are not built yet. *(Since M6-9, 2026-10-31, every one is built: M6-3 d
 268's and 271's globals and 272; M6-4 277 and 282; M6-5 271's
 runner rows, 275's events, 276, 284 and 285; M6-6 275's period; M6-7 278; and 280, 281
 and 283 stand as the scope, `persistent` and `program retain` deferred. The maintainer's
-answers since, decisions 286 to 338, are each built where taken; eight readings the
+answers since, decisions 286 to 338, are each built where taken; ten readings the
 record left silent are still put to the maintainer, provisional and built as read:
-M6-6's seven, `PLAN.md` M6-6, and decision 336's at an edit's first switch, `PLAN.md`
-M6-8's answers.)*
+M6-6's seven, `PLAN.md` M6-6, and decision 336's three, a resume after a scan between
+the switches (decision 56's 20 ms among them), one back from aside and a candidate's
+unscanned hold, `PLAN.md` M6-9's review.)*
 The example plant is §4.13's: the power fails at 14:00 with 41 boxes counted, the lube
 timer at 62 hours, the fan in its run-on and the conveyor running, and comes back at
 14:20.
@@ -11833,10 +11842,27 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      its own scans, so no program holds it unscanned for any time, and its edit behaves
      as it did, which 400 random sequences of scans, tests, untests, accepts and restarts
      over an `rto` on a rung a jump may skip confirm, every report and state the same.
-     *A reading the record leaves open (provisional):* the time a program held an
-     instance unscanned before the first switch of an edit, decision 56's 20 ms, is still
-     taken; and after a resume is given back across a cycle with no scan (fix F11's undo,
-     decision 56's refinement), the next resume counts from that switch.
+     *Readings the record leaves open (provisional), found by M6-9's review and put to
+     the maintainer (`PLAN.md` M6-9), each pinned as built in `config_edit_test.exs`:*
+     (1) where the candidate scans the instance between two switches, the resume at the
+     second counts from the timer's last run, as before decision 336, so the time the
+     original held it unscanned before the first of them is taken: the conveyor's lube
+     `rto`, tested, scanned and untested at 10 ms, held unscanned by the original to 40,
+     tested, scanned once by the candidate at 45 and untested, is resumed by 35 ms where
+     the candidate held it 5, at every depth, a tag, an element, a block's timer and one
+     in an array of blocks; decision 56's 20 ms across an edit's first switch is this
+     case, and the rule that would give every timer back exactly, counting from the last
+     switch after a scan too, changes decision 56's pinned 80 ms to 60, so the record is
+     at odds with itself here; (2) an instance brought back from aside resumes from its
+     timer's last run, so the original's hold before it was set aside is taken however
+     short the time aside: the same lube, its program type changed by the candidate, set
+     aside at 40 ms after the original's 30 ms unscanned and brought back at once, is
+     resumed by 30 ms (decision 57; counting only the time aside changes its pinned 130 ms
+     to 120); and (3) where the program started last scanned the instance, nothing is
+     resumed, so a candidate that held it unscanned, tested at 10 ms and untested at 40,
+     gives those 30 ms to a timer it does not run, which catches them up. After a resume
+     is given back across a cycle with no scan (fix F11's undo, decision 56's
+     refinement), the next resume counts from that switch.
 337. **The suite's failure that named no test (Milestone 6),** M6-8's first question: one
      run in seven of the full suite failed one test and printed none, `Result:
      2406/2407 passed`.
