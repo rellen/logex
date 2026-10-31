@@ -10588,7 +10588,8 @@ done-when reads the next store write; and last the contract walk and the documen
   scanned the instance, its oracle to allow the resume there; (c) left as it is until
   M6-8's contract walk. The record's reading is (a), since §4.9's resume rule says no
   resume is due between a test and an untest with no scan between, but it is not
-  confirmed which program last scanned `m2` here.
+  confirmed which program last scanned `m2` here. *(Answered 2026-10-31: (a), decision
+  336, built after M6-8, below.)*
 
   One gate of the documents failed `retain_configuration_test.exs`'s bound on a warm
   restart with nothing retained, 16,058 reductions against a cold one's 16,053, the bound
@@ -10712,11 +10713,13 @@ done-when reads the next store write; and last the contract walk and the documen
      gate and a fifth all passed. The walks passed alone in every run. Options, by what a
      developer sees: (a) chase it, the suite run until it fails with a formatter that
      names the test; (b) leave it noted, as the reduction bound's single failure at
-     M6-7's answers was. The reading taken is (b), provisional.
+     M6-7's answers was. The reading taken is (b), provisional. *(Answered 2026-10-31:
+     (b), decision 337.)*
   2. *M6-7's question 7613 stays open*: the configuration edit's walk at `{7613, 10,
      19}`, a test then an untest resuming an `rto` by 30 ms, is a walk that existed before
      M6-8 and M6-8 changes none of its draws; it is left for the maintainer's answer to
-     M6-7's three options rather than read here.
+     M6-7's three options rather than read here. *(Answered 2026-10-31: (a), decision
+     336.)*
   *M6-8's review* (2026-10-31) found no defect in decision 329 or in M6-8's code. It
   found the walks short of their claims in seven places, each answered here, the walks'
   code alone changed, no line of `lib/`:
@@ -10841,21 +10844,121 @@ done-when reads the next store write; and last the contract walk and the documen
      61131-3 has no online edit; Logix's test and untest of edits run the original's
      timers as the original left them, and whether a Logix RTO not scanned catches up
      the time is not checked here (unverified). The record's reading stays (a), not
-     built.
-  2. *The suite's failure that named no test.* REPRO. Options, by what a developer sees:
+     built. *(Answered 2026-10-31: (a), decision 336, built below.)*
+  2. *The suite's failure that named no test.* Options, by what a developer sees:
      (a) the gate names a failed run's tests from ExUnit's manifest, as now, and the
      suite is run until the unnamed failure comes back; (b) leave it noted. The reading
-     taken is (a) for the gate, (b) for the chase, provisional.
-  3. *A block's own `var` is retained but `get/2` cannot read it* (provisional, as it
-     was). The store holds `s1.gs[0].j` for a block's `var j`, and a warm start puts it
-     back, but `Logex.Runtime.get/2` and `Logex.Runner.get/2` refuse the path, a `var`
+     taken is (a) for the gate, (b) for the chase, provisional. *(Answered 2026-10-31:
+     (b), decision 337, the gate as it is.)*
+  3. *A block's own `var` is retained but `get/2` cannot read it* (as it was; settled
+     by decision 338). The store holds `s1.gs[0].j` for a block's `var j`, and a warm
+     start puts it back, but `Logex.Runtime.get/2` and `Logex.Runner.get/2` refuse the path, a `var`
      of a block being hidden outside it; the walk made `j` a var_output to read it. An
      operator with a box counter kept inside a block can see the count survive a crash
      only through the block's outputs. Options, by what the operator sees: (a) keep it
      hidden, as IEC 61131-3 hides a function block's internal variables from outside and
      Logix hides an Add-On Instruction's local tags from other logic; (b) let `get/2`
      read a retained internal of a block for diagnostics, as Studio 5000 shows an AOI's
-     local tags in its monitor. The reading taken is (a), unchanged.
+     local tags in its monitor. The reading taken is (a), unchanged. *(Answered
+     2026-10-31: (a), decision 338: it stays hidden.)*
+
+  *The maintainer's answers to M6-8's questions* (2026-10-31), recorded as decisions
+  336–338 in `docs/organisation.md` §7 and built the same day:
+  - *336, changed (a): the round trip's resume is a defect.* A timer resumed at an untest,
+    or any switch back, comes back with exactly the time it had: the resume rule asks too
+    who has held the instance since the last switch, so that time another program held,
+    the original's from the first untest to the second test at `{7613, 10, 19}`, is never
+    taken from it. *The rule, as built* (`Logex.Edit.Plan`, `Logex.Edit`'s moduledoc and
+    §4.9's two rows): the edit's record of each instance keeps the time of its last
+    switch, `held`; where no scan has run since that switch, the program it started, which
+    this switch stops, has held the instance only since it, so a resume moves `last` on by
+    `at - max(last, held)` (`at - held`, since `held` is then the instance's own `now`,
+    which no `last` passes, decision 188), the time before it left for the timer to catch
+    up; and a switch gives back what this edit's last switch moved of a timer's `last`, a
+    resume or a resume given back, where no scan has run since and `last` is still where
+    it left it, each move reported by its net, `:resumed` or `:resume_undone`, so that an
+    untest after a test that gave an untest's resume back across a cycle with no scan
+    gives that back in turn. Where a scan has run since the last switch, or this edit made
+    none before, `last` becomes `now` as before: decision 56's pinned measurement (80 ms
+    across a first switch) and an instance back from aside (decision 57) are unchanged,
+    and fix F11's and decisions 93–95's resume tests stay green. *A lone instance* behaves
+    as it did: its clock moves only by its own scans, so no program holds it unscanned for
+    any time; 400 random sequences of scans, tests, untests, accepts and restarts of an
+    `rto` on a rung a jump may skip gave every report and state the same at the parent and
+    here (`scratchpad/m6/m9/x/lone_explore.exs`). *Tests*: `config_edit_test.exs`, the
+    trace's conveyor, a lube `rto` in an event task tested, scanned, untested, held 30 ms
+    by the original unscanned, tested and untested at once and done on time at its next
+    run, and `m2`'s `t1` given back by an untest after a test that gave an untest's resume
+    back, each failing with the change reverted; `edit_test.exs`, the lone conveyor,
+    finishing on time, which passes at the parent too by the construction above, so the
+    brief's "fails when reverted" is met for the configuration edit alone. *The walks*:
+    the configuration edit walk's restated resume reads the move the last switch made and
+    the time since it where no scan has run since, its round trip of a kept instance exact
+    (the exemption for a give-back after the clock moved, "the known limit of §4.9's
+    spike", retired, the check now stricter), and 20 configurations more, seed stream
+    unchanged before them, drawn toward the trace (every version running `t1`, a candidate
+    running it nowhere, the instances on the slow task, a test and an untest after three
+    cycles, one cycle of 5 ms, a test and an untest at once), its reach
+    `:round_trip_held` and `:resumed_after_hold`, which the parent's `plan.ex` fails; the
+    lone edit walk's oracle restates the rule too. `{7613, 10, 19}` now passes, its round
+    trip exact with no oracle relaxed.
+  - *337, confirmed (b):* the suite's failure that named no test is left noted; the gate
+    names a failed run's tests from ExUnit's manifest. Nothing built.
+  - *338, confirmed (a):* a block's retained `var` stays hidden from `get/2`, as IEC hides
+    a function block's internals and Logix an Add-On Instruction's local tags; its mark of
+    provisional above dropped.
+
+  *Readings the record leaves open (provisional), a question for the maintainer.* The
+  time a program held an instance unscanned before an edit's first switch is still taken
+  by a later resume, as decision 56 measured it: `m2` on a 50 ms task, last scanned by the
+  original at 50 ms, tested at 70 ms, scanned by the candidate at 100 ms and untested at
+  130 ms, is resumed by 80 ms, of which 20 ms the original held. An operator sees a timer
+  in a slow task lose up to one task interval across a test and an untest an interval
+  apart. Options, by what the operator sees: (a) leave it, decision 56 pinned, the
+  timer late by at most one interval of its task across a first switch; (b) extend
+  decision 336 to the first switch too, the switch then recording the instance's own
+  `now` as when the program stopped last held it scanned, so no time the original held is
+  ever taken, decision 56's test changed to 60 ms; (c) left open. And after fix F11's undo
+  across a cycle with no scan the next resume counts from that switch: the candidate's
+  time before the undo is given back to the timer, which the original does not run.
+  The reading taken is (a), provisional.
+
+  *Mutation table* (`scratchpad/m6/m9/mut_results.txt`), eight mutants of the change,
+  each judged by the full suite: seven red, one equivalent.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | Q1 | the resume to `at` always, the old rule | 3 |
+  | Q2 | a resume given back not given back in turn | 4 |
+  | Q3 | `held` read after a scan too | 4 |
+  | Q4 | `held` the edit's first switch's time only | 3 |
+  | Q5 | a move given back whatever `last` holds | 2 |
+  | Q6 | `at - since` for `at - max(last, since)` | none (equivalent) |
+  | Q7 | `held` the instance's own `now` before the switch | 3 |
+  | Q8 | a move given back after a scan too | 2 |
+
+  Q6 is equivalent: `held`, where it is read, is the instance's own `now`, which no `last`
+  passes (decision 188); the code was simplified to it. Q1, Q4 and Q7 fail both of
+  `config_edit_test.exs`'s new tests and the configuration edit walk; Q2 the give-back's
+  test and the configuration, lone and block edit walks; Q3 decision 56's pinned test, the
+  give-back's, and the lone and configuration edit walks; Q5 and Q8 fix F11's tests ("nor
+  after a restart", "but not after a scan") and the lone edit's walk.
+
+  *Cost*, in reductions, the least of five runs, against the parent `eae603f`
+  (`scratchpad/m6/m9/cost.exs`): a lone edit's test of programs of 1, 16 and 64 timers,
+  counters, blocks and arrays 458 to 463, 4,290 to 4,340 and 16,484 to 16,678, about 3 a
+  timer; a resource's test of 1, 16 and 64 instances with a timer each 1,335 to 1,343,
+  10,837 to 10,965 and 41,479 to 42,006, about 8 an instance; accept the same, as its
+  forecast is a switch; assemble and cancel unchanged. Linear, about 1.2%.
+
+  *The edit walks at 30 fresh families* `{9401..9430, ...}`, each walk's own streams
+  moved with it, and at `{7613, 10, 19}` (`scratchpad/m6/m9/fams.sh`): the configuration
+  edit's walk passes all 30 and 7613, every atom reached, the two new among them; the
+  block edit's all 30; the lone edit's 25 and 7613, the other five, `9403`, `9414`,
+  `9424`, `9426` and `9427`, missing `:misfit` alone, as the parent `eae603f` misses it
+  at each of the five, no check failing in any.
+
+  2411 tests (11 doctests), up from 2408.
 
 - **M6-9 · The documents.** README: "Retained values", the trip's restart example run
   again warm, the `rto`'s "until `retain` lands" in "Three more timers", "Settled, not yet
