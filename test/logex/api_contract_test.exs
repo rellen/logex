@@ -4119,6 +4119,12 @@ defmodule Logex.ApiContractTest do
     for _ <- 1..150, do: ce_configuration(:scripted)
     Process.delete(:ce_bias)
 
+    # Decision 329: then 10 drawn toward `b1` reported whole while its state holds a member
+    # the version switched to does not declare (`:retain_undeclared`), which the 650 meet
+    # at some fresh seeds only: an edit adding `blk`'s `m`, tested and untested, superseded
+    # by one that only moves `b1`'s `retain`, tested, untested and cancelled.
+    for _ <- 1..10, do: ce_configuration(:leftover)
+
     assert Process.get(:ce_refused, MapSet.new()) == MapSet.new(Keyword.keys(@ce_refusals))
     assert Process.get(:ce_diagnosed, MapSet.new()) == MapSet.new(@ce_diagnostics)
     assert Process.get(:ce_kinds, MapSet.new()) == MapSet.new(@report_kinds)
@@ -4130,7 +4136,7 @@ defmodule Logex.ApiContractTest do
   defp ce_opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
 
   defp ce_configuration(bias \\ nil) do
-    spec = ce_spec()
+    spec = ce_spec_for(bias, ce_spec())
     Process.put(:ce_timers, Map.new(spec.versions, fn {type, v} -> {type, v.timer} end))
     {:ok, config} = ce_config(spec)
     runtime = Runtime.start(config)
@@ -4160,6 +4166,17 @@ defmodule Logex.ApiContractTest do
   # refused leaves the rest to the walk.
   defp ce_script(nil, w), do: w
 
+  defp ce_script(:leftover, w) do
+    w
+    |> ce_forced(&ce_m_added/1)
+    |> ce_scripted(:test)
+    |> ce_scripted(:untest)
+    |> ce_forced(&ce_b1_requalified/1)
+    |> ce_scripted(:test)
+    |> ce_scripted(:untest)
+    |> ce_scripted(:cancel)
+  end
+
   defp ce_script(:scripted, w) do
     w
     |> ce_accept()
@@ -4170,6 +4187,38 @@ defmodule Logex.ApiContractTest do
     |> ce_scripted(:untest)
     |> ce_scripted(:cancel)
   end
+
+  # Toward `:retain_undeclared`: every version holds `b1`, and `blk` starts with no `m`.
+  defp ce_spec_for(:leftover, spec),
+    do: %{
+      spec
+      | blocks: %{spec.blocks | m: nil},
+        versions: Map.new(spec.versions, fn {type, v} -> {type, %{v | blk: true}} end)
+    }
+
+  defp ce_spec_for(_bias, spec), do: spec
+
+  # A candidate made from the configuration running by `change`, accepted as any.
+  defp ce_forced(w, change) do
+    w = %{w | spec: ce_running_spec(w)}
+    spec = ce_wire(change.(w.spec), true)
+    ce_configured(ce_config(spec), spec, w)
+  end
+
+  defp ce_m_added(spec), do: %{spec | blocks: %{spec.blocks | m: 1}}
+
+  defp ce_b1_requalified(spec),
+    do: %{
+      spec
+      | blocks: %{spec.blocks | m: nil},
+        versions:
+          Map.new(spec.versions, fn {type, v} ->
+            {type, %{v | q: Map.update!(v.q, "b1", &ce_toggled/1)}}
+          end)
+    }
+
+  defp ce_toggled(:retain), do: nil
+  defp ce_toggled(_none), do: :retain
 
   # Each switch after a few cycles, so that a timer may be timing when it comes.
   defp ce_scripted(%{e: nil} = w, _step), do: w
