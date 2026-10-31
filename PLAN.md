@@ -10604,7 +10604,117 @@ done-when reads the next store write; and last the contract walk and the documen
   and every dropped reason, under atoms that do not reuse the existing `:retained`;
   oracles in clauses, draws alone in `@draws` (decision 264). *Size L.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-31** (`1f1fc3a`, the documents after it). As the entry says,
+  built only where the walks before it did not reach.
+
+  *The inventory first.* Decision 271's table, row by row, and what reached it before
+  M6-8: a cold and a warm restart in the core, a lone instance's every leaf by the nearest
+  mark, M6-2's `rw_` walk, and a resource's globals, M6-3's `ext_` walk; in the runner,
+  M6-5's `RunnerWalk` reading a restart's resource from `Logex.Runtime.restart/2` and
+  restating a cold restart's write (`:cold_store`); a crash and a warm fresh start,
+  `:store_restored` and `:period_restored`; a fresh start with no store file, every
+  walk's first start; and a runner with no `retain:` keeping a warm restart's values in
+  memory, the walks with no forces file. Not reached: a resource's instances, the clock,
+  the input and output points and a retained trigger's last sample across `restart/2`
+  (decisions 305 and 313); `start: :cold`; an orderly `stop/2`, a parent's shutdown and
+  a `:normal` exit or a `GenServer.stop/3`, each followed by a fresh start; and a crash
+  with no store, since the walk crashes only with a forces file. Decision 277's reasons:
+  every one of a lone instance's, `:undeclared`, `{:retyped, ...}`, `{:resized, ...}`,
+  `:unretained`, `:misfit`, a preset and a `[*]` drop, M6-4's `iw_` walk; in the runner
+  only `:unretained`, M6-7's `:store_unretained`. Not reached: an instance retyped to
+  another program type, a global's drops of every reason, and in the runner every reason
+  but `:unretained`, and a store whose writes fail.
+
+  *What is new*, under atoms of their own, none of them the existing `:retained`:
+  - a walk of a resource's restarts and image, in `Logex.ApiContractTest`, seed `{2026,
+    10, 2708}`: 50 configurations of two program types, `pp` holding a counter, a timer,
+    an array, a block `cell` under a `cal` that may be false and a var_output, and `qq`
+    under an event task whose `single`, `trig`, `pp` writes, every declaration line's
+    qualifier drawn, the block's members' too, and each unlocated global's, `tot`, `arr`
+    and `trig`, beside two input points and an output point; 30 steps of cycles, warm and
+    cold `restart/2`, and now and then the image taken by `retained/1` and laid by
+    `start/2` over a changed configuration, `tot` retyped or renamed, `arr` resized or
+    taken out, a qualifier drawn again, `m1` retyped, `m3` taken out or put back, `tot`'s
+    stored value now and then made a misfit. Decision 271's two restart rows restated
+    from the draw alone: each instance's leaves, a timer's `last` its instance's `now`,
+    the var_inputs kept; each global; the input points kept and the output point 0; the
+    clock, `now` and `first`; and the trigger's last sample, told by whether the event
+    task runs in a cycle of 0 ms after it. Decision 277's resource-level drops restated
+    from the two draws, in order, and each kept value laid over the changed start. Its
+    reach 22 atoms, `rr_kept_warm` to `rr_undeclared_instance`;
+  - the life walk, `Logex.ApiContractTest.LifeWalk`, a module of its own so that it runs
+    beside the runner walk, whose code it runs: 20 walks of 50 steps, seeds `{6801, 10,
+    n}`, its draws from a stream of its own, `{6801, 280, n}`, a store in four walks of
+    five, and a shelf `s1` retaining an array, an array of timers and an array of a
+    block's instances; one step in five its own: `stop/2`, a parent's `:shutdown` or
+    `{:shutdown, term}`, a parent's `:normal` exit and a `GenServer.stop/3` from another
+    process, running or tripped, each then a fresh start, warm or `start: :cold`; a crash
+    then `start: :cold`; a crash with or without a store; the store's writes made to fail
+    for a period or more, its `.tmp` a directory, `status/1`'s `failed` set and the last
+    good write the one the next start meets; and a crash then a fresh start on a changed
+    configuration that meets the old store, its drops decision 277's restated from the
+    change drawn, in `status/1` and the core's `start/2` alike (`kt` retyped, unretained
+    or undeclared, `k1` retyped, its count retyped, unretained or a misfit written into
+    the store's text, the shelf's array resized, one timer's preset changed or both,
+    `s1.tl[*].pre`, and the block's member retyped in every element, `s1.gs[*].j`), then
+    an end and a cold start on the walk's own configuration. The model knows the last
+    write: each end's is the resource as it ended, a cold start's the configuration's
+    first values, a failed write none; the store's text is checked against it after every
+    end and start, and each warm start's resource against it laid over the configuration,
+    the shelf's paths among `get/2`'s. Its reach 22 atoms, `life_stop_fresh` to
+    `life_member_every`.
+
+  Every earlier walk draws exactly as before: the draw's new key, `shelf`, is no draw, the
+  life walk's steps are drawn only in its own walks, the restated store write reads `kt`
+  by `get/2` where it read it by `get!/2`, and the runner walk's table is owned by an
+  `Agent` that outlives either module, so that the two modules share it.
+
+  *Mutation table* (`scratchpad/m6/m8w/mut`), 19 mutants in `lib/`, each judged by the
+  exit code of `api_contract_test.exs` alone, without the unit tests, all 19 red: a warm
+  restart keeping nothing; a retained timer's `last` kept; a retained global put back
+  warm; a retained trigger's last sample 0, and 1; a `non_retain` overridden by an outer
+  `retain`; a member, and a global, kept though no longer retained; a global's misfit
+  dropped unreported; a preset taken from the image; a `[*]` drop not collapsed; a
+  resize reported as a retype; an instance retyped to another program type matched
+  anyway; `start: :cold` reading the store; a `:normal` exit, a shutdown and a `stop/2`
+  each writing none; a failed write not reported; and a cold restart writing none. Ten
+  of them, a trigger's sample twice, a global kept unretained, a global's misfit, an
+  instance retyped, `start: :cold`, the three ends and a failed write, only M6-8's walks
+  catch; the rest the earlier walks too.
+
+  *The walks at 30 fresh families* `{7701..7730, ...}`, each walk's own streams moved with
+  it (`scratchpad/m6/m8w/seeds2.sh`), no check failing in any: the resource walk and the
+  life walk reach every atom in all 30; the runner walk reaches every atom in 15, the rest
+  missing atoms rare by their nature, as at M6-7 (`:store_tripped_at_start` 5,
+  `:zero_at_stop` 5, `:next_due_from_step` 4, `:period_restored` 2, `:store_unretained`
+  2, `:period_own_wake` 1 and `{:trip, :round}` 1); the lone edit's walk reaches every
+  atom in 23, the other 7 missing only `:misfit`, as the parent's do; and the block
+  edit's and the configuration edit's walks pass all 30, every atom reached. The
+  configuration edit's family `{7613, 10, 19}` of M6-7's question is outside these and
+  was not run again.
+
+  *Run under load*: the life walk 50 times in one process, with four busy loops on the
+  machine's four cores, passed all 50 (`scratchpad/m6/m8w/load.log`), some 46 s a walk of
+  twenty. It ran after the walks' commit, where the brief asks it before; nothing needed
+  changing.
+
+  *Cost*: no line of `lib/` changed, so no program's cost moved. The suite's wall time on
+  this machine's four cores, two runs each, 77.0 and 80.6 s at `47fd8ae`, and 83.4 and
+  88.6 s with M6-8 (96.0 s under the gate), the life walk some 12 s of work alone and the
+  resource walk under a second; with the life walk in the runner walk's own module, so
+  that it ran after it, 103 to 105 s.
+
+  *Questions it raises, for the maintainer.*
+  1. *One run in seven of the full suite failed one test and printed no failure*,
+     `Result: 2406/2407 passed`, with no test named; four runs of the suite after it, the
+     gate and a fifth all passed. The walks passed alone in every run. Options, by what a
+     developer sees: (a) chase it, the suite run until it fails with a formatter that
+     names the test; (b) leave it noted, as the reduction bound's single failure at
+     M6-7's answers was. The reading taken is (b), provisional.
+  2. *M6-7's question 7613 stays open*: the configuration edit's walk at `{7613, 10,
+     19}`, a test then an untest resuming an `rto` by 30 ms, is a walk that existed before
+     M6-8 and M6-8 changes none of its draws; it is left for the maintainer's answer to
+     M6-7's three options rather than read here.
 - **M6-9 · The documents.** README: "Retained values", the trip's restart example run
   again warm, the `rto`'s "until `retain` lands" in "Three more timers", "Settled, not yet
   landed", and "What logex is not", whose "no retained values" clause is replaced and

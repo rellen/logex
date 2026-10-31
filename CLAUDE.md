@@ -1832,7 +1832,30 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   store holds a count the program started does not retain, and since M6-7's review a test
   that moves `keep`'s `retain`, in a walk with a store, followed one time in two, by the
   walk's own stream, by a period's wait and a crash and a fresh start on the original, once
-  a walk beside the crash drawn among its steps, its reach `:keep_requalified`, `:original_after_crash` and `:store_unretained`
+  a walk beside the crash drawn among its steps, its reach `:keep_requalified`, `:original_after_crash` and `:store_unretained`; and since M6-8 a walk of a resource's restarts and image, 50 seeded configurations of
+  two program types whose every declaration line's qualifier is drawn, a block among them,
+  three unlocated globals', a `single` among them, beside input and output points, over
+  cycles, warm and cold `restart/2` and the image laid by `start/2` over a changed
+  configuration (a global retyped, renamed, resized, taken out or requalified, an
+  instance retyped or taken out, a stored value made a misfit), decision 271's two restart
+  rows restated from the draw alone (each instance's leaves by the nearest mark, a timer's
+  `last` its instance's `now`, the globals, the input points kept, the output point 0, the
+  clock, `now` and `first`, and the trigger's last sample, told by whether the event task
+  runs after it) and decision 277's resource-level drops from the two draws, its reach 22
+  `rr_` atoms; and the runner walk's life walk, in a module of its own, `Logex.ApiContractTest.LifeWalk`, so that it runs beside the runner walk, 20 walks of 50
+  steps on seeds of their own, `{6801, 10, n}`, a stream of their own, `{6801, 280, n}`,
+  a store in four walks of five and a shelf `s1` of an array, an array of timers and an
+  array of a block's instances retained, one step in five the life walk's: `stop/2`, a
+  parent's `:shutdown` or `{:shutdown, term}` or `:normal` exit and a `GenServer.stop/3`
+  from another process, running or tripped, each then a fresh start, warm or `start:
+  :cold`; a crash then `start: :cold`; a crash with no store; the store's writes failing
+  for a while, its `.tmp` a directory; and a crash then a fresh start on a changed
+  configuration meeting the old store, its drops decision 277's restated (`kt` retyped,
+  unretained or undeclared, `k1` retyped, its count retyped, unretained or a misfit in the
+  store's text, the shelf's array resized, one preset or every element's, `s1.tl[*].pre`,
+  and a block's member in every element, `s1.gs[*].j`), in `status/1` and `start/2`
+  alike, its model knowing the last write and checking the store's text after every end
+  and start, its reach 22 `life_` atoms
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
