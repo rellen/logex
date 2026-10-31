@@ -196,6 +196,46 @@ defmodule Logex.RetainEditTest do
       assert tested == %{state | switched: true}
     end
 
+    # M6-7's review: a `[*]` value is each element's in the elements' order, an array of
+    # two dimensions a list of its rows, the rightmost subscript fastest; only some
+    # elements scanned, so that an order or a row read wrongly shows.
+    test "a `[*]` value lists each element's in the elements' order, a 2-D array's by rows" do
+      gates = fn q ->
+        compiled(
+          "var_input go bool\nvar #{q}gs latch[2,3]\ncal gs[0,0] go\ncal gs[1,2] go",
+          [latch()]
+        )
+      end
+
+      running = gates.("")
+      state = scanned(running, 2)
+
+      marked = compiled(running.source, [latch("retain ")])
+      {:ok, edit, forecast} = Edit.accept(running, marked, state)
+      assert forecast == [{:retain_added, "gs[*].k", [[2, 0, 0], [0, 0, 2]]}]
+      {_edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      assert tested == %{state | switched: true}
+
+      {:ok, _edit, forecast} = Edit.accept(running, gates.("retain "), state)
+      [one, zero] = [%{"k" => 2, "s" => 1}, %{"k" => 0, "s" => 0}]
+      assert forecast == [{:retain_added, "gs", [[one, zero, zero], [zero, zero, one]]}]
+
+      halves = fn latch ->
+        compiled("var_input go bool\nvar hs cell[2]\ncal hs[1] go", [cell(latch)])
+      end
+
+      running = halves.(latch())
+
+      {:ok, _edit, forecast} =
+        Edit.accept(running, halves.(latch("retain ")), scanned(running, 3))
+
+      assert forecast == [
+               {:retain_added, "hs[*].l.k", [0, 3]},
+               {:retain_added, "hs[*].ws[*].k", [[0, 0], [3, 3]]}
+             ]
+    end
+
     test "an instance marked whole is one path, its value its map" do
       running = holding(cell(latch()))
       candidate = holding(cell(latch()), "retain ")
@@ -495,6 +535,9 @@ defmodule Logex.RetainEditTest do
                {:retain_removed, "t1.lamp"}
              ]
 
+      # Accepted, the original still runs, and the period's write is its.
+      assert stored(rig, runner) == @lamp
+
       assert {:ok, report} = Runner.test(runner)
       assert kinds(report) == kinds(forecast)
 
@@ -536,6 +579,12 @@ defmodule Logex.RetainEditTest do
       assert warm(rig, runner) == {0, 1}
       pressed(rig, [1, 0, 1])
 
+      # Cancelled, the original runs on.
+      assert {:ok, []} = Runner.cancel(runner)
+      assert warm(rig, runner) == {0, 1}
+      pressed(rig, [1, 0, 1])
+
+      assert {:ok, _forecast} = Runner.accept(runner, candidate())
       assert {:ok, _report} = Runner.test(runner)
       assert {:ok, []} = Runner.assemble(runner)
       assert warm(rig, runner) == {2, 0}

@@ -1654,7 +1654,8 @@ clock gone down, its wall clock still answering, writing none, and since decisio
 and 328 a parent's `:normal` exit writing the store after every output 0 and every device
 closed, a `GenServer.stop/3` from another process, `:normal` or `:shutdown`, writing and
 answered `:ok`, its failure `:ok` with the subscribers told, and a runner whose device
-cannot be opened leaving the store byte for byte,
+cannot be opened leaving the store byte for byte, and since M6-7's review a parent's
+`:normal` exit while tripped writing the trip's resource again,
 and since decision 317 a cold restart a device refuses writing the store back after its
 zeros, a crash then restoring the trip's values, a refused warm restart writing nothing
 and a failed write-back reported, and since M6-6's review a supervisor waiting for a
@@ -1686,7 +1687,9 @@ nothing written, the forecast the test's, untest the reverse, assemble and cance
 every pair of qualifiers, a qualifier changed with the type refused for the type alone, a
 retained tag added `:added` alone, the warm restart and the image following the program
 running at each stage, a block's member at depth and through arrays of blocks by `[*]`,
-its value a list of each element's, an instance marked whole one path, a member only one
+its value a list of each element's, since M6-7's review in the elements' order and a
+2-D array of blocks' a list of its rows, `[[2, 0, 0], [0, 0, 2]]`, an instance marked
+whole one path, a member only one
 version declares in no change, a mark moved between an instance and its members
 reporting only what it changes, a configuration's instance by its name beside a global,
 and PLAN's Done-when through `Logex.Runner` on the manual clock (the period's write and a
@@ -1816,8 +1819,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   the two draws, the store's lines holding the count only where the program running
   retains it, and a crash while a candidate runs starting half the time on the original,
   meeting the candidate's store by decision 277, `[{"k1.k", :unretained}]` where the
-  store holds a count the program started does not retain, its reach `:keep_requalified`,
-  `:original_after_crash` and `:store_unretained`
+  store holds a count the program started does not retain, and since M6-7's review a test
+  that moves `keep`'s `retain`, in a walk with a store, followed one time in two, by the
+  walk's own stream, by a period's wait and a crash and a fresh start on the original, once
+  a walk beside the crash drawn among its steps, its reach `:keep_requalified`, `:original_after_crash` and `:store_unretained`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a

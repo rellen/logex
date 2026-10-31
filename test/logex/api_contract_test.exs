@@ -12651,7 +12651,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       hung: %{},
       begun: 0,
       doing: nil,
-      crashed: false
+      crashed: false,
+      # M6-7's review: whether the crash after a test that moves `keep`'s `retain` came.
+      crashed_under_test: false
     }
 
     reach(:untimed, untimed?(config))
@@ -13282,7 +13284,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     config = ConfigEdit.running(edit)
     running = (step == :test && w.draws.candidate) || w.draws.original
     w = %{w | edit: edit, rt: rt, expect: [{:edit, step, report}]}
-    checked(consumed(reconfigured(put_in(w.draws.running, running), config)))
+
+    crash_under_test(
+      checked(consumed(reconfigured(put_in(w.draws.running, running), config))),
+      step
+    )
   end
 
   defp edited(w, step, {config, rt, report}, reply) do
@@ -13292,6 +13298,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = %{w | edit: nil, rt: rt, expect: [{:edit, step, report}]}
     checked(consumed(reconfigured(put_in(w.draws.running, running), config)))
   end
+
+  # M6-7's review: a test that gives `keep`'s count `retain` or takes it away, in a walk
+  # with a store, is followed one time in two, by the walk's own stream, by a period's
+  # wait and a crash, once a walk beside the crash drawn among the steps, and the fresh
+  # start is on the original configuration, so that decision 277's matching meets a store
+  # the candidate wrote, a count kept that the original does not retain among it
+  # (`:store_unretained`). The crash drawn among the steps, once a walk and most often
+  # within its first steps, came before any edit's test in nearly every walk with a store.
+  defp crash_under_test(
+         %{draws: %{candidate: %{keep: candidate}, original: %{keep: original}}} = w,
+         :test
+       )
+       when candidate != original,
+       do: crash_drawn(own(2), w)
+
+  defp crash_under_test(w, _step), do: w
+
+  defp crash_drawn(1, %{file: file, crashed_under_test: false} = w) when file != nil,
+    do: crashed(wait(%{w | crashed_under_test: true}, w.period + w.draws.running.fast), 1)
+
+  defp crash_drawn(_draw, w), do: w
 
   # After a step the rounds read the configuration the resource runs, and the next is
   # planned again from the last, never before the step (decisions 129 and 139).
@@ -13450,7 +13477,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # The runner killed, as a machine that loses it: each device it had writes every output
   # 0 once, where it had not, and closes (decision 115); and a runner started again from
   # the same forces file comes back with every force (decision 127).
-  defp crashed(w) do
+  defp crashed(w), do: crashed(w, own(2))
+
+  defp crashed(w, draw) do
     w = writer_settled(settled(w))
     devices = device_pids(w.runner)
     watched = Enum.map(devices, fn {_name, pid} -> Process.monitor(pid) end)
@@ -13464,7 +13493,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     stopped!(w, before)
     reach(:crash, true)
     w = %{w | crashed: true, edit: nil}
-    original_again(own(2), w)
+    original_again(draw, w)
   end
 
   # M6-7: half the time a runner that crashed while a candidate ran starts again on the

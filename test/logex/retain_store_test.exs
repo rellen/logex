@@ -1127,6 +1127,33 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 328 for a tripped runner (M6-7's review): the trip wrote the store, and a
+    # parent's `:normal` exit while tripped writes it again, the resource the trip kept,
+    # as stop/2 of a tripped runner does. The store taken away after the trip shows the
+    # second write.
+    test "a parent's :normal exit while tripped writes the trip's resource", %{tmp_dir: dir} do
+      rig = rig(dir)
+      test = self()
+
+      parent =
+        spawn(fn ->
+          {:ok, runner} = Runner.start_link(rig.opts)
+          send(test, {:runner, runner})
+          receive do: (:end -> :ok)
+        end)
+
+      assert_receive {:runner, runner}, 5000
+      pressed(rig, [1, 0, 1])
+      tripped(rig, runner)
+      assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
+      File.rm!(rig.store)
+      ref = Process.monitor(runner)
+      send(parent, :end)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :normal}, 5000
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
+    end
+
     # Decisions 327 and 328: the runner tells an orderly exit by its reason alone, so a
     # `GenServer.stop/3` from a process that is not its parent, `:normal` or `:shutdown`,
     # writes the store too, and its caller is answered `:ok`.

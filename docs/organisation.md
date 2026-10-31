@@ -4471,6 +4471,7 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   | a fresh start with `start: :cold`, or with no store file | initial; the store written at once | initial | read | 0 | true |
   | an orderly `stop/2`, then a fresh start | from the store, which `stop/2` wrote last | initial | read | 0 | true |
   | a parent's orderly shutdown, then a fresh start (decision 316) | from the store, which the shutdown wrote last | initial | read | 0 | true |
+  | a parent's `:normal` exit, or a `GenServer.stop/3` from any process with `:normal`, `:shutdown` or `{:shutdown, term}`, running or tripped, then a fresh start (decisions 327 and 328) | from the store, which the exit wrote last | initial | read | 0 | true |
   | a runner given no `retain:` | nothing survives a crash; a warm `restart/2` still keeps retained values in memory | initial | read | 0 | true |
 
   A fresh start with a store is warm unless `start: :cold`: naming a store is the host

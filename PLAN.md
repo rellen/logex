@@ -10351,9 +10351,11 @@ done-when reads the next store write; and last the contract walk and the documen
   the state exactly as it found it but for `switched`; through `Logex.Runner` on the
   manual clock, the next period's write holds the count only while the candidate that
   retains it runs, after its test and after its assemble, and the lamp only while the
-  original runs, at accept, after untest and after cancel; a warm restart after a trip
-  keeps the count and loses the lamp under the candidate and the reverse under the
-  original, at each of the five stages; and a runner killed while the candidate is tested,
+  original runs, at accept (before the test), after untest and after cancel; a warm
+  restart after a trip keeps the count and loses the lamp under the candidate and the
+  reverse under the original, at each of the five stages, after accept, test, untest,
+  cancel and a second accept's test and assemble (the read at accept and the cancel's
+  restart since M6-7's review); and a runner killed while the candidate is tested,
   after a period's write, then started fresh on the original configuration, meets the
   candidate's store by decision 277, `status/1`'s `dropped` `[{"t1.boxes", :unretained}]`,
   the count at 0, the lamp, which the store does not hold, at its declared 0, and the
@@ -10388,7 +10390,32 @@ done-when reads the next store write; and last the contract walk and the documen
   `:store_tripped_at_start`, `:zero_at_stop` and `:next_due_from_step` as at M6-6, and the
   new `:store_unretained` (17) and `:original_after_crash` (12), each a crash while a
   candidate runs, which only some walks meet. 50 runs of `retain_edit_test.exs` under four
-  busy loops pass (`scratchpad/m6/r50e.out`). No existing test line was removed: the lone
+  busy loops pass (`scratchpad/m6/r50e.out`).
+
+  *M6-7's review* (at `0f9bc4b`) found no defect in the rules and three gaps in the tests,
+  each now a test that fails with its mutant: a `[*]` value of a 2-D array of blocks,
+  `var gs latch[2,3]` with only `gs[0,0]` and `gs[1,2]` run, `{:retain_added, "gs[*].k",
+  [[2, 0, 0], [0, 0, 2]]}` and the array marked whole a list of rows of maps (a mutant
+  reading each row as one element gave `[0, 0]`); the elements' order, `cal hs[1] go`
+  alone giving `hs[*].l.k` `[0, 3]` and `hs[*].ws[*].k` `[[0, 0], [3, 3]]` (a mutant
+  reversing them passed every test); and decision 328 for a tripped runner, a parent's
+  `:normal` exit while tripped writing the trip's resource again (`retain_store_test.exs`;
+  a mutant writing nothing there passed). The Done-when's runner tests read the store
+  between accept and test too, and restart warm after a cancel, so each stage this
+  status names is tested. The runner walk's crash under test was drawn too seldom: the
+  walk's one crash, a step in twelve, came before any edit's test in nearly every walk
+  with a store, so at `{7501..7530, …}` `:store_unretained` was missed by 22 families and
+  `:original_after_crash` by 8. A test that moves `keep`'s `retain`, in a walk with a
+  store, is now followed one time in two, by the walk's own stream, by a period's wait and
+  a crash, once a walk beside the crash among the steps, the fresh start on the original.
+  At its pinned seed it reaches every atom; at `{7501..7530, …}` no check failed, 9
+  families reached every atom, `:store_unretained` was missed by 3, `:original_after_crash`
+  by none and `:period_restored` by 2 (11 before), the rest as before, rare by their
+  nature: `:store_tripped_at_start` 11, `:next_due_from_step` 5, `:zero_at_stop` 5,
+  `:period_own_wake`, `:array_unforced` and `{:trip, :round}` 1 each
+  (`scratchpad/m6/m7r/seeds_rw2.out`). The edit walks, unchanged, are as the review ran
+  them at `{7501..7530, …}`. §4.13's table of starts has a row for a parent's `:normal`
+  exit and a `GenServer.stop/3`, running or tripped (decisions 327 and 328). No existing test line was removed: the lone
   walk's two timer regexes read a qualified line, and `@configuration_kinds` loses the two
   kinds, which the lone walk must now reach.
 
