@@ -1440,6 +1440,7 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:held` | for an output the program that runs next still shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
 | `:unwritten` | the value it keeps: a member input logic writes, a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, that the program stopped writes and no logic of the program started writes, by its path (decision 96) | a switch |
 | `:pruned` | the value it had | assemble, cancel |
+| `:retain_added`, `:retain_removed` | the value the path holds, which the next warm restart now keeps, or no longer keeps; nothing is written (M6-7, decisions 278 and 302) | a switch |
 
 The writes a report lists, applied to the state before its step, give the state after it,
 exactly: `:added`, `:input`, `:preset`, `:resume_undone` (`last` given back), `:resumed`
@@ -4595,7 +4596,22 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
   `Logex.Configuration.Edit` and `@configuration_kinds`; the switch writes nothing.
   *(Decision 302, 2026-10-29: a global's two kinds are built now, with M6-3's answers, by
-  the global's name with the value it holds; M6-7 brings a program's tags.)* The
+  the global's name with the value it holds; M6-7 brings a program's tags.)* *(Landed
+  with M6-7, 2026-10-31: a program's tags, members, arrays and instances, by path, a
+  configuration's instance's by its name, `t1.boxes`, beside a global's; a path's
+  retention each program's by decision 270's nearest mark (`Logex.Program.retained`), so
+  `non_retain` and none are one and a mark moved between an instance and its members
+  reports only the paths whose retention it changes; the paths compared are the leaves of
+  the state both programs declare, a tag, an array of an elementary type and a built-in
+  instance one leaf each, a user block's instance member by member and an array of them
+  by `[*]`, and the change named as `retained` names a path, a node whole where every leaf
+  of either program under it changes alike, `gates[*].k` for a member of every element
+  (decision 310's form); the value as a report gives one to a host, an array's a list, an
+  instance's its map, a `[*]` path's a list of each element's; reported at every switch,
+  the accept's forecast among them, and at no prune; a qualifier changed with the type
+  refused for the type alone. `@configuration_kinds` no longer holds the two kinds,
+  which the lone edit's walk reaches too. The readings marked provisional in `PLAN.md`
+  M6-7 are put to the maintainer.)* The
   next store write follows the program running, so a tag whose `retain` is removed keeps
   its value until the next restart and is then initialised; a crash while an edit is
   tested leaves a store of the candidate's values, which a fresh start meets by decision
@@ -5406,7 +5422,11 @@ to OE-2.
     which extends decision 29 to globals. Adopted.
     *(Decision 302, 2026-10-29: a kept global whose qualifier an edit changes is reported
     `:retain_added` or `:retain_removed` beside `:initial_changed`, built with M6-3's
-    answers.)*
+    answers.)* *(Landed with M6-7, 2026-10-31: a program's tag, member, array or instance
+    whose retention an edit changes is reported so too, by path, beside its
+    `:initial_changed`; the 2026-10-27 amendment above stands as M6-2 and M6-4 built it,
+    a retained tag whose initial value changed keeping its running value through a warm
+    restart and its stored one at a fresh start.)*
     *(Amended 2026-10-27 by decisions 277 and 278, for Milestone 6, not yet built: a
     running value kept until a restart is, for a retained global or tag, kept by a warm
     restart still, only a cold restart taking the new initial value; and a store read at a
@@ -11078,7 +11098,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: `:retain_added` and `:retain_removed`, report only** (the maintainer,
      2026-10-27), as recommended. Decision 44 is annotated. *(Decision 302, 2026-10-29: a
      global's two kinds are built ahead of M6-7, by its name with the value it holds,
-     `non_retain` and none one; M6-7 brings a program's tags.)*
+     `non_retain` and none one; M6-7 brings a program's tags.)* *(Landed with M6-7,
+     2026-10-31: a program's tags, members, arrays and instances by path, each path's
+     retention by decision 270's nearest mark, compared leaf by leaf and named as
+     `Program.retained` names a path, `[*]` for every element; a configuration's
+     instances' by the instance's name beside a global's; the next period's write and the
+     next warm restart following the program running at every stage, and a crash under
+     test then a fresh start on the original meeting the candidate's store by decision
+     277, `:unretained` reported, each through `Logex.Runner` on the manual clock;
+     §4.13's note gives the rule, and `PLAN.md` M6-7 the provisional readings.)*
 279. **A pre-scan in the conventional family's sense (Milestone 6).** The conventional
      family needs one because it keeps everything (RM094N p.47); under decision 266 logex
      puts back everything unmarked by `initial_env/1`, and an `ote` writes 0 on a

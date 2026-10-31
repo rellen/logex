@@ -10318,7 +10318,146 @@ done-when reads the next store write; and last the contract walk and the documen
   tested, then a fresh start with the original configuration, meets the candidate's
   store by decision 277's matching. *Size M.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-31** (`7713267`, the documents after it). As the entry says, but where the readings below say
+  otherwise. `Logex.Edit.Plan` gives each plan `requalified`, built once at accept from
+  the two programs alone: each program's leaves of state, a tag, an array of an elementary
+  type and a built-in instance one leaf each, a user block's instance member by member at
+  any depth and an array of them by `[*]`, each to whether the program retains it by
+  decision 270's nearest mark as its `retained` settles it; a leaf both declare whose
+  retention differs is in the change, one alone declares is not; and the change is named
+  as `retained` names a path, a node whole where every leaf of either program under it
+  changes alike, and otherwise each node below it that does. A switch, and so accept's
+  forecast, reports each `{:retain_added, path, value}` or `{:retain_removed, path,
+  value}`, read from the state after every other rule, and writes nothing; untest gives
+  the reverse; no prune reports it. `Logex.Configuration.Edit` gives them by path through
+  the plan's switch, by the instance's name, `t1.boxes`, beside a global's. Rows of
+  `Logex.Edit`'s table and §4.9's; `@configuration_kinds` no longer holds the two kinds,
+  which `@report_kinds` held since decision 302, so the lone edit's walk must reach them.
+
+  *The rule stated* (the item asked it settled): a path is reported where its retention,
+  by the nearest mark, differs between the two programs, compared leaf by leaf over what
+  both declare, so `non_retain` and none are one (decision 302's reading); a mark moved
+  between an instance and its members reports only the leaves whose retention it changes,
+  `var retain s1 seal` to `var s1 seal` with `seal`'s `count` marked `retain` reporting
+  `s1.run` and `s1.t` removed and nothing for `s1.count`, and a move that keeps the same
+  leaves, `var retain l latch` to each of `latch`'s members marked, nothing. A qualifier
+  changed with the type is refused for the type alone, as every type change is, so the
+  edit reports nothing (§4.9). An array of a block's instances is reported once, by `[*]`,
+  decision 310's and 259's form: a declaration marks every element alike, so no element
+  can differ.
+
+  PLAN's Done-when, each a test in `retain_edit_test.exs`: an edit that only changes a
+  tag's qualifier reports it by path, the forecast equal to the test's report, and leaves
+  the state exactly as it found it but for `switched`; through `Logex.Runner` on the
+  manual clock, the next period's write holds the count only while the candidate that
+  retains it runs, after its test and after its assemble, and the lamp only while the
+  original runs, at accept, after untest and after cancel; a warm restart after a trip
+  keeps the count and loses the lamp under the candidate and the reverse under the
+  original, at each of the five stages; and a runner killed while the candidate is tested,
+  after a period's write, then started fresh on the original configuration, meets the
+  candidate's store by decision 277, `status/1`'s `dropped` `[{"t1.boxes", :unretained}]`,
+  the count at 0, the lamp, which the store does not hold, at its declared 0, and the
+  retained total kept. Besides: every pair of qualifiers, `retain` alone reported; an
+  array's value as a list; an instance whole one path, its map; a block's member at depth,
+  `c.l.k`, `c.ws[*].k`, `hs[*].l.k` and `hs[*].ws[*].k`, `[[3, 3], [3, 3]]`; a member one
+  version alone declares in no change; a retained tag the candidate adds `:added` alone;
+  the warm restart and the image of a lone instance following `Logex.Edit.running/1` at
+  each stage; and a configuration's instance by its name beside a global.
+
+  The walks: the lone edit walk gives each `var` and `var_output` line a qualifier now and
+  then, drawn from a stream of its own, `{2026, 10, 278}`, so that every other draw, and
+  so its reach, is as it was, its variants drawing them again, and restates both kinds
+  from the two programs' texts, a line's `retain` alone retaining; its timer oracles'
+  regexes read a qualified `var t1 ton` line. The configuration edit's walk draws each
+  version's qualifiers on `out`, `t1`, `n` and `b1` and `blk`'s on its member `m`, from a
+  stream of its own, at the start and in one candidate in two, and restates each kept
+  instance's reports from the two versions' texts by the nearest mark, `b1` whole or
+  member by member, `i1` whole, its reach `:retain_tag`, `:retain_block` and
+  `:retain_member`. The runner walk, where it edits, starts one walk in three with `keep`'s
+  count unretained and toggles it in one candidate in two, from the walk's own stream
+  seeded by its seed, restates the forecast's `k1.k` from the two draws, holds the store's
+  lines to the count only where the program running retains it, and starts a runner that
+  crashed while a candidate ran on the original half the time, the fresh start's drops
+  restated, its reach `:keep_requalified`, `:original_after_crash` and `:store_unretained`.
+  At their pinned seeds each walk reaches every atom. At the 30 fresh families
+  `{7401..7430, …}`, each walk's own streams moved with it (`scratchpad/m6/m7/seeds.sh`),
+  no check of any walk failed: the configuration edit's walk reached every atom at all
+  30; the lone edit walk at 22, the other eight missing only `:misfit`, which the parent
+  `40cf962` misses at the same families (7402, 7407 and 7409 run there); and the runner
+  walk at 2, the rest missing atoms rare by their nature, `:period_restored`,
+  `:store_tripped_at_start`, `:zero_at_stop` and `:next_due_from_step` as at M6-6, and the
+  new `:store_unretained` (17) and `:original_after_crash` (12), each a crash while a
+  candidate runs, which only some walks meet. 50 runs of `retain_edit_test.exs` under four
+  busy loops pass (`scratchpad/m6/r50e.out`). No existing test line was removed: the lone
+  walk's two timer regexes read a qualified line, and `@configuration_kinds` loses the two
+  kinds, which the lone walk must now reach.
+
+  *Cost*, in reductions against the parent `40cf962` (`scratchpad/m6/m7/cost.exs`): an
+  edit of programs that retain nothing, lone with 1, 16 and 64 of each of a dint, a timer,
+  a block and an array, accepts within 35 of the parent (8330 to 8335 at 1, 347,763 to
+  347,728 at 64, the sort's noise) and switches in 2 more (456 to 458, 16,482 to 16,484),
+  assemble and cancel unchanged; a configuration's switch 2 more an instance (35,528 to
+  35,678 at 64 instances). An edit that marks every line `retain` pays for its leaves,
+  linearly: accept 8,468 to 9,318, 91,308 to 102,385 and 356,789 to 400,627 at 1, 16 and
+  64, a test 456 to 525 and 16,482 to 21,375. `retain_edit_test.exs` holds the growth
+  linear and an edit of programs that retain nothing, `non_retain` on every line, switching
+  at exactly the cost of one that marks nothing.
+
+  *Mutations*, each judged by the full suite's exit code (`scratchpad/m6/m7mut`), all red:
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | R1 | no path reported | 13 |
+  | R2 | untest reports the test's kinds | 4 |
+  | R3 | a leaf only the candidate declares, retained, reported | 4 |
+  | R4 | `retained`'s paths compared as text, not leaf by leaf | 5 |
+  | R5 | no node reported whole, every leaf alone | 4 |
+  | R6 | the whole named over the candidate's leaves alone | 2 |
+  | R7 | a `[*]` path's value its first element's | 1 |
+  | R8 | assemble and cancel report the qualifiers too | 3 |
+  | R9 | a switch writes a newly retained tag's initial value | 7 |
+  | R10 | a leaf retained only where `retained` names it exactly | 5 |
+  | R11 | `[*]` read as part of the array's name | 2 |
+  | R12 | the two kinds swapped | 12 |
+  | R13 | each value read from an empty state | 9 |
+
+  R10's first form did not compile and was written again; its second compiles with one
+  type-checker warning and fails five tests. The exclusion of a var_external that is a
+  global from the leaves has no mutant: no qualifier is allowed on one, so neither program
+  retains it and it can change nothing.
+
+  Provisional readings, each a question put to the maintainer:
+  1. *An instance's value.* `var retain t1 ton` added reports `{:retain_added, "t1", %{"acc"
+     => 0, "last" => 10, …}}`, the state's map, `last` among it, which the image never
+     holds. Options: (a) as built, the map as the state holds it, as `:added` gives one;
+     (b) the map without `last`, as the image would keep it; (c) no value for an
+     instance, only its path.
+  2. *A `[*]` path's value.* `{:retain_added, "gates[*].count", [3, 3, 3, 3]}`, a list in
+     the elements' order, a list of lists for an array inside an array. Options: (a) as
+     built; (b) one entry an element, `gates[0].count` and on, as before decision 310.
+  3. *A mark moved.* `var retain s1 seal` to `var s1 seal` whose `count` the block now
+     marks reports `s1.run` and `s1.t` removed, nothing for `s1.count`, which stays
+     retained. Options: (a) as built, by the leaves whose retention changes; (b) by
+     `retained`'s text, `s1` removed and `s1.count` added, though the count's warm
+     restart does not change.
+  4. *A member one version declares.* `var s1 latch` to `var retain s1 latch` whose new
+     version adds `m` reports `{:added, "s1.m", 0}` and `s1.k` and `s1.s` added, not `s1`
+     whole. Options: (a) as built, a member only one declares in no change; (b) `s1` whole,
+     as the candidate retains everything under it.
+  5. *Assemble and cancel.* They report no qualifier, a switch having said it. Options:
+     (a) as built; (b) assemble repeats the test's.
+  6. *A qualifier with a type change.* `var count dint` to `var retain count int` is refused
+     for the type alone, the message silent on `retain`. Options: (a) as built; (b) the
+     message says the qualifier changes too.
+  7. *A retained tag added.* `var retain spare dint 4` added reports `{:added, "spare", 4}`
+     alone. Options: (a) as built; (b) `:retain_added` beside it.
+
+  PLAN, CLAUDE.md, README ("Settled, not yet landed" and "A retained global", with
+  `requalified.exs`, a real run) and the record's §4.9, §4.13 and decisions 44 and 278
+  updated. `edit.exs` and `recount.exs` run again, their output as printed; no README
+  example edits a program that retains anything, so none other changes. 2399 tests (11
+  doctests), up from 2385.
+
 - **M6-8 · The contract walk.** The host walk gains `retain` on drawn tags, members,
   arrays and instances, and restarts of both modes against an oracle restating decision
   271's table; the `RunnerWalk` gains a store: periods, kills and fresh starts from the

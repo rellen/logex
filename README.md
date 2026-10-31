@@ -348,8 +348,11 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   stop and a cold restart, and a fresh start reads, warm unless `start: :cold` ("The
   store on disk", below). Landed, M6-6: its write every `retain_period:`, a second
   unless set, by a writer process of the runner's own, so that a crash loses at most a
-  period and the write in progress. Still to land: an online edit's report of a
-  program's qualifier. `persistent` is deferred and stays unreserved.
+  period and the write in progress. Landed, M6-7: an online edit that adds or takes away
+  `retain` on a program's tag, member, array or instance reports each path whose
+  retention it changes, with the value it holds, and writes nothing ("A retained global",
+  below). Still to land: the contract walk over retained values and the documents'
+  closing pass. `persistent` is deferred and stays unreserved.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -2982,9 +2985,59 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision
-  302). A program's tags follow with M6-7.
+  302). So does one that changes a program's qualifier (M6-7, decision 278), each path
+  whose retention changes reported by the instance's name, as `requalified.exs` shows
+  below: by the nearest mark, so that `non_retain` and none are one, an instance marked
+  whole is one path, a block's member by its path, `t1.s1.count`, and a member of every
+  element of an array of blocks `t1.gates[*].count`, its value a list of the elements'.
+  The next store write and the next warm restart follow the program running, the
+  candidate under test and the original after an untest.
 - In the core retained values are kept in memory only, as a program's are; the runner's
   store, below, keeps them across a crash.
+
+`requalified.exs` edits the running plant to a `tally` that keeps no count, `var boxes
+ctu`, tests it, restarts warm, and untests:
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("tally.logex")
+{:ok, ld} = File.read("tally.ld")
+{:ok, text} = File.read("tally.logex")
+{:ok, plain} = Logex.compile(String.replace(ld, "var retain boxes", "var boxes"), name: "tally")
+{:ok, candidate} = Logex.Configuration.compile("tally", text, %{"tally" => plain})
+
+count = fn rt, label ->
+  IO.puts("#{label}  t1.boxes.cv=#{Logex.Runtime.get!(rt, "t1.boxes.cv")}")
+  rt
+end
+
+rt =
+  Enum.reduce([1, 0, 1, 0], Logex.Runtime.start(plant), fn eye, rt ->
+    elem(Logex.Runtime.cycle(rt, 10, %{"eye_1" => eye}), 0)
+  end)
+
+{:ok, edit, _forecast} = Logex.Configuration.Edit.accept(rt, candidate)
+{edit, rt, report} = Logex.Configuration.Edit.test(edit, rt)
+IO.puts("test")
+Enum.each(report, &IO.puts("        #{inspect(&1)}"))
+count.(rt, "under test   ")
+rt |> Logex.Runtime.restart(:warm) |> count.("warm restart ")
+
+{_edit, rt, report} = Logex.Configuration.Edit.untest(edit, rt)
+IO.puts("untest")
+Enum.each(report, &IO.puts("        #{inspect(&1)}"))
+rt |> Logex.Runtime.restart(:warm) |> count.("warm restart ")
+```
+
+```
+$ mix run requalified.exs
+test
+        {:retain_removed, "t1.boxes", %{"cu" => 0, "cv" => 1, "ov" => 0, "pv" => 3, "q" => 0, "r" => 0}}
+under test     t1.boxes.cv=1
+warm restart   t1.boxes.cv=0
+untest
+        {:retain_added, "t1.boxes", %{"cu" => 0, "cv" => 1, "ov" => 0, "pv" => 3, "q" => 0, "r" => 0}}
+warm restart   t1.boxes.cv=1
+```
 
 ### The store on disk
 
