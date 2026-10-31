@@ -215,7 +215,7 @@ defmodule Logex.ApiContractTest do
     ce_mistakes ce_op ce_qualifiers ce_sink ce_source ce_source_of ce_spec ce_walk
     ce_wire config_inputs config_operation ct_b ct_maybe ct_op ct_program rw_op rw_program
     iw_spec iw_qualifier iw_changed iw_tag_change iw_member_change iw_input iw_corrupt
-    iw_mistakes
+    iw_mistakes iw_corrupt_toward iw_toward_value
     rr_op rr_spec rr_changed rr_insts rr_corrupt
     ct_source edit_program ia_rungs ia_spec jp_items jp_jumps_at jp_op
     jp_program jp_rung operation pc_coil_change pc_maybe pc_program pc_source
@@ -11525,35 +11525,48 @@ defmodule Logex.ApiContractTest do
   # timer's or counter's preset, drawn and drawn again in a changed program, follows the
   # program, a stored one that differs reported (decision 308), `iw_preset`; and a member
   # every element of an array of cells drops for one reason reported once, `b[*].k`
-  # (decision 310), `iw_every`.
+  # (decision 310), `iw_every`. Since M6-8's review, after the 60, 40 more from a seed of
+  # their own drawn toward two rules no walk reached: reals among the tags and an array of
+  # eleven or twelve cells, one to three retained values made a misfit or, at a real, an
+  # integer, which is taken at its nearest real (decision 311), `iw_int_for_real`, and two
+  # elements of one array of cells dropped, one past the ninth, in the order of their
+  # subscripts' values, `f[2].k` before `f[10].k` (M6-4's review), `iw_past_nine`, the
+  # drops' order restated by value where until then it was the text's.
   @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
                iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every)a
+
+  @iw_toward_reach ~w(iw_int_for_real iw_past_nine)a
 
   test "an image round-trips through a changed program: kept by instance, path, exact " <>
          "type, retain and fit, the rest dropped once with its reason" do
     :rand.seed(:exsss, {2026, 10, 2904})
-
-    for _ <- 1..60 do
-      old = iw_spec()
-      new = iw_changed(old)
-      {p, q} = {iw_compile(old), iw_compile(new)}
-      s = iw_scans(p, Runtime.instance(p), :rand.uniform(12))
-      image = Runtime.retained(p, s)
-      {image, corrupt} = iw_corrupt(image, iw_retained_leaves(old))
-      {started, dropped} = Runtime.instance(q, image)
-
-      {expected, expected_dropped} =
-        iw_expected(old, new, {s.env, Runtime.instance(q).env}, corrupt)
-
-      assert dropped == expected_dropped
-      assert started.env == expected
-      assert %Instance{first: true, now: 0, ons_blocked: []} = started
-      iw_reached(old, new, {s, started, dropped})
-      iw_same(old == new and corrupt == nil, {p, s, image})
-      iw_mistake(iw_mistakes(q, s, image))
-    end
-
+    for _ <- 1..60, do: iw_round(iw_kinds(), &iw_corrupt/2)
     assert Process.get(:iw_reach, MapSet.new()) == MapSet.new(@iw_reach)
+
+    :rand.seed(:exsss, {2026, 10, 2905})
+    for _ <- 1..40, do: iw_round(iw_toward(), &iw_corrupt_toward/2)
+    assert Process.get(:iw_reach) == MapSet.new(@iw_reach ++ @iw_toward_reach)
+  end
+
+  defp iw_round(kinds, corrupted) do
+    old = iw_spec(kinds)
+    new = iw_changed(old, kinds)
+    {p, q} = {iw_compile(old), iw_compile(new)}
+    s = iw_scans(p, Runtime.instance(p), :rand.uniform(12))
+    image = Runtime.retained(p, s)
+    {image, corrupt} = corrupted.(image, iw_retained_leaves(old))
+    {started, dropped} = Runtime.instance(q, image)
+
+    {expected, expected_dropped} =
+      iw_expected(old, new, {s.env, Runtime.instance(q).env}, corrupt)
+
+    assert dropped == expected_dropped
+    assert started.env == expected
+    assert %Instance{first: true, now: 0, ons_blocked: []} = started
+    iw_reached(old, new, {s, started, dropped})
+    iw_toward_reached(old, new, {corrupt, dropped})
+    iw_same(old == new and corrupt == %{}, {p, s, image})
+    iw_mistake(iw_mistakes(q, s, image))
   end
 
   defp iw_compile(spec) do
@@ -11595,7 +11608,7 @@ defmodule Logex.ApiContractTest do
   defp iw_mark(:non_retain, _held), do: false
   defp iw_mark(nil, held), do: held
 
-  defp iw_tag(name, kind, flag, _cell) when kind in [:dint, :int],
+  defp iw_tag(name, kind, flag, _cell) when kind in [:dint, :int, :real],
     do: [%{path: name, at: [name], type: kind, retained: flag, above: []}]
 
   defp iw_tag(name, {:array, type, n}, flag, _cell),
@@ -11691,8 +11704,24 @@ defmodule Logex.ApiContractTest do
         )
       end)
 
-    {env, dropped |> iw_every(old) |> Enum.sort_by(&elem(&1, 0))}
+    {env, dropped |> iw_every(old) |> Enum.sort_by(&iw_order(elem(&1, 0)))}
   end
+
+  # The drops' order restated (M6-4's review): segment by segment, an element by its
+  # subscripts' values, `[*]` before every element, so `f[2].k` comes before `f[10].k`,
+  # which the text's order puts after it.
+  defp iw_order(path), do: Enum.map(String.split(path, "."), &iw_segment/1)
+
+  defp iw_segment(segment),
+    do: iw_segment_of(Regex.run(~r/\A([^\[]+)\[([^\]]+)\]\z/, segment), segment)
+
+  defp iw_segment_of(nil, segment), do: {segment, []}
+
+  defp iw_segment_of([_all, name, subscripts], _segment),
+    do: {name, Enum.map(String.split(subscripts, ","), &iw_subscript/1)}
+
+  defp iw_subscript("*"), do: -1
+  defp iw_subscript(digits), do: String.to_integer(digits)
 
   # Decision 310 restated: a reason every element of an array of cells gives for one path
   # under it, once, `b[*].k`; the elements at most three, the text's order is the
@@ -11756,15 +11785,21 @@ defmodule Logex.ApiContractTest do
       iw_value_judged(
         iw_fit(
           iw_judged(leaf.type, Map.get(declared, leaf.path), MapSet.member?(retained, leaf.path)),
-          leaf.path == corrupt
+          Map.get(corrupt, leaf.path)
         ),
         leaf,
         old_env,
         {env, dropped}
       )
 
-  defp iw_fit(:ok, true), do: :misfit
+  defp iw_fit(:ok, :misfit), do: :misfit
+  defp iw_fit(:ok, {:taken, value}), do: {:taken, value}
   defp iw_fit(judged, _corrupt), do: judged
+
+  # Decision 311 restated: an integer stored for a real taken at its nearest real, which
+  # for the walk's small integers is the integer as a float.
+  defp iw_value_judged({:taken, value}, leaf, _old_env, {env, dropped}),
+    do: {iw_put(env, leaf.at, value), dropped}
 
   defp iw_value_judged(:ok, %{preset: true} = leaf, old_env, {env, dropped}),
     do: iw_preset_kept(iw_get(old_env, leaf.at), iw_get(env, leaf.at), leaf, {env, dropped})
@@ -11814,6 +11849,19 @@ defmodule Logex.ApiContractTest do
 
     iw_reach(:iw_added, iw_added?(old, new, kept))
     iw_reach(:iw_rebased, Enum.any?(kept, &iw_rebased?(&1, s, started)))
+  end
+
+  # M6-8's review: an integer kept at a real, and two drops in one array of cells whose
+  # order by value is not the text's.
+  defp iw_toward_reached(old, new, {corrupt, dropped}) do
+    kept = Enum.map(iw_kept(old, new, dropped), & &1.path)
+
+    iw_reach(
+      :iw_int_for_real,
+      Enum.any?(corrupt, fn {path, how} -> match?({:taken, _}, how) and path in kept end)
+    )
+
+    iw_reach(:iw_past_nine, Enum.sort_by(dropped, &elem(&1, 0)) != dropped)
   end
 
   defp iw_reason({reason, _, _}), do: :"iw_#{reason}"
@@ -11909,10 +11957,26 @@ defmodule Logex.ApiContractTest do
     {:cells, 3}
   ]
 
-  defp iw_spec do
+  # M6-8's review: the kinds of the 40 drawn toward a real and a long array of cells.
+  @iw_toward [
+    :real,
+    :real,
+    {:array, :real, 3},
+    :dint,
+    :ton,
+    :cell,
+    {:cells, 11},
+    {:cells, 12},
+    {:cells, 12}
+  ]
+
+  defp iw_kinds, do: @iw_kinds
+  defp iw_toward, do: @iw_toward
+
+  defp iw_spec(kinds) do
     %{
       presets: iw_presets(),
-      tags: for(name <- ~w(a b c d e f), do: {name, pick(@iw_kinds), iw_qualifier()}),
+      tags: for(name <- ~w(a b c d e f), do: {name, pick(kinds), iw_qualifier()}),
       cell: [
         {"k", pick([:dint, :dint, :int]), iw_qualifier()},
         {"t", pick([:ton, :tof]), iw_qualifier()},
@@ -11923,7 +11987,7 @@ defmodule Logex.ApiContractTest do
 
   defp iw_qualifier, do: pick([nil, :retain, :retain, :non_retain])
 
-  defp iw_changed(spec) do
+  defp iw_changed(spec, kinds) do
     case :rand.uniform(4) do
       1 ->
         spec
@@ -11931,7 +11995,7 @@ defmodule Logex.ApiContractTest do
       _ ->
         %{
           presets: pick([spec.presets, spec.presets, iw_presets()]),
-          tags: Enum.flat_map(spec.tags, &iw_tag_change/1),
+          tags: Enum.flat_map(spec.tags, &iw_tag_change(&1, kinds)),
           cell: Enum.map(spec.cell, &iw_member_change/1)
         }
     end
@@ -11939,11 +12003,11 @@ defmodule Logex.ApiContractTest do
 
   defp iw_presets, do: %{timer: pick([30, 40]), counter: pick([100, 60])}
 
-  defp iw_tag_change({name, kind, q} = tag) do
+  defp iw_tag_change({name, kind, q} = tag, kinds) do
     case :rand.uniform(10) do
       1 -> [{name <> "x", kind, q}]
       2 -> []
-      3 -> [{name, pick(@iw_kinds), q}]
+      3 -> [{name, pick(kinds), q}]
       4 -> [{name, kind, iw_qualifier()}]
       5 -> [{name, iw_resize(kind), q}]
       _ -> [tag]
@@ -11954,6 +12018,8 @@ defmodule Logex.ApiContractTest do
   defp iw_resize({:array, type, 4}), do: {:array, type, 3}
   defp iw_resize({:cells, 2}), do: {:cells, 3}
   defp iw_resize({:cells, 3}), do: {:cells, 2}
+  defp iw_resize({:cells, 11}), do: {:cells, 12}
+  defp iw_resize({:cells, 12}), do: {:cells, 11}
   defp iw_resize(kind), do: kind
 
   defp iw_member_change({"k", kind, q}) do
@@ -11988,23 +12054,101 @@ defmodule Logex.ApiContractTest do
 
   defp iw_input, do: %{"eye" => pick([0, 1]), "run" => pick([0, 1, 1])}
 
-  # One retained value made a misfit now and then: `{image, path}`, or `{image, nil}`.
+  # One retained value made a misfit now and then: `{image, %{path => :misfit}}`, or
+  # `{image, %{}}`.
   defp iw_corrupt(image, leaves) do
     case {:rand.uniform(4), leaves} do
       {1, [_ | _]} ->
         leaf = pick(leaves)
         {type, _value} = Map.fetch!(image.values, leaf.path)
-        {%{image | values: Map.put(image.values, leaf.path, {type, iw_misfit(type)})}, leaf.path}
+
+        {%{image | values: Map.put(image.values, leaf.path, {type, iw_misfit(type)})},
+         %{leaf.path => :misfit}}
 
       _ ->
-        {image, nil}
+        {image, %{}}
     end
   end
+
+  # M6-8's review: where an array of eleven or more cells is retained, one member of an
+  # element from 0 to 9 and the same member of one past it made misfits, so that the two
+  # drops' order by value is not the text's; then up to three more values, a real's an
+  # integer, which is kept, or one no real holds, a misfit, and every other a misfit.
+  defp iw_corrupt_toward(image, leaves) do
+    long =
+      Enum.filter(leaves, fn leaf ->
+        Enum.any?(leaf.above, &match?({_, {:array, "cell", [n]}} when n >= 11, &1))
+      end)
+
+    pair =
+      case long do
+        [] ->
+          []
+
+        _ ->
+          leaf = pick(long)
+          [name, rest] = String.split(leaf.path, ~r/\[\d+\]/, parts: 2)
+          [i, j] = [pick(Enum.to_list(0..9)), pick(Enum.to_list(10..11))]
+
+          for k <- [i, j],
+              path = "#{name}[#{k}]#{rest}",
+              Map.has_key?(image.values, path),
+              do: path
+      end
+
+    others = Enum.take_random(leaves, :rand.uniform(4) - 1) |> Enum.map(& &1.path)
+
+    image_corrupt =
+      Enum.reduce(Enum.uniq(pair ++ others), {image, %{}}, fn path, {image, corrupt} ->
+        {type, _value} = Map.fetch!(image.values, path)
+        {value, how} = iw_toward_value(type)
+
+        {%{image | values: Map.put(image.values, path, {type, value})},
+         Map.put(corrupt, path, how)}
+      end)
+
+    # And, where a real scalar is retained, one of them always an integer, which is kept,
+    # so that decision 311 is met at every seed rather than at most.
+    case Enum.filter(leaves, &(&1.type == :real)) -- Enum.filter(leaves, &(&1.path in pair)) do
+      [] ->
+        image_corrupt
+
+      reals ->
+        {image, corrupt} = image_corrupt
+        path = pick(reals).path
+
+        {%{image | values: Map.put(image.values, path, {:real, 5})},
+         Map.put(corrupt, path, {:taken, 5.0})}
+    end
+  end
+
+  defp iw_toward_value(:real) do
+    case :rand.uniform(4) do
+      1 -> {7, {:taken, 7.0}}
+      2 -> {-3, {:taken, -3.0}}
+      3 -> {2 ** 200, :misfit}
+      4 -> {1.0e39, :misfit}
+    end
+  end
+
+  defp iw_toward_value({:array, :real, [n]}) do
+    case :rand.uniform(2) do
+      1 ->
+        ints = Enum.map(1..n, fn _ -> :rand.uniform(9) end)
+        {ints, {:taken, List.to_tuple(Enum.map(ints, &(&1 * 1.0)))}}
+
+      2 ->
+        {[1], :misfit}
+    end
+  end
+
+  defp iw_toward_value(type), do: {iw_misfit(type), :misfit}
 
   defp iw_misfit(:bool), do: 2
   defp iw_misfit(:dint), do: 5_000_000_000
   defp iw_misfit(:int), do: 40_000
   defp iw_misfit({:array, _, _}), do: [1]
+  defp iw_misfit(:real), do: 1.0e39
 
   # Now and then a host's mistake at one of the four doors.
   defp iw_mistakes(q, s, image) do
@@ -12053,7 +12197,9 @@ defmodule Logex.ApiContractTest do
   defp iw_type_word({:cells, n}), do: "cell[#{n}]"
   defp iw_type_word(atom) when is_atom(atom), do: Atom.to_string(atom)
 
-  defp iw_rungs(name, k, _p) when k in [:dint, :int], do: ["xic eye add #{name} 1 #{name}"]
+  defp iw_rungs(name, k, _p) when k in [:dint, :int, :real],
+    do: ["xic eye add #{name} 1 #{name}"]
+
   defp iw_rungs(name, {:array, _, _}, _p), do: ["xic eye add #{name}[1] 1 #{name}[1]"]
 
   defp iw_rungs(name, k, p) when k in [:ctu, :ctu_int],
@@ -12093,7 +12239,8 @@ defmodule Logex.ApiContractTest do
                rr_input_kept rr_clock_kept rr_global_kept rr_global_reset rr_output_reset
                rr_sample_kept rr_rise_fires rr_image_kept rr_image_global rr_image_trigger
                rr_undeclared_global rr_retyped_global rr_resized_global rr_unretained_global
-               rr_misfit_global rr_retyped_instance rr_undeclared_instance)a
+               rr_misfit_global rr_retyped_instance rr_undeclared_instance
+               rr_member_unretained rr_member_retyped rr_member_misfit)a
 
   test "a resource's warm and cold restarts keep what decision 271's table says, and its " <>
          "image meets a changed configuration by decision 277" do
@@ -12124,7 +12271,9 @@ defmodule Logex.ApiContractTest do
 
     for {name, type} <- w.spec.insts do
       before = w.rt.instances[name]
-      base = Map.merge(fresh.instances[name].env, Map.take(before.env, ["go"]))
+      first = rr_first(type)
+      assert fresh.instances[name].env == first
+      base = Map.merge(first, Map.take(before.env, ["go"]))
       expected = rr_restarted(mode, rr_leaves(type, w.spec), {base, before.env, before.now})
       restarted = rt.instances[name]
       assert restarted.env == expected, inspect({mode, name, w.spec})
@@ -12163,7 +12312,16 @@ defmodule Logex.ApiContractTest do
     for {name, type} <- spec.insts do
       kept = rr_instance_kept?(name, type, w.spec, expected_dropped)
       before = w.rt.instances[name]
-      expected = rr_started(kept, rr_leaves(type, spec), {fresh.instances[name].env, before})
+      first = rr_first(type)
+      assert fresh.instances[name].env == first
+
+      expected =
+        rr_started(
+          kept,
+          rr_kept_leaves(name, type, {w.spec, spec}, misfit),
+          {first, before}
+        )
+
       assert rt.instances[name].env == expected, inspect({name, w.spec, spec})
       assert {rt.instances[name].first, rt.instances[name].now} == {true, 0}
       rr_reach(:rr_image_kept, kept and expected != fresh.instances[name].env)
@@ -12195,8 +12353,10 @@ defmodule Logex.ApiContractTest do
 
   defp rr_kept_leaf({_path, false, _kind}, env, _before), do: env
 
-  # Decision 277, restated: an instance the image keeps starts with each retained leaf as
-  # it was, a timer's `last` the start's `now`, 0; every other at its first value.
+  # Decision 277, restated: an instance the image keeps starts with each leaf it keeps as
+  # it was, a timer's `last` the start's `now`, 0; every other at its first value. Since
+  # M6-8's review a leaf it keeps is one the stored program and the changed one both
+  # retain, of the same type, its value fitting, under no kind dropped (`rr_members/4`).
   defp rr_started(false, _leaves, {fresh, _before}), do: fresh
 
   defp rr_started(true, leaves, {fresh, before}),
@@ -12227,6 +12387,123 @@ defmodule Logex.ApiContractTest do
     assert ran == (trig == 1 and sample == 0), inspect({mode, trig, sample})
     rr_reach(:rr_sample_kept, mode == :warm and trig == 1 and sample == 1)
     rr_reach(:rr_rise_fires, mode == :warm and ran and trig == 1)
+  end
+
+  # M6-8's review: an instance's first env restated from its program's text, each tag at
+  # its type's zero, a timer's and a counter's preset the number on the instruction that
+  # runs it, `last` 0, no var_external held (decision 49).
+  defp rr_first("qq"), do: %{"n" => 0}
+
+  defp rr_first("pp"),
+    do: %{
+      "go" => 0,
+      "lamp" => 0,
+      "c" => %{"cu" => 0, "cv" => 0, "ov" => 0, "pv" => 1000, "q" => 0, "r" => 0},
+      "t" => rr_ton(),
+      "a" => {0, 0, 0},
+      "k" => 0,
+      "b" => %{"go" => 0, "k" => 0, "q" => 0, "t" => rr_ton()},
+      "q2" => 0
+    }
+
+  defp rr_ton, do: %{"acc" => 0, "dn" => 0, "en" => 0, "last" => 0, "pre" => 30, "tt" => 0}
+
+  # M6-8's review (decision 277 inside a resource's instance): the nodes of a program type,
+  # each an instance whose kind is judged first or a value, its type, and the leaves of
+  # `rr_leaves/2` under it.
+  defp rr_nodes("qq", _spec), do: [{["n"], :value, :dint}]
+
+  defp rr_nodes("pp", spec),
+    do: [
+      {["a"], :value, :int3},
+      {["b"], :kind, "cell"},
+      {["b", "go"], :value, :bool},
+      {["b", "k"], :value, :dint},
+      {["b", "q"], :value, :bool},
+      {["b", "t"], :kind, "ton"},
+      {["c"], :kind, "ctu"},
+      {["k"], :value, String.to_atom(spec.ktype)},
+      {["lamp"], :value, :bool},
+      {["q2"], :value, :bool},
+      {["t"], :kind, "ton"}
+    ]
+
+  # Whether the nearest mark retains anything at or under a node.
+  defp rr_held?(path, type, spec),
+    do:
+      Enum.any?(rr_leaves(type, spec), fn {leaf, kept, _kind} ->
+        kept and List.starts_with?(leaf, path)
+      end)
+
+  # An instance kept by the image (`rr_instance_kept?/4`): its nodes judged in path order,
+  # a kind the stored program retains anything under dropped `:unretained` where the
+  # changed one retains nothing under it, everything under it silent; each value it
+  # retained judged declared of exactly its type, retained, fitting. `{drops, kept}`, each
+  # drop by the instance's path, `kept` the leaves laid back.
+  defp rr_members(name, type, {old, new}, misfit) do
+    Enum.reduce(rr_nodes(type, old), {[], []}, fn node, acc ->
+      rr_node(rr_under_dropped?(node, acc), node, {name, type, old, new, misfit}, acc)
+    end)
+  end
+
+  defp rr_under_dropped?({path, _, _}, {drops, _kept}),
+    do: Enum.any?(drops, fn {dropped, _} -> List.starts_with?(path, dropped) end)
+
+  defp rr_node(true, _node, _at, acc), do: acc
+
+  defp rr_node(false, {path, :kind, _kind}, {_name, type, old, new, _misfit}, acc),
+    do: rr_kind(rr_held?(path, type, old), rr_held?(path, type, new), path, acc)
+
+  defp rr_node(false, {path, :value, was}, {name, type, old, new, misfit}, acc) do
+    now = rr_node_type(type, new, path)
+
+    rr_value(
+      {rr_flag_at(type, old, path), rr_flag_at(type, new, path)},
+      {was, now},
+      {path, misfit == {name, path}},
+      acc
+    )
+  end
+
+  defp rr_kind(true, false, path, {drops, kept}), do: {[{path, :unretained} | drops], kept}
+  defp rr_kind(true, true, path, {drops, kept}), do: {drops, rr_kept_under(path, kept)}
+  defp rr_kind(false, _now, _path, acc), do: acc
+
+  # A kind kept keeps every leaf the walk lays whole under it, a timer's map or a counter's.
+  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["b", "t"]], do: [path | kept]
+  defp rr_kept_under(_path, kept), do: kept
+
+  defp rr_value({false, _now}, _types, _path, acc), do: acc
+
+  defp rr_value({true, _now}, {was, now}, {path, _misfit}, {drops, kept}) when was != now,
+    do: {[{path, {:retyped, was, now}} | drops], kept}
+
+  defp rr_value({true, false}, _types, {path, _misfit}, {drops, kept}),
+    do: {[{path, :unretained} | drops], kept}
+
+  defp rr_value({true, true}, _types, {path, true}, {drops, kept}),
+    do: {[{path, :misfit} | drops], kept}
+
+  defp rr_value({true, true}, _types, {path, false}, {drops, kept}), do: {drops, [path | kept]}
+
+  defp rr_node_type(type, spec, path),
+    do: elem(List.keyfind(rr_nodes(type, spec), path, 0), 2)
+
+  defp rr_flag_at(type, spec, path) do
+    {^path, kept, _kind} = List.keyfind(rr_leaves(type, spec), path, 0)
+    kept
+  end
+
+  # The leaves an instance the image keeps lays back, as `rr_leaves/2` gives them, the rest
+  # not kept.
+  defp rr_kept_leaves(name, type, {old, new}, misfit) do
+    {_drops, kept} = rr_members(name, type, {old, new}, misfit)
+    for {path, _flag, kind} <- rr_leaves(type, new), do: {path, path in kept, kind}
+  end
+
+  defp rr_member_drops(name, type, {old, new}, misfit) do
+    {drops, _kept} = rr_members(name, type, {old, new}, misfit)
+    for {path, reason} <- drops, do: {Enum.join([name | path], "."), reason}
   end
 
   # Each leaf of a program type, its path, whether the nearest mark retains it, and whether
@@ -12296,7 +12573,14 @@ defmodule Logex.ApiContractTest do
           reason != :kept,
           do: {name, reason}
 
-    Enum.sort(globals ++ instances)
+    members =
+      for {name, type} <- old.insts,
+          rr_retains?(type, old),
+          List.keyfind(new.insts, name, 0) == {name, type},
+          drop <- rr_member_drops(name, type, {old, new}, misfit),
+          do: drop
+
+    Enum.sort(globals ++ instances ++ members)
   end
 
   defp rr_judged(nil, _was, _qualifier, _misfit), do: :undeclared
@@ -12304,7 +12588,7 @@ defmodule Logex.ApiContractTest do
   defp rr_judged({:array, n}, {:array, m}, _q, _m) when n != m, do: {:resized, [m], [n]}
   defp rr_judged(_now, _was, qualifier, _misfit) when qualifier != :retain, do: :unretained
   defp rr_judged(_now, _was, _qualifier, true), do: :misfit
-  defp rr_judged(_now, _was, _qualifier, false), do: :kept
+  defp rr_judged(_now, _was, _qualifier, _misfit), do: :kept
 
   defp rr_instance_judged(nil, _was), do: :undeclared
   defp rr_instance_judged({_name, now}, was) when now != was, do: {:retyped, was, now}
@@ -12361,6 +12645,11 @@ defmodule Logex.ApiContractTest do
     for {name, reason} <- dropped, do: rr_reach(rr_drop_atom(name, reason), true)
   end
 
+  defp rr_drop_atom(name, reason)
+       when binary_part(name, 0, 2) in ["m1", "m2", "m3"] and
+              byte_size(name) > 2,
+       do: rr_member_atom(reason)
+
   defp rr_drop_atom(name, :undeclared) when name in ~w(m1 m2 m3), do: :rr_undeclared_instance
   defp rr_drop_atom(_name, :undeclared), do: :rr_undeclared_global
   defp rr_drop_atom(_name, {:retyped, was, _now}) when is_binary(was), do: :rr_retyped_instance
@@ -12368,6 +12657,10 @@ defmodule Logex.ApiContractTest do
   defp rr_drop_atom(_name, {:resized, _from, _to}), do: :rr_resized_global
   defp rr_drop_atom(_name, :unretained), do: :rr_unretained_global
   defp rr_drop_atom(_name, :misfit), do: :rr_misfit_global
+
+  defp rr_member_atom(:unretained), do: :rr_member_unretained
+  defp rr_member_atom({:retyped, _was, _now}), do: :rr_member_retyped
+  defp rr_member_atom(:misfit), do: :rr_member_misfit
 
   defp rr_reach(atom, true), do: reached(:rr_reach, atom)
   defp rr_reach(_atom, false), do: :ok
@@ -12402,7 +12695,7 @@ defmodule Logex.ApiContractTest do
           "var #{rr_word(q["c"])}c ctu",
           "var #{rr_word(q["t"])}t ton",
           "var #{rr_word(q["a"])}a int[3]",
-          "var #{rr_word(q["k"])}k dint",
+          "var #{rr_word(q["k"])}k #{spec.ktype}",
           "var #{rr_word(q["b"])}b cell",
           "var #{rr_word(q["q2"])}q2 bool",
           "xic go ctu c 1000",
@@ -12479,6 +12772,7 @@ defmodule Logex.ApiContractTest do
       pp: Map.new(~w(lamp c t a k b q2 cell.go cell.q cell.k cell.t), &{&1, rr_qualifier()}),
       qq: %{"n" => rr_qualifier()},
       tot: {"tot", "dint"},
+      ktype: "dint",
       arr: 2,
       inits: %{"tot" => pick([0, 5]), "trig" => pick([0, 0, 1])},
       insts: [{"m1", "pp"}, {"m2", "qq"}, {"m3", "pp"}]
@@ -12493,9 +12787,17 @@ defmodule Logex.ApiContractTest do
       | tot: rr_tot(pick([:none, :none, :lint, :renamed]), spec.tot),
         arr: rr_arr(pick([:none, :none, :resized, :gone]), spec.arr),
         gq: Map.new(spec.gq, fn {g, q} -> {g, pick([q, q, rr_qualifier()])} end),
-        insts: rr_insts(pick([:none, :m1, :m3]), spec.insts)
+        insts: rr_insts(pick([:none, :m1, :m3]), spec.insts),
+        # M6-8's review: a program type's own qualifiers drawn again now and then, and its
+        # `k` retyped, so that a resource's instance drops a member by decision 277 too.
+        pp: Map.new(spec.pp, fn {m, q} -> {m, pick([q, q, q, rr_qualifier()])} end),
+        qq: Map.new(spec.qq, fn {m, q} -> {m, pick([q, q, q, rr_qualifier()])} end),
+        ktype: pick([spec.ktype, spec.ktype, spec.ktype, rr_other_k(spec.ktype)])
     }
   end
+
+  defp rr_other_k("dint"), do: "int"
+  defp rr_other_k("int"), do: "dint"
 
   defp rr_tot(:none, tot), do: tot
   defp rr_tot(:lint, {name, "dint"}), do: {name, "lint"}
@@ -12523,18 +12825,188 @@ defmodule Logex.ApiContractTest do
   defp rr_other({_name, "pp"}), do: "qq"
   defp rr_other({_name, "qq"}), do: "pp"
 
-  # One image in four with `tot`'s stored value made one no lint holds.
+  # One image in four with `tot`'s stored value made one no lint holds, and since M6-8's
+  # review one in four of the rest with `m1`'s `k` made one, `{"m1", ["k"]}`.
   defp rr_corrupt(image, spec) do
     {tot, _type} = spec.tot
 
-    case {:rand.uniform(4), image.globals[tot]} do
-      {1, {type, _value}} ->
+    case {:rand.uniform(4), image.globals[tot], image.instances["m1"]} do
+      {1, {type, _value}, _m1} ->
         {%{image | globals: Map.put(image.globals, tot, {type, 2 ** 70})}, tot}
+
+      {2, _tot, %{values: %{"k" => {type, _value}}}} ->
+        {put_in(image.instances["m1"].values["k"], {type, 2 ** 70}), {"m1", ["k"]}}
 
       _ ->
         {image, nil}
     end
   end
+
+  # ---- M6-8's review: an edit's retain report over arrays of two dimensions -------------
+
+  # M6-8's review (decisions 278, 302, 310, 329 and 330): neither edit walk drew an array
+  # of two dimensions whose `retain` an edit moves, so that a report's value as a list of
+  # rows, `[[2, 0, 0], [0, 0, 2]]`, was held by unit tests alone. 120 seeded pairs of
+  # versions of one program, `g` an int array of two dimensions, `h dint[3]`, `n dint`
+  # and `gs` a 2-D array of `cell`s, the block `cell`'s `go`, `k` and `t` members, every
+  # line's qualifier drawn in each version
+  # and the shapes kept, so that the edit is accepted; the original scanned at random,
+  # then accepted, tested and untested. Each retain entry of the test's report, of its
+  # forecast and of the untest's is restated from the two versions' qualifiers alone, by
+  # decision 270's nearest mark: `g`, `h` and `n` by their own lines, each member of `gs`
+  # by its own line where it has a qualifier and by `gs`'s otherwise, `gs` whole where its
+  # every member changes alike and otherwise `gs[*].<member>`; its value read from the
+  # state the step left as the image keeps it, an array a list of its rows, every element
+  # its members, a timer's map without its `last` (decision 329), `gs[*].k` a list of the
+  # rows of each element's `k`. Its reach: a 2-D array whole, a 2-D array of blocks whole
+  # and by member, each kind.
+  @rq_reach ~w(rq_array_rows rq_block_whole rq_member_rows rq_added rq_removed)a
+
+  test "an edit that moves retain on arrays of two dimensions reports each path's value " <>
+         "as the image keeps it, a list of its rows" do
+    :rand.seed(:exsss, {2026, 10, 3300})
+
+    for _ <- 1..120 do
+      shape = %{g: pick([[2, 3], [3, 2], [2, 2]]), gs: pick([[2, 2], [2, 3], [3, 2]])}
+      {from, to} = {rq_version(), rq_version()}
+      {p, q} = {rq_compile(shape, from), rq_compile(shape, to)}
+      s = rq_scans(p, Runtime.instance(p), :rand.uniform(10))
+      {:ok, edit, forecast} = Edit.accept(p, q, s)
+      {edit, tested, report} = Edit.test(edit, s)
+      expected = rq_expected(from, to, tested.env)
+      assert rq_retains(report) == expected, inspect({shape, from, to})
+      assert rq_retains(forecast) == expected
+      {_edit, untested, back} = Edit.untest(edit, tested)
+      assert rq_retains(back) == rq_expected(to, from, untested.env)
+      rq_reached(expected)
+    end
+
+    assert Process.get(:rq_reach, MapSet.new()) == MapSet.new(@rq_reach)
+  end
+
+  defp rq_version,
+    do: Map.new(~w(g h n gs go k t), &{&1, pick([nil, :retain, :non_retain, :retain])})
+
+  defp rq_compile(shape, v) do
+    {:ok, cell} =
+      Logex.compile(
+        "function_block cell\nvar_input #{rr_word(v["go"])}go bool\n" <>
+          "var #{rr_word(v["k"])}k dint\nvar #{rr_word(v["t"])}t ton\n" <>
+          "xic go ton t 30\nxic go add k 1 k",
+        name: "cell"
+      )
+
+    {:ok, program} =
+      Logex.compile(
+        Enum.join(
+          [
+            "var_input on bool",
+            "var #{rr_word(v["g"])}g int[#{Enum.join(shape.g, ",")}]",
+            "var #{rr_word(v["h"])}h dint[3]",
+            "var #{rr_word(v["n"])}n dint",
+            "var #{rr_word(v["gs"])}gs cell[#{Enum.join(shape.gs, ",")}]",
+            "xic on add g[1,1] 1 g[1,1]",
+            "xic on add g[0,1] 2 g[0,1]",
+            "xic on add h[2] 1 h[2]",
+            "xic on add n 3 n",
+            "cal gs[0,0] on",
+            "xic on cal gs[1,1] on",
+            "cal gs[1,0] on"
+          ],
+          "\n"
+        ),
+        name: "rq",
+        types: [cell]
+      )
+
+    program
+  end
+
+  defp rq_scans(_program, state, 0), do: state
+
+  defp rq_scans(program, state, n) do
+    state = Runtime.put_inputs(program, state, %{"on" => pick([0, 1, 1])})
+    {_outputs, state} = Runtime.scan(program, state, pick([0, 10, 20, 40]))
+    rq_scans(program, state, n - 1)
+  end
+
+  defp rq_retains(report),
+    do: for({kind, _, _} = entry <- report, kind in [:retain_added, :retain_removed], do: entry)
+
+  # The nearest mark (decision 270): a line's own `retain` or `non_retain`, and a member
+  # with none its instance's.
+  defp rq_kept(nil, held), do: held
+  defp rq_kept(qualifier, _held), do: qualifier == :retain
+
+  defp rq_leaves(v) do
+    gs = rq_kept(v["gs"], false)
+
+    %{
+      "g" => rq_kept(v["g"], false),
+      "h" => rq_kept(v["h"], false),
+      "n" => rq_kept(v["n"], false),
+      "go" => rq_kept(v["go"], gs),
+      "k" => rq_kept(v["k"], gs),
+      "t" => rq_kept(v["t"], gs)
+    }
+  end
+
+  defp rq_expected(from, to, env) do
+    {was, now} = {rq_leaves(from), rq_leaves(to)}
+    changed = for {leaf, kept} <- now, was[leaf] != kept, into: %{}, do: {leaf, rq_kind(kept)}
+
+    tops =
+      for name <- ~w(g h n),
+          Map.has_key?(changed, name),
+          do: {changed[name], name, rq_image(env[name])}
+
+    members = Map.take(changed, ~w(go k t))
+    Enum.sort(tops ++ rq_block(Map.values(members) |> Enum.uniq(), members, env["gs"]))
+  end
+
+  defp rq_kind(true), do: :retain_added
+  defp rq_kind(false), do: :retain_removed
+
+  # `gs` whole where its every member changes alike, and otherwise each member that
+  # changes, `gs[*].k`, its value the rows of each element's.
+  defp rq_block([kind], members, gs) when map_size(members) == 3,
+    do: [{kind, "gs", rq_image(gs)}]
+
+  defp rq_block(_kinds, members, gs),
+    do:
+      for(
+        {member, kind} <- members,
+        do: {kind, "gs[*]." <> member, rq_rows(gs, &rq_image(Map.fetch!(&1, member)))}
+      )
+
+  # A value as the image keeps it (decision 329): an array a list of its rows, a timer's
+  # map without its `last`, at any depth.
+  defp rq_image(tuple) when is_tuple(tuple), do: rq_rows(tuple, &rq_image/1)
+  defp rq_image(%{"pre" => _, "last" => _} = timer), do: rq_image(Map.delete(timer, "last"))
+  defp rq_image(%{} = map), do: Map.new(map, fn {key, value} -> {key, rq_image(value)} end)
+  defp rq_image(value), do: value
+
+  defp rq_rows(tuple, fun) when is_tuple(tuple),
+    do: Enum.map(Tuple.to_list(tuple), &rq_rows(&1, fun))
+
+  defp rq_rows(element, fun), do: fun.(element)
+
+  defp rq_reached(expected) do
+    for {kind, path, value} <- expected do
+      rq_reach(:rq_array_rows, path == "g" and match?([[_ | _] | _], value))
+      rq_reach(:rq_block_whole, path == "gs")
+
+      rq_reach(
+        :rq_member_rows,
+        String.starts_with?(path, "gs[*].") and match?([[_ | _] | _], value)
+      )
+
+      rq_reach(:"rq_#{kind |> Atom.to_string() |> String.replace_prefix("retain_", "")}", true)
+    end
+  end
+
+  defp rq_reach(atom, true), do: reached(:rq_reach, atom)
+  defp rq_reach(_atom, false), do: :ok
 end
 
 defmodule Logex.ApiContractTest.RunnerWalk do
@@ -12991,10 +13463,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       Enum.join(
         tasks(d) ++
           Enum.map(@points, fn {name, type, at} -> "var_global #{name} #{type} at #{at}" end) ++
-          ["var_global cm dint", "var_global cs dint", "var_global g bool"] ++
+          ["var_global cm dint", "var_global cs dint", g_line(d.shelf)] ++
           ["var_global retain kt dint"] ++ instances(d),
         "\n"
       ) <> "\n"
+
+  # M6-8's review: in the life walk the trigger `g` that logic writes is retained, so that
+  # its last sample is a store's `trigger` line, kept across a crash and a warm fresh start
+  # (decisions 305 and 313).
+  defp g_line(false), do: "var_global g bool"
+  defp g_line(true), do: "var_global retain g bool"
 
   defp tasks(d),
     do:
@@ -13132,7 +13610,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # to {4101, 10, n}, which reaches every atom. Of {4101..4130, 10, n} every walk passed,
   # and the families that miss an atom miss that one, which only some reach, or one of
   # `:zero_at_stop`, `:array_unforced` and `:next_due_from_step`, rare by their nature.
+  # Since M6-8's review its time limit is 300 s, the configuration edit walk's: with three
+  # busy loops on the machine's four cores the suite ran it past ExUnit's 60 s and timed it
+  # out, in one run of six.
   @tag :tmp_dir
+  @tag timeout: 300_000
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
        %{tmp_dir: dir} do
@@ -13246,6 +13728,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # configuration's changes and a store whose writes fail.
       life: life,
       shelf_stored: nil,
+      # M6-8's review: the trigger `g`'s last sample, the one its task's cycle took last.
+      g_sample: 0,
       start: nil,
       change: nil,
       store_failing: false,
@@ -13315,35 +13799,33 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # configuration's; with a store and nothing written yet, the configuration's, written at
   # once; and otherwise the last write's, which the store's lines hold, laid over it. A
   # first round that trips then writes the store again, `tripped/2`'s `stored_at/2`.
+  #
+  # Each returns the model's resource, its last write and the image the start laid over
+  # the configuration, nil where it started from the configuration alone and, with a
+  # store, wrote it at once.
   defp fresh_rt(%{start: :cold} = w, config, _text) do
     rt = Runtime.start(config)
     reach(:life_cold_fresh, true)
     reach(:life_cold_discarded, w.stored != restated(rt, w.draws.running.keep))
-    {rt, restated(rt, w.draws.running.keep)}
+    {rt, restated(rt, w.draws.running.keep), nil}
   end
 
   defp fresh_rt(%{change: change, stored: {kt, k}} = w, config, text) when change != nil do
     k = misfit_count(change.k1, k)
     stored_count!(k, text)
-
-    image = %{
-      configuration: "plant",
-      globals: %{"kt" => {:dint, kt}},
-      instances: Map.merge(kept_count(k), shelf_kept(w)),
-      triggers: %{}
-    }
-
+    image = image_for(w, kt, k)
     {rt, dropped} = Runtime.start(config, image)
     assert dropped == life_dropped(w), inspect(change)
+    life_started!(w, {rt, config}, image, dropped)
     for {path, reason} <- dropped, do: reach(life_atom(path, reason), true)
-    {rt, w.stored}
+    {rt, w.stored, image}
   end
 
-  defp fresh_rt(%{store: nil}, config, nil), do: {Runtime.start(config), nil}
+  defp fresh_rt(%{store: nil}, config, nil), do: {Runtime.start(config), nil, nil}
 
   defp fresh_rt(%{stored: nil} = w, config, nil) do
     rt = Runtime.start(config)
-    {rt, restated(rt, w.draws.running.keep)}
+    {rt, restated(rt, w.draws.running.keep), nil}
   end
 
   defp fresh_rt(%{stored: stored} = w, config, text) do
@@ -13352,21 +13834,70 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     stored_count!(k, text)
     reach(:store_restored, is_integer(k) and k > 0)
     reach(:period_restored, w.by_period and is_integer(k) and k > 0)
-
-    image = %{
-      configuration: "plant",
-      globals: %{"kt" => {:dint, kt}},
-      instances: Map.merge(kept_count(k), shelf_kept(w)),
-      triggers: %{}
-    }
+    image = image_for(w, kt, k)
 
     # M6-7: a count the store holds that the program started does not retain is dropped
     # as unretained (decision 277), which status/1 says.
     {rt, dropped} = Runtime.start(config, image)
     assert dropped == unretained(k, w.draws.running.keep)
+    life_started!(w, {rt, config}, image, dropped)
     reach(:store_unretained, dropped != [])
-    {rt, stored}
+    {rt, stored, image}
   end
+
+  # The image a warm fresh start lays over the configuration: the runner walk's, the
+  # retained global and the count; the life walk's, the last write as the model restated
+  # it (`life_image/2`), with the count the store's text holds, a misfit where a hand edit
+  # made it one.
+  defp image_for(%{life: false}, kt, k),
+    do: %{
+      configuration: "plant",
+      globals: %{"kt" => {:dint, kt}},
+      instances: kept_count(k),
+      triggers: %{}
+    }
+
+  defp image_for(%{shelf_stored: image}, _kt, k),
+    do: %{image | instances: Map.merge(image.instances, kept_count(k))}
+
+  # M6-8's review: the model's start from the image held leaf by leaf to the image restated
+  # (decision 277), read through `get/2`, not through the image: each value it holds kept
+  # where no drop names it or a path above it, and every other at the configuration's first
+  # value, as every path of the walk's that the image does not hold.
+  defp life_started!(%{life: false}, _rt, _image, _dropped), do: :ok
+
+  defp life_started!(_w, {rt, config}, image, dropped) do
+    fresh = Runtime.start(config)
+    drops = Enum.map(dropped, &elem(&1, 0))
+
+    held =
+      Enum.map(image.globals, fn {name, {_type, value}} -> {name, value} end) ++
+        for {name, %{values: values}} <- image.instances,
+            {path, {_type, value}} <- values,
+            do: {name <> "." <> path, value}
+
+    for {path, value} <- held do
+      life_leaf!(Enum.any?(drops, &life_covers?(&1, path)), path, value, {rt, fresh})
+    end
+
+    for path <- @paths,
+        not List.keymember?(held, path, 0),
+        do: assert(Runtime.get(rt, path) == Runtime.get(fresh, path), path)
+
+    reach(:life_leaf_kept, Enum.any?(held, &String.starts_with?(elem(&1, 0), "s1.gs[")))
+  end
+
+  defp life_leaf!(true, path, _value, {rt, fresh}),
+    do: assert(Runtime.get(rt, path) == Runtime.get(fresh, path), path)
+
+  defp life_leaf!(false, path, value, {rt, _fresh}),
+    do: assert(Runtime.get(rt, path) == {:ok, value}, path)
+
+  # A drop names a path, the paths under it and, `[*]`, the path at every element.
+  defp life_covers?(drop, path),
+    do:
+      path == drop or String.starts_with?(path, drop <> ".") or
+        path =~ ~r/\A#{drop |> Regex.escape() |> String.replace("\\[\\*\\]", "\\[\\d+\\]")}\z/
 
   # M6-7: the count in the store's lines where the program that wrote it retained it, and
   # no line of `k1` where it did not.
@@ -13431,11 +13962,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # What a store write holds of the model's resource: the retained global and the
   # retained count, the only values the walk's programs retain.
-  defp restated(rt, keep), do: {held(Runtime.get(rt, "kt")), count_kept(keep, rt)}
+  defp restated(rt, keep), do: {Runtime.get!(rt, "kt"), count_kept(keep, rt)}
 
-  # M6-8: a changed configuration's resource may hold no `kt` (`life_changed/1`).
-  defp held({:ok, value}), do: value
-  defp held({:error, _reason}), do: nil
+  # M6-8's review: a changed configuration's write, which may hold no `kt`, is restated by
+  # the life walk alone (`life_image/2`), and the model's last write is then the changed
+  # one, which only the cold start that follows it reads.
+  defp restated_in(%{change: nil} = w, rt), do: restated(rt, w.draws.running.keep)
+  defp restated_in(_w, _rt), do: :changed
 
   # M6-7: the count, where the program running retains it, and nil where an edit took its
   # `retain` away.
@@ -13449,8 +13982,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # M6-8: a write while the store's writes fail leaves the last write the store's.
   defp stored_at(%{store_failing: true} = w, _rt), do: %{w | failed_seen: true}
 
-  defp stored_at(w, rt),
-    do: shelved(%{w | stored: restated(rt, w.draws.running.keep), by_period: false}, rt)
+  defp stored_at(w, rt), do: shelved(%{w | stored: restated_in(w, rt), by_period: false}, rt)
 
   defp cold_stored(:cold, w) do
     reach(:cold_store, w.store != nil)
@@ -13493,7 +14025,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert :ets.lookup(@table, {self(), :late}) == []
     reach(:late_open, late)
     :ok = Runner.subscribe(runner, [:overlap, :fault, :trip, :restart, :edit, :ran, :round])
-    {rt, stored} = fresh_rt(w, config, text)
+    {rt, stored, image} = fresh_rt(w, config, text)
 
     w =
       Map.merge(w, %{
@@ -13521,10 +14053,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         subscribed: false,
         down: MapSet.new(),
         hung: %{},
-        start: nil
+        start: nil,
+        g_sample: sample_of(image)
       })
 
-    w = shelved(w, rt)
+    w = shelved_at_start(image, w, rt)
     life_drops!(w)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
@@ -13535,6 +14068,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     life_store!(w)
     checked(%{w | subscribed: true})
   end
+
+  # A start from the configuration alone writes the store at once where there is one; a
+  # start from an image writes none. Its trigger's last sample the image's, 0 otherwise.
+  defp shelved_at_start(nil, w, rt), do: shelved(w, rt)
+  defp shelved_at_start(_image, w, _rt), do: w
+
+  defp sample_of(%{triggers: %{"g" => sample}}), do: sample
+  defp sample_of(_image), do: 0
+
+  # Decisions 305 and 313, restated: a retained trigger's last sample kept warm, 0 cold.
+  defp restart_sample(:warm, sample), do: sample
+  defp restart_sample(:cold, _sample), do: 0
 
   defp first_round(nil, w), do: round_ended(w, w.round.outputs)
 
@@ -14180,6 +14725,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_normal_fresh,
     :life_gen_stop_fresh,
     :life_end_tripped,
+    :life_stop_tripped,
+    :life_shutdown_tripped,
+    :life_normal_tripped,
+    :life_gen_stop_tripped,
     :life_end_cold,
     :life_cold_fresh,
     :life_cold_discarded,
@@ -14196,7 +14745,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_resized,
     :life_preset_one,
     :life_preset_every,
-    :life_member_every
+    :life_member_every,
+    :life_trigger_kept,
+    :life_latest_wins,
+    :life_leaf_kept,
+    :life_changed_store
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -14246,16 +14799,26 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp start_option(nil), do: []
   defp start_option(mode), do: [start: mode]
 
-  defp life_stepped(n, w) when n >= 9, do: lived(life(10), w)
+  defp life_stepped(n, w) when n >= 9, do: lived(life(11), w)
   defp life_stepped(_draw, w), do: stepped(w)
 
-  defp lived(n, w) when n <= 4,
-    do: life_ended(Enum.at([:stop, :shutdown, :normal, :gen_stop], n - 1), w, life_mode(w))
+  defp lived(n, w) when n <= 4 do
+    w = trip_before(life(4), w)
+    life_ended(Enum.at([:stop, :shutdown, :normal, :gen_stop], n - 1), w, life_mode(w))
+  end
 
   defp lived(5, w), do: life_cold(w)
   defp lived(6, w), do: life_failing(w)
   defp lived(n, w) when n <= 9, do: life_changed(w)
   defp lived(10, w), do: life_crashed(w)
+  defp lived(11, w), do: life_held(w)
+
+  # M6-8's review: one end in four of a running runner tripped first, a device killed, so
+  # that each kind of end is walked tripped as well as running.
+  defp trip_before(1, %{status: :running} = w),
+    do: injected({:kill, life_pick(["panel", "drive"])}, settled(w))
+
+  defp trip_before(_draw, w), do: w
 
   defp life_mode(%{store: nil}), do: nil
   defp life_mode(_w), do: life_pick([nil, nil, :cold])
@@ -14277,6 +14840,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = drained(w)
     stopped!(w, before)
     reach(:life_end_tripped, w.status == :tripped)
+    reach(:"life_#{kind}_tripped", w.status == :tripped)
     reach(:life_end_cold, mode == :cold)
     w = stored_at(w, w.rt)
     life_store!(w)
@@ -14295,6 +14859,38 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_end(:gen_stop, runner) do
     reason = life_pick([:normal, :shutdown, {:shutdown, :end_of_shift}])
     assert Task.await(Task.async(fn -> GenServer.stop(runner, reason) end), 10_000) == :ok
+  end
+
+  # M6-8's review (decision 275's latest wins): the writer held, `:sys.suspend/1`, for three
+  # periods or more, so that one period's write is in progress and the later ones wait, the
+  # newest taken out replacing the one that waited; then let go, the store holding the
+  # newest, the model's last write, which `life_store!/1` reads.
+  defp life_held(%{store: nil} = w), do: wait(w, 5)
+
+  defp life_held(w) do
+    w = writer_settled(settled(wait(w, w.period)))
+    life_hold(writers(w.runner), w)
+  end
+
+  defp life_hold([], w), do: w
+
+  defp life_hold([writer], w) do
+    :ok = :sys.suspend(writer)
+    w = wait(w, 3 * w.period + life(w.period))
+    :ok = :sys.resume(writer)
+    w = writer_settled(settled(w))
+    life_store!(w)
+    reach(:life_latest_wins, w.status == :running and w.by_period)
+    w
+  end
+
+  defp writers(runner) do
+    {:links, links} = Process.info(runner, :links)
+
+    for pid <- links,
+        {:dictionary, dictionary} <- [Process.info(pid, :dictionary)],
+        dictionary[:"$initial_call"] == {Logex.Runner.Writer, :init, 1},
+        do: pid
   end
 
   # A crash then a fresh start with `start: :cold`: the store read for nothing and written
@@ -14350,6 +14946,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = %{killed(w) | edit: nil}
     misfit_store(change.k1, w)
+    w = misfit_shelved(change.k1, w)
     w = started(%{w | change: change}, life_configured(w.draws.running, change, w.programs))
     life_ended(:stop, w, :cold, configured(w.draws.running, w.programs))
   end
@@ -14365,6 +14962,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp misfit_store(_change, _w), do: :ok
+
+  # The model's last write as the hand edit left the store's text.
+  defp misfit_shelved(:misfit, %{stored: {_kt, k}, shelf_stored: image} = w) when is_integer(k),
+    do: %{w | shelf_stored: put_in(image.instances["k1"].values["k"], {:dint, 3_000_000_000})}
+
+  defp misfit_shelved(_change, w), do: w
 
   defp misfit_count(:misfit, k) when is_integer(k), do: 3_000_000_000
   defp misfit_count(_change, k), do: k
@@ -14420,18 +15023,85 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # The store's text the model's last write, after every end and start of the walk's own
   # configuration: the retained global and the count, where the program running retains
   # it (`stored_count!/2`).
+  #
+  # Since M6-8's review the store's text whole after its header, restated from the model's
+  # last write by the store's form (decision 276) without `Logex.Retain`: its globals, its
+  # trigger and its instances by name, each instance's kinds and values in path order, an
+  # element by its subscripts' values; after a changed configuration's start and end too.
   defp life_store!(%{life: false}), do: :ok
   defp life_store!(%{store: nil}), do: :ok
-  defp life_store!(%{change: change}) when change != nil, do: :ok
 
-  defp life_store!(%{stored: {kt, k}} = w) do
+  defp life_store!(w) do
     text = File.read!(w.store)
+    life_counts!(w, text)
+    life_body!(w.shelf_stored, text)
+    reach(:life_changed_store, w.change != nil)
+  end
+
+  defp life_counts!(%{change: nil, stored: {kt, k}}, text) do
     assert text =~ "\nglobal kt dint #{kt}\n"
     stored_count!(k, text)
   end
 
-  # The shelf's paths, which the runner restores from its store as the model does.
-  @life_paths ~w(s1.bins s1.tl[0].acc s1.tl[1].acc s1.tl[0].pre s1.gs[1].go)
+  defp life_counts!(_w, _text), do: :ok
+
+  defp life_body!(nil, _text), do: :ok
+
+  defp life_body!(image, text) do
+    [_text, body] =
+      Regex.run(~r/\Alogex retain 1\nconfiguration plant written \S+\n(.*)\z/s, text)
+
+    assert body == life_body(image)
+
+    reach(
+      :life_trigger_kept,
+      body =~ ~r/\ntrigger g 1\n/ or String.starts_with?(body, "trigger g 1")
+    )
+  end
+
+  defp life_body(image),
+    do:
+      Enum.map_join(Enum.sort(image.globals), fn {name, entry} ->
+        "global #{name} #{life_entry(entry)}\n"
+      end) <>
+        Enum.map_join(Enum.sort(image.triggers), fn {name, sample} ->
+          "trigger #{name} #{sample}\n"
+        end) <> Enum.map_join(Enum.sort(image.instances), &life_instance/1)
+
+  defp life_instance({name, %{program: program, kinds: kinds, values: values}}) do
+    lines =
+      Enum.map(kinds, fn {path, {:array, kind, dims}} -> {path, life_sized(kind, dims)} end) ++
+        Enum.map(values, fn {path, entry} -> {path, life_entry(entry)} end)
+
+    "instance #{name} #{program}\n" <>
+      Enum.map_join(Enum.sort_by(lines, &life_order(elem(&1, 0))), fn {path, line} ->
+        "#{name}.#{path} #{line}\n"
+      end)
+  end
+
+  defp life_entry({{:array, type, dims}, list}),
+    do: life_sized(type, dims) <> Enum.map_join(List.flatten(list), &" #{&1}")
+
+  defp life_entry({type, value}), do: "#{type} #{value}"
+
+  defp life_sized(word, dims), do: "#{word}[#{Enum.join(dims, ",")}]"
+
+  # Path order: segment by segment, an element by its subscripts' values.
+  defp life_order(path), do: Enum.map(String.split(path, "."), &life_segment/1)
+
+  defp life_segment(segment),
+    do: life_segment_of(Regex.run(~r/\A([^\[]+)\[([\d,]+)\]\z/, segment), segment)
+
+  defp life_segment_of(nil, segment), do: {segment, []}
+
+  defp life_segment_of([_all, name, subscripts], _segment),
+    do: {name, Enum.map(String.split(subscripts, ","), &String.to_integer/1)}
+
+  # The shelf's paths, which the runner restores from its store as the model does; since
+  # M6-8's review each element's member of the block `gs[*].j` and the other timer's preset
+  # too.
+  @life_paths ~w(s1.bins s1.tl[0].acc s1.tl[1].acc s1.tl[0].pre s1.gs[1].go) ++
+                ~w(s1.gs[0].j s1.gs[1].j s1.tl[1].pre s1.tl[0].dn g)
 
   defp life_paths!(%{life: false}), do: :ok
 
@@ -14439,12 +15109,77 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     do:
       for(path <- @life_paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path)))
 
-  # The shelf's last write, its instance's image, which a warm start lays over.
+  # The life walk's last write, which a warm start lays over: since M6-8's review the
+  # image restated from the model's resource through `get/2`, not taken by
+  # `Logex.Runtime.retained/1`, of what the configuration running retains, the changed one's
+  # where it runs (`life_changed/1`): `kt` (or `kt2`, or none where unretained), the
+  # trigger `g` and its last sample where its task is declared, the count where `keep`
+  # retains it, and the shelf's array, timers and block's instances whole, each member but
+  # a timer's `last`.
   defp shelved(%{life: false} = w, _rt), do: w
-  defp shelved(w, rt), do: %{w | shelf_stored: Runtime.retained(rt).instances["s1"]}
+  defp shelved(w, rt), do: %{w | shelf_stored: life_image(rt, w)}
 
-  defp shelf_kept(%{shelf_stored: nil}), do: %{}
-  defp shelf_kept(w), do: %{"s1" => w.shelf_stored}
+  defp life_image(rt, w) do
+    change = w.change || %{kt: nil, k1: nil, s1: nil}
+
+    %{
+      configuration: "plant",
+      globals: Map.merge(life_kt(change.kt, rt), %{"g" => {:bool, Runtime.get!(rt, "g")}}),
+      triggers: life_trigger(w.draws.running.logic, w.g_sample),
+      instances:
+        Map.merge(
+          life_count(kept_count?(change.k1, w.draws.running.keep), change.k1, rt),
+          %{"s1" => shelf_image(rt, change.s1)}
+        )
+    }
+  end
+
+  defp life_kt(:plain, _rt), do: %{}
+  defp life_kt(:gone, rt), do: %{"kt2" => {:dint, Runtime.get!(rt, "kt2")}}
+  defp life_kt(:lint, rt), do: %{"kt" => {:lint, Runtime.get!(rt, "kt")}}
+  defp life_kt(nil, rt), do: %{"kt" => {:dint, Runtime.get!(rt, "kt")}}
+
+  defp life_trigger(true, sample), do: %{"g" => sample}
+  defp life_trigger(false, _sample), do: %{}
+
+  defp life_count(false, _change, _rt), do: %{}
+
+  defp life_count(true, change, rt),
+    do: %{
+      "k1" => %{
+        program: k1_program(change),
+        kinds: %{},
+        values: %{"k" => {String.to_atom(count_type(change)), Runtime.get!(rt, "k1.k")}}
+      }
+    }
+
+  defp k1_program(:keepx), do: "keepx"
+  defp k1_program(_change), do: "keep"
+
+  defp shelf_image(rt, change),
+    do: %{
+      program: "shelf",
+      kinds: %{"tl" => {:array, "ton", [2]}, "gs" => {:array, "gate", [2]}},
+      values:
+        Map.new(shelf_leaves(change), fn {path, type} ->
+          {path, {type, Runtime.get!(rt, "s1." <> path)}}
+        end)
+    }
+
+  defp shelf_leaves(change),
+    do:
+      [{"bins", {:array, :int, [bins(change)]}}] ++
+        for(
+          i <- 0..1,
+          {m, type} <- [{"acc", :dint}, {"dn", :bool}, {"en", :bool}, {"pre", :dint}],
+          do: {"tl[#{i}].#{m}", type}
+        ) ++
+        for(i <- 0..1, do: {"tl[#{i}].tt", :bool}) ++
+        for(
+          i <- 0..1,
+          {m, type} <- [{"go", :bool}, {"j", String.to_atom(gate_type(change))}],
+          do: {"gs[#{i}].#{m}", type}
+        )
 
   # The life walk's configurations: the walk's own, and one changed (`life_changed/1`).
   defp life_configured(d, change, programs) do
@@ -14496,11 +15231,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # The shelf: an array, an array of timers and an array of a block's instances, each
   # retained whole, run on the panel's `pa`; a change resizes the array, changes one
-  # timer's preset or both, or retypes the block's member.
+  # timer's preset or both, or retypes the block's member. Since M6-8's review the member,
+  # `j`, is the block's var_output, filled into `j0` and `j1`, which the shelf does not
+  # retain, so that `get/2` reads `s1.gs[0].j`, a `var` of a block being hidden outside it;
+  # and the second timer and the second gate run on the first timer's done bit, so that the
+  # elements of each array hold different values, which a start that put one element's
+  # value in another would show.
   defp shelf_programs(change) do
     {:ok, gate} =
       Logex.compile(
-        "function_block gate\nvar_input go bool\nvar j #{gate_type(change[:s1])}\n" <>
+        "function_block gate\nvar_input go bool\nvar_output j #{gate_type(change[:s1])}\n" <>
           "xic go add j 1 j",
         name: "gate"
       )
@@ -14510,8 +15250,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {:ok, shelf} =
       Logex.compile(
         "var_input on bool\nvar retain bins int[#{bins(change[:s1])}]\nvar retain tl ton[2]\n" <>
-          "var retain gs gate[2]\nxic on add bins[0] 1 bins[0]\nxic on ton tl[0] #{p0}\n" <>
-          "xic on ton tl[1] #{p1}\ncal gs[0] on\nxic on cal gs[1] on",
+          "var retain gs gate[2]\nvar j0 dint\nvar j1 dint\n" <>
+          "xic on add bins[0] 1 bins[0]\nxic on ton tl[0] #{p0}\n" <>
+          "xic tl[0].dn ton tl[1] #{p1}\ncal gs[0] on j0\nxic on cal gs[1] tl[0].dn j1",
         name: "shelf",
         types: [gate]
       )
@@ -14795,7 +15536,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     %{
       w
-      | logical: w.logical + elapsed,
+      | g_sample: Runtime.get!(w.rt, "g"),
+        logical: w.logical + elapsed,
         begun: w.begun + 1,
         round: %{
           at: at,
@@ -14907,6 +15649,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     %{
       w
       | rt: rt,
+        g_sample: restart_sample(mode, w.g_sample),
         status: :running,
         trip: nil,
         first: true,
@@ -15243,8 +15986,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # M6-8: a period's write while the store's writes fail leaves the last write the store's.
   defp period_stored(%{store_failing: true} = w), do: %{w | failed_seen: true}
 
-  defp period_stored(w),
-    do: shelved(%{w | stored: restated(w.rt, w.draws.running.keep), by_period: true}, w.rt)
+  defp period_stored(w), do: shelved(%{w | stored: restated_in(w, w.rt), by_period: true}, w.rt)
 
   # ---- the checks after every step -------------------------------------------------------
 
@@ -15376,7 +16118,9 @@ defmodule Logex.ApiContractTest.LifeWalk do
     Logex.ApiContractTest.RunnerWalk.table()
   end
 
+  # Its time limit 300 s, as the runner walk's (M6-8's review).
   @tag :tmp_dir
+  @tag timeout: 300_000
   test "the runner's store across every end and start: each warm start the last write, a " <>
          "cold one none, a failed write none, and a changed configuration's drops",
        %{tmp_dir: dir} do

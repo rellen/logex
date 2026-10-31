@@ -1808,7 +1808,16 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   scanning as its warm restart does, and a host mistake at each of the four doors, its
   reach eleven `iw_` atoms, and since decisions 308 and 310 its presets drawn and drawn
   again, a preset following the program restated, and a drop every element of an array
-  of cells makes once, `b[*].k`, thirteen; and since M6-5 the RunnerWalk's runner given a
+  of cells makes once, `b[*].k`, thirteen, and since M6-8's review 40 more from a seed of
+  their own drawn toward a real and an array of eleven or twelve cells, an integer stored
+  for a real kept at its nearest real (decision 311) and two elements' drops in the order
+  of their subscripts' values, `f[2].k` before `f[10].k`, restated so where the text's
+  order stood, fifteen; and since M6-8's review a walk of 120 pairs of versions of a
+  program of a 2-D array, a 2-D array of a block's instances, a 1-D array and a dint, every
+  line's qualifier and the block's members' drawn in each, accepted, tested and untested,
+  each retain entry of the test's report, its forecast and the untest's restated from the
+  qualifiers by the nearest mark, its value as the image keeps it, a 2-D array a list of
+  its rows (decisions 329 and 330), its reach five `rq_` atoms; and since M6-5 the RunnerWalk's runner given a
   store wherever it is given a forces file, its configurations holding a program, `keep`,
   whose retained count and a retained global it adds to the store keeps, its model
   restating each write, the first start's, a trip's and a cold restart's before its
@@ -1842,7 +1851,11 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   `last` its instance's `now`, the globals, the input points kept, the output point 0, the
   clock, `now` and `first`, and the trigger's last sample, told by whether the event task
   runs after it) and decision 277's resource-level drops from the two draws, its reach 22
-  `rr_` atoms; and the runner walk's life walk, in a module of its own, `Logex.ApiContractTest.LifeWalk`, so that it runs beside the runner walk, 20 walks of 50
+  `rr_` atoms, and since M6-8's review each instance's first env restated from its
+  program's text at every cold restart and start, a program type's own qualifiers and its
+  `k`'s type drawn again and `m1.k` made a misfit now and then, so that a resource's
+  instance drops a member by decision 277 too, `:unretained`, retyped or a misfit,
+  restated from the draws, 25; and the runner walk's life walk, in a module of its own, `Logex.ApiContractTest.LifeWalk`, so that it runs beside the runner walk, 20 walks of 50
   steps on seeds of their own, `{6801, 10, n}`, a stream of their own, `{6801, 280, n}`,
   a store in four walks of five and a shelf `s1` of an array, an array of timers and an
   array of a block's instances retained, one step in five the life walk's: `stop/2`, a
@@ -1855,7 +1868,18 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   store's text, the shelf's array resized, one preset or every element's, `s1.tl[*].pre`,
   and a block's member in every element, `s1.gs[*].j`), in `status/1` and `start/2`
   alike, its model knowing the last write and checking the store's text after every end
-  and start, its reach 22 `life_` atoms
+  and start, its reach 22 `life_` atoms; and since M6-8's review its model's last write
+  restated from its resource through `get/2`, never taken by `retained/1`, the store's
+  text whole after its header checked against it after every end and start, a changed
+  configuration's among them, each warm start's resource held leaf by leaf to the image
+  restated and every other path to the configuration's first value, the shelf's block
+  member `j` a var_output that `get/2` reads, `s1.gs[*].j` among the paths compared, each
+  array's elements holding values of their own, the trigger `g` retained, its last sample
+  a store's `trigger` line kept across a crash (decisions 305 and 313), the writer held for
+  three periods so that the newest image waiting is the one written (decision 275), and
+  one end in four of a running runner tripped first, each kind of end reached tripped, 30;
+  the runner walk and the life walk each given 300 s, which three busy loops on four
+  cores took the runner walk past ExUnit's 60
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
