@@ -49,7 +49,11 @@ were answered the same day and built, decisions 286–289, and the three questio
 review raised answered the same day, decisions 290–292; M6-3 to M6-6 landed by
 2026-10-30, with the maintainer's answers to their readings, decisions 293–328, the last
 three, of 2026-10-30, the runner's shutdown time, any process's shutdown and a `:normal`
-exit each writing the store.** On 2026-09-28 the
+exit each writing the store; and M6-7 (the online edit of a qualifier) and M6-8 (the
+contract walks) on 2026-10-31 with the maintainer's answers to their readings, decisions
+329–338, and M6-9 (the documents) the same day, so Milestone 6 has landed whole, its done
+sentence put to the maintainer (`PLAN.md` §3, M6-9) and shown whole by one plant,
+`end_to_end_test.exs`'s "Milestone 6's done sentence in one plant".** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -4226,8 +4230,12 @@ suffixes.
 **Designed and decided 2026-10-27; M6-1, the words, M6-2, the warm restart in the
 core, and M6-3, retained globals, landed the same day, and M6-3's eight readings
 answered on 2026-10-29, decisions 299 to 306, and M6-4, the image, landed the same
-day, and M6-5, the store at events, on 2026-10-30, the rest not yet built** (`PLAN.md`
-§3, Milestone 6). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
+day, and M6-5, the store at events, and M6-6, the periodic writer, on 2026-10-30, and
+M6-7, the online edit of a qualifier, M6-8, the contract walks, and M6-9, the documents,
+on 2026-10-31, with the maintainer's answers to their readings, decisions 286 to 338:
+landed whole** (`PLAN.md` §3, Milestone 6, its done sentence put to the maintainer at
+M6-9 and shown whole by `end_to_end_test.exs`'s "Milestone 6's done sentence in one
+plant"). The maintainer asked for it after Milestone 5 closed, taken from README's "What logex
 is not": today a warm restart is a cold one, so a counter's count, a totaliser's total or
 a timer's accumulated time is lost when the runner restarts, crashes or the VM stops. A
 design pass on `3a7c2eb` read IEC 61131-3 Ed 2:2003 and Ed 3:2013 in full and Ed 4:2025
@@ -4411,6 +4419,12 @@ good write, and while tripped an edit's values reach no store until a restart. A
 runner's child spec gives its shutdown `(devices + 2) * (idle + poll)` ms, never less
 than 5000, so that a supervisor waits for decision 316's write (decision 326); and a
 writer gone down before an event's write is taken as gone at once, `{:down, reason}`.)*
+*(Since M6-7, 2026-10-31, an online edit that adds or takes away a program's qualifier
+reports each path whose retention it changes, `:retain_added` or `:retain_removed`, with
+the value it holds, and writes nothing (decisions 278 and 329 to 335); since M6-8 the
+contract walks restate every rule of this section from their draws (decisions 336 to
+338); and since M6-9, 2026-10-31, Milestone 6 has landed whole, README's "Retained
+values" and "What logex is not" saying what is kept, where and what a crash loses.)*
 
 **What logex does today** (`3a7c2eb`). `Logex.Runtime.restart/3` takes `:cold` or
 `:warm` and ignores the mode: it keeps the clock, `switched`, `faults` and each var_input
@@ -4665,7 +4679,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   line naming both, `start: :cold` starting over it and writing a new store at once, so a
   renamed configuration starts only cold, which the message says.
 
-**What "What logex is not" will owe** (M6-9): its "no retained values" clause replaced,
+**What "What logex is not" will owe** (M6-9) *(owed no more: README says each since
+M6-9, 2026-10-31, in its "Not everything a controller has", "Not battery-backed memory,
+and no safety memory" and "Not a guard against what a warm start switches on")*: its "no
+retained values" clause replaced,
 and a bullet of its own, that a retained value is kept on the host's disk, not in
 battery-backed memory, a crash losing up to a period and one write and a power failure
 just after a write possibly bringing back the one before; that a retained value is no
@@ -4720,7 +4737,7 @@ a tag across a power-up; and the exact label TIA gives its retain column.
 | Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–128 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 129–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`, until M6-2 for RETAIN and `:warm`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built, until M6-1 and M6-2 for the words and the warm restart in memory.)* *(Since M6-1 and M6-2, 2026-10-27: `var retain` and `var non_retain` on a program's and a block's lines, and `restart/3`, `restart/2` and `Logex.Runner.restart/2` with `:warm` keeping what is marked, in memory; `var_global retain`, the image and the store wait for M6-3 to M6-5. VAR_CONFIG and output forcing are still targets.)* *(Since M6-3, 2026-10-27: `var_global retain` too, kept by a warm `restart/2`; the image and the store wait for M6-4 and M6-5.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`, until M6-2 for RETAIN and `:warm`.)* *(RETAIN and the warm restart decided for Milestone 6 on 2026-10-27, §4.13, decisions 266–285: `var retain`, `var non_retain` and `var_global retain`, the nearest mark winning, a store the runner writes on the host's disk, matched by name and type at a fresh start; not yet built, until M6-1 and M6-2 for the words and the warm restart in memory.)* *(Since M6-1 and M6-2, 2026-10-27: `var retain` and `var non_retain` on a program's and a block's lines, and `restart/3`, `restart/2` and `Logex.Runner.restart/2` with `:warm` keeping what is marked, in memory; `var_global retain`, the image and the store wait for M6-3 to M6-5. VAR_CONFIG and output forcing are still targets.)* *(Since M6-3, 2026-10-27: `var_global retain` too, kept by a warm `restart/2`; the image and the store wait for M6-4 and M6-5.)* *(Since M6-9, 2026-10-31, RETAIN and the warm restart have landed whole, Milestone 6: the image, `Logex.Runtime.retained/1,2` with `start/2` and `instance/2` (M6-4), the store a runner given `retain:` writes at its events and every `retain_period:` and a fresh start reads warm unless `start: :cold` (M6-5 and M6-6), and an online edit of a qualifier reported (M6-7). VAR_CONFIG and output forcing are still targets, Milestones 13 and 10 in `PLAN.md`'s proposal.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day, arrays by literal subscripts with M5-11 the same day, a subscript held in a tag with M5-12 on 2026-10-24, located arrays with M5-13 and arrays of instances with M5-14 the same day, the walks' cross-type reach with M5-15 and the documents with M5-16 on 2026-10-26: **landed**, every item of Milestone 5 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* *(Arrays landed with M5-11 to M5-14, 2026-10-23 to 2026-10-24: of every elementary type, one to three dimensions, by literal or tag subscripts, located, and of instances; STRUCT, UDTs and IEC's array bounds still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
@@ -10764,7 +10781,14 @@ built; 221, 222, 223, 226, 227 and 228 change six.
 Milestone 6's design put to the maintainer, 284 and 285 added by its review; the
 maintainer answered all twenty on 2026-10-27, each as recommended. M6-1 and M6-2 built
 266 to 270, 273, 274 and 279 for a restart in the core, and 271's core rows, the same day;
-the rest are not built yet.
+the rest are not built yet. *(Since M6-9, 2026-10-31, every one is built: M6-3 decisions
+268's and 271's globals and 272; M6-4 277 and 282; M6-5 271's
+runner rows, 275's events, 276, 284 and 285; M6-6 275's period; M6-7 278; and 280, 281
+and 283 stand as the scope, `persistent` and `program retain` deferred. The maintainer's
+answers since, decisions 286 to 338, are each built where taken; eight readings the
+record left silent are still put to the maintainer, provisional and built as read:
+M6-6's seven, `PLAN.md` M6-6, and decision 336's at an edit's first switch, `PLAN.md`
+M6-8's answers.)*
 The example plant is §4.13's: the power fails at 14:00 with 41 boxes counted, the lube
 timer at 62 hours, the fan in its run-on and the conveyor running, and comes back at
 14:20.

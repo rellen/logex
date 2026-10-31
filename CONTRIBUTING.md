@@ -355,6 +355,24 @@ choice, not an oversight to fix.
   is pending. The review of OE-1 found both, and two more tests now count that scan and
   that edit. A growth test reaches only the passes its program and its steps reach: list
   each pass the work adds, and check that some growth test gives it a large input.
+- **A cost a scheduler's interleaving moves is read as the least of several runs.** A
+  runner test's reductions a round count the messages its devices exchange with it, and
+  how the scheduler interleaves them only ever adds to them: `retain_period_test.exs`'s
+  cost a round of a store with a long period over none read 3.5 to 7.6 in twelve runs
+  here and 15.6 in CI on `8f92723`, over its bound of 10. Since `eae603f` each side is
+  the least of five runs, 5.8 to 7.4 over eight runs, and the bound stayed where it was.
+  Read such a figure as the least of several runs; never widen its bound to pass.
+- **Wait for a process's `DOWN` before asking another process about it.** `Process.exit/2`
+  does not wait, and an exit signal and a later call to another process are not ordered:
+  three tests in `trip_test.exs` killed the drive and read `status/1` at once, and in CI
+  on `ffee8b1` the call overtook the signal, the runner still running and the restart
+  refused as a running runner's. They now monitor the drive and wait for its `DOWN`
+  first, through one helper (`8f92723`). In the same way a test that kills a runner and
+  starts another on the same simulated device waits for the device's old opener, the
+  process `Logex.IO.Sim` names as holding it, to go down first, since the killed runner's
+  device tries its 0 once more as it closes and a fresh runner's check finds the sim
+  still held (`2adf13a`); and a new runner test runs 50 times with every core busy before
+  it lands.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit
   it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in

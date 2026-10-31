@@ -2036,7 +2036,16 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   box counter, `rto` and total through the runner on the manual clock with a store, over
   400 seeded steps of eyes, kills, stops and trips each followed by a fresh start, against
   an oracle that knows nothing of logex and comes back to the last write, since M6-6 a
-  period's every 105 ms among them, which holds every round up to its due time;
+  period's every 105 ms among them, which holds every round up to its due time; and since
+  M6-9 Milestone 6's done sentence in one plant, §4.4's plant from files on disk beside a
+  program that marks a box counter, a totaliser with an initial value and an `rto`
+  `retain`, through the runner on the manual clock with a store every 105 ms, over 400
+  seeded steps of eyes, start presses, kills, stops, trips restarted warm and cold, a cold
+  restart with a crash straight after it, a fresh start with `start: :cold` and one on a
+  changed program, the total retyped, against an oracle that knows nothing of logex: a
+  kill coming back to the last write or a round within a period and one round before it,
+  a cold start to the initial values, the retyped total dropped and the rest kept, and
+  the motor's contactor, which nothing marks, off after every start;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
@@ -2074,9 +2083,13 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   subscript in a tag", the run of `scales.exs`, M5-13's located arrays its "A located
   array", the run of `oven.exs`,
   M5-14's arrays of instances its "Arrays of instances", the run of `lanes.exs`,
-  M6-3's retained globals its "A retained global", the run of `retained.exs`, and
+  M6-3's retained globals its "A retained global", the run of `retained.exs`, M6-5's and
+  M6-6's store its "The store on disk", the run of `kept.exs`, M6-7's qualifier edit the
+  run of `requalified.exs`, and M6-9's "Retained values", the run of `shift.exs`, and the
+  trip's restart run again warm, `a_warm_trip.exs`, and
   M5-16's closing pass every example run again, each of the 30 `mix run` outputs as
-  printed but the real clock's figures,
+  printed but the real clock's figures, and M6-9's every example run again, the 33 and
+  its two new ones as printed but the real clock's figures,
   and since M4-7 the plant on the real clock, `on_the_real_clock.exs`, its keyword list
   the same on every run and its figures that run's; and "What logex is not" says plainly
   what logex does not do, a safety function first, each claim checked against the code,
@@ -2168,7 +2181,9 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   walk) on 2026-10-31, with the maintainer's answers to their questions the same day,
   decisions 329–335 and 336–338: a round trip's resume a defect, fixed, the resume asking
   who has held the instance since the last switch (336), the suite's failure that named no
-  test left noted (337), and a block's retained `var` hidden from `get/2` (338)).
+  test left noted (337), and a block's retained `var` hidden from `get/2` (338); and M6-9
+  (the documents) the same day, so Milestone 6 has landed whole, its done sentence put to
+  the maintainer, `PLAN.md` §3, M6-9).
   Read it before designing anything that adds a data type (§4.12), retains a value
   (§4.13), names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on

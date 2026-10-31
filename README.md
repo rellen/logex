@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is thirty-two small modules.
+written by hand, and the whole thing is thirty-five small modules.
 
 **Stage: early, and honest about it.** Forty instructions, among them four timers, two
 that run IEC's three counters and their typed variants, seven of arithmetic and `sqrt`,
@@ -42,8 +42,15 @@ subscript held in a tag, `weights[slot]`, an index out of range a major fault th
 the plant (M5-12), located, one point an element at consecutive addresses, `var_global
 zone_t real[8] at card.i.0` (M5-13), and of timers, counters and blocks, `var lane_t
 ton[4]`, each element run by literal subscripts and its members read through a tag
-subscript (M5-14). What logex is not, a safety controller first of all,
-is said plainly below ("What logex is not").
+subscript (M5-14). And since `PLAN.md`'s Milestone 6, landed whole, retained values and
+a true warm restart: a tag, member, array, instance or global marked `retain` is kept by
+a warm restart and everything else starts again at its initial value, a retained timer
+resuming without counting the outage; the retained values are taken out as plain data
+and laid over a new instance or resource by name and type; and a runner given a store
+keeps them in a file on the host's disk, written at its ends and every `retain_period:`,
+so that a crash and a fresh start come back to its last write ("Retained values", "A
+retained global" and "The store on disk", below). What logex is not, a safety controller
+first of all, is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
 
@@ -76,10 +83,10 @@ Source syntax today:
   none, and the two words never stand on one line together. Both are reserved, so no
   tag is named `retain` or `non_retain`. A configuration's global takes one too,
   `var_global retain total_boxes dint 0` (M6-3, "A retained global", below). Retained
-  values are kept in memory only, across
-  `Logex.Runtime.restart/2,3` and `Logex.Runner.restart/2` with `:warm`; the store on
-  disk that keeps them across a crash is still to land (Milestone 6, "Settled, not yet
-  landed", below)
+  values are kept in memory across `Logex.Runtime.restart/2,3` and
+  `Logex.Runner.restart/2` with `:warm`, and on the host's disk, across a crash and a
+  fresh start, by a runner given a store ("Retained values" and "The store on disk",
+  below)
 - `var_external estop bool` names a configuration's global, its `var_global estop bool`
   ("A global shared by name", below): logic reads and writes the global itself, one copy
   for every instance that declares it. It is of an elementary type, exactly its global's,
@@ -315,8 +322,8 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 
 ### Settled, not yet landed
 
-One milestone that is decided is part way to landing, retained values (the first bullet
-below). Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
+Nothing decided waits to land: retained values, the last milestone decided, have landed
+whole (the first bullet below). Everything decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
 108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),
@@ -324,7 +331,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 ("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
 - **Retained values and a true warm restart**, `PLAN.md`'s Milestone 6, decided on
   2026-10-27 (decisions 266–285 in [`docs/organisation.md`](docs/organisation.md) §7,
-  designed in its §4.13). Landed, M6-1 and M6-2: `var retain count dint` and `var
+  designed in its §4.13, and the maintainer's answers since, decisions 286–338), have
+  landed whole, M6-1 to M6-9, its done sentence put to the maintainer (`PLAN.md` §3,
+  M6-9; "Retained values", below). M6-1 and M6-2: `var retain count dint` and `var
   non_retain jog bool` on a program's `var` and `var_output` and a block's three
   sections, the nearest mark on a member's path winning, and a warm restart in the core
   keeping what is marked and initialising everything else, a retained timer resuming
@@ -332,27 +341,30 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   scan, through `Logex.Runtime.restart/3` and `restart/2` and a tripped runner's
   `Logex.Runner.restart(runner, :warm)`, which counts none of the time it stood tripped; `retain`
   and `non_retain` are reserved words in any case, so a tag named either no longer
-  compiles. Landed, M6-3: a configuration's `var_global retain total_boxes dint 0`, kept
+  compiles. M6-3: a configuration's `var_global retain total_boxes dint 0`, kept
   by a warm restart, refused on a located global, a retained var_output wired to an
   output point warned of, and both words reserved in a configuration file too, so that a
   plant file naming a global, an instance, a task, a program type or a device `retain` or
-  `non_retain` no longer loads. Landed, M6-4: the image, in the core alone, every
+  `non_retain` no longer loads. M6-4: the image, in the core alone, every
   retained value of an instance or a resource as plain data by its path,
   `Logex.Runtime.retained/2` and `retained/1`, which `instance/2` and `start/2` start a
   new one from, keeping a value only where the program declares its path retained, of
   exactly its type, and it fits, and dropping and reporting the rest, so a program
   changed since lets its unchanged values through, a timer's or counter's preset
   following the program rather than the image, and since the maintainer's answers of
-  2026-10-30 a retained trigger's last sample kept with it. Landed, M6-5: the store, a
+  2026-10-30 a retained trigger's last sample kept with it. M6-5: the store, a
   file on the host's disk a runner given `retain:` writes the image into at a trip, a
   stop and a cold restart, and a fresh start reads, warm unless `start: :cold` ("The
-  store on disk", below). Landed, M6-6: its write every `retain_period:`, a second
+  store on disk", below). M6-6: its write every `retain_period:`, a second
   unless set, by a writer process of the runner's own, so that a crash loses at most a
-  period and the write in progress. Landed, M6-7: an online edit that adds or takes away
+  period and the write in progress. M6-7: an online edit that adds or takes away
   `retain` on a program's tag, member, array or instance reports each path whose
   retention it changes, with the value it holds, and writes nothing ("A retained global",
-  below). Still to land: the contract walk over retained values and the documents'
-  closing pass. `persistent` is deferred and stays unreserved.
+  below). M6-8: the contract walks over retained values, and M6-9: the documents, with
+  Milestone 6's done sentence as one plant from files on disk through the runner
+  (`test/logex/end_to_end_test.exs`, "Milestone 6's done sentence in one plant").
+  `persistent` is deferred and stays unreserved; what else Milestone 6 left deferred
+  "What logex is not" lists below.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
   maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
@@ -2404,6 +2416,140 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   elements listed to ten and then counted: "`lane_t` is an array of 4 tons, but no `ton`
   runs `lane_t[3]`: it never times" (decision 252).
 
+### Retained values
+
+A controller keeps some values through a power cycle and starts the rest again; logex
+keeps exactly what a program marks `retain` (`PLAN.md`'s Milestone 6; decisions 266 to
+285 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.13).
+`shift.ld` — a box counter, a totaliser of the boxes' weights and a lubrication timer,
+all three marked, beside the last box's weight, which is not:
+
+```
+var_input eye bool
+var_input weight dint
+var_input motor bool
+var_output retain total dint
+var_output last dint
+var retain boxes ctu
+var retain lube rto
+var e bool
+
+xic eye ctu boxes 1000
+xic eye ons e add total weight total
+xic eye move weight last
+xic motor rto lube 60000
+```
+
+`shift.exs` counts two boxes while the motor runs, restarts warm with the second box
+still on the eye, counts a third, takes the retained image and restarts cold; then it
+starts a new instance from the image, of the program with the total made a `lint`:
+
+```elixir
+{:ok, shift} = Logex.compile_file("shift.ld")
+
+show = fn state, label ->
+  env = state.env
+  IO.puts("#{label}  boxes=#{env["boxes"]["cv"]} total=#{env["total"]} lube=#{env["lube"]["acc"]} last=#{env["last"]}")
+  state
+end
+
+scan = fn state, label, inputs, ms ->
+  state = Logex.Runtime.put_inputs(shift, state, inputs)
+  {_outputs, state} = Logex.Runtime.scan(shift, state, ms)
+  show.(state, label)
+end
+
+state =
+  Logex.Runtime.instance(shift)
+  |> scan.("motor on          ", %{"motor" => 1}, 0)
+  |> scan.("box of 12 kg      ", %{"eye" => 1, "weight" => 12}, 10)
+  |> scan.("eye clear         ", %{"eye" => 0}, 10)
+  |> scan.("box of 15 kg      ", %{"eye" => 1, "weight" => 15}, 10)
+
+state =
+  Logex.Runtime.restart(shift, state, :warm)
+  |> show.("warm restart      ")
+  |> scan.("first scan, 10 ms ", %{}, 10)
+  |> scan.("10 ms on          ", %{}, 10)
+  |> scan.("eye clear         ", %{"eye" => 0}, 10)
+  |> scan.("box of 9 kg       ", %{"eye" => 1, "weight" => 9}, 10)
+
+image = Logex.Runtime.retained(shift, state)
+IO.inspect(image)
+Logex.Runtime.restart(shift, state, :cold) |> show.("cold restart      ")
+
+{:ok, v2} = Logex.compile(String.replace(File.read!("shift.ld"), "total dint", "total lint"), name: "shift")
+{fresh, dropped} = Logex.Runtime.instance(v2, image)
+show.(fresh, "total made a lint ")
+IO.inspect(dropped)
+```
+
+```
+$ mix run shift.exs
+motor on            boxes=0 total=0 lube=0 last=0
+box of 12 kg        boxes=1 total=12 lube=10 last=12
+eye clear           boxes=1 total=12 lube=20 last=12
+box of 15 kg        boxes=2 total=27 lube=30 last=15
+warm restart        boxes=2 total=27 lube=30 last=0
+first scan, 10 ms   boxes=2 total=27 lube=40 last=15
+10 ms on            boxes=2 total=27 lube=50 last=15
+eye clear           boxes=2 total=27 lube=60 last=15
+box of 9 kg         boxes=3 total=36 lube=70 last=9
+%{
+  values: %{
+    "boxes.cu" => {:bool, 1},
+    "boxes.cv" => {:dint, 3},
+    "boxes.ov" => {:bool, 0},
+    "boxes.pv" => {:dint, 1000},
+    "boxes.q" => {:bool, 0},
+    "boxes.r" => {:bool, 0},
+    "lube.acc" => {:dint, 70},
+    "lube.dn" => {:bool, 0},
+    "lube.en" => {:bool, 1},
+    "lube.pre" => {:dint, 60000},
+    "lube.r" => {:bool, 0},
+    "lube.tt" => {:bool, 1},
+    "total" => {:dint, 36}
+  },
+  program: "shift",
+  kinds: %{"boxes" => "ctu", "lube" => "rto"}
+}
+cold restart        boxes=0 total=0 lube=0 last=0
+total made a lint   boxes=3 total=0 lube=70 last=0
+[{"total", {:retyped, :dint, :lint}}]
+```
+
+- `Logex.Runtime.restart(program, state, :warm)` keeps every tag, member, array and
+  instance the program marks `retain`, at the value it holds, and starts every other at
+  its initial value, as a cold restart starts all of them: `last` is back at 0 until the
+  next scan writes it. A program that marks nothing restarts warm exactly as cold.
+  `var_input`s are kept by both, as the host's values (decision 266, decision 271's
+  table).
+- An instance or an array is retained whole, its hidden members among them (a counter's
+  `cu`, a timer's `en` and `tt`), and inside a block's instance the nearest mark on a
+  member's path wins: a block's `var non_retain step dint` stays out of `var retain s1
+  seal`, and a block's `var retain n dint` is kept inside an unmarked instance of it
+  (decisions 269 and 270). `retain` is refused on a program's `var_input`, whose value
+  the host gives, and on a `var_external`, whose global carries it, and `retain` and
+  `non_retain` never stand on one line together (decisions 267 and 268).
+- Every start is a first scan, warm or cold: the box on the eye as the program restarts
+  is not counted, as on a first start (decision 274), and no prescan runs (decision 279).
+- A retained timer resumes: its time is kept and its next scan adds only the time the host
+  gives that scan, here 10 ms, as any scan does (decisions 273 and 293); the runner gives
+  the time since the restart, so an outage or a trip is never counted.
+- `Logex.Runtime.retained/2` takes the retained values out as plain data, each by its
+  path with its type, every instance on the way by its kind, never a timer's `last`; and
+  `Logex.Runtime.instance/2` starts a new instance from it, keeping a value only where
+  the program declares its path retained, of exactly its type, and it fits, and giving
+  back each value it dropped once, with its reason: the total made a `lint` is dropped,
+  `{"total", {:retyped, :dint, :lint}}`, and starts at 0, while the count and the
+  timer are kept by name and type (decision 277). A timer's or counter's preset is the
+  program's, whatever the image holds (decision 308).
+- In the core this is memory only. A configuration's globals are retained the same way
+  ("A retained global", below), and a runner given a store keeps the image on the host's
+  disk across a crash and a fresh start ("The store on disk", below); "What logex is
+  not", below, says what that store is not.
+
 ## A configuration
 
 A configuration runs instances of one or more programs as one resource: each instance on a
@@ -3666,6 +3812,73 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   its own change among them; its child spec is `restart: :temporary`, so the host starts a
   new one.
 
+`a_warm_trip.exs` runs the same plant from `warm/packing.logex`, beside `warm/boxes.ld`,
+which is `boxes.ld` with its counter declared `var retain boxes ctu`: it starts the
+conveyor, passes three boxes, trips the plant and restarts it warm, then trips it again
+and restarts it cold:
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("warm/packing.logex")
+{:ok, clock} = Manual.start_link()
+{:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+{:ok, runner} =
+  Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Sim, sim: panel}},
+    clock: {Manual, clock}
+  )
+
+show = fn label ->
+  %{status: status, now: now} = Runner.status(runner)
+  out = Sim.outputs(panel)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
+end
+
+Sim.set(panel, [0], 1)                      # start pressed
+Manual.advance(clock, 10)
+Sim.set(panel, [0], 0)
+
+for _box <- 1..3 do
+  Sim.set(panel, [8], 1)
+  Manual.advance(clock, 2)
+  Sim.set(panel, [8], 0)
+  Manual.advance(clock, 2)
+end
+
+show.("three boxes  ")
+Sim.fail(panel, :read, {:error, :eio})      # the panel's next read fails
+Manual.advance(clock, 10)
+show.("tripped      ")
+:ok = Runner.restart(runner, :warm)         # the count kept, the conveyor off
+show.("warm restart ")
+
+Sim.fail(panel, :read, {:error, :eio})
+Manual.advance(clock, 10)
+:ok = Runner.restart(runner, :cold)         # every value back to its initial one
+show.("cold restart ")
+:ok = Runner.stop(runner)
+```
+
+```
+$ mix run a_warm_trip.exs
+t=22  three boxes    running  k1=1 case_full=1  boxes=3
+t=29  tripped        tripped  k1=0 case_full=0  boxes=3
+t=29  warm restart   running  k1=0 case_full=1  boxes=3
+t=36  cold restart   running  k1=0 case_full=0  boxes=0
+```
+
+The warm restart keeps the count, 3, where `boxes.ld`'s unmarked counter would start at 0
+again, and the conveyor stays off, since `conveyor.ld` marks nothing. The case-full lamp
+comes back on in the restart's first round: no output is kept, but `full_lamp` is written
+from the retained counter's `q`, so logic that reads a retained value switches an output
+on as soon as the plant restarts warm, which no warning catches ("A retained global" and
+"What logex is not", below). The cold restart starts the count at 0.
+
 Forcing and an online edit go through the runner too (M4-5, decisions 117, 119, 127 and
 138 to 141).
 `forced_and_edited.exs` runs `packing.logex` with its forces kept in `packing.forces`,
@@ -4598,17 +4811,39 @@ in every cycle's outputs at the value it holds.
   array bounds, `ARRAY[1..8]`, nor a whole-array copy or fill; no byte or word partial
   access, `w.%B1`; no `round`, `ceil` or `floor`, and no conversion to or from a bool, a
   BCD or a real's bit pattern; no NaN or infinity in a real; an online edit changes no
-  tag's type or array's size; a jump forward only; retained values kept across a crash
-  only by a runner given a store, a file on the host's disk and not battery-backed
-  memory, written at a trip, a stop, every orderly exit, a cold restart and a fresh
-  start with `start: :cold` or no store file, never at a warm fresh start from a store,
-  and every `retain_period:`, a second unless set, so a crash or a kill loses whatever
-  changed since the last of those writes made, at most a period and the write in
-  progress while they succeed and keep up, everything since the last good one while they
-  fail, and an edit stepped while tripped, and
-  a power failure just after a write may bring back the one before it, the rename not
-  made durable ("The store on disk", above); and forcing
-  for inputs only, an output never forced.
+  tag's type or array's size; a jump forward only; and forcing for inputs only, an output
+  never forced. Of retained values ("Retained values", above): no `persistent` values, a
+  cold restart discarding every retained value, and no `program retain` on a
+  configuration's line; no retained located global, an input point read again and an
+  output point at 0 at every start; no element of an array retained alone, an array
+  being retained whole; no outage counted, a retained timer resuming as if no time had
+  passed; no first-scan bit nor any way for a program to tell how it started, and no
+  prescan; no hot restart; no warm restart that starts named paths cold; one store a
+  runner, never one a program instance, and no checksum or encryption of it beyond its
+  grammar; and no retained force, the forces having a file of their own.
+- **Not battery-backed memory, and no safety memory.** What a program marks `retain`
+  is kept on the host's disk, by a runner given a store, `retain:`, and only there; in
+  the core, `Logex.Runtime.restart/2,3` with `:warm`, it is kept in memory alone. The
+  store is written at a trip, at `stop/2` and every orderly exit, at a cold restart and a
+  fresh start with `start: :cold` or no store file, and every `retain_period:`, a second
+  unless set, never at a warm fresh start or a warm restart, and no period's write while
+  the runner is tripped. A runner that crashes or is killed writes nothing, so its next fresh start comes
+  back to the last write made: a crash loses what changed since, at most a period and the
+  write in progress while the writes succeed and the writer keeps up, everything since
+  the last good write while they fail, and what an edit stepped while tripped changed.
+  Each write is synced and renamed over the store, the rename not itself made durable,
+  so on some file systems a power failure just after a write may bring back the write
+  before it ("The store on disk", above). A retained value is no safety memory: a
+  burner's lockout, a latch a guard's opening set or a count of trips must not be kept in
+  logex, whose store a person can edit, a cold start discards and a crash may set back.
+- **Not a guard against what a warm start switches on.** No output is kept: every output
+  point is 0 until the first round after a start writes it. But logic that reads a
+  retained bit, count or timer writes its outputs from it in that first round, so a warm
+  start can switch an output on at once, as `a_warm_trip.exs`'s case-full lamp does
+  above; the configuration warns only of a retained var_output wired straight to an
+  output point (decision 272). And a host's own child spec that restarts a crashed runner
+  restarts it warm wherever it names a store, since a fresh start reads its store warm
+  unless `start: :cold`.
 
 ## Running it
 
@@ -4647,7 +4882,7 @@ Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`).
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4, and its data types, §4.12, the integer widths, bit strings, reals and arrays, with Milestone 5)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4, and its data types, §4.12, the integer widths, bit strings, reals and arrays, with Milestone 5, and retained values and a true warm restart, §4.13, with Milestone 6)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

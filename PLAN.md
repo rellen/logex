@@ -230,7 +230,11 @@ answers to their six readings (decisions 293–298), its own eight readings answ
 built on 2026-10-29 (decisions 299–306), and M6-4, the image, the same day, its five
 readings and the three its review raised, with the superseded edit's leftover tags found
 while building M6-3, answered by the maintainer and built on 2026-10-30 (decisions
-307–315), and the other five are planned.
+307–315), M6-5, the store at its events, and M6-6, the periodic writer, the same day with
+the answers to their readings and reviews (decisions 316–328), M6-7, the online edit of a
+qualifier, and M6-8, the contract walks, on 2026-10-31 with the answers to theirs
+(decisions 329–338), and M6-9, the documents, the same day, so Milestone 6 has landed
+whole, its done sentence shown by one plant and put to the maintainer (§3, M6-9).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -366,6 +370,17 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   mixed operand Figure 11 does not widen is refused naming its conversion; and an online
   edit refuses a changed type or size and reports a changed initial value. README's
   sections from "Arithmetic" to "Arrays of instances" run each.
+- Retained values (Milestone 6, M6-1 to M6-9): `var retain` and `var non_retain` on a
+  program's `var` and `var_output`, a block's three sections and `var_global`, the
+  nearest mark on a member's path winning; a warm restart, `Logex.Runtime.restart/2,3`
+  and `Logex.Runner.restart/2`, keeping what is marked and starting everything else at
+  its initial value, a retained timer resuming without the outage and nothing edge-driven
+  firing on the first scan; the retained image as plain data, laid over a new instance or
+  resource by name and type, the rest dropped and reported; a runner's store on the
+  host's disk, written at its ends and every `retain_period:`, read warm at a fresh start
+  unless `start: :cold`; and an online edit of a qualifier reported. README's "Retained
+  values", "A retained global" and "The store on disk" run each, and "What logex is not"
+  says what the store is not.
 
 These were each verified directly:
 
@@ -10976,7 +10991,117 @@ done-when reads the next store write; and last the contract walk and the documen
   row among them; CLAUDE.md; and this section, the done sentence put to the maintainer.
   *Size S.*
 
-  **Status: not started.**
+  **Status: landed, 2026-10-31.** As the entry says, with one test, the done sentence's
+  plant, and no code in `lib/` changed.
+
+  *README.* A section of its own, "Retained values", before "A configuration": `shift.ld`,
+  a box counter, a totaliser of the boxes' weights and a lubrication `rto` marked `retain`
+  beside an unmarked tag, and `shift.exs`, run on the branch, which restarts it warm with
+  a box still on the eye, takes the image, restarts it cold and starts a program whose
+  total is a `lint` from the image, the drop `{"total", {:retyped, :dint, :lint}}`; its
+  bullets the rules each line shows, decisions 266 to 274, 277, 279, 293 and 308. The
+  trip's restart run again warm, `a_warm_trip.exs` beside `a_trip.exs`: `packing.logex`
+  with `boxes.ld`'s counter `var retain boxes ctu`, its count kept by a warm restart and
+  lost by a cold one, the conveyor off after both, and the case-full lamp back on in the
+  warm restart's first round, written from the retained counter's `q`, which no warning
+  catches. The intro says Milestone 6 has landed and the modules are thirty-five, where
+  it said thirty-two; the syntax list's "the store … is still to land" is gone; "Settled,
+  not yet landed" says nothing decided waits to land; and "What logex is not" replaces
+  its retained-values clause with what Milestone 6 left out, each checked against the
+  code (`persistent`, `program retain`, a retained located global, an element retained
+  alone, an outage counted, a first-scan bit and a prescan, a hot restart, a warm restart
+  naming paths cold, a store per instance, a checksum, retained forces), and gains two
+  bullets: "Not battery-backed memory, and no safety memory" (where the store is written
+  and when, a crash losing at most a period and the write in progress while the writes
+  succeed and keep up, the rename not made durable, `Logex.Retain.written/2` syncing the
+  file and renaming it and syncing no directory, and a burner lockout, a guard latch or a
+  trip count never kept in logex) and "Not a guard against what a warm start switches
+  on" (no output kept, logic that reads a retained value switching one on in the first
+  round, the warning seeing a direct wiring only, and a host's own child spec that
+  restarts a crashed runner restarting it warm where it names a store, `start:` being
+  `:warm` unless set). The "Three more timers" `rto`'s sentence was already true, since
+  M6-2. Every example was run again on the branch by a harness that rebuilds each from
+  README's own text, its files from the blocks the prose names and the few derived in
+  words (`wired.logex`, `faster/packing.logex`, `boxes_v2.ld`, `moved/trip.logex` and the
+  new `warm/`) by rule (`scratchpad/m6/m9/ex`): all 33 and the two new ones the same as
+  printed, the real clock's keyword list the same in three runs here and its figures left
+  as M5-16's run gave them, these runs giving 1,223 to 1,231 rounds in 1,230 ms, both
+  overlaps 0, as the prose beside them says.
+
+  *`docs/organisation.md`.* Its status, §4.13's head and its notes on what logex does
+  today, "What 'What logex is not' will owe", §5's RETAIN row and the head of Milestone 6's
+  decisions annotated as landed, the last naming the item that built each of decisions
+  266 to 285 and the eight readings still put to the maintainer (below); the taken text
+  untouched.
+
+  *CLAUDE.md.* `end_to_end_test.exs`'s entry gains the done sentence's plant; README's
+  entry its Milestone 6 sections and runs; `docs/organisation.md`'s status M6-9. Its
+  Milestone 6 entries were read against the code where a claim names a value or a
+  function (the period's range, the child spec's shutdown, `wall_ms/1`, the store's
+  header, `Logex.Retain`'s and `Logex.Image`'s functions), each true.
+
+  *CONTRIBUTING.md.* Two practices that broke this milestone: a cost a scheduler's
+  interleaving moves read as the least of several runs (`eae603f`), and a process's `DOWN`
+  waited for before another process is asked about it, a simulated device's old opener
+  among them, with a new runner test run 50 times with every core busy (`8f92723`,
+  `2adf13a`).
+
+  **Milestone 6's done sentence, checked** (2026-10-31, on this item's tip), clause by
+  clause; a test named here is in `test/logex/`. No test held it whole: `end_to_end_test.exs`'s
+  M6-5 plant kills, stops and trips with a fresh start after each, but no warm or cold
+  `restart/2` through the runner, no crash after a cold restart, no changed program and no
+  unmarked program's state checked. So, as M5-16's review did, the item built it as one:
+  `end_to_end_test.exs`, "Milestone 6's done sentence in one plant", §4.4's plant from
+  files on disk, its motors and snapshot marking nothing, beside `keep.ld`, a box counter,
+  a totaliser that starts at 1000 kg and an `rto` marked `retain`, through `Logex.Runner`
+  on the manual clock with a store every 105 ms, over 400 seeded steps, `{2026, 10, 69}`:
+  eyes and start presses; a kill and a fresh start; a stop and a fresh start; a trip
+  restarted warm; a trip restarted cold; a trip restarted cold and killed at once, then a
+  fresh start; a stop and a fresh start with `start: :cold`; and at step 200 a stop and a
+  fresh start on `keep.ld` changed, its total a `lint` and a new retained tag at 7. Its
+  oracle knows nothing of logex. It passed 50 runs of 50 with three cores busy, and fails
+  where a warm restart is a cold one, where a fresh start ignores its store, where no
+  period writes and where a cold restart writes no store, each a mutant of `lib/` run
+  against it (`scratchpad/m6/m9/e2e_mut.sh`).
+
+  | Clause | Shown by |
+  |---|---|
+  | a box counter, a totaliser and a lubrication timer that a program marks `retain` keep their values across a warm restart | the one plant's trips restarted warm, through `Logex.Runner.restart/2`; `retain_test.exs`, "a box counter, a totaliser and an rto marked retain keep their values through a …", in the core, and "Runner.restart/2 :warm keeps what is retained, not counting the time it stood …" |
+  | across a runner killed and started fresh from its store, losing at most what changed in one store period and one write | the one plant's kills, each fresh start's values the last write's or a round's within 105 ms and one round, 10 ms, before the kill, a period's write met and something lost each reached; `retain_period_test.exs`, "a runner killed between two periods restores the earlier period's write" and "a runner killed in the middle of a period's write restores the write before it"; the M6-5 plant in `end_to_end_test.exs` |
+  | and across a changed program, by name and type | the one plant's step 200, its retyped total dropped, `{"box.total", {:retyped, :dint, :lint}}` in `status/1`, and the count and the timer kept; `retain_image_test.exs`, "an instance, a program type or a global changed is dropped once by its path, …" and every reason of decision 277 from source; `retain_store_test.exs`, "a changed program's drops reported in status/1" |
+  | a cold restart starts them at their initial values | the one plant's trips restarted cold and its `start: :cold`, the total back at 1000 kg; `retain_test.exs`'s and `retain_configuration_test.exs`'s cold restarts |
+  | and a crash just after it brings none of the old values back | the one plant's cold restart killed at once, its fresh start at the initial values; `retain_store_test.exs`, "a cold restart's write precedes its reads, and a crash after it restores none" |
+  | no output comes back on from the store itself | the one plant: every write to the panel from an end to the end of the next start's step holds the contactor and its lamp at 0, the contactor on before 32 of its starts, and the store names no instance of the motors; `retain_configuration_test.exs`, "a located global takes no `retain`, …"; `retain_store_test.exs`, "a trip writes the store after every output 0" |
+  | and a program that marks nothing behaves exactly as before | the one plant's motors, off and their seal-in 0 after every start, warm or cold, and no line of them in the store; `retain_test.exs`, "a program that marks nothing has none, and compiles as it did, …" and "a program with no retain restarts warm exactly as cold, in no more reductions"; `retain_configuration_test.exs`, "a configuration with nothing retained restarts warm exactly as cold" and "with nothing retained, a warm restart costs no more than a cold one, and a cycle …"; `retain_store_test.exs`, "no image is taken out without a store", traced; `retain_period_test.exs`, "a round with a store and a long period costs within a few reductions of none" |
+
+  So every clause is shown by a test, and the first six together by the one plant.
+
+  *A provisional reading the one plant takes.* The sentence's "one store period and one
+  write" is read as the period, 105 ms, and one round, 10 ms: a period's take-out comes at
+  or just after its due time, after at most one round begun after it with no untimed
+  program (decision 275 as M6-6 built it), so a kill restores a round no older than a
+  period and a round before it, or the last write at an end. The write in progress is
+  waited for before the kill, as M6-5's plant does, so that the last period's write has
+  landed; a kill inside a write is `retain_period_test.exs`'s. The options: (a) as built;
+  (b) "one write" read as the write in progress too, the plant killing the runner with a
+  write in flight and allowing the write before it, which only a writer held in a pipe
+  can show on the manual clock, as that test does.
+
+  **Put to the maintainer** (M6-9):
+  1. *Milestone 6's done sentence.* Every clause is shown, the first six whole by the one
+     plant this item built, the last by the cost and exactness tests beside it. An
+     operator sees nothing either way: the question is whether the milestone is done.
+     (a) Done as is; (b) the sentence amended to what the suite shows, the period and one
+     round; (c) more first, a named test. Recommended: (a).
+  2. *The readings still provisional*, each built as read and put to the maintainer where
+     it was found, gathered here as M5-16's review gathered Milestone 5's: M6-6's seven
+     (the period's range and its default, the grid from the start, the take-out's place,
+     nothing written while tripped, an event write waiting for the period's, a writer gone
+     down replaced, the store's age in `status/1`, each above under M6-6), decision 336's
+     first switch (M6-8's answers, above), and the one plant's "one write" above.
+
+  The README examples' harness, the mutants and the cost of the one plant's runs are in
+  `scratchpad/m6/m9/`. 2412 tests (11 doctests), up from 2411.
 
 **What stays deferred**, each a later item or milestone (§4.13): `persistent`, not
 reserved (decision 280); `program retain` on a configuration's line (281); a retained
@@ -11008,7 +11133,7 @@ before another, and says so.
 - **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
   2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
   266–285; M6-1, M6-2 and M6-3 landed the same day, and M6-4 on 2026-10-29, the rest
-  not yet built.)* Today a warm restart is a
+  not yet built.)* *(Landed whole by 2026-10-31, M6-1 to M6-9, with decisions 286–338.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store
