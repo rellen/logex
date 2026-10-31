@@ -7358,4 +7358,326 @@ defmodule Logex.EndToEndTest do
       assert Runner.stop(rig.runner) == :ok
     end
   end
+
+  # PLAN.md's Milestone 6 done sentence in one plant (M6-9): §4.4's plant from files on
+  # disk, its motors and snapshot marking nothing, beside `keep`, a box counter, a
+  # totaliser and a lubrication timer that the program marks `retain`, through the runner
+  # on the manual clock with a store written every 105 ms, over seeded steps of eyes,
+  # start presses and every kind of end and start: a warm restart and a cold one after a
+  # trip, a kill and a fresh start, a stop and a fresh start, a cold restart and a crash
+  # straight after it, a fresh start with `start: :cold`, and once a fresh start on a
+  # changed program. The oracle knows nothing of logex: a box is counted, and 5 kg added
+  # to the total, where a round sees the eye risen since the round before, never in a
+  # start's first round; the timer adds 10 ms in a round that sees the eye on after one
+  # that saw it on; a warm restart keeps all three, a cold one starts them at their
+  # initial values, the total's 1000 kg and the others' 0; a fresh start after a stop
+  # comes back to what the stop held, and after a kill to what one of the rounds of the
+  # last period and one write held, or the last write before them; a retyped total starts
+  # again at its initial value and the rest are kept by name and type; and the motor's
+  # contactor, which nothing marks, is off after every start, never brought back on by
+  # the store.
+  describe "Milestone 6's done sentence in one plant" do
+    @describetag :tmp_dir
+    @describetag capture_log: true
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @life_ld """
+    var_input eye bool
+    var retain boxes ctu
+    var retain total dint 1000
+    var retain lube rto
+    var e bool
+
+    xic eye ctu boxes 100000
+    xic eye ons e add total 5 total
+    xic eye rto lube 100000000
+    """
+
+    # The changed program: the total a lint, and a new retained tag at its initial value.
+    @life_changed_ld """
+    var_input eye bool
+    var retain boxes ctu
+    var retain total lint 1000
+    var retain lube rto
+    var retain shifts dint 7
+    var e bool
+
+    xic eye ctu boxes 100000
+    xic eye ons e add total 5 total
+    xic eye rto lube 100000000
+    """
+
+    @life """
+
+    var_global eye_1 bool at panel.i.8
+
+    program box keep with fast
+      box.eye eye_1
+    """
+
+    @life_period 105
+
+    # The total's initial value, 1000 kg, and the count's and the timer's, 0.
+    @life_initial {1000, 0, 0}
+
+    defp life_plant(dir, ld) do
+      {_programs, files} = shared_programs()
+
+      files =
+        Map.merge(files, %{
+          "keep.ld" => ld,
+          "snapshot.ld" => @snapshot_ld,
+          "plant.logex" => whole_plant() <> @life
+        })
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    # The oracle's model: the three values, the eye the last round saw, the motor's
+    # contactor, the time on the clock, what the last write at an end or a start held and
+    # each round since it, by its time, and its counts of what the walk met.
+    defp life_model,
+      do: %{
+        now: @life_initial,
+        eye: 0,
+        motor: 0,
+        t: 0,
+        written: @life_initial,
+        since: [],
+        changed: false,
+        met: %{period: 0, lost: 0, motor_on: 0, kept: 0}
+      }
+
+    defp life_round(%{now: {total, cv, acc}, eye: last} = model, eye) do
+      t = model.t + 10
+      now = {total + 5 * rose(last, eye), cv + rose(last, eye), acc + held(last, eye)}
+      %{model | now: now, eye: eye, t: t, since: [{t, now} | model.since]}
+    end
+
+    # A start: the values given, the last write theirs, the contactor off.
+    defp life_started(model, values),
+      do: %{
+        model
+        | now: values,
+          written: values,
+          since: [],
+          motor: 0,
+          met: %{
+            model.met
+            | motor_on: model.met.motor_on + model.motor,
+              kept: model.met.kept + differs(values, @life_initial)
+          }
+      }
+
+    defp life_step({:eye, eye}, model), do: model |> life_round(eye) |> life_round(eye)
+
+    defp life_step(:press, model),
+      do: %{(model |> life_round(model.eye) |> life_round(model.eye)) | motor: 1}
+
+    # A kill's model is made once its restored values are read, in `life_checked/3`.
+    defp life_step(:kill, model), do: model
+    defp life_step(:stop, model), do: life_started(model, model.now)
+    defp life_step(:trip_warm, model), do: life_started(%{model | t: model.t + 10}, model.now)
+
+    defp life_step(:trip_cold, model),
+      do: life_started(%{model | t: model.t + 10}, @life_initial)
+
+    defp life_step(:cold_crash, model),
+      do: life_started(%{model | t: model.t + 10}, @life_initial)
+
+    defp life_step(:start_cold, model), do: life_started(model, @life_initial)
+
+    defp life_step(:changed, %{now: {_total, cv, acc}} = model),
+      do: life_started(%{model | changed: true}, {1000, cv, acc})
+
+    # A kill: what the fresh start restored, which must be what the last write held or a
+    # round's within the last period and one round before the kill.
+    defp life_killed(model, restored) do
+      allowed = [
+        model.written | for({t, v} <- model.since, t >= model.t - @life_period - 10, do: v)
+      ]
+
+      assert restored in allowed, inspect({restored, allowed})
+
+      met = %{
+        model.met
+        | period: model.met.period + differs(restored, model.written),
+          lost: model.met.lost + differs(restored, model.now)
+      }
+
+      life_started(%{model | met: met}, restored)
+    end
+
+    defp differs(same, same), do: 0
+    defp differs(_one, _other), do: 1
+
+    defp life_steps(seed, n) do
+      :rand.seed(:exsss, seed)
+      kinds = List.duplicate(:eye, 10) ++ [:press, :press, :kill, :kill, :stop, :trip_warm]
+      kinds = kinds ++ [:trip_cold, :cold_crash, :start_cold]
+
+      for i <- 1..n, do: life_drawn(i, Enum.random(kinds))
+    end
+
+    defp life_drawn(200, _kind), do: :changed
+    defp life_drawn(_i, :eye), do: {:eye, Enum.random([0, 1])}
+    defp life_drawn(_i, kind), do: kind
+
+    defp life_kind({:eye, _eye}), do: :eye
+    defp life_kind(kind), do: kind
+
+    # The runner's side of each step.
+    defp life_run({:eye, eye}, rig) do
+      Sim.set(rig.panel, [8], eye)
+      Manual.advance(rig.clock, 20)
+      rig
+    end
+
+    defp life_run(:press, rig) do
+      Sim.set(rig.panel, [0], 1)
+      Manual.advance(rig.clock, 10)
+      Sim.set(rig.panel, [0], 0)
+      Manual.advance(rig.clock, 10)
+      rig
+    end
+
+    defp life_run(:kill, rig), do: life_start(killed_runner(rig), rig.opts)
+
+    defp life_run(:stop, rig) do
+      assert Runner.stop(rig.runner) == :ok
+      life_start(gone_devices(rig), rig.opts)
+    end
+
+    defp life_run(:trip_warm, rig), do: life_restarted(life_tripped(rig), :warm)
+    defp life_run(:trip_cold, rig), do: life_restarted(life_tripped(rig), :cold)
+
+    defp life_run(:cold_crash, rig) do
+      rig = life_restarted(life_tripped(rig), :cold)
+      life_start(killed_runner(rig), rig.opts)
+    end
+
+    defp life_run(:start_cold, rig) do
+      assert Runner.stop(rig.runner) == :ok
+      life_start(gone_devices(rig), rig.opts ++ [start: :cold])
+    end
+
+    defp life_run(:changed, rig) do
+      assert Runner.stop(rig.runner) == :ok
+      plant = life_plant(rig.dir, @life_changed_ld)
+      opts = Keyword.put(rig.opts, :configuration, plant)
+      rig = life_start(gone_devices(%{rig | opts: opts}), opts)
+
+      assert %{retain: %{dropped: [{"box.total", {:retyped, :dint, :lint}}]}} =
+               Runner.status(rig.runner)
+
+      assert Runner.get!(rig.runner, "box.shifts") == 7
+      rig
+    end
+
+    defp life_tripped(rig) do
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped} = Runner.status(rig.runner)
+      rig
+    end
+
+    defp life_restarted(rig, mode) do
+      assert Runner.restart(rig.runner, mode) == :ok
+      assert %{status: :running} = Runner.status(rig.runner)
+      rig
+    end
+
+    defp life_start(rig, opts) do
+      {:ok, runner} = Runner.start_link(opts)
+      assert %{status: :running} = Runner.status(runner)
+      %{rig | runner: runner}
+    end
+
+    defp life_values(runner),
+      do:
+        {Runner.get!(runner, "box.total"), Runner.get!(runner, "box.boxes.cv"),
+         Runner.get!(runner, "box.lube.acc")}
+
+    defp life_checked({:eye, _eye} = step, rig, model), do: life_compared(step, rig, model)
+    defp life_checked(:press = step, rig, model), do: life_compared(step, rig, model)
+
+    defp life_checked(:kill, rig, model) do
+      model = life_killed(model, life_values(rig.runner))
+      life_compared(:kill, rig, model)
+    end
+
+    defp life_checked(step, rig, model), do: life_compared(step, rig, model)
+
+    defp life_compared(step, rig, model) do
+      assert life_values(rig.runner) == model.now, inspect(step)
+      assert Runner.get!(rig.runner, "k1") == model.motor, inspect(step)
+      assert Runner.get!(rig.runner, "m1.s1.run") == model.motor, inspect(step)
+      assert Map.get(Sim.outputs(rig.panel), [0], 0) == model.motor, inspect(step)
+      model
+    end
+
+    # Every write to the panel from a step's start to its end: the contactor and its lamp
+    # off, a start's first round among them, whatever the store holds.
+    defp life_outputs_off(step, writes) when step in [:eye, :press], do: writes
+
+    defp life_outputs_off(_step, writes) do
+      for write <- writes, do: assert({Map.get(write, [0], 0), Map.get(write, [2], 0)} == {0, 0})
+      writes
+    end
+
+    test "Milestone 6's done sentence: retained values across every kind of end and start",
+         %{tmp_dir: dir} do
+      plant = life_plant(dir, @life_ld)
+      store = Path.join(dir, "plant.retain")
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      opts = [
+        configuration: plant,
+        io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+        clock: {Manual, clock},
+        retain: store,
+        retain_period: @life_period
+      ]
+
+      rig = %{clock: clock, panel: panel, drive: drive, opts: opts, dir: dir, runner: nil}
+      rig = life_start(rig, opts)
+      steps = life_steps({2026, 10, 69}, 400)
+
+      {rig, model} =
+        Enum.reduce(steps, {rig, life_model()}, fn step, {rig, model} ->
+          before = length(Sim.writes(panel))
+          rig = life_run(step, rig)
+          model = life_checked(step, rig, life_step(step, model))
+          life_outputs_off(life_kind(step), Enum.drop(Sim.writes(panel), before))
+          {rig, model}
+        end)
+
+      # The store holds the retained program alone: the motors and the snapshot mark
+      # nothing.
+      text = File.read!(store)
+      assert text =~ "\ninstance box keep\n"
+      refute text =~ ~r/^instance (m1|m2|snap) /m
+
+      # Every kind of step came; a kill met a period's write and one lost what changed
+      # since; a start kept values that were not 0; and a start met the contactor on.
+      assert Enum.sort(Enum.uniq(Enum.map(steps, &life_kind/1))) ==
+               Enum.sort(
+                 [:eye, :press, :kill, :stop, :trip_warm, :trip_cold, :cold_crash] ++
+                   [:start_cold, :changed]
+               )
+
+      assert model.changed
+      assert model.met.period > 0 and model.met.lost > 0 and model.met.motor_on > 0
+      assert model.met.kept > 0
+      assert elem(model.now, 1) > 0 and elem(model.now, 2) > 0
+      assert Runner.stop(rig.runner) == :ok
+    end
+  end
 end
