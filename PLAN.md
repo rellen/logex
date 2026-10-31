@@ -10413,8 +10413,12 @@ done-when reads the next store write; and last the contract walk and the documen
   by none and `:period_restored` by 2 (11 before), the rest as before, rare by their
   nature: `:store_tripped_at_start` 11, `:next_due_from_step` 5, `:zero_at_stop` 5,
   `:period_own_wake`, `:array_unforced` and `{:trip, :round}` 1 each
-  (`scratchpad/m6/m7r/seeds_rw2.out`). The edit walks, unchanged, are as the review ran
-  them at `{7501..7530, …}`. §4.13's table of starts has a row for a parent's `:normal`
+  (`scratchpad/m6/m7r/seeds_rw2.out`). The edit walks, unchanged, run again at the tip at
+  `{7501..7530, …}`: the configuration edit's and the block edit's walks pass all 30, and
+  the lone edit's walk 27, the other three (7501, 7502 and 7508) missing only `:misfit`,
+  as at the parent (`scratchpad/m6/m7r/seeds_{lone,ce,blk}.out`). 50 runs of
+  `retain_edit_test.exs` and `retain_store_test.exs` under four busy loops pass
+  (`scratchpad/m6/m7r/r50.out`); 2401 tests (11 doctests). §4.13's table of starts has a row for a parent's `:normal`
   exit and a `GenServer.stop/3`, running or tripped (decisions 327 and 328). No existing test line was removed: the lone
   walk's two timer regexes read a qualified line, and `@configuration_kinds` loses the two
   kinds, which the lone walk must now reach.
@@ -10460,7 +10464,8 @@ done-when reads the next store write; and last the contract walk and the documen
      (b) the map without `last`, as the image would keep it; (c) no value for an
      instance, only its path.
   2. *A `[*]` path's value.* `{:retain_added, "gates[*].count", [3, 3, 3, 3]}`, a list in
-     the elements' order, a list of lists for an array inside an array. Options: (a) as
+     the elements' order, a list of lists for an array inside an array and for a 2-D
+     array of blocks, its rows, `[[2, 0, 0], [0, 0, 2]]`. Options: (a) as
      built; (b) one entry an element, `gates[0].count` and on, as before decision 310.
   3. *A mark moved.* `var retain s1 seal` to `var s1 seal` whose `count` the block now
      marks reports `s1.run` and `s1.t` removed, nothing for `s1.count`, which stays
