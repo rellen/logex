@@ -2989,7 +2989,11 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   whose retention changes reported by the instance's name, as `requalified.exs` shows
   below: by the nearest mark, so that `non_retain` and none are one, an instance marked
   whole is one path, a block's member by its path, `t1.s1.count`, and a member of every
-  element of an array of blocks `t1.gates[*].count`, its value a list of the elements'.
+  element of an array of blocks `t1.gates[*].count`, its value a list of the elements'
+  in their order (decision 330). A value that holds an instance is what the retained
+  image keeps of it, its declared members without a timer's `last` (decision 329): `var
+  retain fan_t ton` added reports `{:retain_added, "fan_t", %{"acc" => …, "dn" => …,
+  "en" => …, "pre" => …, "tt" => …}}`, no `"last"`.
   The next store write and the next warm restart follow the program running, the
   candidate under test and the original after an untest.
 - In the core retained values are kept in memory only, as a program's are; the runner's

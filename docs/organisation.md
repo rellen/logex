@@ -1440,7 +1440,7 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:held` | for an output the program that runs next still shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
 | `:unwritten` | the value it keeps: a member input logic writes, a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, that the program stopped writes and no logic of the program started writes, by its path (decision 96) | a switch |
 | `:pruned` | the value it had | assemble, cancel |
-| `:retain_added`, `:retain_removed` | the value the path holds, which the next warm restart now keeps, or no longer keeps; nothing is written (M6-7, decisions 278 and 302) | a switch |
+| `:retain_added`, `:retain_removed` | the value the path holds, which the next warm restart now keeps, or no longer keeps, an instance's as the retained image keeps it, a timer's `last` left out (decision 329); nothing is written (M6-7, decisions 278 and 302) | a switch |
 
 The writes a report lists, applied to the state before its step, give the state after it,
 exactly: `:added`, `:input`, `:preset`, `:resume_undone` (`last` given back), `:resumed`
@@ -4608,11 +4608,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   by `[*]`, and the change named as `retained` names a path, a node whole where every leaf
   of either program under it changes alike, `gates[*].k` for a member of every element
   (decision 310's form); the value as a report gives one to a host, an array's a list, an
-  instance's its map, a `[*]` path's a list of each element's; reported at every switch,
+  instance's exactly what the image keeps of it (decision 329: its declared members, a
+  timer's `last` left out, at any depth), a `[*]` path's a list of each element's in
+  their order, a 2-D array's its rows (decision 330); reported at every switch,
   the accept's forecast among them, and at no prune; a qualifier changed with the type
   refused for the type alone. `@configuration_kinds` no longer holds the two kinds,
-  which the lone edit's walk reaches too. The readings marked provisional in `PLAN.md`
-  M6-7 are put to the maintainer.)* The
+  which the lone edit's walk reaches too. The maintainer answered the seven readings
+  `PLAN.md` M6-7 marked provisional on 2026-10-31, decisions 329 to 335: an instance's
+  value changed to what the image keeps (329), the rest confirmed as built.)* The
   next store write follows the program running, so a tag whose `retain` is removed keeps
   its value until the next restart and is then initialised; a crash while an edit is
   tested leaves a store of the candidate's values, which a fresh start meets by decision
@@ -11107,7 +11110,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      next warm restart following the program running at every stage, and a crash under
      test then a fresh start on the original meeting the candidate's store by decision
      277, `:unretained` reported, each through `Logex.Runner` on the manual clock;
-     §4.13's note gives the rule, and `PLAN.md` M6-7 the provisional readings.)*
+     §4.13's note gives the rule, and `PLAN.md` M6-7 the readings, answered on 2026-10-31
+     as decisions 329 to 335, an instance's value changed to what the image keeps.)*
 279. **A pre-scan in the conventional family's sense (Milestone 6).** The conventional
      family needs one because it keeps everything (RM094N p.47); under decision 266 logex
      puts back everything unmarked by `initial_env/1`, and an `ote` writes 0 on a

@@ -267,8 +267,8 @@ defmodule Logex.Edit do
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:unwritten` | the value it keeps: a member input logic writes that the program stopped writes and the program started does not (decision 96) | a switch |
   | `:pruned` | the value it had | assemble, cancel |
-  | `:retain_added` | the value it holds, which a warm restart now keeps; nothing is written (decision 278) | a switch |
-  | `:retain_removed` | the value it holds, which a warm restart no longer keeps; nothing is written (decision 278) | a switch |
+  | `:retain_added` | the value it holds, which a warm restart now keeps, an instance's as the retained image keeps it, a timer's `last` left out (decision 329); nothing is written (decision 278) | a switch |
+  | `:retain_removed` | the value it holds, which a warm restart no longer keeps, an instance's as the retained image keeps it (decision 329); nothing is written (decision 278) | a switch |
 
   The writes a report lists, `:added`, `:input`, `:preset`, `:resume_undone`, `:resumed`
   and `:pruned`, applied to the state before its step, give the state after it, with the
