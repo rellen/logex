@@ -989,16 +989,18 @@ defmodule Logex.ConfigEditTest do
       {runtime, _} = cycles(runtime, 6)
       assert runtime.instances["m2"].now == 100
       {_edit, runtime, report} = Edit.untest(edit, runtime)
-      # From 50 ms, where the original last ran it: 130 - 50, none caught up.
-      assert {:resumed, "m2.t1", 80} in report
+      # The candidate held `m2` from the test at 70 ms: 130 - 70, none caught up. Since
+      # decision 339 the 20 ms the original held it from its last scan at 50 to the test
+      # are the original's and caught up, where until then the resume took them, 80 ms.
+      assert {:resumed, "m2.t1", 60} in report
       assert runtime.instances["m2"].now == 130
       assert Runtime.get!(runtime, "m2.t1.acc") == 50
       {runtime, _} = cycles(runtime, 2)
-      assert Runtime.get!(runtime, "m2.t1.acc") == 50 + 20
+      assert Runtime.get!(runtime, "m2.t1.acc") == 50 + 20 + 20
     end
 
-    test "fix F11's undo reads the instance's own clock, so a cycle that does not scan it " <>
-           "cannot hide a resume from the untest" do
+    test "provisional: after a cycle that does not scan it, an untest keeps the test's " <>
+           "resume, the candidate's hold counted (decision 339; fix F11 within no time)" do
       # First an edit that takes the timer's rung out, assembled at 60 ms: `m2.t1` frozen,
       # timing, its `last` the 50 ms of `m2`'s last scan.
       runtime = running(60)
@@ -1012,15 +1014,67 @@ defmodule Logex.ConfigEditTest do
       assert last_of(runtime, "m2") == 50
 
       # Then one that gives it back, tested at once, and untested at 90 ms, `m2` not
-      # scanned between: the untest gives the test's resume back.
+      # scanned between. Until decision 339 the untest gave the test's resume back, as
+      # fix F11 gives one back with no scan between, `{:resume_undone, "m2.t1", 10}` and
+      # `last` 50; since it, the candidate, which runs `t1`, held `m2` from 60 to 90, so
+      # that time is `t1`'s and the resume stands (provisional, `PLAN.md` M6-9's answers).
       {edit, _} = accepted(runtime, plant())
       {edit, runtime, report} = Edit.test(edit, runtime)
       assert {:resumed, "m2.t1", 10} in report
       {runtime, _} = cycles(runtime, 3)
       assert runtime.instances["m2"].switched
-      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resume_undone, _, _}, &1))
+      assert last_of(runtime, "m2") == 60
+
+      # Tested again at 100, the original, which does not run `t1`, having held `m2` from
+      # 90 and scanned it at 100: resumed by those 10 ms alone, and the candidate's scan at
+      # 150 counts its own 30 ms, 60 to 90, and its 50 since 100, none of the original's.
+      {runtime, _} = cycles(runtime, 1)
+      refute runtime.instances["m2"].switched
+      acc = Runtime.get!(runtime, "m2.t1.acc")
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:resumed, "m2.t1", 10} in report
+      assert last_of(runtime, "m2") == 70
+      {runtime, _} = cycles(runtime, 5)
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 30 + 50
+    end
+  end
+
+  describe "a timer's time runs only while a program that runs it holds the instance " <>
+             "(decisions 339 to 341)" do
+    test "a test and an untest at once give the instance back to the original, which " <>
+           "holds it on from before the test" do
+      # An edit that takes `t1`'s rung out, assembled at 60 ms: `m2.t1` frozen, timing,
+      # its `last` the 50 ms of `m2`'s last scan.
+      runtime = running(60)
+
+      no_timer =
+        plant(plant_text(), programs(String.replace(motor_ld(), "xic motor ton t1 5000\n", "")))
+
+      {edit, _} = accepted(runtime, no_timer)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_config, runtime, _} = Edit.assemble(edit, runtime)
+
+      # One that gives it back, tested and untested at once: the candidate held `m2` for no
+      # time, so the untest gives the test's resume back (fix F11).
+      {edit, _} = accepted(runtime, plant())
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:resumed, "m2.t1", 10} in report
+      {edit, runtime, report} = Edit.untest(edit, runtime)
       assert {:resume_undone, "m2.t1", 10} in report
       assert last_of(runtime, "m2") == 50
+
+      # Tested again at 90, `m2` unscanned since: the original, which does not run `t1`, has
+      # held it since before the edit, so the resume takes all 40 ms since `t1` last ran,
+      # not only the 30 since the untest.
+      {runtime, _} = cycles(runtime, 3)
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:resumed, "m2.t1", 40} in report
+      assert last_of(runtime, "m2") == 90
+      acc = Runtime.get!(runtime, "m2.t1.acc")
+      {runtime, _} = cycles(runtime, 1)
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 10
     end
   end
 
@@ -1092,41 +1146,45 @@ defmodule Logex.ConfigEditTest do
       assert outputs["oil_q"] == 1
     end
 
-    test "an untest gives back what the test gave back, the clock having moved since with " <>
-           "no scan, so the time the original held is caught up" do
-      # `m2`, on the 50 ms task, last scanned at 50 with `t1` timing; the candidate takes
-      # `t1`'s rung out and scans `m2` at 100; the untest at 110 resumes `t1` by 60.
+    test "a test and an untest at once, the clock having moved since the last with no " <>
+           "scan, take nothing the original held, so its time is caught up" do
+      # `m2`, on the 50 ms task, last scanned at 50 with `t1` timing; tested at 60 by a
+      # candidate that takes `t1`'s rung out and scans `m2` at 100; the untest at 110
+      # resumes `t1` by the 50 ms the candidate held it (decision 339; 60 until then, the
+      # resume taking the original's 10 ms from 50 to the test).
       runtime = running(60)
       motor = String.replace(motor_ld(), "xic motor ton t1 5000\n", "")
       {edit, _} = accepted(runtime, plant(plant_text(), programs(motor)))
       {edit, runtime, _} = Edit.test(edit, runtime)
       {runtime, _} = cycles(runtime, 5)
       {edit, runtime, report} = Edit.untest(edit, runtime)
-      assert {:resumed, "m2.t1", 60} in report
-      assert last_of(runtime, "m2") == 110
+      assert {:resumed, "m2.t1", 50} in report
+      assert last_of(runtime, "m2") == 100
       acc = Runtime.get!(runtime, "m2.t1.acc")
 
-      # The original then holds `m2` from 110 to 140, unscanned; the test gives the resume
-      # back, and the untest at once gives back what the test gave back, so `t1` is as the
-      # test found it: the 30 ms the original held it are not taken.
+      # The original then holds `m2` from 110 to 140, unscanned, which runs `t1`: the test
+      # moves nothing, and the untest at once, the candidate having held `m2` for no time,
+      # moves nothing either, where until decision 339 the test gave the resume back and
+      # the untest gave that back in turn, `t1`'s `last` at 110 after both.
       {runtime, _} = cycles(runtime, 3)
       assert runtime.instances["m2"].switched
       {edit, runtime, report} = Edit.test(edit, runtime)
-      assert {:resume_undone, "m2.t1", 60} in report
+      refute Enum.any?(report, &match?({:resume_undone, "m2.t1", _}, &1))
       {_edit, runtime, report} = Edit.untest(edit, runtime)
-      assert {:resumed, "m2.t1", 60} in report
-      assert last_of(runtime, "m2") == 110
+      refute Enum.any?(report, &match?({:resumed, "m2.t1", _}, &1))
+      assert last_of(runtime, "m2") == 100
 
-      # `m2`'s next scan, at 150, catches up the 40 ms since 110.
+      # `m2`'s next scan, at 150, catches up the original's 50 ms, 50 to 60 and 110 to 150.
       {runtime, _} = cycles(runtime, 1)
-      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 40
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 50
     end
 
-    # Three readings the record leaves open (provisional), each a question for the
-    # maintainer in `PLAN.md` M6-9: what the built rule does where the candidate scans
-    # between the two switches, where the instance comes back from aside, and where the
-    # candidate holds it unscanned. Each test pins the rule as built, so that an answer
-    # that changes it changes a test on purpose.
+    # Three readings decision 336 left open, M6-9's review's questions 3 to 5, answered by
+    # the maintainer on 2026-10-31 as one rule, decisions 339 to 341: a timer's time runs
+    # only while a program that runs it holds the instance, and not while it is set
+    # aside. Each test pinned the rule as built until then, provisional, and now pins the
+    # answer: where the candidate scans between the two switches, where the instance comes
+    # back from aside, and where the candidate holds it unscanned.
     @oil "function_block oil\nvar_input go bool\nvar_output d bool\nvar lube rto\n\n" <>
            "xic go rto lube 100000\nxic lube.dn ote d"
 
@@ -1161,8 +1219,8 @@ defmodule Logex.ConfigEditTest do
       {runtime, depth_line(String.replace(original, rung, ""))}
     end
 
-    test "provisional: after a candidate's scan the resume takes the original's hold, " <>
-           "at every depth" do
+    test "after a candidate's scan the resume takes none of the original's hold, at every " <>
+           "depth (decision 339)" do
       for {_declared, _rung, path} = depth <- @depths do
         {runtime, candidate} = lube_at_ten(depth)
         {edit, _} = accepted(runtime, candidate)
@@ -1172,17 +1230,20 @@ defmodule Logex.ConfigEditTest do
         refute Enum.any?(report, &match?({:resumed, _, _}, &1)), path
 
         # The original holds `c1` from 10 to 40 unscanned; the second test at 40, the
-        # candidate's one scan at 45 and the untest: the resume counts from the timer's
-        # last run at 10, 35 ms, not from the second test, 5 ms.
+        # candidate's one scan at 45 and the untest: the resume counts from the second
+        # test, the 5 ms the candidate held it, where until decision 339 it counted from
+        # the timer's last run at 10, 35 ms.
         {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
         {edit, runtime, _} = Edit.test(edit, runtime)
         {runtime, _} = ticked(runtime, 5)
         {_edit, runtime, report} = Edit.untest(edit, runtime)
-        assert {:resumed, "c1." <> path, 35} in report, path
+        assert {:resumed, "c1." <> path, 5} in report, path
+        refute {:resumed, "c1." <> path, 35} in report, path
         assert runtime.now == 45
       end
 
-      # The tag's `acc` at its next run, 5 ms on: 15, the 30 ms the original held lost.
+      # The tag's `acc` at its next run, 5 ms on: 45, the 30 ms the original held caught up
+      # with the 5 since the untest, where until decision 339 it was 15, those 30 lost.
       {runtime, candidate} = lube_at_ten(hd(@depths))
       {edit, _} = accepted(runtime, candidate)
       {edit, runtime, _} = Edit.test(edit, runtime)
@@ -1192,12 +1253,12 @@ defmodule Logex.ConfigEditTest do
       {edit, runtime, _} = Edit.test(edit, runtime)
       {runtime, _} = ticked(runtime, 5)
       {_edit, runtime, _} = Edit.untest(edit, runtime)
-      assert %{"acc" => 10, "last" => 45} = runtime.instances["c1"].env["lube"]
+      assert %{"acc" => 10, "last" => 15} = runtime.instances["c1"].env["lube"]
       {runtime, _} = ticked(runtime, 5)
-      assert Runtime.get!(runtime, "c1.lube.acc") == 15
+      assert Runtime.get!(runtime, "c1.lube.acc") == 45
     end
 
-    test "provisional: one back from aside takes the original's hold before it" do
+    test "one back from aside takes none of the original's hold before it (decision 340)" do
       other = "var_input run bool\nvar x bool\n\nxic run ote x\n"
       {:ok, program} = Logex.compile(other, name: "other")
       line = String.replace(@line, "conveyor with", "other with")
@@ -1218,16 +1279,21 @@ defmodule Logex.ConfigEditTest do
       refute Enum.any?(report, &match?({:resumed, _, _}, &1))
 
       # The original holds `c1` from 10 to 40 unscanned; set aside at 40 and brought back
-      # at once, for no time aside, it resumes by the 30 ms the original held.
+      # at once, for no time aside, nothing is resumed, and its next run catches up the 30
+      # ms the original held, the lube done at its 30 ms, where until decision 340 it
+      # resumed by them, acc 10.
       {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
       {edit, runtime, _} = Edit.test(edit, runtime)
       {_edit, runtime, report} = Edit.untest(edit, runtime)
-      assert {:resumed, "c1.lube", 30} in report
+      assert {:instance_back, "c1", "conveyor"} in report
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
       {runtime, _} = ticked(runtime, 0)
-      assert Runtime.get!(runtime, "c1.lube.acc") == 10
+      assert Runtime.get!(runtime, "c1.lube.acc") == 30
+      assert Runtime.get!(runtime, "c1.lube.dn") == 1
     end
 
-    test "provisional: the candidate's unscanned hold is caught up" do
+    test "the candidate's unscanned hold is not caught up, whoever scanned last " <>
+           "(decision 341)" do
       runtime = Runtime.start(line_with(String.replace(@conveyor, "lube 30", "lube 100000")))
       {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
       {runtime, _} = ticked(runtime, 10)
@@ -1235,15 +1301,17 @@ defmodule Logex.ConfigEditTest do
       {edit, _} = accepted(runtime, line_with(candidate))
 
       # Tested at 10, the candidate holds `c1` to 40 and never scans it; untested at 40,
-      # the original scanned last, so nothing is resumed and the 30 ms are caught up.
+      # the 30 ms the candidate held are resumed, though the original scanned last, so the
+      # lube finishes on time, where until decision 341 nothing was resumed and they were
+      # caught up, acc 40.
       {edit, runtime, _} = Edit.test(edit, runtime)
       {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
       {_edit, runtime, report} = Edit.untest(edit, runtime)
-      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      assert {:resumed, "c1.lube", 30} in report
       refute Enum.any?(report, &match?({:resume_undone, _, _}, &1))
-      assert %{"acc" => 10, "last" => 10} = runtime.instances["c1"].env["lube"]
+      assert %{"acc" => 10, "last" => 40} = runtime.instances["c1"].env["lube"]
       {runtime, _} = ticked(runtime, 0)
-      assert Runtime.get!(runtime, "c1.lube.acc") == 40
+      assert Runtime.get!(runtime, "c1.lube.acc") == 10
     end
   end
 
@@ -1275,11 +1343,14 @@ defmodule Logex.ConfigEditTest do
       {edit, runtime, _} = Edit.test(edit, runtime)
       {runtime, _} = cycles(runtime, 12)
       {_edit, runtime, report} = Edit.untest(edit, runtime)
-      assert {:resumed, "m2.t1", 180 - 50} in report
+      # Set aside at 60 and back at 180: the 120 ms aside are not caught up, and since
+      # decision 340 the original's 10 ms from `m2`'s last scan at 50 to the test are,
+      # where until then the resume took them too, 180 - 50.
+      assert {:resumed, "m2.t1", 180 - 60} in report
       assert runtime.instances["m2"].now == 180
-      assert last_of(runtime, "m2") == 180
+      assert last_of(runtime, "m2") == 170
       {runtime, _} = cycles(runtime, 2)
-      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 20
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 20 + 10
     end
 
     test "a timer inside a block an instance holds carries on too, by its path" do

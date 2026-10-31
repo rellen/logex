@@ -81,29 +81,33 @@ defmodule Logex.Edit do
     keeps its `.pre` frozen, and one it runs that the program stopped did not takes its
     preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
     restart would;
-  - *a resume undone* (fix F11): where this edit's last switch resumed a timer and no
-    scan has run since (`switched`), a `last` still where that switch left it goes back
-    to the one that switch found, so a test and an untest with no scan between leave the
-    original's timers as they were; and since decision 336 so does a resume given back,
-    so the switch after a test that gave an untest's resume back gives it back in turn,
-    the timer as that test found it. A move an earlier edit's last switch made is not
-    given back;
+  - *one rule for a timer's time* (decisions 339 to 341, superseding decision 336's
+    special cases): a timer's time runs only while a program that runs it holds the
+    instance, and not while the instance is set aside (`Logex.Configuration.Edit`). The
+    edit's record of the instance keeps the time from which the program that holds it has
+    held it, and the time from which the other held it before. A switch with no scan
+    since this edit's last one and no time since it only gives the instance back to the
+    program that held it before, which holds it on from then; a lone instance's switch
+    with no scan since the last is always one, its clock moving only by its scans. Any
+    other switch ends the hold of the program it stops, scanned or not;
+  - *a resume undone* (fix F11): where the switch only gives the instance back, a `last`
+    still where this edit's last switch left it, a resume or a resume given back, goes
+    back to the one that switch found, so a test and an untest with no scan between leave
+    the original's timers as they were, and the switch after a give-back gives it back in
+    turn (decision 336). Where time has passed since, the program that switch started has
+    held the instance, and the move stands (decision 339, provisional). A move an earlier
+    edit's last switch made is not given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
     when it last ran (its `last` before `now`, and `.en` 1 for a `ton` or an `rto`, `.tt` 1
-    for a `tof` in its delay or a `tp` in its pulse, M3-2), resumes from the switch, where the
-    program stopped is the one that last scanned (as for one-shots, below), so the time no
-    `ton` ran it is not caught up. Decision 336: the rule asks too who has held the
-    instance since this edit's last switch. Where no scan has run since that switch, the
-    program stopped has held the instance only since it, so `last` moves on by `now -
-    max(last, that switch's time)`, the time before it another program's, which the timer
-    catches up as that program would have; where a scan has run since, or this edit made
-    no switch before, `last` becomes `now`. Where the program started last scanned, a test
-    and an untest with no scan between, it left the timer as it is. A lone instance's
-    clock moves only by its own scans, so the program stopped has held it unscanned for
-    no time and the rule takes what it did before decision 336; in a resource, where a
-    cycle moves the clock without scanning an instance, it keeps the time another program
-    held it, so a test and an untest at once after such a hold give every timer back
-    exactly.
+    for a `tof` in its delay or a `tp` in its pulse, M3-2), resumes: its `last` moves on by
+    the time the program stopped held the instance, from the start of its hold to the
+    switch, scanned or not, and never by more than the time since it last ran, `now -
+    max(last, held)`, whoever scanned the instance last (decision 341). The time before
+    the hold began is the other program's, which runs the timer, and the timer catches it
+    up as a frozen timer does (decision 82): a timer the original's own jump froze before
+    a test keeps that frozen time across the candidate's scans (decision 339). Where the
+    program stopped has held the instance since before the edit, `last` becomes `now`, the
+    time since it last ran not caught up (decision 23; provisional, decision 339).
 
   A report names each move of `last` once, by its net: `:resumed` where it moves on,
   `:resume_undone` where it moves back.
@@ -277,7 +281,7 @@ defmodule Logex.Edit do
   | `:preset` | `{from, to}`, the move of the timer's `.pre`, a counter's `.pv` | a switch |
   | `:preset_kept` | `{pre, preset}`: `.pre` (`.pv`) kept, not the preset of the instruction that runs it | a switch |
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0; for a counter, `{cv, pv}` | a switch |
-  | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` but where the program stopped has held the instance unscanned only since the last switch, or a resume given back is given back in turn (decision 336) | a switch |
+  | `:resumed` | the milliseconds not caught up: `last` moves on by that many, the time the program stopped, which does not run the timer, held the instance (decisions 339 to 341), or a resume given back is given back in turn (decision 336) | a switch |
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
   | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it, its `osr` or `osf` sets no pulse; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
@@ -336,9 +340,10 @@ defmodule Logex.Edit do
     does a block an earlier edit left pending (F2).
   - A timer inside an instance is resumed only where the program started runs it and the
     one stopped does not, read from the stopped program's text: a `cal` of the instance,
-    on a rung of each program down to it, and a `ton` in the body; and only where the
-    program stopped is the one that last scanned. A timer frozen by a false `cal` both
-    programs run is not, and catches up when its block next runs (decision 8). A timer, or
+    on a rung of each program down to it, and a `ton` in the body, whoever last scanned it
+    (decision 341, which retires M2-5's "the one that last scanned"). A timer frozen by a
+    false `cal` both programs run is not, and catches up when its block next runs
+    (decision 8). A timer, or
     an instance, only the program stopped declares is kept, and a `.pre` or a resume the
     edit's last switch moved is given back by its path (fixes F1 and F11).
   - An output a `cal` writes is driven by the program, as one any instruction writes is.

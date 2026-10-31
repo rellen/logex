@@ -23,9 +23,14 @@ defmodule Logex.Edit.Plan do
   # 336), `{left, found, {last_found, last_left}}`; `scanned`, nil until the edit's first
   # switch, then `{side, pending}`: which of its two programs, `:original` or
   # `:candidate`, left the storage bits, and the bits still blocked against it from an
-  # earlier edit (F2, F3); and since decision 336 `held`, the time of the edit's last
-  # switch, from which the program it started has held the instance, nil until the first.
-  @record %{shown: %{}, pre: %{}, scanned: nil, held: nil}
+  # earlier edit (F2, F3); and since decision 336 `held`, the time from which the program
+  # that holds the instance has held it, and since decision 339 `prior`, the time from
+  # which the other program held it before, each nil where it is from before the edit:
+  # a switch made with no scan and no time since the edit's last one, which only gives
+  # the instance back to the program that held it, swaps them, and any other moves `held`
+  # to `prior` and its own time to `held` (decisions 339 to 341: a timer's time runs only
+  # while a program that runs it holds the instance).
+  @record %{shown: %{}, pre: %{}, scanned: nil, held: nil, prior: nil}
 
   # M5-14's review: the mark of an array of instances opened for a switch or a prune.
   @opened :"Logex.Edit.Plan.opened"
@@ -1016,9 +1021,10 @@ defmodule Logex.Edit.Plan do
 
   # OE-2 (decision 56): `at` is the clock a timer resumes from, which the switch then gives
   # the instance as its `now`: a lone instance's own `now`, so nothing moves, and in a
-  # resource the resource's. Fix F11's undo reads the instance's own `now` before it moves,
-  # which while `switched` is true is the time the last switch gave it, so a cycle between
-  # a test and its untest that does not scan the instance cannot hide a resume from it.
+  # resource the resource's. The switch reads the instance's own `now` before it moves,
+  # which while `switched` is true is the time the last switch gave it, to tell a switch
+  # that only gives the instance back, with no time since the last, from a hold's end
+  # (decisions 339 to 341, `back?/3`).
   def switch(plan, record, %Instance{env: env, now: now} = state, first_test?, at) do
     shown = learnt(record.shown, plan.left, state)
 
@@ -1029,8 +1035,9 @@ defmodule Logex.Edit.Plan do
 
     fresh = Map.take(plan.initial, started)
     env = Map.merge(env, fresh)
+    back? = back?(record, state, at)
     scanned = scanned(record.scanned, state, plan)
-    clock = {{now, at}, state.switched, elem(scanned, 0) == plan.stops, since(record.held, state)}
+    clock = {{now, at}, back?, record.held}
 
     {env, inside, pre} =
       Enum.reduce(
@@ -1072,7 +1079,7 @@ defmodule Logex.Edit.Plan do
     unwritten = for path <- plan.unwritten, do: {:unwritten, path, bit_at(env, path)}
 
     {%{state | env: env, switched: true, ons_blocked: blocked, now: at},
-     %{record | shown: shown, pre: pre, scanned: scanned, held: at},
+     held(back?, %{record | shown: shown, pre: pre, scanned: scanned}, at),
      Enum.sort(requalified(plan.requalified, env, timed ++ inside ++ report ++ unwritten))}
   end
 
@@ -1348,14 +1355,24 @@ defmodule Logex.Edit.Plan do
   defp scanned(nil, %Instance{ons_blocked: pending}, plan), do: {plan.stops, pending}
   defp scanned(known, _state, _plan), do: known
 
-  # Decision 336: who has held the instance since this edit's last switch. Where no scan
-  # has run since it (`switched`), the program that switch started, which this switch
-  # stops, has held the instance only from that switch on, whoever scanned it last: the
-  # time before it, back to that program's last scan, another program held. Where a scan
-  # has run since, or this edit made no switch before, nil: the time since the timer last
-  # ran is the program stopped's, as before decision 336 (decision 56).
-  defp since(at, %Instance{switched: true}) when is_integer(at), do: at
-  defp since(_at, _state), do: nil
+  # Decisions 339 to 341: who has held the instance, so that a timer's time runs only
+  # while a program that runs it holds it. A switch with no scan since this edit's last
+  # one (`switched`) and no time since it (the instance's own `now`, which that switch
+  # set, still the switch's `at`) only gives the instance back to the program that held
+  # it before that switch, which therefore holds it on from when it held it before
+  # (`prior`), and gives back what that switch moved (fix F11), as if it had not been
+  # made: a lone instance's switch with no scan since the last is always one, its clock
+  # moving only by its scans. Any other switch is a hold's end: the program stopped held
+  # the instance from `held` to now, scanned or not, and the program started holds it
+  # from now.
+  defp back?(%{scanned: nil}, _state, _at), do: false
+  defp back?(_record, %Instance{switched: true, now: at}, at), do: true
+  defp back?(_record, _state, _at), do: false
+
+  defp held(true, %{held: held, prior: prior} = record, _at),
+    do: %{record | held: prior, prior: held}
+
+  defp held(false, %{held: held} = record, at), do: %{record | held: at, prior: held}
 
   # The block list a switch leaves: its plan's blocks where the program stopped left the
   # bits, none where the program started did, since its bits are then as it left them; and
@@ -1411,15 +1428,13 @@ defmodule Logex.Edit.Plan do
          {:ok, pre},
          {key, name, from, to, %{preset: member} = rules},
          undo,
-         {{_now, at}, switched, stopped_last?, since},
+         {{_now, at}, back?, held},
          {env, report, left}
        ) do
     found = key_get(env, key)
-    value = undone(found, undo, switched)
+    value = undone(found, undo, back?)
     target = target(undo, pre, from, to)
-
-    value =
-      resumed({from, to, stopped_last?}, Map.put(value, member, target), {at, since, rules})
+    value = resumed({from, to}, Map.put(value, member, target), {at, held, rules})
 
     {key_put(env, key, value),
      moved(name, {pre, target, to}, value, rules) ++ lasted(name, found, value) ++ report,
@@ -1625,43 +1640,40 @@ defmodule Logex.Edit.Plan do
   defp done(_dn, _en, _acc, _pre, _name), do: []
 
   # A timer the program started runs and the program stopped does not, timing when it last
-  # ran (`.en` 1, its `last` before `now`), resumes from the switch: its `last` moves on by
-  # the time the program stopped has held the instance since it last ran, so that time,
-  # in which no `ton` ran it, is not caught up (§4.9's Resume rule, decision 23), and none
-  # another program held is taken (decision 336): where no scan has run since this edit's
-  # last switch, the program stopped has held it only since that switch, `since`, so
-  # `last` moves on by `at - max(last, since)`, the time before `since` left for the timer
-  # to catch up, as the program that held it then would have; otherwise (`since` nil) it
-  # moves to `at`, as before decision 336. M2-5: a timer both programs
-  # run is never resumed. Its `last` is `now` where the last scan ran its instruction,
-  # which stamps it at every run; inside a block whose `cal` was false, or since M3-5 on a
-  # rung a jump skipped, it is earlier, and the timer catches up when it next runs, as
-  # decisions 8 and 82 want. And "the program stopped did not run it" is asked of the
-  # program that last scanned, as the one-shots' rule asks it (F3): where that is the
-  # program started, a test and an untest with no scan between, the program started left
-  # the timer as it is, frozen or not, and no resume is due.
+  # ran (`.en` 1, its `last` before `now`), resumes: by decisions 339 to 341 a timer's time
+  # runs only while a program that runs it holds the instance, so its `last` moves on by
+  # the time the program stopped, which does not run it, has held the instance, from
+  # `held` to the switch, scanned or not, and never by more than the time since it last
+  # ran; the time before `held`, another program's, is left for the timer to catch up, by
+  # decision 82 where that program runs it, as a frozen timer's is: `last` becomes `last +
+  # at - max(last, held)`. Where `held` is from before the edit (nil), the program stopped
+  # has held the instance for all the edit knows since the timer last ran, and `last`
+  # becomes `at` (§4.9's Resume rule, decision 23; provisional since decision 339, the
+  # time since an earlier edit's switch unknown). Whoever scanned last (decision 341), the
+  # program stopped held it: a candidate that holds an instance unscanned gives the
+  # original's timer none of that time. M2-5: a timer both programs run is never resumed.
   #
   # M3-1: a timer's, by its kind (Logex.FbType.rules/1): a type that keeps no time has no
   # `last` to resume. M3-2: "timing" is the member the type's rules name, `times`, at 1.
-  defp resumed({nil, to, true}, timer, {at, since, %{kind: :timer, times: times}})
+  defp resumed({nil, to}, timer, {at, held, %{kind: :timer, times: times}})
        when to != nil,
-       do: resume(Map.get(timer, times), timer, {at, since})
+       do: resume(Map.get(timer, times), timer, {at, held})
 
   defp resumed(_presets, timer, _at), do: timer
 
-  # `since`, where there is one, is the instance's own `now`, which no `last` passes
-  # (decision 188), so `at - max(last, since)` is `at - since`.
-  defp resume(1, %{"last" => last} = timer, {at, since}) when last < at,
-    do: %{timer | "last" => last + at - (since || last)}
+  defp resume(1, %{"last" => last} = timer, {at, held}) when last < at,
+    do: %{timer | "last" => last + at - max(last, held || last)}
 
   defp resume(_timing, timer, _at), do: timer
 
-  # A move given back: where this edit's last switch moved the timer's `last`, a resume or
-  # a resume given back, and no scan has run since (`switched`), a `last` still where that
-  # switch left it goes back to the one it found, so a test and an untest with no scan
-  # between leave the original's timers as they were, and since decision 336 the switch
-  # after it gives back what that one gave back, so the round trip the other way does too.
-  # The `last`s are in the edit's record, so an earlier edit's are unknown.
+  # A move given back: where this switch only gives the instance back (`back?`: no scan
+  # and no time since this edit's last switch), a `last` still where that switch left it,
+  # a resume or a resume given back, goes back to the one it found, so a test and an
+  # untest with no scan between leave the original's timers as they were (fix F11), and
+  # the switch after a give-back gives it back in turn (decision 336). Where time has
+  # passed since, the program that switch started has held the instance, and the move
+  # stands (decision 339; provisional, fix F11's undo across a cycle with no scan). The
+  # `last`s are in the edit's record, so an earlier edit's are unknown.
   defp undone(%{"last" => left} = timer, {_pre, _found, {last, left}}, true),
     do: %{timer | "last" => last}
 

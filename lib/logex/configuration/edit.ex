@@ -73,19 +73,22 @@ defmodule Logex.Configuration.Edit do
     or not at all, has that own value dropped, `{:joined, path, {own, global}}`, `own` nil
     where it had none, and reads the shared global from its next scan (decision 55); one of
     the program stopped that the one started declares as its own tag keeps the global's
-    value as its own, `{:left, path, value}` (decision 25). A timer
-    resumes from the resource's clock, and the switch gives the instance that clock as its
-    `now`, fix F11's undo reading the instance's own `now` first, the time the last switch
-    gave it (decision 56), and since decision 336, where no scan has run since this edit's
-    last switch, taking only the time since that switch, the program stopped having held
-    the instance since then and the original's hold before it kept, and giving back what
-    that switch moved, so a test and an untest at once after the original held the
-    instance unscanned give every timer back exactly (`Logex.Edit`'s rules);
+    value as its own, `{:left, path, value}` (decision 25). A timer resumes from the
+    resource's clock, and the switch gives the instance that clock as its `now`, reading
+    the instance's own `now` first (decision 56), by one rule (decisions 339 to 341,
+    `Logex.Edit`'s rules): a timer's time runs only while a program that runs it holds
+    the instance, and not while the instance is set aside. A switch with no scan of the
+    instance and no time since this edit's last one only gives it back to the program
+    that held it before, giving back what that switch moved (fix F11); any other ends the
+    hold of the program it stops, scanned or not, whoever scanned last, and a timer that
+    program does not run and the one started does is resumed by that hold alone, the
+    time before it caught up, so a timer comes back with exactly the time it had;
   - an instance only the configuration started runs, or one it runs as another program
     type (decision 43), which may run on another task (decision 61), comes back from
     aside where an earlier switch of this edit set it aside, as it was, its `now` the
-    resource's and each timer that was timing resumed from the switch, `:resumed` by its
-    path, since the edit stopped it, not its logic (decision 57),
+    resource's and each timer that was timing resumed by the time it was aside alone,
+    `:resumed` by its path, since the edit stopped it, not its logic (decision 57), and
+    the time the program that held it before held it is the timer's (decision 340),
     `{:instance_back, name, type}`; or is started as `Logex.Runtime.instance/1` starts it,
     its var_externals dropped as `start/1` drops them, `{:instance_added, name, type}`;
   - an instance only the configuration stopped runs, or the old state of one retyped, is
@@ -215,8 +218,10 @@ defmodule Logex.Configuration.Edit do
   alias Logex.Walk
   alias Logex.Edit.Plan
 
+  # `aside_at`, since decision 340: the time each instance this edit set aside was set
+  # aside, by name, so that one brought back counts only that time as uncounted.
   @enforce_keys [:original, :candidate, :stage, :plans, :held, :records, :generation]
-  defstruct [:original, :candidate, :stage, :plans, :held, :records, :generation]
+  defstruct [:original, :candidate, :stage, :plans, :held, :records, :generation, aside_at: %{}]
 
   @opaque t :: %__MODULE__{}
 
@@ -297,9 +302,11 @@ defmodule Logex.Configuration.Edit do
   # A switch, written into the resource by Logex.Runtime.edited/2, which moves its
   # generation on; the edit expects the new one.
   defp stepped(edit, {runtime, _at} = timed, direction, stage) do
-    {changes, records, report} = switch(edit, timed, direction)
+    {changes, {records, aside_at}, report} = switch(edit, timed, direction)
     %Runtime{generation: generation} = runtime = Runtime.edited(runtime, changes)
-    {%{edit | stage: stage, records: records, generation: generation}, runtime, report}
+
+    {%{edit | stage: stage, records: records, aside_at: aside_at, generation: generation},
+     runtime, report}
   end
 
   @doc """
@@ -849,7 +856,8 @@ defmodule Logex.Configuration.Edit do
         for({name, state} <- stopped, do: {:instance_stopped, name, state.type}) ++
         timed ++ holding(Map.fetch!(edit.held, direction), globals)
 
-    {changes, records, Enum.sort(report)}
+    aside_at = Map.merge(edit.aside_at, Map.new(stopped, fn {name, _} -> {name, runtime.now} end))
+    {changes, {records, aside_at}, Enum.sort(report)}
   end
 
   # Decision 66: at an edit's first switch the resource runs the original and holds nothing
@@ -938,8 +946,11 @@ defmodule Logex.Configuration.Edit do
 
   # Decision 57: an instance set aside as one of this type comes back as it was set aside,
   # its `now` the resource's, as a switch gives a kept one (decision 56), and each timer
-  # that was timing resumed from the switch, by its path: the edit stopped the instance, not
-  # its logic, so the time set aside is not caught up.
+  # that was timing resumed, by its path: the edit stopped the instance, not its logic, so
+  # the time set aside is not caught up; and since decision 340 only that time, from when
+  # this edit set it aside, `last` moving on by `now - max(last, aside_at)`, so the time
+  # the program that held it before it was set aside, which runs the timer, held it
+  # unscanned is caught up, as a frozen timer's is (decision 82).
   defp back(
          {:ok, %Instance{type: type} = state},
          {name, %Program{name: type} = program},
@@ -947,7 +958,8 @@ defmodule Logex.Configuration.Edit do
          {instances, records, reports}
        ) do
     %Runtime{now: now} = context.runtime
-    {env, resumed} = resume(timers(program), state.env, {name, now})
+    aside_at = Map.get(context.edit.aside_at, name)
+    {env, resumed} = resume(timers(program), state.env, {name, now, aside_at})
 
     {Map.put(instances, name, %{state | env: env, now: now}), records,
      [{:instance_back, name, type} | resumed ++ reports]}
@@ -998,13 +1010,18 @@ defmodule Logex.Configuration.Edit do
         resumed(get_in(env, path), {path, times}, at, acc)
       end)
 
-  defp resumed(%{"last" => last} = timer, {path, times}, {name, now}, {env, reports})
+  defp resumed(%{"last" => last} = timer, {path, times}, {name, now, aside_at}, acc)
        when :erlang.map_get(times, timer) == 1 and last < now,
-       do:
-         {put_in(env, path, %{timer | "last" => now}),
-          [{:resumed, Enum.join([name | path], "."), now - last} | reports]}
+       do: moved(now - max(last, aside_at || last), timer, {name, path}, acc)
 
   defp resumed(_timer, _path, _at, acc), do: acc
+
+  defp moved(0, _timer, _at, acc), do: acc
+
+  defp moved(gap, %{"last" => last} = timer, {name, path}, {env, reports}),
+    do:
+      {put_in(env, path, %{timer | "last" => last + gap}),
+       [{:resumed, Enum.join([name | path], "."), gap} | reports]}
 
   defp merged(%{env: env} = state, externals, globals),
     do: %{state | env: Map.merge(env, Map.take(globals, externals))}
