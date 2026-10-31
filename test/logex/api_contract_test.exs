@@ -13986,7 +13986,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp cold_stored(:cold, w) do
     reach(:cold_store, w.store != nil)
-    stored_at(w, Runtime.restart(w.rt, :cold))
+    # The write holds the cold restart's resource, its trigger's last sample 0; a device
+    # that then refuses the restart leaves the trip's, which `refused_store/2` writes back.
+    %{stored_at(%{w | g_sample: 0}, Runtime.restart(w.rt, :cold)) | g_sample: w.g_sample}
   end
 
   defp cold_stored(:warm, w), do: w
