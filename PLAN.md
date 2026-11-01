@@ -236,7 +236,8 @@ qualifier, and M6-8, the contract walks, on 2026-10-31 with the answers to their
 (decisions 329–338), and M6-9, the documents, the same day, so Milestone 6 has landed
 whole, its done sentence shown by one plant and put to the maintainer (§3, M6-9), the
 maintainer's answers to M6-9's review built the same day (decisions 339–342: one rule for
-a resumed timer's time), so that done sentence is the one question left.
+a resumed timer's time) and their review's fixes, so that done sentence is the one
+question left.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -11107,8 +11108,10 @@ done-when reads the next store write; and last the contract walk and the documen
      no output comes back on from the store itself; and a program that marks nothing
      behaves exactly as before. Every clause is shown by the table above, the first six
      whole by the one plant, the last by the cost and exactness tests beside it; and an
-     online edit's resumed timer now comes back with exactly the time it had (decisions
-     339 to 341). An operator sees nothing either way: the question is whether the
+     online edit's resumed timer now comes back with exactly the time it had by the
+     resource's clock (decisions 339 to 341), a timer in an array brought back from aside
+     among them since that answer's review, a step between two cycles taken at the last
+     cycle's time (question 8, provisional). An operator sees nothing either way: the question is whether the
      milestone is done. (a) Done as is; (b) the sentence amended to what the suite shows,
      the period and one round; (c) more first, a named test. Recommended: (a).
   *(Its second question, the readings still provisional, is no longer one of this item's:
@@ -11116,7 +11119,8 @@ done-when reads the next store write; and last the contract walk and the documen
   range and its default, the grid from the start, the take-out's place, nothing written
   while tripped, an event write waiting for the period's, a writer gone down replaced, the
   store's age in `status/1`, each above under M6-6), and the two the one rule of decisions
-  339 to 341 leaves open ("M6-9's answers", below); decision 336's three were answered
+  339 to 341 leaves open ("M6-9's answers", below), and the one its review found (question
+  8, "M6-9's answers' review"); decision 336's three were answered
   (decisions 339 to 341) and the one plant's "one write" confirmed (decision 342).
 
   **M6-9's review** (2026-10-31, on `dc03bd7`), its four findings and what each became.
@@ -11369,12 +11373,17 @@ done-when reads the next store write; and last the contract walk and the documen
      earlier edit, which this edit's first test starts running again: the edit cannot know
      when the original began to hold the instance, so the resume takes all the time since
      the timer last ran, as decision 23 resumes it, though some of that time may have been
-     held by the earlier edit's candidate, which ran the timer. A fan's run-on timer that
-     an edit stopped mid-run and a later edit restores comes back with the time it had
-     when it was stopped, not counting anything since. Options: (a) as built; (b) keep the
-     time of every instance's last switch in the instance itself, so that a later edit
-     knows it, the timer counting the earlier candidate's hold too; (c) left open. The
-     reading taken is (a), provisional.
+     held by an earlier candidate, which ran the timer. It needs no unusual sequence: an
+     edit cancelled and accepted again is enough (M6-9's answers' review found it within
+     one edit and one cancel). A fan's run-on `tof` whose rung the running program has
+     lost, and a candidate that puts it back: tested, the candidate holds the fan's
+     instance 18 ms with no scan, untested, the edit cancelled, a new one accepted and
+     tested: the run-on loses those 18 ms, which the candidate, which runs it, held, and
+     the fan runs on 18 ms longer than its delay. Nothing is taken from the original;
+     time the first candidate held is lost. Options: (a) as built; (b) keep the time of
+     every instance's last switch in the instance itself, so that a later edit knows it,
+     the timer counting the earlier candidate's hold too, the fan on time; (c) left open.
+     The reading taken is (a), provisional.
 
   The README's examples were run again by M6-9's harness (`scratchpad/m6/a9/ex`), the
   library replaced by this item's: all 35 the same as printed, `edit.exs`'s `{:resumed,
@@ -11384,6 +11393,118 @@ done-when reads the next store write; and last the contract walk and the documen
   `edit_test.exs`, a lone timer frozen by the original's jump, a retained timer warm
   restarted under test (M10's), the double resume (M14's) and two give-backs in a row
   (M4's). Commits `8ec9fd2`, `2c017f7`, `3fd65a1` and `766eecc`, then these documents.
+
+  **M6-9's answers' review** (2026-11-01, on `e0d0a15`), its six findings and what each
+  became, in commit `34d3c77` and these documents.
+  1. *Decision 340 did nothing for a timer in an array brought back from aside.* The
+     configuration edit's walk of an instance's timers for a bring-back (decision 57)
+     reached no array (M5-14), so a timer in `rto[2]` or in an array of blocks, `oil[2]`,
+     was never resumed and the whole time aside counted, `bc3050e` the same: the review's
+     conveyor, aside 50 ms, came back at `acc` 70 where 20 is right. The walk is now by
+     type over the state, every element of an array of timers or of a user block's
+     instances at any depth resumed by its name, `{:resumed, "c1.lube[1]", 50}`,
+     `{:resumed, "c1.o1[1].lube", 50}`, the array built again once.
+     `config_edit_test.exs`'s "one back from aside resumes each timer that was timing, in
+     an array of timers or of blocks too, at every depth (decision 340)", over `@depths`
+     and three more, a 2-D array of timers, a block's array of them and a 2-D array of
+     such blocks, fails at the parent; `instance_array_test.exs`'s "bringing an instance
+     back from aside allocates linearly in its array of timers" fails under a put into the
+     tuple an element, 14.5x the words for 4x the elements, where the walk gives 4.1x.
+     Decision 340's record, `Logex.Configuration.Edit`'s moduledoc and question 1 say so.
+  2. *No edit step given `elapsed_ms` is exact.* The switch, `held` and `aside_at` read the
+     resource's `now`, the last cycle's, not the step's own time, `now + elapsed_ms`, so
+     the time between that cycle and the step goes to the program the step leaves holding
+     the instance: a 10 ms task's lube tested 3 ms and untested 8 ms after a cycle comes
+     back with the candidate's 5 ms counted, `acc` 20 where 15 is exact. Exactness would
+     need a timer's `last` to stand past its instance's `now`, which decision 188
+     refuses, or the step to move a clock. Not settled here: pinned as built, provisional,
+     by `config_edit_test.exs`'s "a step given elapsed_ms switches at the resource's now
+     (provisional)", and put to the maintainer, question 8 below; decision 339's reading
+     (3) and both moduledocs say so.
+  3. *Mutant N4, a hold's end forgetting `prior`, passed the full suite.* `edit_test.exs`'s
+     "a give-back after two holds' ends counts the original's hold from its own untest,
+     not from the timer's last run (decision 339)": a frozen lube, a hold's end at 30, a
+     second at 40 and a give-back at once, then a test at 50 resumed by the original's 20
+     ms since 30, where N4 resumes by 30. It fails under N4.
+  4. *Mutant N12, the time set aside the step's own time, passed the full suite.* The test
+     of finding 2 sets an instance aside with `elapsed_ms` 3 and brings it back with 4:
+     resumed by the 50 ms aside by the resource's clock, where N12 gives 47. It fails
+     under N12.
+  5. *Question 7's example understated how ordinary its loss is.* An edit cancelled and
+     accepted again loses the time the first candidate held unscanned. Question 7's
+     example is now that sequence, the fan's run-on 18 ms long.
+  6. *Pinned values changed beyond the answers' were listed only here.* Decision 339's
+     record now lists them too: decision 56's follow-up `50 + 20 + 20`, decision 57's
+     `acc + 20 + 10`, decision 336's second test's `acc + 50` and its title, fix F11's
+     resource test, and the configuration walk's bound after a switch, each forced by the
+     rule; no test line was removed in this item or its review.
+
+  *Mutation table* (`scratchpad/m6/a10/`), each judged by the full suite on `34d3c77`:
+  twenty-two mutants, the review's thirteen but N5 (equivalent by its analysis) and ten of the
+  new walk, all red but N1, which the review found equivalent too (a time set aside is
+  always known where an instance comes back from aside).
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | N1 | an unknown time aside resumes nothing | none (equivalent) |
+  | N2 | the time set aside 1 ms late | 8 |
+  | N3 | the first time set aside kept over a later one | 2 |
+  | N4 | a hold's end forgets `prior` | 1, "a give-back after two holds' ends" (finding 3) |
+  | N6 | a timer the program started does not run resumed | 4 |
+  | N7 | a resume of 0 reported | 2 |
+  | N8 | only a test records the time set aside | 1 |
+  | N9 | a hold from the instance's own `now` | 5 |
+  | N10 | a give-back without `switched` | 26 |
+  | N11 | an instance back from aside resumes a timer not timing | 2 |
+  | N12 | the time set aside the step's own time | 1, "a step given elapsed_ms switches at the resource's now" (finding 4) |
+  | N13 | the clock read from `prior` | 11 |
+  | A1 | an array of timers back from aside skipped | 2, the seven-depth test and the words' growth |
+  | A2 | an array of blocks skipped | 1, the seven-depth test |
+  | A3 | a 2-D array's rows named by the outer subscript alone | 1, the same |
+  | A4 | no 2-D array walked | 1, the same |
+  | A5 | a put into the tuple an element | 1, the words' growth |
+  | A6 | a block's member not put back | 3 |
+  | A7 | a tag not put back | 6 |
+  | A8 | a block's member path lost from the report | 3 |
+  | A9 | an element's subscripts reversed | 1, the seven-depth test |
+  | A10 | no block's members walked | 3 |
+
+  *At 30 fresh families,* `{7201..7230, 10, 19}`, its own streams moved with it, and `{7613,
+  10, 19}`: the configuration edit walk, the one whose resumes the change reaches (an
+  instance back from aside), passes all 31 (`scratchpad/m6/a10/fam/`). No walk changed;
+  the block and lone edit walks restate no bring-back from aside. The README's examples
+  were run again by M6-9's harness with this library (`scratchpad/m6/a10/ex_run.txt`):
+  all 35 the same as printed.
+
+  *Cost*, in reductions, the least of five runs, against `bc3050e` and `e0d0a15`
+  (`scratchpad/m6/a10/cost.exs`): an untest bringing back an instance of 1 bool and 1
+  `rto`, 20 and 1, 100 and 1 and 20 and 10 took 932, 1,388, 4,589 and 1,996 at the
+  parent, 948, 1,404, 4,604 and 2,021 at `e0d0a15`, and 903, 1,340, 4,480 and 1,623 now,
+  the walk by type cheaper than the paths it replaces; a kept instance's switch is as at
+  `e0d0a15`. The scan is unchanged.
+
+  *Put to the maintainer*, numbered after M6-9's answers' two:
+  8. *A step between two cycles.* `Logex.Runner` steps an edit between rounds and gives the
+     time since its last round; the switch is taken at that round's time, so the time from
+     the round to the step goes to whichever program the step leaves holding the instance.
+     A box line's lube `rto` on a 100 ms task: tested 30 ms after a round and untested 80
+     ms after it, before the next round, the lube counts the candidate's 50 ms and
+     finishes 50 ms early; untested 70 ms after a round the candidate ran, it counts
+     those 70 ms as the original's, early by as much. The error is at most the time since
+     the last round, a task's interval at the most. Options, by what the operator sees:
+     (a) as built, a timer early or late by up to the time since the last round across a
+     step; (b) exact, the switch taken at the step's own time, which lets a timer's `last`
+     stand ahead of its instance's `now` until the next cycle (decision 188 amended for a
+     switch's own write) or gives the instance the step's time as its `now` (decision 56
+     amended), the lube on time; (c) left open. The reading taken is (a), provisional.
+     IEC 61131-3 has no online edit. Logix switches between the original's and the
+     edited rungs as a program scan begins, so its switch is a scan's time too, the
+     reading (a) takes; how a Logix timer counts the time between that scan and the
+     operator's click is not checked here (unverified).
+
+  2424 tests (11 doctests), up from 2420: the seven-depth bring-back and the step given
+  `elapsed_ms` in `config_edit_test.exs`, the give-back after two holds' ends in
+  `edit_test.exs` and the bring-back's words in `instance_array_test.exs`.
 
 **What stays deferred**, each a later item or milestone (§4.13): `persistent`, not
 reserved (decision 280); `program retain` on a configuration's line (281); a retained

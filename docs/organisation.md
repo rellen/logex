@@ -2055,7 +2055,7 @@ above and `Logex.Runtime`'s one-rule section:
 | an instance's `ons_blocked` | `[]` | emptied, but for bits inside a block not run (decision 32) | `[]` | OE-1's rules, against the program that last scanned it | `[]`; back from aside, as set aside | — | OE-1's: kept, not added to |
 | an instance's `switched` | false | false after its scan | kept | true | false; back from aside, as set aside | — | kept |
 | a var_external | none held | merged in, split off | none held | decision 45, as above | bound by name | — | none held |
-| an instance back from aside | — | — | — | — | its state as set aside, each timer that was timing resumed from the switch, `:resumed` by path (decision 57), since decision 340 by the time set aside alone | — | — |
+| an instance back from aside | — | — | — | — | its state as set aside, each timer that was timing resumed from the switch, `:resumed` by path (decision 57), since decision 340 by the time set aside alone, and since its review at any depth, an element of an array of timers or of a block's instances by its name, `c1.lube[1]` | — | — |
 
 Three points the table makes, which OE-1's lone instance never met:
 - **An instance on a slow task is not scanned by every cycle.** Its `switched` stays true
@@ -5689,7 +5689,10 @@ choices are §4.9's rules.
     review.)* *(Amended 2026-10-31 by decision 340, the maintainer's answer: only the time
     set aside is uncounted, so the pinned 130 ms is 120, `m2` set aside at 60 and back at
     180, and the 10 ms from its last scan at 50 to the test are caught up; an instance
-    set aside and brought back at once resumes nothing.)*
+    set aside and brought back at once resumes nothing.)* *(Since M6-9's answers' review,
+    2026-11-01: a timer in an array, an element of `rto[2]` or a timer in an array of
+    blocks, which this resume never reached (M5-14), is resumed too, by its name,
+    decision 340's note.)*
 58. **How a held output is named in the report (OE-2).** A var_output a kept instance no
     longer writes gives OE-1's `{:held, "m1.run_lamp", v}` by path, and the output point
     it is connected to, `lamp_1`, holds too, `{:held, "lamp_1", v}`.
