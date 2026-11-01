@@ -1645,6 +1645,98 @@ defmodule Logex.EditTest do
     end
   end
 
+  # The review after Milestone 6 (a4-warnings-walk-2): fix F7's "written alone?" reads the
+  # word a storage bit is in from the bit's path, which inside an element of an array of
+  # blocks, `gs[1].e[1]`, it cut at its first `[`, `gs`, comparing each element's one-shot
+  # with the writes of every element. Each chain below holds the one leaf block at another
+  # depth, a scalar's, an array of blocks', one inside a block, an array of blocks inside an
+  # element of one and three levels down, each element's one-shot blocked exactly as the
+  # scalar's is.
+  describe "a one-shot inside an element of an array of blocks, at any depth (fix F7)" do
+    @chains [
+      {"s1", "var s1 leaf\n", "cal s1 go k q\n"},
+      {"gs[1]", "var gs leaf[2]\n", "cal gs[1] go k q\n"},
+      {"o.gs[1]", "var o mid\n", "cal o go k q\n"},
+      {"hs[1].gs[1]", "var hs mid[2]\n", "cal hs[1] go k q\n"},
+      {"ts[0].hs[1].gs[1]", "var ts top[2]\n", "cal ts[0] go k q\n"}
+    ]
+
+    @head "var_input go bool\nvar_input k dint\nvar_output q bool\n"
+
+    # The leaf, `xic go ons e[1] ote q` and `rest`, under `mid`, which holds two of it, and
+    # `top`, which holds two of `mid`; and the program of one chain over them.
+    defp chain_program(chain, rest) when is_binary(rest),
+      do: chain_program(chain, {"var e bool[2]\nvar w word\nxic go ons e[1] ote q\n", rest})
+
+    defp chain_program({_path, declared, called}, {leaf_text, rest}) do
+      {:ok, leaf} =
+        Logex.compile("function_block leaf\n" <> @head <> leaf_text <> rest, name: "leaf")
+
+      {:ok, mid} =
+        Logex.compile("function_block mid\n" <> @head <> "var gs leaf[2]\ncal gs[1] go k q\n",
+          name: "mid",
+          types: [leaf]
+        )
+
+      {:ok, top} =
+        Logex.compile("function_block top\n" <> @head <> "var hs mid[2]\ncal hs[1] go k q\n",
+          name: "top",
+          types: [mid]
+        )
+
+      {:ok, program} =
+        Logex.compile(@head <> declared <> called, name: "m", types: [leaf, mid, top])
+
+      program
+    end
+
+    # Each chain's block list after the test, and the candidate's outputs at the scans after.
+    defp chained(chain, {old, new}, {before, after_}) do
+      v1 = chain_program(chain, old)
+      v2 = chain_program(chain, new)
+      {_, state} = run(v1, before)
+      {_edit, tested, report} = Edit.test(accept!(v1, v2, state), state)
+      assert for({:ons_blocked, bit, _} <- report, do: bit) == tested.ons_blocked
+      outputs = for step <- after_, do: elem(drive(v2, tested, [step]), 0)["q"]
+      {tested.ons_blocked, outputs}
+    end
+
+    test "a stray otu removed: every element's one-shot is blocked as the scalar's is, and " <>
+           "fires on no held input" do
+      held = [{0, %{"go" => 1, "k" => 1}}, {10, %{}}]
+
+      for {path, _, _} = chain <- @chains do
+        assert chained(chain, {"xic go otu e[k]\n", ""}, {held, [{10, %{}}]}) ==
+                 {[path <> ".e[1]"], [0]},
+               path
+      end
+    end
+
+    test "a one-shot on a bit of an element whose element a stray move wrote whole: every " <>
+           "element's blocked as the scalar's is" do
+      held = [{0, %{"go" => 1, "k" => 1}}, {10, %{}}]
+      shot = "var e word[2]\nvar w word\nxic go ons e[1].3 ote q\n"
+
+      for {path, _, _} = chain <- @chains do
+        assert chained(chain, {{shot, "xic go move 0 e[1]\n"}, {shot, ""}}, {held, [{10, %{}}]}) ==
+                 {[path <> ".e[1].3"], [0]},
+               path
+      end
+    end
+
+    test "another bit of the block's word edited: no element's one-shot is blocked, and a real " <>
+           "press on the first scan fires" do
+      for {path, _, _} = chain <- @chains do
+        assert chained(
+                 chain,
+                 {"xic go ote w.3\n", "xic go ote w.4\n"},
+                 {[{0, %{"go" => 0, "k" => 1}}, {10, %{}}], [{10, %{"go" => 1}}]}
+               ) == {[], [1]},
+               path
+      end
+    end
+  end
+
   # M3-4: a pulse coil's storage bit is under every rule an `ons` bit has (decision 80): on
   # decision 21's block list by name, its rung compared without presets (decision 87), and
   # blocked inside a block until a scan runs its body (decision 32). Its pulse bit is an

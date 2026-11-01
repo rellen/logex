@@ -985,13 +985,32 @@ defmodule Logex.Edit.Plan do
   defp alone({:ok, 1}, bit, {writes, words, bits}),
     do:
       Map.get(writes, word_of(bit)) == Map.get(words, word_of(bit)) and
-        not is_map_key(bits, element_of(:binary.split(bit, "]."), bit))
+        not is_map_key(bits, element_of(bit))
 
   defp alone({:ok, _more}, _bit, _writes), do: false
 
-  # The element a bit of one is in, `e[1]` of `e[1].3`; any other bit is in none.
-  defp element_of([element, _number], _bit), do: element <> "]"
-  defp element_of([_none], _bit), do: nil
+  # A bit's path read from its end, segment by segment, so that an element or a bit inside
+  # an element of an array of blocks, `gs[0].e[1]` or `gs[0].w.3`, at any depth, is read
+  # as the scalar `s1.e[1]` is, where until the review after Milestone 6 (a4-warnings-walk-2)
+  # it was cut at its first `[` and read as `gs`, so that each element's one-shot was
+  # compared with the writes of every element. The segments, each a name, an element
+  # `e[1]` or a bit's number, hold no `.` of their own: a path names an element by its
+  # subscripts' values.
+  defp last_segment(path), do: Enum.split(String.split(path, "."), -1)
+
+  # The element a bit of one is in, `gs[0].e[1]` of `gs[0].e[1].3`; any other bit, an
+  # element's own among them, is in none.
+  defp element_of(path), do: bit_element(last_segment(path))
+
+  defp bit_element({front, [_number]}), do: element_above(Enum.split(front, -1))
+
+  defp element_above({above, [segment]}),
+    do: element_named(:binary.split(segment, "["), Enum.join(above ++ [segment], "."))
+
+  defp element_above({[], []}), do: nil
+
+  defp element_named([_array, _subscripts], element), do: element
+  defp element_named([_name], _path), do: nil
 
   defp bit_writes(written) do
     bits = Map.new(written, fn {path, lines} -> {path, length(lines)} end)
@@ -1006,13 +1025,22 @@ defmodule Logex.Edit.Plan do
 
   # The word a bit's path is in, `s1.status` for `s1.status.3`; an element's, `edge[2]`, and
   # since decision 221 a bit of an element's, `faults[2].3`, its array, which the walk
-  # counts their writes under.
-  defp word_of(path), do: word_in(:binary.split(path, "["), path)
+  # counts their writes under; inside an element of an array of blocks so too, `gs[0].e`
+  # for `gs[0].e[1]` and `gs[0].w` for `gs[0].w.3`.
+  defp word_of(path), do: last_word(last_segment(path))
 
-  defp word_in([array, _subscripts], _path), do: array
+  defp last_word({front, [last]}), do: word_named(:binary.split(last, "["), front)
 
-  defp word_in([_no_element], path),
-    do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
+  # An element, `edge[2]`: its array. A bit, `status.3` or `faults[2].3`: the word it is a
+  # bit of, or the array of the element it is a bit of.
+  defp word_named([array, _subscripts], front), do: Enum.join(front ++ [array], ".")
+  defp word_named([_number], front), do: bit_word(Enum.split(front, -1))
+
+  defp bit_word({above, [segment]}),
+    do: word_or_array(:binary.split(segment, "["), above, segment)
+
+  defp word_or_array([array, _subscripts], above, _segment), do: Enum.join(above ++ [array], ".")
+  defp word_or_array([_word], above, segment), do: Enum.join(above ++ [segment], ".")
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
