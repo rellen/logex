@@ -15,7 +15,8 @@ is a separate audit pass rather than editing this file in the same commit — bu
 has to happen, or the next reader inherits a plan that disagrees with the code. *(Since
 2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
 milestone decided having landed, and a paragraph naming what waits: the review after
-Milestone 6's decisions 347–360, for RV-2 to RV-8.)*
+Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
+questions, decisions 361–373, for RV-9.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -11632,8 +11633,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   which `claude_md_test.exs` holds, and README's sentence that a rung writing nothing
   compiles today goes with decision 351's landing.)*
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
-  Logix say nothing of a project's documents, and no plant runs differently under any
+  *Provisional readings, put to the maintainer* *(all six answered on 2026-11-01, decisions
+  361 to 366: 1, 2, 4 and 6 as built, 3 and 5 changed, to build in RV-9)*. The record is
+  silent on each; IEC and Logix say nothing of a project's documents, and no plant runs differently under any
   option. (1) CLAUDE.md's cap is 40,000 characters, the figure of Claude Code's own
   warning, CLAUDE.md 22,939 now; a tighter cap, or one in lines, are the others.
   (2) The README test runs in the default suite, the 2 s real-clock example among them,
@@ -11783,7 +11785,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     1"; a label alone refused as a rung that writes nothing; a link to a directory a path
     of its own in the loader's memo; since RV-2's review a rung the jump checks refuse
     told that it writes nothing too (question 7).
-  - *Questions for the maintainer*, by what an operator sees:
+  - *Questions for the maintainer*, by what an operator sees *(all seven answered on
+    2026-11-01, decisions 367 to 373: 2, 3 and 7 as built, 1, 4, 5 and 6 changed, to build
+    in RV-9)*:
     1. *A jump to the end.* `jmp done` … `lbl done` on the routine's last rung is now
        refused, the label alone writing nothing (decision 351 read literally, and Logix's
        LBL needs an output after it). The operator writes `lbl done ote landed` with a tag
@@ -11878,6 +11882,13 @@ and CI checked; each fix with a test that fails when it is reverted.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
+- **RV-9 — the answers to RV-1's and RV-2's questions** (decisions 363, 365, 367, 370, 371
+  and 372). `wired.logex` shown in README as a file of its own; README's one fragment run
+  in a setup the test makes; a rung that is a label alone accepted where a jump of its
+  routine names it; a declaration's elements counted through every nested array of
+  instances, refused past 65,536; a type the loader compiled itself in the same load not
+  checked again; two writes of one array whose literal subscripts differ not warned. It
+  runs as the next of two at a time, before RV-8.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

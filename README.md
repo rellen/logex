@@ -130,7 +130,7 @@ Source syntax today:
   configuration file's numbers take the same forms, its reader quoting each as written.
   A number is at most 10,000 characters and a real's exponent at most 9,999, far past any
   value a type holds, and past either it is an error naming the number by its start
-  (provisional), the store's and the forces file's readers refusing it too
+  (decision 369), the store's and the forces file's readers refusing it too
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
@@ -335,8 +335,10 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-3 to RV-8 build ("The review after Milestone 6"). The one of them that changes
-the source language has landed with RV-2: a rung that writes nothing and jumps nowhere,
+items RV-3 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
+RV-1 and RV-2 left, decisions 361–373, which RV-9 builds, among them a rung that is a
+label alone accepted where a jump names it (decision 367). The one of decisions 347–360 that
+changes the source language has landed with RV-2: a rung that writes nothing and jumps nowhere,
 such as the first half of a rung wrapped onto two lines, `xic start xio stop` above
 `ote motor`, is refused at its line, told that a newline ends a rung (decision 351).
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and

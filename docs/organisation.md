@@ -12190,7 +12190,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      each module's present rules in its moduledoc; the history in `PLAN.md` and this
      record; its size capped by a test. To build in RV-1. *(Landed with RV-1, 2026-11-01:
      CLAUDE.md 305 lines, 21,797 bytes; `test/logex/claude_md_test.exs` caps it at 40,000
-     characters, provisional, the figure Claude Code's own warning for a large CLAUDE.md,
+     characters, the figure of Claude Code's own warning for a large CLAUDE.md (decision 361),
      and holds it to naming every file of `lib/` and `test/` and to no history.)*
 
 359. **The receipts and the toolchain (the review after Milestone 6),** question 13 and
@@ -12216,6 +12216,107 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: keep a copy (a)** (the maintainer, 2026-11-01): before its first write over
      a store it dropped anything from, a fresh start copies the store to
      `<store>.dropped`, kept until the next such start. To build in RV-5.
+
+361. **CLAUDE.md's cap (the review after Milestone 6),** RV-1's provisional reading 1:
+     `claude_md_test.exs` caps CLAUDE.md at 40,000 characters, the figure of Claude Code's
+     own warning for a large CLAUDE.md; a tighter cap, or one in lines, were the others.
+
+     **Taken: 40,000 characters (a)** (the maintainer, 2026-11-01), as built.
+
+362. **README's examples in every run (the review after Milestone 6),** RV-1's provisional
+     reading 2: `readme_test.exs` runs in the default suite, the real-clock example among
+     its examples, about 6 s more a run; a tag only CI runs, or the default suite without
+     the real-clock example, were the others.
+
+     **Taken: every run (a)** (the maintainer, 2026-11-01), as built.
+
+363. **`wired.logex` (the review after Milestone 6),** RV-1's provisional reading 3:
+     README describes `wired.logex` as `tally.logex` wired to an output point, and the
+     test derives it by dropping `tally.logex`'s comment line, so README's warning cites
+     a line 7 README never shows.
+
+     **Taken: show it in README (b)** (the maintainer, 2026-11-01): `wired.logex` is shown
+     as a block of its own, marked `<!-- file: wired.logex -->`, and the test's derived
+     entry for it goes. To build in RV-9.
+
+364. **The real-clock example's figures (the review after Milestone 6),** RV-1's
+     provisional reading 4: the line of that run's figures is compared by its beginning
+     alone; holding each figure to a range, which would see a runner that stalls but could
+     fail on a loaded machine, was the other.
+
+     **Taken: its beginning alone (a)** (the maintainer, 2026-11-01), as built.
+
+365. **README's one fragment (the review after Milestone 6),** RV-1's provisional reading
+     5: the call made from another process in "Running a plant on the clock",
+     `Task.async(fn -> Runner.get!(runner, "b1.count") end)`, is parsed and never run.
+
+     **Taken: run it in a setup (b)** (the maintainer, 2026-11-01): the test makes what
+     README's prose describes, a runner on the manual clock with a round owed after a slow
+     write, runs the fragment and holds it to the prose: it waits, then answers. README
+     does not change. To build in RV-9.
+
+366. **A label in CLAUDE.md (the review after Milestone 6),** RV-1's provisional reading
+     6: a work item's label or a commit anywhere in CLAUDE.md is history and refused,
+     "`ctu` counts boxes (M3-1)" among it; letting a label stand as a pointer into
+     `PLAN.md`, which no check can tell from history, was the other.
+
+     **Taken: no labels (a)** (the maintainer, 2026-11-01), as built.
+
+367. **A label alone (the review after Milestone 6),** RV-2's question 1: decision 351
+     refuses a rung that writes nothing, so a routine whose last rung is `lbl done`, the
+     end a fan program's `jmp done` skips its manual section to, is refused, and the
+     programmer writes a coil of no use, `lbl done ote landed`. Logix needs an output on
+     every rung and has NOP for this; IEC labels a network and has no NOP.
+
+     **Taken: a landing where a jump names it (b)** (the maintainer, 2026-11-01): a rung
+     that is a label alone is accepted where a `jmp` of its routine names the label, and
+     refused as a rung that writes nothing where none does; landing on it runs as landing
+     on the rung after it, or on the routine's end. To build in RV-9.
+
+368. **Where a rung of empty groups is cited (the review after Milestone 6),** RV-2's
+     question 2: a rung of empty groups alone, `( )`, holds no line in the parse tree, so
+     it is cited at the first line it can stand on, after the rung before it, which after
+     blank lines is not its own.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01); the parse tree keeps no group's
+     line and the front end's golden record stays.
+
+369. **A number's length (the review after Milestone 6),** RV-2's question 3: a literal
+     past 10,000 characters, or a real whose exponent is past 9,999, is a lex error at its
+     column, and a store or forces file that holds one is refused at start.
+
+     **Taken: 10,000 characters and 9,999 (a)** (the maintainer, 2026-11-01), as built.
+
+370. **An instance's size at every depth (the review after Milestone 6),** RV-2's question
+     4: each array is held to 65,536 elements, but nothing counts through nested ones, so
+     `var row cell[256]`, each `cell` holding 256 blocks of `ton[256]`, compiles and runs
+     out of memory at its first scan. Logix bounds a project by the controller's memory at
+     download (unverified); IEC is silent.
+
+     **Taken: refused at compile (b)** (the maintainer, 2026-11-01): the elements of a
+     declaration are counted through every nested array of instances, and past 65,536 it
+     is refused at its line. To build in RV-9.
+
+371. **The loader's recompiles (the review after Milestone 6),** RV-2's question 5: a chain
+     of 30 blocks, each holding the next, compiles 435 times, as decision 54 rechecks every
+     type it is given, the loader's own among them.
+
+     **Taken: the loader trusts its own (b)** (the maintainer, 2026-11-01): a type the
+     loader compiled itself in the same load is not checked again, so a chain costs its
+     length; a type a host hands in is checked as decision 54 has it. To build in RV-9.
+
+372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
+     6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
+     that may share an element, which they never can.
+
+     **Taken: no warning (b)** (the maintainer, 2026-11-01): two writes of one array whose
+     literal subscripts differ in any place are distinct and not warned; two that may meet,
+     `ee[i,0]` and `ee[j,0]`, are warned as before. To build in RV-9.
+
+373. **A rung told twice (the review after Milestone 6),** RV-2's question 7: a rung the
+     jump checks refuse, `xic auto lbl done`, is told too that it writes nothing.
+
+     **Taken: both at once (a)** (the maintainer, 2026-11-01), as built.
 
 ---
 

@@ -38,7 +38,7 @@ defmodule Logex.Lexer do
   one with a second `#`, `16#ff#`, are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
   B2's mistyped lexeme.
 
-  Since RV-2 (M13, provisional) a number is at most 10,000 characters, `longest_number/0`,
+  A number is at most 10,000 characters (decision 369), `longest_number/0`,
   and a real's exponent at most 9,999, `largest_exponent/0`, each far past any value a type
   holds: a longer literal is `{:long_number, run}`, quoted by its first 24 characters, a
   name holding a longer subscript or bit number `{:long_name, run}`, and an exponent past
@@ -65,7 +65,7 @@ defmodule Logex.Lexer do
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
 
-  # RV-2 (M13, provisional): the longest number logex reads, in characters, its sign, `_`s,
+  # Decision 369: the longest number logex reads, in characters, its sign, `_`s,
   # base, point and exponent among them, and the largest exponent a real may have, each
   # far past any value a type holds: 10,000 characters hold every integer type's values,
   # 20 digits at most, and every double written in full, some 1,100 digits at most, and an
