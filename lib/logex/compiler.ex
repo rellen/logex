@@ -15,6 +15,16 @@ defmodule Logex.Compiler do
   `lbl` first on its rung, one label to a rung, and each `jmp` naming a label of its own
   routine on a later rung, one to a rung (decisions 81, 104 and 105).
 
+  Since RV-2 (decision 351) a rung that writes nothing and jumps nowhere, none of its
+  instructions writing a tag, a member, a bit or a one-shot's storage bit or running an
+  instance, and no `jmp` on it, is refused at its line, told that a newline ends a rung,
+  so `xic start xio stop` on one line and `ote motor` on the next are never a rung that
+  does nothing and one that runs the motor whatever stop does; a label alone is such a
+  rung. Its last instruction is looked at first, so most rungs cost one clause. A rung
+  refused as it is lowered is not told this too, and one the jump checks refuse is
+  (provisional). A rung of empty groups alone, `( )`, holds no line, and is cited at the
+  first line it can stand on, after the rung before it (provisional).
+
   Since M5-11 (decision 151) an operand may be an element of an array, `temps[3]`, each
   subscript a literal within its dimension, refused at its line otherwise, read and written
   as a tag of its elements' type and lowered to `{:element, line, array, index, name}`,
