@@ -73,6 +73,44 @@ defmodule Logex.CompileTotalTest do
       end
     end
 
+    # RV-2's review: a group alone whose first leg is empty, its output on a later leg, at
+    # any depth, so that each leg past the empty one is read for the rung's line: a reading
+    # that stopped at the first leg read none, and printed/1 raised ArithmeticError.
+    test "a group alone whose first leg is empty compiles and runs, its output on a later leg" do
+      for {rung, b} <- [
+            {"( | xic a ote b )", & &1},
+            {"( | ote b )", fn _a -> 1 end},
+            {"( | ( | xic a ote b ) )", & &1},
+            {"( ( | ) | ( ) | xio a ote b )", &(1 - &1)}
+          ] do
+        source =
+          "function_block fb\nvar_input a bool\nvar_output b bool\n\n// the rung\n" <>
+            rung <> "\n"
+
+        assert {:ok, %Logex.FbType{body: body} = type} = block(source, "fb"), rung
+        assert Logex.FbType.user?(type), rung
+        assert [6] = Enum.map(body.rungs, &first_line/1), rung
+
+        {:ok, tokens, _} = Logex.Compiler.tokenize(source)
+        {:ok, tree} = Logex.Compiler.parse(tokens)
+        assert {:ok, %Logex.FbType{body: built} = printed} = Logex.Compiler.instructionize(tree)
+        assert Logex.FbType.user?(printed), rung
+        assert [_, _, _, "", "", ^rung] = String.split(built.source, "\n"), rung
+
+        assert {:ok, program} =
+                 Logex.compile("var_input a bool\nvar_output b bool\nvar f fb\ncal f a b\n",
+                   name: "p",
+                   types: [type]
+                 )
+
+        # The coil is on its own leg, which the empty legs beside it do not power.
+        for a <- [0, 1] do
+          {outputs, _state} = scanned(program, Logex.Runtime.instance(program), %{"a" => a})
+          assert outputs == %{"b" => b.(a)}, rung
+        end
+      end
+    end
+
     # A rung of empty groups alone holds no line, and is printed on a line of its own.
     # A rung of empty groups alone holds no line; since decision 351 it is refused, in a
     # block's file as in a program's, so no block printed holds one.
@@ -542,6 +580,30 @@ defmodule Logex.CompileTotalTest do
 
       assert two =~ "line 2: a rung of empty groups alone, after line 1, writes nothing"
       assert three =~ "line 3: a rung of empty groups alone, after line 1, writes nothing"
+    end
+
+    # RV-2's review: a group whose first leg is empty holds the line of the first leg past
+    # it that has one, so it is neither a rung of empty groups alone nor uncited, beside one
+    # that is: each rung is cited by its own line, where a reading of the first leg alone
+    # raised MatchError.
+    test "a group led by an empty leg beside a rung of empty groups alone is cited by its own line" do
+      head = "var_input a bool\nvar_output b bool\n"
+
+      assert {:error, [two]} = compiled(head <> "( )\n( | xic a ote b )\nxic a ote b")
+      assert two =~ "line 3: a rung of empty groups alone, after line 2, writes nothing"
+
+      assert {:error, [three, four]} = compiled(head <> "( | xic a )\n( )\nxic a ote b")
+      assert three == "line 3: " <> @idle
+      assert four =~ "line 4: a rung of empty groups alone, after line 3, writes nothing"
+
+      assert {:error, [five, six]} =
+               compiled(head <> "xic a ote b\n( ( | ) | ( | eq 1 1 ) )\n\n( | )\n( | ote b )")
+
+      assert five == "line 4: " <> @idle
+      assert six =~ "line 5: a rung of empty groups alone, after line 4, writes nothing"
+
+      assert {:error, [%Diagnostic{line: 4, message: @idle}, %Diagnostic{line: 5}]} =
+               block("function_block fb\n" <> head <> "( | xic a )\n( )\n( | ote b )", "fb")
     end
   end
 
