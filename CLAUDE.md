@@ -2215,7 +2215,8 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   the maintainer, `PLAN.md` §3, M6-9; and the maintainer's answers to M6-9's review the
   same day, decisions 339–342, one rule for a resumed timer's time, built, and their
   review's fixes, a timer in an array brought back from aside resumed, and a step's
-  `elapsed_ms` put to the maintainer).
+  `elapsed_ms` put to the maintainer; and on 2026-11-01 the readings left answered as
+  built, decisions 343–345, and Milestone 6 closed by the maintainer, decision 346).
   Read it before designing anything that adds a data type (§4.12), retains a value
   (§4.13), names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on

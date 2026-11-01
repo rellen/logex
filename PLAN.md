@@ -236,8 +236,9 @@ qualifier, and M6-8, the contract walks, on 2026-10-31 with the answers to their
 (decisions 329–338), and M6-9, the documents, the same day, so Milestone 6 has landed
 whole, its done sentence shown by one plant and put to the maintainer (§3, M6-9), the
 maintainer's answers to M6-9's review built the same day (decisions 339–342: one rule for
-a resumed timer's time) and their review's fixes, so that done sentence is the one
-question left.
+a resumed timer's time) and their review's fixes, and on 2026-11-01 the maintainer's
+answers to the readings left (decisions 343–345, each as built) and to the done sentence:
+Milestone 6 is done (decision 346).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -11114,6 +11115,7 @@ done-when reads the next store write; and last the contract walk and the documen
      cycle's time (question 8, provisional). An operator sees nothing either way: the question is whether the
      milestone is done. (a) Done as is; (b) the sentence amended to what the suite shows,
      the period and one round; (c) more first, a named test. Recommended: (a).
+     *(Answered (a) by the maintainer, 2026-11-01, decision 346: Milestone 6 is done.)*
   *(Its second question, the readings still provisional, is no longer one of this item's:
   each is put to the maintainer where it was found.)* They are M6-6's seven (the period's
   range and its default, the grid from the start, the take-out's place, nothing written
@@ -11368,7 +11370,8 @@ done-when reads the next store write; and last the contract walk and the documen
      time instead. Options: (a) as built, the resume kept, exact by the rule; (b) give it
      back as fix F11 did across such cycles, the state exactly as the test found it but
      the next test's timer 10 ms off, the original's hold before the test counted; (c)
-     left open. The reading taken is (a), provisional.
+     left open. The reading taken is (a), provisional. *(Answered (a) by the maintainer,
+     2026-11-01, decision 345.)*
   7. *A hold from before the edit.* A timer the original does not run, stopped by an
      earlier edit, which this edit's first test starts running again: the edit cannot know
      when the original began to hold the instance, so the resume takes all the time since
@@ -11383,7 +11386,8 @@ done-when reads the next store write; and last the contract walk and the documen
      time the first candidate held is lost. Options: (a) as built; (b) keep the time of
      every instance's last switch in the instance itself, so that a later edit knows it,
      the timer counting the earlier candidate's hold too, the fan on time; (c) left open.
-     The reading taken is (a), provisional.
+     The reading taken is (a), provisional. *(Answered (a) by the maintainer, 2026-11-01,
+     decision 344.)*
 
   The README's examples were run again by M6-9's harness (`scratchpad/m6/a9/ex`), the
   library replaced by this item's: all 35 the same as printed, `edit.exs`'s `{:resumed,
@@ -11500,7 +11504,8 @@ done-when reads the next store write; and last the contract walk and the documen
      IEC 61131-3 has no online edit. Logix switches between the original's and the
      edited rungs as a program scan begins, so its switch is a scan's time too, the
      reading (a) takes; how a Logix timer counts the time between that scan and the
-     operator's click is not checked here (unverified).
+     operator's click is not checked here (unverified). *(Answered (a) by the maintainer,
+     2026-11-01, decision 343.)*
 
   2424 tests (11 doctests), up from 2420: the seven-depth bring-back and the step given
   `elapsed_ms` in `config_edit_test.exs`, the give-back after two holds' ends in
@@ -11536,7 +11541,9 @@ before another, and says so.
 - **Milestone 6 — retained values and a true warm restart.** *(Designed and decided
   2026-10-27: "Milestone 6", above, and `docs/organisation.md` §4.13 and decisions
   266–285; M6-1, M6-2 and M6-3 landed the same day, and M6-4 on 2026-10-29, the rest
-  not yet built.)* *(Landed whole by 2026-10-31, M6-1 to M6-9, with decisions 286–338.)* Today a warm restart is a
+  not yet built.)* *(Landed whole by 2026-10-31, M6-1 to M6-9, with decisions 286–338; its answers'
+  readings built and answered by 2026-11-01, decisions 339–345, and the milestone closed
+  by the maintainer the same day, decision 346.)* Today a warm restart is a
   cold one: a counter's count, a totaliser's total or a timer's accumulated time is lost
   when the runner restarts, crashes or the VM stops. IEC's `RETAIN`, `NON_RETAIN` and
   `PERSISTENT` qualifiers against the conventional family's every tag retained; a store

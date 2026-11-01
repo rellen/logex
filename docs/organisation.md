@@ -12020,6 +12020,40 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      runner killed in the middle of a period's write restores the write before it".
      Nothing built.
 
+343. **A step between two cycles (Milestone 6),** M6-9's answers' review's question 8:
+     `Logex.Runner` steps an edit between rounds, and the switch is taken at the time of
+     the resource's last cycle, so the time from that round to the step goes to whichever
+     program the step leaves holding the instance, a timer early or late by up to the
+     time since the last round, a task's interval at the most.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): the switch is a cycle's time,
+     as Logix's is a program scan's; decisions 56 and 188 stand. Its provisional test in
+     `config_edit_test.exs` pins the answer. Nothing built.
+
+344. **A hold from before the edit (Milestone 6),** M6-9's answers' question 7: a timer
+     the original does not run, which an edit's first test starts running again, resumes
+     by all the time since it last ran (decision 23), so time an earlier candidate held,
+     one cancelled before this edit was accepted, is lost.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): no instance keeps its last
+     switch's time; a fan's run-on restored by an edit cancelled and accepted again may
+     run on by the first candidate's hold longer. Nothing built.
+
+345. **Fix F11's undo after a cycle with no scan (Milestone 6),** M6-9's answers'
+     question 6: an untest after cycles that scanned no instance keeps the resume its test
+     gave a timer the candidate runs and the original does not, since the candidate held
+     the instance meanwhile.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): decision 341's rule, the
+     resume kept; fix F11's resource test as restated pins it. Nothing built.
+
+346. **Milestone 6's done sentence (Milestone 6),** M6-9's question 1: is Milestone 6
+     done, its sentence as `PLAN.md` M6-9 states it?
+
+     **Taken: done (a)** (the maintainer, 2026-11-01): Milestone 6 is closed as it
+     stands, its readings still provisional (M6-6's seven) left so until a later item
+     meets them.
+
 ---
 
 ## 8. Sources, and what is unverified
