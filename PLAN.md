@@ -12002,6 +12002,45 @@ and CI checked; each fix with a test that fails when it is reverted.
   spread of `e97dc7f`'s, about 1,700 more than `1bdc2c6`'s (M12's checks), and a lone
   instance's warm restart within 13 of both.
 
+  *Mutation table* (`scratchpad/rv/fix3/muts/` on `cb18575` and `scratchpad/rv/fix3/muts2/`
+  on `c6da541`), 27 mutants, each judged by the full suite: on `cb18575` F01 to F17 red
+  and F03 and F18 survived, so `c6da541` adds the two tests that kill them and F03, F18
+  and the rest are judged there, every one red. Two runs there met a device's first
+  read timing out on the loaded machine as well, `{:io_init, _, :timeout}` in
+  `runner_test.exs` and `located_array_test.exs` and a cold restart's write-back report
+  in `retain_store_test.exs` that the timeout skips, each beside the mutant's own
+  failure; the runner's init watchdog is RV-4's.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | F01 | no connection refused for another type than its point's | 3 of decision 347's (and one load failure) |
+  | F02 | accept's exemption of a kept instance's own connection dropped | 1, a kept instance's own connection to a wider global |
+  | F03 | the untest's exemption of the same dropped | 1, the same an untest would hold (`c6da541`) |
+  | F04 | an array var_output wired whole drives every element in the started configuration | 3 |
+  | F05 | the frozen-in-both look-up skipped | 1 |
+  | F06 | every whole connection frozen in both | 1 |
+  | F07 | a whole connection the candidate makes read as the original's too | 1 |
+  | F08 | a retyped instance read as kept for the frozen-in-both look-up | 1 |
+  | F09 | a whole connection's held elements held by the member's name alone | 2 |
+  | F10 | assemble and cancel hold nothing again after a restart | 1 |
+  | F11 | a hold's record keeps no restart count | 2 |
+  | F12 | `restart/2` leaves the restart count | 4 |
+  | F13 | a hold taken whatever the value fits | 1 |
+  | F14 | a task's sample never told from its trigger's | 1 |
+  | F15 | a task's own sample not read at a fresh start | 2 |
+  | F16 | an image's line of a task's sample refused | 2 |
+  | F17 | a task with no `single` given a sample | 1 |
+  | F18 | a missing instance whose tag holds a user block's type itself reads nothing | 1 (`c6da541`) |
+  | F19 | a missing instance of `{:block, name}` reads nothing | 1 (and two load failures) |
+  | F20 | `initial/1` takes -0.0 | 1 |
+  | F21 | an element -0.0 taken | 1 |
+  | F22 | an improper list's length read by `length/1` | 1 |
+  | F23 | `m1.0` read as no bit | 1 |
+  | F24 | an element of a held array, wired by its own connection, not held | 2 |
+  | R15 | a timer catches up though it was not timing at its last run | 1, an rto stopped done and frozen |
+  | S21 | a hold the switch adds is not recorded | 1, a var_output the switch adds is given back |
+  | S30 | a scan with a key its struct lacks taken | 1 (and one load failure) |
+
   *Provisional readings, put to the maintainer.* (1) Decision 347's held value a
   var_output's type does not hold, `speed` held at 70000 and wired from an `int`
   var_output no rung writes: since RV-3's review the connection is refused at accept, the
@@ -12019,9 +12058,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   cold `restart/3` between a test and an untest, an edit's next switch trusts its record
   of the last one, so a one-shot in a block whose `cal` is false at the first scan stays
   blocked and loses one real press; a restart that clears `switched`, which would also
-  end every give-back of fix F11, or an edit that reads a restart from the resource's
-  restart count, as decision 347's give-back has since RV-3's review, are the others. (5) b5-config-edit-3: where the
-  original runs a retained timer, `ton t 25`, and the candidate declares it and runs no
+  end every give-back of fix F11, or a lone instance that counts its own restarts for the
+  edit to read, as a resource's does for decision 347's give-back since RV-3's review, a
+  field of `%Logex.Instance{}` this item does not add, are the others. (5)
+  b5-config-edit-3: where the original runs a retained timer, `ton t 25`, and the candidate declares it and runs no
   `ton` on it, the candidate keeps `.pre` at 25 (decision 23) and a warm restart keeps
   it, but `start/2` from the resource's own image takes the candidate's preset, 0, and
   reports `{"m1.t.pre", {:preset, 25, 0}}` (decision 308); a warm restart that follows
