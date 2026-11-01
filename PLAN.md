@@ -12113,12 +12113,13 @@ and CI checked; each fix with a test that fails when it is reverted.
   no result (M6); an adapter whose first read fails closed (M14); `vetted/3` linear (M9);
   the report's runner and device lows.
 
-  **RV-4 as built** (2026-11-01, branch `rv4`, eleven commits over `1bdc2c6`). Every finding
-  below is closed with a test that fails when its fix is reverted, each revert a mutant of
-  `scripts/mutate.sh`'s tables judged by the full suite and red by the test named, or kept
-  for the reason given. Decision 350, in this item's heading, is RV-3's and was not built
-  here; nothing of `runtime.ex`, `instance.ex`, the edits, the configuration or `image.ex`
-  was touched.
+  **RV-4 as built** (2026-11-01, branch `rv4`, eleven commits over `1bdc2c6` and a merge of
+  RV-3's `d7a1290`). Every finding below is closed with a test that fails when its fix is
+  reverted, each revert a mutant of `scripts/mutate.sh`'s tables judged by the full suite
+  and red by the test named, or kept for the reason given. Decision 350, in this item's
+  heading, is RV-3's and was not built here; nothing of `runtime.ex`, `instance.ex`, the
+  edits, the configuration or `image.ex` was touched. RV-3's decision 350 runner tests,
+  merged in, pass on RV-4's runner.
 
   - *H2, decision 348* (`trip_test.exs`): c3-io-contract-1 reproduced first, three runs of
     three on the real clock, a slow drive in time and a fast panel written after it, the
@@ -12266,7 +12267,19 @@ and CI checked; each fix with a test that fails when it is reverted.
     "heard at each poll meanwhile, on the real clock, short", twice, at its idle watchdog of
     50, which passed ten runs of ten of `trip_test.exs` alone at the parent and at the tip:
     decision 348's renewal adds a refresh at a write and never moves a deadline sooner.
-    The run at the tip of this item is below.
+    At `0ff2abd`, the tests above given time: 5 of 50 runs failed, none a test of this
+    item's: `trip_test`'s "heard at each poll meanwhile" twice again; the two cost tests of
+    `retain_period_test.exs` whose single runs RV-3 makes the least of several, once each;
+    and `force_test.exs`'s `unforce_all/1` of several triggers once,
+    `{:error, {:forces, :timeout}}`, a write the disk was free for past the runner's 510
+    ms, as decision 353 has it: every older test that forces or stops with a file and the
+    runner's own idle watchdog meets that limit, which question 12 puts to the maintainer
+    rather than this item's giving each of them time. The seven files the parent and the
+    tip share, run in turn under the same busy loops, fifteen times each: the parent
+    passed every run, the tip all but one, an older test of `trip_test.exs` whose start at
+    an idle watchdog of 100 met a device's open past its 110 ms (decision 128's bound on
+    every device call, at the parent as here); before the tests above were given time the
+    same pairing read the parent 2 of 11 failed and the tip 5 of 11.
   - *The lows kept*:
     - c1-runner-rounds-2 (with no untimed program a host's requests are served ahead of a
       due periodic round with no bound): the moduledoc's rule, decision 108's share being
@@ -12297,7 +12310,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     costs 2036.5 reductions where `1bdc2c6`'s cost 2014.9 with its outputs changing
     (+1.1%: decision 348's check of the clock at each write, and each read of the clock
     checked for an integer), and 1735.5 where 1725.6 with none (+0.6%); a scan, a cycle
-    and a compile are as they were, `runtime.ex` untouched.
+    and a compile are as they were, `runtime.ex` untouched. Merged over RV-3, the same
+    round costs 2041.2 where `d7a1290`'s cost 2019.1 (+1.1%), and 1735.4 where 1727.8
+    (+0.4%).
   - *Provisional readings*: the restart's forces read limited and refused
     `{:error, {:forces, :timeout}}` (question 1); a write killed past its limit may land
     once the disk answers (question 2); a restart's arrival the runner's taking it from its
