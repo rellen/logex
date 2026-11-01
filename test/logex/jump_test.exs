@@ -428,6 +428,128 @@ defmodule Logex.JumpTest do
     end
   end
 
+  # Decision 367: a rung that is a label alone, `lbl done`, is the landing of a jump a
+  # `jmp` of its routine names, to the routine's end or before the rung after it; landing
+  # on it runs it, which does nothing, as landing on the rung after it, or on the end.
+  describe "a label alone, a jump's landing (decision 367)" do
+    test "a jump to the end lands on the routine's end: the skipped rung's coil holds and " <>
+           "its timer is frozen" do
+      p =
+        c!("""
+        var_input skip bool
+        var_input go bool
+        var_output q bool
+        var t1 ton
+        xic skip jmp done
+        xic go ote q
+        xic go ton t1 1000
+        lbl done
+        """)
+
+      inputs = [%{"skip" => 0, "go" => 1}, %{"skip" => 1, "go" => 0}, %{}, %{"skip" => 0}]
+
+      assert trace(p, inputs, [["q"], ["t1", "acc"], ["t1", "last"]], nil, 100) == [
+               [1, 0, 100],
+               [1, 0, 100],
+               [1, 0, 100],
+               [0, 0, 400]
+             ]
+    end
+
+    test "a label alone before the routine's end lands as on the rung after it" do
+      p =
+        c!("""
+        var_input skip bool
+        var_input a bool
+        var_output inside bool
+        var_output after bool
+        xic skip jmp mid
+        xic a ote inside
+        lbl mid
+        xic a ote after
+        """)
+
+      inputs = [%{"skip" => 0, "a" => 1}, %{"skip" => 1, "a" => 0}, %{"skip" => 0}]
+      assert trace(p, inputs, [["inside"], ["after"]]) == [[1, 1], [1, 0], [0, 0]]
+    end
+
+    test "two jumps land on one label alone, each skipping only the rungs after its own" do
+      p =
+        c!("""
+        var_input one bool
+        var_input two bool
+        var_input a bool
+        var_output x bool
+        var_output y bool
+        xic one jmp done
+        xic a ote x
+        xic two jmp done
+        xic a ote y
+        lbl done
+        """)
+
+      inputs = [
+        %{"one" => 0, "two" => 0, "a" => 1},
+        %{"two" => 1, "a" => 0},
+        %{"one" => 1, "two" => 0},
+        %{"one" => 0}
+      ]
+
+      assert trace(p, inputs, [["x"], ["y"]]) == [[1, 1], [0, 1], [0, 1], [0, 0]]
+    end
+
+    test "at depth, a block's body jumps to its own end: its coil holds and its timer is " <>
+           "frozen, two blocks down" do
+      {:ok, inner} =
+        Logex.compile(
+          "function_block inner\nvar_input skip bool\nvar_input go bool\n" <>
+            "var_output q bool\nvar t1 ton\nxic skip jmp done\nxic go ote q\n" <>
+            "xic go ton t1 1000\nlbl done",
+          name: "inner"
+        )
+
+      {:ok, outer} =
+        Logex.compile(
+          "function_block outer\nvar_input skip bool\nvar_input go bool\n" <>
+            "var_output q bool\nvar i inner\ncal i skip go q",
+          name: "outer",
+          types: [inner]
+        )
+
+      p =
+        c!(
+          """
+          var_input skip bool
+          var_input go bool
+          var_output q bool
+          var_output w bool
+          var o outer
+          cal o skip go q
+          xic go ote w
+          """,
+          [outer]
+        )
+
+      inputs = [%{"skip" => 0, "go" => 1}, %{"skip" => 1, "go" => 0}, %{}, %{"skip" => 0}]
+
+      assert trace(p, inputs, [["q"], ["w"], ["o", "i", "t1", "acc"]], nil, 100) == [
+               [1, 1, 0],
+               [1, 0, 0],
+               [1, 0, 0],
+               [0, 0, 0]
+             ]
+
+      held = [%{"skip" => 0, "go" => 1}, %{"skip" => 1}, %{}, %{"skip" => 0}]
+
+      assert trace(p, held, [["o", "i", "t1", "acc"], ["o", "i", "t1", "last"]], nil, 100) == [
+               [0, 100],
+               [0, 100],
+               [0, 100],
+               [300, 400]
+             ]
+    end
+  end
+
   describe "in a function block's body" do
     test "a jump skips the body's own rungs, and the program's rungs run as ever" do
       {:ok, half} =

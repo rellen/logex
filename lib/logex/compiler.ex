@@ -19,11 +19,15 @@ defmodule Logex.Compiler do
   instructions writing a tag, a member, a bit or a one-shot's storage bit or running an
   instance, and no `jmp` on it, is refused at its line, told that a newline ends a rung,
   so `xic start xio stop` on one line and `ote motor` on the next are never a rung that
-  does nothing and one that runs the motor whatever stop does; a label alone is such a
-  rung. Its last instruction is looked at first, so most rungs cost one clause. A rung
-  refused as it is lowered is not told this too, and one the jump checks refuse is
-  (decision 373). A rung of empty groups alone, `( )`, holds no line, and is cited at the
-  first line it can stand on, after the rung before it (decision 368).
+  does nothing and one that runs the motor whatever stop does. A rung that is a label
+  alone, `lbl done`, is taken where a `jmp` of its routine names the label: it is a
+  jump's landing, and landing on it is landing on the rung after it, or on the routine's
+  end. Where no `jmp` names it, it is a rung that writes nothing, and refused (decision
+  367); a label and a contact, `lbl done xic a`, write nothing, named or not. A rung's
+  last instruction is looked at first, so most rungs cost one clause. A rung refused as it
+  is lowered is not told this too, and one the jump checks refuse is (decision 373). A
+  rung of empty groups alone, `( )`, holds no line, and is cited at the first line it can
+  stand on, after the rung before it (decision 368).
 
   Since M5-11 (decision 151) an operand may be an element of an array, `temps[3]`, each
   subscript a literal within its dimension, refused at its line otherwise, read and written
@@ -338,7 +342,8 @@ defmodule Logex.Compiler do
     {tags, timing} = presets(instructions, tags)
     calls = calls(instructions)
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
-    found = Enum.reject(Enum.reverse(placed(lowering, routine)), &excused?(&1, untyped))
+    found = landings(placed(lowering, routine), instructions)
+    found = Enum.reject(Enum.reverse(found), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
 
     {rungs, tags,
@@ -473,8 +478,10 @@ defmodule Logex.Compiler do
     instructions = Walk.instructions(rungs)
     {timed, timing} = presets(instructions, unpreset(tags))
 
+    named = jumped_to(instructions)
+
     map_size(elem(known, 1)) == map_size(tags) and
-      Enum.all?(rungs, &lowers_to_itself?(&1, known)) and
+      Enum.all?(rungs, &lowers_to_itself?(&1, known, named)) and
       shared_bits(instructions, tags) == [] and calls(instructions) == [] and timing == [] and
       jumps(rungs, {:block, nil}) == [] and timed == tags and
       Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end) == [] and
@@ -556,7 +563,7 @@ defmodule Logex.Compiler do
   defp ir_operand?({:label, line, name}) when is_integer(line) and line > 0, do: is_binary(name)
 
   # M5-8: a bit, its container's path, its number, its mask and its name as written, which the rung's lowering
-  # again must give exactly (lowers_to_itself?/2).
+  # again must give exactly (lowers_to_itself?/3).
   defp ir_operand?({:bit, line, path, n, mask, name}) when is_integer(line) and line > 0,
     do: container?(path) and is_integer(n) and n >= 0 and is_integer(mask) and is_binary(name)
 
@@ -576,7 +583,7 @@ defmodule Logex.Compiler do
 
   # M5-12: an element some of whose subscripts tags hold, each subscript a literal's value
   # or a tag's operand, its array's dimensions and its name as written, which the rung's
-  # lowering again must give exactly (lowers_to_itself?/2).
+  # lowering again must give exactly (lowers_to_itself?/3).
   defp ir_operand?({:element_at, line, array, index, dims, name})
        when is_integer(line) and line > 0 and is_list(index) and is_list(dims),
        do:
@@ -602,8 +609,18 @@ defmodule Logex.Compiler do
 
   # A rung back to the elements its text parses to, lowered again: the same IR, and no
   # diagnostic.
-  defp lowers_to_itself?({:rung, elements} = rung, known),
-    do: lower_rung({:rung, Enum.flat_map(elements, &unlowered/1)}, [], known) == {rung, []}
+  # A rung that is a label alone lowers to itself and a mark (decision 367): a body holds
+  # one only where a `jmp` of its rungs names its label, as a compile takes it (landings/2).
+  defp lowers_to_itself?({:rung, elements} = rung, known, named),
+    do:
+      itself?(lower_rung({:rung, Enum.flat_map(elements, &unlowered/1)}, [], known), rung, named)
+
+  defp itself?({rung, []}, rung, _named), do: true
+
+  defp itself?({rung, [{:lone_label, _line, name}]}, rung, named) when is_map_key(named, name),
+    do: true
+
+  defp itself?(_lowered, _rung, _named), do: false
 
   defp unlowered({:branches, legs}),
     do: [{:branches, Enum.map(legs, &Enum.flat_map(&1, fn e -> unlowered(e) end))}]
@@ -2002,10 +2019,17 @@ defmodule Logex.Compiler do
   # checks refuse after it, a label not first or used twice, which no write mends, is told
   # both (decision 373). Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
   # printed text reads too; a rung of empty groups alone, `( )`, holds none, and is cited
-  # by `lowering/3` (placed/2).
+  # by `lowering/3` (placed/2). A rung that is a label alone, `lbl done`, is the landing of
+  # a jump to the routine's end (decision 367), and which `jmp` names it is known only once
+  # every rung is lowered: it is kept as `{:lone_label, line, name}`, which landings/2
+  # drops where a `jmp` of the routine names the label and makes this rung's refusal where
+  # none does.
   defp ends([{symbol, _line, _operands} | _earlier], _ir, {lowered, _before, _rung})
        when is_map_key(@doing, symbol),
        do: lowered
+
+  defp ends([{:lbl, line, [{:label, _, name}]}], _ir, {before, before, _rung}),
+    do: [{:lone_label, line, name} | before]
 
   defp ends(_backward, ir, at), do: idle(ir, [], at)
 
@@ -2043,6 +2067,29 @@ defmodule Logex.Compiler do
   # many markers there are (RV-2's review).
   defp placed(lowering, routine),
     do: placed_in(Enum.member?(lowering, {:idle_rung, nil}), lowering, routine)
+
+  # Decision 367: a rung that is a label alone is taken where a `jmp` of its routine names
+  # its label, exactly, as a jump's label is matched (jumps/2), whatever else the jump
+  # checks say of either, and refused as a rung that writes nothing where none does.
+  # Landing on it runs it, which does nothing, so a jump to it lands as on the rung after
+  # it, or on the routine's end. A routine of no label alone is not walked: the labels a
+  # `jmp` names are gathered once, and only where one is held.
+  defp landings(lowering, instructions),
+    do: landings_in(List.keymember?(lowering, :lone_label, 0), lowering, instructions)
+
+  defp landings_in(false, lowering, _instructions), do: lowering
+
+  defp landings_in(true, lowering, instructions) do
+    named = jumped_to(instructions)
+    Enum.flat_map(lowering, &landing(&1, named))
+  end
+
+  defp jumped_to(instructions),
+    do: for({:jmp, _, [{:label, _, name}]} <- instructions, into: %{}, do: {name, true})
+
+  defp landing({:lone_label, _line, name}, named) when is_map_key(named, name), do: []
+  defp landing({:lone_label, line, _name}, _named), do: [diagnostic(line, idle_message())]
+  defp landing(found, _named), do: [found]
 
   defp placed_in(false, lowering, _routine), do: lowering
 

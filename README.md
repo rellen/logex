@@ -159,8 +159,10 @@ Source syntax today:
   bit or running an instance, and no `jmp` on it, is refused at its line, told that a
   newline ends a rung: `xic start xio stop` on one line and `ote motor` on the next are
   that rung and one that runs the motor whatever stop does (decision 351, Logix's rule,
-  a rung's last instruction an output). A label alone is such a rung too, so a jump to
-  the end lands on a rung that writes, `lbl done ote landed`
+  a rung's last instruction an output). A rung that is a label alone, `lbl done`, is
+  taken where a `jmp` of its routine names the label, the landing of a jump to the
+  routine's end, and refused as such a rung where none does (decision 367); a label and
+  a contact, `lbl done xic a`, write nothing
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
   reserved word, `function_block` among them in a function block's file, and never a tag:
@@ -299,7 +301,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `word_to_int a dst`, `byte_to_word a dst` and the 74 others | a source of the `from` type or one that widens into it, then a tag of the `to` type it writes; a literal source is a warning | a binary transfer between a bit string and another bit string or an integer type, never a sign extension, `int_to_dword` of −1 16#0000ffff and `word_to_int` of 16#ffff −1 — true: writes and passes power; false: writes nothing, passes no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
-| `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning |
+| `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning. A rung that is a label alone, `lbl done`, is a jump's landing, taken where a `jmp` names it and refused as a rung that writes nothing where none does: landing on it is landing on the rung after it, or on the routine's end |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table and against their tags'
@@ -2136,7 +2138,9 @@ line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, t
   its own rung, is refused, since either could loop for ever (decision 81). So is a `jmp`
   to a label its routine does not have, the nearest on a later rung suggested, a `lbl`
   not first on its rung, a label on two rungs, two labels that differ only in case, and a
-  second `jmp` on one rung. A label no `jmp` names is a warning.
+  second `jmp` on one rung. A label no `jmp` names is a warning, and a rung that is a
+  label alone, which a jump to the routine's end lands on, `lbl done`, is refused where no
+  `jmp` names it, as a rung that writes nothing (decision 367).
 - A label is a name of its own, not a tag, and its routine's (decision 105): a function
   block's body jumps within itself, and no `jmp` reaches into a block or out of one.
 - The warnings read a rung a jump may skip as any rung, so an `ote motor` in each of two

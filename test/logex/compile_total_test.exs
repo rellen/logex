@@ -558,7 +558,8 @@ defmodule Logex.CompileTotalTest do
             {"xic start zzz q", "line 11: unknown instruction `zzz`"},
             {"xic start cal nothing", "line 11: `nothing` is not declared"},
             {"xic start ote", "line 11: `ote` expects 1 operand (a tag), found none"},
-            {"xic nowhere_declared", "line 11: `nowhere_declared` is not declared"}
+            {"xic nowhere_declared", "line 11: `nowhere_declared` is not declared"},
+            {"lbl here zzz", "line 11: unknown instruction `zzz`"}
           ] do
         assert {:error, [found]} = compiled(@io <> rung)
         assert found =~ message, rung
@@ -567,13 +568,18 @@ defmodule Logex.CompileTotalTest do
 
     # RV-2's review: the jump checks run over the lowered rungs, after this check, and find
     # a mistake no write mends, so a rung they refuse is told both, as decision 373 has it:
-    # a misplaced label, a second label and a label used twice.
+    # a misplaced label, a second label and a label used twice. Since decision 367 a label
+    # alone that a `jmp` names is a landing and writes nothing that needs telling, so the
+    # label a jump names used twice is told once, as used twice; used twice with no `jmp`,
+    # each label alone is told both still.
     test "a rung a jump check refuses is told it writes nothing too" do
       for {source, lines} <- [
             {"var a bool\nxic a lbl x\nxic a ote a", [{2, @idle}, {2, "`lbl x` is not first"}]},
             {"var a bool\nlbl x lbl y\nxic a ote a", [{2, @idle}, {2, "`lbl y` is not first"}]},
             {"var a bool\nxic a jmp done\nlbl done\nlbl done\nxic a ote a",
-             [{3, @idle}, {4, @idle}, {4, "`done` already labels the rung on line 3"}]}
+             [{4, "`done` already labels the rung on line 3"}]},
+            {"var a bool\nlbl done\nlbl done\nxic a ote a",
+             [{2, @idle}, {3, @idle}, {3, "`done` already labels the rung on line 2"}]}
           ] do
         assert {:error, diagnostics} = Logex.compile(source, name: "m"), source
         assert length(diagnostics) == length(lines), source
@@ -584,6 +590,77 @@ defmodule Logex.CompileTotalTest do
           assert String.starts_with?(message, start), "#{source}: #{message}"
         end
       end
+    end
+
+    # Decision 367: a rung that is a label alone is a jump's landing where a `jmp` of its
+    # routine names the label, and is refused as a rung that writes nothing where none does.
+    test "a label alone is taken where a jmp of its routine names it, in a program and in a block" do
+      program =
+        "var_input a bool\nvar_input b bool\nvar_output q bool\nxic a jmp done\n" <>
+          "xic b ote q\nlbl done"
+
+      assert compiled(program) == {:ok, []}
+
+      two =
+        "var_input a bool\nvar_input b bool\nvar_output q bool\nxic a jmp done\n" <>
+          "xic b jmp done\nxic b ote q\nlbl done"
+
+      assert compiled(two) == {:ok, []}
+
+      middle =
+        "var_input a bool\nvar_output q bool\nxic a jmp mid\nxic a ote q\nlbl mid\n" <>
+          "xio a ote q"
+
+      assert {:ok, _warnings} = compiled(middle)
+
+      body =
+        "function_block fb\nvar_input a bool\nvar_output q bool\nxic a jmp done\n" <>
+          "xic a ote q\nlbl done"
+
+      assert {:ok, %Logex.FbType{} = fb} = block(body, "fb")
+      assert Logex.Compiler.lowered?(fb.body)
+
+      assert {:ok, []} =
+               compiled("var_input a bool\nvar_output q bool\nvar f fb\ncal f a q", [fb])
+    end
+
+    test "a label alone no jmp names is refused at its line, in a program and in a block" do
+      assert compiled("var_input a bool\nvar_output q bool\nxic a ote q\n\nlbl done") ==
+               {:error, ["line 5: " <> @idle]}
+
+      assert {:error, [%Diagnostic{line: 5, message: @idle}]} =
+               block(
+                 "function_block fb\nvar_input a bool\nvar_output q bool\nxic a ote q\nlbl done",
+                 "fb"
+               )
+
+      # A label is matched exactly, so a `jmp` of another case names no label, and the label
+      # alone is refused too, each at its line.
+      assert compiled("var a bool\nxic a jmp Done\nxic a ote a\nlbl done") ==
+               {:error,
+                [
+                  "line 2: `jmp Done` names no label: no rung of this program begins " <>
+                    "`lbl Done` — did you mean `done`? (labels are case-sensitive)",
+                  "line 4: " <> @idle
+                ]}
+    end
+
+    test "a label and a contact still write nothing, a jmp naming the label or not" do
+      for rung <- ["lbl done xic start", "lbl done ( xic start | xio stop )", "lbl done eq d 5"] do
+        assert compiled(@io <> "xic start jmp done\n" <> rung) ==
+                 {:error, ["line 12: " <> @idle]},
+               rung
+      end
+    end
+
+    # A label no `jmp` names is a warning on a rung that does something (M3-5), and on a
+    # label alone the refusal instead: a refused compile gives its diagnostics and no
+    # warning, and the rung does nothing at all, which the refusal says.
+    test "a label no jmp names is warned of where its rung writes, and a label alone is refused instead" do
+      assert compiled("var a bool\nlbl done xic a ote a") ==
+               {:ok, ["`done` labels this rung, but no `jmp` names it: nothing jumps here"]}
+
+      assert compiled("var a bool\nxic a ote a\nlbl done") == {:error, ["line 3: " <> @idle]}
     end
 
     test "a rung of empty groups alone is cited at the first line it can stand on, after the last rung of a line" do
