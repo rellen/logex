@@ -116,9 +116,13 @@ defmodule Logex.Edit do
   program started runs, is reported as `:preset_kept` where it is not that program's
   preset. After a move of the `.pre` of a timer the program started runs, `:dn_drops` says
   that its `.dn`, now 1 with `.acc` below the new `.pre`, drops at the next scan with its
-  rung true, unless at least `.pre` − `.acc` ms have passed by then; `:dn_rises` that its
-  `.dn`, now 0 while timing with `.acc` at or past the new `.pre`, rises at that scan. No
-  latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts them.
+  rung true, unless at least `.pre` − `.acc` ms have passed by then since it last ran;
+  `:dn_rises` that its `.dn`, now 0 while timing with `.acc` at or past the new `.pre`,
+  rises at that scan. No latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts
+  them. Since the review after Milestone 6 a timer timing at its last run, `.en` 1, whose
+  time from that run to the switch, which it catches up at its next run (decision 82),
+  already reaches the new `.pre`, a timer a jump or a false `cal` froze, is forecast no
+  drop, which cannot happen; an `rto`'s forecast so too.
 
   The other timers (M3-2, decisions 93 on) are timers by every rule above, each by its own
   type: a change of a timer's type, a `ton` made a `tof`, needs a restart. A `tof`'s `.dn`

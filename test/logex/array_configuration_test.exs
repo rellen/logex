@@ -511,6 +511,27 @@ defmodule Logex.ArrayConfigurationTest do
         assert Runtime.get(runtime, path) == {:error, reason}, path
       end
     end
+
+    # The review after Milestone 6 (b2-resource-9): a bit of an instance, which the lexer
+    # reads as one name, is told it names no tag, where until then the program was said
+    # to declare no ``, a tag of no name.
+    test "a bit of a program instance names none of its tags" do
+      {runtime, _events} = cycled(started())
+
+      for path <- ["m1.[0]", "m1.[n]", "m1.[16#1]"] do
+        assert Runtime.get(runtime, path) ==
+                 {:error,
+                  "`#{path}` names a bit of `m1`, a program instance of `m`, which has no " <>
+                    "bits: an access path names one of its tags, as in `m1.e`"}
+      end
+
+      # A bit of a global or of a tag goes too deep, as it did.
+      assert Runtime.get(runtime, "s.[0]") ==
+               {:error, "`s.[0]` goes too deep: `s` is a dint global, which has no members"}
+
+      assert Runtime.get(runtime, "m1.s.[0]") ==
+               {:error, "`m1.s.[0]` goes too deep: `m1.s` is a dint, which has no members"}
+    end
   end
 
   describe "the host contract" do

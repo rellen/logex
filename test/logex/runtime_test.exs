@@ -662,8 +662,51 @@ defmodule Logex.RuntimeTest do
       by_hand = %{runtime | instances: %{"m1" => %{m1 | env: %{m1.env | "k" => 2 ** 32}}}}
       raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.cycle(by_hand, 0, %{}) end)
       raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.restart(by_hand, :cold) end)
+      # The review after Milestone 6 (b2-resource-6): a var_external's global is told as
+      # the global it is, checked before it is merged into the state, where until then
+      # the state's check told it as `state.env holds `e``, a place the host never wrote.
       by_hand = %{runtime | globals: %{globals | "e" => -(2 ** 32)}}
-      raises(outside("e", "a dint", -(2 ** 32)), fn -> Runtime.cycle(by_hand, 0, %{}) end)
+
+      e =
+        "runtime.globals holds `e` outside its type: it is a dint, and -4294967296 is outside -2147483648 to 2147483647"
+
+      raises(e, fn -> Runtime.cycle(by_hand, 0, %{}) end)
+      raises(e, fn -> Runtime.restart(by_hand, :warm) end)
+      raises(e, fn -> Runtime.restart(by_hand, :cold) end)
+
+      # Beside a misfit of the instance's own, the global is told first, as the scan
+      # checks it before it takes the state.
+      both = %{by_hand | instances: %{"m1" => %{m1 | env: %{m1.env | "k" => 2 ** 32}}}}
+      raises(e, fn -> Runtime.cycle(both, 0, %{}) end)
+    end
+
+    test "a var_external's global and a connection's are told in one message, in name order" do
+      {:ok, m} =
+        Logex.compile("var_external e dint
+var_input i dint
+var_output y dint
+add e i y",
+          name: "m"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "var_global e dint\nvar_global a dint\nvar_global y dint\nprogram m1 m\n" <>
+            "m1.i a\nm1.y y",
+          %{"m" => m}
+        )
+
+      runtime = Runtime.start(config)
+      by_hand = %{runtime | globals: %{runtime.globals | "e" => 2 ** 40, "a" => nil}}
+
+      raises(
+        "runtime.globals holds `a` outside its type: it is a dint, and its value must be an " <>
+          "integer, found nil\n" <>
+          "runtime.globals holds `e` outside its type: it is a dint, and 1099511627776 is " <>
+          "outside -2147483648 to 2147483647",
+        fn -> Runtime.cycle(by_hand, 0, %{}) end
+      )
     end
 
     test "a global a connection copies in is checked against its own type, narrower than its var_input" do

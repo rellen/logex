@@ -123,7 +123,10 @@ defmodule Logex.Configuration do
   most driving each element and one that drives the array whole driving them all, decision
   48's writer warnings element by element. Since decision 227 a real initial value a
   `var_global` line writes with more digits than its real keeps is warned of, in decision
-  219's words, at its line. A name with brackets names nothing else in a configuration.
+  219's words, at its line, a qualified line's as one with none, and since the review
+  after Milestone 6 so is a real constant a connection gives its member, `m1.sp
+  16777217.0`, in the member's real, at the connection's line. A name with brackets names
+  nothing else in a configuration.
 
   **Retained globals** (M6-3, `docs/organisation.md` §4.13, decisions 268, 271, 272 and
   298 to 306). A global may be `retain` or `non_retain`, `var_global retain total_boxes
@@ -599,7 +602,9 @@ defmodule Logex.Configuration do
 
   Its inverse is `Logex.Configuration.Text.print/1`: a configuration it gives compiles back
   from its printed text to itself, `compile(config.name, Text.print(config),
-  config.programs) == {:ok, config}`, each element on its line.
+  config.programs) == {:ok, config}`, each element on its line, but for decision 227's
+  warning of a real initial value written with more digits than its real keeps, which
+  the printed text, the value the global holds, no longer earns.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
@@ -609,7 +614,7 @@ defmodule Logex.Configuration do
     read
     |> compiled(name, programs, {nil, [], MapSet.new()})
     |> with_rounded(rounded)
-    |> respelled(spelled)
+    |> respelled(spelled, source)
   end
 
   def compile(_name, source, _programs),
@@ -622,9 +627,15 @@ defmodule Logex.Configuration do
   # Decision 227: a configuration that compiles is told each real initial value its line
   # writes with more digits than its global's real keeps, in decision 219's words, at the
   # global's line, in its file, among its warnings by line.
+  # Since the review after Milestone 6 (b6-configuration-10) so is a connection's real
+  # constant its member's real keeps less precisely, `m1.sp 16777217.0`, at the
+  # connection's line, where until then it was rounded with no warning.
   defp with_rounded({:ok, config}, [_ | _] = rounded) do
+    types = Map.new(config.instances, &{&1.name, &1.type})
+
     told =
-      for {line, spelling, type, held} <- rounded,
+      for entry <- rounded,
+          {line, spelling, type, held} <- rounded_entry(entry, types, config.programs),
           do: %{
             warning(
               line,
@@ -639,26 +650,123 @@ defmodule Logex.Configuration do
 
   defp with_rounded(compiled, _rounded), do: compiled
 
+  defp rounded_entry({:constant, line, {instance, member}, value, spelling}, types, programs),
+    do:
+      held_constant(
+        member_type(Map.fetch!(programs, Map.fetch!(types, instance)), member),
+        {line, value, spelling}
+      )
+
+  defp rounded_entry(global, _types, _programs), do: [global]
+
+  defp held_constant(type, {line, value, spelling}) when type in @reals,
+    do: told_held(Logex.Real.held_as(type, value, spelling), line, spelling, type)
+
+  defp held_constant(_type, _constant), do: []
+
+  defp told_held({:rounded, held}, line, spelling, type), do: [{line, spelling, type, held}]
+  defp told_held(_exact, _line, _spelling, _type), do: []
+
+  # The type a connection's member is filled in, an element's its array's elements'; a
+  # configuration that compiled holds the member.
+  defp member_type(program, member), do: member_typed(Logex.Array.split(member), program, member)
+
+  defp member_typed(nil, program, member), do: Map.fetch!(program.tags, member).type
+
+  defp member_typed({array, _subscripts}, program, _member),
+    do: elements_type(Map.fetch!(program.tags, array).type)
+
+  defp elements_type({:array, type, _dims}), do: type
+
   # Decision 237: a real literal no double holds but 0.0, `1.0e-400`, read as a subnormal
   # stand-in (`Logex.Configuration.Text.read_rounded/1`), which check/1 refuses as it
   # refuses `1.0e-310`, "`sp` is an lreal: `1.0e-400` is too near 0.0 for an lreal, …", is
   # quoted as written in each message at its line; a configuration holding one never
-  # compiles, so only an error is respelled.
-  defp respelled({:error, diagnostics}, [_ | _] = spelled),
-    do: {:error, Enum.map(diagnostics, &respelled_at(&1, spelled))}
+  # compiles, so only an error is respelled. Since the review after Milestone 6
+  # (b6-configuration-8) so is a value a message quotes whole, `` `65535` ``, that its own
+  # line writes one way alone and other than as its plain text, `16#ffff`, as a program's
+  # messages quote it (decision 202), but where it is quoted as another line's, "(line 3)".
+  defp respelled({:error, diagnostics}, spelled, source) do
+    stand_ins = Map.new(spelled, fn {_line, shown, spelling} -> {shown, spelling} end)
+    by_line = spelled_by_line(Logex.Lexer.tokenize(source))
+    {:error, Enum.map(diagnostics, &respelled_at(&1, stand_ins, by_line))}
+  end
 
-  defp respelled(compiled, _spelled), do: compiled
+  defp respelled(compiled, _spelled, _source), do: compiled
 
   # A stand-in's text may be quoted at another line, `m1.a[1]` told it is connected already
-  # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`".
-  defp respelled_at(%Diagnostic{message: message} = diagnostic, spelled),
+  # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`":
+  # each subnormal text a message holds is looked up, so that the respelling is linear in
+  # the diagnostics and the stand-ins (b6-configuration-9), where each stand-in was looked
+  # for in every message.
+  defp respelled_at(%Diagnostic{message: message, line: line} = diagnostic, stand_ins, by_line),
     do: %{
       diagnostic
       | message:
-          Enum.reduce(spelled, message, fn {_line, shown, spelling}, message ->
-            String.replace(message, shown, spelling)
-          end)
+          message
+          |> stood_in_respelled(stand_ins)
+          |> cited_respelled(by_line)
+          |> line_respelled(Map.get(by_line, line, %{}))
     }
+
+  defp stood_in_respelled(message, stand_ins) when map_size(stand_ins) == 0, do: message
+
+  defp stood_in_respelled(message, stand_ins),
+    do: Regex.replace(~r/\d+(?:\.\d+)?e-3\d\d/, message, &Map.get(stand_ins, &1, &1))
+
+  # Each line's literals written other than as the plain text of their value, `16#ffff` or
+  # `1.5e1`, each value's text as a message quotes it, `65535` or `15.0`, to its spelling,
+  # where the line writes that value one way alone; a stand-in of decision 237 is left out,
+  # `Text.read_rounded/1`'s. Read only for a configuration that does not compile.
+  defp spelled_by_line({:ok, tokens, _end_line}),
+    do:
+      tokens
+      |> Enum.filter(&(literal_token?(&1) and not Logex.Parser.underflowed?(&1)))
+      |> Enum.group_by(&elem(elem(&1, 1), 0), &{shown_literal(&1), Logex.Parser.spelling(&1)})
+      |> Map.new(fn {line, pairs} -> {line, spelled_once(pairs)} end)
+
+  defp spelled_by_line(_error), do: %{}
+
+  defp literal_token?({kind, _at, _value}) when kind in [:int_lit, :real_lit], do: true
+
+  defp literal_token?({kind, _at, _value, _spelling}) when kind in [:int_lit, :real_lit],
+    do: true
+
+  defp literal_token?(_token), do: false
+
+  defp shown_literal(literal), do: shown_number(Logex.Parser.value(literal))
+
+  defp spelled_once(pairs),
+    do:
+      for(
+        {shown, spellings} <- Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1)),
+        [spelling] <- [Enum.uniq(spellings)],
+        spelling != shown,
+        into: %{},
+        do: {shown, spelling}
+      )
+
+  # A value quoted as another line's, "to `5` (line 2)", is put back as that line writes it.
+  defp cited_respelled(message, by_line) when map_size(by_line) == 0, do: message
+
+  defp cited_respelled(message, by_line),
+    do:
+      Regex.replace(~r/`([^`]+)` \(line (\d+)\)/, message, fn whole, shown, line ->
+        cited(Map.fetch(Map.get(by_line, String.to_integer(line), %{}), shown), line, whole)
+      end)
+
+  defp cited({:ok, spelling}, line, _whole), do: "`#{spelling}` (line #{line})"
+  defp cited(:error, _line, whole), do: whole
+
+  defp line_respelled(message, spellings),
+    do:
+      Enum.reduce(spellings, message, fn {shown, spelling}, message ->
+        Regex.replace(
+          Regex.compile!("`" <> Regex.escape(shown) <> "`(?! \\(line )"),
+          message,
+          fn _ -> "`" <> spelling <> "`" end
+        )
+      end)
 
   @doc """
   A configuration from its configuration file on disk (`.logex`, decision 35), its program
@@ -776,7 +884,7 @@ defmodule Logex.Configuration do
     read
     |> compiled(name, programs, loaded)
     |> with_rounded(rounded)
-    |> respelled(spelled)
+    |> respelled(spelled, source)
     |> with_theirs(Enum.reverse(theirs))
   end
 
@@ -1298,6 +1406,16 @@ defmodule Logex.Configuration do
 
   defp global_initial(%Global{initial: initial}) when is_integer(initial),
     do: []
+
+  # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
+  # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
+  # array's element told by `Logex.Declarations.array_misfits/3`.
+  defp global_initial(%Global{name: name, type: type, initial: initial})
+       when type in @reals and initial === -0.0,
+       do: [
+         "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
+           "gives, a line's `-0.0` being 0.0: give 0.0"
+       ]
 
   # M5-10: a real global's initial value may be a float, as its line's real literal is;
   # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`, so

@@ -1010,6 +1010,43 @@ defmodule Logex.RetainTest do
       cold = Runtime.restart(runtime, :cold)
       assert Runtime.get!(cold, "m1.total") == 0 and Runtime.get!(cold, "m1.boxes.cv") == 0
     end
+
+    # The review after Milestone 6 (b2-resource-2), kept as decision 273 has it: a
+    # resource's instance's retained timer's `last` is set to that instance's own `now`,
+    # its last scan, so a slow task's `rto` counts, at its first run after `restart/2`, the
+    # time from that scan to the restart, as a run with no restart would, where `start/2`
+    # from the image, which keeps no `last`, counts none of it.
+    test "a resource's warm restart counts a timer's time from its instance's last scan" do
+      {:ok, relay} = Logex.compile("var_input in bool\nvar o bool\nxic in ote o", name: "relay")
+
+      {:ok, lube} =
+        Logex.compile(
+          "var_input in bool\nvar_output done bool\nvar retain t rto\nxic in rto t 230\n" <>
+            "xic t.dn ote done",
+          name: "lube"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\ntask slow interval 100 priority 2\n" <>
+            "var_global x bool at panel.i.0\nvar_global lamp bool at panel.q.0\n" <>
+            "program m1 relay with fast\nm1.in x\nprogram m2 lube with slow\nm2.in x\n" <>
+            "m2.done lamp",
+          %{"relay" => relay, "lube" => lube}
+        )
+
+      cycled = fn runtime, ms -> elem(Runtime.cycle(runtime, ms, %{"x" => 1}), 0) end
+      runtime = Enum.reduce(1..15, Runtime.start(config), fn _, rt -> cycled.(rt, 10) end)
+      assert {runtime.now, runtime.instances["m2"].now} == {150, 100}
+      assert Runtime.get!(runtime, "m2.t.acc") == 90
+
+      warm = cycled.(Runtime.restart(runtime, :warm), 0)
+      assert Runtime.get!(warm, "m2.t.acc") == 140
+
+      {started, []} = Runtime.start(config, Runtime.retained(runtime))
+      assert Runtime.get!(cycled.(started, 0), "m2.t.acc") == 90
+    end
   end
 
   # The review after Milestone 6 (c4-api-fuzz-1, c4-api-fuzz-5): a plain swap, within the

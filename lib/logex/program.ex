@@ -502,6 +502,14 @@ defmodule Logex.Program do
   array, a built-in instance, or a user block's instance or array of them none of whose
   members at any depth is kept out, and otherwise each retained member is listed, an
   element of an array of user block instances by `[*]`, `gates[*].count`.
+
+  Whole means a mark on the path's own line or outside it: an instance no line outside
+  marks lists what its body's own `retained` lists, prefixed, so a block that marks each
+  of its members itself is listed member by member, `s1.count` and `s1.t`, where one whose
+  line is marked `retain` is `s1`, the same leaves listed two ways. Every reader of
+  `retained` takes either, a warm restart, the image and an edit's report comparing the
+  leaves under them (decision 331); the review after Milestone 6 found the two spellings
+  (a5-data-model-6), kept as built, `PLAN.md` RV-3.
   """
   def retained(tags, blocks \\ %{}) when is_map(tags), do: elem(settled(tags, blocks), 3)
 

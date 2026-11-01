@@ -73,7 +73,10 @@ defmodule Logex.Tag do
   - a qualifier, `retain`, a declaration line could not give (M6-1): one on a
     `var_external`, whose global carries it. One on a program's `var_input` is refused
     where the program compiles (`Logex.Compiler`), which knows a program from a function
-    block's body.
+    block's body;
+  - a real initial value of -0.0, an element's too, which no real holds and no line
+    gives, a line's `-0.0` being read as 0.0 (since the review after Milestone 6), as a
+    configuration's global's is (`Logex.Configuration.check/1`).
 
   Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
   key: `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and

@@ -574,9 +574,13 @@ defmodule Logex.Runtime do
   end
 
   @doc """
-  Starts an instance again: every tag back at its initial value except the `var_input`s
-  whose values fit their types, the next scan marked first, no one-shot blocked, and the
-  clock kept, since time never goes backwards. `switched` is kept too: a restart is not a
+  Starts an instance again: every tag back at its initial value except the `var_input`s,
+  which keep their values, the next scan marked first, no one-shot blocked, and the clock
+  kept, since time never goes backwards. A state whose `var_input` does not fit its type is
+  refused first, as at every entry point that takes a state (decision 171), so each one
+  kept fits; a `var_input` the state lacks, which a plain swap leaves, starts at its
+  initial value (the review after Milestone 6 found the doc's "whose values fit" a rule no
+  state handed in could meet otherwise). `switched` is kept too: a restart is not a
   scan, so it shows the host nothing.
 
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
@@ -1086,6 +1090,13 @@ defmodule Logex.Runtime do
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
 
+  An instance's retained timer's `last` is set to that instance's own `now`, the time of
+  its last scan (decision 273), so the time from that scan to the restart, while the
+  resource ran on and the instance's task was not yet due, is counted at its next run, as
+  that run would count it with no restart; `start/2` from the image, which keeps no
+  `last`, counts none of it, so the two can differ by up to a task's interval (the review
+  after Milestone 6, b2-resource-2, kept as decision 273 has it, `PLAN.md` RV-3).
+
   A retained global a connection drives from a var_output its program does not retain
   keeps its value only until that instance's first run, whose copy-out writes the
   var_output, back at its initial value, over it, which `Logex.Configuration.check/1`
@@ -1194,12 +1205,13 @@ defmodule Logex.Runtime do
   defp task_state(%Configuration.Task{}, due), do: %{next_due: due, overlaps: 0, last: 0}
 
   # M5-11: a state is restarted, and checked, with its var_externals' globals in it, as a
-  # scan takes it, so that an array var_external, which a state holds whole, is there.
-  defp attached(%Instance{env: env} = state, runtime, name),
-    do: %{
-      state
-      | env: Map.merge(env, Map.take(runtime.globals, Map.fetch!(runtime.wiring.externals, name)))
-    }
+  # scan takes it, so that an array var_external, which a state holds whole, is there,
+  # each global checked first against its own type, as a scan checks it.
+  defp attached(%Instance{env: env} = state, %__MODULE__{wiring: wiring} = runtime, name) do
+    externals = Map.fetch!(wiring.externals, name)
+    read_fitted(externals_fit(externals, runtime.globals, wiring.globals, []))
+    %{state | env: Map.merge(env, Map.take(runtime.globals, externals))}
+  end
 
   # M2-4: one copy of each global. Between scans an instance's state holds none of its
   # var_externals, which instance/1 and restart/3 start at 0 as any tag: the resource's
@@ -1374,6 +1386,9 @@ defmodule Logex.Runtime do
       )
 
   # M5-11: an array var_input is kept whole where its value is one, as a state holds it.
+  # A state handed in is checked first (decision 171), so every value here fits; the test
+  # is the rule's total form, for `restart/2`'s states, which `call/4` checked as it took
+  # them, and kept (the review after Milestone 6, b2-resource-7).
   defp kept_input?({:array, type, dims}, value),
     do: Logex.Array.held?(value, dims, &element_fits?(type, &1))
 
@@ -3092,10 +3107,10 @@ defmodule Logex.Runtime do
     %Instance{first: first} = state = Map.fetch!(runtime.instances, name)
 
     copy_in = Map.fetch!(wiring.copy_in, name)
-    read!(copy_in, globals, wiring.globals)
+    externals = Map.fetch!(wiring.externals, name)
+    read!(copy_in, externals, globals, wiring.globals)
     inputs = Map.new(copy_in, fn {member, to} -> {member, value(to, globals)} end)
 
-    externals = Map.fetch!(wiring.externals, name)
     state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
 
     {outputs, %Instance{faults: faults} = state} =
@@ -3143,9 +3158,31 @@ defmodule Logex.Runtime do
   # before the copy-in, whose var_input it may widen into (decision 159), so that a value a
   # host left in a runtime it built is refused where its global is narrower than the
   # var_input it fills, as it is where the two are one type (decision 171, M5-3's review):
-  # a line each, in name order, a global read twice told once.
-  defp read!(copy_in, globals, declared),
-    do: read_fitted(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+  # a line each, in name order, a global read twice told once. So is each global a
+  # var_external of the instance binds, before it is merged into the instance's state,
+  # so that a value a host left there is told as the global's, `runtime.globals holds`,
+  # and not as the state's (b2-resource-6), an instance with none paying one clause.
+  defp read!(copy_in, externals, globals, declared),
+    do:
+      read_fitted(
+        externals_fit(
+          externals,
+          globals,
+          declared,
+          Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2))
+        )
+      )
+
+  defp externals_fit([], _globals, _declared, acc), do: acc
+
+  defp externals_fit([global | externals], globals, declared, acc),
+    do:
+      externals_fit(
+        externals,
+        globals,
+        declared,
+        global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
+      )
 
   defp misread({_member, global}, globals, declared, acc) when is_binary(global),
     do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
@@ -3300,6 +3337,17 @@ defmodule Logex.Runtime do
 
   defp tag_at(nil, program, {_head, tag, _members, _path} = at, runtime),
     do: read_tag(tag_of(program, tag), at, program, runtime)
+
+  # The review after Milestone 6 (b2-resource-9): `m1.[0]`, which the lexer reads as a
+  # bit of `m1`, names no tag of the instance, which has no bits, where until then it was
+  # told the program declares no ``, a tag of no name.
+  defp tag_at({"", _subscripts}, program, {head, _tag, _members, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` names a bit of `#{head}`, a program instance of `#{program.name}`, which " <>
+          "has no bits: an access path names one of its tags" <> example_tag(program, head)
+      )
 
   # M5-11 (§4.12): an element of an instance's array, `m1.temps[3]`, a var_external's read
   # in its global, and nothing below it.

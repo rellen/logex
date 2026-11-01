@@ -416,6 +416,49 @@ defmodule Logex.RetainConfigurationTest do
              ]
     end
 
+    # The review after Milestone 6 (a7-docs-13): a qualifier before an instance's name and
+    # its type is IEC's `PROGRAM RETAIN`, which logex leaves for later (decision 283), told
+    # so at its column, the line read on without it declaring its instance, whose uses are
+    # checked, where until then it gave three diagnostics that named none of it.
+    test "a qualifier on a `program` line is told it is IEC's `PROGRAM RETAIN`" do
+      told = fn word ->
+        "`#{word}` before an instance's name is IEC's `PROGRAM #{String.upcase(word)}`, " <>
+          "which logex does not have: mark in its program what it keeps, as in " <>
+          "`var retain count dint`"
+      end
+
+      for word <- ["retain", "NON_RETAIN", "Retain"] do
+        assert messages(compiled("var_global e bool\nprogram #{word} p1 plain\np1.eye e\n")) ==
+                 ["2:9 #{told.(word)}"]
+
+        assert messages(
+                 compiled(
+                   "task t interval 10 priority 1\nvar_global e bool\n" <>
+                     "program #{word} p1 plain with t\np1.eye e\n"
+                 )
+               ) == ["3:9 #{told.(word)}"]
+      end
+
+      # Its instance is declared, so a use of it is checked against its program type.
+      assert messages(compiled("var_global e bool\nprogram retain p1 plain\np1.zz e\n")) == [
+               "2:9 #{told.("retain")}",
+               "2: `p1` leaves its var_input `eye` unconnected: connect it to a global, a " <>
+                 "point or a constant, as in `p1.eye 0`",
+               "3: `p1` runs `plain`, which declares no `zz`: its var_inputs and var_outputs " <>
+                 "are `eye` and `lamp`"
+             ]
+
+      # A keyword and one word, or a type and `with`, still name an instance by a keyword.
+      assert messages(compiled("var_global e bool\nprogram retain plain\n")) ==
+               ["2: `retain` is a keyword and cannot name an instance"]
+
+      assert messages(
+               compiled(
+                 "task t interval 10 priority 1\nvar_global e bool\nprogram retain plain with t\n"
+               )
+             ) == ["3: `retain` is a keyword and cannot name an instance"]
+    end
+
     # Decision 300 (the maintainer, 2026-10-29): every configuration keyword, not only the
     # two qualifiers, is refused as a device's name, in any case, at its global's line.
     test "a device named by any configuration keyword is refused (decision 300)" do

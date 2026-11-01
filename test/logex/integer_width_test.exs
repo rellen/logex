@@ -511,6 +511,76 @@ defmodule Logex.IntegerWidthTest do
                )
     end
 
+    # The review after Milestone 6 (b6-configuration-8): `compile/3`'s refusals, which
+    # check/1 makes of data holding a value, quote a value as its line writes it, where
+    # that line writes it one way alone, and a value cited as another line's as that line
+    # writes it, where until then each was quoted as its plain decimal.
+    test "a configuration's refusals quote a literal as its line writes it" do
+      {:ok, p} =
+        Logex.compile(
+          "var_input x int\nvar_input b bool\nvar_output y int\nmove x y\nxic b",
+          name: "p"
+        )
+
+      refused = fn text ->
+        {:error, diagnostics} = Logex.Configuration.compile("c", text, %{"p" => p})
+        Enum.map(diagnostics, &{&1.line, &1.message})
+      end
+
+      assert refused.("var_global g int 16#ffff\nprogram m1 p\nm1.x g\nm1.b 0") == [
+               {1, "`g` is an int: `16#ffff` is outside -32768 to 32767"}
+             ]
+
+      assert refused.(
+               "var_global g int[2] 1 2#1_0000_0000_0000_0000\nprogram m1 p\nm1.x g[0]\nm1.b 0"
+             ) ==
+               [{1, "`g[1]` is an int: `2#1_0000_0000_0000_0000` is outside -32768 to 32767"}]
+
+      assert refused.("var_global g int 1.5e1\nprogram m1 p\nm1.x g\nm1.b 0") == [
+               {1, "`g` is an int: `1.5e1` is a real, and an int holds only integers"}
+             ]
+
+      assert refused.("program m1 p\nm1.x 1_000_000\nm1.b 0_2") == [
+               {2, "`m1.x` is an int: `1_000_000` is outside -32768 to 32767"},
+               {3, "`m1.b` is a bool: only 0 or 1 fit, found `0_2`"}
+             ]
+
+      assert refused.(
+               "task t interval 16#ffffffffff priority 16#1_0000\nprogram m1 p with t\n" <>
+                 "m1.x 0\nm1.b 0"
+             ) == [
+               {1,
+                "the interval of `t` is `16#ffffffffff` ms: an interval is 1 to 2147483647 ms"},
+               {1,
+                "the priority of `t` is `16#1_0000`: a priority is 0 to 65535, and 0 is the " <>
+                  "highest"}
+             ]
+
+      # A value cited as another line's is quoted as that line writes it.
+      for {first, second, quoted} <- [
+            {"16#5", "5", "16#5"},
+            {"5", "16#5", "5"},
+            {"0_5", "16#5", "0_5"}
+          ] do
+        assert refused.("program m1 p\nm1.x #{first}\nm1.x #{second}\nm1.b 0") == [
+                 {3,
+                  "`m1.x` is already connected, to `#{quoted}` (line 2): a var_input has one source"}
+               ]
+      end
+
+      # A line that writes one value two ways is quoted by its value, which both share.
+      assert refused.(
+               "task t interval 16#ffffffffff priority 1_099_511_627_775\nprogram m1 p with t\nm1.x 0\nm1.b 0"
+             ) ==
+               [
+                 {1,
+                  "the interval of `t` is `1099511627775` ms: an interval is 1 to 2147483647 ms"},
+                 {1,
+                  "the priority of `t` is `1099511627775`: a priority is 0 to 65535, and 0 is " <>
+                    "the highest"}
+               ]
+    end
+
     # The value decides, as presets are compared: a literal respelled leaves its rung the
     # same rung, so an edit reports nothing, and a one-shot on the rung is not blocked.
     test "an edit that only respells a literal changes no rung" do

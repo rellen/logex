@@ -1146,6 +1146,35 @@ defmodule Logex.EditTest do
                Edit.test(accept!(lamp(5000), lamp(1000), done), done)
     end
 
+    # The review after Milestone 6 (b4-edit-3): a timer timing at its last run catches up,
+    # at its next run with its rung true, the time from that run to the switch, which its
+    # own jump held it from counting here, so a drop that catch-up makes impossible is not
+    # forecast, where until then it was, and one it leaves possible still is.
+    test "is not forecast where the time a frozen timer catches up reaches the new .pre" do
+      for kind <- ["ton", "rto"],
+          {held, forecast, q} <- [
+            {100, [{:preset, "t", {20, 50}}], 1},
+            {10, [{:dn_drops, "t", {20, 50}}, {:preset, "t", {20, 50}}], 0}
+          ] do
+        frozen = fn preset ->
+          c!(
+            "var_input j bool\nvar_input a bool\nvar_output q bool\nvar t #{kind}\n" <>
+              "xic j jmp over\nxic a #{kind} t #{preset}\nlbl over xic t.dn ote q"
+          )
+        end
+
+        {_, state} = run(frozen.(20), [{0, %{"a" => 1}}, {30, %{}}, {held, %{"j" => 1}}])
+        assert %{"acc" => 20, "dn" => 1, "en" => 1, "last" => 30} = state.env["t"]
+        assert state.now == 30 + held
+
+        {:ok, edit, ^forecast} = Edit.accept(frozen.(20), frozen.(50), state)
+        {_edit, tested, ^forecast} = Edit.test(edit, state)
+
+        {%{"q" => ^q}, _} =
+          Runtime.scan(frozen.(50), Runtime.put_inputs(frozen.(50), tested, %{"j" => 0}), 1)
+      end
+    end
+
     test "is not forecast for an idle timer, which starts timing against whatever .pre it has" do
       {_, idle} = run(lamp(5000), [{0, %{"go" => 0}}])
       assert %{"en" => 0, "dn" => 0, "acc" => 0} = idle.env["t1"]

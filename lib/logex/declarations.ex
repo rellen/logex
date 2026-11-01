@@ -1677,6 +1677,17 @@ defmodule Logex.Declarations do
        when type not in @reals and not is_integer(v),
        do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
+  # The review after Milestone 6 (a5-data-model-8): -0.0 from Elixir, which no line gives,
+  # a line's `-0.0` being read as 0.0, and which no real holds (decision 150), is refused,
+  # an array's element by element, where until then an edit to the same tag declared on a
+  # line reported `{:initial_changed, "x", {-0.0, 0.0}}`.
+  defp initial(%Tag{type: type, name: name, initial: v}, nil)
+       when type in @reals and v === -0.0,
+       do: [
+         "#{label(name)} is #{a_type(type)}: its initial value is -0.0, which no real holds " <>
+           "and no line gives, a line's `-0.0` being 0.0: give 0.0"
+       ]
+
   # Decision 231: an initial value that underflowed, `var big lreal 1.0e-400`, its value
   # 0.0 and its spelling no zero's, is refused as too near 0.0, as a subnormal one is.
   defp initial(%Tag{type: type, name: name, initial: v}, shown)
