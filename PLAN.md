@@ -11588,7 +11588,19 @@ and CI checked; each fix with a test that fails when it is reverted.
   a test; the mutation and load scripts under `scripts/`; the report's stale and false
   claims made true (its "Documents and process" list, the stale comments of
   `runtime.ex`, the "provisional" marks decisions 343–345 settled, `Logex.IO.Point`'s and
-  `Logex.Declarations`' moduledocs).
+  `Logex.Declarations`' moduledocs). *(Landed 2026-11-01, branch `rv1`: CLAUDE.md an index
+  of 305 lines and 21,797 bytes, each module's rules checked against its own
+  documentation first and the few found nowhere else written into it, under
+  `claude_md_test.exs`'s cap of 40,000 characters (provisional, Claude Code's large-file
+  warning), which also holds it to naming every file of `lib/` and `test/` and to no
+  history; the older-toolchain sandbox gone from `CONTRIBUTING.md`, README and CLAUDE.md,
+  `CONTRIBUTING.md`'s "The toolchain" saying how to get 1.20.4 on OTP 28, and the preamble's 1.14
+  receipts marked history; `readme_test.exs` running README's 35 examples, each in a fresh
+  VM, a module an example, in the default suite (about 6 s alone, side by side), red where
+  an example's printed output or the code's behaviour changes; `scripts/gate.sh`,
+  `failed.exs`, `mutate.sh` and `load.sh`, documented in `CONTRIBUTING.md`'s "Scripts";
+  and the report's document findings each made true by running it, decision 326's figure
+  corrected by a dated note.)*
 - **RV-2 — the compiler** (decision 351). Every source text `Logex.compile/2` raises on
   given a diagnostic (H5's six roots, by one parsed-name structure the readers of a
   lexed name share, and M13's huge numbers); a one-shot's storage bit and a pulse bit in

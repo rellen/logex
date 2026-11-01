@@ -12188,7 +12188,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a slim index (a)** (the maintainer, 2026-11-01): the commands, the
      conventions and a line for each module saying what it is now, a few hundred lines;
      each module's present rules in its moduledoc; the history in `PLAN.md` and this
-     record; its size capped by a test. To build in RV-1.
+     record; its size capped by a test. To build in RV-1. *(Landed with RV-1, 2026-11-01:
+     CLAUDE.md 305 lines, 21,797 bytes; `test/logex/claude_md_test.exs` caps it at 40,000
+     characters, provisional, the figure Claude Code's own warning for a large CLAUDE.md,
+     and holds it to naming every file of `lib/` and `test/` and to no history.)*
 
 359. **The receipts and the toolchain (the review after Milestone 6),** question 13 and
      its follow-up: the receipts `PLAN.md` cites live in one session's scratchpad, and
@@ -12199,7 +12202,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      maintainer, 2026-11-01): the older-toolchain sandbox goes from the documents, the
      receipts produced on 1.14 stay as history, marked so; the check that runs README's
      examples and compares their output becomes a test, and the mutation and load
-     scripts are committed under `scripts/`. To build in RV-1.
+     scripts are committed under `scripts/`. To build in RV-1. *(Landed with RV-1,
+     2026-11-01: `CONTRIBUTING.md`'s sandbox section gone, "The toolchain" in its place;
+     `PLAN.md`'s 1.14 receipts annotated as history; `test/logex/readme_test.exs` in the
+     default suite, each example a module of its own run in a fresh VM; and
+     `scripts/gate.sh`, `scripts/failed.exs`, `scripts/mutate.sh` and `scripts/load.sh`,
+     each documented in `CONTRIBUTING.md`'s "Scripts".)*
 
 360. **A store a fresh start drops from (the review after Milestone 6),** question 14: a
      fresh start that drops retained values the program no longer matches (decision 277)

@@ -100,7 +100,9 @@ defmodule Logex do
 
   A type word that names no built-in type and could name a function block, `var s1 seal`,
   is looked for as a block's file beside the file that names it, `seal.ld`, which is
-  compiled first, once a call however many files name it (decision 34). A mistake in it
+  compiled first, once a call however many files name it (decision 34). It is read by its
+  place on the line, after a qualifier, `var retain s1 seal`, and with an array's sizes,
+  `var gates gate[4]` loading `gate.ld` (decision 154). A mistake in it
   is reported with its own file, and the file that names it is compiled no further, as
   after a lex or parse error. So are a chain of files that holds itself, reported at the
   line in the file that closes it, and a program's file named as a type, at the line that

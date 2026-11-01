@@ -21,8 +21,10 @@ defmodule Logex.IO.Sim do
     past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind;
     since M5-13's review each option is taken once, a key given twice refused.
   - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
-    values, unset inputs reading 0; since M5-13's review an address past `inputs:` is
-    refused, the first in order, and nothing set. Where the sim reports, the inputs that changed are
+    values, each any number, an integer or a float, which the runner checks against its
+    point's type, a real point's taking either (`Logex.IO`), unset inputs reading 0;
+    since M5-13's review an address past `inputs:` is refused, the first in order, and
+    nothing set. Where the sim reports, the inputs that changed are
     sent to the device that opened it as one report, from the caller, which waits until
     the device has handled it, so that a test that sets an input and then moves the clock
     finds the device's change made, by construction. A device that is down, or goes down

@@ -56,7 +56,8 @@ defmodule Logex.Runtime do
      and the untimed instances run last, once each, in every cycle, in that order too:
      those with no task and, since M4-2, those of the configuration's continuous task,
      with `with` naming it or none, which means the same (decision 111). The continuous
-     task is never due and never overlaps, and is listed at 0.
+     task is never due and never overlaps, and is listed at 0. A task's `watchdog` is the
+     runner's to read (`Logex.Runner`): no cycle reads one, however long a run takes.
   4. A scan copies each connected var_input in, from its global or constant, and each
      var_external's global into the instance's state (M2-4), runs the instance through
      `call/4`, splits each var_external off again into its global, and then copies each

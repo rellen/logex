@@ -37,6 +37,7 @@ defmodule Logex.Walk do
   instances run it, so the walk is linear in the program's text and its instances. A
   `cal` of what its table holds as no user block's instance, which only a program built by
   hand can hold, has no slots and reaches nothing, as it runs nothing (`Logex.Runtime`).
+  A rung a jump may skip is walked as any rung, its writes writes (decision 107).
   """
 
   alias Logex.{Compiler, FbType, Program, Tag}
