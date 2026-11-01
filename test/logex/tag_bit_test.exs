@@ -625,9 +625,14 @@ defmodule Logex.TagBitTest do
                {8, "`w.[n]` is a bit of `w`, which the `otl` on line 7 writes whole: #{later}"}
              ]
 
-      assert decides.("xic a ote g[1,c].[n]\nxic a otl g[0,c].[n]") == [
+      # Decision 372: rows whose literal subscripts differ, `g[1,c]` and `g[0,c]`, never
+      # share an element, and are warned of nothing; rows that may meet, `g[1,c]` and
+      # `g[1,m]`, are warned as before.
+      assert decides.("xic a ote g[1,c].[n]\nxic a otl g[0,c].[n]") == []
+
+      assert decides.("xic a ote g[1,c].[n]\nxic a otl g[1,m].[n]") == [
                {8,
-                "`g[0,c].[n]` is in `g`, which the `ote` on line 7 may write through a tag " <>
+                "`g[1,m].[n]` is in `g`, which the `ote` on line 7 may write through a tag " <>
                   "subscript: #{later}"}
              ]
 

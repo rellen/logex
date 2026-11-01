@@ -925,6 +925,217 @@ defmodule Logex.TagSubscriptTest do
     end
   end
 
+  # Decision 372: two writes of one array whose literal subscripts differ in any place,
+  # the rows of a lamp panel, never share an element and are not warned; two that may
+  # meet are warned as before, each told the earliest write that may meet it.
+  describe "two writes whose literal subscripts differ (decision 372)" do
+    @later "the last one in the scan decides it"
+    @panel "var_input a bool\nvar_input i int\nvar_input j int\nvar_input k int\n" <>
+             "var_input c int\nvar ee bool[2,4]\nvar cube bool[2,3,3]\nvar g word[2,3]\n" <>
+             "var lc ctu[2,2]\nvar e bool[4]\nvar_output o bool\n" <>
+             "xic ee[i,j] xic cube[i,j,k] xic g[i,j].[k] xic lc[i,j].q xic e[i] ote o\n"
+
+    defp told(rungs),
+      do:
+        for(
+          {line, message} <- warnings(@panel <> rungs),
+          String.ends_with?(message, @later),
+          do: {line, message}
+        )
+
+    defp may(line, write, first),
+      do:
+        {line,
+         "`#{write}` is in `#{array_of(write)}`, which the `ote` on line #{first} may write " <>
+           "through a tag subscript: " <> @later}
+
+    defp as_in(line, write, other, first),
+      do:
+        {line,
+         "`#{write}` is in `#{array_of(write)}`, as `#{other}` is, which already has an `ote` " <>
+           "on line #{first}: " <> @later}
+
+    defp array_of(write), do: hd(String.split(write, "["))
+
+    test "in one dimension a tag subscript may meet every element, as before" do
+      assert told("xic a ote e[i]\nxic a ote e[1]") == [may(14, "e[1]", 13)]
+      assert told("xic a ote e[1]\nxic a ote e[i]") == [as_in(14, "e[i]", "e[1]", 13)]
+      assert told("xic a ote e[i]\nxic a ote e[j]") == [may(14, "e[j]", 13)]
+    end
+
+    test "in two dimensions, rows that differ are not warned, and rows that may meet are" do
+      for rungs <- [
+            "xic a ote ee[1,i]\nxic a ote ee[0,i]",
+            "xic a ote ee[0,i]\nxic a ote ee[1,3]",
+            "xic a ote ee[i,0]\nxic a ote ee[1,1]",
+            "xic a ote ee[1,1]\nxic a ote ee[i,0]",
+            "xic a ote ee[0,i]\nxic a otl ee[1,i]",
+            "xic a otl ee[1,i]\nxic a ote ee[0,i]"
+          ] do
+        assert {rungs, told(rungs)} == {rungs, []}
+      end
+
+      assert told("xic a ote ee[i,0]\nxic a ote ee[j,0]") == [may(14, "ee[j,0]", 13)]
+      assert told("xic a ote ee[i,0]\nxic a ote ee[1,0]") == [may(14, "ee[1,0]", 13)]
+      assert told("xic a ote ee[1,1]\nxic a ote ee[i,1]") == [as_in(14, "ee[i,1]", "ee[1,1]", 13)]
+      assert told("xic a ote ee[0,i]\nxic a otl ee[0,j]") == [may(14, "ee[0,j]", 13)]
+    end
+
+    # The earliest write that may meet a write, past one that never can.
+    test "a write is told the earliest write that may meet it" do
+      assert told("xic a ote ee[0,i]\nxic a ote ee[1,2]\nxic a ote ee[1,i]") == [
+               as_in(15, "ee[1,i]", "ee[1,2]", 14)
+             ]
+
+      assert told("xic a ote ee[0,i]\nxic a ote ee[1,j]\nxic a ote ee[i,1]") == [
+               may(15, "ee[i,1]", 13)
+             ]
+    end
+
+    test "in three dimensions, any place that differs" do
+      assert told("xic a ote cube[0,i,1]\nxic a ote cube[0,j,2]") == []
+      assert told("xic a ote cube[1,1,1]\nxic a ote cube[i,1,0]") == []
+
+      assert told("xic a ote cube[0,i,1]\nxic a ote cube[k,j,1]") == [
+               may(14, "cube[k,j,1]", 13)
+             ]
+
+      assert told("xic a ote cube[1,1,1]\nxic a ote cube[i,1,1]") == [
+               as_in(14, "cube[i,1,1]", "cube[1,1,1]", 13)
+             ]
+    end
+
+    test "an element's members and bits, and a whole write of an element" do
+      for rungs <- [
+            "xic a ote lc[0,i].r\nxic a ote lc[1,i].r",
+            "xic a ote lc[1,0].r\nxic a ote lc[0,i].r",
+            "xic a ote lc[0,i].r\nxic a otl lc[1,j].r",
+            "xic a ote g[1,c].3\nxic a ote g[0,c].3",
+            "xic a ote g[1,2].3\nxic a ote g[0,c].3",
+            "xic a ote g[0,c].3\nmove 5 g[1,j]",
+            "xic a ote g[0,c].3\nmove 5 g[1,2]",
+            "xic a ote lc[0,i].pv.3\nxic a ote lc[1,i].pv.3",
+            "xic a ote lc[0,i].pv.3\nmove 5 lc[1,j].pv",
+            "xic a ote lc[0,i].pv.3\nmove 5 lc[1,1].pv",
+            "xic a ote lc[1,1].pv.3\nxic a ote lc[0,i].pv.3"
+          ] do
+        assert {rungs, told(rungs)} == {rungs, []}
+      end
+
+      assert told("xic a ote lc[0,i].r\nxic a ote lc[j,i].r") == [may(14, "lc[j,i].r", 13)]
+
+      assert told("xic a ote lc[1,0].r\nxic a ote lc[i,0].r") == [
+               as_in(14, "lc[i,0].r", "lc[1,0].r", 13)
+             ]
+
+      assert told("xic a ote lc[0,i].r\nxic a otl lc[0,j].r") == [may(14, "lc[0,j].r", 13)]
+      assert told("xic a ote g[1,c].3\nxic a ote g[j,c].3") == [may(14, "g[j,c].3", 13)]
+
+      assert told("xic a ote g[1,2].3\nxic a ote g[1,c].3") == [
+               as_in(14, "g[1,c].3", "g[1,2].3", 13)
+             ]
+
+      assert told("xic a ote g[0,c].3\nmove 5 g[0,j]") == [may(14, "g[0,j]", 13)]
+      assert told("xic a ote g[0,c].3\nmove 5 g[0,2]") == [may(14, "g[0,2]", 13)]
+      assert told("xic a ote lc[0,i].pv.3\nmove 5 lc[0,j].pv") == [may(14, "lc[0,j].pv", 13)]
+      assert told("xic a ote lc[0,i].pv.3\nmove 5 lc[0,1].pv") == [may(14, "lc[0,1].pv", 13)]
+
+      assert told("xic a ote lc[1,1].pv.3\nxic a ote lc[1,i].pv.3") == [
+               as_in(14, "lc[1,i].pv.3", "lc[1,1].pv.3", 13)
+             ]
+    end
+
+    # Each first an array keeps is kept under its projections, at most 8, and each write
+    # looks up those that may meet it, so the warnings stay linear in the writes: rows of
+    # 2x the writes cost 2x, where comparing each write with every earlier one would cost 4x.
+    # Counted in a process of its own with a heap the collector never visits, the least of
+    # three runs.
+    test "the warnings stay linear in the writes of an array" do
+      cost = fn n ->
+        source =
+          "var_input a bool\nvar_input i int\nvar_input j int\nvar ee bool[#{n},4]\n" <>
+            Enum.map_join(0..(n - 1), "\n", fn row ->
+              "xic a ote ee[#{row},i]\nxic a ote ee[#{row},j]\nxic a ote ee[i,#{rem(row, 4)}]"
+            end)
+
+        p = program(source)
+        tags = Logex.Program.typed_tags(p)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  Logex.Warnings.of(p.rungs, tags)
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:warned, later - before})
+                end,
+                [:monitor, min_heap_size: 8_000_000]
+              )
+
+            assert_receive {:warned, reductions}, 10_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+            reductions
+          end
+        )
+      end
+
+      ratio = cost.(200) / cost.(100)
+      assert ratio < 2.3, "2x the writes took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # An array no write names through a tag subscript has nothing to compare, so its
+    # literal writes keep their plain keys: 200 coils on a row of a two-dimensional array
+    # cost the warnings 30 reductions a coil more than 200 on a one-dimensional one, 24 at
+    # `d7a1290`, the longer name's, and 6 the look for a write through a tag subscript
+    # among the routine's writes, where keeping each under its projections would cost some
+    # 150 more. The least of three runs each; the bound is a fifth above the figure.
+    test "an array of two dimensions no tag subscript writes costs what one of one does" do
+      warned = fn source ->
+        p = program(source)
+        tags = Logex.Program.typed_tags(p)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  Logex.Warnings.of(p.rungs, tags)
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:warned, later - before})
+                end,
+                [:monitor, min_heap_size: 8_000_000]
+              )
+
+            assert_receive {:warned, reductions}, 10_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+            reductions
+          end
+        )
+      end
+
+      rows = Enum.to_list(0..199)
+
+      one =
+        warned.(
+          "var_input a bool\nvar e bool[200]\n" <>
+            Enum.map_join(rows, "\n", &"xic a ote e[#{&1}]")
+        )
+
+      two =
+        warned.(
+          "var_input a bool\nvar ee bool[200,4]\n" <>
+            Enum.map_join(rows, "\n", &"xic a ote ee[#{&1},1]")
+        )
+
+      assert (two - one) / 200 <= 36, "one dimension #{one}, two #{two}"
+    end
+  end
+
   describe "an online edit" do
     test "a one-shot's rung is changed by an element's subscript tag, a use of the rung" do
       head =
