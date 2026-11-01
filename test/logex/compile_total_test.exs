@@ -74,19 +74,17 @@ defmodule Logex.CompileTotalTest do
     end
 
     # A rung of empty groups alone holds no line, and is printed on a line of its own.
-    test "a rung of empty groups alone is printed on a line of its own" do
+    # A rung of empty groups alone holds no line; since decision 351 it is refused, in a
+    # block's file as in a program's, so no block printed holds one.
+    test "a rung of empty groups alone is refused in a block, at the first line it can stand on" do
       source =
         "function_block fb\nvar_input a bool\nvar_output b bool\nxic a ote b\n( )\n( | )\n"
 
-      assert {:ok, %Logex.FbType{body: body} = type} = block(source, "fb")
-      assert Logex.FbType.user?(type)
-      assert length(body.rungs) == 3
+      assert {:error, [%Diagnostic{line: 5} = d5, %Diagnostic{line: 6} = d6]} =
+               block(source, "fb")
 
-      {:ok, tokens, _} = Logex.Compiler.tokenize(source)
-      {:ok, tree} = Logex.Compiler.parse(tokens)
-      assert {:ok, %Logex.FbType{body: built} = printed} = Logex.Compiler.instructionize(tree)
-      assert Logex.FbType.user?(printed)
-      assert built.source =~ "xic a ote b\n( )\n( | )"
+      assert d5.message =~ "a rung of empty groups alone, after line 4, writes nothing"
+      assert d6.message =~ "a rung of empty groups alone, after line 4, writes nothing"
     end
 
     test "and through the loader, from a file beside the program that holds it" do
@@ -345,6 +343,119 @@ defmodule Logex.CompileTotalTest do
 
       error = assert_raise ArgumentError, fn -> Logex.Runtime.instance(program, image) end
       assert error.message == ~s(`values` holds "k[", which is no path)
+    end
+  end
+
+  # Decision 351: a newline ends a rung, so a rung wrapped onto two lines is a rung that
+  # does nothing and one that runs the motor whatever stop does: a rung that writes nothing
+  # and jumps nowhere is refused at its line, told that a newline ends a rung.
+  describe "a rung that writes nothing (decision 351)" do
+    @idle "this rung writes nothing and jumps nowhere: none of its instructions writes a " <>
+            "tag, a member or a bit, runs an instance or keeps a one-shot's storage bit. A " <>
+            "newline ends a rung, so a rung's conditions and its outputs go on one line, as " <>
+            "in `xic start xio stop ote motor`"
+
+    @io "var_input start bool\nvar_input stop bool\nvar d dint\nvar_output motor bool\n" <>
+          "var w word\nvar t ton\nvar c ctu\nvar s bool\nvar e bool[2]\nvar cl ctu[2]\n"
+
+    test "the review's wrapped rung is refused at its first line" do
+      source =
+        "var_input start bool\nvar_input stop bool\nvar_output motor bool\n\n" <>
+          "xic start xio stop\note motor\n"
+
+      assert compiled(source) == {:error, ["line 5: " <> @idle]}
+    end
+
+    test "contacts, comparisons, a label and groups of them alone are refused, each at its line" do
+      for rung <- [
+            "xic start",
+            "xic start xio stop",
+            "eq d 5",
+            "xic start ge d 5 lt d 9",
+            "lbl here",
+            "lbl here xic start",
+            "xic start ( xic stop | xio stop )",
+            "( xic start | ( xio stop | eq d 1 ) )",
+            "xic start ( | )"
+          ] do
+        assert compiled(@io <> rung <> "\nxic start ote motor") ==
+                 {:error, ["line 11: " <> @idle]},
+               rung
+      end
+    end
+
+    test "a rung that writes a tag, a member, a bit or a storage bit, runs an instance or jumps is taken" do
+      for rung <- [
+            "xic start ote motor",
+            "xic start otl motor",
+            "xic start otu motor",
+            "xic start move d d",
+            "xic start add d 1 d",
+            "xic start ote w.3",
+            "xic start ote e[1]",
+            "xic start move 5 t.pre",
+            "xic start ons s",
+            "xic start osr s motor",
+            "xic start ton t 5",
+            "xic start ctu c 5",
+            "xic start ctu cl[1] 5",
+            "xic start ( xic stop | xio stop ote motor )",
+            "( ( xic stop ote motor ) | xio stop )",
+            "xic start jmp over\nlbl over xic start ote motor",
+            "lbl here xic start ote motor"
+          ] do
+        assert {:ok, _warnings} = compiled(@io <> rung), rung
+      end
+
+      seal = seal()
+
+      assert {:ok, _} =
+               compiled(
+                 "var_input start bool\nvar_output motor bool\nvar s1 seal\ncal s1 start motor",
+                 [seal]
+               )
+    end
+
+    test "every rung that writes nothing is refused, in a program and in a block, in line order" do
+      assert compiled("var_input a bool\nvar_output q bool\nxic a\nxic a ote q\nxio a\nlbl x") ==
+               {:error, ["line 3: " <> @idle, "line 5: " <> @idle, "line 6: " <> @idle]}
+
+      assert {:error, [%Diagnostic{line: 4, message: @idle}]} =
+               block(
+                 "function_block fb\nvar_input a bool\nvar_output q bool\nxic a\nxic a ote q",
+                 "fb"
+               )
+    end
+
+    # A rung refused already, for an unknown instruction, a `cal` that runs nothing or an
+    # operand missing, is not told this too.
+    test "a rung refused for another reason is not told it writes nothing" do
+      for {rung, message} <- [
+            {"xic start zzz q", "line 11: unknown instruction `zzz`"},
+            {"xic start cal nothing", "line 11: `nothing` is not declared"},
+            {"xic start ote", "line 11: `ote` expects 1 operand (a tag), found none"},
+            {"xic nowhere_declared", "line 11: `nowhere_declared` is not declared"}
+          ] do
+        assert {:error, [found]} = compiled(@io <> rung)
+        assert found =~ message, rung
+      end
+    end
+
+    test "a rung of empty groups alone is cited at the first line it can stand on, after the last rung of a line" do
+      assert compiled("( )") ==
+               {:error,
+                [
+                  "line 1: a rung of empty groups alone, at the start, writes nothing and jumps " <>
+                    "nowhere: a group holds no instruction until a leg has one. A newline ends a " <>
+                    "rung, so a rung's conditions and its outputs go on one line, as in " <>
+                    "`xic start ( xio stop | xic jog ) ote motor`"
+                ]}
+
+      assert {:error, [two, three]} =
+               compiled("var b bool\n\n\n( )\n( | ( ) )\nxic b ote b")
+
+      assert two =~ "line 2: a rung of empty groups alone, after line 1, writes nothing"
+      assert three =~ "line 3: a rung of empty groups alone, after line 1, writes nothing"
     end
   end
 

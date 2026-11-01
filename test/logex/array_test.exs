@@ -609,7 +609,8 @@ defmodule Logex.ArrayTest do
       candidate =
         compiled!(
           "var_input go bool\nvar_input skip bool\nvar e bool[2]\nvar_output q bool\n" <>
-            "xic skip jmp over\nxic go xio skip ons e[1] ote q\nlbl over"
+            "var landed bool\nxic skip jmp over\nxic go xio skip ons e[1] ote q\n" <>
+            "lbl over ote landed"
         )
 
       state = Runtime.instance(original)

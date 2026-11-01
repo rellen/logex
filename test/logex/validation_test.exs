@@ -13,6 +13,12 @@ defmodule Logex.ValidationTest do
   @runs_ctu "a ctu, ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint, ctu_ulint or ctud_ulint"
   @runs_ctd "a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint"
 
+  # Decision 351: what a rung of empty groups alone after line 1 is told.
+  @empty_groups_after_1 "a rung of empty groups alone, after line 1, writes nothing and jumps " <>
+                          "nowhere: a group holds no instruction until a leg has one. A newline " <>
+                          "ends a rung, so a rung's conditions and its outputs go on one line, " <>
+                          "as in `xic start ( xio stop | xic jog ) ote motor`"
+
   # M2-4: what a var_external named by a configuration file's keyword is told.
   @keyword "is a keyword of a configuration file, where a var_external's global is " <>
              "declared, so it cannot name a var_external"
@@ -126,7 +132,7 @@ defmodule Logex.ValidationTest do
       message = "unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)"
       assert errors("mov 1 aa") == ["line 1: " <> message]
 
-      assert errors("xic bb\nMOV aa cc") == [
+      assert errors("xic bb ote cc\nMOV aa cc") == [
                "line 2: " <> String.replace(message, "`mov`", "`MOV`")
              ]
     end
@@ -148,7 +154,9 @@ defmodule Logex.ValidationTest do
                "line 4: unknown instruction `qqq`"
              ]
 
-      assert errors("xic aa\note") == ["line 2: `ote` expects 1 operand (a tag), found none"]
+      assert errors("xic aa ote bb\note") == [
+               "line 2: `ote` expects 1 operand (a tag), found none"
+             ]
 
       assert errors("zzz\n7 aa") == [
                "line 1: unknown instruction `zzz`",
@@ -440,9 +448,29 @@ defmodule Logex.ValidationTest do
       jumper = {:rung, [{:branches, [[], [{:branches, [[]]}]]}]}
       on = &{:rung, [{:name, &1, "ote"}, {:name, &1, "aa"}]}
 
-      # From text: `ote aa`, then `( | ( ) )`, then `ote aa` on the line after.
-      assert {:ok, _} = Compiler.instructionize(rungs([on.(1), jumper, on.(3)]), @declared)
-      assert {:ok, _} = Compiler.instructionize(rungs([jumper, jumper, on.(3)]), @declared)
+      # From text: `ote aa`, then `( | ( ) )`, then `ote aa` on the line after: well formed,
+      # and since decision 351 refused as a rung that writes nothing, at the first line
+      # each can stand on.
+      assert {:error,
+              [
+                %Logex.Diagnostic{
+                  line: 2,
+                  message: "a rung of empty groups alone, after line 1, " <> _
+                }
+              ]} =
+               Compiler.instructionize(rungs([on.(1), jumper, on.(3)]), @declared)
+
+      assert {:error,
+              [
+                %Logex.Diagnostic{
+                  line: 1,
+                  message: "a rung of empty groups alone, at the start, " <> _
+                },
+                %Logex.Diagnostic{
+                  line: 2,
+                  message: "a rung of empty groups alone, at the start, " <> _
+                }
+              ]} = Compiler.instructionize(rungs([jumper, jumper, on.(3)]), @declared)
 
       refused(
         rungs([on.(1), jumper, on.(2)]),
@@ -637,15 +665,19 @@ defmodule Logex.ValidationTest do
     end
 
     test "a late declaration cites the first rung's own line, or none when it has none" do
-      assert source_errors("var a bool\n( xic a )\nxic a ote a\nvar b bool") == [
+      assert source_errors("var a bool\n( xic a ) ote a\nxic a ote a\nvar b bool") == [
                "line 4: `var` after the first rung (line 2): declarations come first"
              ]
 
+      # Since decision 351 a rung of empty groups alone writes nothing, and is refused too,
+      # at the first line it can stand on.
       assert source_errors("var a bool\n( )\nxic a ote a\nvar b bool") == [
+               "line 2: " <> @empty_groups_after_1,
                "line 4: `var` after the first rung: declarations come first"
              ]
 
       assert source_errors("var a bool\n( )\nvar b bool") == [
+               "line 2: " <> @empty_groups_after_1,
                "line 3: `var` after the first rung: declarations come first"
              ]
     end
@@ -1501,15 +1533,16 @@ defmodule Logex.ValidationTest do
     test "a label is a namespace of its own: it may share a tag's name, and is no use of it" do
       assert source_warnings(
                "var_input skip bool\nvar_output done bool\nvar spare bool\n" <>
-                 "xic skip jmp done\nxic skip ote done\nlbl done\nxic skip jmp spare\nlbl spare"
+                 "xic skip jmp done\nxic skip ote done\nlbl done xic skip jmp spare\n" <>
+                 "lbl spare xio skip otu done"
              ) == ["line 3: warning: `spare` is declared but no rung uses it"]
     end
 
     test "a label stands first on its rung: elsewhere on it, after an instruction, on a leg or " <>
            "after another, it is an error at its line, and it still labels its rung" do
       assert source_errors(
-               "var a bool\nxic a lbl one\n( lbl two | xic a ) ote a\nlbl three lbl four\n" <>
-                 "xic a jmp five\nxic a ( xic a | lbl five ) ote a"
+               "var a bool\nxic a lbl one ote a\n( lbl two | xic a ) ote a\n" <>
+                 "lbl three lbl four ote a\nxic a jmp five\nxic a ( xic a | lbl five ) ote a"
              ) == [
                "line 2: `lbl one` is not first on its rung: a label stands at the head of the " <>
                  "rung it names, before any other instruction or branch group",
@@ -1525,7 +1558,8 @@ defmodule Logex.ValidationTest do
     test "one label names one rung: a label used twice, or two that differ only in case, is " <>
            "an error at the second" do
       assert source_errors(
-               "var a bool\nxic a jmp done\nlbl done\nlbl done\nlbl Done\nlbl x xic a ( lbl x | xic a )"
+               "var a bool\nxic a jmp done\nlbl done ote a\nlbl done ote a\nlbl Done ote a\n" <>
+                 "lbl x xic a ( lbl x | xic a ) ote a"
              ) == [
                "line 4: `done` already labels the rung on line 3: a label names one rung",
                "line 5: the labels `Done` and `done` (line 3) differ only in case: labels are " <>
@@ -1539,7 +1573,8 @@ defmodule Logex.ValidationTest do
     test "a jmp names a label of its routine, exactly, with the nearest suggested, and one " <>
            "whose label was refused for its shape is told nothing more" do
       assert source_errors(
-               "var a bool\nxic a jmp dne\nxic a jmp Done\nxic a jmp nowhere\nxic a jmp a.b\nlbl done"
+               "var a bool\nxic a jmp dne\nxic a jmp Done\nxic a jmp nowhere\nxic a jmp a.b\n" <>
+                 "lbl done xic a ote a"
              ) == [
                "line 2: `jmp dne` names no label: no rung of this program begins `lbl dne` " <>
                  "— did you mean `done`?",
@@ -1555,7 +1590,7 @@ defmodule Logex.ValidationTest do
            "one back is refused" do
       assert source_errors(
                "var a bool\nlbl done xic a ote a\nxic a jmp donee\nxic a jmp Done\n" <>
-                 "lbl here xic a jmp her\nxic a jmp ender\nlbl end"
+                 "lbl here xic a jmp her\nxic a jmp ender\nlbl end xic a ote a"
              ) == [
                "line 3: `jmp donee` names no label: no rung of this program begins `lbl donee`",
                "line 4: `jmp Done` names no label: no rung of this program begins `lbl Done`",
@@ -1569,7 +1604,7 @@ defmodule Logex.ValidationTest do
            "(decision 81)" do
       assert source_errors(
                "var a bool\nlbl top xic a ote a\nxic a jmp top\nlbl here xic a jmp here\n" <>
-                 "( xic a jmp there | xic a ) ote a\nlbl there"
+                 "( xic a jmp there | xic a ) ote a\nlbl there xic a ote a"
              ) == [
                "line 3: `jmp top` jumps back, to the rung on line 2: a jump goes forward only, " <>
                  "to a label on a later rung, since one back could loop for ever",
@@ -1581,7 +1616,8 @@ defmodule Logex.ValidationTest do
     test "a rung holds one jmp: a second, in series or on another leg, is an error at its " <>
            "line, and is not looked at further" do
       assert source_errors(
-               "var a bool\nxic a jmp one jmp two\n( xic a jmp one | xio a jmp nowhere )\nlbl one"
+               "var a bool\nxic a jmp one jmp two\n( xic a jmp one | xio a jmp nowhere )\n" <>
+                 "lbl one xic a ote a"
              ) == [
                "line 2: `jmp two` is a second `jmp` in this rung, after `jmp one`: a rung holds " <>
                  "one, since which of two would win is not settled",
@@ -1604,13 +1640,16 @@ defmodule Logex.ValidationTest do
       assert [
                "line 3: `jmp done` follows `ton t1` on its path: what passes on after a " <>
                  "`ton` is not settled" <> _
-             ] = source_errors("var a bool\nvar t1 ton\nxic a ton t1 5 jmp done\nlbl done")
+             ] =
+               source_errors(
+                 "var a bool\nvar t1 ton\nxic a ton t1 5 jmp done\nlbl done xic t1.dn ote a"
+               )
     end
 
     test "a label no jmp names compiles, with a warning at its line" do
       assert source_warnings(
                "var_input a bool\nvar_output y bool\nlbl first xic a ote y\nxic a jmp used\n" <>
-                 "lbl used\nlbl last"
+                 "lbl used xic a otl y\nlbl last xio a otu y"
              ) == [
                "line 3: warning: `first` labels this rung, but no `jmp` names it: nothing " <>
                  "jumps here",
@@ -1622,10 +1661,10 @@ defmodule Logex.ValidationTest do
            "skipped section, are the second-ote warning (decision 107)" do
       assert source_warnings(
                "var_input manual bool\nvar_input jog bool\nvar_input run bool\n" <>
-                 "var_output motor bool\nxio manual jmp auto\nxic jog ote motor\nlbl auto\n" <>
-                 "xic manual jmp done\nxic run ote motor\nlbl done"
+                 "var_output motor bool\nxio manual jmp auto\nxic jog ote motor\n" <>
+                 "lbl auto xic manual jmp done\nxic run ote motor\nlbl done xio run otu motor"
              ) == [
-               "line 9: warning: `motor` already has an `ote` on line 6: the last one in the " <>
+               "line 8: warning: `motor` already has an `ote` on line 6: the last one in the " <>
                  "scan decides it"
              ]
     end
@@ -1636,7 +1675,7 @@ defmodule Logex.ValidationTest do
                Logex.compile(
                  "function_block skip\nvar_input a bool\nvar_output y bool\n" <>
                    "xic a jmp function_block\nlbl Function_Block xic a ote y\n" <>
-                   "xic a jmp FUNCTION_BLOCK\nlbl FUNCTION_BLOCK",
+                   "xic a jmp FUNCTION_BLOCK\nlbl FUNCTION_BLOCK xio a otu y",
                  name: "skip"
                )
 

@@ -178,10 +178,11 @@ defmodule Logex.WalkTest do
         xic a ons e ote b
         xic a ton t1 100
         xic a ctu k 3
-        lbl done
+        lbl done ote b
         """)
 
-      assert Walk.writes(p) == %{"b" => [7], "e" => [7], "t1" => [8], "k" => [9]}
+      # Since decision 351 the label heads a rung that writes, here `b` again.
+      assert Walk.writes(p) == %{"b" => [7, 10], "e" => [7], "t1" => [8], "k" => [9]}
       assert Walk.timers(p) == %{"t1" => {8, 100}}
       assert Walk.counters(p) == %{"k" => {9, 3}}
       assert Walk.one_shots(p) == %{"e" => {7, :ons}}

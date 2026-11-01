@@ -318,7 +318,10 @@ defmodule Logex.ApiContractTest do
     "already labels",
     "differ only in case: labels are",
     "is a second `jmp` in this rung",
-    "takes a label"
+    "takes a label",
+    # Decision 351: a rung that writes nothing, a soup's commonest. One of empty groups
+    # alone, which no soup assembles, is `compile_total_test.exs`'s.
+    "this rung writes nothing and jumps nowhere"
   ]
 
   # And its warnings, which only a program that compiles gets.
@@ -9928,10 +9931,12 @@ defmodule Logex.ApiContractTest do
 
   # The block a `cal` runs, in three versions of its body: a jump on its `skip` over its
   # one-shot, the one-shot alone, and a jump over the one-shot on its inverted input.
+  # Since decision 351 a label heads a rung that writes, here the body's own `l`, which
+  # every version declares, so that an edit of the version keeps it.
   @jp_bodies %{
-    1 => ["xic skip jmp done", "xic go ons e ote q", "lbl done"],
+    1 => ["xic skip jmp done", "xic go ons e ote q", "lbl done ote l"],
     2 => ["xic go ons e ote q"],
-    3 => ["xic skip jmp done", "xio go ons e ote q", "lbl done"]
+    3 => ["xic skip jmp done", "xio go ons e ote q", "lbl done ote l"]
   }
 
   test "forward jumps skip exactly the rungs their text says, a skipped rung frozen, its " <>
@@ -10042,7 +10047,7 @@ defmodule Logex.ApiContractTest do
     {:ok, hop} =
       Logex.compile(
         "function_block hop\nvar_input skip bool\nvar_input go bool\nvar_output q bool\n" <>
-          "var e bool\n" <> Enum.join(@jp_bodies[version], "\n"),
+          "var e bool\nvar l bool\n" <> Enum.join(@jp_bodies[version], "\n"),
         name: "hop"
       )
 
@@ -10070,7 +10075,7 @@ defmodule Logex.ApiContractTest do
       Enum.map(@jp_inputs, &"var_input #{&1} bool") ++
         Enum.map(~w(y p q1 q2 q3 bq), &"var_output #{&1} bool") ++
         ["var_output ku dint", "var_output kd dint"] ++
-        ["var s bool", "var c ctud", "var t ton", "var b hop"]
+        ["var s bool", "var c ctud", "var t ton", "var b hop", "var landed bool"]
 
     Enum.join(declarations ++ Enum.map(jp_items(spec), & &1.text), "\n")
   end
@@ -10088,7 +10093,10 @@ defmodule Logex.ApiContractTest do
           do: item
 
     rungs ++
-      if(MapSet.member?(targets, 6), do: [%{kind: :end, label: "L6", text: "lbl L6"}], else: [])
+      if(MapSet.member?(targets, 6),
+        do: [%{kind: :end, label: "L6", text: "lbl L6 ote landed"}],
+        else: []
+      )
   end
 
   defp jp_jumps_at(numbered, pos),
