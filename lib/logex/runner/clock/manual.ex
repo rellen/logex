@@ -39,9 +39,9 @@ defmodule Logex.Runner.Clock.Manual do
   whatever reason, `:timeout` among them, is passed over, as a real timer's message to a
   dead process is lost. A receiver suspended by `:sys.suspend/1` answers `:sys` with its
   messages still waiting, so `advance/2` goes on before it has handled its timer, which it
-  handles once resumed (c3-io-contract-10). A clock that goes down while it is called, a
-  receiver that kills it in the middle of an advance among it, is the `ArgumentError` of a
-  clock that is not running, never an exit. The process that advances may be a receiver too: its message is then
+  handles once resumed (c3-io-contract-10). A clock that goes down in the middle of an
+  advance, a receiver killing it, is the `ArgumentError` of a clock that is not running,
+  never an exit. The process that advances may be a receiver too: its message is then
   in its own mailbox when `advance/2` goes on. One process advances a clock at a time, but
   for one case: a receiver may advance it while it handles a message an advance delivered,
   time passing inside a step with the timers on the way delivered, where `pass/2` delivers
@@ -83,13 +83,13 @@ defmodule Logex.Runner.Clock.Manual do
   end
 
   @doc "Moves the clock on by `ms`, 0 or more, delivering nothing: time passing inside a step."
-  def pass(clock, ms), do: called(clock!(clock), {:pass, span!(ms, "pass/2")})
+  def pass(clock, ms), do: GenServer.call(clock!(clock), {:pass, span!(ms, "pass/2")})
 
   @doc "The timers not yet delivered, `{at_ms, pid, message}`, in the order `advance/2` would deliver them."
-  def pending(clock), do: called(clock!(clock), :pending)
+  def pending(clock), do: GenServer.call(clock!(clock), :pending)
 
   @impl Clock
-  def now_ms(clock), do: called(clock!(clock), :now)
+  def now_ms(clock), do: GenServer.call(clock!(clock), :now)
 
   @impl Clock
   def wake_at(clock, pid, message, at_ms),
@@ -105,7 +105,7 @@ defmodule Logex.Runner.Clock.Manual do
   def wall_ms(clock), do: now_ms(clock)
 
   @impl Clock
-  def cancel(clock, timer), do: called(clock!(clock), {:cancel, Clock.timer!(timer)})
+  def cancel(clock, timer), do: GenServer.call(clock!(clock), {:cancel, Clock.timer!(timer)})
 
   # Each timer due by `target`, taken from the clock one at a time, so that one a receiver
   # sets while it handles its own is taken in its order.
@@ -120,9 +120,9 @@ defmodule Logex.Runner.Clock.Manual do
 
   defp deliver(:none, clock, target, _wait), do: called(clock, {:reach, target})
 
-  # c3-io-contract-10 (RV-4): a clock that goes down as it is called, a receiver killing it
-  # in the middle of an advance among it, is one that is not running, as one down before is,
-  # its exit never let out to the caller.
+  # c3-io-contract-10 (RV-4): a clock that goes down in the middle of an advance, a
+  # receiver killing it, is one that is not running, as one down before it is, its exit
+  # never let out to the caller; every other call checks the clock first (clock!/1).
   defp called(clock, request) do
     GenServer.call(clock, request)
   catch

@@ -2959,7 +2959,17 @@ defmodule Logex.Runner do
   defp in_time({:error, cause}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, cause}, state}}
 
-  defp now(%{clock: {module, clock}}), do: whole(clocked(fn -> module.now_ms(clock) end))
+  defp now(%{clock: {module, clock}}), do: whole(time(module, clock))
+
+  # The clock read as clocked/1 reads it, its failure a shutdown, without the closure, so
+  # that the check of its answer costs a round nothing more than the closure did.
+  defp time(module, clock) do
+    module.now_ms(clock)
+  rescue
+    exception -> exit({:shutdown, {:clock, Exception.message(exception)}})
+  catch
+    :exit, reason -> exit({:shutdown, {:clock, reason}})
+  end
 
   # c3-io-contract-9 (RV-4): a time that is no whole number of milliseconds is a clock that
   # fails, which stops the runner as one gone down does, the answer named.

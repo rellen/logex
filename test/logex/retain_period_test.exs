@@ -538,9 +538,10 @@ defmodule Logex.RetainPeriodTest do
 
     # A writer that does not answer by the idle watchdog and a poll period, in real time,
     # is killed, its write reported failed, `:timeout`, and the stop's write made all the
-    # same (provisional).
+    # same (provisional). Since decision 353 the stop's own write has that time too, so
+    # the idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
     test "a hung writer is killed at its deadline and the stop writes", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 60)
+      rig = rig(dir, idle: 400)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -550,7 +551,7 @@ defmodule Logex.RetainPeriodTest do
       eye(rig, 0, 100)
       began = System.monotonic_time(:millisecond)
       assert Runner.stop(runner) == :ok
-      assert System.monotonic_time(:millisecond) - began >= 70
+      assert System.monotonic_time(:millisecond) - began >= 410
       refute Process.alive?(writer)
       assert_received {Runner, ^runner, {:retain, {:error, :timeout}}}
       assert File.read!(rig.store) =~ "global total_boxes dint 1\n"
@@ -699,10 +700,12 @@ defmodule Logex.RetainPeriodTest do
     end
 
     # M6-6's review: a writer that does not answer a trip's wait by its deadline is killed,
-    # so that it cannot wake later and write an older image over the trip's.
+    # so that it cannot wake later and write an older image over the trip's. Since
+    # decision 353 the trip's own write has the idle watchdog and a poll period too, so the
+    # idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
     test "a hung writer is killed at a trip's deadline and never writes after it",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 60)
+      rig = rig(dir, idle: 400)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)

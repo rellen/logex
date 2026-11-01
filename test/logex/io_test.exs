@@ -181,6 +181,9 @@ defmodule Logex.IOTest do
       for n <- 1..10, do: {:ok, ^state} = Sim.write(%{[0] => n}, state)
       assert Sim.writes(sim) == [%{[0] => 8}, %{[0] => 9}, %{[0] => 10}]
       assert Sim.outputs(sim) == %{[0] => 10}
+      # c6-pmi-7: what the sim holds is bounded, not only what it answers: at most twice
+      # writes: of them, the rest dropped as they pass it.
+      assert length(:sys.get_state(sim).writes) <= 6
 
       sim = sim()
       state = opened(sim)
@@ -950,11 +953,15 @@ defmodule Logex.IOTest do
     {:ok, config} = Logex.Configuration.compile("plant", @scripted, %{"relay" => relay})
     {:ok, clock} = Manual.start_link()
 
+    # idle: 5_000, as the store's write-back tests take it: the device's open and first read
+    # are limited to idle and a poll of real time, which a loaded machine once overran at
+    # 510 ms, and no test here reads the limit.
     opts = [
       configuration: config,
       io: %{"panel" => {Scripted, agent: agent}},
       clock: {Manual, clock},
-      poll: 10
+      poll: 10,
+      idle: 5_000
     ]
 
     %{agent: agent, clock: clock, opts: opts}

@@ -335,10 +335,14 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-3 to RV-8 build ("The review after Milestone 6"). The one of them that changes
+items RV-3 and RV-5 to RV-8 build ("The review after Milestone 6"). The one of them that changes
 the source language has landed with RV-2: a rung that writes nothing and jumps nowhere,
 such as the first half of a rung wrapped onto two lines, `xic start xio stop` above
-`ote motor`, is refused at its line, told that a newline ends a rung (decision 351).
+`ote motor`, is refused at its line, told that a newline ends a rung (decision 351). The
+runner's answers have landed with RV-4: each device's write given its own time (decision 348),
+every file write the runner makes limited (decision 353), a restart judged as it arrives
+(decision 354) and two runners of one VM refused one store or forces file (decision 356),
+each in "Running a plant on the clock" and "The store on disk", below.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3857,7 +3861,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that
   answers at 0 within 50 ms and a poll period, whatever the fan's watchdog, and the
-  runner trips when it next runs.
+  runner trips when it next runs. A round's write gives each device the idle watchdog
+  and a poll period from the start of its own write (decision 348): a device written
+  after a slow one that answered in time is never cut short by it, only a device slow
+  itself is killed and named, and every device that answers takes the trip's 0.
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
   release killed, reads every device once, as a start does, opening again each device
   that went down, those among them (decision 142), restarts the resource, which keeps its

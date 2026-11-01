@@ -11869,6 +11869,224 @@ and CI checked; each fix with a test that fails when it is reverted.
   `start: :cold` written after the name is checked (M11); an adapter's struct refused as
   no result (M6); an adapter whose first read fails closed (M14); `vetted/3` linear (M9);
   the report's runner and device lows.
+
+  **RV-4 as built** (2026-11-01, branch `rv4`, nine commits over `1bdc2c6`). Every finding
+  below is closed with a test that fails when its fix is reverted, each revert a mutant of
+  `scripts/mutate.sh`'s tables judged by the full suite and red by the test named, or kept
+  for the reason given. Decision 350, in this item's heading, is RV-3's and was not built
+  here; nothing of `runtime.ex`, `instance.ex`, the edits, the configuration or `image.ex`
+  was touched.
+
+  - *H2, decision 348* (`trip_test.exs`): c3-io-contract-1 reproduced first, three runs of
+    three on the real clock, a slow drive in time and a fast panel written after it, the
+    panel killed in its own fast write and named. A round's write now gives each device
+    the idle watchdog and a poll period from the start of its own write: where the clock
+    has moved since the refresh before the writes, every device is refreshed again at the
+    write's start, the device written hearing its own deadline and every other the runner
+    well while it waits; a write in the millisecond of the last refresh needs none. On the
+    manual clock a panel written after the drive's 509 ms write is in time where it takes
+    5 ms more and is named for its own 510; on the real clock five devices, four slow in
+    time (160 ms of 600 each, together past one shared deadline) and a fifth that hangs:
+    nothing trips, then the fifth alone is named and every other takes the trip's 0. The
+    comment of the test M4-6's sixth verification changed states the rule as it now is.
+    Mutants: no renewal, and the deadline moved with no refresh, each red.
+  - *Decision 353, M8* (c7-premortem-plant-2, b3-store-image-3, c2-runner-persist-4;
+    `stalled_disk_test.exs`, new, not async): a force's write of the forces file and the
+    store's writes at a trip, a stop, a shutdown, a cold restart and a fresh start are each
+    made in a process of their own, `Logex.Runner.Writer.written/3`, waited on for the idle
+    watchdog and a poll period of real time and killed past it: a force
+    `{:error, {:forces, :timeout}}`, a store write `:timeout` reported as any failed write,
+    the runner answering on. The forces file's read at a restart is limited the same and
+    made raw, off the VM's file server, `{:error, {:forces, :timeout}}`, the runner tripped
+    as it was (provisional). A stalled disk is acted out by the VM's file server held
+    (`:sys.suspend/1`), which every write's rename goes through, and the restart's read by
+    a FIFO in the forces file's place; a force, a trip's write, a cold restart's, a stop
+    waiting on a period's write and on its own, a fresh start's and a restart's read each
+    answer within four limits, the killed write's caller dead, and once the disk answers a
+    write killed in its rename lands whole, the store the old or the new. Mutants: each
+    limit `:infinity` in turn (the force's, the store's, the fresh start's, the restart's
+    read) and the kill dropped, each red.
+  - *M10* (c2-runner-persist-1; `stalled_disk_test.exs`, "each write's `.tmp` its own"):
+    each write's `<path>.tmp` is made new and exclusively, whatever stands there deleted
+    and the open tried again, so that a killed write's late write, sync or close reaches its
+    own file, unlinked by then, and never the next write's; a link at the `.tmp` is removed
+    and the file it names untouched; a directory there is `:eisdir` still (provisional:
+    one name, each write's file its own, where the review suggested a unique name a write).
+    Mutants: the open not exclusive, no retry after the delete, a directory no longer told
+    `:eisdir`, each red.
+  - *Decision 354* (c1-runner-rounds-1; `trip_test.exs`): the runner keeps its status with
+    a restart as it takes the request from its mailbox, `{:restart, mode, status}`, so one
+    asked while it runs is refused in decision 133's words whatever comes before it is
+    served, and the trip stands until a restart asked after it (provisional: a device's
+    notice behind the restart in the mailbox, which a round's start takes first, comes
+    before it). The three tests that pinned the other reading changed, each citing the
+    decision, with the maintainer's leave; nothing else of `trip_test.exs` was removed.
+    Mutant: the restart judged by the status where it is served, red by the three.
+  - *Decision 356* (b3-store-image-9, c6-pmi-4, c2-runner-persist-8,
+    c7-premortem-plant-9; `runner_paths_test.exs`, new, not async): `Logex.Runner.Paths`,
+    a table a process of logex's own keeps for the VM, holds each runner's store and forces
+    file and the `.tmp` beside each from its `init/1`, once its name is registered, until
+    it stops, crashes or is killed; a start naming a file another runner of the VM holds is
+    one pinned `ArgumentError` naming the option, the path as spelled, what the file is to
+    the other runner and its pid, checked in the caller before either file is read and
+    decided by the claim, so of two starts at once one starts (twenty times); the file is
+    free again once its holder is gone, a stop and a refused start giving it up as they
+    end. Two VMs on one file, and two paths through a link, are the host's to avoid, as
+    the moduledoc and README's "What logex is not" say. Mutants: no claim, no caller's
+    check, a dead holder taken as alive, a refused start's claims kept, a stop's kept, each
+    red (the last two survived the first table, hidden by the dead-holder rule, and are
+    pinned since `8aa2788` by the table's claims asserted empty).
+  - *c2-runner-persist-9* (`runner_paths_test.exs`): a relative `retain:` or `forces:` is
+    expanded once at the start and every read and write made through it, so a `File.cd`
+    moves neither file and two spellings of one path are one file to the check;
+    `status/1` and every message keep the host's spelling. Mutant: the paths unexpanded,
+    red.
+  - *M11* (c4-api-fuzz-2, c1-runner-rounds-8, c2-runner-persist-7;
+    `runner_paths_test.exs`): `start: :cold`, and a start with no store file, write the
+    store in the runner's `init/1` once its name is registered and its files claimed, so a
+    start refused `{:already_started, pid}` writes nothing and reads no device. Mutant: the
+    write back in the caller, red.
+  - *M6* (c3-io-contract-2; `io_test.exs`): a read's or a report's values are a map that is
+    no struct, as `Logex.IO.Sim`'s `values!/1` and `Logex.IO`'s `io!/1` take, any struct
+    `{:raised, "... gave ..., which is none of Logex.IO's results"}`, on the first read as
+    on any: a MapSet and a URI on the first read leave the linked host running and the
+    adapter closed, a later one trips. Mutant: any map taken, red.
+  - *M14* (c3-io-contract-3, -4; `io_test.exs`): an adapter whose `init/3` succeeded is
+    closed where its first read fails, its outputs written 0 once first, as a device opened
+    is closed (provisional: the zeros); the device process traps exits, which
+    `Logex.IO`'s moduledoc now says ("The device's process"), and an exit from any process
+    linked to it but its runner is the device's own as a link has it, `:normal` passed
+    over and any other stopping it, zeroed and closed, the runner tripping
+    `{:io, device, {:down, reason}}`. Mutants: no close, a `:normal` exit taken as a crash,
+    a crash passed over, each red.
+  - *M9* (c1-runner-rounds-3, c3-io-contract-5; `runner_test.exs`, "growth"): `vetted/3`
+    takes each change onto the front of its list and reverses it once; a change of every
+    point of a device of 4096 against one of 1024, the least of three runs of the runner's
+    reductions, at most 4.146 times in eight runs, bound 4.98. Mutant: the append, 5.94
+    times, red.
+  - *The lows fixed*, each red by its mutant: c1-runner-rounds-5 and c2-runner-persist-2
+    (a stop whose clock is gone answers `{:error, {:retain, {:clock, reason}}}`, the runner
+    stopped by the stop's reason; `retain_store_test.exs`); c1-runner-rounds-6
+    (`child_spec/1`'s shutdown never past 4,294,967,295 ms; `retain_store_test.exs`);
+    c1-runner-rounds-9 (a notice matched by its whole shape, any other message naming
+    `Logex.Runner.Device` passed over, alone or among the notices a trip takes, where the
+    sort of them crashed the runner; `trip_test.exs`); c1-runner-rounds-10 (stops made at
+    once each answer, the first's reason stopping the runner, each other `:ok` or the
+    not-running raise; `runner_test.exs`); c2-runner-persist-3 and c7-premortem-plant-3
+    (a device hung inside its adapter is killed by a process of its own the idle watchdog
+    and a poll period after its runner's death, its card free for the next start;
+    `trip_test.exs`); c2-runner-persist-6 and c3-io-contract-9 (a clock's `now_ms/1` that
+    is no integer, or a `wall_ms/1` no store header holds, years 0 to 9999, is the host's
+    pinned mistake at start; later a bad time is a clock that fails, the device or the
+    runner stopping as a shutdown `{:clock, {:now_ms, value}}`, and a bad wall time a store
+    write that fails, `{:clock, {:wall_ms, value}}`, reported; `runner_test.exs`,
+    `retain_store_test.exs`); c3-io-contract-8's first half (`Logex.IO.Sim` refuses
+    `sim:` given twice; `io_test.exs`); c3-io-contract-10 (the manual clock killed in the
+    middle of an advance raises that it is not running, its wait message says the receiver
+    may be busy, and its moduledoc that a receiver suspended by `:sys` answers before it
+    handles; `clock_test.exs`); c6-pmi-7 (`Logex.IO.Sim` keeps its newest 100,000 writes,
+    `writes:` to set, provisional; `io_test.exs`: its mutant, a sim that never drops a
+    write, survived the first table, which read only the writes the sim answers, cut to
+    `writes:` all the same, and is pinned since by the writes it holds, at most twice
+    `writes:`).
+  - *The tests the review asked for*, each red by its mutant: c5-tests-1 (a poll that comes
+    late skips the reads it missed, its grid kept); c5-tests-3 (the share's slots at 30%,
+    45% and 86%, where round and ceil differ); c5-tests-4 (`status/1`'s unzeroed devices,
+    the input-point hint and the store's global lines in name order past 32 entries).
+  - *Tests given time on a loaded machine*, each line changed said in its commit and its
+    comment, no assertion of a rule removed: `stalled_disk_test.exs`'s limit 510 ms where
+    110 ms let a fresh start's or a stop's write the disk was free for miss it beside a
+    full suite's syncs; `retain_period_test.exs`'s two hung-writer tests an idle watchdog
+    of 400 and a bound of 410 ms where 60 and 70, since decision 353 gives the stop's and
+    the trip's own write that time too; `retain_store_test.exs`'s cold restart write-back
+    test and `io_test.exs`'s scripted adapter an idle watchdog of 5,000, their seams
+    needing only the first read or the restart's read answered.
+  - *The lows kept*:
+    - c1-runner-rounds-2 (with no untimed program a host's requests are served ahead of a
+      due periodic round with no bound): the moduledoc's rule, decision 108's share being
+      the continuous task's alone as the conventional system overhead time slice is, every
+      request bounded by decision 128 and a task delayed past its interval reported as an
+      overlap; put to the maintainer below.
+    - c1-runner-rounds-12 (`subscribe/2`'s doc leaves `:retain` out): true at `1bdc2c6`.
+    - c2-runner-persist-5 (a device's report backlog drained by a selective receive, a
+      scan of the mailbox a change): taking the device's messages in another order is a
+      change to what decision 142's restart reads first; the backlog is the adapter's
+      reports in one poll period, put to the maintainer below.
+    - c3-io-contract-6 (every device call, `init/3` among them, bounded by idle and a
+      poll): decision 128's one bound on every call of the runner's; a limit of its own
+      for an open is a new option, put to the maintainer below.
+    - c3-io-contract-7 (a misread address printed as a charlist, `~c"\a"`): an address is
+      `Logex.IO`'s list of integers, as `Logex.IO.address()` types it and every adapter
+      is given it; showing it otherwise is a change to the contract's data, put to the
+      maintainer below.
+    - c3-io-contract-8's second half (one sim bound to two devices refused only at start):
+      `bind!/2` checks one device's binding against its own points; the start refuses the
+      second device as one that cannot be opened, named.
+    - c3-io-contract-11 (`Logex.IO.Point`'s moduledoc): true since RV-1.
+    - Met on the way, RV-5's: the wall clock checked at start incidentally refuses
+      b3-store-image-12's year past 9999 there, in the host's pinned words; and the
+      `.tmp` deleted and made exclusively closes b3-store-image-5's `.tmp` half, a link
+      there no longer written through; the store's own link half is RV-5's.
+  - *The cost*: a round of three devices on the manual clock, the least of seven runs,
+    costs 2036.5 reductions where `1bdc2c6`'s cost 2014.9 with its outputs changing
+    (+1.1%: decision 348's check of the clock at each write, and each read of the clock
+    checked for an integer), and 1735.5 where 1725.6 with none (+0.6%); a scan, a cycle
+    and a compile are as they were, `runtime.ex` untouched.
+  - *Provisional readings*: the restart's forces read limited and refused
+    `{:error, {:forces, :timeout}}` (question 1); a write killed past its limit may land
+    once the disk answers (question 2); a restart's arrival the runner's taking it from its
+    mailbox (question 3); M10's one `.tmp` name made new each write (question 4); the
+    zeros of a failed first read's close (question 5); the period's write limited only
+    where the runner waits on it, as decision 275 had it; a bad clock answer later a
+    shutdown naming the clock (question 6); a killed runner's hung device killed after the
+    idle watchdog and a poll period (question 7); `Logex.IO.Sim`'s 100,000 writes.
+  - *Questions for the maintainer*, by what an operator sees:
+    1. *A restart on a stalled disk.* The plant trips, the disk stalls, the operator asks
+       a warm restart: it answers `{:error, {:forces, :timeout}}` after 510 ms and the
+       plant stays tripped, every output 0. (a) As built; (b) the restart goes on with
+       the forces the runner holds, the file unread, and says so.
+    2. *A write that timed out.* A stop on a disk that stalls for a second answers
+       `{:error, {:retain, :timeout}}`, yet once the disk wakes the store may hold that
+       very write, since nothing can stop a call the kernel has begun; the operator who
+       reads the message thinks the store is the old one. (a) As built, README saying a
+       write that timed out may still land; (b) `status/1`'s `retain` saying the last
+       write is unknown until a later one lands.
+    3. *A trip that comes just after a restart is asked.* The operator presses restart
+       on a tripped plant as a card fails: where the card's notice reaches the runner
+       before it has taken the restart from its mailbox, the round takes the notice
+       first, and the restart, judged as the runner takes it, clears that new trip too.
+       (a) As built, a window of one round; (b) each restart stamped with the runner's
+       time as it is called, and refused where a trip came after that time.
+    4. *One `.tmp` name.* Each write uses `tally.retain.tmp`, made new each time, where
+       the review suggested a name a write; the operator sees at most one `.tmp` beside
+       the store. (a) As built; (b) a name a write, `tally.retain.<n>.tmp`, the leftovers
+       of writes killed on a stalled disk piling up beside the store until cleaned.
+    5. *A card whose first read fails.* Its outputs are written 0 once before it is
+       closed, as a device closed always is. (a) As built; (b) closed with no write,
+       since no round ever wrote it.
+    6. *A clock that goes wrong.* A host's clock that answers no whole number of
+       milliseconds once the plant runs stops the runner, a shutdown naming the clock,
+       every output 0 by the latches; the host starts it again. (a) As built; (b) a trip,
+       the runner kept for a restart once the clock is mended.
+    7. *A runner killed while a card hangs.* Its device is killed 510 ms after the
+       runner, by the idle watchdog and a poll period, the card left as the hung adapter
+       had it, since a killed device writes no 0, and free for the next start. (a) As
+       built; (b) sooner, at the runner's death, the card left the same.
+    8. *A busy HMI with no continuous task.* An HMI that calls `status/1` in a tight loop
+       delays the 10 ms task, every request served ahead of a round due; the delay is an
+       overlap the subscribers see. (a) As built, the share the continuous task's alone;
+       (b) the share kept against the periodic tasks too where there is no untimed
+       program.
+    9. *A device's report backlog.* An adapter that reports thousands of changes in one
+       poll period has them drained in time that grows with their square. (a) As built;
+       (b) the device keeping a queue of its own, its messages then taken in another
+       order, a change to what a restart reads first (decision 142).
+    10. *A slow card's open.* An adapter whose connect takes 600 ms cannot start without
+        an idle watchdog that loosens the plant's heartbeat too. (a) As built; (b) an
+        `open:` limit of its own for the open and first read.
+    11. *An address shown as text.* A trip for a misread address prints
+        `{:unknown_address, ~c"\a"}`, the list `[7]` shown as a charlist. (a) As built;
+        (b) a trip's address shown as its location's text, `panel.i.7`.
 - **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
   `.dropped` copy; the report's store and file lows.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,

@@ -45,8 +45,11 @@ defmodule Logex.StalledDiskTest do
     t1.lamp lamp_q
   """
 
-  # Every write's limit, the idle watchdog and a poll period: 110 ms of real time.
-  @idle 100
+  # Every write's limit, the idle watchdog and a poll period: 510 ms of real time, the
+  # runner's own unless set. At 110 ms a write the disk was free for, a fresh start's or a
+  # stop's, missed its limit on a loaded machine beside a full suite's syncs, in four runs
+  # of six; a stalled write fails at any limit, which only the time the test takes reads.
+  @idle 500
   @poll 10
 
   defp configured do
@@ -106,7 +109,7 @@ defmodule Logex.StalledDiskTest do
 
   # A call that does not hang answers within a few of its limits; one that hangs, as every
   # call did on a stalled disk before decision 353, never does.
-  @answers 2000
+  @answers 4 * (@idle + @poll)
 
   describe "a stalled disk (decision 353)" do
     test "a force whose write does not end within its limit is {:error, {:forces, :timeout}}, " <>

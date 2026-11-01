@@ -12086,7 +12086,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: each its own limit (a)** (the maintainer, 2026-11-01): each device's write
      gets its own idle + poll of real time from the start of its own write, so a device
      is killed only for its own slowness and named for it, and every device that answers
-     takes the trip's 0. To build in RV-4.
+     takes the trip's 0. To build in RV-4. *(Landed with RV-4, 2026-11-01: where the clock
+     has moved since the refresh before the writes, every device is refreshed again at a
+     write's start, the device written hearing its own deadline and every other the runner
+     well while it waits on a slow one in time; c3-io-contract-1, three of three on the
+     real clock before, none after, and five devices on the real clock under load, 50 of
+     50.)*
 
 349. **A retained `tof` held on at the outage (the review after Milestone 6),** question
      3: a warm or fresh start keeps a retained `tof`'s `.en` at 1, so the first scan sees
@@ -12143,7 +12148,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      runner makes is limited to idle + poll of real time, as the period's write is
      (decision 275); one past it fails, a force with `{:error, {:forces, :timeout}}`, a
      store write reported as any failed write, and the runner answers on. To build in
-     RV-4.
+     RV-4. *(Landed with RV-4, 2026-11-01: each write in a process of its own,
+     `Logex.Runner.Writer.written/3`, killed past its limit, and the forces file's read at
+     a restart limited the same, `{:error, {:forces, :timeout}}` (provisional); a write
+     killed in its rename may land once the disk answers, the old or the new, and since
+     M10 each write's `.tmp` is made new and exclusively, so a killed write's late call
+     never reaches the next write's file (provisional, one name where the review
+     suggested a unique one); the period's write, by its writer and holding up no round,
+     limited where the runner waits on it, as decision 275 had it (provisional).)*
 
 354. **A restart asked while the runner runs (the review after Milestone 6),** question
      8: a `restart/2` that waits for its slot while a round is owed is served by a trip
@@ -12154,7 +12166,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as it arrives; one asked while the runner runs is refused whatever comes before it
      is served, and the trip stands until a restart asked after it. The three tests of
      `trip_test.exs` that pin the other reading change with the maintainer's leave. To
-     build in RV-4.
+     build in RV-4. *(Landed with RV-4, 2026-11-01: the runner keeps its status with the
+     restart as it takes it from its mailbox, its arrival (provisional: a device's notice
+     behind it in the mailbox that a round's start takes first comes before it); the three
+     tests changed, each citing this decision.)*
 
 355. **A store cut short (the review after Milestone 6),** question 9: a store cut at a
      line boundary is read as whole, its lost values started at their initial values,
@@ -12171,6 +12186,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: refused within one VM (a)** (the maintainer, 2026-11-01): a runner refuses
      at start a store or forces path another runner of the same VM holds, naming it; two
      VMs on one path are the host's to avoid, as the documents say. To build in RV-4.
+     *(Landed with RV-4, 2026-11-01: `Logex.Runner.Paths`, a table a process of logex's
+     own keeps for the VM, each runner's store and forces file and the `.tmp` beside each
+     claimed in its init/1 once its name is registered, checked in the caller first so
+     that the refusal names the file before either is read; a holder that stops, crashes
+     or is killed leaves the file free; each path expanded once at the start, so a
+     `File.cd` moves neither file (c2-runner-persist-9); README's "What logex is not"
+     says two VMs, and two paths through a link, are the host's to avoid.)*
 
 357. **Exact reduction pins (the review after Milestone 6),** question 11: about 27 tests
      pin a scan's or a compile's reductions exactly, so a toolchain release that moves
