@@ -2173,6 +2173,34 @@ defmodule Logex.ConfigEditTest do
       assert Enum.uniq(outputs) == [%{"k1" => 0, "k2" => 1}]
     end
 
+    # RV-3's review: a var_output only the candidate declares, started by the plan's switch
+    # and then at a held global's value, is given back by an untest at once, as one both
+    # declare is, so that its `:added` value is what the original's state is left holding.
+    test "a var_output the switch adds and holds is given back by an untest at once" do
+      original = held_plant(@two_motors, %{"motor" => @relay_ld})
+
+      candidate =
+        held_plant(String.replace(@two_motors, "  m1.run k1\n", "  m1.aux k1\n"), %{
+          "motor" => @spare_ld
+        })
+
+      {runtime, %{"k1" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, forecast} = accepted(runtime, candidate)
+
+      assert forecast == [
+               {:added, "m1.aux", 1},
+               {:added, "m2.aux", 1},
+               {:held, "k1", 0},
+               {:holds, "m1.aux", 0}
+             ]
+
+      {edit, tested, ^forecast} = Edit.test(edit, runtime)
+      assert tested.instances["m1"].env["aux"] == 0
+      {_edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:hold_undone, "m1.aux", 1}]
+      assert untested.instances["m1"].env["aux"] == 1
+    end
+
     test "a restart since the switch makes what the var_output holds the restart's: the " <>
            "untest gives nothing back" do
       retained = String.replace(@spare_ld, "var_output aux", "var_output retain aux")
@@ -2194,33 +2222,370 @@ defmodule Logex.ConfigEditTest do
       assert {_edit, _, []} = Edit.untest(edit, restarted)
     end
 
-    test "a var_output whose type does not hold the global's value is left as it is " <>
-           "(provisional)" do
-      text =
-        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
-          "var_global level dint\nprogram m1 big with fast\n  m1.start pb\n" <>
-          "  m1.level level\n"
+    # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a var_output of another type than
+    # the held point's cannot start at every value the point holds, so the point would move
+    # at the first cycle while every report said it held; such a connection is refused at
+    # accept, a change only a restart makes, where until the review it was left as it was.
+    @level_text "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+                  "var_global level TYPE\nprogram m1 big with fast\n  m1.start pb\n" <>
+                  "  m1.level level\n"
 
+    test "a var_output of another type than the held global's is refused at accept, the " <>
+           "point unmoved (provisional)" do
+      for {global, value, output, value_word} <- [
+            {"dint", "100000", "int", "an int"},
+            {"lreal", "0.1", "real", "a real"},
+            {"int", "-5", "usint", "a usint"}
+          ] do
+        text = String.replace(@level_text, "TYPE", global)
+
+        big =
+          "var_input start bool\nvar_output level #{global}\nxic start move #{value} level\n"
+
+        small = "var_input start bool\nvar_output small #{output}\nvar x bool\nxic start ote x\n"
+        original = held_plant(text, %{"big" => big})
+
+        candidate =
+          held_plant(
+            String.replace(
+              text,
+              "m1 big with fast\n  m1.start pb\n  m1.level level\n",
+              "m1 tiny with fast\n  m1.start pb\n  m1.small level\n"
+            ),
+            %{"tiny" => small}
+          )
+
+        {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+
+        assert Edit.accept(runtime, candidate) ==
+                 {:error,
+                  [
+                    %Logex.Diagnostic{
+                      stage: :edit,
+                      line: 6,
+                      message:
+                        "`m1.small` is #{value_word} var_output no rung of `tiny` writes, " <>
+                          "wired to `level`, #{Logex.Declarations.a_global(String.to_atom(global))} " <>
+                          "the candidate stops driving: a held point is wired to a var_output " <>
+                          "of another type only with a restart"
+                    }
+                  ]}
+      end
+    end
+
+    test "one the running configuration wires to a global only the candidate drives is " <>
+           "refused too, its line there named, after every other refusal (provisional)" do
+      text = String.replace(@level_text, "TYPE", "dint")
       big = "var_input start bool\nvar_output level dint\nxic start move 100000 level\n"
       small = "var_input start bool\nvar_output small int\nvar x bool\nxic start ote x\n"
-      original = held_plant(text, %{"big" => big})
 
-      candidate =
+      original =
         held_plant(
-          "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
-            "var_global level dint\nprogram m1 tiny with fast\n  m1.start pb\n" <>
-            "  m1.small level\n",
+          String.replace(
+            text,
+            "m1 big with fast\n  m1.start pb\n  m1.level level\n",
+            "m1 tiny with fast\n  m1.start pb\n  m1.small level\n"
+          ),
           %{"tiny" => small}
         )
 
+      candidate =
+        held_plant(
+          String.replace(text, "task fast", "task slow interval 50 priority 2\ntask fast"),
+          %{"big" => big}
+        )
+
+      runtime = Runtime.start(original)
+
+      assert {:error, [added, mistyped]} = Edit.accept(runtime, candidate)
+      assert added.message =~ "task `slow` is added"
+
+      assert mistyped == %Logex.Diagnostic{
+               stage: :edit,
+               line: nil,
+               message:
+                 "`m1.small` (line 6 of the running configuration) is an int var_output no " <>
+                   "rung of `tiny` writes, wired to `level`, a dint global only the candidate " <>
+                   "drives: a held point is wired to a var_output of another type only with a " <>
+                   "restart"
+             }
+    end
+
+    test "an element of an array var_output wired to an element of another type is refused " <>
+           "at its line, one of the global's type taken" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global levels dint[2]\nprogram m1 w with fast\n  m1.in pb\n  m1.o levels\n"
+
+      writes = "var_input in bool\nvar_output o dint[2]\nxic in move 7 o[0]\nxic in move 7 o[1]\n"
+      original = held_plant(text, %{"w" => writes})
       {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+
+      for {type, result} <- [
+            {"int", :refused},
+            {"dint",
+             [{:held, "levels", [7, 7]}, {:holds, "m2.o[1]", 7}, {:instance_added, "m2", "s"}]}
+          ] do
+        spare = "var_input in bool\nvar_output o #{type}[2]\nvar x bool\nxic in ote x\n"
+
+        candidate =
+          held_plant(
+            String.replace(text, "  m1.o levels\n", "") <>
+              "program m2 s with fast\n  m2.in pb\n  m2.o[1] levels[0]\n",
+            %{"w" => writes, "s" => spare}
+          )
+
+        assert accepted_or_refused(Edit.accept(runtime, candidate)) == result, type
+      end
+
+      spare = "var_input in bool\nvar_output o int[2]\nvar x bool\nxic in ote x\n"
+
+      candidate =
+        held_plant(
+          String.replace(text, "  m1.o levels\n", "") <>
+            "program m2 s with fast\n  m2.in pb\n  m2.o[1] levels[0]\n",
+          %{"w" => writes, "s" => spare}
+        )
+
+      assert {:error, [%Logex.Diagnostic{line: 8, message: message}]} =
+               Edit.accept(runtime, candidate)
+
+      assert message ==
+               "`m2.o[1]` is an int var_output no rung of `s` writes, wired to `levels[0]`, a " <>
+                 "dint global the candidate stops driving: a held point is wired to a " <>
+                 "var_output of another type only with a restart"
+    end
+
+    test "a kept instance's own connection to a wider global is no refusal: its var_output " <>
+           "holds the point already, and before its first run is left as it is (provisional)" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global level dint 100000\nprogram m1 p with fast\n  m1.start pb\n" <>
+          "  m1.small level\n"
+
+      writes = "var_input start bool\nvar_output small int\nxic start move 5 small\n"
+      stops = "var_input start bool\nvar_output small int\nvar x bool\nxic start ote x\n"
+      original = held_plant(text, %{"p" => writes})
+      candidate = held_plant(text, %{"p" => stops})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+      {edit, forecast} = accepted(runtime, candidate)
+      assert forecast == [{:added, "m1.x", 0}, {:held, "level", 5}, {:held, "m1.small", 5}]
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {_outputs, tested} = under_test(tested, 3, %{"pb" => 0})
+      assert Runtime.get!(tested, "level") == 5
+
+      # Before the instance's first run the point holds its own initial value, which the
+      # int cannot: nothing is written, and the point moves at that run (provisional).
+      fresh = Runtime.start(original)
+      {edit, forecast} = accepted(fresh, candidate)
+      assert forecast == [{:added, "m1.x", 0}, {:held, "level", 100_000}, {:held, "m1.small", 0}]
+      {_edit, tested, ^forecast} = Edit.test(edit, fresh)
+      assert tested.instances["m1"].env["small"] == 0
+      {_outputs, tested} = under_test(tested, 1, %{"pb" => 0})
+      assert Runtime.get!(tested, "level") == 0
+    end
+
+    test "an element a kept instance copies out frozen through one whole connection in both " <>
+           "versions is held by neither, and one the edit stops writing is" do
+      head =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global lamps bool[3] at panel.q.0\nvar_global k bool at panel.q.4\n" <>
+          "program m1 p with fast\n  m1.in pb\n  m1.o lamps\n  m1.r k\n"
+
+      writes = "var_input in bool\nvar_output o bool[3] 0 1 1\nvar_output r bool\n"
+
+      original =
+        held_plant(head, %{"p" => writes <> "xic in ote o[0]\nxic in ote o[1]\nxic in ote r\n"})
+
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+
+      for {rungs, expected} <- [
+            {"xic in ote o[0]\nxic in ote o[1]\nxic in ote r\nxic in ote x\n",
+             [{:added, "m1.x", 0}]},
+            {"xic in ote o[0]\nxic in ote o[1]\nxic in ote x\n",
+             [{:added, "m1.x", 0}, {:held, "k", 1}, {:held, "m1.r", 1}]},
+            {"xic in ote o[0]\nxic in ote r\nxic in ote x\n",
+             [{:added, "m1.x", 0}, {:held, "lamps[1]", 1}]}
+          ] do
+        candidate = held_plant(head, %{"p" => writes <> "var x bool\n" <> rungs})
+        {_edit, forecast} = accepted(runtime, candidate)
+        assert forecast == expected, rungs
+      end
+    end
+
+    test "an element held is held by a new source of it: a retyped instance's, or a kept " <>
+           "one's the candidate wires there for the first time" do
+      head =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global lamps bool[3] at panel.q.0\n"
+
+      first = "var_input in bool\nvar_output o bool[3]\nxic in ote o[0]\n"
+      lit = "var_input in bool\nvar_output o bool[3] 0 1 1\nxic in ote o[0]\n"
+
+      every =
+        "var_input in bool\nvar_output o bool[3]\nxic in ote o[0]\nxic in ote o[1]\nxic in ote o[2]\n"
+
+      expected = [
+        {:held, "lamps[1]", 0},
+        {:held, "lamps[2]", 0},
+        {:holds, "m1.o[1]", 0},
+        {:holds, "m1.o[2]", 0}
+      ]
+
+      # Retyped: the old program's `o[1]` was frozen too, but the new instance starts its own.
+      original =
+        held_plant(head <> "program m1 w with fast\n  m1.in pb\n  m1.o lamps\n", %{"w" => first})
+
+      candidate =
+        held_plant(head <> "program m1 p with fast\n  m1.in pb\n  m1.o lamps\n", %{"p" => lit})
+
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
       {_edit, forecast} = accepted(runtime, candidate)
 
+      assert forecast ==
+               expected ++ [{:instance_added, "m1", "p"}, {:instance_stopped, "m1", "w"}]
+
+      # Kept, its connection new: `m2` drove the array, and `m1`, of one type in both, takes it.
+      text = head <> "program m1 p with fast\n  m1.in pb\nprogram m2 w with fast\n  m2.in pb\n"
+      original = held_plant(text <> "  m2.o lamps\n", %{"p" => lit, "w" => every})
+      candidate = held_plant(text <> "  m1.o lamps\n", %{"p" => lit, "w" => every})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, forecast} = accepted(runtime, candidate)
+      assert forecast == expected
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _runtime} = under_test(tested, 2, %{"pb" => 1})
+      assert Enum.uniq(outputs) == [%{"lamps[0]" => 1, "lamps[1]" => 0, "lamps[2]" => 0}]
+    end
+
+    defp accepted_or_refused({:ok, _edit, forecast}), do: forecast
+    defp accepted_or_refused({:error, _diagnostics}), do: :refused
+
+    # RV-3's review: an array var_output wired whole drives, in the configuration a step
+    # starts, only the elements its program writes, so the elements an added or retyped
+    # instance copies out frozen are held as element connections' are, where until then
+    # one element written drove the whole array and the rest moved with nothing reported.
+    @lamps3 "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+              "var_global lamps bool[3] at panel.q.0\n"
+    @lit3 "var_input in bool\nvar_output o bool[3]\nxic in ote o[0]\nxic in ote o[1]\n" <>
+            "xic in ote o[2]\n"
+
+    test "an instance retyped to one that writes some elements of an array wired whole: each " <>
+           "element it copies out frozen is held" do
+      part = "var_input in bool\nvar_output o bool[3] 1 1 1\nxic in ote o[0]\n"
+
+      original =
+        held_plant(@lamps3 <> "program m1 w with fast\n  m1.in pb\n  m1.o lamps\n", %{
+          "w" => @lit3
+        })
+
+      candidate =
+        held_plant(@lamps3 <> "program m1 p with fast\n  m1.in pb\n  m1.o lamps\n", %{"p" => part})
+
+      {runtime, %{"lamps[1]" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, forecast} = accepted(runtime, candidate)
+
       assert forecast == [
-               {:held, "level", 100_000},
-               {:instance_added, "m1", "tiny"},
-               {:instance_stopped, "m1", "big"}
+               {:held, "lamps[1]", 0},
+               {:held, "lamps[2]", 0},
+               {:holds, "m1.o[1]", 0},
+               {:holds, "m1.o[2]", 0},
+               {:instance_added, "m1", "p"},
+               {:instance_stopped, "m1", "w"}
              ]
+
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _runtime} = under_test(tested, 3, %{"pb" => 1})
+
+      assert Enum.uniq(outputs) == [%{"lamps[0]" => 1, "lamps[1]" => 0, "lamps[2]" => 0}]
+
+      # Every element written by its subscripts drives every element, and any written
+      # through a tag subscript the array whole: nothing is held.
+      for every <- [
+            String.replace(@lit3, "bool[3]", "bool[3] 1 1 1"),
+            "var_input in bool\nvar k int\nvar_output o bool[3] 1 1 1\nxic in ote o[k]\n"
+          ] do
+        candidate =
+          held_plant(@lamps3 <> "program m1 p with fast\n  m1.in pb\n  m1.o lamps\n", %{
+            "p" => every
+          })
+
+        assert {_edit, [{:instance_added, "m1", "p"}, {:instance_stopped, "m1", "w"}]} =
+                 accepted(runtime, candidate)
+      end
+    end
+
+    # RV-3's review: assemble and cancel report each held point, so each holder of the
+    # configuration they keep is started at its point's value again, `:holds`, where a
+    # restart since the edit's last switch started the var_output and the point each at its
+    # own first value; until the review the point moved at the holder's next run.
+    test "assemble and cancel after a restart under the edit hold each held point again" do
+      original = held_plant(@two_motors, %{"motor" => @relay_ld})
+
+      candidate =
+        held_plant(String.replace(@two_motors, "  m1.run k1\n", "  m1.aux k1\n"), %{
+          "motor" => @spare_ld
+        })
+
+      for mode <- [:warm, :cold] do
+        {runtime, %{"k1" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+        {edit, _forecast} = accepted(runtime, candidate)
+        {edit, tested, _report} = Edit.test(edit, runtime)
+        restarted = Runtime.restart(tested, mode)
+        assert restarted.instances["m1"].env["aux"] == 1
+        {_config, assembled, report} = Edit.assemble(edit, restarted)
+        assert report == [{:held, "k1", 0}, {:holds, "m1.aux", 0}], inspect(mode)
+        {outputs, _runtime} = under_test(assembled, 3, %{"pb" => 0})
+        assert Enum.map(outputs, & &1["k1"]) == [0, 0, 0]
+
+        # A cycle after the restart ran the holder, so the point is its value already, and
+        # nothing is written.
+        {cycled, %{"k1" => 1}, _} = Runtime.cycle(restarted, 10, %{"pb" => 0})
+        assert {_config, _assembled, [{:held, "k1", 1}]} = Edit.assemble(edit, cycled)
+      end
+
+      # Cancel after an untest, the original's spare holding the point the candidate drove.
+      {runtime, _, _} = Runtime.cycle(Runtime.start(candidate), 0, %{"pb" => 0})
+      {edit, _forecast} = accepted(runtime, original)
+      {edit, tested, _} = Edit.test(edit, runtime)
+      {tested, %{"k1" => 0}, _} = Runtime.cycle(tested, 10, %{"pb" => 0})
+      {edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:held, "k1", 0}, {:holds, "m1.aux", 0}]
+      restarted = Runtime.restart(untested, :cold)
+      {_config, cancelled, report} = Edit.cancel(edit, restarted)
+      assert report == [{:held, "k1", 0}, {:holds, "m1.aux", 0}]
+      {outputs, _runtime} = under_test(cancelled, 3, %{"pb" => 1})
+      assert Enum.map(outputs, & &1["k1"]) == [0, 0, 0]
+    end
+
+    # RV-3's review: the give-back reads a restart from the resource's restart count,
+    # where until then it read the instance's `first`, which one cycle after the restart
+    # cleared again, and which a switch before the instance's first scan found set already.
+    test "no restart's value is given back, whatever cycles came after it or before the switch" do
+      retained = String.replace(@spare_ld, "var_output aux", "var_output retain aux")
+      original = held_plant(@swapped, %{"motor" => retained})
+
+      candidate =
+        held_plant(String.replace(@swapped, "  m1.run k1\n  m1.aux k2\n", "  m1.aux k1\n"), %{
+          "motor" => retained
+        })
+
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+
+      for start <- [runtime, Runtime.start(original)] do
+        {edit, [{:held, "k1", 0}, {:holds, "m1.aux", 0}]} = accepted(start, candidate)
+        {edit, tested, _} = Edit.test(edit, start)
+        {cycled, _, _} = Runtime.cycle(tested, 10, %{"pb" => 0})
+        assert {_edit, _, [{:hold_undone, "m1.aux", 1}]} = Edit.untest(edit, cycled)
+
+        restarted = Runtime.restart(tested, :warm)
+        {cycled, _, _} = Runtime.cycle(restarted, 10, %{"pb" => 0})
+        assert cycled.instances["m1"].env["aux"] == 0
+
+        for after_restart <- [restarted, cycled] do
+          assert {_edit, untested, []} = Edit.untest(edit, after_restart)
+          assert untested.instances["m1"].env["aux"] == 0
+        end
+      end
     end
   end
 

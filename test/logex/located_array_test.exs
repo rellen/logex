@@ -1478,8 +1478,11 @@ defmodule Logex.LocatedArrayTest do
       assert_in_delta (c64 - c32) / 32, 105.625, 0.5
       assert_in_delta (o64 - o32) / 32, 4.53, 0.5
       # A restart, measured there at 39.4 to 39.7 a group of four globals, an unlocated
-      # array among them, which a located array's look-up would make 2 dearer.
-      assert_in_delta (r64 - r32) / 32, 39.55, 0.5
+      # array among them, which a located array's look-up would make 2 dearer; since RV-3's
+      # review at 38.4 to 38.5, the resource reading a global's first value by its own
+      # private rule, where it called `Logex.Configuration.started/1`, which counted an
+      # array's elements again.
+      assert_in_delta (r64 - r32) / 32, 38.45, 0.5
     end
   end
 end

@@ -49,7 +49,10 @@ defmodule Logex.Configuration.Edit do
   running configuration named in its text, its removed tasks before its removed located
   globals, each in its order there; then each program type's, in the order of its first
   such instance in the candidate, each in that type's own `file` (fix F15). A candidate's
-  warnings stop nothing.
+  warnings stop nothing. Since RV-3's review it refuses too a connection that would hold a
+  point from a var_output of another type than the point's (decision 347's hold, below,
+  provisional): a candidate's at its line, among the others, and one of the running
+  configuration that an untest would hold after them, its line there named.
 
   **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
   to the one it starts, writes it in the resource, which then runs the latter, and prunes
@@ -157,18 +160,33 @@ defmodule Logex.Configuration.Edit do
   the first time, in a kept instance (written before the plan's switch where the state
   holds it, so that the switch's own reports of it are of the value after, and after the
   plan's where only the program started declares it), in an instance it adds or retypes,
-  and an element of an array var_output, `{:holds, "m2.o[1]", 0}`. A var_output that holds
-  the value already is not written, and one whose type does not hold it exactly, a
-  narrower var_output wired to a wider global, is left as it is (provisional). The next
-  switch of the same edit first gives back each such write in an instance both
-  configurations run as one type, where the var_output still holds what it wrote and no
-  restart came since (its `first` as it was), `{:hold_undone, "m1.aux", 1}`, as fix F11
-  gives back a resume, so that a test and an untest with no cycle between leave the state
-  as it was and no copy-out of the configuration it starts meets the other's hold; an
-  instance the switch adds or brings back is set aside by the next one, and its hold taken
-  again at the one after. Assemble and cancel write nothing for it: a var_output a switch
-  started at a held global's value holds it until a rung writes it or a restart starts it
-  again.
+  and an element of an array var_output, `{:holds, "m2.o[1]", 0}`. Since RV-3's review an
+  array var_output wired whole drives, in the configuration a switch starts, only the
+  elements its program writes, unless it writes any through a tag subscript, so that
+  each element it copies out frozen is held so too, `{:holds,
+  "m1.o[2]", 0}`, where until then one element written drove the whole array; in the
+  configuration a switch stops it drives the array whole, as decision 232 has it, but an
+  element a kept instance copies out frozen through that same connection in both is held
+  by neither, since nothing of it changes. A var_output that holds the value already is
+  not written. One of another type than its point's cannot hold every value the point
+  may, so accept refuses its connection (provisional), but a kept instance's own
+  connection that both configurations make, which copied the point's value out and so
+  holds it from the instance's first run on; before that run, one whose type does not
+  hold the point's value is left as it is (provisional). The next switch of the same edit
+  first gives back each such write in an instance both configurations run as one type,
+  where the var_output still holds what it wrote and no restart came since, `{:hold_undone,
+  "m1.aux", 1}`, as fix F11 gives back a resume, so that a test and an untest with no
+  cycle between leave the state as it was and no copy-out of the configuration it starts
+  meets the other's hold; an instance the switch adds or brings back is set aside by the
+  next one, and its hold taken again at the one after. A restart is read from the
+  resource's restart count, which each `Logex.Runtime.restart/2` moves on by one, so that
+  no cycle after it, and no switch before the instance's first scan, makes a give-back
+  overwrite what the restart left, where until RV-3's review the instance's `first` stood
+  for it. Assemble and cancel, which report each held point too, start each such
+  var_output of the configuration they keep at its point's value again where it holds
+  another, which only a restart since the last switch leaves, `{:holds, "m1.aux", 0}`, so
+  that the point holds as they report, where until RV-3's review they wrote nothing and
+  the point moved at the var_output's next copy-out.
 
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the resource to the configuration it keeps, each kept instance by its type's plan, by
@@ -186,7 +204,9 @@ defmodule Logex.Configuration.Edit do
   **A restart during an edit** (decision 65) restarts the instances of the configuration
   the resource runs, drops those set aside and the globals only the other configuration
   declares, and keeps the generation and the edit's stage: the next switch starts again
-  what it dropped, `:instance_added` and `:added`.
+  what it dropped, `:instance_added` and `:added`. It moves the resource's restart count
+  on, so the next switch gives back none of the last one's holds, and the next assemble or
+  cancel holds each held point again (decision 347, since RV-3's review).
 
   **The report** is a list of `{kind, name, detail}`, sorted, at most one entry per kind
   and name, the kinds an open set a host must tolerate. A global, task or instance is
@@ -210,7 +230,7 @@ defmodule Logex.Configuration.Edit do
   | `:retain_removed` | global | the value it holds, which a warm restart no longer keeps; nothing is written (decision 302) | a switch |
   | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused |
   | `:held` | global | its value, which nothing drives any more, an array's as a list | every step |
-  | `:holds` | `instance.member` | the held global's value, which a var_output no rung writes, wired to it, starts at (decision 347) | a switch |
+  | `:holds` | `instance.member` | the held global's value, which a var_output no rung writes, wired to it, starts at (decision 347) | a switch; assemble and cancel, where a restart since the switch left it another |
   | `:hold_undone` | `instance.member` | the value it had before the edit's last switch started it at a held global's (decision 347) | a switch |
   | `:interval` | task | `{old, new}`, in ms | a switch |
   | `:next_due` | task | `{from, to}`, in ms: decision 40's move | a switch |
@@ -258,8 +278,9 @@ defmodule Logex.Configuration.Edit do
   # configuration it starts whose var_output no rung writes and which drive a global that
   # direction holds, read at accept from the two configurations alone, as `held` is; and
   # `holds`, the var_outputs the last switch started at a held global's value, by
-  # `{instance, member}`, each `{old, new, first}`, which the next switch gives back where
-  # the var_output still holds `new` and no restart came since.
+  # `{instance, member}`, each `{old, new, restarts, slot}`, which the next switch gives
+  # back where the var_output still holds `new` and the resource's restart count is still
+  # `restarts`.
   @enforce_keys [:original, :candidate, :stage, :plans, :held, :records, :generation]
   defstruct [
     :original,
@@ -289,28 +310,29 @@ defmodule Logex.Configuration.Edit do
     at = at!(runtime, elapsed_ms)
     candidate!(candidate)
     named!(original, candidate)
+    held = %{test: held(original, candidate), untest: held(candidate, original)}
+    wires = %{test: held_wires(candidate, held.test), untest: held_wires(original, held.untest)}
 
     accepted(
-      refused(original, candidate) ++ retyped(original, candidate),
+      refused(original, candidate, misheld(original, candidate, wires)) ++
+        retyped(original, candidate),
       {runtime, at},
-      candidate
+      {candidate, held, wires}
     )
   end
 
   defp accepted(
          [],
          {%Runtime{config: original, generation: generation} = runtime, at},
-         candidate
+         {candidate, held, wires}
        ) do
-    held = %{test: held(original, candidate), untest: held(candidate, original)}
-
     edit = %__MODULE__{
       original: original,
       candidate: candidate,
       stage: :accepted,
       plans: plans(original, candidate),
       held: held,
-      holders: %{test: holders(candidate, held.test), untest: holders(original, held.untest)},
+      holders: %{test: holders(wires.test), untest: holders(wires.untest)},
       records: %{},
       generation: generation
     }
@@ -512,7 +534,11 @@ defmodule Logex.Configuration.Edit do
   # are all numbers, from text, or all nil, from Elixir (Logex.Configuration.check/1), and
   # the sort is stable, so one from Elixir keeps the candidate's order. Each in the
   # candidate's file.
-  defp refused(%Configuration{} = original, %Configuration{file: file} = candidate) do
+  defp refused(
+         %Configuration{} = original,
+         %Configuration{file: file} = candidate,
+         {misheld, unheld}
+       ) do
     tasks = by_name(original.tasks)
     globals = by_name(original.globals)
     instances = by_name(original.instances)
@@ -527,7 +553,7 @@ defmodule Logex.Configuration.Edit do
           i <- candidate.instances,
           m <- moved(Map.get(instances, i.name), i, untimed),
           do: {i.line, m}
-        )
+        ) ++ misheld
 
     gone =
       for(t <- original.tasks, not is_map_key(kept_tasks, t.name), do: removed_task(t)) ++
@@ -536,7 +562,7 @@ defmodule Logex.Configuration.Edit do
           g.at != nil,
           not is_map_key(kept_globals, g.name),
           do: removed_point(g)
-        )
+        ) ++ unheld
 
     for {line, message} <-
           Enum.sort_by(lined, &elem(&1, 0)) ++ for(m <- gone, do: {nil, m}),
@@ -772,19 +798,74 @@ defmodule Logex.Configuration.Edit do
   # Since decision 232 an array the stopped configuration drives whole, where the started
   # one drives some of its elements, holds each element it no longer drives, each by its
   # name, `speeds[3]`, the report sorting them with its other rows; one it drives none of
-  # holds whole, as before.
+  # holds whole, as before. Since RV-3's review an element a kept instance copies out
+  # frozen through one whole connection in both, neither version of its program writing
+  # it, is not held: the stopped configuration's whole reading counts it driven, but the
+  # same frozen value goes on being copied out, and the edit changes nothing of it.
   defp held(from, to) do
-    driven = drives(to)
+    driven = drives(to, :started)
     keep = by_name(to.globals)
 
-    for name <- Enum.sort(Map.keys(drives(from))),
-        [array | _] = :binary.split(name, "["),
-        is_map_key(keep, array),
-        not is_map_key(driven, name),
-        not is_map_key(driven, array),
-        held <- undriven(Map.fetch!(keep, array), name, driven),
-        do: held
+    held =
+      for name <- Enum.sort(Map.keys(drives(from, :stopped))),
+          [array | _] = :binary.split(name, "["),
+          is_map_key(keep, array),
+          not is_map_key(driven, name),
+          not is_map_key(driven, array),
+          held <- undriven(Map.fetch!(keep, array), name, driven),
+          do: held
+
+    unfrozen(Enum.any?(held, &element?/1), held, {from, to})
   end
+
+  defp element?(name), do: Logex.Name.element(name) != nil
+
+  # The names held but the elements copied out frozen in both, read only where an element
+  # is held at all, so that an edit that holds none, nearly every one, pays nothing for it.
+  defp unfrozen(false, held, _configs), do: held
+
+  defp unfrozen(true, held, {from, to}) do
+    same = same_sources(from, to)
+    for name <- held, not frozen_in_both?(Logex.Name.element(name), name, same), do: name
+  end
+
+  # Each whole connection of a kept instance that both configurations make, by its global,
+  # with its member and the writes of its program type's version the step stops, each read
+  # once: an element held is one the started version does not write, so the stopped
+  # version's writes alone tell whether it was copied out frozen there too.
+  defp same_sources(from, to) do
+    wired = MapSet.new(from.connections, &{&1.instance, &1.member, &1.to})
+    {stopped, started} = {by_name(from.instances), by_name(to.instances)}
+
+    wires =
+      for %Configuration.Connection{instance: instance, member: member, to: global} <-
+            to.connections,
+          is_binary(global),
+          Logex.Name.element(member) == nil,
+          MapSet.member?(wired, {instance, member, global}),
+          type <- kept_type(Map.get(stopped, instance), Map.fetch!(started, instance)),
+          do: {global, member, type}
+
+    writes =
+      Map.new(
+        Enum.uniq(for {_global, _member, type} <- wires, do: type),
+        &{&1, type_writes(Map.fetch!(from.programs, &1))}
+      )
+
+    Map.new(wires, fn {global, member, type} -> {global, {member, Map.fetch!(writes, type)}} end)
+  end
+
+  defp kept_type(%{type: type}, %{type: type}), do: [type]
+  defp kept_type(_stopped, _started), do: []
+
+  defp frozen_in_both?(nil, _name, _same), do: false
+
+  defp frozen_in_both?({array, _subscripts}, name, same),
+    do: frozen_wire(Map.get(same, array), after_word(name, array))
+
+  defp frozen_wire(nil, _rest), do: false
+
+  defp frozen_wire({member, was}, rest), do: not member_written?(was, member <> rest)
 
   defp undriven(%Configuration.Global{name: name, type: {:array, _type, dims}}, name, driven) do
     elements = for index <- Logex.Array.indexes(dims), do: Logex.Array.name(name, index)
@@ -805,21 +886,49 @@ defmodule Logex.Configuration.Edit do
   # var_output at a connection's near end, `b.o[1]`, drives where its program writes that
   # element, or its array through a tag subscript (`Logex.Walk.element_writes/1`), where
   # until then no element member drove anything.
-  defp drives(%Configuration{programs: programs, instances: instances, connections: connections}) do
+  #
+  # An array var_output wired whole drives its global whole, in the configuration a step
+  # stops, where its program writes any element of it, so that every element of it the
+  # configuration started does not drive holds, as decision 232 has it, those it copied
+  # out frozen among them, which nothing then moves. In the configuration a step starts,
+  # since RV-3's review, it drives the global whole only where its program writes it
+  # through a tag subscript, which may reach any element, and otherwise each element of
+  # the global whose element it writes, `lamps[0]`, by its subscripts' values, every one
+  # where it writes every one, so that the elements it copies out frozen are held as an
+  # element connection's are,
+  # each var_output element started at its point's value; until then an added or retyped
+  # instance that writes `o[0]` alone copied its initial `o[1]` over a point the report
+  # said nothing of. No logic writes an array whole (Logex.Compiler), so every write of one
+  # is an element's.
+  defp drives(
+         %Configuration{programs: programs, instances: instances, connections: connections},
+         side
+       ) do
     types = Map.new(instances, &{&1.name, &1.type})
 
     writes =
       Map.new(Enum.uniq(Map.values(types)), &{&1, type_writes(Map.fetch!(programs, &1))})
 
+    # One pass over the connections, each driven name put on the list, so that a connection
+    # pays a clause, as a filter's, where a generator of its own names would cost one more.
     copied =
-      for %Configuration.Connection{instance: instance, member: member, to: global} <-
-            connections,
-          is_binary(global),
-          member_written?(Map.fetch!(writes, Map.fetch!(types, instance)), member),
-          do: driven_name(global)
+      Enum.reduce(connections, [], fn
+        %Configuration.Connection{instance: instance, member: member, to: global}, names
+        when is_binary(global) ->
+          copied_to(
+            side,
+            Logex.Name.element(member),
+            {member, global},
+            Map.fetch!(writes, Map.fetch!(types, instance)),
+            names
+          )
+
+        _constant, names ->
+          names
+      end)
 
     through =
-      for {type, {written, _elements}} <- writes,
+      for {type, {written, _elements, _arrays}} <- writes,
           {name, %Tag{section: :var_external}} <- Map.fetch!(programs, type).tags,
           is_map_key(written, name),
           do: name
@@ -827,10 +936,44 @@ defmodule Logex.Configuration.Edit do
     Map.new(copied ++ through, &{&1, true})
   end
 
-  defp type_writes(program),
-    do: {Map.new(Walk.writes(program)), Map.new(Walk.element_writes(program))}
+  # A program type's writes: each tag, each element by its subscripts' values or an array
+  # through a tag subscript by its name (Logex.Walk.element_writes/1), and each array's
+  # elements written by literal subscripts, by the array's name, each as the text after
+  # it, `[1,2]`.
+  defp type_writes(program) do
+    elements = Map.new(Walk.element_writes(program))
+    {Map.new(Walk.writes(program)), elements, by_array(elements)}
+  end
 
-  defp member_written?({writes, elements}, member),
+  defp by_array(elements),
+    do:
+      Enum.reduce(elements, %{}, fn {name, _lines}, arrays ->
+        literal(Logex.Name.element(name), name, arrays)
+      end)
+
+  defp literal(nil, _name, arrays), do: arrays
+
+  defp literal({array, _subscripts}, name, arrays),
+    do: Map.update(arrays, array, [after_word(name, array)], &[after_word(name, array) | &1])
+
+  defp after_word(name, word),
+    do: binary_part(name, byte_size(word), byte_size(name) - byte_size(word))
+
+  # The names a connection drives: none where its var_output is not written; its global
+  # where it is, but for an array var_output wired whole in the configuration a step
+  # starts, which drives its global whole where a tag subscript writes it, and otherwise
+  # each element of the global whose element is written.
+  defp copied_to(:started, nil, {member, global}, {_written, elements, arrays}, names)
+       when is_map_key(arrays, member) and not is_map_key(elements, member),
+       do: Enum.reduce(Map.fetch!(arrays, member), names, &[global <> &1 | &2])
+
+  defp copied_to(_side, split, {member, global}, {writes, elements, _arrays}, names),
+    do: written_name(written_member(split, member, {writes, elements}), global, names)
+
+  defp written_name(true, global, names), do: [driven_name(global) | names]
+  defp written_name(false, _global, names), do: names
+
+  defp member_written?({writes, elements, _arrays}, member),
     do: written_member(Logex.Name.element(member), member, {writes, elements})
 
   defp written_member(nil, member, {writes, _elements}), do: is_map_key(writes, member)
@@ -862,28 +1005,149 @@ defmodule Logex.Configuration.Edit do
   # direction holds, or an element of one held whole, the var_output starts at the
   # global's value and the point holds as the report says, until a rung writes it. These
   # are read once at accept from the configuration started and the held names: each
-  # `{instance, member, global}`, the global named by its subscripts' values.
-  defp holders(%Configuration{} = to, held) do
+  # `{instance, member, global}`, the global named by its subscripts' values, and since
+  # RV-3's review each held element of a global an array var_output is wired to whole, by
+  # the var_output's element of the same subscripts, `{"m1", "o[1]", "lamps[1]"}`.
+  defp holders(wires),
+    do: for({connection, member, name} <- wires, do: {connection.instance, member, name})
+
+  # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a held point is held by starting
+  # the var_output wired to it at its value, which one of another type than the point's
+  # cannot hold for every value, `small int` wired to `level dint` held at 100000, so that
+  # the point would move at the first cycle while every report said it held. Such a
+  # connection is refused at accept, as a change only a restart makes, where until the
+  # review it was left as it was: a candidate's at its line, and one of the running
+  # configuration that an untest would hold after every other refusal of the running
+  # configuration's, with its line there named. A kept instance's connection that both
+  # configurations make is the point's own source, which copied it out, so it holds the
+  # point's value already and is not refused; before the instance's first run since a
+  # start or a restart it may hold another, and one its type does not hold is then left as
+  # it is (provisional, the same question).
+  defp misheld(original, candidate, wires),
+    do:
+      {for(
+         {connection, _member, _name} = wire <- wires.test,
+         not own_source?(connection, original, candidate),
+         message <- mistyped(candidate, wire, {"", "the candidate stops driving"}),
+         do: {connection.line, message}
+       ),
+       for(
+         {connection, _member, _name} = wire <- wires.untest,
+         not own_source?(connection, candidate, original),
+         message <-
+           mistyped(original, wire, {running_line(connection.line), "only the candidate drives"}),
+         do: message
+       )}
+
+  # A connection of `config` that `other` makes too, of an instance both run as one type.
+  defp own_source?(%{instance: instance, member: member, to: global}, other, config),
+    do:
+      Enum.any?(
+        other.connections,
+        &match?(%{instance: ^instance, member: ^member, to: ^global}, &1)
+      ) and
+        kept_type(
+          Enum.find(other.instances, &(&1.name == instance)),
+          Enum.find(config.instances, &(&1.name == instance))
+        ) != []
+
+  defp mistyped(config, {connection, member, name}, {line, held}) do
+    %{type: type} = Enum.find(config.instances, &(&1.name == connection.instance))
+    {%Tag{type: tag_type}, _tag, index} = connected(Map.fetch!(config.programs, type), member)
+    output = element_type(tag_type, index)
+    point = global_type(Logex.Name.element(name), name, config.globals)
+
+    other_type(output == point, %{
+      wire: "`#{connection.instance}.#{member}`#{line}",
+      output: output,
+      type: type,
+      name: name,
+      point: point,
+      held: held
+    })
+  end
+
+  defp other_type(true, _wire), do: []
+
+  defp other_type(false, wire),
+    do: [
+      "#{wire.wire} is #{Declarations.a_type(wire.output)} var_output no rung of " <>
+        "`#{wire.type}` writes, wired to `#{wire.name}`, #{Declarations.a_global(wire.point)} " <>
+        "#{wire.held}: a held point is wired to a var_output of another type only with a " <>
+        "restart"
+    ]
+
+  defp global_type(nil, name, globals), do: Enum.find(globals, &(&1.name == name)).type
+
+  defp global_type({array, _subscripts}, _name, globals) do
+    {:array, type, _dims} = Enum.find(globals, &(&1.name == array)).type
+    type
+  end
+
+  defp held_wires(%Configuration{} = to, held) do
+    elements = held_elements(held)
     held = Map.new(held, &{&1, true})
     types = Map.new(to.instances, &{&1.name, &1.type})
 
     writes =
       Map.new(Enum.uniq(Map.values(types)), &{&1, type_writes(Map.fetch!(to.programs, &1))})
 
-    for %Configuration.Connection{instance: instance, member: member, to: global} <-
-          to.connections,
-        is_binary(global),
-        name = driven_name(global),
-        held_name?(Logex.Name.element(name), name, held),
-        program = Map.fetch!(to.programs, Map.fetch!(types, instance)),
-        output?(connected(program, member)),
-        not member_written?(Map.fetch!(writes, Map.fetch!(types, instance)), member),
-        do: {instance, member, name}
+    # One pass, a connection whose global holds nothing paying a clause, as in drives/2.
+    to.connections
+    |> Enum.reduce([], fn
+      %Configuration.Connection{member: member, to: global} = connection, wires
+      when is_binary(global) ->
+        wired(
+          held_slots(member, driven_name(global), {held, elements}),
+          connection,
+          {to, types, writes},
+          wires
+        )
+
+      _constant, wires ->
+        wires
+    end)
+    |> Enum.reverse()
   end
 
-  defp held_name?(_split, name, held) when is_map_key(held, name), do: true
-  defp held_name?({array, _subscripts}, _name, held), do: is_map_key(held, array)
-  defp held_name?(nil, _name, _held), do: false
+  defp wired([], _connection, _context, wires), do: wires
+
+  defp wired(slots, %{instance: instance} = connection, {to, types, writes}, wires),
+    do:
+      Enum.reverse(
+        for(
+          {member, name} <- slots,
+          output?(connected(Map.fetch!(to.programs, Map.fetch!(types, instance)), member)),
+          not member_written?(Map.fetch!(writes, Map.fetch!(types, instance)), member),
+          do: {connection, member, name}
+        ),
+        wires
+      )
+
+  # The held elements of each global array, by its name, each as the text after it, `[1]`.
+  defp held_elements(held),
+    do:
+      Enum.reduce(held, %{}, fn name, arrays ->
+        literal(Logex.Name.element(name), name, arrays)
+      end)
+
+  # A connection's member and the held name it holds: its global's, where the direction
+  # holds it, or holds whole the array an element is of; and for a member wired whole to a
+  # global array the direction holds element by element, each held element's, by the
+  # member's element of the same subscripts.
+  defp held_slots(member, name, {held, _elements}) when is_map_key(held, name),
+    do: [{member, name}]
+
+  defp held_slots(member, name, {_held, elements}) when is_map_key(elements, name),
+    do: for(rest <- Map.fetch!(elements, name), do: {member <> rest, name <> rest})
+
+  defp held_slots(member, name, {held, _elements}),
+    do: in_held(Logex.Name.element(name), member, name, held)
+
+  defp in_held({array, _subscripts}, member, name, held) when is_map_key(held, array),
+    do: [{member, name}]
+
+  defp in_held(_split, _member, _name, _held), do: []
 
   # A connection's member as the runtime's copy-out reads it: a tag whole, or an element of
   # an array var_output by its subscripts' values, with the tag and the element's type.
@@ -905,24 +1169,31 @@ defmodule Logex.Configuration.Edit do
   # since, given back the value it had, `{:hold_undone, path, old}`, as fix F11 gives back a
   # resume, so that a test and an untest with no cycle between leave it as it was and no
   # copy-out of the configuration started meets the other's write; then each holder of
-  # this direction in the instance started at its global's value, where its type holds that
-  # value exactly and the var_output holds another, `{:holds, path, value}`. A kept
-  # instance's are written before its plan's switch where its state holds the var_output,
-  # so that what the switch reports of it, its retention among it, is of the value it
-  # holds after, and after the switch where only the program started declares it. A value
-  # its type does not hold, a narrower var_output a candidate wires to a wider global, is
-  # left as it is (provisional). Each write is `{old, new, first, slot}` by `{instance,
-  # member}`, `first` the instance's then: a restart since marks it first and starts the
-  # var_output again, so what it holds after is the restart's, not the hold's.
-  defp given_back(nil, state, _name), do: {state, []}
+  # this direction in the instance started at its global's value, where the var_output
+  # holds another and its type holds that value exactly, `{:holds, path, value}`: accept
+  # refuses a var_output of another type than its point's but a kept instance's own
+  # source, which holds the point's value from its first run on (provisional). A kept
+  # instance's are written before its plan's switch where
+  # its state holds the var_output, so that what the switch reports of it, its retention
+  # among it, is of the value it holds after, and after the switch where only the program
+  # started declares it. Each write is `{old, new, restarts, slot}` by `{instance,
+  # member}`, `restarts` the resource's count then (`Logex.Runtime`'s one rule): a restart
+  # since starts the var_output again, so what it holds after is the restart's, not the
+  # hold's, whatever it holds and however many cycles came after, where until RV-3's review
+  # the instance's `first`, which one cycle after the restart cleared again, said so.
+  defp given_back(nil, state, _named), do: {state, []}
 
-  defp given_back(last, state, name) do
+  defp given_back(last, state, named) do
     Enum.reduce(Enum.sort(last), {state, []}, fn {_key, wrote}, acc ->
-      undone(wrote, name, acc)
+      undone(wrote, named, acc)
     end)
   end
 
-  defp undone({old, new, first, slot}, name, {%Instance{env: env, first: first} = state, reports})
+  defp undone(
+         {old, new, restarts, slot},
+         {name, restarts},
+         {%Instance{env: env} = state, reports}
+       )
        when is_map_key(env, elem(slot, 1)) do
     still(slot_value(slot, env) === new, {name, slot, old}, {state, reports})
   end
@@ -949,7 +1220,7 @@ defmodule Logex.Configuration.Edit do
       acc ->
         started_at(
           held_value(Logex.Name.element(global), global, context.globals),
-          {name, member, slot},
+          {name, member, slot, context.runtime.restarts},
           acc
         )
     end
@@ -957,24 +1228,24 @@ defmodule Logex.Configuration.Edit do
 
   defp all(_tag), do: true
 
-  defp started_at(value, {name, member, {%Tag{type: type}, _tag, index} = slot}, acc) do
+  defp started_at(value, {name, member, {%Tag{type: type}, _tag, index} = slot, restarts}, acc) do
     {state, _reports, _writes} = acc
     was = slot_value(slot, state.env)
 
     holding_at(
       was !== value and fits?(element_type(type, index), value),
-      {name, member, slot, was, value},
+      {name, member, slot, was, value, restarts},
       acc
     )
   end
 
   defp holding_at(false, _hold, acc), do: acc
 
-  defp holding_at(true, {name, member, slot, was, value}, {state, reports, writes}),
+  defp holding_at(true, {name, member, slot, was, value, restarts}, {state, reports, writes}),
     do:
       {%{state | env: slot_put(slot, state.env, value)},
        [{:holds, path(name, slot), host(value)} | reports],
-       Map.put(writes, {name, member}, {was, value, state.first, slot})}
+       Map.put(writes, {name, member}, {was, value, restarts, slot})}
 
   defp slot_value({_tag, name, nil}, env), do: Map.get(env, name)
   defp slot_value({_tag, name, index}, env), do: Logex.Array.fetch(Map.fetch!(env, name), index)
@@ -1143,7 +1414,9 @@ defmodule Logex.Configuration.Edit do
     merged =
       merged(Map.fetch!(context.runtime.instances, name), externals(stops), context.globals)
 
-    {merged, undone} = given_back(Map.get(context.last, name), merged, name)
+    {merged, undone} =
+      given_back(Map.get(context.last, name), merged, {name, context.runtime.restarts})
+
     before = merged.env
     holders = Map.get(context.holders, name)
 
@@ -1401,7 +1674,7 @@ defmodule Logex.Configuration.Edit do
     do: reported(global.type, Map.fetch!(values, global.name))
 
   defp global_moved(:error, _was, global, {values, reports}) do
-    value = Configuration.started(global)
+    value = Configuration.initial(global)
 
     {Map.put(values, global.name, value),
      [{:added, global.name, reported(global.type, value)} | reports]}
@@ -1440,7 +1713,7 @@ defmodule Logex.Configuration.Edit do
   defp reported({:array, _type, dims}, value), do: Logex.Array.to_list(value, dims)
   defp reported(_type, value), do: value
 
-  defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.started(global)
+  defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.initial(global)
   defp declared(%Configuration.Global{initial: initial}), do: initial
 
   defp initial_changed(same, same, _global, acc), do: acc
@@ -1562,6 +1835,14 @@ defmodule Logex.Configuration.Edit do
     {globals, gone} =
       Map.split_with(runtime.globals, fn {name, _value} -> is_map_key(keep, name) end)
 
+    {instances, reports} =
+      held_again(
+        Map.fetch!(edit.holders, direction),
+        to,
+        {globals, runtime},
+        {instances, reports}
+      )
+
     report =
       reports ++
         for({name, value} <- gone, do: {:pruned, name, host(value)}) ++
@@ -1570,6 +1851,30 @@ defmodule Logex.Configuration.Edit do
 
     {Runtime.edited(runtime, %{instances: instances, globals: globals, aside: %{}}),
      Enum.sort(report)}
+  end
+
+  # RV-3's review: assemble and cancel report each held point, `{:held, global, value}`,
+  # so each holder of the configuration they keep is started at its global's value as a
+  # switch starts it, `{:holds, path, value}`, where it holds another, which only a restart
+  # since the edit's last switch leaves, that restart having started the var_output and
+  # the global each at its own first value: until the review the point then moved to the
+  # var_output's at its instance's next run, an event task's perhaps cycles later, while
+  # the step said it held. With no holder, nearly every edit, it costs one clause.
+  defp held_again([], _to, _resource, acc), do: acc
+
+  defp held_again(holders, to, {globals, runtime}, {instances, reports}) do
+    types = Map.new(to.instances, &{&1.name, &1.type})
+    context = %{globals: globals, runtime: runtime}
+
+    Enum.reduce(Enum.group_by(holders, &elem(&1, 0)), {instances, reports}, fn
+      {name, holders}, {instances, reports} ->
+        program = Map.fetch!(to.programs, Map.fetch!(types, name))
+
+        {state, held, _writes} =
+          held_in(holders, Map.fetch!(instances, name), {name, context, program}, &all/1)
+
+        {Map.put(instances, name, state), held ++ reports}
+    end)
   end
 
   defp pruned(%{name: name, type: type}, type, {edit, direction}, {instances, reports}) do

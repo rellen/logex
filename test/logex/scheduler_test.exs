@@ -575,35 +575,53 @@ defmodule Logex.SchedulerTest do
   # OE-2 (docs/organisation.md §4.9, "OE-2's design"; decisions 60, 64 and 65): a
   # configuration edit's two pieces of the resource's state, the generation of its steps and
   # the instances its switch sets aside. No edit fills either yet, so each test sets them in
-  # the opaque resource by hand, on purpose, as the decision-49 test looks inside it.
+  # the opaque resource by hand, on purpose, as the decision-49 test looks inside it. Since
+  # RV-3's review a third, the restart count, by which an edit's switch knows a restart
+  # came since its last one (decision 347's give-back).
   describe "a configuration edit's state in the resource (OE-2)" do
-    test "start/1 gives generation 0 and sets nothing aside" do
+    test "start/1 gives generation 0, a restart count of 0, and sets nothing aside" do
       runtime = Runtime.start(plant())
-      assert {runtime.generation, runtime.aside} == {0, %{}}
+      assert {runtime.generation, runtime.aside, runtime.restarts} == {0, %{}, 0}
 
       assert Enum.sort(Map.keys(Map.from_struct(runtime))) ==
-               [:aside, :config, :generation, :globals, :instances, :now, :tasks, :wiring]
+               [
+                 :aside,
+                 :config,
+                 :generation,
+                 :globals,
+                 :instances,
+                 :now,
+                 :restarts,
+                 :tasks,
+                 :wiring
+               ]
     end
 
-    test "a cycle keeps the generation and what is set aside, and never scans it" do
+    test "a cycle keeps the generation, the restart count and what is set aside, and never " <>
+           "scans it" do
       runtime = Runtime.start(plant())
       aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
-      runtime = %{runtime | generation: 3, aside: aside}
+      runtime = %{runtime | generation: 3, aside: aside, restarts: 2}
       {runtime, _, events} = Runtime.cycle(runtime, 10, %{"x" => 1})
       {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 0})
-      assert {runtime.generation, runtime.aside} == {3, aside}
+      assert {runtime.generation, runtime.aside, runtime.restarts} == {3, aside, 2}
       refute Enum.any?(events, &match?({:ran, _, "q", _}, &1))
     end
 
-    test "restart/2 keeps the generation and drops what is set aside (decision 65)" do
+    test "restart/2 keeps the generation, moves the restart count on by one and drops what " <>
+           "is set aside (decision 65)" do
       runtime = Runtime.start(plant())
       aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
-      runtime = %{runtime | generation: 3, aside: aside}
+      runtime = %{runtime | generation: 3, aside: aside, restarts: 2}
 
       for mode <- [:cold, :warm] do
         restarted = Runtime.restart(runtime, mode)
-        assert {restarted.generation, restarted.aside} == {3, %{}}
+        assert {restarted.generation, restarted.aside, restarted.restarts} == {3, %{}, 3}
       end
+
+      # start/2 from the image starts the count again, as start/1 does.
+      {started, []} = Runtime.start(plant(), Runtime.retained(Runtime.restart(runtime, :warm)))
+      assert started.restarts == 0
     end
   end
 

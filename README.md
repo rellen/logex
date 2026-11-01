@@ -3120,13 +3120,17 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   restarts is not counted, as on a first start (decision 274); and a retained `tof` held
   on at the outage, its rung false at that scan, sees no falling edge and comes to rest,
   `.dn` 0, so a fan's run-on does not start by itself, while one already in its run-on at
-  the outage resumes it (decision 349).
+  the outage resumes it (decision 349). The rule is that scan's: a retained `tof` it does
+  not run, on a rung a jump skips or in a block whose `cal` is false, keeps `.en` 1 and
+  runs its delay when it first runs with its rung false (provisional, `PLAN.md`'s RV-3
+  entry).
 - `Logex.Runtime.retained/1` takes every retained value of the resource out as plain
   data, the retained image, `%{configuration: "tally", globals: %{"total_boxes" =>
   {:dint, 5}}, instances: %{"t1" => %{program: "tally", kinds: %{"boxes" => "ctu"},
   values: %{"boxes.cv" => {:dint, 5}, ...}}}, triggers: %{}}`, each value by its path
   with its type and never a timer's `last`, and `triggers` each retained global that is
-  a task's `single` with its last sample (decision 313); `Logex.Runtime.start/2` starts a new resource from it, as
+  a task's `single` with its last sample (decision 313), and a task's own, by the task's
+  name, where two tasks on one trigger hold two (decision 350); `Logex.Runtime.start/2` starts a new resource from it, as
   `start/1` does, with each value laid over it where the program declares its path
   retained, of exactly its type, and the value fits, and gives back what it dropped,
   each once by its path with its reason. A counter made a `ctu_int` is an instance of
@@ -3163,7 +3167,9 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   stands as the last sample only once the step that runs its task has run, so a round a
   trip stops before that step, a major fault in an earlier task's, leaves the sample as it
   was, in the resource and in the store, and the task runs on the next cycle that samples
-  the rise, a warm restart's or a fresh start's (decision 350). A cold
+  the rise, a warm restart's or a fresh start's, each task by its own sample, so that of
+  two event tasks on one trigger with the round cut between their steps only the one cut
+  off runs, once (decision 350). A cold
   restart puts it back with its trigger, and an input point's trigger already 1 still
   runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and

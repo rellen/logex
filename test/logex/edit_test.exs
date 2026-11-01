@@ -1175,6 +1175,30 @@ defmodule Logex.EditTest do
       end
     end
 
+    # RV-3's review: only a timer timing at its last run, `.en` 1, catches up; an rto
+    # stopped done, `.en` 0, counts none of the time it was frozen, so a preset raised past
+    # its `.acc` still drops its `.dn`, and the forecast says so.
+    test "is forecast for an rto stopped done and frozen, which catches up no time" do
+      frozen = fn preset ->
+        c!(
+          "var_input j bool\nvar_input a bool\nvar_output q bool\nvar t rto\n" <>
+            "xic j jmp over\nxic a rto t #{preset}\nlbl over xic t.dn ote q"
+        )
+      end
+
+      {_, state} =
+        run(frozen.(20), [{0, %{"a" => 1}}, {30, %{}}, {10, %{"a" => 0}}, {100, %{"j" => 1}}])
+
+      assert %{"acc" => 20, "dn" => 1, "en" => 0, "last" => 40} = state.env["t"]
+      forecast = [{:dn_drops, "t", {20, 50}}, {:preset, "t", {20, 50}}]
+      {:ok, edit, ^forecast} = Edit.accept(frozen.(20), frozen.(50), state)
+      {_edit, tested, ^forecast} = Edit.test(edit, state)
+      inputs = %{"j" => 0, "a" => 1}
+
+      assert {%{"q" => 0}, %{env: %{"t" => %{"acc" => 20, "dn" => 0}}}} =
+               Runtime.scan(frozen.(50), Runtime.put_inputs(frozen.(50), tested, inputs), 1)
+    end
+
     test "is not forecast for an idle timer, which starts timing against whatever .pre it has" do
       {_, idle} = run(lamp(5000), [{0, %{"go" => 0}}])
       assert %{"en" => 0, "dn" => 0, "acc" => 0} = idle.env["t1"]

@@ -518,7 +518,9 @@ defmodule Logex.ArrayConfigurationTest do
     test "a bit of a program instance names none of its tags" do
       {runtime, _events} = cycled(started())
 
-      for path <- ["m1.[0]", "m1.[n]", "m1.[16#1]"] do
+      # Since RV-3's review a bit number written plainly, `m1.0`, too, which was told the
+      # program declares no `0`.
+      for path <- ["m1.[0]", "m1.[n]", "m1.[16#1]", "m1.0", "m1.12"] do
         assert Runtime.get(runtime, path) ==
                  {:error,
                   "`#{path}` names a bit of `m1`, a program instance of `m`, which has no " <>

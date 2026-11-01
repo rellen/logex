@@ -5978,13 +5978,15 @@ defmodule Logex.ApiContractTest do
   # connection of the configuration started from a var_output no rung of its program
   # writes, to a global the step holds, started at the global's value where it holds
   # another, `:holds`. Gives the entries and this switch's writes, each `{old, new,
-  # first}`, a kept instance's alone.
+  # restarts}`, a kept instance's alone, `restarts` the resource's restart count, which
+  # `ce_restart/1` holds to one more at each restart and `ce_unmoved!/3` to none at a step
+  # (RV-3's review, where until then the instance's `first` stood for it).
   defp ce_held_through(before, later, {from, to, kept}, last) do
     undone =
-      for {{name, member}, {old, new, first}} <- Enum.sort(last),
+      for {{name, member}, {old, new, restarts}} <- Enum.sort(last),
           name in kept,
           state = before.instances[name],
-          state.env[member] == new and state.first == first,
+          state.env[member] == new and before.restarts == restarts,
           do: {name, member, old}
 
     gave = Map.new(undone, fn {name, member, old} -> {{name, member}, old} end)
@@ -6006,7 +6008,7 @@ defmodule Logex.ApiContractTest do
        {name, member, base, value} <- started,
        name in kept,
        into: %{},
-       do: {{name, member}, {base, value, later.instances[name].first}}
+       do: {{name, member}, {base, value, later.restarts}}
      )}
   end
 
@@ -6157,10 +6159,11 @@ defmodule Logex.ApiContractTest do
         do: {:order, name, new}
   end
 
-  # No step moves the clock, an overlap count or a trigger's last sample, and only
-  # decision 40 moves a next due time.
+  # No step moves the clock, the restart count, an overlap count or a trigger's last
+  # sample, and only decision 40 moves a next due time.
   defp ce_unmoved!(before, later, report) do
     assert later.now == before.now
+    assert later.restarts == before.restarts
     moved = for {:next_due, task, {_from, to}} <- report, into: %{}, do: {task, to}
 
     for {name, state} <- before.tasks do
@@ -6431,6 +6434,7 @@ defmodule Logex.ApiContractTest do
   defp ce_restart(w) do
     {:ok, rt} = ce_attempt(fn -> Runtime.restart(w.rt, :cold) end)
     assert rt.aside == %{} and rt.generation == w.rt.generation
+    assert rt.restarts == w.rt.restarts + 1
     ce_reach(:restart_in_edit, w.e != nil)
 
     # A restart starts a held point and the var_output wired to it again, each at 0 in

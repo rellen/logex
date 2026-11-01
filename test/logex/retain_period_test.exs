@@ -840,8 +840,8 @@ defmodule Logex.RetainPeriodCostTest do
   # The least of five runs' costs a round. The devices' messages a round depend on how
   # the scheduler interleaves them, which only ever adds reductions: one run in CI read
   # 15.6 more a round where five here read 3.5 to 7.6 (ci on 8f92723).
-  defp least(config, extra, dir),
-    do: Enum.min(for _ <- 1..5, do: per_round(config, extra, dir))
+  defp least(config, extra, dir, runs \\ 5),
+    do: Enum.min(for _ <- 1..runs, do: per_round(config, extra, dir))
 
   test "a round with a store and a long period costs within a few reductions of none",
        %{tmp_dir: dir} do
@@ -856,8 +856,10 @@ defmodule Logex.RetainPeriodCostTest do
       for n <- [16, 64] do
         config = counters(n)
         store = [retain: Path.join(dir, "s")]
-        often = per_round(config, store ++ [retain_period: 100], dir)
-        long = per_round(config, store ++ [retain_period: 3_600_000], dir)
+        # The least of three runs each, as the test above reads five (RV-3's review met
+        # one run under load past the bound).
+        often = least(config, store ++ [retain_period: 100], dir, 3)
+        long = least(config, store ++ [retain_period: 3_600_000], dir, 3)
         often - long
       end
 

@@ -1911,7 +1911,7 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:retain_removed` | global | the value it holds | a switch | fact: nothing written; the next warm restart puts it back (decisions 278 and 302) |
 | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused (decision 66) | write |
 | `:held` | global | its value, an array's as a list | every step | fact: nothing drives it any more (decision 20; decision 58) |
-| `:holds` | `instance.member` | the held global's value | a switch | write: a var_output no rung writes, wired to a global the step holds, started at the global's value, so that its copy-out holds the point (decision 347) |
+| `:holds` | `instance.member` | the held global's value | a switch; assemble and cancel, where a restart since the switch left it another (RV-3's review) | write: a var_output no rung writes, wired to a global the step holds, started at the global's value, so that its copy-out holds the point (decision 347) |
 | `:hold_undone` | `instance.member` | the value it had | a switch | write: a var_output the edit's last switch started at a held global's value, still holding it with no restart since, given back (decision 347) |
 | `:interval` | task | `{old, new}` ms | a switch | fact |
 | `:next_due` | task | `{from, to}` ms | a switch | write: decision 40 |
@@ -12083,7 +12083,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      plan's switch, and the next switch of the edit gives it back, `{:hold_undone, path,
      old}`, where it still holds the value and no restart came since; a var_output whose
      type does not hold the value is left as it is, provisional, put to the maintainer in
-     `PLAN.md`'s RV-3 entry.)*
+     `PLAN.md`'s RV-3 entry.)* *(Fixed after RV-3's review, 2026-11-01: a connection that
+     would hold a point from a var_output of another type than the point's is refused at
+     accept, provisional, but a kept instance's own connection that both configurations
+     make, which holds the point's value from its first run on; an array var_output wired
+     whole drives, in the configuration a switch starts, only the elements its program
+     writes, so each element it copies out frozen is held too; a restart since the last
+     switch is read from the resource's restart count, which `restart/2` moves on; and
+     assemble and cancel start each holder again where a restart left it another value,
+     so that every point a step reports held holds.)*
 
 348. **One write's time limit (the review after Milestone 6),** question 2: a round
      writes its devices in name order against the one deadline the refresh before the
@@ -12108,7 +12116,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      in its run-on, `.tt` 1, resumes it as decision 273 has it. Decisions 69 and 93's
      "no first scan sees one" hold again. To build in RV-3. *(Built in RV-3,
      2026-11-01: a first scan's de-energised `tof` clauses, every kind of `tof`, a scan
-     after the first costing what it did.)*
+     after the first costing what it did.)* *(RV-3's review found the rule a first scan's
+     alone, as worded: a retained `tof` the first scan does not run, on a jumped rung or in
+     a block whose `cal` is false, runs its delay at its first run with its rung false,
+     pinned as built and put to the maintainer in `PLAN.md`'s RV-3 entry.)*
 
 350. **A trigger's sample whose task a trip cut off (the review after Milestone 6),**
      question 4: a cycle records every task's trigger sample before any step runs, so a
@@ -12123,7 +12134,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      next cycle that samples the rise, a warm restart's first among them. To build in
      RV-3 and RV-4. *(Built in RV-3, 2026-11-01, core and runner both: a rise's step
      carries its sample, which stands as the step runs; every other sample stands at
-     once, a periodic run's while the trigger samples 0 among them, provisional.)*
+     once, a periodic run's while the trigger samples 0 among them, provisional.)* *(Fixed
+     after RV-3's review, 2026-11-01: two tasks on one trigger, the round cut between
+     their steps, hold two samples, and the retained image, so the store, keeps a task's
+     own by the task's name where it is not the trigger's, so a fresh start runs the task
+     the trip cut off, once, as a warm restart does.)*
 
 351. **A rung that writes nothing (the review after Milestone 6),** question 5: a
      newline ends a rung, so a rung wrapped onto two lines, `xic start xio stop` and

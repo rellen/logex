@@ -1159,6 +1159,26 @@ defmodule Logex.ConfigurationTest do
           ],
           do: assert_raise(ArgumentError, message, fn -> Configuration.initial(global) end)
 
+      # RV-3's review: -0.0, scalar and an array's element, in check/1's words for a scalar,
+      # and an improper list, where initial/1 gave -0.0 and length/1 raised its own words.
+      for {global, message} <- [
+            {%Global{name: "a", type: :real, initial: -0.0},
+             "the initial value of global `a` is -0.0, which no real holds and no line gives, " <>
+               "a line's `-0.0` being 0.0: give 0.0"},
+            {%Global{name: "a", type: :lreal, initial: -0.0},
+             "the initial value of global `a` is -0.0, which no real holds and no line gives, " <>
+               "a line's `-0.0` being 0.0: give 0.0"},
+            {%Global{name: "a", type: {:array, :real, [2]}, initial: [1.0, -0.0]},
+             "expected an initial list of values for an array of 2 reals, each a value a real " <>
+               "holds, got: [1.0, -0.0]"},
+            {%Global{name: "a", type: {:array, :int, [2]}, initial: [1 | 2]},
+             "expected an initial list of 2 values for an array of 2 ints, got: [1 | 2]"}
+          ],
+          do:
+            assert_raise(ArgumentError, message, fn ->
+              Configuration.initial(opaque(global))
+            end)
+
       for global <- [
             %Global{name: "a", type: {:array, :int, 8}},
             %Global{name: "a", type: {:array, :int, []}},

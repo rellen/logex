@@ -16,8 +16,9 @@ defmodule Logex.Image do
   # globals, instances: instances, triggers: triggers}`, `globals` each retained global by
   # name to `{type, value}`, `instances` each instance whose program retains anything by
   # name to its image, and since decision 313 `triggers` each retained global that is a
-  # task's `single` by name to its last sample. The shape is decision 307's, the
-  # maintainer's confirmation of M6-4's; `triggers` decision 313's.
+  # task's `single` by name to its last sample, and since RV-3's review a task whose own
+  # last sample is not its trigger's, by the task's name (decision 350). The shape is
+  # decision 307's, the maintainer's confirmation of M6-4's; `triggers` decision 313's.
 
   import Logex.Declarations, only: [is_elementary: 1, is_fitting: 2]
 
@@ -228,7 +229,7 @@ defmodule Logex.Image do
       configuration_line(name, config.name) ++
         map_lines(globals, "globals", &global_lines/2) ++
         map_lines(instances, "instances", &instance_lines/2) ++
-        map_lines(triggers, "triggers", &trigger_lines(&1, &2, globals))
+        map_lines(triggers, "triggers", &trigger_lines(&1, &2, {globals, tasks(config)}))
 
     raised(lines)
   end
@@ -242,11 +243,17 @@ defmodule Logex.Image do
       )
 
   # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
-  # of a global the image holds.
-  defp trigger_lines(name, sample, globals),
+  # of a global the image holds; and since RV-3's review a task's own, by the name of a
+  # task the configuration declares with a single, which no global can have.
+  defp trigger_lines(name, sample, {globals, tasks}),
     do:
       name_lines(name, "triggers") ++
-        sample_lines(sample, name) ++ held_lines(held_global?(globals, name), name)
+        sample_lines(sample, name) ++
+        held_lines(held_global?(globals, name) or is_map_key(tasks, name), name)
+
+  defp tasks(%{tasks: tasks}) when is_list(tasks),
+    do:
+      for(%{name: name, single: single} <- tasks, is_binary(single), into: %{}, do: {name, true})
 
   defp sample_lines(sample, _name) when is_fitting(:bool, sample), do: []
 

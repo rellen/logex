@@ -1416,10 +1416,7 @@ defmodule Logex.Configuration do
   # array's element told by `Logex.Declarations.array_misfits/3`.
   defp global_initial(%Global{name: name, type: type, initial: initial})
        when type in @reals and initial === -0.0,
-       do: [
-         "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
-           "gives, a line's `-0.0` being 0.0: give 0.0"
-       ]
+       do: [minus_zero(name)]
 
   # M5-10: a real global's initial value may be a float, as its line's real literal is;
   # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`, so
@@ -1436,6 +1433,11 @@ defmodule Logex.Configuration do
     do: [
       "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
     ]
+
+  defp minus_zero(name),
+    do:
+      "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
+        "gives, a line's `-0.0` being 0.0: give 0.0"
 
   defp array_initial(true, _global), do: []
 
@@ -2178,6 +2180,12 @@ defmodule Logex.Configuration do
              (initial == nil or is_list(initial)),
       do: initial_sized(sizes_said?(dims), {global, array}, initial)
 
+  # RV-3's review: -0.0, which `check/1` refuses (a5-data-model-8), in its words, where
+  # initial/1 gave it.
+  def initial(%Global{name: name, type: type, initial: initial})
+      when type in @reals and initial === -0.0,
+      do: raise(ArgumentError, minus_zero(name))
+
   # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
   # `real`'s rounded to a single, an integer one as the real it is, one past its range the
   # host's mistake.
@@ -2190,22 +2198,6 @@ defmodule Logex.Configuration do
       do: integer_initial(Declarations.holds?(type, initial), global)
 
   def initial(other), do: no_global(other)
-
-  @doc false
-  # The rule `initial/1` states, for a global `check/1` has passed, so with none of its
-  # host checks: the resource's own starts and restarts, and an edit's switch, read it, so
-  # that a restart costs what it did before the review after Milestone 6 gave initial/1
-  # its checks (`located_array_test.exs` pins that cost).
-  def started(%Global{type: type, initial: nil}) when is_elementary(type),
-    do: Declarations.zero(type)
-
-  def started(%Global{type: {:array, _type, dims} = array, initial: initial}),
-    do: started_array(initial == nil or length(initial) == Logex.Array.size(dims), array, initial)
-
-  def started(%Global{type: type, initial: initial}) when type in @reals and is_number(initial),
-    do: Logex.Real.nearest(type, initial)
-
-  def started(%Global{initial: initial}) when is_integer(initial), do: initial
 
   defp no_global(other),
     do:
@@ -2228,19 +2220,26 @@ defmodule Logex.Configuration do
         initial
       )
 
+  # RV-3's review: an improper list, `[1 | 2]`, is no list of the array's size, told so,
+  # where `length/1` raised the BEAM's own words.
   defp initial_judged([], {_global, {:array, _type, dims} = array}, initial),
-    do: initial_array(initial == nil or length(initial) == Logex.Array.size(dims), array, initial)
+    do: initial_array(sized?(initial, Logex.Array.size(dims)), array, initial)
 
   defp initial_judged(misfits, _at, _initial),
     do: raise(ArgumentError, Enum.join(misfits, "\n"))
 
-  defp started_array(true, array, initial), do: Logex.Array.started(array, initial)
-  defp started_array(false, array, initial), do: initial_array(false, array, initial)
+  defp sized?(nil, _size), do: true
+  defp sized?(initial, size), do: proper_length(initial, 0) == size
+
+  defp proper_length([], n), do: n
+  defp proper_length([_element | rest], n), do: proper_length(rest, n + 1)
+  defp proper_length(_improper, _n), do: -1
 
   defp initial_array(true, array, nil), do: Logex.Array.started(array, nil)
 
+  # A real element's -0.0 is no value a real holds (decision 150), as `check/1` tells it.
   defp initial_array(true, {:array, type, _dims} = array, initial),
-    do: listed_initial(Enum.reject(initial, &Declarations.holds?(type, &1)), array, initial)
+    do: listed_initial(Enum.reject(initial, &element_held?(type, &1)), array, initial)
 
   defp initial_array(false, array, initial),
     do:
@@ -2249,6 +2248,9 @@ defmodule Logex.Configuration do
         "expected an initial list of #{Logex.Array.size(elem(array, 2))} values for " <>
           "#{Declarations.a_type(array)}, got: #{inspect(initial, charlists: :as_lists)}"
       )
+
+  defp element_held?(type, value) when type in @reals and value === -0.0, do: false
+  defp element_held?(type, value), do: Declarations.holds?(type, value)
 
   defp listed_initial([], array, initial), do: Logex.Array.started(array, initial)
 

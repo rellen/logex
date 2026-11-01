@@ -935,6 +935,52 @@ defmodule Logex.RetainTest do
       assert outputs == [[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [0, 0, 0, 0]]
     end
 
+    # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): decision 349 is a first scan's
+    # rule, so a retained `tof` held on at the outage that the first scan does not run, on
+    # a rung a jump skips or in a block whose `cal` is false, keeps its `.en` 1, and its
+    # first run with its rung false sees a falling edge and runs the off-delay, as one held
+    # on and skipped does with no restart. Pinned as built until the maintainer rules.
+    @skipped_tof "var_input a bool\nvar_input j bool\nvar_output q bool\nvar retain t tof\n" <>
+                   "xic j jmp over\nxic a tof t 100\nlbl over xic t.dn ote q\n"
+
+    @skipped_block "function_block fb\nvar_input a bool\nvar_output q bool\n" <>
+                     "var retain t tof\nxic a tof t 100\nxic t.dn ote q\n"
+
+    test "a retained tof the first scan does not run runs its off-delay at its first run " <>
+           "(provisional)" do
+      top = c!(@skipped_tof)
+
+      inb =
+        c!(
+          "var_input a bool\nvar_input go bool\nvar_output q bool\nvar retain b fb\n" <>
+            "xic go cal b a q\n",
+          [block!(@skipped_block)]
+        )
+
+      for {p, on, steps, expected} <- [
+            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 0}, %{}], [0, 0]},
+            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 1}, %{"j" => 0}, %{}], [1, 1, 1]},
+            {inb, %{"a" => 1, "go" => 1}, [%{"a" => 0, "go" => 0}, %{"go" => 1}, %{}], [0, 1, 1]}
+          ] do
+        held = scans(p, Runtime.instance(p), [on, on])
+
+        for restarted <- [
+              Runtime.restart(p, held, :warm),
+              elem(Runtime.instance(p, Runtime.retained(p, held)), 0)
+            ] do
+          {outputs, _} =
+            Enum.map_reduce(steps, restarted, fn inputs,
+                                                 %Instance{now: now, first: first} = state ->
+              state = Runtime.put_inputs(p, state, inputs)
+              {out, state} = Runtime.call(p, state, %{}, %Scan{now: now + 10, first: first})
+              {out["q"], state}
+            end)
+
+          assert outputs == expected, inspect({p.source, steps})
+        end
+      end
+    end
+
     test "a block's non_retain member and an unmarked nested timer follow decision 270" do
       seal = block!(@seal)
       plain = block!(@plain)

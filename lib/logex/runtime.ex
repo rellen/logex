@@ -139,6 +139,11 @@ defmodule Logex.Runtime do
   (OE-2), uses for a piece it adds, with its exceptions:
   - the clock, `now`, is 0 at `start/1`, moves on by each cycle's `elapsed_ms`, and is
     kept by `restart/2` and by every step of an edit;
+  - since RV-3's review the restart count, `restarts`, is 0 at `start/1` and `start/2`,
+    moves on by one at each `restart/2`, warm or cold, and is kept by a cycle and by every
+    step of an edit, which reads it: a configuration edit's switch gives back a hold of the
+    last one only where no restart came since (decision 347), where the instance's `first`,
+    which a cycle clears, stood for it;
   - a global starts by `Logex.Configuration.initial/1`: at `start/1`, at `restart/2` but
     for an input point, whose value is the host's from its first cycle on and is kept, and
     since M6-3 at a warm `restart/2` but for a global the configuration declares `retain`
@@ -192,7 +197,8 @@ defmodule Logex.Runtime do
     decision 313 the last sample the resource took, not the value kept, so a trigger
     sampled at 1 fires on no rising edge (decision 274) and a rise logic wrote after the
     sample fires once, and since M6-4 `start/2`'s for a `single` the image put back, the
-    sample the image holds for it (decision 313), every other 0; and a cycle
+    sample the image holds for it (decision 313), a task's own by its name where the
+    image holds one (since RV-3's review), every other 0; and a cycle
     samples it once, after the input merge and before any scan, the sample standing as
     its last at once, but since decision 350 a rise, which runs the task, only with the
     step that runs it (`cycle_step/2`), so a round the runner's trip stops before that
@@ -429,8 +435,18 @@ defmodule Logex.Runtime do
   # A task with a single holds its trigger's last sample there too (M2-6). OE-2:
   # `generation`, the count of the configuration edits' steps taken on it, and `aside`,
   # the state of each instance an edit's switch has set aside, by name, never scanned.
-  @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
-  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
+  @enforce_keys [
+    :config,
+    :now,
+    :globals,
+    :instances,
+    :tasks,
+    :wiring,
+    :generation,
+    :aside,
+    :restarts
+  ]
+  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside, :restarts]
 
   @opaque t :: %__MODULE__{}
 
@@ -805,7 +821,7 @@ defmodule Logex.Runtime do
     %__MODULE__{
       config: config,
       now: 0,
-      globals: Map.new(config.globals, &{&1.name, Configuration.started(&1)}),
+      globals: Map.new(config.globals, &{&1.name, started(&1)}),
       instances:
         Map.new(config.instances, fn %{name: name, type: type} ->
           {name, detached(fresh(Map.fetch!(config.programs, type)), wiring, name)}
@@ -813,7 +829,8 @@ defmodule Logex.Runtime do
       tasks: Map.new(config.tasks, &{&1.name, task_state(&1, 0)}),
       wiring: wiring,
       generation: 0,
-      aside: %{}
+      aside: %{},
+      restarts: 0
     }
   end
 
@@ -843,8 +860,9 @@ defmodule Logex.Runtime do
   initial value, unreported. Each retained timer starts with `last` at the start's `now`,
   0, so the outage is not counted (decision 273); every scan's first is marked first
   (decision 274); and a task's `single` that the image put back starts its trigger's last
-  sample at the sample the image holds for it, as a warm `restart/2` keeps it (decisions
-  305 and 313), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
+  sample at the sample the image holds for it, the task's own by its name where it holds
+  one and otherwise its trigger's, as a warm `restart/2` keeps it (decisions 305, 313 and
+  350), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
   after the sample fires once, every other at 0 as `start/1` has it; one the image holds
   no sample for, which only a host's own image lacks, at the value put back, so nothing
   fires (decision 319). So a resource started from another's image cycles as that one does
@@ -866,9 +884,10 @@ defmodule Logex.Runtime do
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
   instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
   One that is not, or whose parts are not, a sample that is no bool's value or of a
-  global `globals` does not hold among them, or one of another configuration, which a
-  line naming both tells, is the host's mistake: one `ArgumentError`, a line each, after
-  `config`'s own check.
+  global `globals` does not hold among them, a task's sample being of a task `config`
+  declares with a single, or one of another configuration, which a line naming both
+  tells, is the host's mistake: one `ArgumentError`, a line each, after `config`'s own
+  check.
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -918,17 +937,21 @@ defmodule Logex.Runtime do
   # sample the image holds for it, so that a rise logic made after that sample fires once
   # in the first cycle and one already seen does not; one the image holds no sample for,
   # which only a host's own image lacks, at the value put back, so nothing fires
-  # (decision 319, confirmed by the maintainer, 2026-10-30).
+  # (decision 319, confirmed by the maintainer, 2026-10-30). Since RV-3's review a task the
+  # image holds a sample of by its own name, which a round cut short before its step
+  # leaves (decision 350), starts at that one.
   defp put_back(
          %{last: _} = state,
-         %Configuration.Task{single: single},
+         %Configuration.Task{single: single, name: name},
          {kept, globals, triggers}
        ),
        do:
          kept_sample(
            single in kept,
            state,
-           Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
+           Map.get_lazy(triggers, name, fn ->
+             Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
+           end)
          )
 
   defp put_back(state, _task, _kept), do: state
@@ -941,7 +964,10 @@ defmodule Logex.Runtime do
   name, to its lone image (`retained/2`), its program type and each retained value by
   its path inside the instance; and since decision 313 `triggers`, each retained global
   that is a task's `single` by name to the last sample the resource took of it, 0 or 1,
-  so that a start lays it back as a warm `restart/2` keeps it. An instance an edit set
+  the first such task's in declaration order, and since RV-3's review each task whose
+  last sample is not that one, by the task's name, which only a round a trip cut short
+  between two tasks on one trigger leaves (decision 350), so that a start lays each back
+  as a warm `restart/2` keeps it. An instance an edit set
   aside is not in it, and during an edit the program running is the one read (decision
   278). A timer's `last` is never in it (decision 273). Its cost is the retained values' and the paths', with one step for
   each global and instance declared, whatever else the resource holds.
@@ -964,25 +990,36 @@ defmodule Logex.Runtime do
   end
 
   # Decision 313: each retained global that is a task's `single`, by name, to that task's
-  # last sample of it, the first such task's in declaration order, every task sampling
-  # each trigger in the same cycle.
+  # last sample of it, the first such task's in declaration order. Since decision 350 a
+  # round a trip cut short leaves the sample of a task whose step it did not run as it was,
+  # so tasks that share a trigger may hold two; since RV-3's review each task whose last
+  # sample is not its trigger's entry is in the image by its own name too, which no global
+  # can have, so a start from it runs the task the cut left and no other, where until then
+  # it took the first task's for all and lost the rise or counted it twice.
   defp triggers(%Configuration{tasks: tasks, globals: globals}, states) do
     retained = for %Configuration.Global{retain: :retain, name: name} <- globals, do: name
+    samples = Enum.flat_map(tasks, &trigger(&1, retained, states))
+    firsts = samples |> Enum.reverse() |> Map.new(fn {single, _task, last} -> {single, last} end)
 
-    tasks
-    |> Enum.reverse()
-    |> Enum.flat_map(&trigger(&1, retained, states))
-    |> Map.new()
+    Map.merge(
+      firsts,
+      for(
+        {single, task, last} <- samples,
+        Map.fetch!(firsts, single) != last,
+        into: %{},
+        do: {task, last}
+      )
+    )
   end
 
   defp trigger(%Configuration.Task{single: single, name: name}, retained, states)
        when is_binary(single),
-       do: sample_of(single in retained, single, Map.fetch!(states, name))
+       do: sample_of(single in retained, {single, name}, Map.fetch!(states, name))
 
   defp trigger(_task, _retained, _states), do: []
 
-  defp sample_of(true, single, %{last: last}), do: [{single, last}]
-  defp sample_of(false, _single, _state), do: []
+  defp sample_of(true, {single, task}, %{last: last}), do: [{single, task, last}]
+  defp sample_of(false, _named, _state), do: []
 
   @doc """
   One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,
@@ -1129,6 +1166,7 @@ defmodule Logex.Runtime do
     %{
       runtime
       | globals: globals,
+        restarts: runtime.restarts + 1,
         instances:
           Map.new(runtime.instances, fn {name, state} ->
             restarted =
@@ -1187,7 +1225,7 @@ defmodule Logex.Runtime do
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
 
   defp input_kept(false, global, %__MODULE__{wiring: %{located: nil}}),
-    do: Configuration.started(global)
+    do: started(global)
 
   # M5-13: a located input array keeps its input image as an input point does.
   defp input_kept(
@@ -1197,7 +1235,24 @@ defmodule Logex.Runtime do
        ),
        do: array_kept(located_array(runtime.wiring.located, name), global, runtime)
 
-  defp input_kept(false, global, _runtime), do: Configuration.started(global)
+  defp input_kept(false, global, _runtime), do: started(global)
+
+  # `Logex.Configuration.initial/1`'s rule for a global `Logex.Configuration.check/1` has
+  # passed, so with none of its host checks, the resource's own: its starts and restarts
+  # read it, so that a restart costs what it did before the review after Milestone 6 gave
+  # initial/1 its checks (`located_array_test.exs` pins that cost), and since RV-3's review
+  # here, private, where it was `Logex.Configuration.started/1`, a public function no host
+  # needs.
+  defp started(%Configuration.Global{type: type, initial: nil}) when is_elementary(type),
+    do: Declarations.zero(type)
+
+  defp started(%Configuration.Global{type: {:array, _type, _dims} = array, initial: initial}),
+    do: Logex.Array.started(array, initial)
+
+  defp started(%Configuration.Global{type: type, initial: initial}) when type in @reals,
+    do: Logex.Real.nearest(type, initial)
+
+  defp started(%Configuration.Global{initial: initial}), do: initial
 
   defp located_array(nil, _name), do: nil
   defp located_array(located, name), do: Map.get(located, name)
@@ -1205,7 +1260,7 @@ defmodule Logex.Runtime do
   defp array_kept({"i", _first, _last}, global, runtime),
     do: Map.fetch!(runtime.globals, global.name)
 
-  defp array_kept(_other, global, _runtime), do: Configuration.started(global)
+  defp array_kept(_other, global, _runtime), do: started(global)
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
@@ -1782,6 +1837,17 @@ defmodule Logex.Runtime do
   defp misfits([], _env, _at, acc), do: acc
 
   defp present({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
+
+  # A user block's instance the state lacks, which a plain swap leaves, reads each member as
+  # one the state lacks: its scalars read 0 as a tag's do, and an array it holds, at any
+  # depth, is refused by its path, `mm.gs`, as a tag's is, where until RV-3's review a
+  # scan of its body raised a KeyError on the array.
+  defp present(:error, %FbType{body: %Program{}} = type, path, blocks, acc),
+    do: of_type(type, %{}, path, blocks, acc)
+
+  defp present(:error, {:block, _name} = type, path, blocks, acc),
+    do: of_type(type, %{}, path, blocks, acc)
+
   defp present(:error, _type, _path, _blocks, acc), do: acc
 
   defp held({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
@@ -3337,16 +3403,31 @@ defmodule Logex.Runtime do
 
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    instance_part(Logex.Name.bracketed(tag), program, {head, tag, members, path}, runtime)
+
+    instance_part(
+      bit_number(Logex.Name.bracketed(tag), tag),
+      program,
+      {head, tag, members, path},
+      runtime
+    )
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
     do: raise(ArgumentError, unknown_head(kind(runtime, head), head, runtime))
 
+  # RV-3's review: a part that is a number, `m1.0`, is a bit number too, as the lexer reads
+  # `status.3`, told as `m1.[0]` is, where until then the program was said to declare no
+  # `0`.
+  defp bit_number(nil, tag), do: numbered(Logex.Name.subscript(tag))
+  defp bit_number(bit, _tag), do: bit
+
+  defp numbered({:literal, _n} = bit), do: bit
+  defp numbered({:tag, _name}), do: nil
+
   # The review after Milestone 6 (b2-resource-9): `m1.[0]`, which the lexer reads as a
-  # bit of `m1`, a bit number in brackets (`Logex.Name.bracketed/1`), names no tag of the
-  # instance, which has no bits, where until then it was told the program declares no
-  # ``, or since RV-2 no `[0]`, a tag of no name.
+  # bit of `m1`, a bit number in brackets (`Logex.Name.bracketed/1`), and since RV-3's
+  # review `m1.0`, names no tag of the instance, which has no bits, where until then it was
+  # told the program declares no ``, or since RV-2 no `[0]`, a tag of no name.
   defp instance_part(nil, program, {_head, tag, _members, _path} = at, runtime),
     do: tag_at(Logex.Name.element(tag), program, at, runtime)
 
@@ -4227,11 +4308,16 @@ defmodule Logex.Runtime do
   # a fresh instance and a cold restart put `.en` at 0, and since decision 349 (the
   # maintainer, 2026-11-01) a first scan reads no edge from an `.en` a warm restart, or a
   # start from an image, kept at 1, so a retained `tof` held on at the outage comes to rest
-  # on a false rung, `.dn` 0, as Logix's prescan leaves a TOF, where until then it started
-  # its delay and ran its output on with nothing commanding it; one already in its delay at
-  # the outage, `.tt` 1, resumes it on the first scan, its `last` at the restart's `now`
-  # (decision 273). Each first scan's run is a clause of its own, so a scan after the first
-  # costs what it did. Nothing may follow it on its path (decision 73).
+  # on a false rung, `.dn` 0, where until then it started its delay and ran its output on
+  # with nothing commanding it; one already in its delay at the outage, `.tt` 1, resumes it
+  # on the first scan, its `last` at the restart's `now` (decision 273). The rule is the
+  # first scan's, so a retained `tof` the first scan does not run, on a rung a jump skips
+  # or in a block whose `cal` is false, keeps its `.en` 1 and runs its delay at its first
+  # run with its rung false (provisional, `PLAN.md`'s RV-3 entry), where Logix's prescan,
+  # which clears a TOF's `.EN`, `.TT` and `.DN`, is said to reach every rung (unverified
+  # here for a jumped rung and an add-on instruction not called). Each first scan's run is
+  # a clause of its own, so a scan after the first costs what it did. Nothing may follow
+  # it on its path (decision 73).
   defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end

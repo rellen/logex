@@ -333,6 +333,13 @@ defmodule Logex.RuntimeTest do
           Runtime.call(m, s, %{}, opaque(lacking))
         end)
       end
+
+      # One with a key its struct does not have, as the state's twin above (RV-3's review).
+      extra = Map.put(%Scan{now: 0, first: true}, :extra, 1)
+
+      raises("expected a %Logex.Scan{}, got: #{inspect(extra)}", fn ->
+        Runtime.call(m, s, %{}, opaque(extra))
+      end)
     end
   end
 
@@ -2369,9 +2376,9 @@ add e i y",
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
       # its compile from a configuration file's text, and from its file on disk.
-      # M4-2: watchdog/1, the one rule for a task's watchdog. The review after Milestone 6
-      # (b6-configuration-6): started/1, internal (no doc), initial/1's rule with none of its
-      # host checks, which the resource reads.
+      # M4-2: watchdog/1, the one rule for a task's watchdog. initial/1's rule with none of
+      # its host checks, which the resource reads (b6-configuration-6), is the resource's own
+      # since RV-3's review, which found it a public function no host needs.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -2381,7 +2388,6 @@ add e i y",
                initial: 1,
                location: 1,
                new!: 1,
-               started: 1,
                watchdog: 1
              ]
 
