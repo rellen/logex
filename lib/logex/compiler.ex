@@ -1974,9 +1974,9 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
-  defp lower_rung({:rung, elements}, diagnostics, known) do
+  defp lower_rung({:rung, elements} = rung, diagnostics, known) do
     {ir, lowered} = lower(elements, [], diagnostics, known)
-    {{:rung, ir}, idle(ir, [], {lowered, diagnostics, ir})}
+    {{:rung, ir}, idle(ir, [], {lowered, diagnostics, rung})}
   end
 
   # RV-2 (decision 351): a rung that writes nothing and jumps nowhere is refused at its
@@ -1986,7 +1986,8 @@ defmodule Logex.Compiler do
   # group's legs where they stand, until one does something (`@doing`), so a rung costs a
   # look-up for each instruction before its first output, one for most; a rung refused
   # already, for an unknown instruction, a `cal` that runs nothing or any other mistake, is
-  # not told this too. A rung of empty groups alone, `( )`, holds no line, and is placed
+  # not told this too. Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
+  # printed text reads too; a rung of empty groups alone, `( )`, holds none, and is cited
   # by `lowering/3` (placed/2).
   defp idle([{symbol, _line, _operands} | _rest], _later, {lowered, _before, _ir})
        when is_map_key(@doing, symbol),
@@ -1995,19 +1996,14 @@ defmodule Logex.Compiler do
   defp idle([{:branches, legs} | rest], later, at), do: idle_legs(legs, [rest | later], at)
   defp idle([_instruction | rest], later, at), do: idle(rest, later, at)
   defp idle([], [next | later], at), do: idle(next, later, at)
-  defp idle([], [], {before, before, ir}), do: [idle_rung(ir_line(ir, [])) | before]
-  defp idle([], [], {lowered, _before, _ir}), do: lowered
+  defp idle([], [], {before, before, rung}), do: [idle_rung(rung_line(rung)) | before]
+  defp idle([], [], {lowered, _before, _rung}), do: lowered
 
   defp idle_legs([leg | legs], later, at), do: idle(leg, [legs_of(legs) | later], at)
   defp idle_legs([], later, at), do: idle([], later, at)
 
   defp legs_of([]), do: []
   defp legs_of(legs), do: [{:branches, legs}]
-
-  defp ir_line([{:branches, legs} | rest], later), do: ir_line(List.flatten(legs), [rest | later])
-  defp ir_line([{_symbol, line, _operands} | _rest], _later), do: line
-  defp ir_line([], [next | later]), do: ir_line(next, later)
-  defp ir_line([], []), do: nil
 
   defp idle_rung(nil), do: {:idle_rung, nil}
   defp idle_rung(line), do: diagnostic(line, idle_message())
@@ -2021,7 +2017,10 @@ defmodule Logex.Compiler do
 
   # A rung of empty groups alone holds no line in the parse tree, so it is cited at the
   # first line it can stand on, the one after the rung before it, a declaration among them
-  # (provisional): each, in order, takes the place of its marker, which comes newest first.
+  # (provisional). A marker says that a routine holds one, so a routine of none is not
+  # walked again; then every rung of the parse tree whose `rung_line/1` is nil is cited,
+  # each where it stands, and the markers are dropped, so the citing never depends on how
+  # many markers there are (RV-2's review).
   defp placed(lowering, routine),
     do: placed_in(Enum.member?(lowering, {:idle_rung, nil}), lowering, routine)
 
@@ -2031,17 +2030,13 @@ defmodule Logex.Compiler do
     {lineless, _at} =
       Enum.flat_map_reduce(rungs, {0, 0}, fn rung, at -> lineless(rung_line(rung), at) end)
 
-    {placed, []} = Enum.map_reduce(lowering, Enum.reverse(lineless), &place/2)
-    placed
+    Enum.reverse(lineless, Enum.reject(lowering, &(&1 == {:idle_rung, nil})))
   end
 
-  defp place({:idle_rung, nil}, [{after_line, line} | lines]),
-    do: {diagnostic(line, empty_groups(after_line)), lines}
-
-  defp place(diagnostic, lines), do: {diagnostic, lines}
-
   # The last line a rung holds, and how many rungs of empty groups alone came after it.
-  defp lineless(nil, {line, count}), do: {[{line, line + count + 1}], {line, count + 1}}
+  defp lineless(nil, {line, count}),
+    do: {[diagnostic(line + count + 1, empty_groups(line))], {line, count + 1}}
+
   defp lineless(line, _at), do: {[], {line, 0}}
 
   defp empty_groups(0), do: "a rung of empty groups alone, at the start, " <> empty_groups()
