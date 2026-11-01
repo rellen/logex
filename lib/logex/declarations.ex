@@ -1599,10 +1599,13 @@ defmodule Logex.Declarations do
 
   defp holding({:array, %FbType{name: name} = type, dims}),
     do:
-      "#{Logex.Array.size(dims)} instances of `#{name}`, `[#{Enum.join(dims, ",")}]`, each " <>
-        "holding #{Logex.Array.deep_size(type)}"
+      "#{instances_of(Logex.Array.size(dims))} of `#{name}`, `[#{Enum.join(dims, ",")}]`, " <>
+        "each holding #{Logex.Array.deep_size(type)}"
 
   defp holding(%FbType{name: name}), do: "in the arrays its type `#{name}` holds"
+
+  defp instances_of(1), do: "1 instance"
+  defp instances_of(count), do: "#{count} instances"
 
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
   defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"

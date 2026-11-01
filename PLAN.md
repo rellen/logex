@@ -12223,8 +12223,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   instance's first state. A program of 100 jumps each to its own label alone, refused at
   `d7a1290`, compiles in 133,788.
 
-  *Mutation table* (`scratchpad/rv/m9/t1/` on `1453de6`, 18 mutants), each judged by the
-  full suite: every one red.
+  *Mutation table* (`scratchpad/rv/m9/t1/` on `1453de6`, 18 mutants, and
+  `scratchpad/rv/m9/t2/` on `fa04f39`, 13), each judged by the full suite: every one red.
+  The second table's first run, on `1f2b840`, had three survivors, m372_latest,
+  m372_order_const and m372_unmarked, which `fa04f39`'s two tests kill.
 
   | Mutant | What it does | Tests failed |
   |---|---|---|
@@ -12246,6 +12248,19 @@ and CI checked; each fix with a test that fails when it is reverted.
   | m371_host_trusted | `compile/2` trusts a host's types | 14 |
   | m371_loader_checks | the loader checks its own types again | 3 |
   | m371_no_one_version | the loader's types held with no table | 4 |
+  | m372_no_places | every write of an array keyed by the array alone, as before | 6 |
+  | m372_literal_only | a write meets only literals equal to its own | 3 |
+  | m372_latest | the latest write that may meet told, not the earliest | 1 |
+  | m372_untagged | no array taken as one a tag subscript writes | 5 |
+  | m372_full_projection | a first kept under its full projection alone | 6 |
+  | m372_tag_as_value | a tag subscript read as a literal of its name | 6 |
+  | m372_order_const | every first of one order | 1 |
+  | m372_coil_indexed | a coil in an array no tag subscript writes indexed | 1 (the cost pin) |
+  | m372_unmarked | a coil of literal subscripts marks no array | 1 |
+  | m372_one_dim_indexed | an array of one dimension indexed | 9 |
+  | m365_no_slow_write | the fragment's setup owes no round | 1 |
+  | m365_fragment_parsed_only | the fragment parsed and not run | 1 |
+  | m363_unmarked | `wired.logex` shown but no file of the examples | 1 |
 
   *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
   Logix say nothing that settles them.

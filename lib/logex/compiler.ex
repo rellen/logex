@@ -12,9 +12,10 @@ defmodule Logex.Compiler do
   <name>`, or `{:error, [%Logex.Diagnostic{}]}`, every mistake in the routine, in line
   order. The function block types a routine may hold are given as its third argument,
   each checked at full depth (decision 54); the loader alone gives its own through an
-  internal entry, `loaded/2`, which checks none of them again (decision 371). Since M3-5 it checks a routine's labels and jumps too: each
-  `lbl` first on its rung, one label to a rung, and each `jmp` naming a label of its own
-  routine on a later rung, one to a rung (decisions 81, 104 and 105).
+  internal entry, `loaded/2`, which checks none of them again (decision 371). Since M3-5
+  it checks a routine's labels and jumps too: each `lbl` first on its rung, one label to
+  a rung, and each `jmp` naming a label of its own routine on a later rung, one to a rung
+  (decisions 81, 104 and 105).
 
   Since RV-2 (decision 351) a rung that writes nothing and jumps nowhere, none of its
   instructions writing a tag, a member, a bit or a one-shot's storage bit or running an

@@ -304,7 +304,7 @@ defmodule Logex.InstanceArrayTest do
 
       assert messages(held("var row big[1]") <> "cal row[0] x y", [big]) == [
                {3,
-                "`row` would hold 65537 elements at every depth, 1 instances of `big`, `[1]`, " <>
+                "`row` would hold 65537 elements at every depth, 1 instance of `big`, `[1]`, " <>
                   "each holding 65537: " <> @deep}
              ]
 
