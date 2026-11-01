@@ -238,6 +238,45 @@ defmodule Logex.RetainTest do
              }
     end
 
+    # RV-2's review: a program's var_input and a var_external take no qualifier wherever it
+    # stands, so one out of its place is told that, in the words its place gives, where
+    # it was told to move to where it is refused too; the tag is declared with none, its
+    # uses checked. A block's var_input and a `var` are told where it goes, as before.
+    test "a misplaced qualifier on a section that takes none is told the section takes none" do
+      input =
+        &("`#{&1}` is a program's var_input, which takes no `#{&2}`: a var_input holds the " <>
+            "host's value, which every restart keeps where it fits")
+
+      external =
+        &("`#{&1}` is a var_external, which takes no `#{&2}`: its global carries it, as the " <>
+            "configuration declares it")
+
+      assert errors(
+               "var_input x int[2] retain\nvar_input y dint Non_Retain\n" <>
+                 "var_input z retain dint\nvar_external e int[2] retain\n" <>
+                 "var_external f dint NON_RETAIN\nvar w int[2] retain\nvar_output q dint\n" <>
+                 "move x[1] q\nmove y q\nmove z q\nmove e[0] q\nmove f q\nmove w[0] q"
+             ) == [
+               "line 1: " <> input.("x", "retain"),
+               "line 2: " <> input.("y", "non_retain"),
+               "line 3: " <> input.("z", "retain"),
+               "line 4: " <> external.("e", "retain"),
+               "line 5: " <> external.("f", "non_retain"),
+               "line 6: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`"
+             ]
+
+      {:error, [d]} =
+        Logex.compile(
+          "function_block fb\nvar_input x dint retain\nvar_output y dint\nmove x y",
+          name: "fb"
+        )
+
+      assert d.message ==
+               "`retain` comes straight after the section word, as in " <>
+                 "`var_input retain count dint`"
+    end
+
     test "a section word is quoted as written beside its qualifier" do
       assert errors("VAR_OUTPUT Retain\nVar x Retain bool") == [
                "line 1: `VAR_OUTPUT Retain` needs a tag name and a type, as in " <>

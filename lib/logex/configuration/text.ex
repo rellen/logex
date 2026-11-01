@@ -214,6 +214,13 @@ defmodule Logex.Configuration.Text do
   # double no other literal of the text holds, which every rule of `check/1` refuses as it
   # refuses a subnormal one, `1.0e-310`, in the global's or the member's words, and whose
   # text, `shown`, `Logex.Configuration.compile/3` puts back as written in each message. No configuration holding a stand-in compiles, so none is ever handed out.
+  #
+  # Since RV-2's review a real literal written other than as its value's plain text, an
+  # initial value of a `var_global` line whose global holds no real, `var_global g dint
+  # 1.5e1` or `var_global g int[2] 1 2.5e0`, is stood in for too, which every rule refuses
+  # as it refuses any real there, so that it is quoted as written, as a `.ld` line's is
+  # (a3-compiler2-9's twin); and a line's qualifier is passed over, so that decision 227's
+  # warning is given on `var_global retain sp real 16777217.0` too.
   def read_rounded(source) when is_binary(source) do
     {lexed, spelled} = stood_in(Logex.Lexer.tokenize(source))
     {read, rounded} = lexed_rounded(lexed)
@@ -222,31 +229,51 @@ defmodule Logex.Configuration.Text do
 
   # Decision 237: each underflowed literal, in source order, stood in for by a subnormal
   # double, the next `k * 5.0e-324`, k from 7919, that no real literal of the text holds, so
-  # that its shortest text, which a message quotes, is no other literal's.
-  # A text with none, nearly every one, is passed over at a reduction a token.
-  defp stood_in({:ok, tokens, _end_line} = lexed), do: stood_in(underflows?(tokens), lexed)
+  # that its shortest text, which a message quotes, is no other literal's; and since RV-2's
+  # review each spelled real literal a `var_global` line gives a global that holds no real
+  # (`misfits/1`). A text with no spelled real literal, nearly every one, is passed over at
+  # a reduction a token.
+  defp stood_in({:ok, tokens, _end_line} = lexed), do: stood_in(spelled_real?(tokens), lexed)
   defp stood_in(error), do: {error, []}
 
   defp stood_in(false, lexed), do: {lexed, []}
 
   defp stood_in(true, {:ok, tokens, end_line}) do
+    misfits = misfits(split(tokens, [], []))
+
     {tokens, {_count, _held, spelled}} =
-      Enum.map_reduce(tokens, {7919, held(tokens), []}, &stand_in/2)
+      Enum.map_reduce(tokens, {7919, held(tokens), []}, &stand_in(&1, &2, misfits))
 
     {{:ok, tokens, end_line}, Enum.reverse(spelled)}
   end
 
-  defp underflows?([{:real_lit, _, zero, _} = token | rest]) when zero == 0.0,
-    do: Parser.underflowed?(token) or underflows?(rest)
+  defp spelled_real?([{:real_lit, _, _value, _spelling} | _rest]), do: true
+  defp spelled_real?([_token | rest]), do: spelled_real?(rest)
+  defp spelled_real?([]), do: false
 
-  defp underflows?([_token | rest]), do: underflows?(rest)
-  defp underflows?([]), do: false
+  defp stand_in({:real_lit, {line, _} = location, _value, spelling} = token, acc, misfits),
+    do:
+      stand_in(
+        Parser.underflowed?(token) or MapSet.member?(misfits, location),
+        token,
+        {location, line, spelling},
+        acc
+      )
 
-  defp stand_in({:real_lit, {line, _} = location, zero, spelling} = token, acc)
-       when zero == 0.0,
-       do: stand_in(Parser.underflowed?(token), token, {location, line, spelling}, acc)
+  defp stand_in(token, acc, _misfits), do: {token, acc}
 
-  defp stand_in(token, acc), do: {token, acc}
+  # The location of each spelled real literal among a `var_global` line's initial values
+  # whose global's type is known and holds no real, an integer, a bit string or a bool, or
+  # an array of one: a real there is always refused, so its configuration never compiles.
+  defp misfits(lines),
+    do:
+      MapSet.new(
+        for tokens <- lines,
+            {_line, type, values} <- [global_line(tokens)],
+            type != nil and type not in @reals,
+            {:real_lit, location, _value, _spelling} <- Enum.take_while(values, &is_literal/1),
+            do: location
+      )
 
   defp stand_in(true, token, {location, line, spelling} = at, {k, held, spelled}),
     do:
@@ -297,10 +324,28 @@ defmodule Logex.Configuration.Text do
 
   defp lexed_rounded(error), do: {lexed(error), []}
 
-  defp rounded_line([{:name, {line, _}, word}, {:name, _, _name}, {:name, _, type} | values]),
-    do: rounded_global(String.downcase(word), line, real_word(String.downcase(type)), values)
+  defp rounded_line(tokens), do: rounded_global(global_line(tokens))
 
-  defp rounded_line(_tokens), do: []
+  # A `var_global` line as `{line, type, values}`, its type word read as `real_word/1` reads
+  # it and the tokens after it, a qualifier straight after `var_global` passed over (M6-3),
+  # or nil for any other line.
+  defp global_line([{:name, {line, _}, word} | rest]),
+    do: global_words(String.downcase(word), line, rest)
+
+  defp global_line(_tokens), do: nil
+
+  defp global_words("var_global", line, [{:name, _, first} | rest] = words),
+    do: unqualified(is_map_key(@qualifiers, String.downcase(first)), line, rest, words)
+
+  defp global_words(_word, _line, _rest), do: nil
+
+  defp unqualified(true, line, words, _whole), do: typed_line(line, words)
+  defp unqualified(false, line, _rest, words), do: typed_line(line, words)
+
+  defp typed_line(line, [{:name, _, _name}, {:name, _, type} | values]),
+    do: {line, real_word(String.downcase(type)), values}
+
+  defp typed_line(_line, _words), do: nil
 
   defp real_word(word) when is_map_key(@types, word), do: Map.fetch!(@types, word)
 
@@ -312,7 +357,7 @@ defmodule Logex.Configuration.Text do
   defp array_real({:ok, {:array, type, _dims}}), do: type
   defp array_real(:error), do: nil
 
-  defp rounded_global("var_global", line, type, values) when type in @reals,
+  defp rounded_global({line, type, values}) when type in @reals,
     do:
       for(
         value <- Enum.take_while(values, &is_literal/1),
@@ -323,7 +368,7 @@ defmodule Logex.Configuration.Text do
         do: {line, Parser.spelling(value), type, held}
       )
 
-  defp rounded_global(_word, _line, _type, _values), do: []
+  defp rounded_global(_other), do: []
 
   defp lines([], entries, []), do: {:ok, Enum.reverse(entries)}
   defp lines([], entries, problems), do: {:error, Enum.reverse(problems), Enum.reverse(entries)}

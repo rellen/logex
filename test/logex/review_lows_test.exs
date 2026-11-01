@@ -52,10 +52,25 @@ defmodule Logex.ReviewLowsTest do
   end
 
   describe "Logex.Declarations, total" do
+    # Since RV-2's review in pinned words, where it raised FunctionClauseError.
     test "c4-api-fuzz-6: a_or_an/1 of nil raises, where it recursed for ever" do
       task = Task.async(fn -> catch_error(Declarations.a_or_an(nil)) end)
-      assert :function_clause = Task.await(task, 2_000)
+
+      assert %ArgumentError{
+               message:
+                 "a_or_an/2 takes a word and the word as shown, each a binary, got: nil and nil"
+             } = Task.await(task, 2_000)
+
+      assert_raise ArgumentError,
+                   "a_or_an/2 takes a word and the word as shown, each a binary, got: 5 and nil",
+                   fn -> Declarations.a_or_an(5) end
+
+      assert_raise ArgumentError,
+                   ~s(a_or_an/2 takes a word and the word as shown, each a binary, got: "ton" and :x),
+                   fn -> Declarations.a_or_an("ton", :x) end
+
       assert Declarations.a_or_an("rto") == "an rto"
+      assert Declarations.a_or_an("rto", "`rto`") == "an `rto`"
     end
 
     test "c4-api-fuzz-7: an improper list of tags declared from Elixir is a pinned ArgumentError" do
@@ -201,6 +216,82 @@ defmodule Logex.ReviewLowsTest do
                "line 1: the initial value of `a[1]` must be an integer, found 2.5e0"
              ]
     end
+
+    # RV-2's review: its twin in a configuration, whose check/1 judges a global's value,
+    # which keeps no spelling. The reader stands each such literal in for a value no other
+    # literal of the text holds, as decision 237 stands in `1.0e-400`, and compile/3 puts
+    # its text back, so that it is quoted as written; a real global keeps its value.
+    test "a3-compiler2-9's twin: a configuration global's real initial value is quoted as written" do
+      for {line, messages} <- [
+            {"var_global g dint 1.5e1",
+             ["`g` is a dint: `1.5e1` is a real, and a dint holds only integers"]},
+            {"var_global retain g word 1.0e0",
+             ["`g` is a word: `1.0e0` is a real, and a word holds only integers"]},
+            {"var_global g bool 1.0e0",
+             ["`g` is a bool: `1.0e0` is a real, and a bool holds only 0 or 1"]},
+            {"var_global g dint 1.0e-400",
+             ["`g` is a dint: `1.0e-400` is a real, and a dint holds only integers"]},
+            {"var_global g dint 15.0",
+             ["`g` is a dint: `15.0` is a real, and a dint holds only integers"]},
+            {"var_global g int[3] 2.5 2.50 2.5e0",
+             [
+               "the initial value of `g[0]` must be an integer, found 2.5",
+               "the initial value of `g[1]` must be an integer, found 2.50",
+               "the initial value of `g[2]` must be an integer, found 2.5e0"
+             ]}
+          ] do
+        assert {:error, diagnostics} =
+                 Logex.Configuration.compile("c", line <> "\nvar_global r real 1.50\n", %{}),
+               line
+
+        assert Enum.map(diagnostics, & &1.message) --
+                 ["this configuration declares no `program`: it would run nothing"] == messages,
+               line
+      end
+
+      {:ok, program} =
+        Logex.compile("var_input a real\nvar_output q bool\ngt a 1.0 ote q", name: "m")
+
+      assert {:ok, config} =
+               Logex.Configuration.compile(
+                 "c",
+                 "var_global r real 1.50\nvar_global s lreal[2] 2.5e0 -0.250\n" <>
+                   "var_global b bool\nprogram m1 m\n  m1.a r\n  m1.q b\n",
+                 %{"m" => program}
+               )
+
+      assert Enum.map(config.globals, &{&1.name, &1.initial}) == [
+               {"r", 1.5},
+               {"s", [2.5, -0.25]},
+               {"b", nil}
+             ]
+    end
+
+    # RV-2's review: decision 227's warning read a `var_global` line's type as its third
+    # word, so a qualified line, `var_global retain sp real 16777217.0`, was told nothing.
+    test "decision 227's warning is given on a qualified global's line" do
+      {:ok, program} =
+        Logex.compile("var_input a real\nvar_output q bool\ngt a 1.0 ote q", name: "m")
+
+      for line <- [
+            "var_global retain sp real 16777217.0",
+            "var_global NON_RETAIN sp real[2] 1.0 16777217.0",
+            "var_global sp real 16777217.0"
+          ] do
+        assert {:ok, config} =
+                 Logex.Configuration.compile(
+                   "c",
+                   line <> "\nvar_global x real\nprogram m1 m\n  m1.a x\n",
+                   %{"m" => program}
+                 )
+
+        assert [%Diagnostic{line: 1, message: message} | _] = config.warnings
+
+        assert message ==
+                 "`16777217.0` is more precise than a real keeps: it is held as 16777216.0",
+               line
+      end
+    end
   end
 
   describe "the warnings" do
@@ -285,6 +376,20 @@ defmodule Logex.ReviewLowsTest do
                "line 1: warning: `r` is a var_output, but no rung writes it: it stays at 0.0",
                "line 2: warning: `l` is a var_output, but no rung writes it: it stays at 1.5",
                "line 3: warning: `d` is a var_output, but no rung writes it: it stays at 0"
+             ]
+
+      # Since RV-2's review each element of an array of reals too, where an array of
+      # lreals was told 0; one with an initial list and one of ints are told as before.
+      assert warnings(
+               "var_output la lreal[2]\nvar_output ra real[2,2]\nvar_output ia int[2]\n" <>
+                 "var_output li lreal[2] 1.5 2.5\nvar x lreal\nvar y real\nvar z int\n" <>
+                 "var w lreal\nmove la[0] x\nmove ra[0,0] y\nmove ia[1] z\nmove li[1] w"
+             ) == [
+               "line 1: warning: `la` is a var_output, but no rung writes it: it stays at 0.0",
+               "line 2: warning: `ra` is a var_output, but no rung writes it: it stays at 0.0",
+               "line 3: warning: `ia` is a var_output, but no rung writes it: it stays at 0",
+               "line 4: warning: `li` is a var_output, but no rung writes it: it stays at " <>
+                 "its initial values"
              ]
     end
 
@@ -371,6 +476,16 @@ defmodule Logex.ReviewLowsTest do
       assert_raise ArgumentError,
                    "cannot print {:int_lit, 1, 1.5}: not a tree Logex.Parser.parse/1 can produce",
                    fn -> Logex.Printer.print({:rung, [{:int_lit, 1, 1.5}]}) end
+
+      # RV-2's review: a routine's rungs that are no proper list, where Enum.map_join/3 raised
+      # FunctionClauseError.
+      assert_raise ArgumentError,
+                   "cannot print :x: not a tree Logex.Parser.parse/1 can produce",
+                   fn ->
+                     Logex.Printer.print({:routine, {:rungs, [{:rung, [{:name, 1, "a"}]} | :x]}})
+                   end
+
+      assert Logex.Printer.print({:routine, {:rungs, [{:rung, [{:name, 1, "a"}]}]}}) == "a"
 
       # A token the lexer never makes is still an error, not a raise, as yecc answered one.
       assert {:error, {{1, 1}, Logex.Parser, _}} = Logex.Compiler.parse([{:foo, {1, 1}}])

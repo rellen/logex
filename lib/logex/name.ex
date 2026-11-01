@@ -64,9 +64,14 @@ defmodule Logex.Name do
   @doc false
   # A last part's bit number in brackets, `[n]` or `[16#4]`: `{:tag, "n"}`, the tag that
   # holds it (M5-9, decision 160), or `{:literal, 4}`, the number a literal spells
-  # (decision 213), read as a subscript is.
-  def bracketed(<<?[, _::binary>> = part) when binary_part(part, byte_size(part) - 1, 1) == "]",
-    do: subscript(binary_part(part, 1, byte_size(part) - 2))
+  # (decision 213), read as a subscript is; nil for a text of no such shape.
+  def bracketed(<<?[, _::binary>> = part)
+      when byte_size(part) > 2 and binary_part(part, byte_size(part) - 1, 1) == "]",
+      do: subscript(binary_part(part, 1, byte_size(part) - 2))
+
+  # RV-2's review: any other text, `x`, `[`, `[1` or `[]`, is no bit number in brackets, nil,
+  # so that this reader is total as the others are.
+  def bracketed(part) when is_binary(part), do: nil
 
   @doc false
   # The word before a text's first bracket, however its brackets are written, `temps` of

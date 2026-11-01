@@ -11781,7 +11781,8 @@ and CI checked; each fix with a test that fails when it is reverted.
     of empty groups alone, which holds no line in the parse tree, cited at the first line
     it can stand on, after the rung before it, "a rung of empty groups alone, after line
     1"; a label alone refused as a rung that writes nothing; a link to a directory a path
-    of its own in the loader's memo.
+    of its own in the loader's memo; since RV-2's review a rung the jump checks refuse
+    told that it writes nothing too (question 7).
   - *Questions for the maintainer*, by what an operator sees:
     1. *A jump to the end.* `jmp done` … `lbl done` on the routine's last rung is now
        refused, the label alone writing nothing (decision 351 read literally, and Logix's
@@ -11807,6 +11808,56 @@ and CI checked; each fix with a test that fails when it is reverted.
     6. *Disjoint subscripts.* `ote ee[1,i]` and `ote ee[0,i]` are warned as two coils that
        may share an element, which they never do. (a) As built, the warning's "may"; (b) a
        subscript literal in the same place told apart, so rows that differ are no warning.
+    7. *A misplaced label told twice.* `xic auto lbl done` is refused for its label, which
+       stands first on its rung, and told too that the rung writes nothing, since moving
+       the label first, `lbl done xic auto`, still leaves a rung that writes nothing.
+       (a) As built, both; (b) the label's message alone, the second given once it is
+       moved.
+
+  **RV-2's review** (2026-11-01, of `cc98165`: eleven findings, each fixed with a test that
+  fails when its fix is reverted, checked by reverting, or with its document made true).
+
+  1. *A connection's member that ends in `]` and is no element*, `k1.[0]` or `k1.o[1].[2]`,
+     raised `FunctionClauseError` from `Logex.Configuration.compile/3`, `compile_file/1` and
+     `check/1`, `Logex.Name.element/1` giving nil, which no clause took: it is told as a
+     member its program does not declare, too deep where it has a `.` part, as `k1.a.3` is
+     (`compile_total_test.exs`, H5's sixth root).
+  2. *H5's first root not pinned*: a reading of a rung's line that stopped at a group's
+     first leg survived the suite. A group alone whose first leg is empty, `( | xic a ote
+     b )` or `( | ote b )`, compiles in a block and runs, and beside a rung of empty groups
+     alone each is cited by its own line; a rung that writes nothing is cited by its parse
+     tree's line, and a rung of empty groups alone by a walk of the tree once a routine
+     holds one, so the citing no longer depends on how many markers there are.
+  3. *A connection's instance with brackets*, `k1[1].a x`, raised the host's
+     `ArgumentError` from `compile/3`: the configuration reader breaks the line, told the
+     instance is named whole, and the line still connects `k1`'s `a`.
+  4. *The compile's cost*: decision 351's check looks at a rung's last instruction first,
+     and `Logex.Name.element/1` reads a name in one split (the H5 and decision 351
+     paragraphs above); every program within 8 reductions a rung of `e365fa4`, one of
+     arrays within 16, pinned.
+  5. *A rung refused already*: the claim narrowed to a refusal found as the rung is
+     lowered, and a rung the jump checks refuse told both, pinned (question 7).
+  6. *`Logex.Printer.print/1` of a routine whose rungs are no proper list* is the printer's
+     pinned `ArgumentError`, where `Enum.map_join/3` raised.
+  7. *An array of reals no rung writes* is told it stays at 0.0, as a real is.
+  8. *`Logex.Declarations.a_or_an/2` of a word that is no binary* raises a pinned
+     `ArgumentError`, where it raised `FunctionClauseError`.
+  9. *The documents*: `docs/naming.md`'s `lbl` stanza amended, a label alone no longer a
+     landing that does nothing; `Logex.Name.bracketed/1` made total, nil for a text of no
+     bit number in brackets, so its comment's "each is total" is true.
+  10. *Older twins*: a configuration global's real initial value quoted as written,
+      `var_global g dint 1.5e1` told "`1.5e1` is a real" and `int[2] 1 2.5e0` "found
+      2.5e0", the reader standing each such literal in for a value no other literal holds,
+      as decision 237 stands in `1.0e-400`; decision 227's warning given on a qualified
+      `var_global` line, which read its third word as the type; and a qualifier out of
+      its place on a program's var_input or a var_external told that the section takes
+      none, as where it stands in its place, where it was told to move to a place that
+      refuses it too.
+  11. *Observations*: `retain_configuration_test.exs`'s warm-restart bound reads the least
+      of three runs, where one run, read once on a busy machine, was 6 reductions dearer;
+      a long number's start quoted in double quotes, as every other run the lexer refuses;
+      a second rung of empty groups alone citing the same "after line N" as the first is
+      question 2's reading, kept.
 - **RV-3 — the core and the edits** (decisions 347, 349 and 350). A held output held (H1);
   an edit's one-shot blocking in an array of user blocks (H3); a warm restart after a
   plain swap, a path the state lacks started at its initial value as `instance/2` starts

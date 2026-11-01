@@ -57,7 +57,7 @@ defmodule Logex.Printer do
   inside it.
   """
   def print({:routine, {:rungs, rungs}}) when is_list(rungs),
-    do: Enum.map_join(rungs, "\n", &print/1)
+    do: rungs |> lines([]) |> Enum.reverse() |> Enum.join("\n")
 
   def print({:rung, []}) do
     raise ArgumentError,
@@ -69,6 +69,11 @@ defmodule Logex.Printer do
     do: elements |> series([]) |> Enum.reverse() |> Enum.join(" ")
 
   def print(tree), do: unprintable!(tree)
+
+  # Each rung's line newest first, a list that is no proper one refused as any node is.
+  defp lines([rung | rest], acc), do: lines(rest, [print(rung) | acc])
+  defp lines([], acc), do: acc
+  defp lines(tail, _acc), do: unprintable!(tail)
 
   # The tokens newest first, each group's opened, its legs split and closed on the way.
   defp series([element | rest], acc), do: series(rest, token(element, acc))

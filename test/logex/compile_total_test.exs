@@ -745,6 +745,13 @@ defmodule Logex.CompileTotalTest do
     test "bracketed/1, base/1 and word/1" do
       assert Name.bracketed("[16#4]") == {:literal, 4}
       assert Name.bracketed("[n]") == {:tag, "n"}
+
+      # RV-2's review: each reader is total on a text, so a text of no bit number in
+      # brackets is nil, where `x`, `[` and `[1` raised FunctionClauseError.
+      for text <- ["x", "[", "[1", "[]", "n]", ""] do
+        assert Name.bracketed(text) == nil, text
+      end
+
       assert Name.base("gate[4]") == "gate"
       assert Name.base("ton") == "ton"
       assert Name.base("gate[2].x") == "gate[2].x"
@@ -786,7 +793,7 @@ defmodule Logex.CompileTotalTest do
       assert compiled("var x lint\nmove #{long} x") ==
                {:error,
                 [
-                  "line 2, column 6: `999999999999999999999999…` is no number logex reads: " <>
+                  "line 2, column 6: \"999999999999999999999999…\" is no number logex reads: " <>
                     "a number is written in at most 10000 characters, and this one has 10001"
                 ]}
 
@@ -814,7 +821,7 @@ defmodule Logex.CompileTotalTest do
           ] do
         assert {:error, [message]} = compiled("var w word\nmove #{name} w")
 
-        assert message =~ "line 2, column #{column}: `#{String.slice(name, 0, 24)}…` is no name",
+        assert message =~ ~s(line 2, column #{column}: "#{String.slice(name, 0, 24)}…" is no name),
                name
 
         assert message =~
