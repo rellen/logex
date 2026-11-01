@@ -1975,20 +1975,30 @@ defmodule Logex.Compiler do
   end
 
   defp lower_rung({:rung, elements} = rung, diagnostics, known) do
-    {ir, lowered} = lower(elements, [], diagnostics, known)
-    {{:rung, ir}, idle(ir, [], {lowered, diagnostics, rung})}
+    {backward, lowered} = lower(elements, [], diagnostics, known)
+    ir = :lists.reverse(backward)
+    {{:rung, ir}, ends(backward, ir, {lowered, diagnostics, rung})}
   end
 
   # RV-2 (decision 351): a rung that writes nothing and jumps nowhere is refused at its
   # line, told that a newline ends a rung: `xic start xio stop` and `ote motor` on two lines
   # are a rung that does nothing and one that runs the motor whatever stop does (Logix's
-  # rule, a rung's last instruction an output). Its instructions are looked at in order, a
-  # group's legs where they stand, until one does something (`@doing`), so a rung costs a
-  # look-up for each instruction before its first output, one for most; a rung refused
-  # already, for an unknown instruction, a `cal` that runs nothing or any other mistake, is
-  # not told this too. Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
+  # rule, a rung's last instruction an output). Its last instruction is looked at first,
+  # which does something (`@doing`) in a rung of Logix's shape, so most rungs cost one
+  # clause, however long (RV-2's review); any other rung's instructions are then looked at
+  # in order, a group's legs where they stand, until one does something. A rung refused
+  # as it is lowered, for an unknown instruction, a `cal` that runs nothing or an operand
+  # missing, any of which may be the write it lacks, is not told this too; one the jump
+  # checks refuse after it, a label not first or used twice, which no write mends, is told
+  # both (provisional). Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
   # printed text reads too; a rung of empty groups alone, `( )`, holds none, and is cited
   # by `lowering/3` (placed/2).
+  defp ends([{symbol, _line, _operands} | _earlier], _ir, {lowered, _before, _rung})
+       when is_map_key(@doing, symbol),
+       do: lowered
+
+  defp ends(_backward, ir, at), do: idle(ir, [], at)
+
   defp idle([{symbol, _line, _operands} | _rest], _later, {lowered, _before, _ir})
        when is_map_key(@doing, symbol),
        do: lowered
@@ -2051,10 +2061,18 @@ defmodule Logex.Compiler do
   # Diagnostics are accumulated newest first and reversed once, in instructionize/2. An
   # undeclared tag is accumulated as `{:undeclared, line, name, slot}`, with the slot it is
   # used in or `:member`, and reported by undeclared/3, at its first use only.
-  defp lower([], ir, diagnostics, _known), do: {Enum.reverse(ir), diagnostics}
+  # Each leg's instructions, and the rung's, come back last first, as they were gathered:
+  # a leg is put in order where its group is built, and the rung by lower_rung/3, which
+  # reads its last instruction first (decision 351).
+  defp lower([], ir, diagnostics, _known), do: {ir, diagnostics}
 
   defp lower([{:branches, legs} | rest], ir, diagnostics, known) do
-    {legs, diagnostics} = Enum.map_reduce(legs, diagnostics, &lower(&1, [], &2, known))
+    {legs, diagnostics} =
+      Enum.map_reduce(legs, diagnostics, fn leg, diagnostics ->
+        {backward, diagnostics} = lower(leg, [], diagnostics, known)
+        {:lists.reverse(backward), diagnostics}
+      end)
+
     lower(rest, [{:branches, legs} | ir], diagnostics, known)
   end
 

@@ -26,29 +26,26 @@ defmodule Logex.Name do
   # bracket: `grid`, `int[2].[n]`, `lines[1].gates[0]`, `temps[`, `[n]` and `a[]` among
   # them. A dotted word before the brackets, `x.y[0]`, is read as its word, `x.y`, so that
   # a caller that looks the word up is told it is none.
-  def element(name) when is_binary(name), do: element_at(:binary.split(name, "["), name)
+  def element(name) when is_binary(name),
+    do: element_at(:binary.split(name, ["[", "]"], [:global]), name)
 
-  defp element_at([_name], _whole), do: nil
-  defp element_at(["", _bracketed], _whole), do: nil
+  # Exactly two brackets, the first a `[` straight after the word and the second the `]`
+  # that ends the name, read in one split: an element's name costs what `Logex.Array`'s
+  # cut at the first `[` did but a reduction or two (RV-2's review), however its brackets
+  # are written.
+  defp element_at([word, inside, ""], name)
+       when word != "" and binary_part(name, byte_size(word), 1) == "[" and
+              binary_part(name, byte_size(name) - 1, 1) == "]",
+       do: filled(:binary.split(inside, ",", [:global]), word)
 
-  defp element_at([word, bracketed], whole)
-       when binary_part(whole, byte_size(whole) - 1, 1) == "]",
-       do: closed(binary_part(bracketed, 0, byte_size(bracketed) - 1), word)
+  defp element_at(_parts, _name), do: nil
 
-  defp element_at([_word, _unclosed], _whole), do: nil
+  defp filled([text] = texts, word) when text != "", do: {word, texts}
+  defp filled([one, two] = texts, word) when one != "" and two != "", do: {word, texts}
+  defp filled(texts, word), do: every_filled(:lists.member("", texts), texts, word)
 
-  defp closed(inside, word),
-    do: subscripts(:binary.match(inside, ["[", "]"]), inside, word)
-
-  defp subscripts(:nomatch, inside, word),
-    do: filled(:binary.split(inside, ",", [:global]), word)
-
-  defp subscripts(_bracket, _inside, _word), do: nil
-
-  defp filled(texts, word), do: every_filled(Enum.all?(texts, &(&1 != "")), texts, word)
-
-  defp every_filled(true, texts, word), do: {word, texts}
-  defp every_filled(false, _texts, _word), do: nil
+  defp every_filled(false, texts, word), do: {word, texts}
+  defp every_filled(true, _texts, _word), do: nil
 
   @doc false
   # A subscript as written: `{:literal, n}`, the number one integer literal spells, `16#a`
