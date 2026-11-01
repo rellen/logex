@@ -1909,8 +1909,13 @@ defmodule Logex.Runner do
   # (decision 114): `{:ok, changes}`, each by its global's name, or `{:fault, cause}` for
   # the first address that is no input point's, `{:unknown_address, address}`, or value
   # that does not fit its point, `{:bad_value, address, value}`.
+  # M9 (RV-4): each change taken onto the front, the list reversed once at the end, so that
+  # the check is linear in the device's points, where an append made it quadratic.
   defp vetted(device, values, state),
-    do: Enum.reduce_while(Enum.sort(values), {:ok, []}, &check(device, &1, &2, state))
+    do: in_order(Enum.reduce_while(Enum.sort(values), {:ok, []}, &check(device, &1, &2, state)))
+
+  defp in_order({:ok, changes}), do: {:ok, :lists.reverse(changes)}
+  defp in_order(fault), do: fault
 
   defp check(device, {address, value}, {:ok, changes}, state),
     do: fit(Map.fetch(state.addresses, {device, address}), address, value, changes)
@@ -1921,7 +1926,7 @@ defmodule Logex.Runner do
     do: fitting(Declarations.fits?(type, value), name, address, value, changes)
 
   defp fitting(true, name, _address, value, changes),
-    do: {:cont, {:ok, changes ++ [{name, value}]}}
+    do: {:cont, {:ok, [{name, value} | changes]}}
 
   defp fitting(false, _name, address, value, _changes),
     do: {:halt, {:fault, {:bad_value, address, value}}}

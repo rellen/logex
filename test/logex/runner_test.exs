@@ -2244,6 +2244,45 @@ defmodule Logex.RunnerTest do
       later - before
     end
 
+    # M9 (RV-4): a device's change checked against its input points, each by address, in
+    # time linear in them, where each was appended to the list of those checked before it,
+    # quadratic: a change of every point of a device of 4096 against one of 1024, the least
+    # of three runs of the runner's own reductions while it takes the change, 4x the points
+    # at most 4.146x in 8 runs, its bound a fifth above, 4.98, where the append took 5.94x.
+    defp change_cost(n) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      text =
+        "task fast interval 10 priority 1\nvar_global big bool[#{n}] at panel.i.0\n" <>
+          "var_global x bool at panel.i.#{n}\nvar_global y bool at panel.q.0\n" <>
+          "program r relay with fast\n  r.in x\n  r.out y\n"
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      {:reductions, before} = Process.info(runner, :reductions)
+      Sim.set(panel, Map.new(0..(n - 1), &{[&1], 1}))
+      {:reductions, later} = Process.info(runner, :reductions)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "big[#{n - 1}]") == 1
+      Runner.stop(runner)
+      later - before
+    end
+
+    test "a device's change is checked in time linear in its points (M9)" do
+      [small, large] = for n <- [1024, 4096], do: Enum.min(for(_ <- 1..3, do: change_cost(n)))
+      ratio = large / small
+      assert ratio < 4.98, "4x the points took #{Float.round(ratio, 2)}x"
+    end
+
     test "a round's work is linear in the instances and the devices" do
       base = round_cost(20, 2)
       both = round_cost(80, 8) / base

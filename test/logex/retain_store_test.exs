@@ -1426,7 +1426,13 @@ defmodule Logex.RetainStoreTest do
     # `status/1`'s `retain` and `{:retain, {:error, reason}}` to the subscribers, the
     # runner tripped all the same; the store then holds the cold restart's own write.
     test "a cold restart's write-back that fails is reported", %{tmp_dir: dir} do
-      rig = rig(dir)
+      # The restart's read of the panel makes the store's `.tmp` a directory in the
+      # device's own process, through the VM's file server, within its real-time limit,
+      # the idle watchdog and a poll period; beside a full suite and a mutation run's
+      # (RV-4) that took over 510 ms in four runs of ten, the device killed before its
+      # directory was made and the write-back did not fail, so the limit is 5000 ms here,
+      # which nothing else in the test reads.
+      rig = rig(dir, idle: 5_000)
       {:ok, agent} = Agent.start_link(fn -> fn -> :ok end end)
 
       opts =
