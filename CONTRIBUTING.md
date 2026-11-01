@@ -272,7 +272,11 @@ prose, `faster/packing.logex` "being `packing.logex` with `interval 5`", is made
 test's `@derived` table from the file it names, and a script README shows as the rest of
 another, `a_trip.exs`, in its `@continues`, each beside README's words, which the test
 checks are still there. The real-clock example's figures line, which README says is this
-run's alone, is compared by its beginning. So a new example needs its files marked, and
+run's alone, is compared by its beginning. An `elixir` block that no `$ mix run` block
+follows is never run, so the test refuses one unless its `@fragments` names it by its first
+line, a fragment of prose the test only parses: today the one call made from another
+process in "Running a plant on the clock". So a new example needs its files marked and its
+output shown, and
 a changed one is run by the suite: when the test fails, the code or the README is wrong,
 and the diff it prints says which line. The prose, the syntax list and the instruction
 table have no test behind them.
@@ -410,7 +414,9 @@ All four must pass, judged by exit code; the third builds `lib/` as the suite bu
 below).
 CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
 exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 through
-`erlef/setup-beam`: a red run there is a red commit. `--force` recompiles every module in `lib/`, so a
+`erlef/setup-beam`: a red run there is a red commit, whatever ran green here, and a work
+item's report says so. A push runs CI on the commit it ends at alone, so push each commit
+you want checked, and read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
 warning in a file you did not touch still fails the build. `mix compile` never compiles the
 tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
 checker printed two warnings on every run of `runtime_test.exs`, across six commits that
@@ -439,7 +445,13 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   failed, `file: Module: test name` a line, read from ExUnit's failures manifest by
   `scripts/failed.exs`, since `Result: 2406/2407 passed` names none, and a long log hides
   them.
-- **`elixir scripts/failed.exs`** prints those tests for the last `mix test` run alone.
+- **`elixir scripts/failed.exs`** prints the tests ExUnit's failures manifest holds. The
+  manifest is ExUnit's own and kept across runs: a test's failure stays in it until a run
+  passes that test, so after a failing run of one file and a passing run of another it
+  still names the first; after the scripts here, which delete it first, it names that
+  run's alone. A suite whose test files fail to compile or load runs no test, and ExUnit
+  marks it failed whole: the script says so in one line beginning `suite:`
+  (`test/logex/scripts_test.exs`).
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
   mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
   then restore the tree; the script applies each patch in turn (`git apply`), runs the

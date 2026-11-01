@@ -322,8 +322,15 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 
 ### What has landed
 
-Nothing decided waits to land: retained values, the last milestone decided, have landed
-whole (the first bullet below, the milestones newest first). Everything decided so far (see [`docs/naming.md`](docs/naming.md), and
+Every milestone decided has landed, retained values the last (the first bullet below,
+the milestones newest first). What waits to land is the maintainer's answers to the
+review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
+decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
+items RV-2 to RV-8 build ("The review after Milestone 6"). One of them changes the source
+language: a rung that writes nothing and jumps nowhere, such as the first half of a rung
+wrapped onto two lines, `xic start xio stop` above `ote motor`, is to be refused at its
+line, told that a newline ends a rung (decision 351, RV-2), where today it compiles and
+does nothing. Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
 108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),
@@ -331,9 +338,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 ("Watchdogs and the continuous task" and "Running a plant on the clock", below). And:
 - **Retained values and a true warm restart**, `PLAN.md`'s Milestone 6, decided on
   2026-10-27 (decisions 266–285 in [`docs/organisation.md`](docs/organisation.md) §7,
-  designed in its §4.13, and the maintainer's answers since, decisions 286–338), have
-  landed whole, M6-1 to M6-9, its done sentence put to the maintainer (`PLAN.md` §3,
-  M6-9; "Retained values", below). M6-1 and M6-2: `var retain count dint` and `var
+  designed in its §4.13, and the maintainer's answers since, decisions 286–345), have
+  landed whole, M6-1 to M6-9, and the milestone was closed by the maintainer on
+  2026-11-01 (decision 346; `PLAN.md` §3, M6-9; "Retained values", below). M6-1 and M6-2: `var retain count dint` and `var
   non_retain jog bool` on a program's `var` and `var_output` and a block's three
   sections, the nearest mark on a member's path winning, and a warm restart in the core
   keeping what is marked and initialising everything else, a retained timer resuming
@@ -367,9 +374,9 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
   "What logex is not" lists below.
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–167 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12, and the
-  maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16,
-  eight readings built as provisional still put to the maintainer (`PLAN.md` §3, M5-16's
-  review): IEC's
+  maintainer's answers since, decisions 168–256), have landed whole, M5-1 to M5-16, the
+  questions left open on it answered since, decisions 257–265 and 286–289 (`PLAN.md`
+  §3, M5-16's review): IEC's
   integer widths `sint int lint usint uint udint ulint` beside `dint`, with `move` by
   Figure 11 and the 56 integer conversions (M5-3, "Integer widths", below), and
   arithmetic and comparison over every width (M5-4); based literals `16#ff` and `2#1010`
@@ -4920,8 +4927,10 @@ CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors`, the same under
 `MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
 Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`); `scripts/gate.sh` runs the
-same four here. The suite runs every example in this file and compares what it prints
-with what is printed here (`test/logex/readme_test.exs`).
+same four here. The suite runs every example in this file, each script a `$ mix run`
+block follows, and compares what it prints with what is printed here; the one `elixir`
+block shown with no output, the call made from another process in "Running a plant on
+the clock", is a fragment, which it only parses (`test/logex/readme_test.exs`).
 
 ## Documents
 

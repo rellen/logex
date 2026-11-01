@@ -389,7 +389,7 @@ defmodule Logex.Declarations do
   @doc "An elementary type's word, `dint` for `:dint`."
   def word(type) when type in @type_atoms, do: Map.fetch!(@rows, type).word
 
-  @doc "An elementary type's kind: `:boolean`, `:signed`, `:unsigned` or, since M5-8, `:bit_string`."
+  @doc "An elementary type's kind: `:boolean`, `:signed`, `:unsigned`, `:real` or `:bit_string`."
   def kind(type) when type in @type_atoms, do: Map.fetch!(@rows, type).kind
 
   @doc "An elementary type's range of values."
@@ -429,7 +429,10 @@ defmodule Logex.Declarations do
   def widens?(from, to) when from in @type_atoms and to in @type_atoms,
     do: to in Map.fetch!(@rows, from).widens
 
-  @doc "Whether `class` is one of IEC's generic types a slot takes, `:any_int` or `:any_num` (M5-4): a guard."
+  @doc """
+  Whether `class` is one of IEC's generic types a slot takes, `:any_int`, `:any_num`,
+  `:any_real`, `:any_bitwise` or `:any_elementary`: a guard.
+  """
   defguard is_class(class) when class in @class_atoms
 
   @doc """

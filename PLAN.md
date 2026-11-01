@@ -13,8 +13,9 @@ review of the codebase and turns them into an ordered plan.
 any "Settled, not yet landed" bullet in the README all go out of date. The repo's practice
 is a separate audit pass rather than editing this file in the same commit — but the pass
 has to happen, or the next reader inherits a plan that disagrees with the code. *(Since
-2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, since
-nothing decided waits to land.)*
+2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
+milestone decided having landed, and a paragraph naming what waits: the review after
+Milestone 6's decisions 347–360, for RV-2 to RV-8.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -11600,7 +11601,36 @@ and CI checked; each fix with a test that fails when it is reverted.
   an example's printed output or the code's behaviour changes; `scripts/gate.sh`,
   `failed.exs`, `mutate.sh` and `load.sh`, documented in `CONTRIBUTING.md`'s "Scripts";
   and the report's document findings each made true by running it, decision 326's figure
-  corrected by a dated note.)*
+  corrected by a dated note.)* *(Its review, the same day, at `9af035e`: ten findings, each
+  fixed. The item's first commit, `c994b75`, was red in CI, which its report did not say:
+  `retain_period_test.exs`'s bound of 10 reductions a round between a runner with a long
+  period and one with no store read 12.8, `{1686.02, 1698.825}`, where the reviewer read
+  6.7 to 7.5 locally, alone and beside the README test; the job run again on the same
+  commit (run 41285284921, attempt 2), and the two commits after it, were green. Its cause
+  is not shown: that test is `async: false`, and ExUnit runs every async module,
+  `readme_test.exs` among them, before a sync one, and a single run of it read 15.6 in CI
+  before it took the least of five, long before the README test (the comment above it).
+  It is the kind of scheduler-sensitive bound RV-7 takes up (decision 357);
+  `CONTRIBUTING.md` now says a red CI run is a red commit whatever ran green locally, a
+  report says so, and a push checks its last commit alone. An `elixir` block README shows
+  with no `$ mix run` after it was never run: `readme_test.exs` refuses one its
+  `@fragments` does not name and parses each that it does, one today. CLAUDE.md said
+  every keyword is reserved in any case everywhere: `function_block` is reserved only in a
+  block's file and a configuration file's words only in a configuration file, now said so;
+  three of its process rules dropped by the index are back (read `docs/organisation.md`
+  before designing, `docs/instruction-sets.md` before a stanza, and README's "What logex
+  is not" stales with what it says logex lacks); `claude_md_test.exs` also finds history
+  told as "until decision 228", "as of RV-2", an item's label or a commit, and every file,
+  module and function CLAUDE.md names that is not there, each pinned by a test of the
+  check itself; `clauses_test.exs` reads a file's top level, outside every module;
+  `scripts/failed.exs` tells a suite that did not load, `{1, :all}`, in a line, pinned by
+  `scripts_test.exs`, and the documents say its manifest is kept across runs; README's
+  "What has landed" names decisions 347–360 as waiting and Milestone 6 as closed; and
+  `Logex.Declarations.kind/1`'s and `is_class/1`'s docs name every kind and class,
+  pinned in `type_table_test.exs`. When RV-2 meets this branch, its new
+  `lib/logex/name.ex` and `test/logex/compile_total_test.exs` each owe CLAUDE.md a line,
+  which `claude_md_test.exs` holds, and README's sentence that a rung writing nothing
+  compiles today goes with decision 351's landing.)*
 - **RV-2 — the compiler** (decision 351). Every source text `Logex.compile/2` raises on
   given a diagnostic (H5's six roots, by one parsed-name structure the readers of a
   lexed name share, and M13's huge numbers); a one-shot's storage bit and a pulse bit in

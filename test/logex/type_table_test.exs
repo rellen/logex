@@ -77,6 +77,27 @@ defmodule Logex.TypeTableTest do
     defp zero_of(:real), do: 0.0
     defp zero_of(_kind), do: 0
 
+    # The review after Milestone 6 (a3-compiler2-12): `kind/1`'s and `is_class/1`'s docs
+    # named some of the kinds and classes only.
+    test "kind/1's doc names every kind the table holds, and is_class/1's every class" do
+      {:docs_v1, _, _, _, _, _, docs} = Code.fetch_docs(Declarations)
+
+      doc = fn kind, name ->
+        for {{^kind, ^name, 1}, _, _, %{"en" => text}, _} <- docs, do: text
+      end
+
+      kinds = Enum.uniq(for row <- Declarations.table(), do: row.kind)
+      classes = [:any_int, :any_num, :any_real, :any_bitwise, :any_elementary]
+
+      assert kinds == [:boolean, :signed, :unsigned, :real, :bit_string]
+      # each a class: `a_class/1` takes a class alone
+      assert Enum.all?(classes, &is_binary(Declarations.a_class(&1)))
+      [kind_doc] = doc.(:function, :kind)
+      [class_doc] = doc.(:macro, :is_class)
+      assert Enum.reject(kinds, &(kind_doc =~ "`#{inspect(&1)}`")) == []
+      assert Enum.reject(classes, &(class_doc =~ "`#{inspect(&1)}`")) == []
+    end
+
     test "holds bool, the eight integer widths, the two reals and the four bit strings, each a row of the record's columns, in its order" do
       rows =
         for {word, kind, n, article, widens} <- @widths,

@@ -8,7 +8,8 @@ defmodule Logex.ClausesTest do
   oracle and the harness that compares it with logex, and every other form of a module's
   body, a `setup`, a module attribute's anonymous function or the body's own code, is
   clauses. `end_to_end_test.exs` holds none, nor does `readme_test.exs`, the harness that
-  runs README's examples. The files are read as syntax trees, so that a
+  runs README's examples, and in each file the code outside every module, its top level, is
+  read as a module's body is. The files are read as syntax trees, so that a
   conditional in a string, a comment or a heredoc is none and one written inline,
   `if(x, do: 1, else: 0)`, or through its module, `Kernel.if(x, do: 1)`, is one.
   """
@@ -19,6 +20,7 @@ defmodule Logex.ClausesTest do
   @defs [:def, :defp, :defmacro, :defmacrop]
   @kernel [[:Kernel], [:Kernel, :SpecialForms]]
   @each_example "Module.concat(Logex.ReadmeTest, Macro.camelize(Path.rootname(example.name)))"
+  @top "the file's top level"
 
   test "a walk's conditional lies only in a draw its module names, and each draw named is one of its functions" do
     path = Path.join(@root, "test/logex/api_contract_test.exs")
@@ -51,8 +53,10 @@ defmodule Logex.ClausesTest do
     path = Path.join(@root, "test/logex/readme_test.exs")
     modules = modules(path)
     assert Map.has_key?(modules, Logex.ReadmeTest.Examples)
-    # The module each example is, defined by a `for`, is read too.
+    # The module each example is, defined by a `for`, is read too, and so is the `for`
+    # itself, at the file's top level.
     assert Map.has_key?(modules, Module.concat([@each_example]))
+    assert Map.has_key?(modules, @top)
 
     for {module, %{conditionals: conditionals}} <- modules,
         do: assert(conditionals == [], inspect(module))
@@ -69,6 +73,30 @@ defmodule Logex.ClausesTest do
 
     name = Module.concat([~S|Module.concat(M, "N#{n}")|])
     assert %{^name => %{functions: [:f], conditionals: [{:f, _, :if}]}} = read(source)
+  end
+
+  # Code outside every module, a `for` that defines a module for each of its elements or
+  # a form after the last module, is read as the file's top level, where no draw is.
+  test "a conditional at a file's top level, outside every module, is found" do
+    source = ~S'''
+    for n <- [1, 2] do
+      _ = if n == 2, do: :skip
+      defmodule Module.concat(M, "N#{n}") do
+        def f(x), do: x
+      end
+    end
+
+    defmodule P do
+      def g(x), do: x
+    end
+
+    if System.get_env("X"), do: :skipped
+    '''
+
+    name = Module.concat([~S|Module.concat(M, "N#{n}")|])
+    assert %{^name => %{conditionals: []}, P => %{conditionals: []}} = read(source)
+    assert %{@top => %{draws: [], conditionals: found}} = read(source)
+    assert found == [{@top, 2, :if}, {@top, 12, :if}]
   end
 
   # The check itself: each kind found, inline and in a block, where it is, and nothing in
@@ -144,10 +172,21 @@ defmodule Logex.ClausesTest do
 
   defp modules(path), do: read(File.read!(path))
 
+  # Each module of the file by its name, and the file's own top level, the code outside
+  # every module, a `for` that defines one among it, under `@top`.
   defp read(text) do
     {:ok, ast} = Code.string_to_quoted(text)
     {_ast, modules} = Macro.prewalk(ast, %{}, &module/2)
-    modules
+    Map.put(modules, @top, top(ast))
+  end
+
+  # The file's top level is read as a module's body is, each form whole, a module inside
+  # it read as its own and not here, and none of it a draw.
+  defp top(ast) do
+    found =
+      Enum.reduce(forms(ast), %{draws: [], functions: [], conditionals: []}, &walk(&1, @top, &2))
+
+    %{found | conditionals: Enum.reverse(found.conditionals)}
   end
 
   defp module({:defmodule, _, [{:__aliases__, _, parts}, [do: body]]}, modules) do

@@ -12,11 +12,15 @@ own documentation holds:
 - **The present rules** of each module are its moduledoc and function docs; a module
   marked `@moduledoc false` keeps them in the comment at its head.
 - **The design and the reasons** are `docs/organisation.md`: §4 the design, §7 every
-  numbered decision and fix (`decision 271`, `fix F11`), §8 the sources.
-- **The plan and the history** are `PLAN.md`; the review of the whole codebase after
-  Milestone 6 is `docs/review-2026-11-01.md`.
-- **The names** are `docs/naming.md`, one stanza a word; `docs/instruction-sets.md` is the
-  reference it cites.
+  numbered decision and fix (`decision 271`, `fix F11`), §8 the sources. Read it before
+  designing anything that adds a data type (§4.12), retains a value (§4.13), names a
+  program, schedules one, binds I/O, changes a running controller (§4.9) or runs one on
+  the clock (§4.11).
+- **The plan and the history** are `PLAN.md`; the review of the whole codebase, every
+  finding with its repro, is `docs/review-2026-11-01.md`.
+- **The names** are `docs/naming.md`, one stanza a word. Read `docs/instruction-sets.md`,
+  the reference it cites, before writing a stanza: it carries the IEC feature numbers a
+  stanza should cite.
 - **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
   is and how to use it is `README.md`, whose examples the suite runs.
 
@@ -29,7 +33,9 @@ own documentation holds:
 - `mix format` — format before a commit; CI runs `mix format --check-formatted`.
 - `scripts/gate.sh [log]` — the four gates of `CONTRIBUTING.md`'s "Before you commit" in
   order, by exit code, printing `GATE-OK` or `GATE-FAIL rc=<n>` and the tests that failed;
-  `elixir scripts/failed.exs` names the last run's failed tests from ExUnit's manifest.
+  `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, which keeps a
+  test's failure until a run passes it, so after runs by hand it may name an earlier
+  run's; the scripts delete the manifest before each run.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -213,8 +219,11 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   against oracles restated from the programs' text, each asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
   trees of the walks, the end-to-end tests and the README harness.
-- `test/logex/readme_test.exs` — every example in `README.md` run in a fresh VM and its
-  output compared with README's (`CONTRIBUTING.md`, "Landing work stales the plan").
+- `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
+  `$ mix run` follows, run in a fresh VM and its output compared with README's, and every
+  other `elixir` block a fragment it names and parses (`CONTRIBUTING.md`, "Landing work
+  stales the plan").
+- `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
@@ -276,10 +285,14 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   the compiler refuses anything after it on its path, as after `ton`.
 - **Every tag is declared,** in the source, `var aa bool` before the first rung, or from
   Elixir with `Logex.Tag.new!/4,5` (`validation_test.exs`'s `@declared`). A new section,
-  qualifier or elementary type word is a row of `Logex.Declarations`, a built-in block
-  type a key of `Logex.FbType.builtins/0`, a word that heads a file of another kind an
-  entry of `Logex.Declarations.kinds/0`, and a configuration file's word a row of
-  `Logex.Configuration.Text`'s: each reserved in any case and owing a `docs/naming.md`
+  qualifier or elementary type word is a row of `Logex.Declarations` and a built-in block
+  type a key of `Logex.FbType.builtins/0`, each reserved in any case in a program and in
+  a block's file, as a mnemonic is; a word that heads a file of another kind is an entry of
+  `Logex.Declarations.kinds/0`, reserved in any case in that kind of file only, so that
+  `var function_block bool` compiles in a program and not in a block's file; and a
+  configuration file's word is a row of `Logex.Configuration.Text`'s, which reserves it in
+  any case in a configuration file only, where it names no task, global, instance, program
+  type or device, so that `var task bool` compiles in a program. Each owes a `docs/naming.md`
   stanza, which `naming_test.exs` checks against its pinned list. A user block's name is
   no row, owes no stanza and is not reserved.
 - **New state states its rule across an online edit.** A tag or member starts by
@@ -295,9 +308,12 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   before it lands, and the golden record stays green; nothing checks the grammar for
   ambiguity but those.
 - **The README is checked.** A language change stales its syntax list, instruction table
-  and examples; each example's output is compared by `readme_test.exs`, and a file an
-  example reads is marked `<!-- file: path -->` above its block (`CONTRIBUTING.md`). Its
-  prose has no test.
+  and examples; each example's output is compared by `readme_test.exs`, a file an example
+  reads is marked `<!-- file: path -->` above its block, and an `elixir` block shown with
+  no output is a fragment the test names (`CONTRIBUTING.md`). Its prose has no test: its
+  "What logex is not" says plainly what logex does not do, a safety function first, each
+  claim checked against the code, so a change that adds what it says logex lacks, an
+  adapter, output forcing, a backward jump or a type among them, stales it.
 - **Cite decisions and fixes by `docs/organisation.md` §7's numbers alone**, never a label
   only a design pass's notes define (`edit_test.exs`, "the labels this work cites").
 - **Keep this file an index.** A module's rules go in its moduledoc, the reasons in

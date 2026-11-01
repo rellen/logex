@@ -44,6 +44,15 @@ defmodule Logex.ReadmeTest.Examples do
     "a_trip.exs" => {"on_the_clock.exs", "show = fn label", "`a_trip.exs` runs the same plant"}
   }
 
+  # The `elixir` blocks README shows that no `$ mix run` follows, each by its first line:
+  # fragments of prose, which the suite parses and does not run. Every other `elixir`
+  # block is an example's script.
+  @fragments [
+    # "Running a plant on the clock": a call made from another process while the clock is
+    # moved on, which needs a round owed after a slow write to show its wait.
+    ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|
+  ]
+
   # The lines of a script's output that README says are this run's alone, compared by
   # their beginning: "The keyword list is the same on every run; the figures are this
   # run's".
@@ -52,6 +61,19 @@ defmodule Logex.ReadmeTest.Examples do
   def readme, do: File.read!(@readme)
   def derived, do: @derived
   def continues, do: @continues
+  def fragments, do: @fragments
+
+  # Each `elixir` block no `$ mix run` follows, `{line, first line, body}`.
+  def unrun do
+    blocks = readme() |> String.split("\n") |> blocks(1, nil, [])
+
+    for {{n, "elixir", body, nil}, next} <- Enum.zip(blocks, tl(blocks) ++ [nil]),
+        not runs?(next),
+        do: {n, hd(String.split(body, "\n")), body}
+  end
+
+  defp runs?({_n, "", body, nil}), do: Regex.match?(@run, body)
+  defp runs?(_block), do: false
 
   def all do
     text = readme()
@@ -221,6 +243,26 @@ defmodule Logex.ReadmeTest.Extraction do
 
     for {name, {_from, _cut, words}} <- Examples.continues(),
         do: assert(readme =~ words, "README no longer says #{inspect(words)} of #{name}")
+  end
+
+  # An `elixir` block README shows with no `$ mix run` after it is never run, so each is
+  # a fragment named in `@fragments`, which must still parse, or the test says which.
+  test "every `elixir` block README shows is an example's script or a named fragment" do
+    unrun = Examples.unrun()
+
+    for {n, first, _body} <- unrun,
+        do:
+          assert(
+            first in Examples.fragments(),
+            "README.md line #{n}: an `elixir` block no `$ mix run` follows, so the suite " <>
+              "never runs it: show what it prints, or name it in @fragments"
+          )
+
+    assert Examples.fragments() -- Enum.map(unrun, &elem(&1, 1)) == [],
+           "a fragment @fragments names is no longer in README"
+
+    for {n, _first, body} <- unrun,
+        do: assert(match?({:ok, _}, Code.string_to_quoted(body)), "README.md line #{n}")
   end
 
   test "every `$ mix run` README shows is an example, and every file a mark names is one" do
