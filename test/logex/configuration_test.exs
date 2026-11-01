@@ -1138,6 +1138,43 @@ defmodule Logex.ConfigurationTest do
               fn -> Configuration.initial(opaque(other)) end
             )
     end
+
+    # The review after Milestone 6 (b6-configuration-6, c4-api-fuzz-8): a global check/1
+    # would refuse, given to initial/1 straight, is the host's mistake too, where it raised
+    # MatchError or FunctionClauseError or gave a value no type holds.
+    test "initial/1 refuses a global check/1 would, a pinned line each" do
+      for {global, message} <- [
+            {%Global{name: "a", type: :real, initial: 1.0e39},
+             "global `a` is a real: `1.0e39` is beyond a real's range, " <>
+               "-3.4028234663852886e38 to 3.4028234663852886e38"},
+            {%Global{name: "a", type: :bool, initial: 7},
+             "global `a` is a bool: only 0 or 1 fit, found `7`"},
+            {%Global{name: "a", type: {:array, :int, [0]}},
+             "`a` is declared with a dimension of 0, `[0]`: each dimension of an array holds 1 element or more"},
+            {%Global{name: "a", type: {:array, :bool, [100_000_000_000]}},
+             "`a` would hold 100000000000 elements, `[100000000000]`: an array holds 65536 at most"},
+            {%Global{name: "a", type: {:array, :int, [2]}, initial: ["a", "b"]},
+             "expected an initial list of values for an array of 2 ints, each a value an int " <>
+               "holds, got: [\"a\", \"b\"]"}
+          ],
+          do: assert_raise(ArgumentError, message, fn -> Configuration.initial(global) end)
+
+      for global <- [
+            %Global{name: "a", type: {:array, :int, 8}},
+            %Global{name: "a", type: {:array, :int, []}},
+            %Global{name: "a", type: {:array, :int, [1 | 2]}},
+            %Global{name: "a", type: :foo},
+            %Global{name: "a", type: :foo, initial: 5},
+            %Global{name: "a", type: :dint, initial: 1.5}
+          ],
+          do:
+            assert_raise(
+              ArgumentError,
+              "expected a %Logex.Configuration.Global{} whose initial value is an integer, " <>
+                "a real's a number, or nil, got: #{inspect(global)}",
+              fn -> Configuration.initial(global) end
+            )
+    end
   end
 
   describe "globals" do
@@ -5946,6 +5983,54 @@ defmodule Logex.ConfigurationTest do
 
       ratio = bytes.(400) / bytes.(100)
       assert ratio < 6, "4x the refusals made a message #{Float.round(ratio, 1)}x the size"
+    end
+
+    # The review after Milestone 6 (b2-resource-4, b6-configuration-4): instances that each
+    # write a shared global through a var_external, and an array through a tag subscript,
+    # beside a connection each that drives a global of its own: the writer warnings look a
+    # writer's connection up, where they searched every driven global for each writer.
+    test "check/1 stays linear in the var_external writers beside the connections" do
+      {:ok, writer} =
+        Logex.compile(
+          "var_input in bool\nvar_output out bool\nvar_external shared dint\n" <>
+            "var_external arr dint[8]\nvar i dint\nxic in add shared 1 shared\n" <>
+            "xic in move 5 arr[i]\nxic in ote out\n",
+          name: "w"
+        )
+
+      checked = fn n ->
+        config = %Configuration{
+          name: "plant",
+          programs: %{"w" => writer},
+          tasks: [task("fast", 10, 1)],
+          globals:
+            [
+              %Global{name: "x", type: :bool, at: "panel.i.0"},
+              %Global{name: "shared", type: :dint},
+              %Global{name: "arr", type: {:array, :dint, [8]}}
+            ] ++ for(i <- 1..n, do: %Global{name: "y#{i}", type: :bool}),
+          instances: for(i <- 1..n, do: %Instance{name: "m#{i}", type: "w", task: "fast"}),
+          connections:
+            Enum.flat_map(1..n, fn i ->
+              [
+                %Connection{instance: "m#{i}", member: "in", to: "x"},
+                %Connection{instance: "m#{i}", member: "out", to: "y#{i}"}
+              ]
+            end)
+        }
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            [] = Configuration.check(config)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = checked.(1600) / checked.(400)
+      assert ratio < 5, "4x the writers took #{Float.round(ratio, 1)}x the reductions"
     end
 
     test "check/1 stays linear in the configuration's size", %{seal: seal} do

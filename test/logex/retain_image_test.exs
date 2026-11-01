@@ -1337,6 +1337,31 @@ defmodule Logex.RetainImageTest do
       assert d400 <= 4.6 * d100, "100 dints #{d100}, 400 dints #{d400}"
     end
 
+    # The review after Milestone 6 (b2-resource-5): each instance of the image found by its
+    # name, not by a search of the configuration's instances, so the start grows linearly
+    # in them, where it grew as their square.
+    test "the matching grows linearly in the instances" do
+      program = c!("var_input go bool\nvar retain n dint\nxic go add n 1 n", [], "g")
+
+      started = fn n ->
+        {:ok, config} =
+          Configuration.compile(
+            "plant",
+            Enum.map_join(1..n, "\n", &"program m#{&1} g\n  m#{&1}.go 0"),
+            %{"g" => program}
+          )
+
+        image = Runtime.retained(Runtime.start(config))
+
+        reductions(fn -> Runtime.start(config, image) end) -
+          reductions(fn -> Runtime.start(config) end)
+      end
+
+      i250 = started.(250)
+      i1000 = started.(1000)
+      assert i1000 <= 4.6 * i250, "250 instances #{i250}, 1000 instances #{i1000}"
+    end
+
     test "a configuration that retains nothing starts from its empty image within a few " <>
            "dozen reductions of start/1" do
       program = c!("var_input go bool\nvar n dint\nxic go add n 1 n", [], "g")

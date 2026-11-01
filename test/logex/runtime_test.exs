@@ -297,6 +297,45 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  # The review after Milestone 6 (a5-data-model-7, c4-api-fuzz-9): a state or a scan that
+  # names its struct but lacks one of its keys, as Map.delete/2 makes one, is refused as
+  # anything that is no state or scan is, at every door, where until then the missing
+  # field escaped as a KeyError, a MatchError or a FunctionClauseError.
+  describe "a state or a scan that lacks a key" do
+    test "is refused at every entry point that takes it", %{motor: m, state: s} do
+      for key <- [:type, :env, :now, :first, :ons_blocked, :switched, :faults] do
+        lacking = Map.delete(s, key)
+
+        message =
+          "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(lacking)}"
+
+        for door <- [
+              fn -> Runtime.call(m, lacking, %{}, %Scan{now: 0, first: true}) end,
+              fn -> Runtime.scan(m, lacking) end,
+              fn -> Runtime.put_inputs(m, lacking, %{}) end,
+              fn -> Runtime.restart(m, lacking, :warm) end,
+              fn -> Runtime.retained(m, lacking) end,
+              fn -> Logex.Edit.accept(m, m, lacking) end
+            ],
+            do: raises(message, door)
+      end
+
+      raises(
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: " <>
+          inspect(Map.put(s, :extra, 1)),
+        fn -> Runtime.scan(m, opaque(Map.put(s, :extra, 1))) end
+      )
+
+      for key <- [:now, :first, :ons_blocked, :tags, :blocks, :units, :reals] do
+        lacking = Map.delete(%Scan{now: 0, first: true}, key)
+
+        raises("expected a %Logex.Scan{}, got: #{inspect(lacking)}", fn ->
+          Runtime.call(m, s, %{}, opaque(lacking))
+        end)
+      end
+    end
+  end
+
   describe "a state's values (decision 171)" do
     @held """
     var_input go bool
@@ -699,6 +738,36 @@ defmodule Logex.RuntimeTest do
     test "is linear in the state it checks" do
       ratio = reductions_to_check(2000) / reductions_to_check(500)
       assert ratio < 4.8, "4x the tags took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
+  # The review after Milestone 6 (b6-configuration-11): a program whose table of block
+  # types is no map, or whose retained paths are an improper list, edited by hand, is a
+  # pinned line where it is first handed in, an instance's start and a configuration's
+  # compile, where it raised Protocol.UndefinedError or the BEAM's own ArgumentError.
+  describe "a program's block types or retained paths edited into no shape" do
+    test "are refused in the edit-by-hand words, at instance/1 and at a configuration" do
+      {:ok, p} =
+        Logex.compile("var_input go bool\nvar_output retain o dint\nxic go move 1 o\n",
+          name: "p"
+        )
+
+      for {edited, line} <- [
+            {%{p | blocks: :x},
+             "`p`'s block types are no map of the types it holds by name, got: :x: `p` was " <>
+               "edited by hand after it compiled"},
+            {%{p | retained: ["o" | "x"]},
+             "`p`'s retained paths are neither nil nor a list of paths, got: [\"o\" | \"x\"]: " <>
+               "`p` was edited by hand after it compiled"}
+          ] do
+        raises(line, fn -> Runtime.instance(edited) end)
+
+        raises(line, fn ->
+          Logex.Configuration.compile("plant", "var_global g bool\nprogram m p\nm.go g\n", %{
+            "p" => edited
+          })
+        end)
+      end
     end
   end
 
@@ -2233,7 +2302,9 @@ defmodule Logex.RuntimeTest do
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
       # its compile from a configuration file's text, and from its file on disk.
-      # M4-2: watchdog/1, the one rule for a task's watchdog.
+      # M4-2: watchdog/1, the one rule for a task's watchdog. The review after Milestone 6
+      # (b6-configuration-6): started/1, internal (no doc), initial/1's rule with none of its
+      # host checks, which the resource reads.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -2243,6 +2314,7 @@ defmodule Logex.RuntimeTest do
                initial: 1,
                location: 1,
                new!: 1,
+               started: 1,
                watchdog: 1
              ]
 

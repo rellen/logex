@@ -455,6 +455,19 @@ defmodule Logex.Runtime do
   # and the guard of state!/2's refusal, which names each, since a guard reads no list.
   @own_keys [@faults, @jump, @ran]
 
+  # A state or a scan with every key of its struct and no other (a5-data-model-7).
+  defguardp is_whole_instance(state)
+            when map_size(state) == 8 and is_map_key(state, :type) and is_map_key(state, :env) and
+                   is_map_key(state, :now) and is_map_key(state, :first) and
+                   is_map_key(state, :ons_blocked) and is_map_key(state, :switched) and
+                   is_map_key(state, :faults)
+
+  defguardp is_whole_scan(scan)
+            when map_size(scan) == 8 and is_map_key(scan, :now) and is_map_key(scan, :first) and
+                   is_map_key(scan, :ons_blocked) and is_map_key(scan, :tags) and
+                   is_map_key(scan, :blocks) and is_map_key(scan, :units) and
+                   is_map_key(scan, :reals)
+
   # M3-5: the instructions whose edge memory a skipped rung must mark to keep it blocked:
   # the one-shots, whose storage bits are leaves of the routine's own tree (Logex.Walk.
   # one_shots/0), and a counter's two sides, a `ctu`'s `cu` and a `ctd`'s `cd` (counted/4),
@@ -785,7 +798,7 @@ defmodule Logex.Runtime do
     %__MODULE__{
       config: config,
       now: 0,
-      globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
+      globals: Map.new(config.globals, &{&1.name, Configuration.started(&1)}),
       instances:
         Map.new(config.instances, fn %{name: name, type: type} ->
           {name, detached(fresh(Map.fetch!(config.programs, type)), wiring, name)}
@@ -861,7 +874,7 @@ defmodule Logex.Runtime do
     {instances, dropped_instances} =
       image.instances
       |> Enum.sort()
-      |> Enum.reduce({runtime.instances, []}, &restored(&1, config, &2))
+      |> Enum.reduce({runtime.instances, []}, &restored(&1, {config, runtime.wiring.types}, &2))
 
     tasks =
       Map.new(
@@ -874,23 +887,20 @@ defmodule Logex.Runtime do
      Image.ordered(dropped_globals ++ dropped_instances)}
   end
 
-  defp restored({name, image}, config, {instances, dropped}),
-    do:
-      restored_as(
-        Enum.find(config.instances, &(&1.name == name)),
-        {name, image},
-        config,
-        {instances, dropped}
-      )
+  # Each image instance's type by its name in the wiring, a map, where until the review
+  # after Milestone 6 (b2-resource-5) a search of the configuration's instances made a
+  # start quadratic in them.
+  defp restored({name, image}, {config, types}, {instances, dropped}),
+    do: restored_as(Map.get(types, name), {name, image}, config, {instances, dropped})
 
   defp restored_as(nil, {name, _image}, _config, {instances, dropped}),
     do: {instances, [{name, :undeclared} | dropped]}
 
-  defp restored_as(%{type: type}, {name, %{program: program}}, _config, {instances, dropped})
+  defp restored_as(type, {name, %{program: program}}, _config, {instances, dropped})
        when type != program,
        do: {instances, [{name, {:retyped, program, type}} | dropped]}
 
-  defp restored_as(%{type: type}, {name, image}, config, {instances, dropped}) do
+  defp restored_as(type, {name, image}, config, {instances, dropped}) do
     %Instance{env: env} = state = Map.fetch!(instances, name)
     {env, more} = Image.matched(Map.fetch!(config.programs, type), env, image, name <> ".")
     {Map.put(instances, name, %{state | env: env}), Enum.reverse(more, dropped)}
@@ -1147,7 +1157,7 @@ defmodule Logex.Runtime do
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
 
   defp input_kept(false, global, %__MODULE__{wiring: %{located: nil}}),
-    do: Configuration.initial(global)
+    do: Configuration.started(global)
 
   # M5-13: a located input array keeps its input image as an input point does.
   defp input_kept(
@@ -1157,7 +1167,7 @@ defmodule Logex.Runtime do
        ),
        do: array_kept(located_array(runtime.wiring.located, name), global, runtime)
 
-  defp input_kept(false, global, _runtime), do: Configuration.initial(global)
+  defp input_kept(false, global, _runtime), do: Configuration.started(global)
 
   defp located_array(nil, _name), do: nil
   defp located_array(located, name), do: Map.get(located, name)
@@ -1165,7 +1175,7 @@ defmodule Logex.Runtime do
   defp array_kept({"i", _first, _last}, global, runtime),
     do: Map.fetch!(runtime.globals, global.name)
 
-  defp array_kept(_other, global, _runtime), do: Configuration.initial(global)
+  defp array_kept(_other, global, _runtime), do: Configuration.started(global)
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
@@ -1605,6 +1615,17 @@ defmodule Logex.Runtime do
   defp computable!([]), do: :ok
   defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
+  # The review after Milestone 6 (a5-data-model-7): a map that names the struct but lacks
+  # one of its keys, as `Map.delete/2` makes one, or holds one more, is no state, refused
+  # as anything else that is no state is, before any field is read, where until then a
+  # field's absence escaped as a KeyError or a FunctionClauseError from inside.
+  defp state!(%Instance{} = state, _program) when not is_whole_instance(state),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(state)}"
+      )
+
   defp state!(%Instance{type: type}, _program) when not is_binary(type) and type != nil,
     do: raise(ArgumentError, "state.type must be a program name, got: #{inspect(type)}")
 
@@ -1937,6 +1958,15 @@ defmodule Logex.Runtime do
         inspect(Logex.Real.nearest(type, value))
 
   defp unreal(false, type, value), do: Declarations.misfit(type, inspect(value))
+
+  # As a state is (a5-data-model-7, c4-api-fuzz-9): a scan that lacks one of its keys is
+  # none.
+  defp scan!(%Scan{} = scan, _state) when not is_whole_scan(scan),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Scan{}, got: #{inspect(scan)}"
+      )
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")

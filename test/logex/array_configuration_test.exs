@@ -886,4 +886,163 @@ defmodule Logex.ArrayConfigurationTest do
       end
     end
   end
+
+  # The review after Milestone 6 (M12, b6-configuration-1 to 3, c4-api-fuzz-3 and 4): what
+  # crashed a configuration's check, each now a located diagnostic or the host contract's
+  # pinned ArgumentError.
+  describe "the configuration crashes the review found" do
+    @oven """
+    var_input zone_t real[8]
+    var_output zone_hot bool[8]
+    gt zone_t[0] 200.0 ote zone_hot[0]
+    """
+
+    defp oven do
+      {:ok, oven} = Logex.compile(@oven, name: "oven")
+      %{"oven" => oven}
+    end
+
+    test "an array var_input or var_output connected to a location is told to declare a " <>
+           "global array at it, from text and from a file",
+         %{} do
+      assert {:error, [d]} =
+               Configuration.compile("plant", "program o1 oven\no1.zone_t card.i.0\n", oven())
+
+      assert d.message ==
+               "`card.i.0` is a location, written only after `at` on a `var_global` line: " <>
+                 "declare a global at it, as in `var_global point real[8] at card.i.0`, and " <>
+                 "name that"
+
+      assert {:error, diagnostics} =
+               Configuration.compile(
+                 "plant",
+                 "program o1 oven\no1.zone_t[0] 0.0\no1.zone_hot card.q.0\n",
+                 oven()
+               )
+
+      assert Enum.any?(
+               diagnostics,
+               &(&1.message =~ "as in `var_global point bool[8] at card.q.0`")
+             )
+
+      dir = Path.join(System.tmp_dir!(), "logex-m12-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "oven.ld"), @oven)
+      File.write!(Path.join(dir, "plant.logex"), "program o1 oven\no1.zone_t card.i.0\n")
+      assert {:error, [d]} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert d.message =~ "as in `var_global point real[8] at card.i.0`"
+      File.rm_rf!(dir)
+    end
+
+    @driven "var_output s int\nvar_output q bool\nxic q ote q\n"
+
+    defp driven(text) do
+      {:ok, p} = Logex.compile(@driven, name: "p")
+      Configuration.compile("plant", text, %{"p" => p})
+    end
+
+    test "a located array refused for its sizes lists none of its points: a dimension of 0 " <>
+           "and one of millions are refused at once" do
+      assert {:error, messages} =
+               driven("program m1 p\nvar_global g int[0] at card.i.0\nm1.s g\n")
+
+      assert Enum.map(messages, & &1.message) == [
+               "`g` is declared with a dimension of 0, `[0]`: each dimension of an array holds 1 element or more",
+               "`g` is an array of input points (line 2): `m1.s`, a var_output, cannot drive it"
+             ]
+
+      assert {:error, [_ | _]} =
+               driven("program m1 p\nvar_global g int[0] at card.i.0\nm1.s g[0]\n")
+
+      assert {:error, [_ | _]} = driven("var_global retain g bool[0] at card.q.0\nprogram m1 p\n")
+
+      # The cost of a refusal is its size's in no way: two sizes 100 apart cost alike.
+      cost = fn n ->
+        text = "program m1 p\nvar_global g bool[#{n}] at card.q.0\nm1.q g[2]\n"
+        {:error, [_]} = driven(text)
+        reductions(fn -> driven(text) end)
+      end
+
+      ratio = cost.(7_000_000) / cost.(70_000)
+      assert ratio < 1.2, "100 times the size cost #{ratio} times the reductions"
+
+      assert {:error, [retain, size]} =
+               driven("program m1 p\nvar_global retain g bool[2000000] at card.q.0\n")
+
+      assert retain.message =~
+               "`g` is an array of output points, `card.q.0` to `card.q.1999999`, and a " <>
+                 "located global takes no `retain`"
+
+      assert size.message ==
+               "`g` would hold 2000000 elements, `[2000000]`: an array holds 65536 at most"
+    end
+
+    defp reductions(fun) do
+      Enum.min(
+        for _ <- 1..5 do
+          parent = self()
+
+          spawn(fn ->
+            {:reductions, a} = Process.info(self(), :reductions)
+            fun.()
+            {:reductions, b} = Process.info(self(), :reductions)
+            send(parent, b - a)
+          end)
+
+          receive do
+            n -> n
+          end
+        end
+      )
+    end
+
+    test "a global of a malformed array type, connected, as a var_external's or located, is " <>
+           "the host's mistake at every door" do
+      {:ok, p} = Logex.compile("var_input go bool\nvar_external ex int[8]\n", name: "p")
+
+      for type <- [
+            {:array, :int, nil},
+            {:array, :int, 8},
+            {:array, :int, [1 | 2]},
+            {:array, :ton, [3]},
+            {:array, :integer, [8]},
+            {:array, {:array, :int, [2]}, [2]},
+            {:array, :int, []}
+          ],
+          {at, to, member} <- [{nil, "g", "go"}, {nil, "ex", "go"}, {"card.i.0", "g", "go"}] do
+        name = to
+
+        globals =
+          [%Global{name: "g", type: type, at: at}, %Global{name: "ex", type: type}]
+          |> Enum.uniq_by(& &1.name)
+
+        config = [
+          name: "plant",
+          programs: [p],
+          globals: globals,
+          instances: [%Instance{name: "m1", type: "p"}],
+          connections: [%Connection{instance: "m1", member: member, to: name}]
+        ]
+
+        line = "global `#{name}` has type #{inspect(type)}: a global is "
+
+        for door <- [
+              fn -> Configuration.new!(config) end,
+              fn ->
+                Configuration.check(struct!(Configuration, config ++ [programs: %{"p" => p}]))
+              end,
+              fn -> Runtime.start(struct!(Configuration, config ++ [programs: %{"p" => p}])) end,
+              fn ->
+                Logex.IO.points(struct!(Configuration, config ++ [programs: %{"p" => p}]))
+              end,
+              fn ->
+                Logex.IO.bind!(struct!(Configuration, config ++ [programs: %{"p" => p}]), %{})
+              end
+            ] do
+          error = assert_raise ArgumentError, door
+          assert error.message =~ line, inspect({type, at, to})
+        end
+      end
+    end
+  end
 end

@@ -1350,7 +1350,7 @@ defmodule Logex.Configuration.Edit do
     do: reported(global.type, Map.fetch!(values, global.name))
 
   defp global_moved(:error, _was, global, {values, reports}) do
-    value = Configuration.initial(global)
+    value = Configuration.started(global)
 
     {Map.put(values, global.name, value),
      [{:added, global.name, reported(global.type, value)} | reports]}
@@ -1389,7 +1389,7 @@ defmodule Logex.Configuration.Edit do
   defp reported({:array, _type, dims}, value), do: Logex.Array.to_list(value, dims)
   defp reported(_type, value), do: value
 
-  defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.initial(global)
+  defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.started(global)
   defp declared(%Configuration.Global{initial: initial}), do: initial
 
   defp initial_changed(same, same, _global, acc), do: acc

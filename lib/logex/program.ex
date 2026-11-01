@@ -588,12 +588,21 @@ defmodule Logex.Program do
   built by hand does. Every entry point that takes a program first checks it so, where it
   is first handed in (decision 190).
   """
-  def edited_by_hand(%__MODULE__{name: name} = program) do
+  def edited_by_hand(%__MODULE__{name: name, blocks: blocks} = program)
+      when is_map(blocks) or blocks == nil do
     {lines, _seen} =
       routine(program, {name, nil}, {[], MapSet.new()}, held_in(table(program.blocks)))
 
     Enum.reverse(lines)
   end
+
+  # The review after Milestone 6 (b6-configuration-11): a program whose table of block
+  # types is no map is one line, where its walk raised Protocol.UndefinedError.
+  def edited_by_hand(%__MODULE__{name: name, blocks: blocks}),
+    do: [
+      "#{owner({name, nil})} block types are no map of the types it holds by name, got: " <>
+        "#{inspect(blocks)}: #{named(name)} was edited by hand after it compiled"
+    ]
 
   defp routine(
          %__MODULE__{
@@ -778,7 +787,8 @@ defmodule Logex.Program do
   # line, in order, as its units.
   defp retained_lines(nil, nil, _where), do: []
 
-  defp retained_lines(retained, wanted, where) when is_list(retained) or retained == nil do
+  defp retained_lines(retained, wanted, where)
+       when (is_list(retained) and length(retained) >= 0) or retained == nil do
     given = MapSet.new(retained || [])
     wanted = MapSet.new(wanted || [])
 
