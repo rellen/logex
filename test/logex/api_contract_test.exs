@@ -5161,9 +5161,20 @@ defmodule Logex.ApiContractTest do
 
   # A cycle, against the model seeded from the resource after the last step, and the two
   # oracles that know nothing of an edit: no scan lets a timer gain more than the time
-  # since its instance's last scan, and a one-shot passes power only where its instance's
-  # last scan ran the same `ons` rung with its condition 0.
+  # since its instance's last scan, or, where a switch came since that scan, than the
+  # time since the walk last saw the timer run, since by decisions 339 to 341 a timer the
+  # program holding it runs catches up the time that program held it unscanned before a
+  # switch, whoever scanned it since (the exact amount is `ce_restated!/4`'s); and a
+  # one-shot passes power only where its instance's last scan ran the same `ons` rung
+  # with its condition 0.
   defp ce_cycle(w), do: ce_cycle(w, pick([0, 5, 10, 10, 15, 30]))
+
+  defp ce_gain_bound(false, gap, _since_ran), do: gap
+  defp ce_gain_bound(true, _gap, since_ran), do: since_ran
+
+  # A run stamps a timer's `last` with the scan's time.
+  defp ce_ran(true, at, now, prev), do: Map.put(prev, at, now)
+  defp ce_ran(false, _at, _now, prev), do: prev
 
   defp ce_cycle(w, elapsed) do
     # Inputs change now and then, so that a timer times for long enough to be done.
@@ -5188,19 +5199,29 @@ defmodule Logex.ApiContractTest do
           key = {name, later.type}
           gap = now - Map.get(prev, key, 0)
 
-          for path <- [["t1"], ["b1", "i1", "t"]],
-              %{"acc" => was} <- [get_in(before.env, path)],
-              %{"acc" => acc} <- [get_in(later.env, path)],
-              do:
-                assert(
-                  acc - was <= gap,
-                  "#{name}.#{Enum.join(path, ".")} gained #{acc - was} in #{gap} ms"
-                )
+          ran =
+            for path <- [["t1"], ["b1", "i1", "t"]],
+                %{"acc" => was} <- [get_in(before.env, path)],
+                %{"acc" => acc, "last" => last} <- [get_in(later.env, path)] do
+              bound = ce_gain_bound(before.switched, gap, now - Map.get(prev, {key, path}, 0))
+
+              assert(
+                acc - was <= bound,
+                "#{name}.#{Enum.join(path, ".")} gained #{acc - was} in #{bound} ms"
+              )
+
+              {{key, path}, last}
+            end
 
           rung = ce_ons_rung(rt.config.programs[later.type])
           ce_pulsed!(later.env["q"] == 1 and rung != nil, onsp, key, {rung, name, before})
 
-          {Map.put(prev, key, now), Map.put(onsp, key, ce_ons_last(rung, later.env["c"]))}
+          prev =
+            Enum.reduce(ran, Map.put(prev, key, now), fn {at, last}, prev ->
+              ce_ran(last == now, at, now, prev)
+            end)
+
+          {prev, Map.put(onsp, key, ce_ons_last(rung, later.env["c"]))}
 
         _event, acc ->
           acc
