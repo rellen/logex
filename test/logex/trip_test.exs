@@ -574,6 +574,38 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).trip == {:io, "panel", :timeout}
     end
 
+    # c1-runner-rounds-9 (RV-4): a message that names Logex.Runner.Device but is of no
+    # notice's shape crashed the runner, raised in the sort of the notices taken together.
+    test "a message of no notice's shape, though it names Logex.Runner.Device, is passed " <>
+           "over, alone or among the notices a trip takes" do
+      text =
+        "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock, panel: panel} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      junk = [
+        {Logex.Runner.Device, self(), 0, 0, :junk},
+        {Logex.Runner.Device, self(), 0, 0, {:latched, "nope", 1}},
+        {Logex.Runner.Device, :pid, :restarts, :at, {:back, "panel", nil}},
+        {Logex.Runner.Device, self(), 0, 0, {:fault, :panel, :forged}}
+      ]
+
+      for message <- junk, do: send(runner, message)
+      Manual.advance(clock, 20)
+      assert %{status: :running} = Runner.status(runner)
+
+      # The panel's own notice in the suspended runner's mailbox, and junk behind it, which
+      # the trip that takes every notice waiting passes over.
+      :sys.suspend(runner)
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      for message <- junk, do: send(runner, message)
+      :sys.resume(runner)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+    end
+
     test "the hidden option's mistake, raised in the caller" do
       {:ok, clock} = Manual.start_link()
       {:ok, panel} = Sim.start_link(clock: clock)
@@ -744,6 +776,46 @@ defmodule Logex.TripTest do
     # trip's 0 is written its 0 again at every poll, and nothing else, until one is taken,
     # status/1 naming it until then; the first reason is kept, and a restart releases and
     # writes as before.
+    # c5-tests-4 (RV-4): a set past 32 members is in no order of its names, so status/1's
+    # `unzeroed` is sorted: forty devices whose trip's 0 their adapters do not take, named
+    # in device-name order.
+    test "status/1 names the devices whose 0 was not taken in device-name order past 32" do
+      names = for i <- 0..39, do: "d#{String.pad_leading("#{i}", 2, "0")}"
+
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global boom dint at panel.i.1\n" <>
+          Enum.map_join(names, "", &"var_global y#{&1} bool at #{&1}.q.0\n") <>
+          Enum.map_join(
+            names,
+            "",
+            &"program r#{&1} relay with fast\n  r#{&1}.in x\n  r#{&1}.out y#{&1}\n"
+          )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      sims = Map.new(names, fn name -> {name, elem(Sim.start_link(clock: clock), 1)} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io:
+            Map.new(sims, fn {name, sim} -> {name, {Sim, sim: sim}} end)
+            |> Map.put("panel", {Sim, sim: panel}),
+          clock: {Manual, clock},
+          poll: 1_000_000,
+          steps: Boom
+        )
+
+      # The next round, at 10, raises in its step, and the trip's 0 fails at every device.
+      for {_name, sim} <- sims, do: Sim.fail(sim, :write, {:error, :gone})
+      Sim.set(panel, [1], 2)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, unzeroed: unzeroed} = Runner.status(runner)
+      assert unzeroed == names
+      Runner.stop(runner)
+    end
+
     test "a trip's 0 that fails is tried again at every poll until it is taken" do
       # Polls at 7, 14, 21, …, apart from the fast task's rounds at 10, 20, ….
       %{runner: runner, clock: clock, panel: panel} = lamped(@lamped, 7)
@@ -2292,6 +2364,47 @@ defmodule Logex.TripTest do
       zeroed_once(panel, 1)
       zeroed_once(drive, 1)
       assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+
+    # c7-premortem-plant-3, c2-runner-persist-3 (RV-4): a device hung inside its adapter
+    # never took its runner's exit, so a killed runner's device held its card, its outputs
+    # on, and the next start was refused; it is killed now within the idle watchdog and a
+    # poll period of real time of its runner's death, the card free for the next runner.
+    @tag :capture_log
+    test "a killed runner's device hung inside its adapter is killed within its idle " <>
+           "watchdog and a poll period, its card free for the next start" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock, wait: 100)
+
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global y bool at panel.q.0\nprogram r relay with fast\n  r.in x\n  r.out y\n"
+
+      opts = [
+        configuration: configured(text),
+        io: %{"panel" => {Sim, sim: panel}},
+        clock: {Manual, clock},
+        poll: 10,
+        idle: 200,
+        steps: Runtime
+      ]
+
+      {:ok, runner} = Runner.start_link(opts)
+      device = device_pid(runner, "panel")
+      ref = Process.monitor(device)
+      Sim.fail(panel, :report, :hang)
+
+      assert_raise ArgumentError, ~r/^Logex.IO.Sim waited 100 ms for /, fn ->
+        Sim.set(panel, [0], 1)
+      end
+
+      Process.unlink(runner)
+      Process.exit(runner, :kill)
+
+      assert_receive {:DOWN, ^ref, :process, ^device, :killed}, 5000
+      {:ok, again} = Runner.start_link(opts)
+      assert %{status: :running} = Runner.status(again)
+      Runner.stop(again)
     end
 
     @tag :capture_log

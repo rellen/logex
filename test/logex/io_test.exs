@@ -173,6 +173,23 @@ defmodule Logex.IOTest do
       assert Sim.reads(sim) == 2
     end
 
+    # c6-pmi-7 (RV-4): a sim written again every poll period for hours kept every write;
+    # it keeps its newest, `writes:` of them, 100,000 unless set, its outputs as ever.
+    test "keeps its newest writes, as many as writes: says" do
+      sim = sim(writes: 3)
+      state = opened(sim)
+      for n <- 1..10, do: {:ok, ^state} = Sim.write(%{[0] => n}, state)
+      assert Sim.writes(sim) == [%{[0] => 8}, %{[0] => 9}, %{[0] => 10}]
+      assert Sim.outputs(sim) == %{[0] => 10}
+
+      sim = sim()
+      state = opened(sim)
+      for n <- 1..200_001, do: {:ok, ^state} = Sim.write(%{[0] => n}, state)
+      writes = Sim.writes(sim)
+      assert length(writes) == 100_000
+      assert {hd(writes), List.last(writes)} == {%{[0] => 100_002}, %{[0] => 200_001}}
+    end
+
     test "records every write in order, and the last value written to each output" do
       sim = sim()
       state = opened(sim)
@@ -551,7 +568,9 @@ defmodule Logex.IOTest do
              [
                "expected a simulated device from Logex.IO.Sim.start_link/1, got: :panel",
                "Logex.IO.Sim is bound with sim: alone, got: :reports"
-             ]}
+             ]},
+            # c3-io-contract-8 (RV-4): sim: given twice, the second no longer passed over.
+            {[sim: sim, sim: sim], ["Logex.IO.Sim is bound with sim: once, got it 2 times"]}
           ] do
         assert Sim.check("panel", points(), opaque(opts)) == mistakes
         lines = for mistake <- mistakes, do: "the device `panel`'s adapter options: " <> mistake
@@ -574,13 +593,17 @@ defmodule Logex.IOTest do
            "with its message" do
       for {opts, message} <- [
             {:fast,
-             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: " <>
-               "and outputs:, got: :fast"},
+             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs:, " <>
+               "outputs: and writes:, got: :fast"},
             {[1],
-             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: " <>
-               "and outputs:, got: [1]"},
+             "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs:, " <>
+               "outputs: and writes:, got: [1]"},
             {[loud: true],
-             "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: :loud"},
+             "Logex.IO.Sim takes reports:, clock:, wait:, inputs:, outputs: and writes:, got: " <>
+               ":loud"},
+            # RV-4 (c6-pmi-7): the writes it keeps, 1 or more.
+            {[writes: 0],
+             "Logex.IO.Sim's writes: is how many writes it keeps, its newest, 1 or more, got: 0"},
             # M5-13's review: a key twice is told so, not told it is unknown.
             {[inputs: 3, inputs: 4],
              "Logex.IO.Sim takes each option once, got :inputs more than once"},

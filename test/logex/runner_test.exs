@@ -82,6 +82,30 @@ defmodule Logex.RunnerTest do
 
   # A clock whose cancel/2 stops nothing, as a real clock's cannot stop a message already
   # sent: every wake the runner set comes, the ones it superseded among them.
+  # A manual clock whose now_ms/1 and wall_ms/1 give, once the test puts one in this
+  # module's table under the clock, what it says instead of their time: so that a clock's
+  # answer that is no whole number of milliseconds can come at start or later.
+  defmodule OddClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock),
+      do: odd(:ets.lookup(Logex.RunnerTest, {clock, :now_ms}), Manual.now_ms(clock))
+
+    @impl true
+    def wall_ms(clock),
+      do: odd(:ets.lookup(Logex.RunnerTest, {clock, :wall_ms}), Manual.wall_ms(clock))
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+
+    defp odd([{_key, answer}], _time), do: answer
+    defp odd([], time), do: time
+  end
+
   defmodule NoCancelClock do
     @behaviour Logex.Runner.Clock
 
@@ -109,6 +133,11 @@ defmodule Logex.RunnerTest do
     def unregister_name({key, _messages}), do: :global.unregister_name(key)
     def whereis_name({key, _messages}), do: :global.whereis_name(key)
     def send({key, _messages}, message), do: :global.send(key, message)
+  end
+
+  setup_all do
+    :ets.new(__MODULE__, [:named_table, :public, :set])
+    :ok
   end
 
   # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth"):
@@ -159,6 +188,14 @@ defmodule Logex.RunnerTest do
   end
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
+
+  # A stop's answer from a task of its own, or the host's mistake it raised, so that a stop
+  # of a runner gone does not take the test down; an exit is let through, to fail it.
+  defp stop_answer(runner, reason) do
+    Runner.stop(runner, reason)
+  rescue
+    error in ArgumentError -> {:raised, error.message}
+  end
 
   # The relay on the 10 ms task, and an event task on the panel's `e` counting its rises
   # into `hits`, the drive's one output: a trigger at a device that reports.
@@ -348,6 +385,68 @@ defmodule Logex.RunnerTest do
         "expected a manual clock from Logex.Runner.Clock.Manual.start_link/1, got: :clock",
         fn -> Runner.start_link(Keyword.put(opts, :clock, {Manual, :clock})) end
       )
+    end
+
+    # c3-io-contract-9, c2-runner-persist-6 (RV-4): a clock's answers checked at start, a
+    # time that is no whole number of milliseconds, and a wall clock's that no store's
+    # header can hold, each the host's mistake, where one became a device that could not be
+    # opened and the other a FunctionClauseError.
+    test "a clock whose now_ms/1 or wall_ms/1 gives no time a runner can take" do
+      {opts, _rig} = rig()
+      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      for answer <- [1.5, nil, "10"] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :now_ms}, answer})
+
+        raises(
+          "the runner's clock `Logex.RunnerTest.OddClock` gave #{inspect(answer)} from " <>
+            "now_ms/1: a clock's time is a whole number of milliseconds",
+          fn -> Runner.start_link(Keyword.put(opts, :clock, {OddClock, clock})) end
+        )
+      end
+
+      for answer <- [1.5, :now, 253_402_300_800_000, -377_705_116_800_001] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :wall_ms}, answer})
+
+        raises(
+          "the runner's clock `Logex.RunnerTest.OddClock` gave #{inspect(answer)} from " <>
+            "wall_ms/1: a store's header is written at the wall clock's time, a whole " <>
+            "number of milliseconds since the Unix epoch from year 0 to year 9999",
+          fn ->
+            Runner.start_link(
+              opts
+              |> Keyword.put(:clock, {OddClock, clock})
+              |> Keyword.put(:retain, Path.join(dir, "#{System.unique_integer([:positive])}"))
+            )
+          end
+        )
+      end
+    end
+
+    # And later: a time that is no whole number of milliseconds is a clock that fails,
+    # never a crash: a device that reads it goes down as one whose clock fails does, which
+    # trips the runner naming it, and the runner that reads it stops as a shutdown naming
+    # it, as at a clock gone down.
+    @tag :capture_log
+    test "a clock whose now_ms/1 gives no time later trips or stops the runner, naming it" do
+      {opts, _rig} = rig()
+      {:ok, clock} = Manual.start_link()
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {OddClock, clock}))
+      :ok = Runner.subscribe(runner)
+      :ets.insert(__MODULE__, {{clock, :now_ms}, 2.5})
+
+      # The panel's poll at 10 comes before the runner's round, and the panel goes down.
+      Manual.advance(clock, 10)
+      reason = {:shutdown, {:clock, {:now_ms, 2.5}}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:down, ^reason}}}}, 5000
+
+      # The runner reads its clock as it serves the next request.
+      raises("the runner #{inspect(runner)} is not running", fn -> Runner.status(runner) end)
+      assert_receive {:EXIT, ^runner, ^reason}, 5000
     end
 
     test "a poll period, a share or an idle watchdog out of its range" do
@@ -681,6 +780,33 @@ defmodule Logex.RunnerTest do
       assert Sim.writes(panel) == [%{[0] => 1}]
       assert Sim.writes(drive) == [%{[0] => 0}]
       assert Runner.get!(runner, "r.out") == 1
+    end
+
+    # c5-tests-1 (RV-4): a poll that comes late, its device busy past its grid, reads once
+    # and takes up the grid at its next time after now, never making up the reads it
+    # missed; a device that made them up passed every suite.
+    test "a poll that comes late skips the reads it missed, its grid kept" do
+      {opts, %{panel: panel, clock: clock}} = rig(relayed(), poll: 10, idle: 1_000)
+      {:ok, runner} = Runner.start_link(opts)
+      reads = Sim.reads(panel)
+
+      # Time passes with nothing delivered, as in a device busy past its polls: the one due
+      # at 10 comes at 25, reads once, and takes up the grid at 30, the read at 20 skipped;
+      # the advance to 35 delivers the one at 30, and the next is at 40.
+      Manual.pass(clock, 25)
+      Manual.advance(clock, 10)
+      assert Sim.reads(panel) == reads + 2
+      device = devices(runner)["panel"]
+
+      assert [40] ==
+               for(
+                 {at, ^device, {Logex.Runner.Device, :poll, _}} <- Manual.pending(clock),
+                 do: at
+               )
+
+      Manual.advance(clock, 5)
+      assert Sim.reads(panel) == reads + 3
+      Runner.stop(runner)
     end
 
     test "a device that cannot be opened is {:error, {:io_init, device, reason}}, every " <>
@@ -1132,8 +1258,9 @@ defmodule Logex.RunnerTest do
           %{"toggle" => @toggle, "count" => @count}
         )
 
-      # 15% and 40% round C, 5.67 to 6 and 1.5 to 2.
-      for {share, c} <- [{10, 9}, {15, 6}, {20, 4}, {40, 2}, {50, 1}, {90, 1}] do
+      # 15% and 40% round C, 5.67 to 6 and 1.5 to 2; and since RV-4 (c5-tests-3) 30% and
+      # 45%, where round and ceil differ, 2.33 to 2 and 1.22 to 1.
+      for {share, c} <- [{10, 9}, {15, 6}, {20, 4}, {30, 2}, {40, 2}, {45, 1}, {50, 1}, {90, 1}] do
         {:ok, clock} = Manual.start_link()
 
         {:ok, runner} =
@@ -1165,7 +1292,13 @@ defmodule Logex.RunnerTest do
       # Each request takes 3 ms on this clock: the slot's reading before it and, since
       # M4-4, two that time it against the idle watchdog (decision 128); so a slot of 9 ms
       # serves three.
-      for {share, slots} <- [{50, List.duplicate(1, 40)}, {90, List.duplicate(3, 13) ++ [1]}] do
+      # Since RV-4 (c5-tests-3) also 86%, S = round(6.14) = 6, where ceil gives 7 and a slot
+      # of three requests: two a slot.
+      for {share, slots} <- [
+            {50, List.duplicate(1, 40)},
+            {86, List.duplicate(2, 20)},
+            {90, List.duplicate(3, 13) ++ [1]}
+          ] do
         {:ok, clock} = Manual.start_link()
         {:ok, panel} = Sim.start_link(clock: clock)
 
@@ -1736,6 +1869,7 @@ defmodule Logex.RunnerTest do
           runner: self(),
           clock: {Manual, clock},
           poll: 10,
+          idle: 500,
           restarts: 0
         })
 
@@ -1768,6 +1902,7 @@ defmodule Logex.RunnerTest do
           runner: self(),
           clock: {Manual, clock},
           poll: 10,
+          idle: 500,
           restarts: 0
         })
 
@@ -1928,6 +2063,28 @@ defmodule Logex.RunnerTest do
   end
 
   describe "stop/2, status/1 and subscriptions" do
+    # c1-runner-rounds-10 (RV-4): stops made at once, with their own reasons, each answer,
+    # where the second exited with the first's reason; one that finds the runner stopped
+    # already raises that it is not running, as a stop of a stopped runner does.
+    test "stops made at once each answer, the runner stopped by the first" do
+      not_running = fn runner -> "the runner #{inspect(runner)} is not running" end
+
+      for _ <- 1..10 do
+        {opts, _rig} = plant_rig()
+        {:ok, runner} = Runner.start_link(opts)
+        Process.unlink(runner)
+
+        answers =
+          [:normal, :shutdown, {:shutdown, :end_of_shift}, :normal, :shutdown]
+          |> Enum.map(fn reason -> Task.async(fn -> stop_answer(runner, reason) end) end)
+          |> Enum.map(&Task.await/1)
+
+        assert Enum.all?(answers, &(&1 in [:ok, {:raised, not_running.(runner)}]))
+        assert :ok in answers
+        refute Process.alive?(runner)
+      end
+    end
+
     test "stop/2 writes every output 0 once and closes every device before it returns " <>
            "(decision 116)" do
       {opts, %{panel: panel, drive: drive, clock: clock}} = plant_rig()

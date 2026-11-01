@@ -51,6 +51,7 @@ defmodule Logex.ClockTest do
     defp act({:pass, ms}, state), do: Manual.pass(state.clock, ms)
     defp act({:advance, ms}, state), do: Manual.advance(state.clock, ms)
     defp act({:sleep, ms}, _state), do: Process.sleep(ms)
+    defp act({:kill, pid}, _state), do: Process.exit(pid, :kill)
     defp act(:down, _state), do: :down
   end
 
@@ -338,6 +339,20 @@ defmodule Logex.ClockTest do
       assert_received :mine
     end
 
+    # c3-io-contract-10 (RV-4): a clock a receiver kills in the middle of an advance is a
+    # clock that is not running, in the caller, where its exit escaped.
+    test "a clock killed in the middle of an advance is one that is not running" do
+      clock = clock()
+      Process.unlink(clock)
+      killer = receiver(clock, %{tick: {:kill, clock}})
+      Manual.wake_at(clock, killer, :tick, 1)
+      Manual.wake_at(clock, killer, :tick, 2)
+
+      assert_raise ArgumentError, "the manual clock #{inspect(clock)} is not running", fn ->
+        Manual.advance(clock, 5)
+      end
+    end
+
     test "waits 5000 ms for a receiver unless wait: says otherwise" do
       clock = clock()
       plain = spawn_link(fn -> receive do: (:never -> :ok) end)
@@ -363,8 +378,9 @@ defmodule Logex.ClockTest do
 
       assert_raise ArgumentError,
                    "the manual clock waited 20 ms for #{inspect(plain)} to handle :tick: a " <>
-                     "receiver of its timers is an OTP process, as a GenServer is, which " <>
-                     "answers :sys once it has handled what it was sent",
+                     "receiver of its timers answers :sys once it has handled what it was " <>
+                     "sent, as a GenServer does, and this one did not within wait:, still " <>
+                     "busy with it or no OTP process",
                    fn -> Manual.advance(clock, 1) end
     end
 

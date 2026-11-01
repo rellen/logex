@@ -25,7 +25,10 @@ defmodule Logex.Runner.Clock do
 
   A receiver is a process given by its pid; a time an integer; a timer the reference
   `wake_at/4` gave. Anything else is the host's mistake, an `ArgumentError`, whose
-  message is one for both clocks.
+  message is one for both clocks. The runner holds a clock of the host's to the same: a
+  time from `now_ms/1` that is no integer, and from `wall_ms/1` that is none or that no
+  `DateTime` holds, is the host's mistake where the runner's start reads it, and a clock
+  that fails afterwards (`Logex.Runner`).
   """
 
   @typedoc "What a clock's callbacks take: a manual clock's pid, or any term for the monotonic one."
