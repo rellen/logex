@@ -12264,7 +12264,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: show it in README (b)** (the maintainer, 2026-11-01): `wired.logex` is shown
      as a block of its own, marked `<!-- file: wired.logex -->`, and the test's derived
-     entry for it goes. To build in RV-9.
+     entry for it goes. To build in RV-9. *(Landed with RV-9, 2026-11-01: README shows
+     `wired.logex` beside `broken.logex` in "A retained global", its warning citing line 7,
+     `t1.full case_lamp`, a line README shows; `readme_test.exs`'s `@derived` entry and the
+     `:uncommented` reading only it used are gone.)*
 
 364. **The real-clock example's figures (the review after Milestone 6),** RV-1's
      provisional reading 4: the line of that run's figures is compared by its beginning
@@ -12280,7 +12283,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: run it in a setup (b)** (the maintainer, 2026-11-01): the test makes what
      README's prose describes, a runner on the manual clock with a round owed after a slow
      write, runs the fragment and holds it to the prose: it waits, then answers. README
-     does not change. To build in RV-9.
+     does not change. To build in RV-9. *(Landed with RV-9, 2026-11-01: `readme_test.exs`'s
+     `@fragments` table gives the fragment a setup, `packing.logex` on the manual clock with
+     the panel's first write slowed 2 ms, then runs README's text in a fresh VM as an
+     example is run, a process of its own counting the fragment's advances; the run must
+     print that the call waited, the clock moved on 1 to 4 times, and then answered
+     `b1.count`, 0, and README must still say "One made while a round is owed ... waits for
+     its slot". README is unchanged.)*
 
 366. **A label in CLAUDE.md (the review after Milestone 6),** RV-1's provisional reading
      6: a work item's label or a commit anywhere in CLAUDE.md is history and refused,
@@ -12298,7 +12307,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a landing where a jump names it (b)** (the maintainer, 2026-11-01): a rung
      that is a label alone is accepted where a `jmp` of its routine names the label, and
      refused as a rung that writes nothing where none does; landing on it runs as landing
-     on the rung after it, or on the routine's end. To build in RV-9.
+     on the rung after it, or on the routine's end. To build in RV-9. *(Landed with RV-9,
+     2026-11-01: `Logex.Compiler` keeps a label alone as a mark while the rungs lower and
+     takes it where a `jmp` of the routine names the label exactly, in a program and in a
+     block's body, `Logex.Compiler.lowered?/1` among them; refused in decision 351's words
+     where none does, which a refused compile gives in place of the warning for a label no
+     `jmp` names; a label and a contact still write nothing. The runtime needed no change.
+     A label alone that a jump names and that a second rung labels again is told once, as
+     used twice (provisional).)*
 
 368. **Where a rung of empty groups is cited (the review after Milestone 6),** RV-2's
      question 2: a rung of empty groups alone, `( )`, holds no line in the parse tree, so
@@ -12322,7 +12338,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: refused at compile (b)** (the maintainer, 2026-11-01): the elements of a
      declaration are counted through every nested array of instances, and past 65,536 it
-     is refused at its line. To build in RV-9.
+     is refused at its line. To build in RV-9. *(Landed with RV-9, 2026-11-01: a type keeps
+     what an instance of it holds at every depth in its schema, `Logex.FbType`'s
+     `elements`, counted by `of/1` from its members once a type, and decision 54's check
+     compares it with the rest of the type; `Logex.Declarations` refuses a declaration past
+     65,536 at its line, `` `row` would hold 16777216 elements at every depth, 256
+     instances of `cell`, `[256]`, each holding 65536: a declaration holds 65536 at most,
+     counted through every array of instances it holds ``, from Elixir too. An element of
+     an array of instances counts its type's elements where it holds any and itself where
+     it holds none, so `cell[256]` of `ton[256]` holds 65,536 as `ton[256,256]` does, and
+     an instance counts every array its type holds, summed (provisional). A configuration's
+     program instance is not counted: a program that holds such a declaration does not
+     compile.)*
 
 371. **The loader's recompiles (the review after Milestone 6),** RV-2's question 5: a chain
      of 30 blocks, each holding the next, compiles 435 times, as decision 54 rechecks every
@@ -12331,6 +12358,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: the loader trusts its own (b)** (the maintainer, 2026-11-01): a type the
      loader compiled itself in the same load is not checked again, so a chain costs its
      length; a type a host hands in is checked as decision 54 has it. To build in RV-9.
+     *(Landed with RV-9, 2026-11-01: the loader compiles each file over its own types
+     through `Logex.Compiler.loaded/2`, internal, which checks none of them again and still
+     holds one version of each name; `Logex.compile/2` takes no option for it and a type
+     carries no mark of it. The review's chain of 30 files compiles 31 times and none again,
+     where it compiled 435 more, and a configuration of 20 types over it 50 times, none
+     again, where it compiled 1,035 more.)*
 
 372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
      6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
@@ -12338,7 +12371,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: no warning (b)** (the maintainer, 2026-11-01): two writes of one array whose
      literal subscripts differ in any place are distinct and not warned; two that may meet,
-     `ee[i,0]` and `ee[j,0]`, are warned as before. To build in RV-9.
+     `ee[i,0]` and `ee[j,0]`, are warned as before. To build in RV-9. *(Landed with RV-9,
+     2026-11-01: `Logex.Warnings` keeps each first an array of two or three dimensions holds
+     under every projection of its subscripts, a literal's value or a tag, and a write
+     looks up those that may meet it, taking the earliest, so an element's bit and an
+     element's member are judged so too, and the warnings stay linear; an array of one
+     dimension, where a tag meets every element, and one no write names through a tag
+     subscript keep their plain keys. A bit's number and a member's path are no
+     subscripts: `w[i].3` beside `w[j].4` is warned as before.)*
 
 373. **A rung told twice (the review after Milestone 6),** RV-2's question 7: a rung the
      jump checks refuse, `xic auto lbl done`, is told too that it writes nothing.

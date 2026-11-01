@@ -12129,6 +12129,168 @@ and CI checked; each fix with a test that fails when it is reverted.
   checked again; two writes of one array whose literal subscripts differ not warned. It
   runs as the next of two at a time, before RV-8.
 
+  **RV-9 as built** (2026-11-01, branch `rv9` on `d7a1290`). Each change has a test that
+  fails when it is reverted, judged by the full suite (the mutation table below).
+
+  - *Decision 367, a label alone* (`compile_total_test.exs`, "a rung that writes nothing",
+    and `jump_test.exs`, "a label alone, a jump's landing"). `Logex.Compiler` keeps a rung
+    that is a label alone as a mark while the rungs lower, `{:lone_label, line, name}`,
+    and takes it where a `jmp` of its routine names the label exactly, in a program and in
+    a block's body; a body holding one is a compiled body (`lowered?/1`). Where no `jmp`
+    names it, it is refused in decision 351's words, and that refusal is what the
+    programmer sees in place of the warning for a label no `jmp` names, since a refused
+    compile gives no warnings; `lbl done xic a` writes nothing, named or not. Landing runs
+    the label, which does nothing, so a jump to the end over a skipped rung holds its coil
+    and freezes its timer, at depth two blocks down, as the tests restate; the runtime did
+    not change. A label alone a jump names, used twice, is told once, as used twice: the
+    one test line decision 367 changes (`compile_total_test.exs`, "told it writes nothing
+    too"), the same with no `jmp` a new case told both, as before. Decision 351's check is
+    one clause still for a rung whose last instruction writes; a routine of no label
+    alone pays one `List.keymember?/3` of its diagnostics. Docs: the compiler's moduledoc,
+    README's syntax list, the `lbl` row and "A forward jump", `docs/naming.md`'s `lbl`
+    stanza amended.
+  - *Decision 370, an instance's size at every depth* (`instance_array_test.exs`, "an
+    instance's size at every depth"). A type keeps what an instance of it holds in its
+    schema, `Logex.FbType`'s new `elements` (0 for a built-in), counted by `of/1` from its
+    members, each type an instance names read in the table that holds it, so each type is
+    counted once, as it is built, and a declaration reads it in a clause's guard
+    (`Logex.Array.deep_size/1`, `held_by/2`). `Logex.Declarations` refuses a declaration
+    past 65,536 at its line, naming the count and the bound, from Elixir as the pinned
+    `ArgumentError`: `var row cell[256]`, each `cell` holding 256 blocks of `ton[256]`, in
+    a program, a block's file, through `types:` and through `compile_file/1`, and a
+    configuration's program that holds it, which does not compile; nothing is built, the
+    refusal costing what the compile of `cell[1]` does. The count is part of what decision
+    54's check compares, so a type handed in with another is refused. The first form
+    walked the type's table at each declaration and failed four of the suite's cost tests
+    (a program of 200 block instances 27 reductions a rung over its pin, a nested chain's
+    compile quadratic); the count moved into the schema, every one passes. Docs:
+    `Logex.Declarations`' and `Logex.FbType`'s moduledocs, `Logex.Array`'s head, README's
+    "Arrays of instances".
+  - *Decision 371, the loader's own types* (`function_block_test.exs`, "the loader's own
+    types"). The loader compiles each file over the blocks this one call compiled itself
+    through `Logex.Compiler.loaded/2`, internal, which compiles none of them again and
+    still holds one version of each name (decision 53); `Logex.compile/2` takes no option
+    for it and `%Logex.FbType{}` no mark of it, so a host's `types:` is checked as
+    decision 54 has it: the same chain handed in compiles each of its 12 types again, and
+    a loaded type edited by hand is refused. Counted by tracing the compiler, a chain of 10
+    files compiles 11 times and one of 20, 21, none again; through `compile_files/1` and a
+    configuration's loader each file once a call. a6-compile-scale-9's probe at the tip:
+    a chain of 30 files 31 compiles and none again (435 more at `d7a1290`), a
+    configuration of 20 types over it 50 and none again (1,035 more). Each file is still
+    read once for each file that names it, to tell a block from a program, linear. In
+    reductions a chain of 20 to 40 files costs about 2.4x, of 40 to 80 2.7x, where it cost
+    3.6x and 3.8x: what remains is each compile's own reading of its table. The public
+    surface pin (`runtime_test.exs`) names `loaded: 2`.
+  - *Decision 372, two writes whose subscripts differ* (`tag_subscript_test.exs`, "two
+    writes whose literal subscripts differ"; `tag_bit_test.exs`'s `g[1,c].[n]` beside
+    `g[0,c].[n]`, the one test line it changes, now no warning, with `g[1,m].[n]` beside it
+    warned). `Logex.Warnings` keeps each first an array of two or three dimensions holds,
+    a coil's, a whole write's, an element's bit's and an element's member's, under every
+    projection of its subscripts, a literal's value or a tag, at most 8, and a write looks
+    up the 2^n projections that may meet it, n its literal places, taking the earliest;
+    an array of one dimension, where a tag meets every element, and one no write names
+    through a tag subscript keep their plain keys. Linear: 2x the writes 2x the
+    reductions. A bit's number and a member's path are no subscripts, so `w[i].3` beside
+    `w[j].4` is warned as before, and the one-shot storage-bit warning, a write through a
+    tag subscript reaching every storage bit of its array, is unchanged (question 4). The
+    first form indexed every array of two dimensions and failed `compile_total_test.exs`'s
+    pin for a program of bit coils, 10.5 reductions a rung over `e365fa4` where 8 bound
+    it: a routine whose coils name no array of two dimensions, and an array of one, now
+    take the parent's clauses exactly. The review's a4-warnings-walk-8 probe now gives no
+    warning on either of its programs, and its three crash fuzzers, 8,000 programs over
+    every write form, raise nothing.
+  - *Decision 363, `wired.logex`*: README shows it beside `broken.logex`, marked, its
+    warning citing line 7, `t1.full case_lamp`; `readme_test.exs`'s derived entry and the
+    `:uncommented` reading only it used are gone.
+  - *Decision 365, README's one fragment*: `readme_test.exs`'s `@fragments` table gives it
+    a setup, `packing.logex` on the manual clock with the panel's first write slowed 2 ms,
+    so a round is owed; the fragment's own text then runs in a fresh VM as an example
+    does, a process of its own counting its advances by a call trace, and must print that
+    the call waited, the clock moved on 1 to 4 times, and then answered `b1.count`, 0,
+    beside README's words of it. README did not change; `CONTRIBUTING.md` and CLAUDE.md's
+    line for the test say the fragment runs.
+
+  The cost against `d7a1290`, in reductions, the least of eleven runs each in a fresh
+  process whose heap is large enough that no collection falls inside it: every program of
+  `compile_total_test.exs`'s pin compiles within 38 of the parent's (0.00% to 0.02%), as
+  do the README's block-free `.ld` files (9 more each); a block's file 79 more, its
+  `elements` counted (1.5%); a program that loads a block through the loader 8.7% to 15%
+  fewer (`lanes.ld`, `belts.ld`), its block not compiled again; 200 coils on elements of
+  one dimension 0.46% more, of two 0.95%; and a program of 600 rungs that writes rows of
+  a two-dimensional array both by literals and through tags 48.9% more, the cost of
+  telling them apart (decision 372), linear in the writes. Every scan is exactly the
+  parent's: 200 mixed rungs, energised and not, and an array of blocks of timers, and an
+  instance's first state. A program of 100 jumps each to its own label alone, refused at
+  `d7a1290`, compiles in 133,788.
+
+  *Mutation table* (`scratchpad/rv/m9/t1/` on `1453de6`, 18 mutants), each judged by the
+  full suite: every one red.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | m367_all_named | every label alone taken | 5 |
+  | m367_any_jmp | a label alone taken where any `jmp` is | 1 |
+  | m367_itself | a body holding a label alone no compiled body | 1 |
+  | m367_no_before | a label alone marked on a rung refused as it lowers | 2 |
+  | m367_no_mark | no label alone taken | 6 |
+  | m370_array_none | an array of instances not counted at depth | 7 |
+  | m370_bound_ge | 65,536 at depth refused | 8 |
+  | m370_no_max_deep | an array of a type holding no array counts nothing | 7 |
+  | m370_no_max_member2 | so for a member of a block's type | 1 |
+  | m370_no_sum | a type's arrays not summed | 2 |
+  | m370_not_compared | the count not part of decision 54's check | 1 |
+  | m370_of_no_table | a check's recompile counted with no table | 12 |
+  | m370_scalar_ge2 | an instance of 65,536 refused | 2 |
+  | m370_scalar_member_zero | a scalar instance member counts nothing | 1 |
+  | m370_scalar_none | an instance not counted | 2 |
+  | m371_host_trusted | `compile/2` trusts a host's types | 14 |
+  | m371_loader_checks | the loader checks its own types again | 3 |
+  | m371_no_one_version | the loader's types held with no table | 4 |
+
+  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
+  Logix say nothing that settles them.
+
+  1. *A label alone a jump names, used twice* (decision 367). `xic a jmp done`, `lbl done`,
+     `lbl done`: the second label alone is told only that `done` already labels the rung
+     above, since a `jmp` names its label. (a) As built; (b) only the rung a jump lands on,
+     the first, is a landing, so the second is told too that it writes nothing.
+  2. *What a declaration counts at every depth* (decision 370). A block holding two
+     `int[40000]` compiles, but `var x two` in a program is refused, 80,000 elements; and
+     an element of an array of blocks counts its block's elements, so `cell[256]` of a
+     block holding `ton[256]` is 65,536, taken. (a) As built, a declaration's leaf
+     elements summed; (b) each array alone, multiplied through the arrays of instances
+     that hold it, so `var x two` is taken and only nesting is bounded; (c) every element
+     at every level, so `cell[256]` of `ton[256]` is 65,792, refused. A configuration's
+     program instance is counted by none: each of its program's declarations is.
+  3. *The loader's trust* (decision 371). The trust is an internal function the loader
+     calls, `Logex.Compiler.loaded/2`; a host that calls it itself, outside the host
+     contract, hands in a type unchecked. (a) As built; (b) a check that the types are
+     the loader's own, by a token only the loader's call holds. The loader still reads a
+     block's file once for each file that names it, to tell a block from a program: a
+     configuration of 20 programs over one chain reads `b1.ld` 21 times, linear; reading
+     it once a call is the other.
+  4. *What decision 372 tells apart* (decision 372). `ote w[i].3` beside `ote w[j].4`,
+     two bits of one word array through tags, is still the "may share" warning, a bit's
+     number being no subscript; and a write through a tag subscript beside a one-shot's
+     storage bit, `ons e[1,1]` and `ote e[i,0]`, which can never meet, is still warned as
+     a write of the storage bit. (a) As built; (b) the bit's number as one more place;
+     (c) the storage-bit warning judged as decision 372 judges two writes.
+  5. *The fragment's setup* (decision 365). The test writes its own setup, `packing.logex`
+     on the manual clock with the panel's first write slowed 2 ms, rather than cutting
+     README's `on_the_clock.exs`, and holds the count of advances to 1 to 4, where this
+     setup makes it 1. (a) As built; (b) README's own setup with the slow write added,
+     and the exact count.
+  6. *`wired.logex`'s first line* (decision 363). README shows it with no comment line,
+     so the connection stays on line 7 and the warning README prints is unchanged. (a) As
+     built; (b) a comment line as `tally.logex` has, the warning citing line 8.
+
+  CI on each commit, and the gates. Two local gates, of `1453de6`'s tree and of
+  `1f2b840`'s, failed once each on `retain_image_test.exs`'s growth bound for an array of
+  instances' image, 4.79x and 4.63x against 4.6, with another workflow's suite running on
+  the same machine (load 13); alone it reads 4.00 to 4.06 at the tip and 4.09 at
+  `d7a1290`, and each gate run again passed. It is the kind of scheduler-sensitive bound
+  RV-7 takes up (decision 357).
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

@@ -990,6 +990,27 @@ defmodule Logex.TagSubscriptTest do
       assert told("xic a ote ee[0,i]\nxic a ote ee[1,j]\nxic a ote ee[i,1]") == [
                may(15, "ee[i,1]", 13)
              ]
+
+      # Two that may meet it, kept under two projections, `ee[i,j]`'s and `ee[1,k]`'s: the
+      # earlier is told, by the order each came in.
+      assert told("xic a ote ee[i,j]\nxic a ote ee[1,k]\nxic a ote ee[1,1]") == [
+               may(14, "ee[1,k]", 13),
+               may(15, "ee[1,1]", 13)
+             ]
+    end
+
+    # A write through a tag subscript that is no coil, `otl ee[i,1]`, in an array whose
+    # coils are of literal subscripts alone, finds each that may meet it as a coil through
+    # a tag subscript does.
+    test "a latch through a tag subscript beside coils of literal subscripts alone" do
+      assert told("xic a ote ee[1,1]\nxic a otl ee[i,1]") == [as_in(14, "ee[i,1]", "ee[1,1]", 13)]
+      assert told("xic a ote ee[1,1]\nxic a otl ee[i,0]") == []
+
+      assert told("xic a ote lc[1,1].r\nxic a otl lc[i,1].r") == [
+               as_in(14, "lc[i,1].r", "lc[1,1].r", 13)
+             ]
+
+      assert told("xic a ote lc[1,1].r\nxic a otl lc[i,0].r") == []
     end
 
     test "in three dimensions, any place that differs" do
