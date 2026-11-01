@@ -290,7 +290,10 @@ defmodule Logex.Runtime do
   outside its type: it is a uint, and 70000 is outside 0 to 65535", and since M5-11 a
   global array a connection copies whole whose value is no tuple of its sizes of its
   elements' values. A resource's instance is restarted with its var_externals' globals in
-  its state, as a scan takes it. The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
+  its state, as a scan takes it. A var_external's global that does not fit its own type,
+  which only a host gives it, is told as the global's, `runtime.globals holds`, by a cycle
+  and a restart alike, where it was told as the state's (since the review after Milestone
+  6). The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
@@ -1030,14 +1033,30 @@ defmodule Logex.Runtime do
   # One step cycle_steps/3 gave, run: `{runtime, events}`, its events in the order they
   # happened.
   def cycle_step(%__MODULE__{} = runtime, {:timed, _name, task}) do
-    {runtime, events} = run_task(task, {runtime, []})
+    {runtime, events} =
+      try do
+        run_task(task, {runtime, []})
+      rescue
+        refused in ArgumentError ->
+          externals!(refused, runtime, task_instances(task), __STACKTRACE__)
+      end
+
     {runtime, Enum.reverse(events)}
   end
 
   def cycle_step(%__MODULE__{} = runtime, {:untimed, task, instances}) do
-    {runtime, events} = Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
+    {runtime, events} =
+      try do
+        Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
+      rescue
+        refused in ArgumentError -> externals!(refused, runtime, instances, __STACKTRACE__)
+      end
+
     {runtime, Enum.reverse(events)}
   end
+
+  defp task_instances({_name, _trigger, _priority, _index, instances}), do: instances
+  defp task_instances({_name, _trigger, _priority, _index, instances, _sample}), do: instances
 
   @doc false
   # The output points, every one, after a cycle's last step.
@@ -3009,9 +3028,10 @@ defmodule Logex.Runtime do
     {due, states} =
       Enum.flat_map_reduce(tasks, states, fn {name, trigger, priority, index, _} = task, states ->
         {runs, state} =
-          plan(trigger, sample(trigger, globals), Map.fetch!(states, name), {now, task})
+          plan(trigger, sample(trigger, globals), Map.fetch!(states, name), now, task)
 
-        {for({at, run} <- runs, do: {{priority, at, index}, run}), Map.put(states, name, state)}
+        {for(run <- runs, do: {{priority, elem(run, 0), index}, elem(run, 1)}),
+         Map.put(states, name, state)}
       end)
 
     {%{rt | tasks: states}, due |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))}
@@ -3029,33 +3049,34 @@ defmodule Logex.Runtime do
   # among them, is skipped and not counted, the next on the same phase, so an edge run
   # does not move the phase; and one that came while the image held 1 runs in the cycle
   # that samples 0 (decision 52), since only the sample is known.
-  defp plan({nil, _interval}, nil, %{next_due: next} = state, {now, task}) when next <= now,
+  defp plan({nil, _interval}, nil, %{next_due: next} = state, now, task) when next <= now,
     do: {[{next, task}], state}
 
-  defp plan({nil, _interval}, nil, state, _at), do: {[], state}
+  defp plan({nil, _interval}, nil, state, _now, _task), do: {[], state}
 
-  defp plan({_single, nil}, 1, %{last: 0} = state, {now, {name, trigger, priority, index, ins}}),
+  defp plan({_single, nil}, 1, %{last: 0} = state, now, {name, trigger, priority, index, ins}),
     do: {[{now, {name, trigger, priority, index, ins, 1}}], state}
 
-  defp plan({_single, nil}, sample, state, _at), do: {[], %{state | last: sample}}
+  defp plan({_single, nil}, sample, state, _now, _task), do: {[], %{state | last: sample}}
 
   defp plan(
          {_single, interval} = trigger,
          1,
          %{last: 0, next_due: next} = state,
-         {now, {name, trigger, priority, index, instances}}
+         now,
+         {name, trigger, priority, index, instances}
        ),
        do:
          {[{now, {name, trigger, priority, index, instances, 1}}],
           %{state | next_due: skipped(next, interval, now)}}
 
-  defp plan({_single, interval}, 1, %{next_due: next} = state, {now, _task}),
+  defp plan({_single, interval}, 1, %{next_due: next} = state, now, _task),
     do: {[], %{state | last: 1, next_due: skipped(next, interval, now)}}
 
-  defp plan({_single, _interval}, 0, %{next_due: next} = state, {now, task}) when next <= now,
+  defp plan({_single, _interval}, 0, %{next_due: next} = state, now, task) when next <= now,
     do: {[{next, task}], %{state | last: 0}}
 
-  defp plan({_single, _interval}, 0, state, _at), do: {[], %{state | last: 0}}
+  defp plan({_single, _interval}, 0, state, _now, _task), do: {[], %{state | last: 0}}
 
   defp skipped(next, interval, now) when next <= now,
     do: next + (div(now - next, interval) + 1) * interval
@@ -3107,10 +3128,10 @@ defmodule Logex.Runtime do
     %Instance{first: first} = state = Map.fetch!(runtime.instances, name)
 
     copy_in = Map.fetch!(wiring.copy_in, name)
-    externals = Map.fetch!(wiring.externals, name)
-    read!(copy_in, externals, globals, wiring.globals)
+    read!(copy_in, globals, wiring.globals)
     inputs = Map.new(copy_in, fn {member, to} -> {member, value(to, globals)} end)
 
+    externals = Map.fetch!(wiring.externals, name)
     state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
 
     {outputs, %Instance{faults: faults} = state} =
@@ -3158,20 +3179,37 @@ defmodule Logex.Runtime do
   # before the copy-in, whose var_input it may widen into (decision 159), so that a value a
   # host left in a runtime it built is refused where its global is narrower than the
   # var_input it fills, as it is where the two are one type (decision 171, M5-3's review):
-  # a line each, in name order, a global read twice told once. So is each global a
-  # var_external of the instance binds, before it is merged into the instance's state,
-  # so that a value a host left there is told as the global's, `runtime.globals holds`,
-  # and not as the state's (b2-resource-6), an instance with none paying one clause.
-  defp read!(copy_in, externals, globals, declared),
+  # a line each, in name order, a global read twice told once.
+  defp read!(copy_in, globals, declared),
+    do: read_fitted(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+
+  # The review after Milestone 6 (b2-resource-6): a var_external's global, merged into its
+  # instance's state, is checked with it inside call/4, where a misfit was told as the
+  # state's, `state.env holds`, a place the host never wrote. A step refused is told
+  # instead, where a var_external's global of an instance it runs does not fit its own
+  # type, by that global, `runtime.globals holds`, with every line of a copy-in's refusal
+  # (read!/3), and otherwise as it was refused. Read only where a step is refused, so that
+  # a step pays nothing for it; only a host gives a global a misfit, never a scan, so the
+  # runtime the step was given holds it.
+  defp externals!(refused, %__MODULE__{} = runtime, instances, stacktrace),
+    do: externals_told(misfit_externals(runtime, instances), refused, stacktrace)
+
+  defp misfit_externals(%__MODULE__{wiring: wiring, globals: globals}, instances),
+    do:
+      Enum.reduce(instances, [], fn name, acc ->
+        externals_fit(Map.fetch!(wiring.externals, name), globals, wiring.globals, acc)
+      end)
+
+  defp externals_told([], refused, stacktrace), do: reraise(refused, stacktrace)
+
+  defp externals_told(lines, refused, _stacktrace),
     do:
       read_fitted(
-        externals_fit(
-          externals,
-          globals,
-          declared,
-          Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2))
-        )
+        lines ++ Enum.flat_map(String.split(Exception.message(refused), "\n"), &refused_global/1)
       )
+
+  defp refused_global("runtime.globals holds " <> _rest = line), do: [line]
+  defp refused_global(_line), do: []
 
   defp externals_fit([], _globals, _declared, acc), do: acc
 

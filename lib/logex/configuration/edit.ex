@@ -914,8 +914,10 @@ defmodule Logex.Configuration.Edit do
   # left as it is (provisional). Each write is `{old, new, first, slot}` by `{instance,
   # member}`, `first` the instance's then: a restart since marks it first and starts the
   # var_output again, so what it holds after is the restart's, not the hold's.
-  defp given_back(state, name, %{last: last}) do
-    Enum.reduce(Enum.sort(Map.get(last, name, [])), {state, []}, fn {_key, wrote}, acc ->
+  defp given_back(nil, state, _name), do: {state, []}
+
+  defp given_back(last, state, name) do
+    Enum.reduce(Enum.sort(last), {state, []}, fn {_key, wrote}, acc ->
       undone(wrote, name, acc)
     end)
   end
@@ -935,9 +937,12 @@ defmodule Logex.Configuration.Edit do
        [{:hold_undone, path(name, slot), host(old)} | reports]}
 
   # The holders of `name` in this direction whose var_output's tag `present?` takes, each
-  # started at its global's value.
-  defp held_in(state, name, {context, %Program{} = program}, present?) do
-    for {_instance, member, global} <- Map.get(context.holders, name, []),
+  # started at its global's value; an instance with none, nearly every one, paying one
+  # clause.
+  defp held_in(nil, state, _named, _present?), do: {state, [], %{}}
+
+  defp held_in(holders, state, {name, context, %Program{} = program}, present?) do
+    for {_instance, member, global} <- holders,
         {%Tag{}, tag, _index} = slot = connected(program, member),
         present?.(tag),
         reduce: {state, [], %{}} do
@@ -1094,6 +1099,35 @@ defmodule Logex.Configuration.Edit do
   # a global stays in the state (decision 49). The switch resumes a timer from the
   # resource's clock, and gives the instance that clock (decision 56).
   #
+  # An instance with no holder in this direction and nothing the last switch wrote to give
+  # back, nearly every one, is told by its clause's guard, and switched as before decision
+  # 347, so that a switch costs what it did.
+  defp instance(
+         {%{name: name, type: type}, type, from, to},
+         %{holders: holders, last: last} = context,
+         {instances, records, reports, holds}
+       )
+       when not is_map_key(holders, name) and not is_map_key(last, name) do
+    stops = Map.fetch!(from.programs, type)
+    starts = Map.fetch!(to.programs, type)
+
+    merged =
+      merged(Map.fetch!(context.runtime.instances, name), externals(stops), context.globals)
+
+    plan = Map.fetch!(Map.fetch!(context.edit.plans, type), context.direction)
+    record = Map.get(records, name, Plan.record())
+
+    {state, record, report} =
+      Plan.switch(plan, record, merged, context.first?, context.runtime.now)
+
+    state = split(state, externals(starts) ++ undeclared(externals(stops), starts))
+    shared = sections(stops, starts, merged.env, context.globals)
+
+    {Map.put(instances, name, state), Map.put(records, name, record),
+     for({kind, path, detail} <- report ++ shared, do: {kind, name <> "." <> path, detail}) ++
+       reports, holds}
+  end
+
   # Decision 347's give-back and holds come first where the state holds the var_output, and
   # after the plan's switch where only the program started declares it, each by its path
   # beside the plan's reports; only a kept instance's writes are given back by the next
@@ -1109,9 +1143,13 @@ defmodule Logex.Configuration.Edit do
     merged =
       merged(Map.fetch!(context.runtime.instances, name), externals(stops), context.globals)
 
-    {merged, undone} = given_back(merged, name, context)
+    {merged, undone} = given_back(Map.get(context.last, name), merged, name)
     before = merged.env
-    {merged, early, wrote} = held_in(merged, name, {context, starts}, &is_map_key(before, &1))
+    holders = Map.get(context.holders, name)
+
+    {merged, early, wrote} =
+      held_in(holders, merged, {name, context, starts}, &is_map_key(before, &1))
+
     plan = Map.fetch!(Map.fetch!(context.edit.plans, type), context.direction)
     record = Map.get(records, name, Plan.record())
 
@@ -1119,7 +1157,7 @@ defmodule Logex.Configuration.Edit do
       Plan.switch(plan, record, merged, context.first?, context.runtime.now)
 
     {state, late, wrote_late} =
-      held_in(state, name, {context, starts}, &(not is_map_key(before, &1)))
+      held_in(holders, state, {name, context, starts}, &(not is_map_key(before, &1)))
 
     state = split(state, externals(starts) ++ undeclared(externals(stops), starts))
     shared = sections(stops, starts, merged.env, context.globals)
@@ -1129,7 +1167,7 @@ defmodule Logex.Configuration.Edit do
        early ++
        late ++
        for({kind, path, detail} <- report ++ shared, do: {kind, name <> "." <> path, detail}) ++
-       reports, holds |> Map.merge(wrote) |> Map.merge(wrote_late)}
+       reports, wrote(holds, wrote, wrote_late)}
   end
 
   # An instance the configuration started runs that the one stopped does not, as this
@@ -1144,6 +1182,12 @@ defmodule Logex.Configuration.Edit do
         context,
         acc
       )
+
+  # The writes this switch made, none for nearly every instance, which then pays nothing.
+  defp wrote(holds, wrote, wrote_late) when map_size(wrote) == 0 and map_size(wrote_late) == 0,
+    do: holds
+
+  defp wrote(holds, wrote, wrote_late), do: holds |> Map.merge(wrote) |> Map.merge(wrote_late)
 
   # Decision 55, and decision 45 the other way: a var_external of the program started that
   # the program stopped declares otherwise, or not at all, has its own value dropped at the
@@ -1184,7 +1228,12 @@ defmodule Logex.Configuration.Edit do
     {env, resumed} = resume(Program.typed_tags(program), state.env, {name, now, aside_at})
 
     {state, held, _wrote} =
-      held_in(%{state | env: env, now: now}, name, {context, program}, &all/1)
+      held_in(
+        Map.get(context.holders, name),
+        %{state | env: env, now: now},
+        {name, context, program},
+        &all/1
+      )
 
     {Map.put(instances, name, state), records,
      [{:instance_back, name, type} | resumed ++ held ++ reports], holds}
@@ -1197,7 +1246,9 @@ defmodule Logex.Configuration.Edit do
          {instances, records, reports, holds}
        ) do
     state = split(Runtime.fresh(program), externals(program))
-    {state, held, _wrote} = held_in(state, name, {context, program}, &all/1)
+
+    {state, held, _wrote} =
+      held_in(Map.get(context.holders, name), state, {name, context, program}, &all/1)
 
     {Map.put(instances, name, state), records, [{:instance_added, name, type} | held ++ reports],
      holds}

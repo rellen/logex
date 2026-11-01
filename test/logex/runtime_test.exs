@@ -700,13 +700,37 @@ add e i y",
       runtime = Runtime.start(config)
       by_hand = %{runtime | globals: %{runtime.globals | "e" => 2 ** 40, "a" => nil}}
 
-      raises(
+      both =
         "runtime.globals holds `a` outside its type: it is a dint, and its value must be an " <>
           "integer, found nil\n" <>
           "runtime.globals holds `e` outside its type: it is a dint, and 1099511627776 is " <>
-          "outside -2147483648 to 2147483647",
-        fn -> Runtime.cycle(by_hand, 0, %{}) end
-      )
+          "outside -2147483648 to 2147483647"
+
+      raises(both, fn -> Runtime.cycle(by_hand, 0, %{}) end)
+
+      # The same under a timed task, whose step is the task's run, and an event task's.
+      for task <- ["task t interval 10 priority 1", "task t single g priority 1"] do
+        {:ok, config} =
+          Logex.Configuration.compile(
+            "plant",
+            "#{task}\nvar_global g bool\nvar_global e dint\nvar_global a dint\n" <>
+              "var_global y dint\nprogram m1 m with t\nm1.i a\nm1.y y",
+            %{"m" => m}
+          )
+
+        runtime = Runtime.start(config)
+        globals = %{runtime.globals | "e" => 2 ** 40, "g" => 1}
+
+        raises(both, fn ->
+          Runtime.cycle(%{runtime | globals: %{globals | "a" => nil}}, 0, %{})
+        end)
+
+        raises(
+          "runtime.globals holds `e` outside its type: it is a dint, and 1099511627776 is " <>
+            "outside -2147483648 to 2147483647",
+          fn -> Runtime.cycle(%{runtime | globals: globals}, 0, %{}) end
+        )
+      end
     end
 
     test "a global a connection copies in is checked against its own type, narrower than its var_input" do

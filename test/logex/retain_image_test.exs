@@ -1339,9 +1339,12 @@ defmodule Logex.RetainImageTest do
 
     # The review after Milestone 6 (b2-resource-5): each instance of the image found by its
     # name, not by a search of the configuration's instances, so the start grows linearly
-    # in them, where it grew as their square.
+    # in them, where it grew as their square. Each start is read as the least of three
+    # runs: in the full suite one run in some seven read a tenth more at 1000 instances,
+    # never less, which a run alone read 4.05x to 4.13x over four runs on Elixir 1.20.4.
     test "the matching grows linearly in the instances" do
       program = c!("var_input go bool\nvar retain n dint\nxic go add n 1 n", [], "g")
+      least = fn fun -> Enum.min(for _ <- 1..3, do: reductions(fun)) end
 
       started = fn n ->
         {:ok, config} =
@@ -1352,9 +1355,7 @@ defmodule Logex.RetainImageTest do
           )
 
         image = Runtime.retained(Runtime.start(config))
-
-        reductions(fn -> Runtime.start(config, image) end) -
-          reductions(fn -> Runtime.start(config) end)
+        least.(fn -> Runtime.start(config, image) end) - least.(fn -> Runtime.start(config) end)
       end
 
       i250 = started.(250)
