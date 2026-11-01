@@ -2421,13 +2421,15 @@ add e i y",
       # instructionize/3, which takes the function blocks a routine may declare instances
       # of; and lowered?/1, the definition of a compiled body, which a type given must have.
       # Decision 54: recompiled/3, a block's body from its source text over the types it
-      # names, trusted, which Logex.FbType.check/2 asks a type given to be.
+      # names, trusted, which Logex.FbType.check/2 asks a type given to be. Decision 371:
+      # loaded/2, internal (no doc), instructionize/3 for the loader's own types alone.
       assert Enum.sort(Logex.Compiler.__info__(:functions)) == [
                instructionize: 1,
                instructionize: 2,
                instructionize: 3,
                instructions: 0,
                literal_real: 4,
+               loaded: 2,
                lowered?: 1,
                parse: 1,
                recompiled: 3,

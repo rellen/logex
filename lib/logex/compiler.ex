@@ -11,7 +11,8 @@ defmodule Logex.Compiler do
   warnings included, `{:ok, %Logex.FbType{}}` for a routine headed `function_block
   <name>`, or `{:error, [%Logex.Diagnostic{}]}`, every mistake in the routine, in line
   order. The function block types a routine may hold are given as its third argument,
-  each checked at full depth. Since M3-5 it checks a routine's labels and jumps too: each
+  each checked at full depth (decision 54); the loader alone gives its own through an
+  internal entry, `loaded/2`, which checks none of them again (decision 371). Since M3-5 it checks a routine's labels and jumps too: each
   `lbl` first on its rung, one label to a rung, and each `jmp` naming a label of its own
   routine on a later rung, one to a rung (decisions 81, 104 and 105).
 
@@ -316,9 +317,23 @@ defmodule Logex.Compiler do
   is no integer or a rung over two lines, raises `ArgumentError`, a host mistake, since no
   source text says it and no diagnostic could cite it (OE-1). Then `declared`.
   """
-  def instructionize(routine, declared \\ [], types \\ []) do
-    {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
-    {library, held, checked} = library!(types)
+  def instructionize(routine, declared \\ [], types \\ []),
+    do: instructionized(Logex.Parser.well_formed!(routine), declared, library!(types))
+
+  @doc false
+  # Decision 371 (RV-9): `instructionize/3` for the loader alone (`Logex.compile_file/1`,
+  # `Logex.compile_files/1` and through them a configuration's loader), whose `types` are
+  # the blocks it compiled itself from their files in this one load, each as
+  # `Logex.compile/2` gives it: trusted, none compiled again from its text, so a chain of
+  # files each holding the next compiles once a file. One version of each name is still
+  # held (decision 53). It is no host's way in: `Logex.compile/2` takes no option for it
+  # and a type carries no mark of it, so a type a host hands in, `types:`, is checked as
+  # decision 54 has it, a loaded type edited by hand among them.
+  def loaded(routine, types),
+    do: instructionized(Logex.Parser.well_formed!(routine), [], library_loaded(types))
+
+  defp instructionized({:routine, {:rungs, rungs}} = routine, declared, library) do
+    {library, held, checked} = library
     {kind, rungs, heading} = file_kind(rungs)
     marks = marked(kind, library, held)
 
@@ -891,6 +906,18 @@ defmodule Logex.Compiler do
         ArgumentError,
         "types must be function block types from Logex.compile/2, got: #{inspect(type)}"
       )
+
+  # Decision 371: the loader's own types, the library and the one version of each name as
+  # listed!/2 builds them, with no check of any against its text, and nothing checked.
+  defp library_loaded(types) do
+    library = Map.new(types, fn %FbType{name: name} = type -> {name, type} end)
+    seen = Map.new(library, fn {name, type} -> {name, FbType.held(type)} end)
+
+    {held, _walked, :types} =
+      Enum.reduce(Map.values(library), {seen, %{}, :types}, &one_version!/2)
+
+    {library, held, %{}}
+  end
 
   # Since M5-14 an array of instances' elements' type too.
   defp blocks(tags),

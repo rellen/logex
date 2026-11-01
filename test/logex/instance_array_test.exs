@@ -318,6 +318,41 @@ defmodule Logex.InstanceArrayTest do
              ]
     end
 
+    # The review's shape (a6-compile-scale-8): `cell` holds one timer and no array, so an
+    # array of cells counts its own elements, `row` holding 256, `grid` 256 of those, and an
+    # array of 256 grids 16,777,216, which a first scan could not build.
+    test "an array of blocks whose type holds no array counts its own elements, at any depth" do
+      cell =
+        block!(
+          "function_block cell\nvar_input x bool\nvar_output y bool\nvar retain k dint\n" <>
+            "var t ton\nxic x ton t 100\nxic t.dn ote y",
+          "cell"
+        )
+
+      row =
+        block!(
+          "function_block row\nvar_input x bool\nvar_output y bool\nvar c cell[256]\ncal c[0] x y",
+          "row",
+          [cell]
+        )
+
+      grid =
+        block!(
+          "function_block grid\nvar_input x bool\nvar_output y bool\nvar r row[256]\ncal r[0] x y",
+          "grid",
+          [row]
+        )
+
+      assert {cell.elements, row.elements, grid.elements} == {0, 256, 65_536}
+      assert %Logex.Program{} = program(held("var r row[256]") <> "cal r[0] x y", [row])
+
+      assert messages(held("var g grid[256]") <> "cal g[0] x y", [grid]) == [
+               {3,
+                "`g` would hold 16777216 elements at every depth, 256 instances of `grid`, " <>
+                  "`[256]`, each holding 65536: " <> @deep}
+             ]
+    end
+
     test "in a block's file, the block declaring it is refused at its line" do
       {_k, cell} = nest()
 

@@ -4285,6 +4285,167 @@ defmodule Logex.FunctionBlockTest do
     end
   end
 
+  # Decision 371: a type the loader compiled itself in the same load is not compiled again
+  # from its text, so a chain of files each holding the next compiles once a file; a type
+  # a host hands in, `types:`, is checked as decision 54 has it, a loaded one among them.
+  describe "the loader's own types (decision 371)" do
+    @describetag :tmp_dir
+
+    # A chain of `d` block files, `b1` holding `b2` and so on, and `prog.ld` holding `b1`.
+    defp chain_files(dir, d) do
+      for k <- 1..d do
+        inner = chain_inner(k, d)
+
+        File.write!(
+          Path.join(dir, "b#{k}.ld"),
+          "function_block b#{k}\nvar_input x bool\nvar_output y bool\n" <> inner
+        )
+      end
+
+      File.write!(
+        Path.join(dir, "prog.ld"),
+        "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y\n"
+      )
+
+      Path.join(dir, "prog.ld")
+    end
+
+    defp chain_inner(d, d), do: "xic x ote y\n"
+    defp chain_inner(k, _d), do: "var s b#{k + 1}\ncal s x y\n"
+
+    # How often `fun`, run in a process of its own that this one traces, compiles a type
+    # again from its text (decision 54's `Logex.Compiler.recompiled/4`) and compiles a file
+    # the loader read (`Logex.Compiler.loaded/2`), and what it gave.
+    defp compiles(fun) do
+      Code.ensure_loaded!(Logex.Compiler)
+      patterns = [{Logex.Compiler, :recompiled, 4}, {Logex.Compiler, :loaded, 2}]
+      for pattern <- patterns, do: assert(:erlang.trace_pattern(pattern, true, [:global]) == 1)
+
+      try do
+        parent = self()
+        ref = make_ref()
+        pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
+        :erlang.trace(pid, true, [:call])
+        send(pid, :go)
+        assert_receive {^ref, result}, 30_000
+        {result, traced(pid, %{recompiled: 0, loaded: 0})}
+      after
+        for pattern <- patterns, do: :erlang.trace_pattern(pattern, false, [:global])
+      end
+    end
+
+    defp traced(pid, counts) do
+      receive do
+        {:trace, ^pid, :call, {Logex.Compiler, kind, _args}} ->
+          traced(pid, Map.update!(counts, kind, &(&1 + 1)))
+      after
+        0 -> counts
+      end
+    end
+
+    test "a chain of d files compiles d + 1 times through compile_file/1, none again", %{
+      tmp_dir: dir
+    } do
+      for d <- [10, 20] do
+        sub = Path.join(dir, "d#{d}")
+        File.mkdir_p!(sub)
+        prog = chain_files(sub, d)
+        assert {{:ok, %Logex.Program{}}, counts} = compiles(fn -> Logex.compile_file(prog) end)
+        assert counts == %{recompiled: 0, loaded: d + 1}, "a chain of #{d}"
+      end
+    end
+
+    test "so through compile_files/1 and a configuration's loader, each file once a call", %{
+      tmp_dir: dir
+    } do
+      prog = chain_files(dir, 12)
+
+      for k <- 1..3 do
+        File.write!(
+          Path.join(dir, "p#{k}.ld"),
+          "var_input x bool\nvar_output y bool\nvar s b#{k}\ncal s x y\n"
+        )
+      end
+
+      paths = [prog | for(k <- 1..3, do: Path.join(dir, "p#{k}.ld"))]
+
+      assert {results, %{recompiled: 0, loaded: 16}} =
+               compiles(fn -> Logex.compile_files(paths) end)
+
+      assert Enum.all?(results, &match?({:ok, %Logex.Program{}}, &1))
+
+      File.write!(
+        Path.join(dir, "plant.logex"),
+        "var_global g bool\ntask t interval 10 priority 1\nprogram m1 p1 with t\n" <>
+          "program m2 p2 with t\nprogram m3 p3 with t\nm1.x g\nm2.x g\nm3.x g\n"
+      )
+
+      assert {{:ok, %Configuration{}}, %{recompiled: 0, loaded: 15}} =
+               compiles(fn -> Configuration.compile_file(Path.join(dir, "plant.logex")) end)
+    end
+
+    # The trust is the loader's, in its own call, and no mark on a type: the same chain
+    # handed in by a host through `types:` is compiled again, each type its table holds
+    # once (decision 54), and a loaded type edited by hand is refused.
+    test "a type a host hands in is checked, a loaded one among them, and one edited refused",
+         %{tmp_dir: dir} do
+      chain_files(dir, 12)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+      held = "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y"
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 0}} =
+               compiles(fn -> Logex.compile(held, name: "m", types: [b1]) end)
+
+      edited = put_in(b1.body.blocks["b12"].body.rungs, [])
+
+      assert_raise ArgumentError,
+                   ~r/^types must be function block types from Logex.compile\/2, got: /,
+                   fn -> Logex.compile(held, name: "m", types: [edited]) end
+
+      assert_raise ArgumentError,
+                   ~r/^types must be function block types from Logex.compile\/2, got: /,
+                   fn -> Logex.compile(held, name: "m", types: [%{b1 | members: []}]) end
+    end
+
+    # In reductions: each file compiled once, its cost what its own compile reads, the
+    # table of the types below it among it, one version of each name and the recursion
+    # check, so 2x a chain of 20 files costs about 2.4x and 2x one of 40 about 2.7x,
+    # where the loader's checks of its own types, d(d - 1)/2 compiles, cost 3.6x and 3.8x
+    # at `d7a1290`. Counted in a process of its own with a heap the collector never visits,
+    # the least of three runs each; the bound is a little above the figure, so that a
+    # compile of each type again fails it.
+    test "the chain's compile costs each file once, in reductions", %{tmp_dir: dir} do
+      cost = fn d ->
+        sub = Path.join(dir, "r#{d}")
+        File.mkdir_p!(sub)
+        prog = chain_files(sub, d)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:ok, _} = Logex.compile_file(prog)
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, later - before})
+                end,
+                [:monitor, min_heap_size: 8_000_000]
+              )
+
+            assert_receive {:compiled, reductions}, 30_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+            reductions
+          end
+        )
+      end
+
+      ratio = cost.(40) / cost.(20)
+      assert ratio < 2.6, "2x the chain took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
   describe "growth in a type's source text" do
     # Decision 54: a compile given a type compiles each type it holds again from its source
     # text, once, over the types it names as the one table holds them, and compares the

@@ -1583,17 +1583,19 @@ defmodule Logex.Declarations do
   # built. It is judged by instance/1 and instances/1, once its type is known and its own
   # sizes taken, so a type the compile does not know is never counted and an array past
   # the bound by its own sizes is told so alone; each reads its type's `elements` in a
-  # clause's guard, so a declaration of a type that holds no array pays nothing for it.
+  # clause's guard, so a declaration of a type that holds no array pays nothing for it: an
+  # instance's guard is the bound itself, and an array of instances' is that its type holds
+  # an array, its count then judged here.
   defp held_within(%Tag{name: name, type: type}),
     do: held_limit(Logex.Array.deep_size(type), name, type)
 
-  defp held_limit(count, name, type) when count > 65_536,
-    do: [
+  defp held_limit(count, name, type) when count > 65_536, do: [held_message(count, name, type)]
+  defp held_limit(_count, _name, _type), do: []
+
+  defp held_message(count, name, type),
+    do:
       "#{label(name)} would hold #{count} elements at every depth, #{holding(type)}: a " <>
         "declaration holds 65536 at most, counted through every array of instances it holds"
-    ]
-
-  defp held_limit(_count, _name, _type), do: []
 
   defp holding({:array, %FbType{name: name} = type, dims}),
     do:
@@ -1668,9 +1670,9 @@ defmodule Logex.Declarations do
            "`#{section}`"
        ]
 
-  defp instance(%Tag{initial: nil, type: %FbType{elements: elements}} = tag)
+  defp instance(%Tag{initial: nil, name: name, type: %FbType{elements: elements} = type})
        when elements > 65_536,
-       do: held_within(tag)
+       do: [held_message(elements, name, type)]
 
   defp instance(%Tag{initial: nil}), do: []
 

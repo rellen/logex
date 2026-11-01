@@ -100,7 +100,11 @@ defmodule Logex do
 
   A type word that names no built-in type and could name a function block, `var s1 seal`,
   is looked for as a block's file beside the file that names it, `seal.ld`, which is
-  compiled first, once a call however many files name it (decision 34). It is read by its
+  compiled first, once a call however many files name it (decision 34). A type the loader
+  compiled so is not compiled again from its text when the file that names it compiles,
+  as a type `compile/2` is given is (decision 371): the loader trusts its own, within its
+  own call, so a chain of files each holding the next compiles once a file. A type it gave
+  and a host hands to `compile/2` is checked as any other. It is read by its
   place on the line, after a qualifier, `var retain s1 seal`, and with an array's sizes,
   `var gates gate[4]` loading `gate.ld` (decision 154). A mistake in it
   is reported with its own file, and the file that names it is compiled no further, as
@@ -299,7 +303,11 @@ defmodule Logex do
 
   defp parsed_file(front_end, _file, _source, {_held, state}), do: {{front_end, [], false}, state}
 
-  defp built([], ast, {name, source}, types), do: lowered(ast, source, name, types)
+  # Decision 371 (RV-9): the types are the blocks this load compiled itself, so they are
+  # trusted, not compiled again from their texts (`Logex.Compiler.loaded/2`).
+  defp built([], ast, {name, source}, types),
+    do: named_as(Compiler.loaded(ast, types), header(ast), source, name)
+
   defp built(problems, _ast, _file, _types), do: {:error, Enum.uniq(Enum.reverse(problems))}
 
   # The type words of the declaration lines that could name a function block, and are not
