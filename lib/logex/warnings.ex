@@ -435,8 +435,9 @@ defmodule Logex.Warnings do
     ]
 
   # RV-2 (the review after Milestone 6, a4-warnings-walk-9): a real stays at 0.0, its zero,
-  # where it was told 0.
+  # where it was told 0, and since RV-2's review each element of an array of reals too.
   defp start(nil, type) when type in @reals, do: "0.0"
+  defp start(nil, {:array, type, _dims}) when type in @reals, do: "0.0"
   defp start(nil, _type), do: "0"
   # M5-11: an array's initial list, which no one value says.
   defp start(initial, _type) when is_list(initial), do: "its initial values"

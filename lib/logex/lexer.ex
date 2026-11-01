@@ -200,8 +200,9 @@ defmodule Logex.Lexer do
       "missing separator before `-`: #{shown(text)} is neither a tag nor a number, " <>
         "and a sign begins a number"
 
-  # The first 24 characters of a long run, then `…`, and a short run whole.
-  defp quoted_start(<<start::binary-size(24), _::binary>>), do: "`#{start}…`"
+  # The first 24 characters of a long run, then `…`, and a short run whole, each quoted as
+  # every other run is (since RV-2's review, where a long one was quoted in backticks).
+  defp quoted_start(<<start::binary-size(24), _::binary>>), do: shown(start <> "…")
   defp quoted_start(text), do: shown(text)
 
   # RV-2 (the review after Milestone 6, a1-frontend-10): a run quoted as a string even
