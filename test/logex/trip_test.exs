@@ -278,6 +278,37 @@ defmodule Logex.TripTest do
     def write(_values, agent), do: {:ok, agent}
   end
 
+  # An adapter of outputs alone over an Agent, `agent:`, holding `%{slow: how, writes: [...]}`:
+  # a write of values other than the last it wrote takes `how` once, `{:sleep, ms}` in
+  # real time or `:hang`, for ever, and then `nil`; every write recorded, newest first, so
+  # that a poll's write again of the last values is never the slow one.
+  defmodule SlowOnce do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, %{agent: Keyword.fetch!(opts, :agent), last: nil}}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(values, %{last: values} = state), do: recorded(values, state)
+
+    def write(values, %{agent: agent} = state) do
+      agent |> Agent.get_and_update(&{&1.slow, %{&1 | slow: nil}}) |> taken()
+      recorded(values, %{state | last: values})
+    end
+
+    defp taken(nil), do: :ok
+    defp taken({:sleep, ms}), do: Process.sleep(ms)
+    defp taken(:hang), do: Process.sleep(:infinity)
+
+    defp recorded(values, %{agent: agent} = state) do
+      Agent.update(agent, &%{&1 | writes: [values | &1.writes]})
+      {:ok, state}
+    end
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -1419,6 +1450,44 @@ defmodule Logex.TripTest do
     assert [%{[0] => 0}, %{[0] => ^last} | _] = Enum.reverse(Sim.writes(sim))
   end
 
+  # Decision 348's plant on the real clock: a panel that reports its e-stop, and the
+  # devices a to e, each a SlowOnce over an agent of its own, each written the e-stop by a
+  # relay of its own, every write's limit 500 ms and a poll period of 100.
+  @five "task e single t priority 0\nvar_global t bool at panel.i.0\n" <>
+          Enum.map_join(~w(a b c d e), fn d ->
+            "var_global y#{d} bool at #{d}.q.0\nprogram r#{d} relay with e\n  r#{d}.in t\n" <>
+              "  r#{d}.out y#{d}\n"
+          end)
+
+  defp slow_rig(text) do
+    {:ok, panel} = Sim.start_link(reports: true)
+
+    agents =
+      for _ <- 1..5,
+          do: start_supervised!({Agent, fn -> %{slow: nil, writes: []} end}, id: make_ref())
+
+    io =
+      Map.new(Enum.zip(~w(a b c d e), agents), fn {name, agent} ->
+        {name, {SlowOnce, agent: agent}}
+      end)
+
+    {:ok, runner} =
+      Runner.start_link(
+        configuration: configured(text),
+        io: Map.put(io, "panel", {Sim, sim: panel}),
+        clock: {Logex.Runner.Clock.Monotonic, nil},
+        idle: 500,
+        poll: 100
+      )
+
+    %{runner: runner, panel: panel, agents: agents}
+  end
+
+  # What a SlowOnce device was written at [0], oldest first, a poll's write again of the
+  # same values folded into the write it repeats.
+  defp slow_writes(agent),
+    do: agent |> Agent.get(& &1.writes) |> Enum.reverse() |> Enum.map(& &1[[0]]) |> Enum.dedup()
+
   describe "the I/O faults (decision 114)" do
     test "each kind of fault in a poll's read trips, naming its device, every device " <>
            "written 0 once and nothing after" do
@@ -1604,9 +1673,9 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == :ok
       assert device_pid(runner, "drive") == old
 
-      # One a millisecond sooner is in time. The panel has no output here: written after
-      # the drive, it would have the deadline's last millisecond, on the manual clock a
-      # millisecond of real time, to answer in, which a loaded machine misses.
+      # One a millisecond sooner is in time. The panel has no output here, so that the
+      # drive's limit is shown alone; since decision 348 a device written after the drive
+      # has a limit of its own from the start of its own write, below.
       %{runner: runner, panel: panel, drive: drive} =
         rig(configured(@drive_stopped), poll: 10, steps: Runtime)
 
@@ -1615,6 +1684,65 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).status == :running
       assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
       assert Sim.writes(panel) == []
+    end
+
+    test "each device's write has the idle watchdog and a poll period from its own start " <>
+           "(decision 348): one written after a slow device in time is in time" do
+      # The drive's write takes 509 ms of its 510 on the runner's clock and the panel's,
+      # after it, 5 more: the panel's limit runs from its own start, at 509, to 1019, so it
+      # is in time, where a deadline both shared ended at 510.
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(@stopped), poll: 10, steps: Runtime)
+
+      Sim.fail(drive, :write, {:delay, 509})
+      Sim.fail(panel, :write, {:delay, 5})
+      Sim.set(panel, [0], 1)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+
+      # A panel that takes its whole own limit, 510 ms from its start, is the one late,
+      # named for it, and the drive, which answered in time, takes the trip's 0.
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(@stopped), poll: 10, steps: Runtime)
+
+      Sim.fail(drive, :write, {:delay, 509})
+      Sim.fail(panel, :write, {:delay, 510})
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).trip == {:io, "panel", :timeout}
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
+      assert Runner.status(runner).unzeroed == []
+    end
+
+    test "on the real clock, a device written after slow ones that answered in time has " <>
+           "its own idle watchdog and poll period, and every device that answers takes " <>
+           "the trip's 0 (decision 348)" do
+      # Each write's limit is 500 ms and a poll period of 100, 600 ms of real time. The
+      # e-stop's round writes a, b, c and d in 160 ms each, their own time a quarter of
+      # their limit, so that a loaded machine that stretches each sleep by half again is
+      # still in time, and the four together more than one deadline shared, which left d
+      # 120 ms at most: every device is written in time and nothing trips.
+      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five)
+      for agent <- Enum.take(agents, 4), do: Agent.update(agent, &%{&1 | slow: {:sleep, 160}})
+      Sim.set(panel, [0], 1)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1], 5)
+      Runner.stop(runner)
+
+      # And e, after them, hangs: it is killed at its own limit, 600 ms from its own start,
+      # and named, where a shared deadline named d, and a to d, which answered, each take
+      # the trip's 0.
+      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five)
+      [a, b, c, d, e] = agents
+      Runner.subscribe(runner, [:trip])
+      for agent <- [a, b, c, d], do: Agent.update(agent, &%{&1 | slow: {:sleep, 160}})
+      Agent.update(e, &%{&1 | slow: :hang})
+      Sim.set(panel, [0], 1)
+      assert_receive {Runner, ^runner, {:trip, {:io, "e", :timeout}}}, 5000
+      assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1, 0], 4) ++ [[0]]
+      assert Runner.status(runner).unzeroed == ["e"]
+      Runner.stop(runner)
     end
 
     test "a device's process that goes down trips, and is opened again at a restart" do

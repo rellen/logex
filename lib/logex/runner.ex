@@ -68,11 +68,17 @@ defmodule Logex.Runner do
     after them, by construction. While it waits the device answers the runner's own
     requests to it, so that neither waits on the other.
   - After each round every device whose outputs changed is given every one of its output
-    points, by address, and the runner waits for its answer, which comes once its adapter
-    has written them. Every device is refreshed, without a wait, before each step of a
-    round, the refresh carrying that step's deadline, its task's watchdog and one poll
-    period from the step's start, and before the write, carrying the idle watchdog's and
-    one poll period from then (decisions 125 and 128): a refresh calls no adapter.
+    points, by address, in device-name order, and the runner waits for its answer, which
+    comes once its adapter has written them, each device's write given the idle watchdog
+    and a poll period of its own from the start of its own write, on the runner's clock
+    and as long in real time, so that a device is cut short only by its own slowness,
+    never by a slow device written before it that answered in time (decision 348). Every
+    device is refreshed, without a wait, before each step of a round, the refresh carrying
+    that step's deadline, its task's watchdog and one poll period from the step's start,
+    and before the writes, carrying the idle watchdog's and one poll period from then, and
+    again before a device's write where the clock has moved since, so that the device
+    written hears its own deadline and every other the runner well while it waits on a
+    slow one in time (decisions 125, 128 and 348): a refresh calls no adapter.
   - At each poll, after its read, a device writes the outputs it last wrote again,
     whether or not a round wrote to it within the poll period, while its last refresh's
     deadline has not passed: a fixed timer, as Logix re-sends a module's outputs at its
@@ -371,11 +377,14 @@ defmodule Logex.Runner do
     and a result of no shape `Logex.IO` gives `{:raised, message}`, a message that says
     so; a read's or a report's value that does not fit its point is `{:bad_value,
     address, value}` and an address that is no input point's `{:unknown_address,
-    address}`; a device that does not answer the runner within the deadline its last
-    refresh carried, in real time, is `:timeout`, and is killed, its outputs left to what
-    it does on losing its master; one that answers a round's write after that deadline on
-    the runner's clock is `:timeout` too, and is written its 0 by the trip, as every
-    device that answers is; so is one hung inside its own read or report,
+    address}`; a device that does not answer a round's write within its own deadline, the
+    idle watchdog and a poll period from the start of its own write (decision 348), in
+    real time, is `:timeout`, and is killed, its outputs left to what it does on losing
+    its master, and named, every device written before it having answered in time and
+    each taking the trip's 0, as every device after it, not written, does; one that
+    answers a round's write after its own deadline on the runner's clock is `:timeout`
+    too, and is written its 0 by the trip, as every device that answers is; so is one
+    hung inside its own read or report,
     which has not told the runner it is back from its adapter, after a read or a report,
     at a poll while it waits on the runner or by answering a round's write in time, within
     the idle watchdog and a poll period, seen as each round begins and at each wait's
@@ -2690,8 +2699,9 @@ defmodule Logex.Runner do
   end
 
   # Each device whose outputs changed written, in device-name order, its answer awaited
-  # within the deadline its last refresh carried: a write that fails, or answers late, is
-  # an I/O fault, and the devices after it are not written (decision 114).
+  # within a deadline of its own, the idle watchdog and a poll period from the start of
+  # its own write (decision 348): a write that fails, or answers late, is an I/O fault,
+  # and the devices after it are not written (decision 114).
   defp written(%{devices: devices} = state, outputs),
     do:
       Enum.reduce_while(devices, {:ok, state}, fn device, {:ok, state} ->
@@ -2715,11 +2725,23 @@ defmodule Logex.Runner do
 
   defp wrote(false, _name, _pid, _values, state), do: {:cont, {:ok, state}}
 
+  # Decision 348: each device's write has the idle watchdog and a poll period from its own
+  # start, on the runner's clock, and as long in real time, so that a device written after
+  # a slow one that answered in time is not cut short by it. Where the clock has moved
+  # since the refresh before the writes, so that the deadline it carried comes sooner than
+  # that, every device is refreshed again first, at the write's start: the one written
+  # hears its own deadline, and those written after it or not at all hear the runner well
+  # while it waits on a slow device in time. A write in the millisecond of the last refresh
+  # needs none, its deadline that refresh's.
   defp wrote(true, name, pid, values, state) do
-    timeout = max(state.deadline - now(state), 0)
-    answer = asked(pid, &Device.write(&1, values, &2), timeout)
+    begun = now(state)
+    state = renewed(begun + state.idle + state.poll > state.deadline, begun, state)
+    answer = asked(pid, &Device.write(&1, values, &2), max(state.deadline - begun, 0))
     in_time(answer, now(state), name, pid, values, state)
   end
+
+  defp renewed(true, begun, state), do: refresh(state, begun, state.idle)
+  defp renewed(false, _begun, state), do: state
 
   # A write answered in time: the device is back from its adapter, heard then.
   defp in_time(:ok, answered, name, _pid, values, %{deadline: deadline} = state)
@@ -2733,9 +2755,14 @@ defmodule Logex.Runner do
                heard: Map.put(state.heard, name, answered)
            }}}
 
-  # One that answered after its deadline on the runner's clock answered all the same, so it
-  # is no hung device: it is `:timeout`, and the trip's zero writes it its 0 as it does
-  # every device that answers. One killed, or gone down, the trip's zero finds down.
+  # One that answered after its own deadline on the runner's clock, a time that passed in
+  # its write on the manual clock, answered all the same, so it is no hung device: it is
+  # `:timeout`, and the trip's zero writes it its 0 as it does every device that answers,
+  # each device's zero its own call with its own time to answer. One that did not answer
+  # within its own deadline in real time was killed, as one gone down is lost, and the
+  # trip's zero finds it down; since decision 348 that is only ever the device whose own
+  # write was slow, every device written before it having answered in time and every one
+  # after it not written, so each of them takes the trip's 0.
   defp in_time(:ok, _late, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, :timeout}, state}}
 
