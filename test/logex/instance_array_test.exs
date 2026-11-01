@@ -1516,6 +1516,95 @@ defmodule Logex.InstanceArrayTest do
                  "or 1 fit, found 2"
     end
 
+    # RV-3's review: a plain swap that adds an instance of a block holding an array of
+    # instances leaves a state that lacks the block, which reads its scalars as 0, as any
+    # tag the swap adds, and lacks its array, which every door refuses by its path, as one
+    # that lacks an array at the top level; until the review a scan of the body raised a
+    # KeyError on the array.
+    test "a block instance the state lacks is refused for each array it holds, by its path" do
+      {:ok, blk} =
+        Logex.compile("function_block blk\nvar_input en bool\nvar n dint\nxic en add n 1 n\n",
+          name: "blk"
+        )
+
+      {:ok, mid} =
+        Logex.compile(
+          "function_block mid\nvar_input en bool\nvar k dint\nvar gs blk[2]\n" <>
+            "xic en cal gs[1] en\nxic en add k 1 k\n",
+          name: "mid",
+          types: [blk]
+        )
+
+      v1 = program("var_input go bool\nvar c dint\nxic go add c 1 c\n")
+
+      v2 =
+        program(
+          "var_input go bool\nvar c dint\nvar mm mid\nxic go add c 1 c\nxic go cal mm go\n",
+          [blk, mid]
+        )
+
+      {_, state} = Runtime.scan(v1, Runtime.put_inputs(v1, Runtime.instance(v1), %{"go" => 1}))
+
+      message =
+        "state.env lacks `mm.gs`: it is an array of 2 instances of `blk`, which a state holds " <>
+          "whole, as `Logex.Runtime.instance/1` makes it"
+
+      assert refused(v2, state, %{"go" => 1}) == message
+
+      for door <- [
+            fn -> Runtime.scan(v2, state, 10) end,
+            fn -> Runtime.put_inputs(v2, state, %{"go" => 1}) end,
+            fn -> Runtime.restart(v2, state, :warm) end,
+            fn -> Runtime.restart(v2, state, :cold) end,
+            fn -> Runtime.retained(v2, state) end
+          ],
+          do: assert_raise(ArgumentError, message, door)
+
+      # So is one a program built by hand gives the block's type itself, as
+      # `Logex.Tag.new!/2` takes it, where a compiled program names it `{:block, "mid"}`.
+      hand = %{v2 | tags: Map.put(v2.tags, "mm", %{v2.tags["mm"] | type: mid})}
+      assert refused(hand, state, %{"go" => 1}) == message
+      assert_raise ArgumentError, message, fn -> Runtime.scan(hand, state, 10) end
+
+      # A member a block's new version adds, `o.m`, of a block holding one, told by its path.
+      {:ok, outer_v1} =
+        Logex.compile("function_block outer\nvar_input en bool\nvar k dint\nxic en add k 1 k\n",
+          name: "outer"
+        )
+
+      {:ok, outer_v2} =
+        Logex.compile(
+          "function_block outer\nvar_input en bool\nvar k dint\nvar m mid\n" <>
+            "xic en add k 1 k\nxic en cal m en\n",
+          name: "outer",
+          types: [blk, mid]
+        )
+
+      v1 = program("var_input go bool\nvar o outer\nxic go cal o go\n", [outer_v1])
+      v2 = program("var_input go bool\nvar o outer\nxic go cal o go\n", [blk, mid, outer_v2])
+      {_, held} = Runtime.scan(v1, Runtime.put_inputs(v1, Runtime.instance(v1), %{"go" => 1}))
+
+      assert_raise ArgumentError,
+                   "state.env lacks `o.m.gs`: it is an array of 2 instances of `blk`, which a " <>
+                     "state holds whole, as `Logex.Runtime.instance/1` makes it",
+                   fn -> Runtime.scan(v2, held, 10) end
+
+      # One whose block holds scalars alone is taken on, each read as 0.
+      {:ok, flat} =
+        Logex.compile("function_block flat\nvar_input en bool\nvar k dint\nxic en add k 1 k\n",
+          name: "flat"
+        )
+
+      v3 =
+        program(
+          "var_input go bool\nvar c dint\nvar mm flat\nxic go add c 1 c\nxic go cal mm go\n",
+          [flat]
+        )
+
+      {_, scanned} = Runtime.scan(v3, Runtime.put_inputs(v3, state, %{"go" => 1}))
+      assert scanned.env["mm"]["k"] == 1
+    end
+
     test "an array of instances is no input, whole or by an element" do
       p = program(@hosted)
 

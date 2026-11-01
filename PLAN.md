@@ -15,7 +15,8 @@ is a separate audit pass rather than editing this file in the same commit — bu
 has to happen, or the next reader inherits a plan that disagrees with the code. *(Since
 2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
 milestone decided having landed, and a paragraph naming what waits: the review after
-Milestone 6's decisions 347–360, for RV-2 to RV-8.)*
+Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
+questions, decisions 361–373, for RV-9.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -11632,8 +11633,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   which `claude_md_test.exs` holds, and README's sentence that a rung writing nothing
   compiles today goes with decision 351's landing.)*
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
-  Logix say nothing of a project's documents, and no plant runs differently under any
+  *Provisional readings, put to the maintainer* *(all six answered on 2026-11-01, decisions
+  361 to 366: 1, 2, 4 and 6 as built, 3 and 5 changed, to build in RV-9)*. The record is
+  silent on each; IEC and Logix say nothing of a project's documents, and no plant runs differently under any
   option. (1) CLAUDE.md's cap is 40,000 characters, the figure of Claude Code's own
   warning, CLAUDE.md 22,939 now; a tighter cap, or one in lines, are the others.
   (2) The README test runs in the default suite, the 2 s real-clock example among them,
@@ -11783,7 +11785,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     1"; a label alone refused as a rung that writes nothing; a link to a directory a path
     of its own in the loader's memo; since RV-2's review a rung the jump checks refuse
     told that it writes nothing too (question 7).
-  - *Questions for the maintainer*, by what an operator sees:
+  - *Questions for the maintainer*, by what an operator sees *(all seven answered on
+    2026-11-01, decisions 367 to 373: 2, 3 and 7 as built, 1, 4, 5 and 6 changed, to build
+    in RV-9)*:
     1. *A jump to the end.* `jmp done` … `lbl done` on the routine's last rung is now
        refused, the label alone writing nothing (decision 351 read literally, and Logix's
        LBL needs an output after it). The operator writes `lbl done ote landed` with a tag
@@ -11863,6 +11867,245 @@ and CI checked; each fix with a test that fails when it is reverted.
   plain swap, a path the state lacks started at its initial value as `instance/2` starts
   it (H4); a retained `tof` at rest on a first scan; a trigger's sample after its task;
   the configuration crashes (M12); the report's runtime, edit and configuration lows.
+  *(Landed 2026-11-01, branch `rv3` on `e09be54`, eight commits, then `origin/main` with
+  RV-2 merged and its last two lows built on RV-2's reader.)* H1,
+  decision 347: at a configuration edit's switch each connection from a var_output no
+  rung of its program writes to a global the step holds, or to an element of an array
+  held whole, starts that var_output at the global's value, `{:holds, path, value}`, so
+  that its copy-out keeps the point where the forecast says, in a kept instance (before
+  its plan's switch, so that the plan's own reports are of the value after), an added or
+  retyped one, an element of an array var_output and two connections swapped, both ways;
+  the edit's next switch gives it back, `{:hold_undone, path, old}`, where the var_output
+  still holds it and no restart came since, as fix F11 gives back a resume; both new
+  report kinds are rows of `Logex.Configuration.Edit`'s table, §4.9's and
+  `@report_kinds`, pinned in `config_edit_test.exs` and through `Logex.Runner` on the
+  manual clock in `runner_edit_test.exs`, and restated in the configuration-edit walk,
+  which holds every held point at its value through each cycle (`:held_kept`); with it
+  b5-config-edit-2, every array in a configuration edit's report a list. H3: fix F7's
+  "written alone?" check reads a storage bit's word and element from the path's end, so
+  a one-shot in an element of an array of blocks, at one, two and three levels, is
+  blocked exactly as its scalar twin. H4: a warm restart after a plain swap starts a
+  retained path the state lacks at its initial value, at any depth, and the image passes
+  it by, blaming no hand edit (c4-api-fuzz-1 and -5), the rule in `restart/3`'s and
+  `retained/2`'s docs. Decision 349: a first scan's `tof` with `.en` 1 and `.tt` 0
+  comes to rest, `.tt` 1 resumes, every kind of `tof`, the first scan a clause of its
+  own so a later scan costs the parent's reductions exactly, restated in the `rw_`,
+  `iw_` and `rr_` walks. Decision 350: a rise is carried by its task's step and stands
+  as the last sample with it, so a round tripped by an earlier step's major fault leaves
+  it to be seen again, after a warm `Logex.Runner.restart/2` and after a crash and a
+  fresh start from the store, each pinned on the manual clock and restated in the
+  scheduler, runner and life walks. M12: an array var_input or var_output wired to a
+  location, a located array refused for its sizes, and a global of a malformed type,
+  each a located diagnostic or the pinned line, at `check/1`, `new!/1`, `start/1`,
+  `IO.points/1` and `bind!/2`.
+
+  The report's lows: fixed, each with a test that fails when it is reverted, are
+  b2-resource-4 and b6-configuration-4 (the writer warnings linear), b2-resource-5
+  (`start/2` linear), b2-resource-6 (a var_external's global told as the global),
+  b2-resource-9 (`m1.[0]`), a5-data-model-7 and c4-api-fuzz-9's scan (a struct missing a
+  key refused), b6-configuration-6 and c4-api-fuzz-8 (`initial/1` checked), a5-data-model-8
+  (-0.0 no initial value from Elixir), b6-configuration-5 and -10 (a qualified line's and
+  a connection's rounded real warned of), b6-configuration-8 (a literal quoted as its
+  line writes it), b6-configuration-9's respelling (linear, 9 s to 0.2 s at 4,000
+  lines), b6-configuration-11 (junk `blocks` or `retained` refused as a hand edit),
+  a7-docs-13 (`program retain m1 motor` told it is IEC's `PROGRAM RETAIN`), b4-edit-3 (no
+  `:dn_drops` a frozen timer's catch-up makes impossible) and c5-tests-2 (a real's integer
+  range at its edge). Made true in the docs, pinned where they hold behaviour:
+  b2-resource-2 (a resource's warm restart counts a timer's time from its instance's last
+  scan, `start/2` none), b2-resource-7 (a kept `var_input` always fits) and
+  b6-configuration-7 (the round trip loses one warning). Kept, each for its reason:
+  b4-edit-1, by decision 274, which drops every block at a restart; b4-edit-4, a restart
+  between a test and an untest, since a restart keeps `switched` by `Logex.Instance`'s
+  rule, which the one-shot, hold and give-back rules all read (question 4 below);
+  b5-config-edit-3, decision 308's preset following the program against decision 271's
+  warm restart keeping it (question 5); a5-data-model-6, `retained`'s two spellings,
+  which `retain_edit_test.exs` pins and every reader takes alike (question 6);
+  c5-tests-5, the `aside_at || last` that no instance this edit did not set aside
+  reaches, the rule's total form; b6-configuration-9's did-you-mean, quadratic as
+  documented; c4-api-fuzz-11, the public surface wider than the host contract, for
+  RV-8's pass; c4-api-fuzz-9's Runner `{:via, ...}` name, RV-4's; and b2-resource-8, a
+  located array's element named with its subscripts spelled another way, `temps[03]`,
+  which a cycle and the forces file refuse as no input point, M5-13's rule that
+  `located_array_test.exs` pins, while `get/2` and `put_inputs/3` read a subscript by its
+  value (decisions 222 and 312), so that one reading would change a pinned value no
+  decision changes (question 11). b2-resource-3 was fixed by RV-2's `Logex.Name`, which
+  `origin/main` held when this item came to it last, merged into `rv3` and pinned at a
+  resource's doors, an input key, an image's path and a store's line, in
+  `array_configuration_test.exs`; b6-configuration-12 was RV-1's and c4-api-fuzz-6 and -7
+  RV-2's, and b6-configuration-5 RV-2's too, its fix and this item's one on the merge.
+
+  Its cost against `e09be54`, in reductions, the least of eleven runs each in a fresh
+  process whose heap is large enough that no collection falls inside it: a scan of 200
+  mixed rungs exactly the parent's, energised and not, and every kind of `tof` exactly;
+  a cycle of 50 periodic and 50 event tasks 100 fewer whatever is due, one call fewer an
+  event task's plan, with no rise, with every event task rising (every step run) and
+  with nothing due; a configuration edit's switch of 100 kept instances within 5 of the
+  parent's, a kept instance with nothing held told by its clause's guard and switched as
+  before, its accept 5% cheaper for the writer warnings' index; a lone edit's switch
+  within 3. A var_external's global is told as the global's only where a step is
+  refused, so a scan pays nothing for it.
+
+  *Fixed after its review (2026-11-01, twelve findings, `rv3` on `e97dc7f`).* Decision
+  347's hold, where every report said held and the point moved: a connection that would
+  hold a point from a var_output of another type than the point's, a retyped instance's
+  `small int` wired to `level dint` held at 100000, is refused at accept (finding 1, the
+  first question's reading changed, below), but a kept instance's own connection that
+  both configurations make, which holds the point's value from its first run on; an array
+  var_output wired whole drives, in the configuration a switch starts, only the elements
+  its program writes, so an added or retyped instance's frozen `o[1]` and `o[2]` are held
+  as element connections' are (finding 2), while the stopped side keeps decision 232's
+  whole reading and an element a kept instance copies out frozen through one connection
+  in both is held by neither; assemble and cancel, after a restart under the edit, start
+  each holder again at its point's value, `:holds` (finding 5); and the give-back reads a
+  restart from the resource's restart count, `restarts`, a new piece of
+  `%Logex.Runtime{}` that `start/1` and `start/2` give 0, `restart/2` moves on by one and
+  a cycle and every step keep, where the instance's `first`, which one cycle cleared,
+  stood for it (finding 6). Decision 350 through the store: two tasks on one trigger, the
+  round cut between their steps, now keep each its own sample in the image, by the
+  task's name where it is not the trigger's entry, which no global can have, so a fresh
+  start from the store runs the cut task alone, once, whichever is declared first, as a
+  warm restart does (finding 3; `trigger <task> <sample>` in the store, read as before).
+  Decision 349 as worded covers a `tof` the first scan runs; one it skips, on a jumped
+  rung or in a block whose `cal` is false, runs its delay at its first run with its rung
+  false: pinned as built in `retain_test.exs`, the runtime's comment, README and decision
+  349's record made true, and put to the maintainer (finding 4, question 12). The three
+  surviving mutants killed: an rto stopped done and frozen forecasts its `:dn_drops`
+  (R15), a var_output the switch adds and holds is given back at once (S21), and a scan
+  with a key its struct lacks is refused (S30). A plain swap that adds a block instance
+  whose type holds an array of instances is refused at every door by the array's path,
+  `mm.gs`, as a missing array at the top level is, where a scan raised a KeyError (finding
+  8). `Logex.Configuration.initial/1` refuses -0.0, scalar and element, and an improper
+  list, `[1 | 2]`, in pinned words (finding 9), and `Configuration.started/1` is the
+  resource's own private rule again, the public surface as it was (finding 12), a restart
+  of a group of four globals 1.1 reductions cheaper for it (`located_array_test.exs`'s
+  pin moved with it); `get/2` tells `m1.0` as a bit of the instance, as `m1.[0]`. The
+  probe's `Configuration.new!/1` KeyError was the probe's own (it read `c.name` of a
+  struct it had stripped), and new!/1 refuses any struct with its pinned line. Two tests
+  a loaded machine failed read the least of three runs and wait 5 s for a kill; CI then
+  failed `cb18575` on `retain_period_test.exs`'s bound, 10.35 reductions a round more
+  with a long period where four runs here read 6.6 to 7.8, so that test reads the least
+  of nine, its bound as it was, and `retain_store_test.exs` waits 5 s for the runner's
+  own reports as for a kill. Each fix
+  has a test that fails when it is reverted (mutation table below); the review's b5
+  configuration-edit fuzzer, extended with unwritten var_outputs, passes 4 of 4 seeds
+  where it failed 4 of 4, with a cycle after every restart 6 of 6, and unchanged 3 of 3.
+  Its cost, the review's probe, the least of eleven runs in a fresh process each, against
+  `1bdc2c6` (`origin/main`) and against `e97dc7f`, the tip reviewed: a scan of 200 mixed
+  rungs exactly both, a first scan after a warm restart 125 fewer than `1bdc2c6`, every
+  `tof` scan exactly `e97dc7f`'s (28 fewer on a first scan than `1bdc2c6`), a cycle of 50
+  periodic and 50 event tasks 98 to 101 fewer than `1bdc2c6` whatever is due and exactly
+  `e97dc7f`'s; a configuration edit's switch of 100 kept instances within 2 of
+  `e97dc7f`'s and 28 of `1bdc2c6`'s, a lone edit's exactly both. Not reported until the
+  review, and so here: accept on that plant, which has no var_external writer, 437,357,
+  2,180 more than `e97dc7f` (0.5%) and 12,918 more than `1bdc2c6` (3.0%), decision 347's
+  holders read for both directions at accept, which `1bdc2c6` has none of, the
+  frozen-in-both look-up paid only where an element is held, and each connection read
+  in one pass with a clause for one that holds nothing; `restart/2` warm and cold about
+  400 more than `1bdc2c6` (4 an instance, b2-resource-6's check of each var_external's
+  global, paid where an instance holds none too), `start/1` within its own run-to-run
+  spread of `e97dc7f`'s, about 1,700 more than `1bdc2c6`'s (M12's checks), and a lone
+  instance's warm restart within 13 of both.
+
+  *Mutation table* (`scratchpad/rv/fix3/muts/` on `cb18575` and `scratchpad/rv/fix3/muts2/`
+  on `c6da541`), 27 mutants, each judged by the full suite: on `cb18575` F01 to F17 red
+  and F03 and F18 survived, so `c6da541` adds the two tests that kill them and F03, F18
+  and the rest are judged there, every one red. Two runs there met a device's first
+  read timing out on the loaded machine as well, `{:io_init, _, :timeout}` in
+  `runner_test.exs` and `located_array_test.exs` and a cold restart's write-back report
+  in `retain_store_test.exs` that the timeout skips, each beside the mutant's own
+  failure; the runner's init watchdog is RV-4's.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | F01 | no connection refused for another type than its point's | 3 of decision 347's (and one load failure) |
+  | F02 | accept's exemption of a kept instance's own connection dropped | 1, a kept instance's own connection to a wider global |
+  | F03 | the untest's exemption of the same dropped | 1, the same an untest would hold (`c6da541`) |
+  | F04 | an array var_output wired whole drives every element in the started configuration | 3 |
+  | F05 | the frozen-in-both look-up skipped | 1 |
+  | F06 | every whole connection frozen in both | 1 |
+  | F07 | a whole connection the candidate makes read as the original's too | 1 |
+  | F08 | a retyped instance read as kept for the frozen-in-both look-up | 1 |
+  | F09 | a whole connection's held elements held by the member's name alone | 2 |
+  | F10 | assemble and cancel hold nothing again after a restart | 1 |
+  | F11 | a hold's record keeps no restart count | 2 |
+  | F12 | `restart/2` leaves the restart count | 4 |
+  | F13 | a hold taken whatever the value fits | 1 |
+  | F14 | a task's sample never told from its trigger's | 1 |
+  | F15 | a task's own sample not read at a fresh start | 2 |
+  | F16 | an image's line of a task's sample refused | 2 |
+  | F17 | a task with no `single` given a sample | 1 |
+  | F18 | a missing instance whose tag holds a user block's type itself reads nothing | 1 (`c6da541`) |
+  | F19 | a missing instance of `{:block, name}` reads nothing | 1 (and two load failures) |
+  | F20 | `initial/1` takes -0.0 | 1 |
+  | F21 | an element -0.0 taken | 1 |
+  | F22 | an improper list's length read by `length/1` | 1 |
+  | F23 | `m1.0` read as no bit | 1 |
+  | F24 | an element of a held array, wired by its own connection, not held | 2 |
+  | R15 | a timer catches up though it was not timing at its last run | 1, an rto stopped done and frozen |
+  | S21 | a hold the switch adds is not recorded | 1, a var_output the switch adds is given back |
+  | S30 | a scan with a key its struct lacks taken | 1 (and one load failure) |
+
+  *Provisional readings, put to the maintainer.* (1) Decision 347's held value a
+  var_output's type does not hold, `speed` held at 70000 and wired from an `int`
+  var_output no rung writes: since RV-3's review the connection is refused at accept, the
+  edit taken only with a restart, but a kept instance's own connection that both
+  configurations make, which holds the point's value from its first run on, and before
+  that run is left as it is, so the point moves to the var_output's value then; leaving
+  every such connection as it is, the point moving at the first cycle while the report
+  says held, which was RV-3's reading, or not copying that connection out until a rung
+  writes it, are the others. (2) Decision 350's falling sample: a task
+  with an interval and a `single` that a cut-off round sampled at 0 stands at 0 at once,
+  since holding a 0 back would lose the next rise; holding every sample back with its
+  step is the other. (3) A configuration's refusal quotes a value as its own line writes
+  it only where that line writes it one way; a line that writes 10 as `16#a` and as `10`
+  is quoted `10`; quoting it as its first spelling is the other. (4) b4-edit-4: after a
+  cold `restart/3` between a test and an untest, an edit's next switch trusts its record
+  of the last one, so a one-shot in a block whose `cal` is false at the first scan stays
+  blocked and loses one real press; a restart that clears `switched`, which would also
+  end every give-back of fix F11, or a lone instance that counts its own restarts for the
+  edit to read, as a resource's does for decision 347's give-back since RV-3's review, a
+  field of `%Logex.Instance{}` this item does not add, are the others. (5)
+  b5-config-edit-3: where the original runs a retained timer, `ton t 25`, and the candidate declares it and runs no
+  `ton` on it, the candidate keeps `.pre` at 25 (decision 23) and a warm restart keeps
+  it, but `start/2` from the resource's own image takes the candidate's preset, 0, and
+  reports `{"m1.t.pre", {:preset, 25, 0}}` (decision 308); a warm restart that follows
+  the program's preset as the image does, or an image that keeps a preset no instruction
+  gives, are the others. (6) a5-data-model-6: a
+  block whose own lines mark every member is listed member by member, `b1.c1.a`,
+  `b1.c1.b` and `b1.c1.t`, where one marked `retain` on its instance's line is `b1.c1`;
+  listing both as `b1.c1` would change `retain_edit_test.exs`'s pin of the first form.
+  (7) a5-data-model-8: -0.0 from Elixir is refused where a line's `-0.0` reads as 0.0;
+  taking it as 0.0 is the other. (8) b4-edit-3: only a timer timing at its last run,
+  `.en` 1, catches up, and a `:dn_rises` the catch-up alone would cause is not
+  forecast; forecasting it is the other. (9) b2-resource-2: a resource's warm restart
+  counts a slow task's timer's time from its last scan to the restart, up to a task's
+  interval more than `start/2` from the image; setting `last` to the resource's `now`,
+  as `start/2` does, is the other. (10) `program retain motor`, a qualifier and one word,
+  is still an instance named by a keyword (decision 298), and `program retain m1 motor`
+  the deferred `PROGRAM RETAIN`; reading every qualifier there as `PROGRAM RETAIN` is the
+  other. (11) b2-resource-8: `temps[03]` in a cycle's inputs and the forces file is no
+  input point, the name `temps[3]` alone, where `get/2` reads `earr[01]` as `earr[1]` and
+  `put_inputs/3` takes `steps[03]`; reading every one by its value, or none, are the
+  others. (12) RV-3's review, decision 349's reach: a retained `tof` the first scan after
+  a warm restart or a start does not run, on a rung a jump skips or in a block whose `cal`
+  is false, keeps `.en` 1 and runs its delay at its first run with its rung false, a fan
+  coming on for its run-on with nobody pressing anything; putting every retained `tof`
+  with `.en` 1 and `.tt` 0 at rest at the restart and the start, which costs a scan
+  nothing, or clearing every `tof` there as Logix's prescan does, its run-on among them,
+  are the others. (13) A point a frozen var_output copies out, rewired by an edit to
+  another frozen var_output that holds another value, moves at the first cycle with an
+  empty forecast where it is a scalar, its old driver never having counted as one, and is
+  held where it is an element of an array the old connection wired whole (decision 232's
+  reading); holding both, or reporting the move, are the others. (14) A point no
+  connection drove, newly wired from a frozen var_output, moves to the var_output's value
+  at the first cycle with an empty forecast; holding it at its value, or reporting the
+  move, are the others. (15) A var_output no rung writes but a rung reads, held at its
+  point's value, changes what that rung gives, `xic aux ote lamp` turning the lamp off,
+  reported only as `{:holds, "m1.aux", 0}`; holding no var_output a rung reads, the point
+  moving instead, or refusing the edit, are the others. (16) An image's sample of a task
+  the configuration started does not declare, which a store written at a cut round leaves
+  when the configuration then drops the task, is refused at the start as a sample of no
+  held global is; passing it by is the other.
 - **RV-4 — the runner and its devices** (decisions 348, 350, 353, 354 and 356). Each
   device its own write limit (H2); every file write time-limited, a write's temporary
   file its own (M10); a restart judged when asked; one VM's runners on one path refused;
@@ -12126,6 +12369,13 @@ and CI checked; each fix with a test that fails when it is reverted.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
+- **RV-9 — the answers to RV-1's and RV-2's questions** (decisions 363, 365, 367, 370, 371
+  and 372). `wired.logex` shown in README as a file of its own; README's one fragment run
+  in a setup the test makes; a rung that is a label alone accepted where a jump of its
+  routine names it; a declaration's elements counted through every nested array of
+  instances, refused past 65,536; a type the loader compiled itself in the same load not
+  checked again; two writes of one array whose literal subscripts differ not warned. It
+  runs as the next of two at a time, before RV-8.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

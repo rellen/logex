@@ -297,6 +297,52 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  # The review after Milestone 6 (a5-data-model-7, c4-api-fuzz-9): a state or a scan that
+  # names its struct but lacks one of its keys, as Map.delete/2 makes one, is refused as
+  # anything that is no state or scan is, at every door, where until then the missing
+  # field escaped as a KeyError, a MatchError or a FunctionClauseError.
+  describe "a state or a scan that lacks a key" do
+    test "is refused at every entry point that takes it", %{motor: m, state: s} do
+      for key <- [:type, :env, :now, :first, :ons_blocked, :switched, :faults] do
+        lacking = Map.delete(s, key)
+
+        message =
+          "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(lacking)}"
+
+        for door <- [
+              fn -> Runtime.call(m, lacking, %{}, %Scan{now: 0, first: true}) end,
+              fn -> Runtime.scan(m, lacking) end,
+              fn -> Runtime.put_inputs(m, lacking, %{}) end,
+              fn -> Runtime.restart(m, lacking, :warm) end,
+              fn -> Runtime.retained(m, lacking) end,
+              fn -> Logex.Edit.accept(m, m, lacking) end
+            ],
+            do: raises(message, door)
+      end
+
+      raises(
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: " <>
+          inspect(Map.put(s, :extra, 1)),
+        fn -> Runtime.scan(m, opaque(Map.put(s, :extra, 1))) end
+      )
+
+      for key <- [:now, :first, :ons_blocked, :tags, :blocks, :units, :reals] do
+        lacking = Map.delete(%Scan{now: 0, first: true}, key)
+
+        raises("expected a %Logex.Scan{}, got: #{inspect(lacking)}", fn ->
+          Runtime.call(m, s, %{}, opaque(lacking))
+        end)
+      end
+
+      # One with a key its struct does not have, as the state's twin above (RV-3's review).
+      extra = Map.put(%Scan{now: 0, first: true}, :extra, 1)
+
+      raises("expected a %Logex.Scan{}, got: #{inspect(extra)}", fn ->
+        Runtime.call(m, s, %{}, opaque(extra))
+      end)
+    end
+  end
+
   describe "a state's values (decision 171)" do
     @held """
     var_input go bool
@@ -623,8 +669,75 @@ defmodule Logex.RuntimeTest do
       by_hand = %{runtime | instances: %{"m1" => %{m1 | env: %{m1.env | "k" => 2 ** 32}}}}
       raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.cycle(by_hand, 0, %{}) end)
       raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.restart(by_hand, :cold) end)
+      # The review after Milestone 6 (b2-resource-6): a var_external's global is told as
+      # the global it is, checked before it is merged into the state, where until then
+      # the state's check told it as `state.env holds `e``, a place the host never wrote.
       by_hand = %{runtime | globals: %{globals | "e" => -(2 ** 32)}}
-      raises(outside("e", "a dint", -(2 ** 32)), fn -> Runtime.cycle(by_hand, 0, %{}) end)
+
+      e =
+        "runtime.globals holds `e` outside its type: it is a dint, and -4294967296 is outside -2147483648 to 2147483647"
+
+      raises(e, fn -> Runtime.cycle(by_hand, 0, %{}) end)
+      raises(e, fn -> Runtime.restart(by_hand, :warm) end)
+      raises(e, fn -> Runtime.restart(by_hand, :cold) end)
+
+      # Beside a misfit of the instance's own, the global is told first, as the scan
+      # checks it before it takes the state.
+      both = %{by_hand | instances: %{"m1" => %{m1 | env: %{m1.env | "k" => 2 ** 32}}}}
+      raises(e, fn -> Runtime.cycle(both, 0, %{}) end)
+    end
+
+    test "a var_external's global and a connection's are told in one message, in name order" do
+      {:ok, m} =
+        Logex.compile("var_external e dint
+var_input i dint
+var_output y dint
+add e i y",
+          name: "m"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "var_global e dint\nvar_global a dint\nvar_global y dint\nprogram m1 m\n" <>
+            "m1.i a\nm1.y y",
+          %{"m" => m}
+        )
+
+      runtime = Runtime.start(config)
+      by_hand = %{runtime | globals: %{runtime.globals | "e" => 2 ** 40, "a" => nil}}
+
+      both =
+        "runtime.globals holds `a` outside its type: it is a dint, and its value must be an " <>
+          "integer, found nil\n" <>
+          "runtime.globals holds `e` outside its type: it is a dint, and 1099511627776 is " <>
+          "outside -2147483648 to 2147483647"
+
+      raises(both, fn -> Runtime.cycle(by_hand, 0, %{}) end)
+
+      # The same under a timed task, whose step is the task's run, and an event task's.
+      for task <- ["task t interval 10 priority 1", "task t single g priority 1"] do
+        {:ok, config} =
+          Logex.Configuration.compile(
+            "plant",
+            "#{task}\nvar_global g bool\nvar_global e dint\nvar_global a dint\n" <>
+              "var_global y dint\nprogram m1 m with t\nm1.i a\nm1.y y",
+            %{"m" => m}
+          )
+
+        runtime = Runtime.start(config)
+        globals = %{runtime.globals | "e" => 2 ** 40, "g" => 1}
+
+        raises(both, fn ->
+          Runtime.cycle(%{runtime | globals: %{globals | "a" => nil}}, 0, %{})
+        end)
+
+        raises(
+          "runtime.globals holds `e` outside its type: it is a dint, and 1099511627776 is " <>
+            "outside -2147483648 to 2147483647",
+          fn -> Runtime.cycle(%{runtime | globals: globals}, 0, %{}) end
+        )
+      end
     end
 
     test "a global a connection copies in is checked against its own type, narrower than its var_input" do
@@ -699,6 +812,36 @@ defmodule Logex.RuntimeTest do
     test "is linear in the state it checks" do
       ratio = reductions_to_check(2000) / reductions_to_check(500)
       assert ratio < 4.8, "4x the tags took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
+  # The review after Milestone 6 (b6-configuration-11): a program whose table of block
+  # types is no map, or whose retained paths are an improper list, edited by hand, is a
+  # pinned line where it is first handed in, an instance's start and a configuration's
+  # compile, where it raised Protocol.UndefinedError or the BEAM's own ArgumentError.
+  describe "a program's block types or retained paths edited into no shape" do
+    test "are refused in the edit-by-hand words, at instance/1 and at a configuration" do
+      {:ok, p} =
+        Logex.compile("var_input go bool\nvar_output retain o dint\nxic go move 1 o\n",
+          name: "p"
+        )
+
+      for {edited, line} <- [
+            {%{p | blocks: :x},
+             "`p`'s block types are no map of the types it holds by name, got: :x: `p` was " <>
+               "edited by hand after it compiled"},
+            {%{p | retained: ["o" | "x"]},
+             "`p`'s retained paths are neither nil nor a list of paths, got: [\"o\" | \"x\"]: " <>
+               "`p` was edited by hand after it compiled"}
+          ] do
+        raises(line, fn -> Runtime.instance(edited) end)
+
+        raises(line, fn ->
+          Logex.Configuration.compile("plant", "var_global g bool\nprogram m p\nm.go g\n", %{
+            "p" => edited
+          })
+        end)
+      end
     end
   end
 
@@ -2233,7 +2376,9 @@ defmodule Logex.RuntimeTest do
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
       # its compile from a configuration file's text, and from its file on disk.
-      # M4-2: watchdog/1, the one rule for a task's watchdog.
+      # M4-2: watchdog/1, the one rule for a task's watchdog. initial/1's rule with none of
+      # its host checks, which the resource reads (b6-configuration-6), is the resource's own
+      # since RV-3's review, which found it a public function no host needs.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,

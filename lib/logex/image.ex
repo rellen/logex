@@ -16,8 +16,9 @@ defmodule Logex.Image do
   # globals, instances: instances, triggers: triggers}`, `globals` each retained global by
   # name to `{type, value}`, `instances` each instance whose program retains anything by
   # name to its image, and since decision 313 `triggers` each retained global that is a
-  # task's `single` by name to its last sample. The shape is decision 307's, the
-  # maintainer's confirmation of M6-4's; `triggers` decision 313's.
+  # task's `single` by name to its last sample, and since RV-3's review a task whose own
+  # last sample is not its trigger's, by the task's name (decision 350). The shape is
+  # decision 307's, the maintainer's confirmation of M6-4's; `triggers` decision 313's.
 
   import Logex.Declarations, only: [is_elementary: 1, is_fitting: 2]
 
@@ -76,13 +77,16 @@ defmodule Logex.Image do
   # to `leaf`, which gives the value to put back and the accumulator: `{env, acc}`.
   # A program handed in and checked, which the host then edited by hand, is trusted, as
   # decision 194 has it, and a walk that reaches a retained path its tags do not give
-  # raises a pinned ArgumentError there, as a warm restart's does (M6-2's review).
+  # raises a pinned ArgumentError there, as a warm restart's does (M6-2's review). A path
+  # the tags give and the env lacks, a tag or a member a plain swap's program declares and
+  # its state never held, holds nothing to take out: the walk passes it by, so the image
+  # lacks it and `instance/2` starts it at its initial value, as a warm restart does (the
+  # review after Milestone 6, c4-api-fuzz-5), where until then it blamed a hand edit.
   defp along(path, %Program{tags: tags, blocks: blocks}, env, acc, leaf) do
     [first | rest] = String.split(path, ".")
     {name, each} = each(first)
     type = typed(Map.fetch!(tags, name).type, blocks)
-    {value, acc} = down(each, rest, {name, type}, Map.fetch!(env, name), {acc, leaf})
-    {Map.put(env, name, value), acc}
+    held_at(Map.fetch(env, name), {each, rest, {name, type}}, {env, acc, leaf})
   rescue
     _error in [KeyError, BadMapError, FunctionClauseError, ArgumentError, MatchError] ->
       reraise(
@@ -95,6 +99,13 @@ defmodule Logex.Image do
         ],
         __STACKTRACE__
       )
+  end
+
+  defp held_at(:error, _at, {env, acc, _leaf}), do: {env, acc}
+
+  defp held_at({:ok, value}, {each, rest, {name, _type} = at}, {env, acc, leaf}) do
+    {value, acc} = down(each, rest, at, value, {acc, leaf})
+    {Map.put(env, name, value), acc}
   end
 
   defp typed({:block, name}, blocks), do: FbType.within(Map.fetch!(blocks, name), blocks)
@@ -124,7 +135,13 @@ defmodule Logex.Image do
     {name, each} = each(segment)
     member = member!(type, name)
     at = {path <> "." <> name, FbType.type_of(type, member)}
-    {kept, acc} = down(each, rest, at, Map.fetch!(value, name), {acc, leaf})
+    member_down(Map.fetch(value, name), {each, rest, at, name}, {value, acc, leaf})
+  end
+
+  defp member_down(:error, _at, {value, acc, _leaf}), do: {value, acc}
+
+  defp member_down({:ok, held}, {each, rest, at, name}, {value, acc, leaf}) do
+    {kept, acc} = down(each, rest, at, held, {acc, leaf})
     {Map.put(value, name, kept), acc}
   end
 
@@ -152,15 +169,19 @@ defmodule Logex.Image do
     do:
       Enum.reduce(members, {value, elem(with, 0)}, fn %Member{name: name} = member,
                                                       {value, acc} ->
-        {kept, acc} =
-          whole(
-            {path <> "." <> name, FbType.type_of(type, member)},
-            Map.fetch!(value, name),
-            {acc, elem(with, 1)}
-          )
-
-        {Map.put(value, name, kept), acc}
+        member_whole(
+          Map.fetch(value, name),
+          {path <> "." <> name, FbType.type_of(type, member), name},
+          {value, acc, elem(with, 1)}
+        )
       end)
+
+  defp member_whole(:error, _at, {value, acc, _leaf}), do: {value, acc}
+
+  defp member_whole({:ok, held}, {path, type, name}, {value, acc, leaf}) do
+    {kept, acc} = whole({path, type}, held, {acc, leaf})
+    {Map.put(value, name, kept), acc}
+  end
 
   # An instance's kind in the accumulator's kinds, where it keeps kinds: the walk that
   # takes an image out, and the one that finds what a program retains.
@@ -208,7 +229,7 @@ defmodule Logex.Image do
       configuration_line(name, config.name) ++
         map_lines(globals, "globals", &global_lines/2) ++
         map_lines(instances, "instances", &instance_lines/2) ++
-        map_lines(triggers, "triggers", &trigger_lines(&1, &2, globals))
+        map_lines(triggers, "triggers", &trigger_lines(&1, &2, {globals, tasks(config)}))
 
     raised(lines)
   end
@@ -222,11 +243,17 @@ defmodule Logex.Image do
       )
 
   # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
-  # of a global the image holds.
-  defp trigger_lines(name, sample, globals),
+  # of a global the image holds; and since RV-3's review a task's own, by the name of a
+  # task the configuration declares with a single, which no global can have.
+  defp trigger_lines(name, sample, {globals, tasks}),
     do:
       name_lines(name, "triggers") ++
-        sample_lines(sample, name) ++ held_lines(held_global?(globals, name), name)
+        sample_lines(sample, name) ++
+        held_lines(held_global?(globals, name) or is_map_key(tasks, name), name)
+
+  defp tasks(%{tasks: tasks}) when is_list(tasks),
+    do:
+      for(%{name: name, single: single} <- tasks, is_binary(single), into: %{}, do: {name, true})
 
   defp sample_lines(sample, _name) when is_fitting(:bool, sample), do: []
 

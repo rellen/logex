@@ -21,7 +21,9 @@ defmodule Logex.Retain do
   # a header, `logex retain 1`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; each retained global, `global <name> <type> <value>`; since decision 313 each
-  # retained `single`'s last sample, `trigger <name> <sample>`; and each instance whose
+  # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
+  # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
+  # each instance whose
   # program retains anything, `instance <name> <program type>`, followed by its lines in
   # path order (`Logex.Image.ordered/1`), each instance on the way to a value `<path>
   # <kind>`, an array of instances `m1.lane_t ton[4]`, and each value `<path> <type>

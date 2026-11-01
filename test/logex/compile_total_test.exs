@@ -566,8 +566,8 @@ defmodule Logex.CompileTotalTest do
     end
 
     # RV-2's review: the jump checks run over the lowered rungs, after this check, and find
-    # a mistake no write mends, so a rung they refuse is told both, as a provisional
-    # reading: a misplaced label, a second label and a label used twice.
+    # a mistake no write mends, so a rung they refuse is told both, as decision 373 has it:
+    # a misplaced label, a second label and a label used twice.
     test "a rung a jump check refuses is told it writes nothing too" do
       for {source, lines} <- [
             {"var a bool\nxic a lbl x\nxic a ote a", [{2, @idle}, {2, "`lbl x` is not first"}]},

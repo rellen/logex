@@ -511,6 +511,29 @@ defmodule Logex.ArrayConfigurationTest do
         assert Runtime.get(runtime, path) == {:error, reason}, path
       end
     end
+
+    # The review after Milestone 6 (b2-resource-9): a bit of an instance, which the lexer
+    # reads as one name, is told it names no tag, where until then the program was said
+    # to declare no ``, a tag of no name.
+    test "a bit of a program instance names none of its tags" do
+      {runtime, _events} = cycled(started())
+
+      # Since RV-3's review a bit number written plainly, `m1.0`, too, which was told the
+      # program declares no `0`.
+      for path <- ["m1.[0]", "m1.[n]", "m1.[16#1]", "m1.0", "m1.12"] do
+        assert Runtime.get(runtime, path) ==
+                 {:error,
+                  "`#{path}` names a bit of `m1`, a program instance of `m`, which has no " <>
+                    "bits: an access path names one of its tags, as in `m1.e`"}
+      end
+
+      # A bit of a global or of a tag goes too deep, as it did.
+      assert Runtime.get(runtime, "s.[0]") ==
+               {:error, "`s.[0]` goes too deep: `s` is a dint global, which has no members"}
+
+      assert Runtime.get(runtime, "m1.s.[0]") ==
+               {:error, "`m1.s.[0]` goes too deep: `m1.s` is a dint, which has no members"}
+    end
   end
 
   describe "the host contract" do
@@ -841,14 +864,17 @@ defmodule Logex.ArrayConfigurationTest do
                  {text, [{"g[0]", 1}, {"g[3]", 3}]}
       end
 
-      # Driven by no connection at all, the array is held whole, as before.
+      # Driven by no connection at all, the array is held whole, as before, its value a
+      # list, as `get/2` gives it, since the review's b5-config-edit-2 (where until then it
+      # was the resource's tuple).
       {:ok, none} = configured("var_global g int[4]\nprogram a w4\n")
       {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, none)
 
       assert for({:held, name, value} <- forecast, do: {name, value}) == [
-               {"g",
-                Runtime.get!(runtime, "g") |> then(&Logex.Array.from_list(&1, [4], fn v -> v end))}
+               {"g", Runtime.get!(runtime, "g")}
              ]
+
+      assert Runtime.get!(runtime, "g") == [1, 0, 0, 3]
     end
   end
 
@@ -880,6 +906,220 @@ defmodule Logex.ArrayConfigurationTest do
 
       for path <- ~w(ws g s os x m1.w m1.e m1.o m1.g) do
         assert Runtime.get!(runtime, path) == Runtime.get!(from_text, path), path
+      end
+    end
+  end
+
+  # The review after Milestone 6 (M12, b6-configuration-1 to 3, c4-api-fuzz-3 and 4): what
+  # crashed a configuration's check, each now a located diagnostic or the host contract's
+  # pinned ArgumentError.
+  describe "the configuration crashes the review found" do
+    @oven """
+    var_input zone_t real[8]
+    var_output zone_hot bool[8]
+    gt zone_t[0] 200.0 ote zone_hot[0]
+    """
+
+    defp oven do
+      {:ok, oven} = Logex.compile(@oven, name: "oven")
+      %{"oven" => oven}
+    end
+
+    test "an array var_input or var_output connected to a location is told to declare a " <>
+           "global array at it, from text and from a file",
+         %{} do
+      assert {:error, [d]} =
+               Configuration.compile("plant", "program o1 oven\no1.zone_t card.i.0\n", oven())
+
+      assert d.message ==
+               "`card.i.0` is a location, written only after `at` on a `var_global` line: " <>
+                 "declare a global at it, as in `var_global point real[8] at card.i.0`, and " <>
+                 "name that"
+
+      assert {:error, diagnostics} =
+               Configuration.compile(
+                 "plant",
+                 "program o1 oven\no1.zone_t[0] 0.0\no1.zone_hot card.q.0\n",
+                 oven()
+               )
+
+      assert Enum.any?(
+               diagnostics,
+               &(&1.message =~ "as in `var_global point bool[8] at card.q.0`")
+             )
+
+      dir = Path.join(System.tmp_dir!(), "logex-m12-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "oven.ld"), @oven)
+      File.write!(Path.join(dir, "plant.logex"), "program o1 oven\no1.zone_t card.i.0\n")
+      assert {:error, [d]} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert d.message =~ "as in `var_global point real[8] at card.i.0`"
+      File.rm_rf!(dir)
+    end
+
+    @driven "var_output s int\nvar_output q bool\nxic q ote q\n"
+
+    defp driven(text) do
+      {:ok, p} = Logex.compile(@driven, name: "p")
+      Configuration.compile("plant", text, %{"p" => p})
+    end
+
+    test "a located array refused for its sizes lists none of its points: a dimension of 0 " <>
+           "and one of millions are refused at once" do
+      assert {:error, messages} =
+               driven("program m1 p\nvar_global g int[0] at card.i.0\nm1.s g\n")
+
+      assert Enum.map(messages, & &1.message) == [
+               "`g` is declared with a dimension of 0, `[0]`: each dimension of an array holds 1 element or more",
+               "`g` is an array of input points (line 2): `m1.s`, a var_output, cannot drive it"
+             ]
+
+      assert {:error, [_ | _]} =
+               driven("program m1 p\nvar_global g int[0] at card.i.0\nm1.s g[0]\n")
+
+      assert {:error, [_ | _]} = driven("var_global retain g bool[0] at card.q.0\nprogram m1 p\n")
+
+      # The cost of a refusal is its size's in no way: two sizes 100 apart cost alike.
+      cost = fn n ->
+        text = "program m1 p\nvar_global g bool[#{n}] at card.q.0\nm1.q g[2]\n"
+        {:error, [_]} = driven(text)
+        reductions(fn -> driven(text) end)
+      end
+
+      ratio = cost.(7_000_000) / cost.(70_000)
+      assert ratio < 1.2, "100 times the size cost #{ratio} times the reductions"
+
+      assert {:error, [retain, size]} =
+               driven("program m1 p\nvar_global retain g bool[2000000] at card.q.0\n")
+
+      assert retain.message =~
+               "`g` is an array of output points, `card.q.0` to `card.q.1999999`, and a " <>
+                 "located global takes no `retain`"
+
+      assert size.message ==
+               "`g` would hold 2000000 elements, `[2000000]`: an array holds 65536 at most"
+    end
+
+    defp reductions(fun) do
+      Enum.min(
+        for _ <- 1..5 do
+          parent = self()
+
+          spawn(fn ->
+            {:reductions, a} = Process.info(self(), :reductions)
+            fun.()
+            {:reductions, b} = Process.info(self(), :reductions)
+            send(parent, b - a)
+          end)
+
+          receive do
+            n -> n
+          end
+        end
+      )
+    end
+
+    test "a global of a malformed array type, connected, as a var_external's or located, is " <>
+           "the host's mistake at every door" do
+      {:ok, p} = Logex.compile("var_input go bool\nvar_external ex int[8]\n", name: "p")
+
+      for type <- [
+            {:array, :int, nil},
+            {:array, :int, 8},
+            {:array, :int, [1 | 2]},
+            {:array, :ton, [3]},
+            {:array, :integer, [8]},
+            {:array, {:array, :int, [2]}, [2]},
+            {:array, :int, []}
+          ],
+          {at, to, member} <- [{nil, "g", "go"}, {nil, "ex", "go"}, {"card.i.0", "g", "go"}] do
+        name = to
+
+        globals =
+          [%Global{name: "g", type: type, at: at}, %Global{name: "ex", type: type}]
+          |> Enum.uniq_by(& &1.name)
+
+        config = [
+          name: "plant",
+          programs: [p],
+          globals: globals,
+          instances: [%Instance{name: "m1", type: "p"}],
+          connections: [%Connection{instance: "m1", member: member, to: name}]
+        ]
+
+        line = "global `#{name}` has type #{inspect(type)}: a global is "
+
+        for door <- [
+              fn -> Configuration.new!(config) end,
+              fn ->
+                Configuration.check(struct!(Configuration, config ++ [programs: %{"p" => p}]))
+              end,
+              fn -> Runtime.start(struct!(Configuration, config ++ [programs: %{"p" => p}])) end,
+              fn ->
+                Logex.IO.points(struct!(Configuration, config ++ [programs: %{"p" => p}]))
+              end,
+              fn ->
+                Logex.IO.bind!(struct!(Configuration, config ++ [programs: %{"p" => p}]), %{})
+              end
+            ] do
+          error = assert_raise ArgumentError, door
+          assert error.message =~ line, inspect({type, at, to})
+        end
+      end
+    end
+
+    # The review after Milestone 6 (b2-resource-3): a name whose first `[` is its last byte,
+    # given at a resource's doors, an input key, an image's path and a store's line, is
+    # refused in logex's words, read by RV-2's `Logex.Name`, where `Logex.Array.split/1`
+    # raised the BEAM's `binary_part/3` error.
+    test "a key or path ending in a bracket is refused at a resource's doors" do
+      {:ok, p} =
+        Logex.compile(
+          "var_input in bool\nvar_output out bool\nvar retain k dint\nxic in ote out",
+          name: "p"
+        )
+
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+            "var_global y bool at panel.q.0\nvar_global temps int[4] at card.i.0\n" <>
+            "program m1 p with fast\nm1.in x\nm1.out y",
+          %{"p" => p}
+        )
+
+      runtime = Runtime.start(config)
+
+      for {key, message} <- [
+            {"x[", ~s|input "x[" is not an input point — did you mean `x`?|},
+            {"temps[",
+             ~s|input "temps[" is not an input point: `temps` is an array of input points, | <>
+               "each element set by its name as its subscripts' values, `temps[0]` to " <>
+               "`temps[3]`"},
+            {"[",
+             ~s|input "[" is not an input point: the input points are `temps[0]` to | <>
+               "`temps[3]` and `x`"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Runtime.cycle(runtime, 0, %{key => 1}) end
+      end
+
+      image = Runtime.retained(runtime)
+      [{"m1", values}] = Map.to_list(image.instances)
+      bracketed = put_in(image.instances["m1"], %{values | values: %{"k[" => {:dint, 1}}})
+
+      assert_raise ArgumentError, ~s|instance "m1": `values` holds "k[", which is no path|, fn ->
+        Runtime.start(config, bracketed)
+      end
+
+      {decoded, _at} =
+        Logex.Retain.decode!(
+          "logex retain 1\nconfiguration plant written 2026-11-01T00:00:00Z\n" <>
+            "instance m1 p\nm1.k[ dint 0\n",
+          {"store", "plant"}
+        )
+
+      assert_raise ArgumentError, ~s|instance "m1": `values` holds "k[", which is no path|, fn ->
+        Runtime.start(config, decoded)
       end
     end
   end

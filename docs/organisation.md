@@ -1342,7 +1342,7 @@ rules, in order:
 | `.pre`, undone first (fix F1) | Each switch records in the edit's record, for each timer F or T declares, the `.pre` it left and the `.pre` it found. The edit's next switch first restores the found value wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre` its test found, a timer the candidate drops included. The two `.pre` rules below apply only where this one does not. A `.pre` an earlier edit's switch moved is not given back | `{:preset, t, {left, found}}` where it moves; `{:preset_kept, t, {pre, preset}}` where it does not, T runs the timer and `.pre` is not T's preset |
 | `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
-| `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
+| `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed since it last ran; *(since RV-3, 2026-11-01, the review's b4-edit-3: no drop is forecast where a timer timing at its last run, `.en` 1, has had that time already at the switch, which it catches up at its next run, a timer a jump or a false `cal` froze, an `rto`'s so too)*. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
 | Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back. *(Since decision 336, 2026-10-31: what that switch moved of `last`, a resume or a resume given back, goes back where `last` is still where it left it, so the switch after a give-back gives it back in turn, reported by the net move, `:resumed` or `:resume_undone`.)* *(Since decision 339, 2026-10-31: only where the switch only gives the instance back, with no scan and no time since this edit's last switch, which in a lone instance is every switch with no scan since; where time has passed, the program that switch started held the instance and the move stands, provisional.)* *(Since decision 345, 2026-11-01: as built, no longer provisional.)* | `{:resume_undone, t, ms}` |
 | Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* *(Changed 2026-10-31 by decision 336: the rule asks too who has held the instance since this edit's last switch. Where no scan has run since it, F has held the instance only since that switch, so `last` moves on by `now - max(last, switch)`, the time before it another program's and left for the timer to catch up; otherwise it becomes `now` as before.)* *(Changed 2026-10-31 by decisions 339 to 341, the maintainer's answers, into one rule: a timer's time runs only while a program that runs it holds the instance, and not while it is set aside. `last` moves on by the time F held the instance, from the start of its hold, scanned or not, `now - max(last, held)`, and to `now` where F has held it since before the edit; whoever scanned last, so "F being the program that last scanned" is retired; a switch with no scan and no time since the last only gives the instance back to the program that held it before, which holds it on from then, and resumes nothing more than it gives back.)* | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
@@ -1910,7 +1910,9 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:retain_added` | global | the value it holds | a switch | fact: nothing written; the next warm restart keeps it (decisions 278 and 302) |
 | `:retain_removed` | global | the value it holds | a switch | fact: nothing written; the next warm restart puts it back (decisions 278 and 302) |
 | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused (decision 66) | write |
-| `:held` | global | its value | every step | fact: nothing drives it any more (decision 20; decision 58) |
+| `:held` | global | its value, an array's as a list | every step | fact: nothing drives it any more (decision 20; decision 58) |
+| `:holds` | `instance.member` | the held global's value | a switch; assemble and cancel, where a restart since the switch left it another (RV-3's review) | write: a var_output no rung writes, wired to a global the step holds, started at the global's value, so that its copy-out holds the point (decision 347) |
+| `:hold_undone` | `instance.member` | the value it had | a switch | write: a var_output the edit's last switch started at a held global's value, still holding it with no restart since, given back (decision 347) |
 | `:interval` | task | `{old, new}` ms | a switch | fact |
 | `:next_due` | task | `{from, to}` ms | a switch | write: decision 40 |
 | `:priority` | task | `{old, new}` | a switch | fact |
@@ -1922,8 +1924,9 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 The writes a report lists, applied to the resource before its step, give the resource
 after it, exactly, with each instance's `switched` and block list as OE-1 states them and
 its `now` as decision 56 sets it, a first test's `:instance_pruned` and `:pruned` written
-before the rest (decision 66). `api_contract_test.exs`'s walk of a configuration's edit
-checks it.
+before the rest (decision 66), and since decision 347 a kept instance's `:hold_undone` and
+`:holds` written in the report's order, after its `:added`, and an added instance's after
+its `:instance_added`. `api_contract_test.exs`'s walk of a configuration's edit checks it.
 
 *Host mistakes* raise `ArgumentError`, each message pinned by a test. A step checks the
 edit, then the runtime, then that the edit is current, its generation first and then the
@@ -12075,7 +12078,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: keep it held (a)** (the maintainer, 2026-11-01): at the switch, each
      var_output its program does not write whose connection drives a held global starts
      at the global's value, so the point holds as reported until a rung writes it. To
-     build in RV-3.
+     build in RV-3. *(Built in RV-3, 2026-11-01: `Logex.Configuration.Edit` starts each
+     such var_output at the switch, `{:holds, path, value}`, a kept instance's before its
+     plan's switch, and the next switch of the edit gives it back, `{:hold_undone, path,
+     old}`, where it still holds the value and no restart came since; a var_output whose
+     type does not hold the value is left as it is, provisional, put to the maintainer in
+     `PLAN.md`'s RV-3 entry.)* *(Fixed after RV-3's review, 2026-11-01: a connection that
+     would hold a point from a var_output of another type than the point's is refused at
+     accept, provisional, but a kept instance's own connection that both configurations
+     make, which holds the point's value from its first run on; an array var_output wired
+     whole drives, in the configuration a switch starts, only the elements its program
+     writes, so each element it copies out frozen is held too; a restart since the last
+     switch is read from the resource's restart count, which `restart/2` moves on; and
+     assemble and cancel start each holder again where a restart left it another value,
+     so that every point a step reports held holds.)*
 
 348. **One write's time limit (the review after Milestone 6),** question 2: a round
      writes its devices in name order against the one deadline the refresh before the
@@ -12103,7 +12119,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: stay off (a)** (the maintainer, 2026-11-01): on a first scan a `tof` whose
      `.en` is 1 and `.tt` 0 sees no falling edge and comes to rest, `.dn` 0; one already
      in its run-on, `.tt` 1, resumes it as decision 273 has it. Decisions 69 and 93's
-     "no first scan sees one" hold again. To build in RV-3.
+     "no first scan sees one" hold again. To build in RV-3. *(Built in RV-3,
+     2026-11-01: a first scan's de-energised `tof` clauses, every kind of `tof`, a scan
+     after the first costing what it did.)* *(RV-3's review found the rule a first scan's
+     alone, as worded: a retained `tof` the first scan does not run, on a jumped rung or in
+     a block whose `cal` is false, runs its delay at its first run with its rung false,
+     pinned as built and put to the maintainer in `PLAN.md`'s RV-3 entry.)*
 
 350. **A trigger's sample whose task a trip cut off (the review after Milestone 6),**
      question 4: a cycle records every task's trigger sample before any step runs, so a
@@ -12116,7 +12137,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as its trigger's last only once the step that runs the task has run; a round a trip
      stops before it leaves the last sample as it was, so the event task runs on the
      next cycle that samples the rise, a warm restart's first among them. To build in
-     RV-3 and RV-4.
+     RV-3 and RV-4. *(Built in RV-3, 2026-11-01, core and runner both: a rise's step
+     carries its sample, which stands as the step runs; every other sample stands at
+     once, a periodic run's while the trigger samples 0 among them, provisional.)* *(Fixed
+     after RV-3's review, 2026-11-01: two tasks on one trigger, the round cut between
+     their steps, hold two samples, and the retained image, so the store, keeps a task's
+     own by the task's name where it is not the trigger's, so a fresh start runs the task
+     the trip cut off, once, as a warm restart does.)*
 
 351. **A rung that writes nothing (the review after Milestone 6),** question 5: a
      newline ends a rung, so a rung wrapped onto two lines, `xic start xio stop` and
@@ -12212,7 +12239,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      each module's present rules in its moduledoc; the history in `PLAN.md` and this
      record; its size capped by a test. To build in RV-1. *(Landed with RV-1, 2026-11-01:
      CLAUDE.md 305 lines, 21,797 bytes; `test/logex/claude_md_test.exs` caps it at 40,000
-     characters, provisional, the figure Claude Code's own warning for a large CLAUDE.md,
+     characters, the figure of Claude Code's own warning for a large CLAUDE.md (decision 361),
      and holds it to naming every file of `lib/` and `test/` and to no history.)*
 
 359. **The receipts and the toolchain (the review after Milestone 6),** question 13 and
@@ -12238,6 +12265,107 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: keep a copy (a)** (the maintainer, 2026-11-01): before its first write over
      a store it dropped anything from, a fresh start copies the store to
      `<store>.dropped`, kept until the next such start. To build in RV-5.
+
+361. **CLAUDE.md's cap (the review after Milestone 6),** RV-1's provisional reading 1:
+     `claude_md_test.exs` caps CLAUDE.md at 40,000 characters, the figure of Claude Code's
+     own warning for a large CLAUDE.md; a tighter cap, or one in lines, were the others.
+
+     **Taken: 40,000 characters (a)** (the maintainer, 2026-11-01), as built.
+
+362. **README's examples in every run (the review after Milestone 6),** RV-1's provisional
+     reading 2: `readme_test.exs` runs in the default suite, the real-clock example among
+     its examples, about 6 s more a run; a tag only CI runs, or the default suite without
+     the real-clock example, were the others.
+
+     **Taken: every run (a)** (the maintainer, 2026-11-01), as built.
+
+363. **`wired.logex` (the review after Milestone 6),** RV-1's provisional reading 3:
+     README describes `wired.logex` as `tally.logex` wired to an output point, and the
+     test derives it by dropping `tally.logex`'s comment line, so README's warning cites
+     a line 7 README never shows.
+
+     **Taken: show it in README (b)** (the maintainer, 2026-11-01): `wired.logex` is shown
+     as a block of its own, marked `<!-- file: wired.logex -->`, and the test's derived
+     entry for it goes. To build in RV-9.
+
+364. **The real-clock example's figures (the review after Milestone 6),** RV-1's
+     provisional reading 4: the line of that run's figures is compared by its beginning
+     alone; holding each figure to a range, which would see a runner that stalls but could
+     fail on a loaded machine, was the other.
+
+     **Taken: its beginning alone (a)** (the maintainer, 2026-11-01), as built.
+
+365. **README's one fragment (the review after Milestone 6),** RV-1's provisional reading
+     5: the call made from another process in "Running a plant on the clock",
+     `Task.async(fn -> Runner.get!(runner, "b1.count") end)`, is parsed and never run.
+
+     **Taken: run it in a setup (b)** (the maintainer, 2026-11-01): the test makes what
+     README's prose describes, a runner on the manual clock with a round owed after a slow
+     write, runs the fragment and holds it to the prose: it waits, then answers. README
+     does not change. To build in RV-9.
+
+366. **A label in CLAUDE.md (the review after Milestone 6),** RV-1's provisional reading
+     6: a work item's label or a commit anywhere in CLAUDE.md is history and refused,
+     "`ctu` counts boxes (M3-1)" among it; letting a label stand as a pointer into
+     `PLAN.md`, which no check can tell from history, was the other.
+
+     **Taken: no labels (a)** (the maintainer, 2026-11-01), as built.
+
+367. **A label alone (the review after Milestone 6),** RV-2's question 1: decision 351
+     refuses a rung that writes nothing, so a routine whose last rung is `lbl done`, the
+     end a fan program's `jmp done` skips its manual section to, is refused, and the
+     programmer writes a coil of no use, `lbl done ote landed`. Logix needs an output on
+     every rung and has NOP for this; IEC labels a network and has no NOP.
+
+     **Taken: a landing where a jump names it (b)** (the maintainer, 2026-11-01): a rung
+     that is a label alone is accepted where a `jmp` of its routine names the label, and
+     refused as a rung that writes nothing where none does; landing on it runs as landing
+     on the rung after it, or on the routine's end. To build in RV-9.
+
+368. **Where a rung of empty groups is cited (the review after Milestone 6),** RV-2's
+     question 2: a rung of empty groups alone, `( )`, holds no line in the parse tree, so
+     it is cited at the first line it can stand on, after the rung before it, which after
+     blank lines is not its own.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01); the parse tree keeps no group's
+     line and the front end's golden record stays.
+
+369. **A number's length (the review after Milestone 6),** RV-2's question 3: a literal
+     past 10,000 characters, or a real whose exponent is past 9,999, is a lex error at its
+     column, and a store or forces file that holds one is refused at start.
+
+     **Taken: 10,000 characters and 9,999 (a)** (the maintainer, 2026-11-01), as built.
+
+370. **An instance's size at every depth (the review after Milestone 6),** RV-2's question
+     4: each array is held to 65,536 elements, but nothing counts through nested ones, so
+     `var row cell[256]`, each `cell` holding 256 blocks of `ton[256]`, compiles and runs
+     out of memory at its first scan. Logix bounds a project by the controller's memory at
+     download (unverified); IEC is silent.
+
+     **Taken: refused at compile (b)** (the maintainer, 2026-11-01): the elements of a
+     declaration are counted through every nested array of instances, and past 65,536 it
+     is refused at its line. To build in RV-9.
+
+371. **The loader's recompiles (the review after Milestone 6),** RV-2's question 5: a chain
+     of 30 blocks, each holding the next, compiles 435 times, as decision 54 rechecks every
+     type it is given, the loader's own among them.
+
+     **Taken: the loader trusts its own (b)** (the maintainer, 2026-11-01): a type the
+     loader compiled itself in the same load is not checked again, so a chain costs its
+     length; a type a host hands in is checked as decision 54 has it. To build in RV-9.
+
+372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
+     6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
+     that may share an element, which they never can.
+
+     **Taken: no warning (b)** (the maintainer, 2026-11-01): two writes of one array whose
+     literal subscripts differ in any place are distinct and not warned; two that may meet,
+     `ee[i,0]` and `ee[j,0]`, are warned as before. To build in RV-9.
+
+373. **A rung told twice (the review after Milestone 6),** RV-2's question 7: a rung the
+     jump checks refuse, `xic auto lbl done`, is told too that it writes nothing.
+
+     **Taken: both at once (a)** (the maintainer, 2026-11-01), as built.
 
 ---
 

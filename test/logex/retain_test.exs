@@ -847,6 +847,140 @@ defmodule Logex.RetainTest do
       assert counted.env["t"]["acc"] == t + 50
     end
 
+    # Decision 349 (the maintainer, 2026-11-01): a first scan reads no falling edge from a
+    # retained `tof`'s `.en` kept at 1, so one held on at the outage comes to rest, `.dn`
+    # 0, where until then it ran its whole delay with nothing commanding it; one in its
+    # delay at the outage, `.tt` 1, resumes it (decision 273). Every kind: a `tof`, a
+    # `tof_ltime`, an element of an array of them and a member of a block.
+    @run_on_block """
+    function_block runon
+    var_input go bool
+    var_output q bool
+    var t tof
+    xic go tof t 50
+    xic t.dn ote q
+    """
+
+    @run_on """
+    var_input motor bool
+    var_output k1 bool
+    var_output k2 bool
+    var_output k3 bool
+    var_output k4 bool
+    var retain fan tof
+    var retain lf tof_ltime
+    var retain fs tof[2]
+    var retain r runon
+    xic motor tof fan 50
+    xic motor tof lf 50000000
+    xic motor tof fs[1] 50
+    cal r motor k4
+    xic fan.dn ote k1
+    xic lf.dn ote k2
+    xic fs[1].dn ote k3
+    """
+
+    defp run_on_outputs(p, state, inputs) do
+      Enum.map_reduce(inputs, state, fn input, %Instance{now: now, first: first} = state ->
+        {out, state} = Runtime.call(p, state, input, %Scan{now: now + 10, first: first})
+        {Enum.map(~w(k1 k2 k3 k4), &out[&1]), state}
+      end)
+    end
+
+    defp run_on_timers(env),
+      do: [env["fan"], env["lf"], elem(env["fs"], 1), env["r"]["t"]]
+
+    test "a retained tof held on at the outage comes to rest on the first scan, of every kind" do
+      p = c!(@run_on, [block!(@run_on_block)])
+      on = scans(p, Runtime.instance(p), List.duplicate(%{"motor" => 1}, 3))
+
+      assert Enum.map(run_on_timers(on.env), &{&1["en"], &1["dn"], &1["tt"]}) ==
+               List.duplicate({1, 1, 0}, 4)
+
+      for restarted <- [
+            Runtime.restart(p, on, :warm),
+            elem(Runtime.instance(p, Runtime.retained(p, on)), 0)
+          ] do
+        {outputs, after_} = run_on_outputs(p, restarted, List.duplicate(%{"motor" => 0}, 8))
+        assert outputs == List.duplicate([0, 0, 0, 0], 8)
+
+        assert Enum.map(run_on_timers(after_.env), &{&1["en"], &1["dn"], &1["tt"], &1["acc"]}) ==
+                 List.duplicate({0, 0, 0, 0}, 4)
+      end
+
+      # The rung true on the first scan: held on, as any energised run.
+      {[first | _], _} = run_on_outputs(p, Runtime.restart(p, on, :warm), [%{"motor" => 1}])
+      assert first == [1, 1, 1, 1]
+    end
+
+    test "a retained tof in its delay at the outage resumes it on the first scan, of every kind" do
+      p = c!(@run_on, [block!(@run_on_block)])
+
+      off =
+        scans(p, Runtime.instance(p), [
+          %{"motor" => 1},
+          %{"motor" => 1},
+          %{"motor" => 0},
+          %{"motor" => 0}
+        ])
+
+      # The long timer counts its 10 ms in nanoseconds.
+      assert Enum.map(run_on_timers(off.env), &{&1["tt"], &1["acc"]}) ==
+               [{1, 10}, {1, 10_000_000}, {1, 10}, {1, 10}]
+
+      {outputs, _} =
+        run_on_outputs(p, Runtime.restart(p, off, :warm), List.duplicate(%{"motor" => 0}, 4))
+
+      # 10 ms a scan from 10: on at 20, 30 and 40, and off at 50, the preset.
+      assert outputs == [[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [0, 0, 0, 0]]
+    end
+
+    # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): decision 349 is a first scan's
+    # rule, so a retained `tof` held on at the outage that the first scan does not run, on
+    # a rung a jump skips or in a block whose `cal` is false, keeps its `.en` 1, and its
+    # first run with its rung false sees a falling edge and runs the off-delay, as one held
+    # on and skipped does with no restart. Pinned as built until the maintainer rules.
+    @skipped_tof "var_input a bool\nvar_input j bool\nvar_output q bool\nvar retain t tof\n" <>
+                   "xic j jmp over\nxic a tof t 100\nlbl over xic t.dn ote q\n"
+
+    @skipped_block "function_block fb\nvar_input a bool\nvar_output q bool\n" <>
+                     "var retain t tof\nxic a tof t 100\nxic t.dn ote q\n"
+
+    test "a retained tof the first scan does not run runs its off-delay at its first run " <>
+           "(provisional)" do
+      top = c!(@skipped_tof)
+
+      inb =
+        c!(
+          "var_input a bool\nvar_input go bool\nvar_output q bool\nvar retain b fb\n" <>
+            "xic go cal b a q\n",
+          [block!(@skipped_block)]
+        )
+
+      for {p, on, steps, expected} <- [
+            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 0}, %{}], [0, 0]},
+            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 1}, %{"j" => 0}, %{}], [1, 1, 1]},
+            {inb, %{"a" => 1, "go" => 1}, [%{"a" => 0, "go" => 0}, %{"go" => 1}, %{}], [0, 1, 1]}
+          ] do
+        held = scans(p, Runtime.instance(p), [on, on])
+
+        for restarted <- [
+              Runtime.restart(p, held, :warm),
+              elem(Runtime.instance(p, Runtime.retained(p, held)), 0)
+            ] do
+          {outputs, _} =
+            Enum.map_reduce(steps, restarted, fn inputs,
+                                                 %Instance{now: now, first: first} = state ->
+              state = Runtime.put_inputs(p, state, inputs)
+              {out, state} = Runtime.call(p, state, %{}, %Scan{now: now + 10, first: first})
+              {out["q"], state}
+            end)
+
+          assert outputs == expected, inspect({p.source, steps})
+        end
+      end
+    end
+
     test "a block's non_retain member and an unmarked nested timer follow decision 270" do
       seal = block!(@seal)
       plain = block!(@plain)
@@ -1000,6 +1134,163 @@ defmodule Logex.RetainTest do
       assert Runtime.get!(warm, "m1.count") == 0
       cold = Runtime.restart(runtime, :cold)
       assert Runtime.get!(cold, "m1.total") == 0 and Runtime.get!(cold, "m1.boxes.cv") == 0
+    end
+
+    # The review after Milestone 6 (b2-resource-2), kept as decision 273 has it: a
+    # resource's instance's retained timer's `last` is set to that instance's own `now`,
+    # its last scan, so a slow task's `rto` counts, at its first run after `restart/2`, the
+    # time from that scan to the restart, as a run with no restart would, where `start/2`
+    # from the image, which keeps no `last`, counts none of it.
+    test "a resource's warm restart counts a timer's time from its instance's last scan" do
+      {:ok, relay} = Logex.compile("var_input in bool\nvar o bool\nxic in ote o", name: "relay")
+
+      {:ok, lube} =
+        Logex.compile(
+          "var_input in bool\nvar_output done bool\nvar retain t rto\nxic in rto t 230\n" <>
+            "xic t.dn ote done",
+          name: "lube"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\ntask slow interval 100 priority 2\n" <>
+            "var_global x bool at panel.i.0\nvar_global lamp bool at panel.q.0\n" <>
+            "program m1 relay with fast\nm1.in x\nprogram m2 lube with slow\nm2.in x\n" <>
+            "m2.done lamp",
+          %{"relay" => relay, "lube" => lube}
+        )
+
+      cycled = fn runtime, ms -> elem(Runtime.cycle(runtime, ms, %{"x" => 1}), 0) end
+      runtime = Enum.reduce(1..15, Runtime.start(config), fn _, rt -> cycled.(rt, 10) end)
+      assert {runtime.now, runtime.instances["m2"].now} == {150, 100}
+      assert Runtime.get!(runtime, "m2.t.acc") == 90
+
+      warm = cycled.(Runtime.restart(runtime, :warm), 0)
+      assert Runtime.get!(warm, "m2.t.acc") == 140
+
+      {started, []} = Runtime.start(config, Runtime.retained(runtime))
+      assert Runtime.get!(cycled.(started, 0), "m2.t.acc") == 90
+    end
+  end
+
+  # The review after Milestone 6 (c4-api-fuzz-1, c4-api-fuzz-5): a plain swap, within the
+  # contract, hands a state to a program that declares a retained path the state lacks; a
+  # warm restart starts that path at its initial value, as `instance/2` starts a path its
+  # image lacks, at any depth, where until then it gave nil or raised, and nothing after it
+  # refuses the state; and the image passes it by, blaming no hand edit.
+  describe "a warm restart after a plain swap" do
+    @swap_block_v1 "function_block blk\nvar_input en bool\nvar n dint\nxic en add n 1 n\n"
+    @swap_block_v2 "function_block blk\nvar_input en bool\nvar n dint\nvar retain k dint 7\n" <>
+                     "var t ton\nxic en add n 1 n\nxic en add k 1 k\nxic en ton t 5\n"
+
+    # Every way the program swapped in may retain what the state lacks: a tag, a timer that
+    # has not run, a member a block's new version adds under a false `cal`, the block
+    # retained whole, and that member in every element of an array of the block's
+    # instances, the array retained whole too. (A state that lacks an array whole is
+    # refused where it is handed in, as one that lacks an array always was.)
+    @swaps [
+      {"var retain k dint 5\n", "xic go add k 1 k\n", %{"k" => 5}},
+      {"var retain t ton\n", "xic go ton t 100\n", :timer},
+      {"var b blk\n", "xic go cal b go\n", :member},
+      {"var retain b blk\n", "xic go cal b go\n", :member},
+      {"var gs blk[2]\n", "xic go cal gs[1] go\n", :members},
+      {"var retain gs blk[2]\n", "xic go cal gs[1] go\n", :members}
+    ]
+
+    defp swapped({declared, rungs, _}) do
+      v1 =
+        c!(
+          "var_input go bool\nvar c dint\n" <>
+            declared_v1(declared) <> "xic go add c 1 c\n" <> rungs_v1(rungs),
+          [block!(@swap_block_v1)]
+        )
+
+      v2 =
+        c!("var_input go bool\nvar c dint\n" <> declared <> "xic go add c 1 c\n" <> rungs, [
+          block!(@swap_block_v2)
+        ])
+
+      {v1, v2}
+    end
+
+    # The original declares the block instances, under its first version, and none of the
+    # rest.
+    defp declared_v1("var" <> _ = declared), do: blocks_only(declared)
+    defp blocks_only(declared), do: block_line(String.contains?(declared, "blk"), declared)
+    defp block_line(true, declared), do: declared
+    defp block_line(false, _declared), do: ""
+    defp rungs_v1(rungs), do: block_line(String.contains?(rungs, "cal"), rungs)
+
+    test "each path the state lacks starts at its initial value, and the state is taken on" do
+      for {_, _, expect} = swap <- @swaps do
+        {v1, v2} = swapped(swap)
+        state = scans(v1, Runtime.instance(v1), [%{"go" => 1}, %{"go" => 1}])
+        warm = Runtime.restart(v2, state, :warm)
+        assert lacked(expect, warm.env, Runtime.instance(v2).env), inspect(swap)
+        taken_on!(v2, warm)
+
+        # Swapped in and scanned with `go` false first, so that no `cal` runs the new body
+        # and no rung writes what the state lacks: as the review's repro had it.
+        warm = Runtime.restart(v2, scans(v2, state, [%{"go" => 0}]), :warm)
+        taken_on!(v2, warm)
+      end
+    end
+
+    # Nothing after the warm restart refuses the state: a cold restart, inputs, scans and
+    # the image.
+    defp taken_on!(program, state) do
+      assert %Instance{} = Runtime.restart(program, state, :cold)
+      assert %Instance{} = Runtime.put_inputs(program, state, %{"go" => 1})
+      assert %Instance{} = scans(program, state, [%{"go" => 1}, %{"go" => 1}])
+      assert %{program: "m"} = Runtime.retained(program, state)
+    end
+
+    defp lacked(%{"k" => k}, env, _fresh), do: env["k"] == k
+    defp lacked(:timer, env, fresh), do: env["t"] == fresh["t"]
+
+    defp lacked(:member, env, fresh),
+      do: env["b"]["k"] == fresh["b"]["k"] and env["b"]["t"] == fresh["b"]["t"]
+
+    defp lacked(:members, env, fresh),
+      do:
+        Enum.map(Tuple.to_list(env["gs"]), &Map.take(&1, ["k", "t"])) ==
+          Enum.map(Tuple.to_list(fresh["gs"]), &Map.take(&1, ["k", "t"]))
+
+    test "the image of a swapped state lacks what the state lacks, and laid over a new " <>
+           "instance starts it as the warm restart does" do
+      for {_, _, _} = swap <- @swaps do
+        {v1, v2} = swapped(swap)
+        state = scans(v1, Runtime.instance(v1), [%{"go" => 1}])
+        image = Runtime.retained(v2, state)
+        assert {laid, []} = Runtime.instance(v2, image)
+        warm = Runtime.restart(v2, state, :warm)
+
+        assert Map.drop(laid.env, ["c", "go"]) ==
+                 Map.drop(rebased(warm.env, laid.now), ["c", "go"]),
+               inspect(swap)
+      end
+    end
+
+    # A block instance the state held keeps the timers it holds, each `last` at the
+    # restart's `now` (decision 273), where a fresh instance's is 0.
+    defp rebased(env, now),
+      do: Map.new(env, fn {name, value} -> {name, rebased_value(value, now)} end)
+
+    defp rebased_value(%{"last" => _} = timer, now), do: %{timer | "last" => now}
+    defp rebased_value(%{} = map, now), do: rebased(map, now)
+    defp rebased_value(value, _now), do: value
+
+    test "a retained path the program's tags do not give is still a hand edit's" do
+      {_v1, v2} = swapped(hd(@swaps))
+      state = Runtime.instance(v2)
+      edited = %{v2 | retained: ["k", "zz"]}
+
+      raises(
+        "a warm restart keeps the retained path `zz`, which the program's tags do not give: " <>
+          "the program was edited by hand after it was handed in and checked",
+        fn -> Runtime.restart(edited, state, :warm) end
+      )
     end
   end
 

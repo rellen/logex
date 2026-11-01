@@ -985,13 +985,32 @@ defmodule Logex.Edit.Plan do
   defp alone({:ok, 1}, bit, {writes, words, bits}),
     do:
       Map.get(writes, word_of(bit)) == Map.get(words, word_of(bit)) and
-        not is_map_key(bits, element_of(:binary.split(bit, "]."), bit))
+        not is_map_key(bits, element_of(bit))
 
   defp alone({:ok, _more}, _bit, _writes), do: false
 
-  # The element a bit of one is in, `e[1]` of `e[1].3`; any other bit is in none.
-  defp element_of([element, _number], _bit), do: element <> "]"
-  defp element_of([_none], _bit), do: nil
+  # A bit's path read from its end, segment by segment, so that an element or a bit inside
+  # an element of an array of blocks, `gs[0].e[1]` or `gs[0].w.3`, at any depth, is read
+  # as the scalar `s1.e[1]` is, where until the review after Milestone 6 (a4-warnings-walk-2)
+  # it was cut at its first `[` and read as `gs`, so that each element's one-shot was
+  # compared with the writes of every element. The segments, each a name, an element
+  # `e[1]` or a bit's number, hold no `.` of their own: a path names an element by its
+  # subscripts' values.
+  defp last_segment(path), do: Enum.split(String.split(path, "."), -1)
+
+  # The element a bit of one is in, `gs[0].e[1]` of `gs[0].e[1].3`; any other bit, an
+  # element's own among them, is in none.
+  defp element_of(path), do: bit_element(last_segment(path))
+
+  defp bit_element({front, [_number]}), do: element_above(Enum.split(front, -1))
+
+  defp element_above({above, [segment]}),
+    do: element_named(:binary.split(segment, "["), Enum.join(above ++ [segment], "."))
+
+  defp element_above({[], []}), do: nil
+
+  defp element_named([_array, _subscripts], element), do: element
+  defp element_named([_name], _path), do: nil
 
   defp bit_writes(written) do
     bits = Map.new(written, fn {path, lines} -> {path, length(lines)} end)
@@ -1006,13 +1025,22 @@ defmodule Logex.Edit.Plan do
 
   # The word a bit's path is in, `s1.status` for `s1.status.3`; an element's, `edge[2]`, and
   # since decision 221 a bit of an element's, `faults[2].3`, its array, which the walk
-  # counts their writes under.
-  defp word_of(path), do: word_in(:binary.split(path, "["), path)
+  # counts their writes under; inside an element of an array of blocks so too, `gs[0].e`
+  # for `gs[0].e[1]` and `gs[0].w` for `gs[0].w.3`.
+  defp word_of(path), do: last_word(last_segment(path))
 
-  defp word_in([array, _subscripts], _path), do: array
+  defp last_word({front, [last]}), do: word_named(:binary.split(last, "["), front)
 
-  defp word_in([_no_element], path),
-    do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
+  # An element, `edge[2]`: its array. A bit, `status.3` or `faults[2].3`: the word it is a
+  # bit of, or the array of the element it is a bit of.
+  defp word_named([array, _subscripts], front), do: Enum.join(front ++ [array], ".")
+  defp word_named([_number], front), do: bit_word(Enum.split(front, -1))
+
+  defp bit_word({above, [segment]}),
+    do: word_or_array(:binary.split(segment, "["), above, segment)
+
+  defp word_or_array([array, _subscripts], above, _segment), do: Enum.join(above ++ [array], ".")
+  defp word_or_array([_word], above, segment), do: Enum.join(above ++ [segment], ".")
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
@@ -1138,6 +1166,13 @@ defmodule Logex.Edit.Plan do
   # M5-11: a value as a report gives it to a host, an array's as a list, a list of lists for
   # more dimensions, as a host's input takes one, where the state holds it whole.
   defp host(%{lists: lists}, name, value), do: listed_value(Map.get(lists, name), value)
+
+  # A value no program of the edit declares, a tag or member a prune drops, as a report gives
+  # one to a host by its shape alone (b5-config-edit-2): an array, the state's tuple, as a
+  # list, a list of lists for more dimensions; an instance's members each so.
+  defp listed(value) when is_tuple(value), do: Enum.map(Tuple.to_list(value), &listed/1)
+  defp listed(value) when is_map(value), do: Map.new(value, fn {k, v} -> {k, listed(v)} end)
+  defp listed(value), do: value
 
   defp listed_value(nil, value), do: value
   defp listed_value(dims, value) when is_tuple(value), do: Logex.Array.to_list(value, dims)
@@ -1437,7 +1472,7 @@ defmodule Logex.Edit.Plan do
     value = resumed(back?, {from, to}, Map.put(value, member, target), {at, held, rules})
 
     {key_put(env, key, value),
-     moved(name, {pre, target, to}, value, rules) ++ lasted(name, found, value) ++ report,
+     moved(name, {pre, target, to}, value, {rules, at}) ++ lasted(name, found, value) ++ report,
      Map.put(left, name, {target, pre, last_moved(found, value)})}
   end
 
@@ -1565,8 +1600,8 @@ defmodule Logex.Edit.Plan do
   defp moved(_name, {pre, pre, pre}, _value, _rules), do: []
   defp moved(name, {pre, pre, to}, _value, _rules), do: [{:preset_kept, name, {pre, to}}]
 
-  defp moved(name, {pre, target, to}, value, rules),
-    do: [{:preset, name, {pre, target}} | done(to, value, name, rules)]
+  defp moved(name, {pre, target, to}, value, {rules, at}),
+    do: [{:preset, name, {pre, target}} | done(to, value, name, rules, caught(value, at, rules))]
 
   # F6: `.dn` is `.acc` against `.pre`, with no latch (docs/naming.md, `ton`), so after a
   # move it drops at the next scan with its rung true, unless `.pre` - `.acc` ms pass by
@@ -1574,15 +1609,23 @@ defmodule Logex.Edit.Plan do
   # negative `.acc` as 0. A moved `.pre` is never negative where the program started runs
   # the timer: a switch moves it to a preset, or back from one.
   # M3-1: by the type's kind; M3-2, by the rule its forecast follows (Logex.FbType.rules/1).
-  defp done(nil, _value, _name, _rules), do: []
+  #
+  # The review after Milestone 6 (b4-edit-3): a timer that was timing at its last run, `.en`
+  # 1, gains at its next run with its rung true at least the time from that run to the
+  # switch, which a jump, a block whose `cal` was false or a task not yet due held it from
+  # counting, `caught`, in its `.acc`'s units: a drop is forecast only where `.acc` and that
+  # time together are below the new `.pre`, so that one the catch-up makes impossible is
+  # not, where until then it was. The report's `.acc` is the state's.
+  defp done(nil, _value, _name, _rules, _caught), do: []
 
   defp done(
          _to,
          %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en},
          name,
-         %{forecast: :on_delay}
+         %{forecast: :on_delay},
+         caught
        ),
-       do: done(dn, en, max(acc, 0), pre, name)
+       do: on_delay(dn, en, max(acc, 0), pre, {name, caught})
 
   # M3-1 (decision 88): a counter's done member, `q` or a ctud's `qu`, is `cv >= pv` at its
   # next run, whatever its rung, against the `cv` that run leaves, so the forecast holds
@@ -1594,13 +1637,19 @@ defmodule Logex.Edit.Plan do
   # `.dn` drops at its next run with its rung false, however many runs with its rung true
   # come first (decision 93), as a `ton`'s and an `rto`'s forecasts are for a run with its
   # rung true. `.en` is read with `Map.get/2`, as the runtime reads it.
-  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt} = value, name, %{forecast: :off_delay}),
+  defp done(
+         _to,
+         %{"pre" => pre, "acc" => acc, "tt" => tt} = value,
+         name,
+         %{forecast: :off_delay},
+         _caught
+       ),
        do: off_delay({tt, Map.get(value, "en")}, max(acc, 0), pre, name)
 
   # M3-2: a `tp`'s `.pre` moves its pulse only while it runs (`.tt` 1): there its next run
   # ends the pulse where `.acc` is at or past the new `.pre`, `.dn` rising, unless that run
   # finds its rung false, when `.dn` stays 0 as the pulse ends (decision 94).
-  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :pulse}),
+  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :pulse}, _caught),
     do: pulse_ends(tt, max(acc, 0), pre, name)
 
   # M3-2: an `rto`'s `.dn` is set again only at a run with its rung true, since a false rung
@@ -1608,14 +1657,28 @@ defmodule Logex.Edit.Plan do
   # and `.acc` below the new `.pre`, unless at least `.pre` - `.acc` ms of true rung pass by
   # then, and a rise where `.dn` is 0 and `.acc` at or past it, whatever `.en`, unless that
   # run finds `r` set (decision 95).
-  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn}, name, %{forecast: :retentive}),
-    do: retentive(dn, max(acc, 0), pre, name)
+  defp done(
+         _to,
+         %{"pre" => pre, "acc" => acc, "dn" => dn},
+         name,
+         %{forecast: :retentive},
+         caught
+       ),
+       do: retentive(dn, max(acc, 0), pre, {name, caught})
 
-  defp done(_to, value, name, %{forecast: :count, done: member, preset: preset})
+  defp done(_to, value, name, %{forecast: :count, done: member, preset: preset}, _caught)
        when is_binary(member),
        do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)
 
-  defp done(_to, _value, _name, %{forecast: :count}), do: []
+  defp done(_to, _value, _name, %{forecast: :count}, _caught), do: []
+
+  # The time a timer timing at its last run catches up at its next, from that run to the
+  # switch, in its units; none for one that was not timing, or a counter.
+  defp caught(%{"en" => 1, "last" => last}, at, %{per_ms: per_ms})
+       when is_integer(last) and is_integer(at) and at > last and is_integer(per_ms),
+       do: (at - last) * per_ms
+
+  defp caught(_value, _at, _rules), do: 0
 
   defp off_delay({1, _en}, acc, pre, name) when acc >= pre, do: [{:dn_drops, name, {acc, pre}}]
   defp off_delay({0, 1}, acc, pre, name) when pre <= 0, do: [{:dn_drops, name, {acc, pre}}]
@@ -1624,9 +1687,13 @@ defmodule Logex.Edit.Plan do
   defp pulse_ends(1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
   defp pulse_ends(_tt, _acc, _pre, _name), do: []
 
-  defp retentive(1, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
-  defp retentive(0, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
-  defp retentive(_dn, _acc, _pre, _name), do: []
+  defp retentive(1, acc, pre, {name, caught}) when acc + caught < pre,
+    do: [{:dn_drops, name, {acc, pre}}]
+
+  defp retentive(0, acc, pre, {name, _caught}) when acc >= pre,
+    do: [{:dn_rises, name, {acc, pre}}]
+
+  defp retentive(_dn, _acc, _pre, _named), do: []
 
   defp counted(1, cv, pv, name) when is_integer(cv) and cv < pv, do: [{:dn_drops, name, {cv, pv}}]
 
@@ -1635,9 +1702,13 @@ defmodule Logex.Edit.Plan do
 
   defp counted(_done, _cv, _pv, _name), do: []
 
-  defp done(1, _en, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
-  defp done(0, 1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
-  defp done(_dn, _en, _acc, _pre, _name), do: []
+  defp on_delay(1, _en, acc, pre, {name, caught}) when acc + caught < pre,
+    do: [{:dn_drops, name, {acc, pre}}]
+
+  defp on_delay(0, 1, acc, pre, {name, _caught}) when acc >= pre,
+    do: [{:dn_rises, name, {acc, pre}}]
+
+  defp on_delay(_dn, _en, _acc, _pre, _named), do: []
 
   # A timer the program started runs and the program stopped does not, timing when it last
   # ran (`.en` 1, its `last` before `now`), resumes: by decisions 339 to 341 a timer's time
@@ -1731,7 +1802,7 @@ defmodule Logex.Edit.Plan do
   # point, and the record has the value.
   def prune(plan, record, %Instance{env: env} = state) do
     {kept, gone} = Map.split_with(env, fn {name, _value} -> is_map_key(plan.keep, name) end)
-    pruned = for {name, value} <- gone, do: {:pruned, name, value}
+    pruned = for {name, value} <- gone, do: {:pruned, name, listed(value)}
     {kept, inside} = Enum.reduce(plan.nested, {opened(kept, plan.opens), []}, &prune_in/2)
     kept = closed(kept, plan.opens)
     {%{state | env: kept}, Enum.sort(holding(plan, record.shown, env) ++ pruned ++ inside)}
@@ -1754,7 +1825,7 @@ defmodule Logex.Edit.Plan do
 
     reports =
       Enum.reduce(gone, reports, fn {name, v}, acc ->
-        [{:pruned, prefix <> "." <> name, v} | acc]
+        [{:pruned, prefix <> "." <> name, listed(v)} | acc]
       end)
 
     {kept, reports} =

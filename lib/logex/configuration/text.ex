@@ -115,7 +115,7 @@ defmodule Logex.Configuration.Text do
   alias Logex.{Declarations, Diagnostic, FbType, Parser}
   alias Logex.Configuration.{Connection, Global, Instance}
   import Logex.Declarations, only: [is_elementary: 1]
-  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1]
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
 
   # Each word of a configuration file's lines, and the place a line reads it: `:line`
   # starts one, `:task` goes on a `task` line, `:program` on a `program` line, and
@@ -324,7 +324,18 @@ defmodule Logex.Configuration.Text do
 
   defp lexed_rounded(error), do: {lexed(error), []}
 
+  # The review after Milestone 6 (b6-configuration-10): a connection's real constant,
+  # `m1.sp 16777217.0`, with its spelling, which `Logex.Configuration.compile/3` judges in
+  # the type of the member it fills, as a `var_global` line's is judged in its global's.
+  defp rounded_line([{:name, {line, _}, path}, value]) when is_real_lit(value),
+    do: rounded_constant(String.split(path, ".", parts: 2), line, value)
+
   defp rounded_line(tokens), do: rounded_global(global_line(tokens))
+
+  defp rounded_constant([instance, member], line, value),
+    do: [{:constant, line, {instance, member}, Parser.value(value), Parser.spelling(value)}]
+
+  defp rounded_constant(_unparted, _line, _value), do: []
 
   # A `var_global` line as `{line, type, values}`, its type word read as `real_word/1` reads
   # it and the tokens after it, a qualifier straight after `var_global` passed over (M6-3),
@@ -892,8 +903,45 @@ defmodule Logex.Configuration.Text do
       {:error, fail(token, "expected an instance name after `program`, found #{describe(token)}"),
        []}
 
+  # The review after Milestone 6 (a7-docs-13): a qualifier before an instance's name and
+  # its type, `program retain m1 motor`, IEC's `PROGRAM RETAIN`, which logex leaves for
+  # later (decision 283), is told so at its word, the line read on without it and declaring
+  # its instance, whose uses are checked, as a `var_global` line refused for its qualifier
+  # alone declares its global (decision 301), where until then it gave three diagnostics
+  # that named none of it. Two words after it, `program retain motor`, or a type and
+  # `with`, still name an instance by a keyword, refused as decision 298 has it.
+  defp program(
+         [{:name, _, word} = token | [{:name, _, _}, {:name, _, type} | _] = rest],
+         first,
+         line
+       )
+       when may_qualify(word),
+       do:
+         program_qualified(
+           {Map.get(@qualifiers, String.downcase(word)), String.downcase(type)},
+           token,
+           rest,
+           {first, line}
+         )
+
   defp program([{:name, _, name} | rest], first, line),
     do: typed_program(rest, %Instance{name: name, type: nil, line: line}, first)
+
+  defp program_qualified({nil, _type}, {:name, _, name}, rest, {first, line}),
+    do: typed_program(rest, %Instance{name: name, type: nil, line: line}, first)
+
+  defp program_qualified({_qualifier, "with"}, {:name, _, name}, rest, {first, line}),
+    do: typed_program(rest, %Instance{name: name, type: nil, line: line}, first)
+
+  defp program_qualified(_qualified, {:name, _, word} = token, rest, {first, line}),
+    do:
+      {:error,
+       fail(
+         token,
+         "`#{word}` before an instance's name is IEC's `PROGRAM #{String.upcase(word)}`, " <>
+           "which logex does not have: mark in its program what it keeps, as in " <>
+           "`var retain count dint`"
+       ), still_declared(program(rest, first, line))}
 
   defp typed_program([], instance, first),
     do:
@@ -1067,8 +1115,14 @@ defmodule Logex.Configuration.Text do
   globals, then its program instances, then its connections. The round trip is exact
   (§4.10): what `Logex.Configuration.compile/3` gives, `compile(config.name,
   print(config), config.programs)` gives back, each element on its line, its warnings
-  included; a configuration from `Logex.Configuration.new!/1` comes back with its
-  elements numbered from line 1. Its name and its programs are `compile/3`'s arguments,
+  included but one: a real initial value its `var_global` line wrote with more digits
+  than its real keeps, warned of by decision 227, is held as the value its real keeps and
+  printed as the shortest text that reads back to it, which earns no warning, so the
+  configuration comes back without that warning and is otherwise the same; a connection's
+  real constant, held as the double its text writes and printed as that double's shortest
+  text, comes back warned again, quoted as printed, only where that text holds more digits
+  than its member's real keeps. A configuration from
+  `Logex.Configuration.new!/1` comes back with its elements numbered from line 1. Its name and its programs are `compile/3`'s arguments,
   which no line says, and its warnings `compile/3`'s to give, so none of them is printed.
 
   Entries no configuration line could say raise `ArgumentError`, as `entries!/1` does, and

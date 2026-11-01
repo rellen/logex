@@ -123,7 +123,10 @@ defmodule Logex.Configuration do
   most driving each element and one that drives the array whole driving them all, decision
   48's writer warnings element by element. Since decision 227 a real initial value a
   `var_global` line writes with more digits than its real keeps is warned of, in decision
-  219's words, at its line. A name with brackets names nothing else in a configuration.
+  219's words, at its line, a qualified line's as one with none, and since the review
+  after Milestone 6 so is a real constant a connection gives its member, `m1.sp
+  16777217.0`, in the member's real, at the connection's line. A name with brackets names
+  nothing else in a configuration.
 
   **Retained globals** (M6-3, `docs/organisation.md` §4.13, decisions 268, 271, 272 and
   298 to 306). A global may be `retain` or `non_retain`, `var_global retain total_boxes
@@ -599,7 +602,9 @@ defmodule Logex.Configuration do
 
   Its inverse is `Logex.Configuration.Text.print/1`: a configuration it gives compiles back
   from its printed text to itself, `compile(config.name, Text.print(config),
-  config.programs) == {:ok, config}`, each element on its line.
+  config.programs) == {:ok, config}`, each element on its line, but for decision 227's
+  warning of a real initial value written with more digits than its real keeps, which
+  the printed text, the value the global holds, no longer earns.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
@@ -609,7 +614,7 @@ defmodule Logex.Configuration do
     read
     |> compiled(name, programs, {nil, [], MapSet.new()})
     |> with_rounded(rounded)
-    |> respelled(spelled)
+    |> respelled(spelled, source)
   end
 
   def compile(_name, source, _programs),
@@ -622,9 +627,15 @@ defmodule Logex.Configuration do
   # Decision 227: a configuration that compiles is told each real initial value its line
   # writes with more digits than its global's real keeps, in decision 219's words, at the
   # global's line, in its file, among its warnings by line.
+  # Since the review after Milestone 6 (b6-configuration-10) so is a connection's real
+  # constant its member's real keeps less precisely, `m1.sp 16777217.0`, at the
+  # connection's line, where until then it was rounded with no warning.
   defp with_rounded({:ok, config}, [_ | _] = rounded) do
+    types = Map.new(config.instances, &{&1.name, &1.type})
+
     told =
-      for {line, spelling, type, held} <- rounded,
+      for entry <- rounded,
+          {line, spelling, type, held} <- rounded_entry(entry, types, config.programs),
           do: %{
             warning(
               line,
@@ -639,26 +650,123 @@ defmodule Logex.Configuration do
 
   defp with_rounded(compiled, _rounded), do: compiled
 
+  defp rounded_entry({:constant, line, {instance, member}, value, spelling}, types, programs),
+    do:
+      held_constant(
+        member_type(Map.fetch!(programs, Map.fetch!(types, instance)), member),
+        {line, value, spelling}
+      )
+
+  defp rounded_entry(global, _types, _programs), do: [global]
+
+  defp held_constant(type, {line, value, spelling}) when type in @reals,
+    do: told_held(Logex.Real.held_as(type, value, spelling), line, spelling, type)
+
+  defp held_constant(_type, _constant), do: []
+
+  defp told_held({:rounded, held}, line, spelling, type), do: [{line, spelling, type, held}]
+  defp told_held(_exact, _line, _spelling, _type), do: []
+
+  # The type a connection's member is filled in, an element's its array's elements'; a
+  # configuration that compiled holds the member.
+  defp member_type(program, member), do: member_typed(Logex.Name.element(member), program, member)
+
+  defp member_typed(nil, program, member), do: Map.fetch!(program.tags, member).type
+
+  defp member_typed({array, _subscripts}, program, _member),
+    do: elements_type(Map.fetch!(program.tags, array).type)
+
+  defp elements_type({:array, type, _dims}), do: type
+
   # Decision 237: a real literal no double holds but 0.0, `1.0e-400`, read as a subnormal
   # stand-in (`Logex.Configuration.Text.read_rounded/1`), which check/1 refuses as it
   # refuses `1.0e-310`, "`sp` is an lreal: `1.0e-400` is too near 0.0 for an lreal, …", is
   # quoted as written in each message at its line; a configuration holding one never
-  # compiles, so only an error is respelled.
-  defp respelled({:error, diagnostics}, [_ | _] = spelled),
-    do: {:error, Enum.map(diagnostics, &respelled_at(&1, spelled))}
+  # compiles, so only an error is respelled. Since the review after Milestone 6
+  # (b6-configuration-8) so is a value a message quotes whole, `` `65535` ``, that its own
+  # line writes one way alone and other than as its plain text, `16#ffff`, as a program's
+  # messages quote it (decision 202), but where it is quoted as another line's, "(line 3)".
+  defp respelled({:error, diagnostics}, spelled, source) do
+    stand_ins = Map.new(spelled, fn {_line, shown, spelling} -> {shown, spelling} end)
+    by_line = spelled_by_line(Logex.Lexer.tokenize(source))
+    {:error, Enum.map(diagnostics, &respelled_at(&1, stand_ins, by_line))}
+  end
 
-  defp respelled(compiled, _spelled), do: compiled
+  defp respelled(compiled, _spelled, _source), do: compiled
 
   # A stand-in's text may be quoted at another line, `m1.a[1]` told it is connected already
-  # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`".
-  defp respelled_at(%Diagnostic{message: message} = diagnostic, spelled),
+  # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`":
+  # each subnormal text a message holds is looked up, so that the respelling is linear in
+  # the diagnostics and the stand-ins (b6-configuration-9), where each stand-in was looked
+  # for in every message.
+  defp respelled_at(%Diagnostic{message: message, line: line} = diagnostic, stand_ins, by_line),
     do: %{
       diagnostic
       | message:
-          Enum.reduce(spelled, message, fn {_line, shown, spelling}, message ->
-            String.replace(message, shown, spelling)
-          end)
+          message
+          |> stood_in_respelled(stand_ins)
+          |> cited_respelled(by_line)
+          |> line_respelled(Map.get(by_line, line, %{}))
     }
+
+  defp stood_in_respelled(message, stand_ins) when map_size(stand_ins) == 0, do: message
+
+  defp stood_in_respelled(message, stand_ins),
+    do: Regex.replace(~r/\d+(?:\.\d+)?e-3\d\d/, message, &Map.get(stand_ins, &1, &1))
+
+  # Each line's literals written other than as the plain text of their value, `16#ffff` or
+  # `1.5e1`, each value's text as a message quotes it, `65535` or `15.0`, to its spelling,
+  # where the line writes that value one way alone; a stand-in of decision 237 is left out,
+  # `Text.read_rounded/1`'s. Read only for a configuration that does not compile.
+  defp spelled_by_line({:ok, tokens, _end_line}),
+    do:
+      tokens
+      |> Enum.filter(&(literal_token?(&1) and not Logex.Parser.underflowed?(&1)))
+      |> Enum.group_by(&elem(elem(&1, 1), 0), &{shown_literal(&1), Logex.Parser.spelling(&1)})
+      |> Map.new(fn {line, pairs} -> {line, spelled_once(pairs)} end)
+
+  defp spelled_by_line(_error), do: %{}
+
+  defp literal_token?({kind, _at, _value}) when kind in [:int_lit, :real_lit], do: true
+
+  defp literal_token?({kind, _at, _value, _spelling}) when kind in [:int_lit, :real_lit],
+    do: true
+
+  defp literal_token?(_token), do: false
+
+  defp shown_literal(literal), do: shown_number(Logex.Parser.value(literal))
+
+  defp spelled_once(pairs),
+    do:
+      for(
+        {shown, spellings} <- Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1)),
+        [spelling] <- [Enum.uniq(spellings)],
+        spelling != shown,
+        into: %{},
+        do: {shown, spelling}
+      )
+
+  # A value quoted as another line's, "to `5` (line 2)", is put back as that line writes it.
+  defp cited_respelled(message, by_line) when map_size(by_line) == 0, do: message
+
+  defp cited_respelled(message, by_line),
+    do:
+      Regex.replace(~r/`([^`]+)` \(line (\d+)\)/, message, fn whole, shown, line ->
+        cited(Map.fetch(Map.get(by_line, String.to_integer(line), %{}), shown), line, whole)
+      end)
+
+  defp cited({:ok, spelling}, line, _whole), do: "`#{spelling}` (line #{line})"
+  defp cited(:error, _line, whole), do: whole
+
+  defp line_respelled(message, spellings),
+    do:
+      Enum.reduce(spellings, message, fn {shown, spelling}, message ->
+        Regex.replace(
+          Regex.compile!("`" <> Regex.escape(shown) <> "`(?! \\(line )"),
+          message,
+          fn _ -> "`" <> spelling <> "`" end
+        )
+      end)
 
   @doc """
   A configuration from its configuration file on disk (`.logex`, decision 35), its program
@@ -780,7 +888,7 @@ defmodule Logex.Configuration do
     read
     |> compiled(name, programs, loaded)
     |> with_rounded(rounded)
-    |> respelled(spelled)
+    |> respelled(spelled, source)
     |> with_theirs(Enum.reverse(theirs))
   end
 
@@ -1303,6 +1411,13 @@ defmodule Logex.Configuration do
   defp global_initial(%Global{initial: initial}) when is_integer(initial),
     do: []
 
+  # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
+  # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
+  # array's element told by `Logex.Declarations.array_misfits/3`.
+  defp global_initial(%Global{name: name, type: type, initial: initial})
+       when type in @reals and initial === -0.0,
+       do: [minus_zero(name)]
+
   # M5-10: a real global's initial value may be a float, as its line's real literal is;
   # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`, so
   # that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and a dint
@@ -1318,6 +1433,11 @@ defmodule Logex.Configuration do
     do: [
       "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
     ]
+
+  defp minus_zero(name),
+    do:
+      "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
+        "gives, a line's `-0.0` being 0.0: give 0.0"
 
   defp array_initial(true, _global), do: []
 
@@ -1511,7 +1631,19 @@ defmodule Logex.Configuration do
   end
 
   defp stored(:declared, _placeholder), do: :declared
+
+  # The review after Milestone 6 (b6-configuration-3, c4-api-fuzz-4): a global whose type
+  # is the host's mistake, refused a line of the ArgumentError, takes its name as a broken
+  # line's placeholder does, so that nothing that names it is read in that type, and every
+  # use of it is silent, where until then a connection or a var_external that named it
+  # raised FunctionClauseError or Protocol.UndefinedError inside the check.
+  defp stored({:global, _index}, %Global{} = global),
+    do: typed_or_declared(global_type(global), global)
+
   defp stored(_ref, element), do: element
+
+  defp typed_or_declared([], global), do: global
+  defp typed_or_declared(_mistake, _global), do: :declared
 
   defp held(%Logex.Configuration.Task{name: name, line: line}), do: {:task, name, line}
   defp held(%Global{name: name, line: line}), do: {:global, name, line}
@@ -1547,7 +1679,7 @@ defmodule Logex.Configuration do
          {ref, kind, name, line, element} = held,
          {names, folded, silent, kept, problems}
        ) do
-    {silent, kept} = keeps(ref, name, silent, kept)
+    {silent, kept} = keeps(kept_as(ref, element), name, silent, kept)
     names = Map.put(names, name, {kind, line, element})
     {names, Map.put(folded, String.downcase(name), held), silent, kept, problems}
   end
@@ -1571,6 +1703,9 @@ defmodule Logex.Configuration do
   # it is reported again.
   defp keeps(:declared, name, silent, kept), do: {MapSet.put(silent, name), kept}
   defp keeps(ref, _name, silent, kept), do: {silent, MapSet.put(kept, ref)}
+
+  defp kept_as(_ref, :declared), do: :declared
+  defp kept_as(ref, _element), do: ref
 
   defp first_as(nil, kind), do: "the first is #{a(kind)}"
   defp first_as(line, kind), do: "first on line #{line}, as #{a(kind)}"
@@ -1918,16 +2053,23 @@ defmodule Logex.Configuration do
   defp a_point({:ok, {_device, "q", _fields}}, %Global{type: type}) when not is_array(type),
     do: "an output point"
 
-  defp a_point({:ok, {device, io, fields}}, %Global{type: {:array, _type, dims}}) do
-    points = Logex.Array.points("", dims, fields)
-    {_, _, from} = hd(points)
-    {_, _, to} = List.last(points)
-
-    "an array of #{direction_word(io)} points, `#{spelling({device, io, from})}` to " <>
-      "`#{spelling({device, io, to})}`"
-  end
+  # The range from the first element's address and the count, never the points one by
+  # one, and none for an array of no element, where its sizes are refused: the review
+  # after Milestone 6 (b6-configuration-2) found an array refused for its size of millions
+  # listed point by point for this, and a dimension of 0 raising.
+  defp a_point({:ok, {device, io, fields}}, %Global{type: {:array, _type, dims}}),
+    do: ranged_point(Enum.product(dims), {device, io, fields})
 
   defp a_point(:error, _global), do: "located"
+
+  defp ranged_point(count, {device, io, fields}) when count > 0 do
+    {first, [last]} = Enum.split(fields, -1)
+
+    "an array of #{direction_word(io)} points, `#{spelling({device, io, fields})}` to " <>
+      "`#{spelling({device, io, first ++ [last + count - 1]})}`"
+  end
+
+  defp ranged_point(_none, {_device, io, _fields}), do: "an array of #{direction_word(io)} points"
 
   defp retained_point(location, %Global{name: name, line: line} = global),
     do: [
@@ -2014,6 +2156,11 @@ defmodule Logex.Configuration do
   being refused then; and a global that nothing drives any more holds its value, as an
   output an edit leaves undriven does (decision 20).
 
+  Given a global `check/1` would refuse, sizes no array has, an initial value or list its
+  type does not hold, or a type a global has not, it raises `ArgumentError`, a pinned
+  line; the resource, which holds only checked globals, reads the same rule without
+  those checks.
+
       iex> Logex.Configuration.initial(%Logex.Configuration.Global{name: "sp", type: :dint, initial: 1200})
       1200
       iex> Logex.Configuration.initial(%Logex.Configuration.Global{name: "x", type: :bool, at: "panel.i.0"})
@@ -2024,22 +2171,35 @@ defmodule Logex.Configuration do
 
   # M5-11 (decision 151): an array global starts as a declared array does, each element at
   # its type's zero or its initial list's value in the elements' order, a real's at its
-  # nearest, held as a state holds an array, a tuple of tuples.
-  def initial(%Global{type: {:array, type, dims} = array, initial: initial})
-      when is_elementary(type) and (initial == nil or is_list(initial)),
-      do:
-        initial_array(initial == nil or length(initial) == Logex.Array.size(dims), array, initial)
+  # nearest, held as a state holds an array, a tuple of tuples. Since the review after
+  # Milestone 6 (b6-configuration-6, c4-api-fuzz-8) a global `check/1` would refuse, its
+  # sizes or a value of its list, is the host's mistake here too, an ArgumentError naming
+  # each, where it raised MatchError or FunctionClauseError, or gave a value of no type.
+  def initial(%Global{type: {:array, type, dims} = array, initial: initial} = global)
+      when is_elementary(type) and is_list(dims) and dims != [] and
+             (initial == nil or is_list(initial)),
+      do: initial_sized(sizes_said?(dims), {global, array}, initial)
 
-  def initial(%Global{type: type, initial: nil}) when not is_array(type), do: 0
+  # RV-3's review: -0.0, which `check/1` refuses (a5-data-model-8), in its words, where
+  # initial/1 gave it.
+  def initial(%Global{name: name, type: type, initial: initial})
+      when type in @reals and initial === -0.0,
+      do: raise(ArgumentError, minus_zero(name))
 
   # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
-  # `real`'s rounded to a single, an integer one as the real it is.
-  def initial(%Global{type: type, initial: initial}) when type in @reals and is_number(initial),
-    do: Logex.Real.nearest(type, initial)
+  # `real`'s rounded to a single, an integer one as the real it is, one past its range the
+  # host's mistake.
+  def initial(%Global{type: type, initial: initial} = global)
+      when type in @reals and is_number(initial),
+      do: real_initial(Declarations.holds?(type, initial), global)
 
-  def initial(%Global{initial: initial}) when is_integer(initial), do: initial
+  def initial(%Global{type: type, initial: initial} = global)
+      when is_elementary(type) and is_integer(initial),
+      do: integer_initial(Declarations.holds?(type, initial), global)
 
-  def initial(other),
+  def initial(other), do: no_global(other)
+
+  defp no_global(other),
     do:
       raise(
         ArgumentError,
@@ -2048,7 +2208,38 @@ defmodule Logex.Configuration do
           "got: #{inspect(other)}"
       )
 
-  defp initial_array(true, array, initial), do: Logex.Array.started(array, initial)
+  defp sizes_said?(dims), do: Enum.all?(proper_or_not(dims), &is_integer/1)
+
+  defp initial_sized(false, {global, _array}, _initial), do: no_global(global)
+
+  defp initial_sized(true, {global, array}, initial),
+    do:
+      initial_judged(
+        Declarations.array_misfits(global.name, array, nil),
+        {global, array},
+        initial
+      )
+
+  # RV-3's review: an improper list, `[1 | 2]`, is no list of the array's size, told so,
+  # where `length/1` raised the BEAM's own words.
+  defp initial_judged([], {_global, {:array, _type, dims} = array}, initial),
+    do: initial_array(sized?(initial, Logex.Array.size(dims)), array, initial)
+
+  defp initial_judged(misfits, _at, _initial),
+    do: raise(ArgumentError, Enum.join(misfits, "\n"))
+
+  defp sized?(nil, _size), do: true
+  defp sized?(initial, size), do: proper_length(initial, 0) == size
+
+  defp proper_length([], n), do: n
+  defp proper_length([_element | rest], n), do: proper_length(rest, n + 1)
+  defp proper_length(_improper, _n), do: -1
+
+  defp initial_array(true, array, nil), do: Logex.Array.started(array, nil)
+
+  # A real element's -0.0 is no value a real holds (decision 150), as `check/1` tells it.
+  defp initial_array(true, {:array, type, _dims} = array, initial),
+    do: listed_initial(Enum.reject(initial, &element_held?(type, &1)), array, initial)
 
   defp initial_array(false, array, initial),
     do:
@@ -2056,6 +2247,35 @@ defmodule Logex.Configuration do
         ArgumentError,
         "expected an initial list of #{Logex.Array.size(elem(array, 2))} values for " <>
           "#{Declarations.a_type(array)}, got: #{inspect(initial, charlists: :as_lists)}"
+      )
+
+  defp element_held?(type, value) when type in @reals and value === -0.0, do: false
+  defp element_held?(type, value), do: Declarations.holds?(type, value)
+
+  defp listed_initial([], array, initial), do: Logex.Array.started(array, initial)
+
+  defp listed_initial([_misfit | _], {:array, type, _dims} = array, initial),
+    do:
+      raise(
+        ArgumentError,
+        "expected an initial list of values for #{Declarations.a_type(array)}, each a value " <>
+          "#{Declarations.a_type(type)} holds, got: #{inspect(initial, charlists: :as_lists)}"
+      )
+
+  defp real_initial(true, %Global{type: type, initial: initial}),
+    do: Logex.Real.nearest(type, initial)
+
+  defp real_initial(false, global), do: misfit_initial(global)
+
+  defp integer_initial(true, %Global{initial: initial}), do: initial
+  defp integer_initial(false, global), do: misfit_initial(global)
+
+  defp misfit_initial(%Global{name: name, type: type, initial: initial}),
+    do:
+      raise(
+        ArgumentError,
+        "global #{label(name)} is #{Declarations.a_type(type)}: " <>
+          Declarations.literal_misfit(type, initial, "`#{inspect(initial)}`")
       )
 
   @doc """
@@ -3096,12 +3316,15 @@ defmodule Logex.Configuration do
        "`#{name}` is an instance's member: instances share a value only through a global, " <>
          "which one drives and the other reads"}
 
-  # A raw location in a connection (§4.5: not adopted), its advice in its one spelling.
+  # A raw location in a connection (§4.5: not adopted), its advice in its one spelling, an
+  # array member's type with its sizes, `real[8]` (the review after Milestone 6,
+  # b6-configuration-1, where it raised Protocol.UndefinedError).
   defp member_held(false, _held, {_written, address}, {name, _first, type}, _world),
     do:
       {:error,
        "`#{name}` is a location, written only after `at` on a `var_global` line: declare a " <>
-         "global at it, as in `var_global point #{type} at #{spelling(address)}`, and name that"}
+         "global at it, as in `var_global point #{written_type(type)} at " <>
+         "#{spelling(address)}`, and name that"}
 
   defp member_held(false, {kind, line, _ref}, :error, {name, first, _type}, _world),
     do:
@@ -3602,9 +3825,11 @@ defmodule Logex.Configuration do
       |> together()
       |> Enum.map(&twice/1)
 
+    firsts = first_elements(driven)
+
     connected =
       for {written, global, instance, _bit} <- writers,
-          {:ok, connection} <- [driven_at(driven, written, global)],
+          {:ok, connection} <- [driven_at({driven, firsts}, written, global)],
           do: connected(written, instance, connection, Map.get(bits, written))
 
     twice ++ connected
@@ -3723,26 +3948,39 @@ defmodule Logex.Configuration do
   # Decision 223: an element a var_external writes is driven where a connection drives it or
   # its array whole; and since M5-12 an array written whole where a connection drives it or
   # any of its elements, the first in line order.
-  defp driven_at(driven, global, global),
-    do: or_element(Map.fetch(driven, global), driven, global)
+  defp driven_at({driven, firsts}, global, global),
+    do: or_element(Map.fetch(driven, global), firsts, global)
 
-  defp driven_at(driven, written, global),
+  defp driven_at({driven, _firsts}, written, global),
     do: or_whole(Map.fetch(driven, written), driven, global)
 
   defp or_whole(:error, driven, global), do: Map.fetch(driven, global)
   defp or_whole(found, _driven, _global), do: found
 
-  defp or_element(:error, driven, global) do
-    elements =
-      for {name, connection} <- driven, element_of?(name, global), do: connection
+  defp or_element(:error, firsts, global), do: Map.fetch(firsts, global)
+  defp or_element(found, _firsts, _global), do: found
 
-    first_connection(Enum.sort_by(elements, & &1.line))
-  end
+  # The first connection in line order that drives an element of each array, by the
+  # array's name, from one pass of what the connections drive, the first met among those
+  # of one line kept: where until the review after Milestone 6 (b2-resource-4,
+  # b6-configuration-4) each writer through a var_external looked through every driven
+  # global for one, so that the writer warnings grew as writers times connections.
+  defp first_elements(driven),
+    do:
+      Enum.reduce(driven, %{}, fn {name, connection}, firsts ->
+        element_first(:binary.split(name, "["), connection, firsts)
+      end)
 
-  defp or_element(found, _driven, _global), do: found
+  defp element_first([array, _subscripts], connection, firsts),
+    do: Map.update(firsts, array, connection, &earlier(&1, connection))
 
-  defp first_connection([]), do: :error
-  defp first_connection([connection | _]), do: {:ok, connection}
+  defp element_first([_whole], _connection, firsts), do: firsts
+
+  defp earlier(%Connection{line: first}, %Connection{line: line} = connection)
+       when is_integer(line) and is_integer(first) and line < first,
+       do: connection
+
+  defp earlier(kept, _connection), do: kept
 
   defp connected(global, instance, %Connection{instance: name} = connection, bit),
     do:
@@ -3970,12 +4208,17 @@ defmodule Logex.Configuration do
   # decision 236 counts a writer: each element it writes, `ote lq[1]` driving `lq[1]` alone,
   # and the array whole where it writes through a tag subscript, `ote lq[slot]`
   # (`written_of/2`, provisional), where until then any such write drove the array whole.
-  defp doubt(true, %Global{type: {:array, _type, dims}, at: at} = global, {wiring, externals})
+  #
+  # An array whose sizes are refused takes no address, as `occupied/3` has it, so it is
+  # warned of nothing: its elements are never listed one by one (the review after
+  # Milestone 6, b6-configuration-2).
+  defp doubt(true, %Global{type: {:array, type, dims}, at: at} = global, {wiring, externals})
        when at != nil,
        do:
          elements_undriven(
            output_point?(location(at)) and not Map.has_key?(wiring.driven, global.name) and
-             not MapSet.member?(externals.driving, global.name),
+             not MapSet.member?(externals.driving, global.name) and
+             Declarations.array_misfits(global.name, {:array, type, dims}, nil) == [],
            global,
            dims,
            {wiring, externals}

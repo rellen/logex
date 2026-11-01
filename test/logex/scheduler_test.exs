@@ -575,35 +575,53 @@ defmodule Logex.SchedulerTest do
   # OE-2 (docs/organisation.md §4.9, "OE-2's design"; decisions 60, 64 and 65): a
   # configuration edit's two pieces of the resource's state, the generation of its steps and
   # the instances its switch sets aside. No edit fills either yet, so each test sets them in
-  # the opaque resource by hand, on purpose, as the decision-49 test looks inside it.
+  # the opaque resource by hand, on purpose, as the decision-49 test looks inside it. Since
+  # RV-3's review a third, the restart count, by which an edit's switch knows a restart
+  # came since its last one (decision 347's give-back).
   describe "a configuration edit's state in the resource (OE-2)" do
-    test "start/1 gives generation 0 and sets nothing aside" do
+    test "start/1 gives generation 0, a restart count of 0, and sets nothing aside" do
       runtime = Runtime.start(plant())
-      assert {runtime.generation, runtime.aside} == {0, %{}}
+      assert {runtime.generation, runtime.aside, runtime.restarts} == {0, %{}, 0}
 
       assert Enum.sort(Map.keys(Map.from_struct(runtime))) ==
-               [:aside, :config, :generation, :globals, :instances, :now, :tasks, :wiring]
+               [
+                 :aside,
+                 :config,
+                 :generation,
+                 :globals,
+                 :instances,
+                 :now,
+                 :restarts,
+                 :tasks,
+                 :wiring
+               ]
     end
 
-    test "a cycle keeps the generation and what is set aside, and never scans it" do
+    test "a cycle keeps the generation, the restart count and what is set aside, and never " <>
+           "scans it" do
       runtime = Runtime.start(plant())
       aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
-      runtime = %{runtime | generation: 3, aside: aside}
+      runtime = %{runtime | generation: 3, aside: aside, restarts: 2}
       {runtime, _, events} = Runtime.cycle(runtime, 10, %{"x" => 1})
       {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 0})
-      assert {runtime.generation, runtime.aside} == {3, aside}
+      assert {runtime.generation, runtime.aside, runtime.restarts} == {3, aside, 2}
       refute Enum.any?(events, &match?({:ran, _, "q", _}, &1))
     end
 
-    test "restart/2 keeps the generation and drops what is set aside (decision 65)" do
+    test "restart/2 keeps the generation, moves the restart count on by one and drops what " <>
+           "is set aside (decision 65)" do
       runtime = Runtime.start(plant())
       aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
-      runtime = %{runtime | generation: 3, aside: aside}
+      runtime = %{runtime | generation: 3, aside: aside, restarts: 2}
 
       for mode <- [:cold, :warm] do
         restarted = Runtime.restart(runtime, mode)
-        assert {restarted.generation, restarted.aside} == {3, %{}}
+        assert {restarted.generation, restarted.aside, restarted.restarts} == {3, %{}, 3}
       end
+
+      # start/2 from the image starts the count again, as start/1 does.
+      {started, []} = Runtime.start(plant(), Runtime.retained(Runtime.restart(runtime, :warm)))
+      assert started.restarts == 0
     end
   end
 
@@ -1489,6 +1507,51 @@ defmodule Logex.SchedulerTest do
           {whole, cut}
         end)
       end
+    end
+  end
+
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rise stands as its task's last
+  # sample only once the step that runs the task has run, so a round stopped after an
+  # earlier step, as the runner stops one a major fault trips, leaves it as it was, in the
+  # resource and in its retained image, and the task runs on the next cycle that samples
+  # the rise, a warm restart's first; every other sample stands at once.
+  describe "a trigger's sample after its task's step (decision 350)" do
+    @handler "var_external hits dint\nvar_external arm bool\nadd hits 1 hits\notu arm"
+
+    defp armed_plant do
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\ntask ev single arm priority 5\n" <>
+            "var_global eye bool at panel.i.0\nvar_global retain arm bool\n" <>
+            "var_global retain hits dint\nvar_global lamp bool at panel.q.0\n" <>
+            "program r relay with fast\n  r.in eye\n  r.out lamp\nprogram h handler with ev\n",
+          %{"relay" => program(@relay, "relay"), "handler" => program(@handler, "handler")}
+        )
+
+      config
+    end
+
+    test "a round stopped before the event task's step keeps the rise for the next cycle" do
+      runtime = Runtime.start(armed_plant())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{})
+      # Logic outside the plant latches `arm`: the next cycle samples its rise.
+      runtime = %{runtime | globals: %{runtime.globals | "arm" => 1}}
+      {cut, steps} = Runtime.cycle_steps(runtime, 10, %{})
+      assert [{:timed, "fast", _}, {:timed, "ev", _}] = steps
+      {cut, _events} = Runtime.cycle_step(cut, hd(steps))
+      assert cut.tasks["ev"].last == 0
+      assert Runtime.retained(cut).triggers == %{"arm" => 0}
+
+      # The whole cycle takes it, as before.
+      {whole, _, events} = Runtime.cycle(runtime, 10, %{})
+      assert {:ran, "ev", "h", 10} in events
+      assert whole.tasks["ev"].last == 1
+
+      # A warm restart of the stopped round runs the handler in its first cycle.
+      {restarted, _, events} = Runtime.cycle(Runtime.restart(cut, :warm), 0, %{})
+      assert {:ran, "ev", "h", 10} in events
+      assert Runtime.get!(restarted, "hits") == 1 and Runtime.get!(restarted, "arm") == 0
     end
   end
 

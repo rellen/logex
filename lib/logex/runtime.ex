@@ -139,6 +139,11 @@ defmodule Logex.Runtime do
   (OE-2), uses for a piece it adds, with its exceptions:
   - the clock, `now`, is 0 at `start/1`, moves on by each cycle's `elapsed_ms`, and is
     kept by `restart/2` and by every step of an edit;
+  - since RV-3's review the restart count, `restarts`, is 0 at `start/1` and `start/2`,
+    moves on by one at each `restart/2`, warm or cold, and is kept by a cycle and by every
+    step of an edit, which reads it: a configuration edit's switch gives back a hold of the
+    last one only where no restart came since (decision 347), where the instance's `first`,
+    which a cycle clears, stood for it;
   - a global starts by `Logex.Configuration.initial/1`: at `start/1`, at `restart/2` but
     for an input point, whose value is the host's from its first cycle on and is kept, and
     since M6-3 at a warm `restart/2` but for a global the configuration declares `retain`
@@ -192,8 +197,14 @@ defmodule Logex.Runtime do
     decision 313 the last sample the resource took, not the value kept, so a trigger
     sampled at 1 fires on no rising edge (decision 274) and a rise logic wrote after the
     sample fires once, and since M6-4 `start/2`'s for a `single` the image put back, the
-    sample the image holds for it (decision 313), every other 0; and a cycle
-    samples it once, after the input merge and before any scan. An edit's switch keeps it, so a
+    sample the image holds for it (decision 313), a task's own by its name where the
+    image holds one (since RV-3's review), every other 0; and a cycle
+    samples it once, after the input merge and before any scan, the sample standing as
+    its last at once, but since decision 350 a rise, which runs the task, only with the
+    step that runs it (`cycle_step/2`), so a round the runner's trip stops before that
+    step leaves it as it was, in the resource and in its retained image, and the task runs
+    on the next cycle that samples the rise; a cycle, which runs every step, ends as it
+    did. An edit's switch keeps it, so a
     switch fires no event, and its accept refuses a changed `single`, or an `interval`
     added to or removed from a task with one, while the plant runs (§4.9);
   - the generation (OE-2), the count of the configuration edits' steps taken on the
@@ -285,7 +296,10 @@ defmodule Logex.Runtime do
   outside its type: it is a uint, and 70000 is outside 0 to 65535", and since M5-11 a
   global array a connection copies whole whose value is no tuple of its sizes of its
   elements' values. A resource's instance is restarted with its var_externals' globals in
-  its state, as a scan takes it. The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
+  its state, as a scan takes it. A var_external's global that does not fit its own type,
+  which only a host gives it, is told as the global's, `runtime.globals holds`, by a cycle
+  and a restart alike, where it was told as the state's (since the review after Milestone
+  6). The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
@@ -421,8 +435,18 @@ defmodule Logex.Runtime do
   # A task with a single holds its trigger's last sample there too (M2-6). OE-2:
   # `generation`, the count of the configuration edits' steps taken on it, and `aside`,
   # the state of each instance an edit's switch has set aside, by name, never scanned.
-  @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
-  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
+  @enforce_keys [
+    :config,
+    :now,
+    :globals,
+    :instances,
+    :tasks,
+    :wiring,
+    :generation,
+    :aside,
+    :restarts
+  ]
+  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside, :restarts]
 
   @opaque t :: %__MODULE__{}
 
@@ -449,6 +473,19 @@ defmodule Logex.Runtime do
   # has it dropped before its body runs (members_of/1). A key the runtime adds joins them,
   # and the guard of state!/2's refusal, which names each, since a guard reads no list.
   @own_keys [@faults, @jump, @ran]
+
+  # A state or a scan with every key of its struct and no other (a5-data-model-7).
+  defguardp is_whole_instance(state)
+            when map_size(state) == 8 and is_map_key(state, :type) and is_map_key(state, :env) and
+                   is_map_key(state, :now) and is_map_key(state, :first) and
+                   is_map_key(state, :ons_blocked) and is_map_key(state, :switched) and
+                   is_map_key(state, :faults)
+
+  defguardp is_whole_scan(scan)
+            when map_size(scan) == 8 and is_map_key(scan, :now) and is_map_key(scan, :first) and
+                   is_map_key(scan, :ons_blocked) and is_map_key(scan, :tags) and
+                   is_map_key(scan, :blocks) and is_map_key(scan, :units) and
+                   is_map_key(scan, :reals)
 
   # M3-5: the instructions whose edge memory a skipped rung must mark to keep it blocked:
   # the one-shots, whose storage bits are leaves of the routine's own tree (Logex.Walk.
@@ -507,7 +544,9 @@ defmodule Logex.Runtime do
   array of instances `{:array, "ton", [4]}`, its elements' members named by their
   subscripts' values, `"lane_t[2].acc"`. A timer's `last` is never in it (decision 273).
   A program that retains nothing gives empty maps. Its cost is the retained values' and
-  the program's retained paths', besides the state's check.
+  the program's retained paths', besides the state's check. A retained path the state
+  lacks, which a plain swap gives, is not in it, so `instance/2` starts it at its initial
+  value, as a warm restart does.
   """
   def retained(program, state) do
     program!(program)
@@ -554,9 +593,13 @@ defmodule Logex.Runtime do
   end
 
   @doc """
-  Starts an instance again: every tag back at its initial value except the `var_input`s
-  whose values fit their types, the next scan marked first, no one-shot blocked, and the
-  clock kept, since time never goes backwards. `switched` is kept too: a restart is not a
+  Starts an instance again: every tag back at its initial value except the `var_input`s,
+  which keep their values, the next scan marked first, no one-shot blocked, and the clock
+  kept, since time never goes backwards. A state whose `var_input` does not fit its type is
+  refused first, as at every entry point that takes a state (decision 171), so each one
+  kept fits; a `var_input` the state lacks, which a plain swap leaves, starts at its
+  initial value (the review after Milestone 6 found the doc's "whose values fit" a rule no
+  state handed in could meet otherwise). `switched` is kept too: a restart is not a
   scan, so it shows the host nothing.
 
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
@@ -575,6 +618,12 @@ defmodule Logex.Runtime do
   counted (decision 273), a frozen block's timer among them. The next scan is marked
   first, warm or cold, so no edge fires on it, a retained counter's among them (decision
   274), and no one-shot is blocked; there is no prescan (decision 279).
+
+  A retained path the state lacks, where a plain swap hands a state to a program that
+  declares a tag, a timer that has not run, or a block's member the state never held, at
+  any depth, in every element of an array of instances among it, keeps nothing: it starts
+  at its initial value, as a cold restart starts it and as `instance/2` starts a path its
+  image lacks, and the state is then one every entry point takes.
   """
   def restart(program, state, mode) do
     program!(program)
@@ -604,10 +653,16 @@ defmodule Logex.Runtime do
   # program `instance/1` checked and the host then edited by hand is trusted, as decision
   # 194 has it, and a warm restart that reaches retained paths its tags do not give raises
   # a pinned ArgumentError there (M6-2's review).
+  #
+  # The review after Milestone 6 (c4-api-fuzz-1): a state a plain swap hands to a program
+  # that declares a retained path the state lacks, a tag, a timer that has not run, a
+  # member a block's new version adds, at any depth, an element's among them, keeps
+  # nothing there: the path starts at its initial value, the cold env's, as `instance/2`
+  # starts a path its image lacks, where until then it was taken as nil or raised.
   defp warm([path | paths], started, env, {tags, now} = at) when is_binary(path) do
     [name | members] = String.split(path, ".")
     {name, each} = each(name)
-    kept = {env[name], started[name]}
+    kept = {Map.fetch(env, name), Map.get(started, name)}
     put = warm_tag(Map.fetch(tags, name), {each, members}, kept, {now, path})
     warm(paths, Map.put(started, name, put), env, at)
   end
@@ -639,20 +694,29 @@ defmodule Logex.Runtime do
   defp each_of([name, ""], _whole), do: {name, true}
   defp each_of(_parts, name), do: {name, false}
 
-  defp warm_kept({false, []}, type, {value, _started}, {now, _path}),
-    do: rebased(type, value, now)
+  defp warm_kept({false, []}, type, {{:ok, value}, started}, {now, _path}),
+    do: rebased(type, value, started, now)
 
-  defp warm_kept({true, members}, {:array, type, dims}, {values, started}, at),
-    do: zipped(length(dims), values, started, &warm_kept({false, members}, type, {&1, &2}, at))
+  defp warm_kept({true, members}, {:array, type, dims}, {{:ok, values}, started}, at),
+    do:
+      zipped(
+        length(dims),
+        values,
+        started,
+        &warm_kept({false, members}, type, {{:ok, &1}, &2}, at)
+      )
 
-  defp warm_kept({false, [member | rest]}, %FbType{} = type, kept, at) do
+  defp warm_kept({false, [member | rest]}, %FbType{} = type, {{:ok, _value}, _started} = kept, at) do
     {name, each} = each(member)
     warm_member(Enum.find(type.members, &(&1.name == name)), {type, {each, rest}}, kept, at)
   end
 
+  defp warm_kept(members, type, {:error, started}, {_now, path}),
+    do: lacked(retainable?(members, type), started, path)
+
   defp warm_kept(_members, _type, _kept, {_now, path}), do: unretainable(path)
 
-  defp warm_member(%Member{name: name} = found, {type, rest}, {value, started}, at),
+  defp warm_member(%Member{name: name} = found, {type, rest}, {{:ok, value}, started}, at),
     do:
       Map.put(
         started,
@@ -660,12 +724,32 @@ defmodule Logex.Runtime do
         warm_kept(
           rest,
           FbType.type_of(type, found),
-          {Map.fetch!(value, name), Map.fetch!(started, name)},
+          {Map.fetch(value, name), Map.fetch!(started, name)},
           at
         )
       )
 
   defp warm_member(nil, _type, _kept, {_now, path}), do: unretainable(path)
+
+  # A retained path the state lacks starts at its cold value, where the program's tags give
+  # it; one they do not give is a hand edit's, refused as before.
+  defp lacked(true, started, _path), do: started
+  defp lacked(false, _started, path), do: unretainable(path)
+
+  defp retainable?({false, []}, _type), do: true
+
+  defp retainable?({true, members}, {:array, %FbType{} = type, _dims}),
+    do: retainable?({false, members}, type)
+
+  defp retainable?({false, [member | rest]}, %FbType{} = type) do
+    {name, each} = each(member)
+    member_retainable?(Enum.find(type.members, &(&1.name == name)), {each, rest}, type)
+  end
+
+  defp retainable?(_members, _type), do: false
+
+  defp member_retainable?(nil, _rest, _type), do: false
+  defp member_retainable?(found, rest, type), do: retainable?(rest, FbType.type_of(type, found))
 
   defp unretainable(path),
     do:
@@ -690,28 +774,37 @@ defmodule Logex.Runtime do
       |> Enum.zip_with(Tuple.to_list(started), &zipped(depth - 1, &1, &2, fun))
       |> List.to_tuple()
 
-  # Decision 273: a retained timer's `last` is the instance's `now`, at any depth.
-  defp rebased(%FbType{body: nil} = type, value, now),
+  # Decision 273: a retained timer's `last` is the instance's `now`, at any depth. A member
+  # the state lacks, one a block's new version adds that a plain swap's state never held,
+  # starts at its cold value, `started`'s, as the review after Milestone 6 found
+  # (c4-api-fuzz-1), where `Map.update!/3` raised.
+  defp rebased(%FbType{body: nil} = type, value, _started, now),
     do: rebased_built_in(FbType.rules(type), value, now)
 
-  defp rebased(%FbType{} = type, value, now),
+  defp rebased(%FbType{} = type, value, started, now),
     do:
       Enum.reduce(type.members, value, fn member, value ->
-        Map.update!(value, member.name, &rebased(FbType.type_of(type, member), &1, now))
+        rebased_member(Map.fetch(value, member.name), {type, member}, {value, started}, now)
       end)
 
-  defp rebased({:array, %FbType{} = type, dims}, values, now),
-    do: mapped(length(dims), values, &rebased(type, &1, now))
+  defp rebased({:array, %FbType{} = type, dims}, values, started, now),
+    do: zipped(length(dims), values, started, &rebased(type, &1, &2, now))
 
-  defp rebased(_elementary, value, _now), do: value
+  defp rebased(_elementary, value, _started, _now), do: value
+
+  defp rebased_member({:ok, kept}, {type, member}, {value, started}, now),
+    do:
+      Map.put(
+        value,
+        member.name,
+        rebased(FbType.type_of(type, member), kept, Map.fetch!(started, member.name), now)
+      )
+
+  defp rebased_member(:error, {_type, member}, {value, started}, _now),
+    do: Map.put(value, member.name, Map.fetch!(started, member.name))
 
   defp rebased_built_in(%{kind: :timer}, value, now), do: Map.put(value, "last", now)
   defp rebased_built_in(_counter, value, _now), do: value
-
-  defp mapped(1, values, fun), do: values |> Tuple.to_list() |> Enum.map(fun) |> List.to_tuple()
-
-  defp mapped(depth, values, fun),
-    do: values |> Tuple.to_list() |> Enum.map(&mapped(depth - 1, &1, fun)) |> List.to_tuple()
 
   @doc """
   A resource running `config`, at time 0 before its first cycle: every global at its
@@ -728,7 +821,7 @@ defmodule Logex.Runtime do
     %__MODULE__{
       config: config,
       now: 0,
-      globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
+      globals: Map.new(config.globals, &{&1.name, started(&1)}),
       instances:
         Map.new(config.instances, fn %{name: name, type: type} ->
           {name, detached(fresh(Map.fetch!(config.programs, type)), wiring, name)}
@@ -736,7 +829,8 @@ defmodule Logex.Runtime do
       tasks: Map.new(config.tasks, &{&1.name, task_state(&1, 0)}),
       wiring: wiring,
       generation: 0,
-      aside: %{}
+      aside: %{},
+      restarts: 0
     }
   end
 
@@ -766,8 +860,9 @@ defmodule Logex.Runtime do
   initial value, unreported. Each retained timer starts with `last` at the start's `now`,
   0, so the outage is not counted (decision 273); every scan's first is marked first
   (decision 274); and a task's `single` that the image put back starts its trigger's last
-  sample at the sample the image holds for it, as a warm `restart/2` keeps it (decisions
-  305 and 313), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
+  sample at the sample the image holds for it, the task's own by its name where it holds
+  one and otherwise its trigger's, as a warm `restart/2` keeps it (decisions 305, 313 and
+  350), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
   after the sample fires once, every other at 0 as `start/1` has it; one the image holds
   no sample for, which only a host's own image lacks, at the value put back, so nothing
   fires (decision 319). So a resource started from another's image cycles as that one does
@@ -789,9 +884,10 @@ defmodule Logex.Runtime do
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
   instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
   One that is not, or whose parts are not, a sample that is no bool's value or of a
-  global `globals` does not hold among them, or one of another configuration, which a
-  line naming both tells, is the host's mistake: one `ArgumentError`, a line each, after
-  `config`'s own check.
+  global `globals` does not hold among them, a task's sample being of a task `config`
+  declares with a single, or one of another configuration, which a line naming both
+  tells, is the host's mistake: one `ArgumentError`, a line each, after `config`'s own
+  check.
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -804,7 +900,7 @@ defmodule Logex.Runtime do
     {instances, dropped_instances} =
       image.instances
       |> Enum.sort()
-      |> Enum.reduce({runtime.instances, []}, &restored(&1, config, &2))
+      |> Enum.reduce({runtime.instances, []}, &restored(&1, {config, runtime.wiring.types}, &2))
 
     tasks =
       Map.new(
@@ -817,23 +913,20 @@ defmodule Logex.Runtime do
      Image.ordered(dropped_globals ++ dropped_instances)}
   end
 
-  defp restored({name, image}, config, {instances, dropped}),
-    do:
-      restored_as(
-        Enum.find(config.instances, &(&1.name == name)),
-        {name, image},
-        config,
-        {instances, dropped}
-      )
+  # Each image instance's type by its name in the wiring, a map, where until the review
+  # after Milestone 6 (b2-resource-5) a search of the configuration's instances made a
+  # start quadratic in them.
+  defp restored({name, image}, {config, types}, {instances, dropped}),
+    do: restored_as(Map.get(types, name), {name, image}, config, {instances, dropped})
 
   defp restored_as(nil, {name, _image}, _config, {instances, dropped}),
     do: {instances, [{name, :undeclared} | dropped]}
 
-  defp restored_as(%{type: type}, {name, %{program: program}}, _config, {instances, dropped})
+  defp restored_as(type, {name, %{program: program}}, _config, {instances, dropped})
        when type != program,
        do: {instances, [{name, {:retyped, program, type}} | dropped]}
 
-  defp restored_as(%{type: type}, {name, image}, config, {instances, dropped}) do
+  defp restored_as(type, {name, image}, config, {instances, dropped}) do
     %Instance{env: env} = state = Map.fetch!(instances, name)
     {env, more} = Image.matched(Map.fetch!(config.programs, type), env, image, name <> ".")
     {Map.put(instances, name, %{state | env: env}), Enum.reverse(more, dropped)}
@@ -844,17 +937,21 @@ defmodule Logex.Runtime do
   # sample the image holds for it, so that a rise logic made after that sample fires once
   # in the first cycle and one already seen does not; one the image holds no sample for,
   # which only a host's own image lacks, at the value put back, so nothing fires
-  # (decision 319, confirmed by the maintainer, 2026-10-30).
+  # (decision 319, confirmed by the maintainer, 2026-10-30). Since RV-3's review a task the
+  # image holds a sample of by its own name, which a round cut short before its step
+  # leaves (decision 350), starts at that one.
   defp put_back(
          %{last: _} = state,
-         %Configuration.Task{single: single},
+         %Configuration.Task{single: single, name: name},
          {kept, globals, triggers}
        ),
        do:
          kept_sample(
            single in kept,
            state,
-           Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
+           Map.get_lazy(triggers, name, fn ->
+             Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
+           end)
          )
 
   defp put_back(state, _task, _kept), do: state
@@ -867,7 +964,10 @@ defmodule Logex.Runtime do
   name, to its lone image (`retained/2`), its program type and each retained value by
   its path inside the instance; and since decision 313 `triggers`, each retained global
   that is a task's `single` by name to the last sample the resource took of it, 0 or 1,
-  so that a start lays it back as a warm `restart/2` keeps it. An instance an edit set
+  the first such task's in declaration order, and since RV-3's review each task whose
+  last sample is not that one, by the task's name, which only a round a trip cut short
+  between two tasks on one trigger leaves (decision 350), so that a start lays each back
+  as a warm `restart/2` keeps it. An instance an edit set
   aside is not in it, and during an edit the program running is the one read (decision
   278). A timer's `last` is never in it (decision 273). Its cost is the retained values' and the paths', with one step for
   each global and instance declared, whatever else the resource holds.
@@ -890,25 +990,36 @@ defmodule Logex.Runtime do
   end
 
   # Decision 313: each retained global that is a task's `single`, by name, to that task's
-  # last sample of it, the first such task's in declaration order, every task sampling
-  # each trigger in the same cycle.
+  # last sample of it, the first such task's in declaration order. Since decision 350 a
+  # round a trip cut short leaves the sample of a task whose step it did not run as it was,
+  # so tasks that share a trigger may hold two; since RV-3's review each task whose last
+  # sample is not its trigger's entry is in the image by its own name too, which no global
+  # can have, so a start from it runs the task the cut left and no other, where until then
+  # it took the first task's for all and lost the rise or counted it twice.
   defp triggers(%Configuration{tasks: tasks, globals: globals}, states) do
     retained = for %Configuration.Global{retain: :retain, name: name} <- globals, do: name
+    samples = Enum.flat_map(tasks, &trigger(&1, retained, states))
+    firsts = samples |> Enum.reverse() |> Map.new(fn {single, _task, last} -> {single, last} end)
 
-    tasks
-    |> Enum.reverse()
-    |> Enum.flat_map(&trigger(&1, retained, states))
-    |> Map.new()
+    Map.merge(
+      firsts,
+      for(
+        {single, task, last} <- samples,
+        Map.fetch!(firsts, single) != last,
+        into: %{},
+        do: {task, last}
+      )
+    )
   end
 
   defp trigger(%Configuration.Task{single: single, name: name}, retained, states)
        when is_binary(single),
-       do: sample_of(single in retained, single, Map.fetch!(states, name))
+       do: sample_of(single in retained, {single, name}, Map.fetch!(states, name))
 
   defp trigger(_task, _retained, _states), do: []
 
-  defp sample_of(true, single, %{last: last}), do: [{single, last}]
-  defp sample_of(false, _single, _state), do: []
+  defp sample_of(true, {single, task}, %{last: last}), do: [{single, task, last}]
+  defp sample_of(false, _named, _state), do: []
 
   @doc """
   One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,
@@ -942,11 +1053,15 @@ defmodule Logex.Runtime do
     runtime = %{runtime | now: now + elapsed, globals: image!(runtime, inputs)}
     {runtime, due} = due(runtime)
 
-    {runtime,
-     Enum.map(due, fn {name, _trigger, _priority, _index, _instances} = task ->
-       {:timed, name, task}
-     end) ++ untimed_step(runtime.wiring.untimed)}
+    {runtime, Enum.map(due, &timed_step/1) ++ untimed_step(runtime.wiring.untimed)}
   end
+
+  # A due task's step, an edge's run carrying its trigger's sample (decision 350).
+  defp timed_step({name, _trigger, _priority, _index, _instances} = task),
+    do: {:timed, name, task}
+
+  defp timed_step({name, _trigger, _priority, _index, _instances, _sample} = task),
+    do: {:timed, name, task}
 
   defp untimed_step({_task, []}), do: []
   defp untimed_step({task, instances}), do: [{:untimed, task, instances}]
@@ -955,14 +1070,30 @@ defmodule Logex.Runtime do
   # One step cycle_steps/3 gave, run: `{runtime, events}`, its events in the order they
   # happened.
   def cycle_step(%__MODULE__{} = runtime, {:timed, _name, task}) do
-    {runtime, events} = run_task(task, {runtime, []})
+    {runtime, events} =
+      try do
+        run_task(task, {runtime, []})
+      rescue
+        refused in ArgumentError ->
+          externals!(refused, runtime, task_instances(task), __STACKTRACE__)
+      end
+
     {runtime, Enum.reverse(events)}
   end
 
   def cycle_step(%__MODULE__{} = runtime, {:untimed, task, instances}) do
-    {runtime, events} = Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
+    {runtime, events} =
+      try do
+        Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
+      rescue
+        refused in ArgumentError -> externals!(refused, runtime, instances, __STACKTRACE__)
+      end
+
     {runtime, Enum.reverse(events)}
   end
+
+  defp task_instances({_name, _trigger, _priority, _index, instances}), do: instances
+  defp task_instances({_name, _trigger, _priority, _index, instances, _sample}), do: instances
 
   @doc false
   # The output points, every one, after a cycle's last step.
@@ -1015,6 +1146,13 @@ defmodule Logex.Runtime do
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
 
+  An instance's retained timer's `last` is set to that instance's own `now`, the time of
+  its last scan (decision 273), so the time from that scan to the restart, while the
+  resource ran on and the instance's task was not yet due, is counted at its next run, as
+  that run would count it with no restart; `start/2` from the image, which keeps no
+  `last`, counts none of it, so the two can differ by up to a task's interval (the review
+  after Milestone 6, b2-resource-2, kept as decision 273 has it, `PLAN.md` RV-3).
+
   A retained global a connection drives from a var_output its program does not retain
   keeps its value only until that instance's first run, whose copy-out writes the
   var_output, back at its initial value, over it, which `Logex.Configuration.check/1`
@@ -1028,6 +1166,7 @@ defmodule Logex.Runtime do
     %{
       runtime
       | globals: globals,
+        restarts: runtime.restarts + 1,
         instances:
           Map.new(runtime.instances, fn {name, state} ->
             restarted =
@@ -1086,7 +1225,7 @@ defmodule Logex.Runtime do
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
 
   defp input_kept(false, global, %__MODULE__{wiring: %{located: nil}}),
-    do: Configuration.initial(global)
+    do: started(global)
 
   # M5-13: a located input array keeps its input image as an input point does.
   defp input_kept(
@@ -1096,7 +1235,24 @@ defmodule Logex.Runtime do
        ),
        do: array_kept(located_array(runtime.wiring.located, name), global, runtime)
 
-  defp input_kept(false, global, _runtime), do: Configuration.initial(global)
+  defp input_kept(false, global, _runtime), do: started(global)
+
+  # `Logex.Configuration.initial/1`'s rule for a global `Logex.Configuration.check/1` has
+  # passed, so with none of its host checks, the resource's own: its starts and restarts
+  # read it, so that a restart costs what it did before the review after Milestone 6 gave
+  # initial/1 its checks (`located_array_test.exs` pins that cost), and since RV-3's review
+  # here, private, where it was `Logex.Configuration.started/1`, a public function no host
+  # needs.
+  defp started(%Configuration.Global{type: type, initial: nil}) when is_elementary(type),
+    do: Declarations.zero(type)
+
+  defp started(%Configuration.Global{type: {:array, _type, _dims} = array, initial: initial}),
+    do: Logex.Array.started(array, initial)
+
+  defp started(%Configuration.Global{type: type, initial: initial}) when type in @reals,
+    do: Logex.Real.nearest(type, initial)
+
+  defp started(%Configuration.Global{initial: initial}), do: initial
 
   defp located_array(nil, _name), do: nil
   defp located_array(located, name), do: Map.get(located, name)
@@ -1104,7 +1260,7 @@ defmodule Logex.Runtime do
   defp array_kept({"i", _first, _last}, global, runtime),
     do: Map.fetch!(runtime.globals, global.name)
 
-  defp array_kept(_other, global, _runtime), do: Configuration.initial(global)
+  defp array_kept(_other, global, _runtime), do: started(global)
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
@@ -1123,12 +1279,13 @@ defmodule Logex.Runtime do
   defp task_state(%Configuration.Task{}, due), do: %{next_due: due, overlaps: 0, last: 0}
 
   # M5-11: a state is restarted, and checked, with its var_externals' globals in it, as a
-  # scan takes it, so that an array var_external, which a state holds whole, is there.
-  defp attached(%Instance{env: env} = state, runtime, name),
-    do: %{
-      state
-      | env: Map.merge(env, Map.take(runtime.globals, Map.fetch!(runtime.wiring.externals, name)))
-    }
+  # scan takes it, so that an array var_external, which a state holds whole, is there,
+  # each global checked first against its own type, as a scan checks it.
+  defp attached(%Instance{env: env} = state, %__MODULE__{wiring: wiring} = runtime, name) do
+    externals = Map.fetch!(wiring.externals, name)
+    read_fitted(externals_fit(externals, runtime.globals, wiring.globals, []))
+    %{state | env: Map.merge(env, Map.take(runtime.globals, externals))}
+  end
 
   # M2-4: one copy of each global. Between scans an instance's state holds none of its
   # var_externals, which instance/1 and restart/3 start at 0 as any tag: the resource's
@@ -1303,6 +1460,9 @@ defmodule Logex.Runtime do
       )
 
   # M5-11: an array var_input is kept whole where its value is one, as a state holds it.
+  # A state handed in is checked first (decision 171), so every value here fits; the test
+  # is the rule's total form, for `restart/2`'s states, which `call/4` checked as it took
+  # them, and kept (the review after Milestone 6, b2-resource-7).
   defp kept_input?({:array, type, dims}, value),
     do: Logex.Array.held?(value, dims, &element_fits?(type, &1))
 
@@ -1544,6 +1704,17 @@ defmodule Logex.Runtime do
   defp computable!([]), do: :ok
   defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
+  # The review after Milestone 6 (a5-data-model-7): a map that names the struct but lacks
+  # one of its keys, as `Map.delete/2` makes one, or holds one more, is no state, refused
+  # as anything else that is no state is, before any field is read, where until then a
+  # field's absence escaped as a KeyError or a FunctionClauseError from inside.
+  defp state!(%Instance{} = state, _program) when not is_whole_instance(state),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(state)}"
+      )
+
   defp state!(%Instance{type: type}, _program) when not is_binary(type) and type != nil,
     do: raise(ArgumentError, "state.type must be a program name, got: #{inspect(type)}")
 
@@ -1666,6 +1837,17 @@ defmodule Logex.Runtime do
   defp misfits([], _env, _at, acc), do: acc
 
   defp present({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
+
+  # A user block's instance the state lacks, which a plain swap leaves, reads each member as
+  # one the state lacks: its scalars read 0 as a tag's do, and an array it holds, at any
+  # depth, is refused by its path, `mm.gs`, as a tag's is, where until RV-3's review a
+  # scan of its body raised a KeyError on the array.
+  defp present(:error, %FbType{body: %Program{}} = type, path, blocks, acc),
+    do: of_type(type, %{}, path, blocks, acc)
+
+  defp present(:error, {:block, _name} = type, path, blocks, acc),
+    do: of_type(type, %{}, path, blocks, acc)
+
   defp present(:error, _type, _path, _blocks, acc), do: acc
 
   defp held({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
@@ -1876,6 +2058,15 @@ defmodule Logex.Runtime do
         inspect(Logex.Real.nearest(type, value))
 
   defp unreal(false, type, value), do: Declarations.misfit(type, inspect(value))
+
+  # As a state is (a5-data-model-7, c4-api-fuzz-9): a scan that lacks one of its keys is
+  # none.
+  defp scan!(%Scan{} = scan, _state) when not is_whole_scan(scan),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Scan{}, got: #{inspect(scan)}"
+      )
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")
@@ -2891,11 +3082,23 @@ defmodule Logex.Runtime do
   # being seen in this cycle; a periodic run's is its due time. A task with both that
   # samples 1 skips the due times that have come, moving its next one past `now` on its
   # phase, and counts none of them (decisions 39 and 51).
+  #
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rising edge, the sample that
+  # makes its task run, stands as its last sample only once the step that runs the task
+  # has run, the step carrying it, so that a round a trip stops before that step leaves the
+  # last sample as it was and the task runs on the next cycle that samples the rise, a warm
+  # restart's first among them (decisions 305 and 313), where until then every sample stood
+  # before any step ran. Every other sample stands at once, a fall's and a periodic run's
+  # among them (provisional for a task with an interval too, whose periodic run while its
+  # trigger samples 0 holds nothing back): holding a 0 back would lose the next rise.
   defp due(%__MODULE__{now: now, globals: globals, tasks: states, wiring: %{tasks: tasks}} = rt) do
     {due, states} =
       Enum.flat_map_reduce(tasks, states, fn {name, trigger, priority, index, _} = task, states ->
-        {plan, state} = plan(trigger, sample(trigger, globals), Map.fetch!(states, name), now)
-        {for(at <- plan, do: {{priority, at, index}, task}), Map.put(states, name, state)}
+        {runs, state} =
+          plan(trigger, sample(trigger, globals), Map.fetch!(states, name), now, task)
+
+        {for(run <- runs, do: {{priority, elem(run, 0), index}, elem(run, 1)}),
+         Map.put(states, name, state)}
       end)
 
     {%{rt | tasks: states}, due |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))}
@@ -2904,35 +3107,43 @@ defmodule Logex.Runtime do
   defp sample({nil, _interval}, _globals), do: nil
   defp sample({single, _interval}, globals), do: Map.fetch!(globals, single)
 
-  # What a task does in this cycle: `{[due time], state}` when it runs, `{[], state}`
-  # when not, its trigger's last sample kept.
-  defp plan({nil, _interval}, nil, %{next_due: next} = state, now) when next <= now,
-    do: {[next], state}
-
-  defp plan({nil, _interval}, nil, state, _now), do: {[], state}
-
-  defp plan({_single, nil}, sample, %{last: last} = state, now),
-    do: {edge(last, sample, now), %{state | last: sample}}
-
-  defp plan({_single, interval}, sample, %{last: last, next_due: next} = state, now),
-    do: both(edge(last, sample, now), sample, {next, interval}, %{state | last: sample}, now)
-
-  defp edge(0, 1, now), do: [now]
-  defp edge(_last, _sample, _now), do: []
-
+  # What a task does in this cycle: `{[{due time, run}], state}` when it runs, `{[],
+  # state}` when not; an edge's run, a rise sampled where the last sample is 0, the task
+  # with the sample its step stands, every other run the task as the wiring holds it.
+  #
   # Decision 39: at most one run a cycle; on an edge, or while the trigger samples 0 and a
   # periodic due time has come. A due time that comes while it samples 1, an edge cycle's
   # among them, is skipped and not counted, the next on the same phase, so an edge run
   # does not move the phase; and one that came while the image held 1 runs in the cycle
   # that samples 0 (decision 52), since only the sample is known.
-  defp both([now], _sample, {next, interval}, state, now),
-    do: {[now], %{state | next_due: skipped(next, interval, now)}}
+  defp plan({nil, _interval}, nil, %{next_due: next} = state, now, task) when next <= now,
+    do: {[{next, task}], state}
 
-  defp both([], 1, {next, interval}, state, now),
-    do: {[], %{state | next_due: skipped(next, interval, now)}}
+  defp plan({nil, _interval}, nil, state, _now, _task), do: {[], state}
 
-  defp both([], 0, {next, _interval}, state, now) when next <= now, do: {[next], state}
-  defp both([], 0, _due, state, _now), do: {[], state}
+  defp plan({_single, nil}, 1, %{last: 0} = state, now, {name, trigger, priority, index, ins}),
+    do: {[{now, {name, trigger, priority, index, ins, 1}}], state}
+
+  defp plan({_single, nil}, sample, state, _now, _task), do: {[], %{state | last: sample}}
+
+  defp plan(
+         {_single, interval} = trigger,
+         1,
+         %{last: 0, next_due: next} = state,
+         now,
+         {name, trigger, priority, index, instances}
+       ),
+       do:
+         {[{now, {name, trigger, priority, index, instances, 1}}],
+          %{state | next_due: skipped(next, interval, now)}}
+
+  defp plan({_single, interval}, 1, %{next_due: next} = state, now, _task),
+    do: {[], %{state | last: 1, next_due: skipped(next, interval, now)}}
+
+  defp plan({_single, _interval}, 0, %{next_due: next} = state, now, task) when next <= now,
+    do: {[{next, task}], %{state | last: 0}}
+
+  defp plan({_single, _interval}, 0, state, _now, _task), do: {[], %{state | last: 0}}
 
   defp skipped(next, interval, now) when next <= now,
     do: next + (div(now - next, interval) + 1) * interval
@@ -2945,6 +3156,17 @@ defmodule Logex.Runtime do
   defp run_task({name, {_single, interval}, _priority, _index, instances}, {runtime, events}) do
     {missed, state} = periods(interval, Map.fetch!(runtime.tasks, name), runtime.now)
     runtime = %{runtime | tasks: Map.put(runtime.tasks, name, state)}
+    Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
+  end
+
+  # Decision 350: an edge's run, whose sample stands with its step, which nothing in the
+  # step reads: a round a trip stops before the step leaves it as it was.
+  defp run_task(
+         {name, {_single, interval}, _priority, _index, instances, sample},
+         {runtime, events}
+       ) do
+    {missed, state} = periods(interval, Map.fetch!(runtime.tasks, name), runtime.now)
+    runtime = %{runtime | tasks: Map.put(runtime.tasks, name, %{state | last: sample})}
     Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
   end
 
@@ -3027,6 +3249,45 @@ defmodule Logex.Runtime do
   # a line each, in name order, a global read twice told once.
   defp read!(copy_in, globals, declared),
     do: read_fitted(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+
+  # The review after Milestone 6 (b2-resource-6): a var_external's global, merged into its
+  # instance's state, is checked with it inside call/4, where a misfit was told as the
+  # state's, `state.env holds`, a place the host never wrote. A step refused is told
+  # instead, where a var_external's global of an instance it runs does not fit its own
+  # type, by that global, `runtime.globals holds`, with every line of a copy-in's refusal
+  # (read!/3), and otherwise as it was refused. Read only where a step is refused, so that
+  # a step pays nothing for it; only a host gives a global a misfit, never a scan, so the
+  # runtime the step was given holds it.
+  defp externals!(refused, %__MODULE__{} = runtime, instances, stacktrace),
+    do: externals_told(misfit_externals(runtime, instances), refused, stacktrace)
+
+  defp misfit_externals(%__MODULE__{wiring: wiring, globals: globals}, instances),
+    do:
+      Enum.reduce(instances, [], fn name, acc ->
+        externals_fit(Map.fetch!(wiring.externals, name), globals, wiring.globals, acc)
+      end)
+
+  defp externals_told([], refused, stacktrace), do: reraise(refused, stacktrace)
+
+  defp externals_told(lines, refused, _stacktrace),
+    do:
+      read_fitted(
+        lines ++ Enum.flat_map(String.split(Exception.message(refused), "\n"), &refused_global/1)
+      )
+
+  defp refused_global("runtime.globals holds " <> _rest = line), do: [line]
+  defp refused_global(_line), do: []
+
+  defp externals_fit([], _globals, _declared, acc), do: acc
+
+  defp externals_fit([global | externals], globals, declared, acc),
+    do:
+      externals_fit(
+        externals,
+        globals,
+        declared,
+        global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
+      )
 
   defp misread({_member, global}, globals, declared, acc) when is_binary(global),
     do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
@@ -3142,11 +3403,41 @@ defmodule Logex.Runtime do
 
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    tag_at(Logex.Name.element(tag), program, {head, tag, members, path}, runtime)
+
+    instance_part(
+      bit_number(Logex.Name.bracketed(tag), tag),
+      program,
+      {head, tag, members, path},
+      runtime
+    )
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
     do: raise(ArgumentError, unknown_head(kind(runtime, head), head, runtime))
+
+  # RV-3's review: a part that is a number, `m1.0`, is a bit number too, as the lexer reads
+  # `status.3`, told as `m1.[0]` is, where until then the program was said to declare no
+  # `0`.
+  defp bit_number(nil, tag), do: numbered(Logex.Name.subscript(tag))
+  defp bit_number(bit, _tag), do: bit
+
+  defp numbered({:literal, _n} = bit), do: bit
+  defp numbered({:tag, _name}), do: nil
+
+  # The review after Milestone 6 (b2-resource-9): `m1.[0]`, which the lexer reads as a
+  # bit of `m1`, a bit number in brackets (`Logex.Name.bracketed/1`), and since RV-3's
+  # review `m1.0`, names no tag of the instance, which has no bits, where until then it was
+  # told the program declares no ``, or since RV-2 no `[0]`, a tag of no name.
+  defp instance_part(nil, program, {_head, tag, _members, _path} = at, runtime),
+    do: tag_at(Logex.Name.element(tag), program, at, runtime)
+
+  defp instance_part(_bit, program, {head, _tag, _members, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` names a bit of `#{head}`, a program instance of `#{program.name}`, which " <>
+          "has no bits: an access path names one of its tags" <> example_tag(program, head)
+      )
 
   defp unknown_head(:task, head, _runtime),
     do:
@@ -4013,11 +4304,20 @@ defmodule Logex.Runtime do
   # on the falling edge's own scan. Otherwise it is at rest: `.dn` and `.tt` 0, and `.acc`
   # where the delay left it. `.en` is 0 on every de-energised run, and `last` is stamped on
   # every run, so a `tof` a frozen block holds catches up when it next runs (decision 8).
-  # Its falling edge is read from `.en`, which a fresh instance and a cold restart put at 0,
-  # so the first scan after either sees none (decision 69); a warm restart, or a start from
-  # an image, keeps a retained `tof`'s `.en`, so one held on at the outage sees its rung's
-  # fall on the first scan after it and starts its delay (decisions 271 and 277; decision
-  # 349, RV-3's, brings it to rest instead). Nothing may follow it on its path (decision 73).
+  # Its falling edge is read from `.en`, and no first scan sees one (decisions 69 and 93):
+  # a fresh instance and a cold restart put `.en` at 0, and since decision 349 (the
+  # maintainer, 2026-11-01) a first scan reads no edge from an `.en` a warm restart, or a
+  # start from an image, kept at 1, so a retained `tof` held on at the outage comes to rest
+  # on a false rung, `.dn` 0, where until then it started its delay and ran its output on
+  # with nothing commanding it; one already in its delay at the outage, `.tt` 1, resumes it
+  # on the first scan, its `last` at the restart's `now` (decision 273). The rule is the
+  # first scan's, so a retained `tof` the first scan does not run, on a rung a jump skips
+  # or in a block whose `cal` is false, keeps its `.en` 1 and runs its delay at its first
+  # run with its rung false (provisional, `PLAN.md`'s RV-3 entry), where Logix's prescan,
+  # which clears a TOF's `.EN`, `.TT` and `.DN`, is said to reach every rung (unverified
+  # here for a jumped rung and an add-on instruction not called). Each first scan's run is
+  # a clause of its own, so a scan after the first costs what it did. Nothing may follow
+  # it on its path (decision 73).
   defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end
@@ -4025,9 +4325,22 @@ defmodule Logex.Runtime do
   defp evaluate(
          {:tof, _, [timer, _preset]},
          {false, env},
-         %Scan{now: now, units: nil}
+         %Scan{now: now, units: nil, first: false}
        ) do
     {false, write(env, timer, off_delay(as_map(read(env, timer)), now, 1))}
+  end
+
+  defp evaluate({:tof, line, [timer, _preset]}, {false, env}, %Scan{first: false} = scan) do
+    {false,
+     write(
+       env,
+       timer,
+       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
+     )}
+  end
+
+  defp evaluate({:tof, _, [timer, _preset]}, {false, env}, %Scan{now: now, units: nil}) do
+    {false, write(env, timer, first_off(as_map(read(env, timer)), now, 1))}
   end
 
   defp evaluate({:tof, line, [timer, _preset]}, {false, env}, scan) do
@@ -4035,7 +4348,7 @@ defmodule Logex.Runtime do
      write(
        env,
        timer,
-       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
+       first_off(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
      )}
   end
 
@@ -4932,6 +5245,11 @@ defmodule Logex.Runtime do
         now,
         per_ms
       )
+
+  # Decision 349: a first scan's de-energised run, its delay resumed where `.tt` is 1 and
+  # otherwise at rest, whatever `.en` holds.
+  defp first_off(timer, now, per_ms),
+    do: delayed(closed?(Map.get(timer, "tt")), timer, now, per_ms)
 
   defp delayed(true, timer, now, per_ms) do
     pre = integer(Map.get(timer, "pre"))

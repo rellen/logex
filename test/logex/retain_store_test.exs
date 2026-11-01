@@ -129,7 +129,9 @@ defmodule Logex.RetainStoreTest do
     Process.unlink(runner)
     ref = Process.monitor(runner)
     Process.exit(runner, :kill)
-    assert_receive {:DOWN, ^ref, :process, _, :killed}
+    # Within 5 s, as every other wait here, where the default 100 ms met a loaded machine
+    # (RV-3's review, which gave the runner's own reports below the same 5 s).
+    assert_receive {:DOWN, ^ref, :process, _, :killed}, 5000
   end
 
   # The sim's opener gone down, so that a runner started on it again can open it (commit
@@ -1379,7 +1381,7 @@ defmodule Logex.RetainStoreTest do
       Process.flag(:trap_exit, true)
 
       assert Runner.stop(runner, :shutdown) == {:error, {:retain, :eisdir}}
-      assert_receive {:EXIT, ^runner, :shutdown}
+      assert_receive {:EXIT, ^runner, :shutdown}, 5000
       assert Sim.outputs(rig.panel) == %{[0] => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written
@@ -1449,7 +1451,7 @@ defmodule Logex.RetainStoreTest do
       File.mkdir_p!(rig.store <> ".tmp")
 
       assert Runner.restart(runner, :cold) == {:error, {:retain, :eisdir}}
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == {reads, writes}
@@ -1546,7 +1548,7 @@ defmodule Logex.RetainStoreTest do
       Sim.fail(rig.panel, :read, {:error, :eio})
 
       assert {:error, {:io_init, "panel", _cause}} = Runner.restart(runner, :cold)
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert values(runner) == [2, 2, 1, 2]
       assert File.read!(rig.store) =~ "global total_boxes dint 0\n"
@@ -1571,8 +1573,8 @@ defmodule Logex.RetainStoreTest do
       File.mkdir_p!(rig.store <> ".tmp")
       tripped(rig, runner)
 
-      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, 5000
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       File.rm_rf!(rig.store <> ".tmp")
@@ -1655,6 +1657,178 @@ defmodule Logex.RetainStoreTest do
       assert %{status: :running} = Runner.status(runner)
       assert Runner.get!(runner, "s1.slot") == 0
       assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rise stands as its last sample
+  # only once the step that runs its task has run, so a round a major fault in an earlier
+  # step trips leaves it as it was, in the resource and in the store, and the event task
+  # runs on the next cycle that samples the rise: a warm restart's first, and a fresh
+  # start's from the store, where until the review after Milestone 6 (b2-resource-1) the
+  # rise was taken and the handler never ran. A box is counted where the task runs, and it
+  # clears the latch.
+  describe "a trigger's rise a trip cut off (decision 350)" do
+    @arming "var_input eye bool\nvar_external arm bool\nxic eye otl arm"
+    @counting "var_external hits dint\nvar_external arm bool\nadd hits 1 hits\notu arm"
+    @faulting "var_external arm bool\nvar w int[2]\nvar i dint\nvar s bool\n" <>
+                "xic arm ons s move 5 i\nxic arm move 1 w[i]"
+
+    @tallying "var_external early_hits dint\nadd early_hits 1 early_hits"
+
+    defp armed(dir, early \\ nil) do
+      programs =
+        for {name, text} <- [
+              arming: @arming,
+              counting: @counting,
+              faulting: @faulting,
+              tallying: @tallying
+            ],
+            into: %{} do
+          {:ok, program} = Logex.compile(text, name: Atom.to_string(name))
+          {Atom.to_string(name), program}
+        end
+
+      source = """
+      task fast interval 1 priority 1
+      task ev single arm priority 5
+      var_global eye_1 bool at panel.i.0
+      var_global retain arm bool
+      var_global retain hits dint
+      var_global retain early_hits dint
+      program f1 faulting with fast
+      program a1 arming with fast
+        a1.eye eye_1
+      program c1 counting with ev
+      """
+
+      rig(dir, configuration: configured(early_task(early, source), programs), poll: 10)
+    end
+
+    # A second event task on `arm`, `early`, before `fast` in the round, so the trip cuts
+    # the round between the two tasks' steps; declared before `ev` or after it.
+    defp early_task(nil, source), do: source
+
+    defp early_task(:first, source),
+      do: "task early single arm priority 0\n" <> source <> "program t1 tallying with early\n"
+
+    defp early_task(:last, source),
+      do:
+        String.replace(
+          source,
+          "var_global eye_1",
+          "task early single arm priority 0\nvar_global eye_1"
+        ) <>
+          "program t1 tallying with early\n"
+
+    # The eye latches `arm` in one round; the next samples its rise, and `f1`, on `fast`,
+    # before `ev`, faults on it: the round trips before `ev`'s step.
+    defp cut_off(rig) do
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 30)
+      Sim.set(rig.panel, [0], 1)
+      Manual.advance(rig.clock, 30)
+      assert %{status: :tripped, trip: {:fault, "fast", "f1", _}} = Runner.status(runner)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {1, 0}
+      Sim.set(rig.panel, [0], 0)
+      Manual.advance(rig.clock, 10)
+      runner
+    end
+
+    test "the event task runs after a warm restart, and the store kept the old sample",
+         %{tmp_dir: dir} do
+      rig = armed(dir)
+      runner = cut_off(rig)
+      {image, _at} = Retain.decode!(File.read!(rig.store), {rig.store, "plant"})
+      assert image.triggers == %{"arm" => 0}
+      assert Runner.restart(runner, :warm) == :ok
+      Manual.advance(rig.clock, 20)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {0, 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "the event task runs after a crash and a fresh start from the store",
+         %{tmp_dir: dir} do
+      rig = armed(dir)
+      runner = cut_off(rig)
+      killed(runner)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 20)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {0, 1}
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # RV-3's review: two event tasks on one trigger, the round cut between their steps, hold
+  # two last samples, and the store keeps the one a task's step left as it was by the
+  # task's name, so a fresh start from it runs the task the trip cut off, once, and not
+  # the one that ran, whichever is declared first, as a warm restart does; until the review
+  # the store kept the first task's sample for both, and the fresh start lost the cut
+  # task's rise for good, or ran the other twice.
+  describe "two event tasks on one trigger, a trip between their steps (decision 350)" do
+    test "a warm restart and a fresh start from the store each run the cut task alone",
+         %{tmp_dir: dir} do
+      for {early, line} <- [first: "trigger ev 0", last: "trigger early 1"] do
+        at = Path.join(dir, Atom.to_string(early))
+        File.mkdir_p!(at)
+        rig = armed(at, early)
+        runner = cut_off(rig)
+        assert Runner.get!(runner, "early_hits") == 1
+        text = File.read!(rig.store)
+        assert text =~ "\n" <> line <> "\n", text
+        killed(runner)
+        opener_down(rig.panel)
+        {:ok, runner} = Runner.start_link(rig.opts)
+        Manual.advance(rig.clock, 20)
+
+        assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits"),
+                Runner.get!(runner, "early_hits")} == {0, 1, 1},
+               inspect(early)
+
+        assert Runner.stop(runner) == :ok
+
+        warm = Path.join(at, "warm")
+        File.mkdir_p!(warm)
+        rig = armed(warm, early)
+        runner = cut_off(rig)
+        assert Runner.restart(runner, :warm) == :ok
+        Manual.advance(rig.clock, 20)
+
+        assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits"),
+                Runner.get!(runner, "early_hits")} == {0, 1, 1},
+               inspect(early)
+
+        assert Runner.stop(runner) == :ok
+      end
+    end
+
+    test "an image's sample of a task is a task's of the configuration, or a pinned line" do
+      programs =
+        for {name, text} <- [counting: @counting, tallying: @tallying], into: %{} do
+          {:ok, program} = Logex.compile(text, name: Atom.to_string(name))
+          {Atom.to_string(name), program}
+        end
+
+      config =
+        configured(
+          "task ev single arm priority 5\ntask early single arm priority 0\n" <>
+            "task fast interval 1 priority 1\nvar_global retain arm bool\n" <>
+            "var_global retain hits dint\nvar_global retain early_hits dint\n" <>
+            "program c1 counting with ev\nprogram t1 tallying with early\n",
+          programs
+        )
+
+      image = Runtime.retained(Runtime.start(config))
+      assert image.triggers == %{"arm" => 0}
+      {started, []} = Runtime.start(config, %{image | triggers: %{"arm" => 1, "early" => 0}})
+      assert {started.tasks["ev"].last, started.tasks["early"].last} == {1, 0}
+
+      assert_raise ArgumentError,
+                   "`triggers` holds \"fast\", which `globals` does not hold: a trigger's " <>
+                     "last sample is kept only with its retained global",
+                   fn ->
+                     Runtime.start(config, %{image | triggers: %{"arm" => 1, "fast" => 0}})
+                   end
     end
   end
 

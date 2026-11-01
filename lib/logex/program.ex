@@ -502,6 +502,14 @@ defmodule Logex.Program do
   array, a built-in instance, or a user block's instance or array of them none of whose
   members at any depth is kept out, and otherwise each retained member is listed, an
   element of an array of user block instances by `[*]`, `gates[*].count`.
+
+  Whole means a mark on the path's own line or outside it: an instance no line outside
+  marks lists what its body's own `retained` lists, prefixed, so a block that marks each
+  of its members itself is listed member by member, `s1.count` and `s1.t`, where one whose
+  line is marked `retain` is `s1`, the same leaves listed two ways. Every reader of
+  `retained` takes either, a warm restart, the image and an edit's report comparing the
+  leaves under them (decision 331); the review after Milestone 6 found the two spellings
+  (a5-data-model-6), kept as built, `PLAN.md` RV-3.
   """
   def retained(tags, blocks \\ %{}) when is_map(tags), do: elem(settled(tags, blocks), 3)
 
@@ -588,12 +596,21 @@ defmodule Logex.Program do
   built by hand does. Every entry point that takes a program first checks it so, where it
   is first handed in (decision 190).
   """
-  def edited_by_hand(%__MODULE__{name: name} = program) do
+  def edited_by_hand(%__MODULE__{name: name, blocks: blocks} = program)
+      when is_map(blocks) or blocks == nil do
     {lines, _seen} =
       routine(program, {name, nil}, {[], MapSet.new()}, held_in(table(program.blocks)))
 
     Enum.reverse(lines)
   end
+
+  # The review after Milestone 6 (b6-configuration-11): a program whose table of block
+  # types is no map is one line, where its walk raised Protocol.UndefinedError.
+  def edited_by_hand(%__MODULE__{name: name, blocks: blocks}),
+    do: [
+      "#{owner({name, nil})} block types are no map of the types it holds by name, got: " <>
+        "#{inspect(blocks)}: #{named(name)} was edited by hand after it compiled"
+    ]
 
   defp routine(
          %__MODULE__{
@@ -778,7 +795,8 @@ defmodule Logex.Program do
   # line, in order, as its units.
   defp retained_lines(nil, nil, _where), do: []
 
-  defp retained_lines(retained, wanted, where) when is_list(retained) or retained == nil do
+  defp retained_lines(retained, wanted, where)
+       when (is_list(retained) and length(retained) >= 0) or retained == nil do
     given = MapSet.new(retained || [])
     wanted = MapSet.new(wanted || [])
 

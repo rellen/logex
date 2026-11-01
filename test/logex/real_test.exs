@@ -896,6 +896,101 @@ defmodule Logex.RealTest do
       assert %{env: %{"r" => -@single_max}} = Runtime.put_inputs(program, state, %{"r" => -below})
     end
 
+    # The review after Milestone 6 (c5-tests-2): an integer at the least magnitude whose
+    # nearest real is infinite, 2^128 − 2^103 for a `real` and 2^1024 − 2^970 for an
+    # `lreal`, is refused, either sign, and the integer just below it taken as its real's
+    # largest value, so that the integer clause of the range's rule is held at its edge, as
+    # the float clause is above.
+    test "an integer at the edge of a real's range is refused, and the one below it taken" do
+      program =
+        program(
+          "var_input r real\nvar_input l lreal\nvar_output x real\nvar_output y lreal\nmove r x move l y"
+        )
+
+      state = Runtime.instance(program)
+      double_max = 1.7976931348623157e308
+
+      for {name, past, max, range} <- [
+            {"r", Integer.pow(2, 128) - Integer.pow(2, 103), @single_max,
+             "a real's range, -3.4028234663852886e38 to 3.4028234663852886e38"},
+            {"l", Integer.pow(2, 1024) - Integer.pow(2, 970), double_max,
+             "an lreal's range, -1.7976931348623157e308 to 1.7976931348623157e308"}
+          ],
+          sign <- [1, -1] do
+        a_type = %{"r" => "a real", "l" => "an lreal"}[name]
+
+        assert_raise ArgumentError,
+                     "input `#{name}` is #{a_type}: #{sign * past} is beyond #{range}",
+                     fn -> Runtime.put_inputs(program, state, %{name => sign * past}) end
+
+        assert %{env: %{^name => held}} =
+                 Runtime.put_inputs(program, state, %{name => sign * (past - 1)})
+
+        assert held === sign * max
+      end
+    end
+
+    # The review after Milestone 6 (a5-data-model-8): -0.0, which no real holds and no
+    # line gives, a line's `-0.0` being 0.0, is refused as an initial value from Elixir, a
+    # tag's, an element's and a global's, where until then it was taken and an edit to the
+    # same tag declared on a line reported `{:initial_changed, "x", {-0.0, 0.0}}`.
+    test "-0.0 is no initial value from Elixir, as no line gives it" do
+      told = "which no real holds and no line gives, a line's `-0.0` being 0.0: give 0.0"
+
+      assert_raise ArgumentError, "`x` is a real: its initial value is -0.0, #{told}", fn ->
+        Logex.Tag.new!("x", :real, :var, -0.0)
+      end
+
+      assert_raise ArgumentError, "`x[0]` is an lreal: its initial value is -0.0, #{told}", fn ->
+        Logex.Tag.new!("x", {:array, :lreal, [2]}, :var, [-0.0, 0.5])
+      end
+
+      # 0.0 is taken, and a line's `-0.0` is 0.0, so the two programs are one.
+      tag = Logex.Tag.new!("x", :real, :var, 0.0)
+      assert tag.initial === 0.0
+      rungs = "var_input g bool\nvar_output o real\nxic g move x o"
+
+      instructionized = fn text, declared ->
+        {:ok, tokens, _} = Logex.Compiler.tokenize(text)
+        {:ok, tree} = Logex.Compiler.parse(tokens)
+        {:ok, program} = Logex.Compiler.instructionize(tree, declared)
+        program
+      end
+
+      from_elixir = instructionized.(rungs, [tag])
+      from_text = instructionized.("var x real -0.0\n" <> rungs, [])
+
+      assert {:ok, _edit, []} =
+               Logex.Edit.accept(from_elixir, from_text, Runtime.instance(from_elixir))
+
+      {:ok, m} = Logex.compile("var_input x real\nvar_output y real\nmove x y", name: "m")
+
+      configured = fn global ->
+        Configuration.new!(
+          name: "c",
+          programs: [m],
+          globals: [global],
+          instances: [%Configuration.Instance{name: "m1", type: "m"}],
+          connections: [%Configuration.Connection{instance: "m1", member: "x", to: "g"}]
+        )
+      end
+
+      assert_raise ArgumentError, "the initial value of global `g` is -0.0, #{told}", fn ->
+        configured.(%Configuration.Global{name: "g", type: :real, initial: -0.0})
+      end
+
+      assert_raise ArgumentError, ~r/^`g\[1\]` is a real: its initial value is -0\.0, /, fn ->
+        configured.(%Configuration.Global{
+          name: "g",
+          type: {:array, :real, [2]},
+          initial: [0.5, -0.0]
+        })
+      end
+
+      assert %Configuration{globals: [%{initial: +0.0}]} =
+               configured.(%Configuration.Global{name: "g", type: :real, initial: 0.0})
+    end
+
     test "a state's real holds one of its type's values: a float, never −0.0, no subnormal" do
       program = program("var r real\nvar l lreal\nvar_output q real\nmove r q")
       state = Runtime.instance(program)
@@ -2009,6 +2104,83 @@ defmodule Logex.RealTest do
       assert Enum.map(again.warnings, & &1.message) == ["`rs` is declared but nothing uses it"]
     end
 
+    # The review after Milestone 6 (b6-configuration-5): a qualified line is warned of as
+    # the same line with none, where until then its warning was lost.
+    test "a qualified global's, in either case, an array's too" do
+      {:ok, m} = Logex.compile("var_input x real\nvar_output y real\nmove x y", name: "m")
+
+      {:ok, configuration} =
+        Configuration.compile(
+          "c",
+          "var_global retain sp real 16777217.0\nvar_global NON_RETAIN ok real 0.1\n" <>
+            "var_global Retain rs lreal[2] 1.0 9007199254740993.0\n" <>
+            "var_global non_retain q real 16777217.0\nprogram m1 m\nm1.x sp\nm1.y ok\n",
+          %{"m" => m}
+        )
+
+      assert Enum.map(configuration.warnings, &{&1.line, &1.message}) == [
+               {1, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {3,
+                "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
+                  "9.007199254740992e15"},
+               {3, "`rs` is declared but nothing uses it"},
+               {4, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {4, "`q` is declared but nothing uses it"}
+             ]
+    end
+
+    # The review after Milestone 6 (b6-configuration-10): a connection's real constant is
+    # warned of in its member's real, at its line, as a `var_global` line's is in its
+    # global's, an element's in its array's, where until then it was rounded unwarned.
+    test "a connection's real constant, in its member's real" do
+      {:ok, m} =
+        Logex.compile(
+          "var_input x real\nvar_input l lreal\nvar_input rs real[2]\nvar_input n dint\n" <>
+            "var_output y real\nvar_output z lreal\nadd x x y\nadd l l z\nadd rs[0] rs[1] y",
+          name: "m"
+        )
+
+      {:ok, configuration} =
+        Configuration.compile(
+          "c",
+          "program m1 m\nm1.x 16777217.0\nm1.l 9007199254740993.0\nm1.rs[0] 0.1\n" <>
+            "m1.rs[1] 1.6777217e7\nm1.n 5\n",
+          %{"m" => m}
+        )
+
+      assert Enum.map(configuration.warnings, &{&1.line, &1.message}) == [
+               {2, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {3,
+                "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
+                  "9.007199254740992e15"},
+               {5, "`1.6777217e7` is more precise than a real keeps: it is held as 16777216.0"}
+             ]
+
+      # The same digits in an lreal, which keeps them, and a constant that is its real's
+      # shortest text, are warned of nothing.
+      {:ok, quiet} =
+        Configuration.compile(
+          "c",
+          "program m1 m\nm1.x 0.1\nm1.l 16777217.0\nm1.rs[0] 37.1\nm1.rs[1] 2.5\nm1.n 5\n",
+          %{"m" => m}
+        )
+
+      assert quiet.warnings == []
+
+      # Printed, the constant is the shortest text of the double it holds, which comes
+      # back warned again where that text holds more digits than its real keeps, quoted
+      # as printed, and the lreal's, which the double already rounded, unwarned.
+      {:ok, again} =
+        Configuration.compile("c", Configuration.Text.print(configuration), %{"m" => m})
+
+      assert %{again | warnings: []} == %{configuration | warnings: []}
+
+      assert Enum.map(again.warnings, &{&1.line, &1.message}) == [
+               {2, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {5, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
+             ]
+    end
+
     test "from Elixir there is no spelling and nothing is warned" do
       tag = Logex.Tag.new!("r", :real, :var_output, 16_777_216.0)
       {:ok, tokens, _} = Logex.Compiler.tokenize("var_input a bool\nxic a move 1.0 r")
@@ -2323,6 +2495,29 @@ defmodule Logex.RealTest do
       assert d.message ==
                "\"1.0e-400\" is no number logex holds: an lreal's smallest above 0.0 is " <>
                  "2.2250738585072014e-308"
+    end
+
+    # The review after Milestone 6 (b6-configuration-9): each stand-in a message holds is
+    # looked up, so that a text of n refused lines is respelled in time linear in n, where
+    # each stand-in was looked for in every message, 4,000 lines taking 9 s. 4x the lines
+    # took 3.996x to 3.999x the reductions over five runs on Elixir 1.20.4; the bound is a
+    # fifth above the highest.
+    test "is respelled in time linear in the lines that hold one" do
+      refused = fn n ->
+        text = Enum.map_join(1..n, "\n", &"var_global g#{&1} lreal 1.0e-400")
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            {:error, _} = Configuration.compile("c", text, %{})
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = refused.(1000) / refused.(250)
+      assert ratio < 4.8, "4x the lines took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 end

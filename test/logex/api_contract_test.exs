@@ -1266,12 +1266,18 @@ defmodule Logex.ApiContractTest do
     # Decision 302: a global's qualifier, added or taken away, which a switch writes
     # nothing for.
     :retain_added,
-    :retain_removed
+    :retain_removed,
+    # Decision 347: a var_output no rung writes, wired to a global the step holds,
+    # started at the global's value, and given back by the next switch.
+    :holds,
+    :hold_undone
   ]
 
   # The kinds only a configuration's edit gives, which the walk of a lone instance's edit
   # cannot reach.
   @configuration_kinds [
+    :holds,
+    :hold_undone,
     :instance_added,
     :instance_back,
     :instance_pruned,
@@ -2416,7 +2422,10 @@ defmodule Logex.ApiContractTest do
     :overlap_under_single,
     :tie_event_periodic,
     # M5-8: a word's bit read through a connection, at a point or not.
-    :word_bit
+    :word_bit,
+    # Decision 350: a round cut after its first step, as a trip cuts it, keeping back the
+    # rise of a task whose step it did not run.
+    :cut_rise_kept
   ]
 
   # The program types a configuration of the walk draws from: a contact, a latch, a timer
@@ -2845,6 +2854,7 @@ defmodule Logex.ApiContractTest do
        ) do
     before = model
     refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
+    cut!(config, {runtime, elapsed, inputs}, Process.get(:config_samples, %{}))
     samples!(config, runtime, inputs, events)
 
     {model, expected_outputs, expected_events} =
@@ -2962,6 +2972,32 @@ defmodule Logex.ApiContractTest do
 
   defp single_ran!(nil, runs, edge?), do: assert(runs == bit(edge?))
   defp single_ran!(_interval, _runs, _edge?), do: nil
+
+  # Decision 350, restated from the triggers' samples alone: the same cycle cut after its
+  # first step, as a trip at that step's end cuts a round, beside the walk. Each task with
+  # a single keeps its last sample as it was where its sample is a rise and its step is not
+  # the one run, and takes its sample otherwise.
+  defp cut!(config, {runtime, elapsed, inputs}, seen) do
+    {cut, steps} = Runtime.cycle_steps(runtime, elapsed, inputs)
+    cut_after(steps, cut, {config, runtime, inputs, seen})
+  end
+
+  defp cut_after([{_kind, first, _run} = step, _ | _], cut, {config, runtime, inputs, seen}) do
+    {partial, _events} = Runtime.cycle_step(cut, step)
+
+    for task <- config.tasks, task.single != nil do
+      sample = Map.get(inputs, task.single, Runtime.get!(runtime, task.single))
+      last = Map.get(seen, task.name, 0)
+      kept = {last, sample} == {0, 1} and task.name != first
+      assert partial.tasks[task.name].last == cut_last(kept, last, sample), task.name
+      config_reach(:cut_rise_kept, kept)
+    end
+  end
+
+  defp cut_after(_steps, _cut, _at), do: :ok
+
+  defp cut_last(true, last, _sample), do: last
+  defp cut_last(false, _last, sample), do: sample
 
   defp samples!(config, runtime, inputs, events) do
     seen = Process.get(:config_samples, %{})
@@ -4136,7 +4172,10 @@ defmodule Logex.ApiContractTest do
     # Decision 329: a value reported without a timer's `last`, and `b1` whole without a
     # member the state holds that the version switched to does not declare.
     :retain_no_last,
-    :retain_undeclared
+    :retain_undeclared,
+    # Decision 347: a held global kept at its reported value through a cycle while a
+    # connection of the configuration running still names it.
+    :held_kept
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -4207,6 +4246,8 @@ defmodule Logex.ApiContractTest do
       moves: %{},
       holds: %{},
       aside_at: %{},
+      held_writes: %{},
+      held_points: %{},
       o: nil
     }
 
@@ -5192,6 +5233,13 @@ defmodule Logex.ApiContractTest do
     assert rt.globals == model.globals
     assert rt.instances == model.states
 
+    # Decision 347: a global the last step reported held keeps the value it reported,
+    # whatever the configuration running copies out, until the next step or restart.
+    for {global, value} <- w.held_points do
+      assert rt.globals[global] == value, "#{global} was held at #{value}"
+      ce_reach(:held_kept, Enum.any?(rt.config.connections, &(&1.to == global)))
+    end
+
     {prev, onsp} =
       Enum.reduce(events, {w.prev, w.onsp}, fn
         {:ran, _task, name, now}, {prev, onsp} ->
@@ -5374,7 +5422,11 @@ defmodule Logex.ApiContractTest do
     first? = step == :test and stage == :accepted
     {holds, aside_at} = ce_holds(w, rt, first?)
     {held, set_aside} = ce_hold_start(first?, w)
-    ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, held, set_aside}})
+    last = ce_held_writes(first?, w)
+
+    held_writes =
+      ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, held, set_aside, last}})
+
     ce_one_copy!(rt, ce_switched_to(step, w))
     ce_round!(step, w, rt, report)
     ce_reach(:model_after_switch)
@@ -5392,7 +5444,9 @@ defmodule Logex.ApiContractTest do
         resumed: Enum.any?(report, &match?({:resumed, _, _}, &1)),
         moves: ce_moves(w.rt, report),
         holds: holds,
-        aside_at: aside_at
+        aside_at: aside_at,
+        held_writes: held_writes,
+        held_points: ce_held_points(report)
     }
   end
 
@@ -5418,9 +5472,29 @@ defmodule Logex.ApiContractTest do
         stale: [w.e | w.stale],
         passed: w.sup ++ w.passed,
         sup: [],
-        round: nil
+        round: nil,
+        held_points: ce_points_after(stage, report, w.held_points)
     }
   end
+
+  # Decision 347: the globals a step reports held, by name, each at the value it reports;
+  # cancel from accept changes nothing, so what the last step held stays held.
+  defp ce_held_points(report),
+    do:
+      for(
+        {:held, name, value} <- report,
+        not String.contains?(name, "."),
+        into: %{},
+        do: {name, value}
+      )
+
+  defp ce_points_after(:accepted, [], points), do: points
+  defp ce_points_after(_stage, report, _points), do: ce_held_points(report)
+
+  # An edit's first test knows nothing of the var_outputs an earlier edit's switch started
+  # at a held global's value.
+  defp ce_held_writes(true, _w), do: %{}
+  defp ce_held_writes(false, w), do: w.held_writes
 
   # Decisions 339 to 341, restated from the two configurations, the walk's own record of
   # the edit's switches and each state alone: a timer's time runs only while a program that
@@ -5631,7 +5705,7 @@ defmodule Logex.ApiContractTest do
   # configurations' text and the resource before the step; and what a step leaves in every
   # running state, read from its program's text: a switch every tag its program declares
   # but a var_external, and a prune those alone.
-  defp ce_restated!(before, later, report, {:switch, first?, {moves, holds, aside_at}}) do
+  defp ce_restated!(before, later, report, {:switch, first?, {moves, holds, aside_at, last}}) do
     {from, to} = {before.config, later.config}
     {before, dropped} = ce_left(before, from, first?)
     was = Map.new(from.tasks, &{&1.name, &1})
@@ -5733,11 +5807,16 @@ defmodule Logex.ApiContractTest do
             {kind, "#{name}.#{path}",
              ce_declared(ce_held_at(later.instances[name].env, path), path, to.programs[type])}
 
+    {held_through, held_writes} = ce_held_through(before, later, {from, to, kept}, last)
+
     restated =
       Enum.sort(
         dropped ++
           tasks ++
-          globals ++ stopped ++ started ++ shared ++ unwritten ++ retains ++ ce_orders(from, to)
+          globals ++
+          stopped ++
+          started ++
+          shared ++ unwritten ++ retains ++ ce_orders(from, to) ++ held_through
       )
 
     given =
@@ -5756,7 +5835,9 @@ defmodule Logex.ApiContractTest do
             :order,
             :unwritten,
             :retain_added,
-            :retain_removed
+            :retain_removed,
+            :holds,
+            :hold_undone
           ] or
             (not String.contains?(to_string(name), ".") and
                kind in [:added, :initial_changed, :held, :pruned]),
@@ -5795,9 +5876,10 @@ defmodule Logex.ApiContractTest do
     fresh = Runtime.start(to)
 
     for {:instance_added, name, _} <- report,
-        do: assert(later.instances[name] == fresh.instances[name], name)
+        do:
+          assert(later.instances[name] == ce_held_into(fresh.instances[name], name, report), name)
 
-    ce_first_fresh!(first?, {from, to, old, kept}, later, fresh)
+    ce_first_fresh!(first?, {from, to, old, kept}, later, {fresh, report})
 
     # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
     # timing; and, but at the first test, no start over a value the state already holds.
@@ -5843,6 +5925,7 @@ defmodule Logex.ApiContractTest do
         do: refute(tag in ce_externals(to.programs[state.type]), "#{path} started")
 
     ce_declared!(later, &MapSet.subset?/2)
+    held_writes
   end
 
   defp ce_restated!(before, later, report, {:prune, from}) do
@@ -5888,6 +5971,80 @@ defmodule Logex.ApiContractTest do
     ce_declared!(later, &MapSet.equal?/2)
   end
 
+  # Decision 347, restated from the two configurations' text, the resource before the step
+  # and the walk's own record of the last switch's writes: first each var_output that
+  # switch started at a held global's value, in an instance this one keeps too, that still
+  # holds it with no restart since, given back the value it had, `:hold_undone`; then each
+  # connection of the configuration started from a var_output no rung of its program
+  # writes, to a global the step holds, started at the global's value where it holds
+  # another, `:holds`. Gives the entries and this switch's writes, each `{old, new,
+  # restarts}`, a kept instance's alone, `restarts` the resource's restart count, which
+  # `ce_restart/1` holds to one more at each restart and `ce_unmoved!/3` to none at a step
+  # (RV-3's review, where until then the instance's `first` stood for it).
+  defp ce_held_through(before, later, {from, to, kept}, last) do
+    undone =
+      for {{name, member}, {old, new, restarts}} <- Enum.sort(last),
+          name in kept,
+          state = before.instances[name],
+          state.env[member] == new and before.restarts == restarts,
+          do: {name, member, old}
+
+    gave = Map.new(undone, fn {name, member, old} -> {{name, member}, old} end)
+    held = for {:held, global, _} <- ce_held(from, to, later), do: global
+    types = Map.new(to.instances, &{&1.name, &1.type})
+
+    started =
+      for c <- to.connections,
+          c.to in held,
+          c.member in ~w(out q r),
+          not ce_writes?(to.programs[types[c.instance]], c.member),
+          base = ce_unheld({c.instance, c.member}, {before, kept, gave}),
+          base != later.globals[c.to],
+          do: {c.instance, c.member, base, later.globals[c.to]}
+
+    {for({name, member, old} <- undone, do: {:hold_undone, "#{name}.#{member}", old}) ++
+       for({name, member, _base, value} <- started, do: {:holds, "#{name}.#{member}", value}),
+     for(
+       {name, member, base, value} <- started,
+       name in kept,
+       into: %{},
+       do: {{name, member}, {base, value, later.restarts}}
+     )}
+  end
+
+  # What a var_output holds at a switch before decision 347's write: what the last switch's
+  # give-back leaves, or a kept instance's own value, 0 where the switch adds it; one back
+  # from aside as it was set aside; one started at 0, its initial value in these draws.
+  defp ce_unheld({name, member} = key, {before, kept, gave}),
+    do: ce_unheld_of(name in kept, Map.fetch(gave, key), {name, member, before})
+
+  defp ce_unheld_of(true, {:ok, old}, _at), do: old
+
+  defp ce_unheld_of(true, :error, {name, member, before}),
+    do: Map.get(before.instances[name].env, member, 0)
+
+  defp ce_unheld_of(false, _gave, {name, member, before}),
+    do: ce_aside_value(before.aside[name], member)
+
+  defp ce_aside_value(nil, _member), do: 0
+  defp ce_aside_value(state, member), do: Map.get(state.env, member, 0)
+
+  # An instance a switch starts, as start/1 starts it, with decision 347's writes into it.
+  defp ce_held_into(state, name, report),
+    do:
+      Enum.reduce(report, state, fn
+        {:holds, path, value}, state ->
+          ce_held_member(String.split(path, ".", parts: 2), name, {state, value})
+
+        _entry, state ->
+          state
+      end)
+
+  defp ce_held_member([name, member], name, {state, value}),
+    do: %{state | env: Map.put(state.env, member, value)}
+
+  defp ce_held_member(_path, _name, {state, _value}), do: state
+
   defp ce_depth(path), do: length(String.split(path, ".")) - 1
 
   # Decision 66: at an edit's first switch what the resource holds that the original does
@@ -5919,8 +6076,10 @@ defmodule Logex.ApiContractTest do
 
   # Decision 20 for the plant, from the programs' text: a global a connection copies out a
   # var_output that some rung writes to, or that a rung writes through a var_external.
+  defp ce_writes?(program, name), do: program.source =~ ~r/\b(ote|otl|otu) #{name}\b/
+
   defp ce_drives(config) do
-    writes = fn program, name -> program.source =~ ~r/\b(ote|otl|otu) #{name}\b/ end
+    writes = &ce_writes?/2
     types = Map.new(config.instances, &{&1.name, &1.type})
 
     MapSet.new(
@@ -5954,10 +6113,14 @@ defmodule Logex.ApiContractTest do
 
   defp ce_first_fresh!(false, _configs, _later, _fresh), do: nil
 
-  defp ce_first_fresh!(true, {from, to, old, kept}, later, fresh) do
+  defp ce_first_fresh!(true, {from, to, old, kept}, later, {fresh, report}) do
     for i <- to.instances,
         i.name not in kept,
-        do: assert(later.instances[i.name] == fresh.instances[i.name], i.name)
+        do:
+          assert(
+            later.instances[i.name] == ce_held_into(fresh.instances[i.name], i.name, report),
+            i.name
+          )
 
     for g <- to.globals,
         not Map.has_key?(old, g.name),
@@ -5996,10 +6159,11 @@ defmodule Logex.ApiContractTest do
         do: {:order, name, new}
   end
 
-  # No step moves the clock, an overlap count or a trigger's last sample, and only
-  # decision 40 moves a next due time.
+  # No step moves the clock, the restart count, an overlap count or a trigger's last
+  # sample, and only decision 40 moves a next due time.
   defp ce_unmoved!(before, later, report) do
     assert later.now == before.now
+    assert later.restarts == before.restarts
     moved = for {:next_due, task, {_from, to}} <- report, into: %{}, do: {task, to}
 
     for {name, state} <- before.tasks do
@@ -6105,8 +6269,9 @@ defmodule Logex.ApiContractTest do
 
   defp ce_switched_kept!(_prune, _later, _report, _started), do: nil
 
-  defp ce_write({kind, path, value}, env) when kind in [:added, :input, :left],
-    do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
+  defp ce_write({kind, path, value}, env)
+       when kind in [:added, :input, :left, :holds, :hold_undone],
+       do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
 
   defp ce_write({:preset, path, {_from, to}}, env),
     do: put_in(env, String.split(path, ".") ++ ["pre"], to)
@@ -6269,8 +6434,13 @@ defmodule Logex.ApiContractTest do
   defp ce_restart(w) do
     {:ok, rt} = ce_attempt(fn -> Runtime.restart(w.rt, :cold) end)
     assert rt.aside == %{} and rt.generation == w.rt.generation
+    assert rt.restarts == w.rt.restarts + 1
     ce_reach(:restart_in_edit, w.e != nil)
-    %{w | rt: rt, model: ce_seed(rt), round: nil}
+
+    # A restart starts a held point and the var_output wired to it again, each at 0 in
+    # these draws, and nothing drives the point after it either.
+    points = for {name, _value} <- w.held_points, into: %{}, do: {name, rt.globals[name]}
+    %{w | rt: rt, model: ce_seed(rt), round: nil, held_points: points}
   end
 
   # A step on an edit that has ended, or that another has stepped past.
@@ -11510,8 +11680,12 @@ defmodule Logex.ApiContractTest do
   # an edit left blocked, as `ons_blocked` holds it, unblocked by a warm restart. Since
   # M6-2's review its program holds a `tp`, an `osr`'s storage and pulse bits, a real, a
   # 2-D array, a typed counter and a long timer too, each kept moved, `rw_types_kept`.
+  #
+  # Since decision 349 the first scan after each restart that scans runs `fan`'s rung false
+  # too, its `tof` restated: at rest where `.tt` was 0 whatever `.en` held, a retained one
+  # held on at the outage among them (`rw_tof_at_rest`), its delay resumed where `.tt` was 1.
   @rw_reach ~w(rw_kept rw_reset_warm rw_reset_cold rw_member_out rw_element_kept rw_rebased
-               rw_no_edge rw_unblocked rw_types_kept)a
+               rw_no_edge rw_unblocked rw_types_kept rw_tof_at_rest)a
 
   test "a warm restart keeps exactly what the nearest mark retains, and a cold one nothing, " <>
          "each timer rebased and no edge on the first scan" do
@@ -11553,12 +11727,31 @@ defmodule Logex.ApiContractTest do
   # The first scan after a warm restart counts no edge of a retained counter whose `cu`
   # was 0, the eye risen (decision 274).
   defp rw_first_scan(1, restarted, w) do
-    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, restarted, %{"eye" => 1}), 10)
+    inputs = %{"eye" => 1, "run" => 0}
+    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, restarted, inputs), 10)
     assert s.env["boxes"]["cv"] == restarted.env["boxes"]["cv"]
     rw_reach(:rw_no_edge, rw_kept?(w, ["boxes"]) and w.s.env["boxes"]["cu"] == 0)
+    fan = restarted.env["fan"]
+    assert s.env["fan"] == tof_first(fan, restarted.now + 10), inspect(fan)
+    rw_reach(:rw_tof_at_rest, {fan["en"], fan["tt"]} == {1, 0})
   end
 
   defp rw_first_scan(0, _restarted, _w), do: :ok
+
+  # Decision 349, restated: a first scan's de-energised `tof`, from its value before the
+  # scan and the scan's time, resumes its delay where `.tt` is 1, adding the time since its
+  # `last`, and is at rest otherwise, `.dn` and `.tt` 0, whatever `.en` held.
+  defp tof_first(%{"tt" => 1, "acc" => acc, "pre" => pre, "last" => last} = tof, now) do
+    limit = max(pre, 0)
+    acc = min(max(acc, 0) + now - last, limit)
+    running = tof_one(acc != limit)
+    %{tof | "acc" => acc, "dn" => running, "tt" => running, "en" => 0, "last" => now}
+  end
+
+  defp tof_first(tof, now), do: %{tof | "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp tof_one(true), do: 1
+  defp tof_one(false), do: 0
 
   # The rule restated: every leaf at its first value, the var_inputs as they were, and each
   # leaf the nearest mark retains, at a warm restart, as it was, a timer's `last` the
@@ -11745,8 +11938,14 @@ defmodule Logex.ApiContractTest do
   # elements of one array of cells dropped, one past the ninth, in the order of their
   # subscripts' values, `f[2].k` before `f[10].k` (M6-4's review), `iw_past_nine`, the
   # drops' order restated by value where until then it was the text's.
+  #
+  # Since decision 349 each start's first scan with every rung false is run beside the
+  # walk, each `tof` of the changed program, a tag or a member of a cell, restated by
+  # `tof_first/2`: at rest where `.tt` was 0, a kept one held on among them
+  # (`iw_tof_at_rest`).
   @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
-               iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every)a
+               iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every
+               iw_tof_at_rest)a
 
   @iw_toward_reach ~w(iw_int_for_real iw_past_nine)a
 
@@ -11776,11 +11975,48 @@ defmodule Logex.ApiContractTest do
     assert dropped == expected_dropped
     assert started.env == expected
     assert %Instance{first: true, now: 0, ons_blocked: []} = started
+    iw_tofs_first(q, started, new)
     iw_reached(old, new, {s, started, dropped})
     iw_toward_reached(old, new, {corrupt, dropped})
     iw_same(old == new and corrupt == %{}, {p, s, image})
     iw_mistake(iw_mistakes(q, s, image))
   end
+
+  # The first scan of a start with every rung false, beside the walk: each `tof` restated.
+  defp iw_tofs_first(program, started, spec) do
+    {_out, scanned} =
+      Runtime.call(program, started, %{"eye" => 0, "run" => 0}, %Scan{now: 10, first: true})
+
+    for at <- iw_tofs(spec) do
+      tof = iw_at(started.env, at)
+      assert iw_at(scanned.env, at) == tof_first(tof, 10), inspect({at, tof})
+      iw_reach(:iw_tof_at_rest, {tof["en"], tof["tt"]} == {1, 0})
+    end
+  end
+
+  # Each `tof` a scan runs, by its keys into an env: a tag, a cell's member and the member of
+  # each element cell a `cal` runs, the first two.
+  defp iw_tofs(spec),
+    do:
+      for(
+        {name, kind, _q} <- spec.tags,
+        at <- iw_tofs_in(name, kind, spec.cell),
+        do: at
+      )
+
+  defp iw_tofs_in(name, :tof, _cell), do: [[name]]
+
+  defp iw_tofs_in(name, :cell, cell),
+    do: for({m, :tof, _q} <- cell, do: [name, m])
+
+  defp iw_tofs_in(name, {:cells, _n}, cell),
+    do: for(i <- [0, 1], {m, :tof, _q} <- cell, do: [name, {:el, i}, m])
+
+  defp iw_tofs_in(_name, _kind, _cell), do: []
+
+  defp iw_at(value, []), do: value
+  defp iw_at(values, [{:el, i} | rest]), do: iw_at(elem(values, i), rest)
+  defp iw_at(map, [key | rest]), do: iw_at(Map.fetch!(map, key), rest)
 
   defp iw_compile(spec) do
     {:ok, cell} = Logex.compile(iw_cell_text(spec.cell, spec.presets), name: "cell")
@@ -12447,13 +12683,15 @@ defmodule Logex.ApiContractTest do
   # to another program type, each kept value laid over the changed configuration's start,
   # a timer's `last` 0, and the trigger's sample kept with its global. Its reach: each row's
   # kinds of leaf and global, each trigger's case and each resource-level drop; the
-  # lone instance's drops are M6-4's walk's (`iw_`), which this one does not repeat.
+  # lone instance's drops are M6-4's walk's (`iw_`), which this one does not repeat. Since
+  # decision 349 `pp` holds a `tof`, `f`, on `t`'s qualifier, whose first scan after each
+  # restart and start is restated (`rr_tof_at_rest`).
   @rr_reach ~w(rr_kept_warm rr_reset_warm rr_reset_cold rr_member_out rr_rebased
                rr_input_kept rr_clock_kept rr_global_kept rr_global_reset rr_output_reset
                rr_sample_kept rr_rise_fires rr_image_kept rr_image_global rr_image_trigger
                rr_undeclared_global rr_retyped_global rr_resized_global rr_unretained_global
                rr_misfit_global rr_retyped_instance rr_undeclared_instance
-               rr_member_unretained rr_member_retyped rr_member_misfit)a
+               rr_member_unretained rr_member_retyped rr_member_misfit rr_tof_at_rest)a
 
   test "a resource's warm and cold restarts keep what decision 271's table says, and its " <>
          "image meets a changed configuration by decision 277" do
@@ -12508,6 +12746,7 @@ defmodule Logex.ApiContractTest do
     assert rt.now == w.rt.now
     sample = rr_sample(mode, rr_quals(w.spec)["trig"], w.sample)
     rr_fires!(rt, sample, mode)
+    rr_tof_first!(rt)
     rr_restart_reach(mode, w, {rt, fresh})
     %{w | rt: rt, sample: sample}
   end
@@ -12548,6 +12787,7 @@ defmodule Logex.ApiContractTest do
 
     sample = rr_image_sample(rr_global_kept?("trig", w.spec, expected_dropped), w.sample)
     rr_fires!(rt, sample, :image)
+    rr_tof_first!(rt)
     rr_reach(:rr_image_trigger, sample == 1)
     rr_drop_reach(expected_dropped)
     %{w | spec: spec, config: config, rt: rt, sample: sample}
@@ -12602,6 +12842,25 @@ defmodule Logex.ApiContractTest do
     rr_reach(:rr_rise_fires, mode == :warm and ran and trig == 1)
   end
 
+  # Decision 349: the first scan of each `pp` after a restart or a start, in a cycle of 0 ms
+  # beside the walk, runs its `tof` `f` as `tof_first/2` restates it where its rung is
+  # false, at rest where `.tt` was 0 whatever `.en` held, and held on where it is true.
+  defp rr_tof_first!(rt) do
+    {later, _outputs, events} = Runtime.cycle(rt, 0, %{})
+
+    for {:ran, "fast", name, now} <- events,
+        %Instance{type: "pp", first: true, env: %{"f" => f}} <- [rt.instances[name]] do
+      go = later.instances[name].env["go"]
+      assert later.instances[name].env["f"] == rr_tof_run(go, f, now), inspect({name, f})
+      rr_reach(:rr_tof_at_rest, {go, f["en"], f["tt"]} == {0, 1, 0})
+    end
+  end
+
+  defp rr_tof_run(0, f, now), do: tof_first(f, now)
+
+  defp rr_tof_run(1, f, now),
+    do: %{f | "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => now}
+
   # M6-8's review: an instance's first env restated from its program's text, each tag at
   # its type's zero, a timer's and a counter's preset the number on the instruction that
   # runs it, `last` 0, no var_external held (decision 49).
@@ -12613,6 +12872,7 @@ defmodule Logex.ApiContractTest do
       "lamp" => 0,
       "c" => %{"cu" => 0, "cv" => 0, "ov" => 0, "pv" => 1000, "q" => 0, "r" => 0},
       "t" => rr_ton(),
+      "f" => rr_ton(),
       "a" => {0, 0, 0},
       "k" => 0,
       "b" => %{"go" => 0, "k" => 0, "q" => 0, "t" => rr_ton()},
@@ -12635,6 +12895,7 @@ defmodule Logex.ApiContractTest do
       {["b", "q"], :value, :bool},
       {["b", "t"], :kind, "ton"},
       {["c"], :kind, "ctu"},
+      {["f"], :kind, "tof"},
       {["k"], :value, String.to_atom(spec.ktype)},
       {["lamp"], :value, :bool},
       {["q2"], :value, :bool},
@@ -12683,7 +12944,9 @@ defmodule Logex.ApiContractTest do
   defp rr_kind(false, _now, _path, acc), do: acc
 
   # A kind kept keeps every leaf the walk lays whole under it, a timer's map or a counter's.
-  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["b", "t"]], do: [path | kept]
+  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["f"], ["b", "t"]],
+    do: [path | kept]
+
   defp rr_kept_under(_path, kept), do: kept
 
   defp rr_value({false, _now}, _types, _path, acc), do: acc
@@ -12737,7 +13000,9 @@ defmodule Logex.ApiContractTest do
           ],
           do: {[name], rw_flag(q[name], false), kind}
 
+    # Decision 349's `tof`, `f`, on `t`'s line's qualifier, so that its draw is no draw more.
     own ++
+      [{["f"], rw_flag(q["t"], false), :timer}] ++
       for {m, kind} <- [{"go", :value}, {"q", :value}, {"k", :value}, {"t", :timer}],
           do: {["b", m], rw_flag(q["cell." <> m], rw_flag(q["b"], false)), kind}
   end
@@ -12907,12 +13172,14 @@ defmodule Logex.ApiContractTest do
           "var_output #{rr_word(q["lamp"])}lamp bool",
           "var #{rr_word(q["c"])}c ctu",
           "var #{rr_word(q["t"])}t ton",
+          "var #{rr_word(q["t"])}f tof",
           "var #{rr_word(q["a"])}a int[3]",
           "var #{rr_word(q["k"])}k #{spec.ktype}",
           "var #{rr_word(q["b"])}b cell",
           "var #{rr_word(q["q2"])}q2 bool",
           "xic go ctu c 1000",
           "xic go ton t 30",
+          "xic go tof f 30",
           "xic go add k 1 k",
           "xic go add a[1] 1 a[1]",
           "xic go add #{tot} 1 #{tot}",
@@ -13636,7 +13903,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # count the store holds as unretained (decision 277).
     :keep_requalified,
     :original_after_crash,
-    :store_unretained
+    :store_unretained,
+    # Decision 350: the trigger `g`'s rise standing once `l`'s step has run.
+    :rise_stood_at_step
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14303,6 +14572,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
     reach(:trip, true)
     reach(trip_kind(reason), true)
+    reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
     w = all_steps(round.steps, w, round.took)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end
@@ -14964,7 +15234,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_trigger_kept,
     :life_latest_wins,
     :life_leaf_kept,
-    :life_changed_store
+    :life_changed_store,
+    # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
+    # `l`'s step, its last sample, a store's `trigger` line, as it was.
+    :rise_kept_by_trip
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -15748,10 +16021,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {cycled, outputs, events} = Runtime.cycle(w.rt, elapsed, inputs)
     reach(:"round_#{kind}", true)
     reach({:trigger_round, w.doing || :poll}, kind == :trigger)
+    {g_sample, g_rise} = g_sampled(w.g_sample, Runtime.get!(w.rt, "g"), w.draws.running.logic)
 
     %{
       w
-      | g_sample: Runtime.get!(w.rt, "g"),
+      | g_sample: g_sample,
         logical: w.logical + elapsed,
         begun: w.begun + 1,
         round: %{
@@ -15765,7 +16039,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
           cycled: cycled,
           outputs: outputs,
           expected: events,
-          trip: nil
+          trip: nil,
+          g_rise: g_rise
         }
     }
   end
@@ -15795,7 +16070,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     %{
       w
-      | longest: Map.update(w.longest, task, ms, &max(&1, ms)),
+      | g_sample: g_stood(task, round.g_rise, w.g_sample),
+        longest: Map.update(w.longest, task, ms, &max(&1, ms)),
         round: %{
           round
           | rt: rt,
@@ -15807,6 +16083,19 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         }
     }
   end
+
+  # Decision 350, restated: the trigger `g`'s sample as a round begins, the one its task `l`
+  # reads, stands as its last at once, but a rise, which makes `l` run, only once `l`'s
+  # step has run; a round a trip stops before it keeps the last sample as it was.
+  defp g_sampled(0, 1, logic) when logic != nil, do: {0, true}
+  defp g_sampled(_last, sample, _logic), do: {sample, false}
+
+  defp g_stood("l", true, _sample) do
+    reach(:rise_stood_at_step, true)
+    1
+  end
+
+  defp g_stood(_task, _rise, sample), do: sample
 
   # M5-9, restated (decisions 153 and 160): a step whose run met a major fault trips at its
   # end, for the first, before any later step of its round and before a watchdog.
@@ -15838,6 +16127,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
     reach(:trip, true)
     reach(trip_kind(reason), true)
+    reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
     w = all_steps(round.steps, w, round.took)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end

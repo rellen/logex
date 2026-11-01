@@ -13,7 +13,7 @@ defmodule Logex.ClaudeMdTest do
   @claude_md Path.join(@root, "CLAUDE.md")
 
   # Claude Code warns of a CLAUDE.md over 40,000 characters, as one that costs every session
-  # it is loaded into (provisional: the figure is that guidance's, not a measure of ours).
+  # it is loaded into (decision 361: the figure is that guidance's, not a measure of ours).
   @cap 40_000
 
   # What marks history: a numbered decision or fix, the review, the maintainer, a year, a
@@ -27,7 +27,7 @@ defmodule Logex.ClaudeMdTest do
   # A rule told by when it came: a time word before a mark, "since M5-14", "until decision
   # 228", "as of RV-2", "after `23a5136`"; a word of change tied to one, "added in M5-14";
   # and a work item's label or a commit anywhere, "(M5-14)", which an index of what is there
-  # now has no use for (provisional: a label as a pointer into `PLAN.md` is refused too).
+  # now has no use for (decision 366: a label as a pointer into `PLAN.md` is refused too).
   @path ~r{^(?:(?:lib|test|scripts|docs|\.github)/(?!\d+(?:,\d+)*$)|\.\w+-[\w-]+$|[\w.-]+\.(?:ex|exs|md|nix|yml|sh|txt)$)}
 
   @history [
