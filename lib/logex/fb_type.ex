@@ -52,6 +52,15 @@ defmodule Logex.FbType do
   block of its name, the file it was read from aside, and every type its table holds the
   one its own text compiles to in turn, each under its own name, with no table of its own,
   and none holding an instance of a type of its own name, at any depth.
+
+  `elements` is what an instance of the type holds at every depth, since RV-9 (decision
+  370): the elements of every array its members hold, an array of instances counting each
+  element's elements where its type holds any and its own where it holds none, summed, 0
+  for a built-in and for a block that holds no array. `of/1` counts it from the members,
+  each type an instance names read in the table, so each type is counted once, as it is
+  built, and a declaration reads it in constant time (`Logex.Declarations.check/1`, which
+  refuses one past 65,536). It is part of the type a check compares, so a type handed in
+  with another count is not the one its text compiles to.
   """
 
   alias Logex.{Program, Tag}
@@ -75,12 +84,13 @@ defmodule Logex.FbType do
   end
 
   @enforce_keys [:name, :members]
-  defstruct [:name, :members, body: nil]
+  defstruct [:name, :members, body: nil, elements: 0]
 
   @type t :: %__MODULE__{
           name: String.t(),
           members: [Member.t()],
-          body: Logex.Program.t() | nil
+          body: Logex.Program.t() | nil,
+          elements: non_neg_integer
         }
 
   # The on-delay timer (docs/naming.md, `ton`): the conventional TIMER's members,
@@ -531,16 +541,27 @@ defmodule Logex.FbType do
   `{:block, name}`, as its tag does, and since M6-1 of its tag's qualifier, `retain`
   (decision 270). A built-in's members have none: they follow their instance. Their order is `cal`'s positional order: the tags
   declared from Elixir first, which have no line, by name, then the source's in the order
-  they are declared. No member of a user block is written from outside it.
+  they are declared. No member of a user block is written from outside it. Its `elements`
+  are counted from its members, each type an instance names read in the body's `blocks`
+  (decision 370).
   """
   # M5-11: a block's own `var` may be an array, a member of its array type, which starts
   # at its initial list or its elements' zero (`Logex.Array.started/2`).
-  def of(%Program{name: name, tags: tags} = body),
-    do: %__MODULE__{
+  def of(%Program{blocks: blocks} = body), do: of(body, blocks)
+
+  # Decision 370 (RV-9): its `elements` counted from its members, each type an instance
+  # names read in `blocks`, the table it is read inside, where its own is kept (decision
+  # 53), or the table a check compiled it again over (check/2).
+  defp of(%Program{name: name, tags: tags} = body, blocks) do
+    members = tags |> Map.values() |> Enum.sort_by(&order/1) |> Enum.map(&member_of/1)
+
+    %__MODULE__{
       name: name,
-      members: tags |> Map.values() |> Enum.sort_by(&order/1) |> Enum.map(&member_of/1),
-      body: body
+      members: members,
+      body: body,
+      elements: Logex.Array.held_by(members, blocks)
     }
+  end
 
   defp order(%Tag{line: nil, name: name}), do: {0, name}
   defp order(%Tag{line: line}), do: {1, line}
@@ -692,7 +713,8 @@ defmodule Logex.FbType do
           Map.new(named, &{&1.name, within(&1, blocks)}),
           from_elixir(within(held, blocks))
         ),
-        held
+        held,
+        blocks
       )
 
   defp from_elixir(%__MODULE__{body: body}),
@@ -700,11 +722,12 @@ defmodule Logex.FbType do
 
   defp recompiled(
          {:ok, body},
-         %__MODULE__{name: name, body: %Program{source: source, file: file}} = held
+         %__MODULE__{name: name, body: %Program{source: source, file: file}} = held,
+         blocks
        ),
-       do: read_from?(file, name) and of(%{filed(body, file) | source: source}) == held
+       do: read_from?(file, name) and of(%{filed(body, file) | source: source}, blocks) == held
 
-  defp recompiled(:error, _held), do: false
+  defp recompiled(:error, _held, _blocks), do: false
 
   defp read_from?(nil, _name), do: true
   # RV-2 (the review after Milestone 6, a5-data-model-9): read from the file its loader

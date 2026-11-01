@@ -2408,6 +2408,12 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
     at 32767;
   - a user block, `var gates gate[4]`, which `Logex.compile_file/1` loads from `gate.ld`
     beside the program as it loads a block declared alone.
+- **65,536 elements at every depth.** A declaration's elements are counted through every
+  array of instances it holds, and past 65,536 it is refused at its line (decision 370):
+  an element of an array of blocks counts the elements its block holds, so `var row
+  cell[256]`, each `cell` holding 256 blocks of `ton[256]`, would hold 16,777,216 timers,
+  and an instance counts every array its block holds, at any depth, together. `var row
+  cell[1]` holds 65,536 and is taken, as `ton[256,256]` is.
 - **Literal subscripts to run an element.** An instruction that runs an instance names
   its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
   storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each

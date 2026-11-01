@@ -23,6 +23,18 @@ defmodule Logex.Declarations do
   instances, `var lane_t ton[4]` or `var gates gate[4]`, is declared with `var` alone and
   takes no initial list (decision 154). No tag is named with brackets.
 
+  Since RV-9 (decision 370) the 65,536 elements bound a declaration at every depth, counted
+  through every array of instances it holds (`Logex.Array.deep_size/1`): an array of
+  instances counts each element's elements where its type holds any, its own where it
+  holds none, and an instance the elements of every array its type holds at any depth,
+  summed, so `var row cell[256]`, each `cell` holding 256 blocks of `ton[256]`, would hold
+  16,777,216 and is refused at its line, in words that name the count and the bound, from
+  Elixir too, where `var row cell[1]` holds 65,536 and is taken, as `ton[256,256]` is. The
+  count is kept in each type's schema, `Logex.FbType`'s `elements`, counted once a type as
+  it is built, so a declaration reads it in constant time and nothing is built; its type
+  known and its own sizes taken first, so an array past the bound by its sizes is told so
+  alone.
+
   A qualifier (decisions 267 to 270) comes straight after the section word, `var retain
   count dint`, on a program's `var` and `var_output` and a block's three sections: never on
   a program's `var_input` nor a `var_external`, never twice nor both, and never after the
@@ -1564,6 +1576,32 @@ defmodule Logex.Declarations do
 
   defp within_limit(_size, _name, _dims), do: []
 
+  # Decision 370 (RV-9): a declaration of instances holds 65,536 elements at most counted
+  # through every array of instances at every depth (`Logex.Array.deep_size/1`), as an array
+  # holds 65,536 of its own: an array of 256 blocks each holding `ton[256]` holds 65,536,
+  # and one each holding 256 of those 16,777,216, refused at its line before anything is
+  # built. It is judged by instance/1 and instances/1, once its type is known and its own
+  # sizes taken, so a type the compile does not know is never counted and an array past
+  # the bound by its own sizes is told so alone; each reads its type's `elements` in a
+  # clause's guard, so a declaration of a type that holds no array pays nothing for it.
+  defp held_within(%Tag{name: name, type: type}),
+    do: held_limit(Logex.Array.deep_size(type), name, type)
+
+  defp held_limit(count, name, type) when count > 65_536,
+    do: [
+      "#{label(name)} would hold #{count} elements at every depth, #{holding(type)}: a " <>
+        "declaration holds 65536 at most, counted through every array of instances it holds"
+    ]
+
+  defp held_limit(_count, _name, _type), do: []
+
+  defp holding({:array, %FbType{name: name} = type, dims}),
+    do:
+      "#{Logex.Array.size(dims)} instances of `#{name}`, `[#{Enum.join(dims, ",")}]`, each " <>
+        "holding #{Logex.Array.deep_size(type)}"
+
+  defp holding(%FbType{name: name}), do: "in the arrays its type `#{name}` holds"
+
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
   defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"
 
@@ -1630,6 +1668,10 @@ defmodule Logex.Declarations do
            "`#{section}`"
        ]
 
+  defp instance(%Tag{initial: nil, type: %FbType{elements: elements}} = tag)
+       when elements > 65_536,
+       do: held_within(tag)
+
   defp instance(%Tag{initial: nil}), do: []
 
   defp instance(%Tag{name: name, type: %FbType{body: %Logex.Program{}}} = tag),
@@ -1660,6 +1702,10 @@ defmodule Logex.Declarations do
            "declared with `var`, as in `var #{display(name)} #{type.name}[#{Enum.join(dims, ",")}]`" <>
            ", not with `#{section}`"
        ]
+
+  defp instances(%Tag{initial: nil, type: {:array, %FbType{elements: elements}, _dims}} = tag)
+       when elements > 0,
+       do: held_within(tag)
 
   defp instances(%Tag{initial: nil}), do: []
   defp instances(%Tag{name: name, type: type}), do: [instances_initial(name, type)]

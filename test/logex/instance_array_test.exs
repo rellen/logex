@@ -234,6 +234,271 @@ defmodule Logex.InstanceArrayTest do
     end
   end
 
+  # Decision 370: a declaration's elements are counted through every array of instances it
+  # holds, at any depth, an array of instances counting each element's elements where its
+  # type holds any, and past 65,536 it is refused at its line, as one array past it is.
+  describe "an instance's size at every depth (decision 370)" do
+    @deep "a declaration holds 65536 at most, counted through every array of instances it holds"
+
+    defp block!(source, name, types \\ []) do
+      {:ok, type} = Logex.compile(source, name: name, types: types)
+      type
+    end
+
+    # `k` holds `ton[256]`, and `cell` 256 of `k`: 65,536 timers.
+    defp nest do
+      k =
+        block!(
+          "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+            "xic x ton t[0] 10\nxic t[0].dn ote y",
+          "k"
+        )
+
+      cell =
+        block!(
+          "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[256]\ncal c[0] x y",
+          "cell",
+          [k]
+        )
+
+      {k, cell}
+    end
+
+    defp held(declaration), do: "var_input x bool\nvar_output y bool\n#{declaration}\n"
+
+    test "an array of blocks each holding 256 blocks of ton[256] is refused at its line" do
+      {_k, cell} = nest()
+
+      assert messages(held("var row cell[256]") <> "cal row[0] x y", [cell]) == [
+               {3,
+                "`row` would hold 16777216 elements at every depth, 256 instances of `cell`, " <>
+                  "`[256]`, each holding 65536: " <> @deep}
+             ]
+    end
+
+    test "exactly 65,536 at every depth are taken, and 65,537 refused, an array's and an instance's" do
+      {k, cell} = nest()
+
+      assert %Logex.Program{} = program(held("var row cell[1]") <> "cal row[0] x y", [cell])
+      assert %Logex.Program{} = program(held("var one cell") <> "cal one x y", [cell])
+      assert %Logex.Program{} = program(held("var row k[256]") <> "cal row[0] x y", [k])
+
+      assert messages(held("var row k[257]") <> "cal row[0] x y", [k]) == [
+               {3,
+                "`row` would hold 65792 elements at every depth, 257 instances of `k`, " <>
+                  "`[257]`, each holding 256: " <> @deep}
+             ]
+
+      big =
+        block!(
+          "function_block big\nvar_input x bool\nvar_output y bool\nvar a int[65536]\n" <>
+            "var b int[1]\nxic x ote y",
+          "big"
+        )
+
+      assert messages(held("var one big") <> "cal one x y", [big]) == [
+               {3,
+                "`one` would hold 65537 elements at every depth, in the arrays its type `big` " <>
+                  "holds: " <> @deep}
+             ]
+
+      assert messages(held("var row big[1]") <> "cal row[0] x y", [big]) == [
+               {3,
+                "`row` would hold 65537 elements at every depth, 1 instances of `big`, `[1]`, " <>
+                  "each holding 65537: " <> @deep}
+             ]
+
+      # A built-in type holds no array: an array of 65,536 timers is the single array's
+      # bound, 65,537 refused in its words.
+      assert %Logex.Program{} =
+               program(held("var t ton[65536]") <> "xic x ton t[0] 5\nxic t[0].dn ote y")
+
+      assert messages(held("var t ton[65537]") <> "xic x ton t[0] 5") == [
+               {3, "`t` would hold 65537 elements, `[65537]`: an array holds 65536 at most"}
+             ]
+    end
+
+    test "in a block's file, the block declaring it is refused at its line" do
+      {_k, cell} = nest()
+
+      assert {:error, [%Logex.Diagnostic{line: 4, message: message}]} =
+               Logex.compile(
+                 "function_block grid\nvar_input x bool\nvar_output y bool\n" <>
+                   "var r cell[2]\ncal r[0] x y",
+                 name: "grid",
+                 types: [cell]
+               )
+
+      assert message ==
+               "`r` would hold 131072 elements at every depth, 2 instances of `cell`, `[2]`, " <>
+                 "each holding 65536: " <> @deep
+    end
+
+    test "from Elixir, a host's mistake, in the same words" do
+      {_k, cell} = nest()
+
+      assert_raise ArgumentError,
+                   "`row` would hold 131072 elements at every depth, 2 instances of `cell`, " <>
+                     "`[2]`, each holding 65536: " <> @deep,
+                   fn -> Logex.Tag.new!("row", {:array, cell, [2]}) end
+
+      assert %Logex.Tag{} = Logex.Tag.new!("row", {:array, cell, [1]})
+    end
+
+    @tag :tmp_dir
+    test "through compile_file/1's loader, and a configuration's program that holds one", %{
+      tmp_dir: dir
+    } do
+      File.write!(
+        Path.join(dir, "k.ld"),
+        "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+          "xic x ton t[0] 10\nxic t[0].dn ote y\n"
+      )
+
+      File.write!(
+        Path.join(dir, "cell.ld"),
+        "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[256]\ncal c[0] x y\n"
+      )
+
+      File.write!(Path.join(dir, "fine.ld"), held("var row cell[1]") <> "cal row[0] x y\n")
+      File.write!(Path.join(dir, "deep.ld"), held("var row cell[256]") <> "cal row[0] x y\n")
+      deep = Path.join(dir, "deep.ld")
+
+      assert {:ok, %Logex.Program{}} = Logex.compile_file(Path.join(dir, "fine.ld"))
+
+      assert {:error, [%Logex.Diagnostic{file: ^deep, line: 3, message: message}]} =
+               Logex.compile_file(deep)
+
+      assert message ==
+               "`row` would hold 16777216 elements at every depth, 256 instances of `cell`, " <>
+                 "`[256]`, each holding 65536: " <> @deep
+
+      File.write!(
+        Path.join(dir, "plant.logex"),
+        "var_global g bool\ntask t interval 10 priority 1\nprogram m1 deep with t\nm1.x g\n"
+      )
+
+      assert {:error, diagnostics} =
+               Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+
+      assert %Logex.Diagnostic{file: ^deep, line: 3, message: ^message} =
+               Enum.find(diagnostics, &(&1.file == deep))
+    end
+
+    # A type's count is kept in its schema, `elements`, counted from its members as it is
+    # built, each type it names read in its table, so it is counted once a type and a
+    # declaration reads it in constant time: a chain of types each holding two instances of
+    # the type below holds 2^d elements, read at depth 16 in what it costs at depth 8,
+    # where counting each holder's types anew would cost 2^d. Counted in a process of its
+    # own with a heap the collector never visits, the least of five runs.
+    test "a type keeps its count in its schema, read at any depth in constant time" do
+      chain = fn d ->
+        bottom =
+          block!("function_block t0\nvar_input x bool\nvar a bool[1]\nxic x ote a[0]", "t0")
+
+        Enum.reduce(1..d, bottom, fn i, below ->
+          block!(
+            "function_block t#{i}\nvar_input x bool\nvar a t#{i - 1}\nvar b t#{i - 1}\n" <>
+              "cal a x\ncal b x",
+            "t#{i}",
+            [below]
+          )
+        end)
+      end
+
+      cost = fn type ->
+        parent = self()
+
+        runs =
+          for _run <- 1..5 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  count = Logex.Array.deep_size(type)
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:counted, count, later - before})
+                end,
+                [:monitor, min_heap_size: 1_000_000]
+              )
+
+            assert_receive {:counted, count, reductions}, 10_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+            {count, reductions}
+          end
+
+        {Enum.min(Enum.map(runs, &elem(&1, 1))), elem(hd(runs), 0)}
+      end
+
+      eight_type = chain.(8)
+      sixteen_type = chain.(16)
+      assert {eight_type.elements, sixteen_type.elements} == {256, 65_536}
+      assert Logex.FbType.ton().elements == 0
+      {eight, 256} = cost.(eight_type)
+      {sixteen, 65_536} = cost.(sixteen_type)
+      assert sixteen <= eight, "#{eight} at depth 8, #{sixteen} at depth 16"
+
+      assert %Logex.Program{} = program(held("var one t16") <> "cal one x", [sixteen_type])
+      seventeen = chain.(17)
+
+      assert messages(held("var one t17") <> "cal one x", [seventeen]) == [
+               {3,
+                "`one` would hold 131072 elements at every depth, in the arrays its type `t17` " <>
+                  "holds: " <> @deep}
+             ]
+    end
+
+    # The count is part of the type a check compares (decision 54): a type handed in with
+    # another, the outermost's or a type its table holds, is not the one its text compiles
+    # to, and is refused as any type edited by hand is.
+    test "a count a host edits is refused, so the bound is not escaped by a type handed in" do
+      {_k, cell} = nest()
+      source = held("var row cell[256]") <> "cal row[0] x y"
+
+      for forged <- [
+            %{cell | elements: 0},
+            put_in(cell.body.blocks["k"].elements, 0)
+          ] do
+        assert_raise ArgumentError,
+                     ~r/^types must be function block types from Logex.compile\/2, got: /,
+                     fn -> Logex.compile(source, name: "p", types: [forged]) end
+      end
+    end
+
+    # Nothing is built: the refused compile of 16,777,216 elements costs no more than the
+    # compile of 65,536 it is refused beside, the least of five runs of each.
+    test "the refusal builds nothing: it costs what the compile of an array of one does" do
+      {_k, cell} = nest()
+
+      cost = fn source ->
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..5 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  result = Logex.compile(source, name: "p", types: [cell])
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, elem(result, 0), later - before})
+                end,
+                [:monitor, min_heap_size: 4_000_000]
+              )
+
+            assert_receive {:compiled, _outcome, reductions}, 10_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+            reductions
+          end
+        )
+      end
+
+      refused = cost.(held("var row cell[256]") <> "cal row[0] x y")
+      taken = cost.(held("var row cell[1]") <> "cal row[0] x y")
+      assert refused <= taken, "#{refused} refused, #{taken} taken"
+    end
+  end
+
   describe "the instruction that runs an element (decision 154)" do
     @runs "var_input go bool\nvar_input i dint\nvar_output q bool\n"
 
