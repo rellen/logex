@@ -1206,7 +1206,7 @@ defmodule Logex.Runner do
         "is forced"
 
   defp not_input(:error, name, %{configuration: configuration, types: types} = state),
-    do: unheld(element_of(Logex.Array.split(name), state.located), name, {types, configuration})
+    do: unheld(element_of(Logex.Name.element(name), state.located), name, {types, configuration})
 
   defp element_of({array, _subscripts}, located), do: Map.get(located, array)
   defp element_of(nil, _located), do: nil

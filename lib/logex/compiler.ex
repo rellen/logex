@@ -1159,10 +1159,10 @@ defmodule Logex.Compiler do
   # M5-14 (decision 154): the instruction that runs an element of an array of instances
   # takes it by literal subscripts.
   defp subscripted_instance(word, written) do
-    {_array, subscripts} = Logex.Array.split(written)
+    {_array, subscripts} = Logex.Name.element(written)
 
     index =
-      for text <- subscripts, {:tag, _} <- [Logex.Array.subscript(text)], do: {:name, 0, text}
+      for text <- subscripts, {:tag, _} <- [Logex.Name.subscript(text)], do: {:name, 0, text}
 
     "`#{word}` runs `#{written}`, whose #{held_subscripts(index)}: an instruction that runs " <>
       "an instance takes an element of an array of instances by literal subscripts, as in " <>
@@ -1192,10 +1192,10 @@ defmodule Logex.Compiler do
   # `edge[slot]` as `edge[0]`, `grid[r,2].3` as `grid[0,2].3`: each tag's name a 0.
   defp subscripted_example(written) do
     {element, rest} = split_element(:binary.split(written, "]"))
-    {array, subscripts} = Logex.Array.split(element <> "]")
+    {array, subscripts} = Logex.Name.element(element <> "]")
 
     zeroed =
-      for text <- subscripts, do: zero_tag(Logex.Array.subscript(text), text)
+      for text <- subscripts, do: zero_tag(Logex.Name.subscript(text), text)
 
     "#{array}[#{Enum.join(zeroed, ",")}]#{rest}"
   end
@@ -1357,7 +1357,7 @@ defmodule Logex.Compiler do
   # M5-14: an element of an array of instances, `lane_t[2]`, as a tag of its elements' type
   # under its own name; nil where its array is none.
   defp instance_element(tags, name) do
-    {array, _subscripts} = Logex.Array.split(name)
+    {array, _subscripts} = Logex.Name.element(name)
     of_instances(Map.get(tags, array), name)
   end
 
@@ -1434,8 +1434,8 @@ defmodule Logex.Compiler do
   # index, `%{[2] => %{"pre" => 500}}` (Logex.FbType.started/2).
   defp starts(tags, instance, symbol, pre)
        when binary_part(instance, byte_size(instance) - 1, 1) == "]" do
-    {array, subscripts} = Logex.Array.split(instance)
-    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    {array, subscripts} = Logex.Name.element(instance)
+    index = for text <- subscripts, do: elem(Logex.Name.subscript(text), 1)
     Map.update!(tags, array, &started_at(&1, index, symbol, pre))
   end
 
@@ -1671,18 +1671,32 @@ defmodule Logex.Compiler do
   defp printed({:routine, {:rungs, rungs}}) do
     {lines, _line} =
       Enum.map_reduce(rungs, 1, fn rung, at ->
-        line = rung_line(rung)
+        line = printed_at(rung_line(rung), at)
         {String.duplicate("\n", line - at) <> Logex.Printer.print(rung), line}
       end)
 
     Enum.join(lines)
   end
 
+  # RV-2 (H5's first root): a rung's line is its first element's that has one, an empty
+  # leg passed over, `( | xic a ) ote b` on the line of its `xic`, at any depth. A rung of
+  # empty groups alone, `( )`, which holds no line, is printed on the line after the one
+  # before it, a rung of its own whatever its line was, since nothing in it is cited.
   defp rung_line({:rung, elements}), do: element_line(elements)
 
-  defp element_line([{:branches, [leg | _legs]} | _elements]), do: element_line(leg)
+  defp element_line([{:branches, legs} | elements]), do: leg_line(legs, elements)
   defp element_line([{_kind, line, _value} | _elements]), do: line
   defp element_line([{_literal, line, _value, _spelling} | _elements]), do: line
+  defp element_line([]), do: nil
+
+  defp leg_line([leg | legs], elements), do: or_later(element_line(leg), legs, elements)
+  defp leg_line([], elements), do: element_line(elements)
+
+  defp or_later(nil, legs, elements), do: leg_line(legs, elements)
+  defp or_later(line, _legs, _elements), do: line
+
+  defp printed_at(nil, at), do: at + 1
+  defp printed_at(line, _at), do: line
 
   # The tags, each instance of a user block naming its type, and the table: every type the
   # instances reach, at any depth, once, by name, the one version of it the compile holds,
@@ -1986,6 +2000,9 @@ defmodule Logex.Compiler do
   # M5-14 (decision 154): an element of an array of instances, `cal lanes[2]`, lowered as
   # an element is, `{:element, line, "lanes", [2], "lanes[2]"}`, told by the name's last
   # byte, which the clause's guard reads, so a `cal` of an instance lowers in what it did.
+  # RV-2 (H5's fifth root): the element is lowered only where the name is one, the instance
+  # of a user block runs/5 takes, so that a name that goes on past an element, `cal
+  # lines[1].gates[0]` or `cal e[0].[n]`, is told what it names, where its lowering raised.
   defp cal([{:name, line, name} = instance], at, {rest, ir, diagnostics, known})
        when binary_part(name, byte_size(name) - 1, 1) == "]" do
     {scope, _folded} = known
@@ -1994,7 +2011,7 @@ defmodule Logex.Compiler do
     runs(
       Declarations.reserved(name),
       found,
-      {instance, by_path(element_at(found, line, name, scope))},
+      {instance, {:element_of, found, line, name}},
       at,
       {rest, ir, diagnostics, known}
     )
@@ -2028,7 +2045,8 @@ defmodule Logex.Compiler do
     {operands, rest} = take_operands(rest, length(formals), [])
     diagnostics = cal_count(formals, operands, rest, instance, diagnostics)
     diagnostics = cal_operands(formals, operands, {at, instance}, scope, diagnostics)
-    lowered = {:cal, line, [lowered_instance | Enum.map(operands, &bit_operand(&1, scope))]}
+    called = called_instance(lowered_instance, scope)
+    lowered = {:cal, line, [called | Enum.map(operands, &bit_operand(&1, scope))]}
     lower(rest, [lowered | ir], diagnostics, known)
   end
 
@@ -2043,6 +2061,11 @@ defmodule Logex.Compiler do
       known
     )
   end
+
+  defp called_instance({:element_of, found, line, name}, scope),
+    do: by_path(element_at(found, line, name, scope))
+
+  defp called_instance(instance, _scope), do: instance
 
   defp not_run(nil, :error, line, name, _word), do: [{:undeclared, line, name, :block}]
 
@@ -2572,8 +2595,8 @@ defmodule Logex.Compiler do
   defp held_in(path, _line, _found), do: path
 
   defp element_ir({:ok, %Tag{}}, {line, name}, _scope) do
-    {array, subscripts} = Logex.Array.split(name)
-    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    {array, subscripts} = Logex.Name.element(name)
+    index = for text <- subscripts, do: elem(Logex.Name.subscript(text), 1)
     {:element, line, array, index, name}
   end
 
@@ -2583,13 +2606,13 @@ defmodule Logex.Compiler do
   # as written, `{:element_at, line, "weights", [{:name, line, "slot"}], [8],
   # "weights[slot]"}`; an element of literal subscripts lowers as it did.
   defp element_ir({:tag_element, {:ok, %Tag{}}, _found}, {line, name}, {tags, _members}),
-    do: tag_element_ir(Logex.Array.split(name), {line, name}, tags)
+    do: tag_element_ir(Logex.Name.element(name), {line, name}, tags)
 
   # One that is refused lowers as a name, which no scan runs.
   defp element_ir(_refused, {line, name}, _scope), do: {:name, line, name}
 
   defp tag_element_ir({array, subscripts}, {line, name}, tags) do
-    index = for text <- subscripts, do: subscript_operand(Logex.Array.subscript(text), line)
+    index = for text <- subscripts, do: subscript_operand(Logex.Name.subscript(text), line)
     %Tag{type: {:array, _type, dims}} = Map.fetch!(tags, array)
     {:element_at, line, array, index, dims, name}
   end
@@ -2603,8 +2626,8 @@ defmodule Logex.Compiler do
     do: element_ir(found, {line, name}, scope)
 
   defp element_at(_found, line, name, _scope) do
-    {array, subscripts} = Logex.Array.split(name)
-    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    {array, subscripts} = Logex.Name.element(name)
+    index = for text <- subscripts, do: elem(Logex.Name.subscript(text), 1)
     {:element, line, array, index, name}
   end
 
@@ -2616,9 +2639,11 @@ defmodule Logex.Compiler do
   # A bit carries its name as written, `status.03`, which a message quotes (decision 202's
   # rule for a literal, provisional for a bit's number); its number is its value.
   defp bit_ir_of(nil, _n, path, {{line, _name}, _scope}), do: {:member, line, path}
-  # A negative number, `status.[-1]`, which is refused, lowers as nothing a scan runs.
-  defp bit_ir_of(_width, {n, _type, _container, _found}, path, {{line, _name}, _scope})
-       when n < 0,
+  # A number outside the bits, `status.[-1]` or `status.16`, which is refused, lowers as
+  # nothing a scan runs, and since RV-2 (M13) one past them is judged before its mask is
+  # made, so that `w.10000000` is told its bits where 2^10000000 raised.
+  defp bit_ir_of(width, {n, _type, _container, _found}, path, {{line, _name}, _scope})
+       when n < 0 or n >= width,
        do: {:member, line, path}
 
   # Decision 221: a bit of an element is held in the element (held_in/2), told by its
@@ -3170,7 +3195,7 @@ defmodule Logex.Compiler do
   # dimension. Told from a tag by its name's last byte, which the clause's guard reads.
   defp lookup_parts([name], {tags, _members})
        when binary_part(name, byte_size(name) - 1, 1) == "]",
-       do: element(Logex.Array.split(name), name, tags)
+       do: element(Logex.Name.element(name), name, tags)
 
   defp lookup_parts([name], {tags, _members}), do: Map.fetch(tags, name)
 
@@ -3199,7 +3224,7 @@ defmodule Logex.Compiler do
     do:
       element_of(
         Map.fetch(tags, array),
-        {array, Enum.map(subscripts, &{&1, Logex.Array.subscript(&1)})},
+        {array, Enum.map(subscripts, &{&1, Logex.Name.subscript(&1)})},
         {name, tags}
       )
 
@@ -3269,7 +3294,7 @@ defmodule Logex.Compiler do
   # number the literal's value and its name as written.
   defp owned({:ok, %Tag{} = tag}, _head, [<<?[, d, _::binary>> = part], _scope)
        when d in ?0..?9 or d == ?-,
-       do: bit_of({literal_number(part), ""}, bits(tag.type), tag, part)
+       do: literal_bit(bits(tag.type), tag, part)
 
   defp owned({:ok, %Tag{} = tag}, _head, ["[" <> bracketed], {tags, _members}),
     do: tag_bit(bits(tag.type), tag, numbered_by(bracketed), tags)
@@ -3288,6 +3313,12 @@ defmodule Logex.Compiler do
   defp owned({:ok, tag}, _head, [part | _deeper], _scope),
     do: beyond(Integer.parse(part), tag, part)
 
+  # RV-2 (H5's second root): a literal in brackets on a tag of no bits, an instance's
+  # `t.[3]` or a bool's `b.[3]`, is told it has none as `t.[n]` is, where it reached a
+  # message that names an elementary type alone.
+  defp literal_bit(nil, tag, _part), do: {:no_bits, tag.name, tag.type, tag}
+  defp literal_bit(width, tag, part), do: bit_of({literal_number(part), ""}, width, tag, part)
+
   # The tag a bit number in brackets names, `n` of `status.[n]`.
   defp numbered_by(bracketed), do: binary_part(bracketed, 0, byte_size(bracketed) - 1)
 
@@ -3297,11 +3328,12 @@ defmodule Logex.Compiler do
 
   defp bit_number(part), do: Integer.parse(part)
 
-  # Decision 213: the value of a literal in brackets, `16#4` of `status.[16#4]`, read by the
-  # lexer, which took the name only where its brackets hold one number.
+  # Decision 213: the value of a literal in brackets, `16#4` of `status.[16#4]`, read by
+  # `Logex.Name.bracketed/1`, as the lexer took the name only where its brackets hold one
+  # number.
   defp literal_number(part) do
-    {:ok, [literal], _line} = Logex.Lexer.tokenize(binary_part(part, 1, byte_size(part) - 2))
-    elem(literal, 2)
+    {:literal, n} = Logex.Name.bracketed(part)
+    n
   end
 
   defp tag_bit(nil, tag, _index, _tags), do: {:no_bits, tag.name, tag.type, tag}
@@ -3672,7 +3704,7 @@ defmodule Logex.Compiler do
 
   # M5-14: an element of an array of counters is told its array's declaration.
   defp one_way(kind, name, %Tag{initial: {:sized, dims}} = tag) when kind in ["ctu", "ctd"] do
-    {array, _subscripts} = Logex.Array.split(tag.name)
+    {array, _subscripts} = Logex.Name.element(tag.name)
 
     ": #{Declarations.a_or_an(name)} only counts #{way(kind)}; declare its array " <>
       "`var #{array} #{String.replace_prefix(name, kind, "ctud")}[#{Enum.join(dims, ",")}]` " <>
@@ -3810,6 +3842,14 @@ defmodule Logex.Compiler do
       "`#{name}` takes its bit number from `#{tag.name}`, but `#{tag.name}` is " <>
         "#{Declarations.instance_of(type)}#{declared(tag)}: a bit number is held in a tag " <>
         "of an integer type"
+
+  # RV-2 (H5's fourth root): an array, or an array of instances, holds no one number, told
+  # as a subscript held in one is, where it reached an elementary type's conversion.
+  defp not_a_number(name, %Tag{type: type} = tag) when is_array(type),
+    do:
+      "`#{name}` takes its bit number from `#{tag.name}`, #{a_type(type)}#{declared(tag)}, " <>
+        "which is no integer: a bit number is held in a tag of an integer type, never an " <>
+        "array or one of its elements"
 
   defp not_a_number(name, %Tag{type: type} = tag),
     do:

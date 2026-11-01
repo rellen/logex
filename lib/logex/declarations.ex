@@ -1050,14 +1050,14 @@ defmodule Logex.Declarations do
   # Told from a scalar's type word by its last byte, which the clause's guard reads, so a
   # scalar's declaration costs what it did before arrays.
   defp declared_type(word, types) when binary_part(word, byte_size(word) - 1, 1) == "]",
-    do: sized(Logex.Array.split(word), word, types)
+    do: sized(Logex.Name.element(word), word, types)
 
   defp declared_type(word, types), do: type_of(String.downcase(word), word, types)
 
   defp sized(nil, word, types), do: type_word(word, types)
 
   defp sized({base, sizes}, word, types),
-    do: array_of(type_word(base, types), Enum.map(sizes, &Logex.Array.subscript/1), {base, word})
+    do: array_of(type_word(base, types), Enum.map(sizes, &Logex.Name.subscript/1), {base, word})
 
   defp array_of(type, sizes, at) when is_elementary(type),
     do: literal_sizes(Enum.find(sizes, &match?({:tag, _}, &1)), type, sizes, at)
@@ -1284,7 +1284,7 @@ defmodule Logex.Declarations do
         "a function block never holds an instance of itself, at any depth"
 
   defp type_word?({:name, _, word}, types),
-    do: declared_type(word, types) not in [nil, {:unknown, hd(String.split(word, "["))}]
+    do: declared_type(word, types) not in [nil, {:unknown, Logex.Name.base(word)}]
 
   defp type_word?(_element, _types), do: false
 

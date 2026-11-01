@@ -182,6 +182,15 @@ defmodule Logex.Walk do
   # since the element moves as the tag does: it is itself, as the element `w[i]` is.
   def bit_name({:bit, _, {:element_at, _, _, _, _, _}, _n, _mask, _name} = bit), do: bit
 
+  # RV-2 (H5's third root): a bit of a member of an element, `lc[1].pv.0`, by its
+  # element's name, its member's path and its number, `lc[1].pv.0`, as a scalar
+  # instance's member's bit is named, `c.pv.0`; one of an element a tag subscripts,
+  # `lc[i].pv.0`, names no one bit, as the element does not.
+  def bit_name({:bit, _, {:member, _, {:element, _, _, _, _} = element, members}, n, _, _}),
+    do: Enum.join([bit_name(element) | members], ".") <> "." <> Integer.to_string(n)
+
+  def bit_name({:bit, _, {:member, _, _element_at, _members}, _n, _mask, _name} = bit), do: bit
+
   def bit_name({:bit, _, path, n, _mask, _name}),
     do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
 
@@ -490,7 +499,7 @@ defmodule Logex.Walk do
   # An instance's tag by the name it is run by, a tag's or since M5-14 an element's,
   # `lane_t[2]`, its array's elements' type.
   defp instance(tags, name) when binary_part(name, byte_size(name) - 1, 1) == "]",
-    do: element_tag(Map.get(tags, elem(Logex.Array.split(name), 0)))
+    do: element_tag(Map.get(tags, elem(Logex.Name.element(name), 0)))
 
   defp instance(tags, name), do: Map.get(tags, name)
 

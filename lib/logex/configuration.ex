@@ -2595,7 +2595,7 @@ defmodule Logex.Configuration do
   # of its element's type under its element's name, `temps[3]` by its subscripts' values.
   defp member_tag(program, %Connection{member: member} = connection)
        when binary_part(member, byte_size(member) - 1, 1) == "]",
-       do: element_tag(Logex.Array.split(member), program, "#{connection.instance}.#{member}")
+       do: element_tag(Logex.Name.element(member), program, "#{connection.instance}.#{member}")
 
   defp member_tag(program, %Connection{member: member}), do: Map.fetch(program.tags, member)
 
@@ -2608,7 +2608,7 @@ defmodule Logex.Configuration do
   defp element_of_tag({:ok, %Tag{type: {:array, type, dims}} = tag}, {_, subscripts}, _p, member),
     do:
       subscripted(
-        Enum.map(subscripts, &Logex.Array.subscript/1),
+        Enum.map(subscripts, &Logex.Name.subscript/1),
         {tag, type, dims},
         member
       )
@@ -2629,7 +2629,7 @@ defmodule Logex.Configuration do
     do:
       {:element,
        "`#{member}`'s subscript `#{name}` is a tag's name: a connection names an element by " <>
-         "literal subscripts, as in `#{elem(Logex.Array.split(member), 0)}[0]`"}
+         "literal subscripts, as in `#{elem(Logex.Name.element(member), 0)}[0]`"}
 
   defp element_index([], {index, _}, {tag, _type, dims}, member)
        when length(index) != length(dims),
@@ -2749,7 +2749,7 @@ defmodule Logex.Configuration do
   # A var_input: connected once, to a global of its type or a constant that fits it.
   defp input(connection, tag, {wiring, problems}, world) do
     key = {connection.instance, tag.name}
-    first = first_source(Logex.Array.split(tag.name), wiring.inputs, key)
+    first = first_source(Logex.Name.element(tag.name), wiring.inputs, key)
 
     sourced(
       first,
@@ -2771,7 +2771,7 @@ defmodule Logex.Configuration do
     do: Map.get(inputs, key) || Map.get(inputs, {:elements, instance, name})
 
   defp parted({instance, name}, inputs, connection),
-    do: element_part(Logex.Array.split(name), instance, inputs, connection)
+    do: element_part(Logex.Name.element(name), instance, inputs, connection)
 
   defp element_part({array, _subscripts}, instance, inputs, connection),
     do: Map.put_new(inputs, {:elements, instance, array}, connection)
@@ -2803,7 +2803,7 @@ defmodule Logex.Configuration do
         world
       )
 
-  defp parted?(member), do: Logex.Array.split(member) != nil
+  defp parted?(member), do: Logex.Name.element(member) != nil
 
   defp already(false, %Connection{member: member} = first, {_key, connection, _tag}, acc, _world),
     do:
@@ -2968,7 +2968,7 @@ defmodule Logex.Configuration do
        ),
        do:
          global_subscripts(
-           Enum.map(elem(Logex.Array.split(name), 1), &Logex.Array.subscript/1),
+           Enum.map(elem(Logex.Name.element(name), 1), &Logex.Name.subscript/1),
            {global, etype, dims},
            name
          )
@@ -3657,7 +3657,7 @@ defmodule Logex.Configuration do
   defp together(told) do
     {keys, groups} =
       Enum.reduce(told, {[], %{}}, fn {target, writer, first, bit} = one, {keys, groups} ->
-        key = together_key(Logex.Array.split(target), {target, writer, first, bit})
+        key = together_key(Logex.Name.element(target), {target, writer, first, bit})
         {[key | keys], Map.update(groups, key, [one], &[one | &1])}
       end)
 
@@ -3672,7 +3672,7 @@ defmodule Logex.Configuration do
     do: {:one, target, instance.name}
 
   defp element_order({target, _writer, _first, _bit}),
-    do: element_index(Logex.Array.split(target))
+    do: element_index(Logex.Name.element(target))
 
   defp element_index({_array, subscripts}), do: Enum.map(subscripts, &String.to_integer/1)
   defp element_index(nil), do: []
@@ -3817,7 +3817,7 @@ defmodule Logex.Configuration do
   # An instance's tag by its name in a routine's typed tags, and since M5-14 an element's of
   # an array of instances, `lane_t[2]`, as a tag of its array's elements' type.
   defp instance_tag(typed, name) when binary_part(name, byte_size(name) - 1, 1) == "]" do
-    {array, _subscripts} = Logex.Array.split(name)
+    {array, _subscripts} = Logex.Name.element(name)
     %Tag{type: {:array, type, _dims}} = tag = Map.fetch!(typed, array)
     %{tag | type: type}
   end

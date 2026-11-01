@@ -691,7 +691,7 @@ defmodule Logex.Configuration.Text do
       {:error, fail(token, unknown_array(FbType.builtin(base_word(word)), word, global.name)),
        declared(global)}
 
-  defp base_word(word), do: hd(:binary.split(word, "["))
+  defp base_word(word), do: Logex.Name.base(word)
 
   # M5-14 (decision 154): an array of instances is a program's own, as an instance is.
   defp unknown_array(%FbType{name: type}, word, name),
