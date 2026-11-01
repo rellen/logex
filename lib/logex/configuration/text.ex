@@ -60,7 +60,8 @@ defmodule Logex.Configuration.Text do
   - `<instance>.<member> <global or constant>`, a `%Logex.Configuration.Connection{}`, its
     path split at its first `.`, so `m1.t1.pre` is the instance `m1` and the member
     `t1.pre`, connected `to` a global's name or a constant. The member's section gives
-    the direction, so the line carries no arrow (decision 5).
+    the direction, so the line carries no arrow (decision 5). The instance is named
+    whole: a path whose first part has brackets, `k1[1].a`, is a broken line, told so.
 
   This is the grammar only, and a mistake in it is a `:configure` diagnostic at its token,
   with a column. What the words mean, a name declared once and a location that is one, a
@@ -917,8 +918,24 @@ defmodule Logex.Configuration.Text do
   # connection -> PATH (NAME | INT)
   defp connection(rest, path, first, line) do
     [instance, member] = String.split(path, ".", parts: 2)
-    wire(rest, %Connection{instance: instance, member: member, to: nil, line: line}, first)
+    connection = %Connection{instance: instance, member: member, to: nil, line: line}
+    whole_instance(Logex.Name.word(instance), connection, rest, first)
   end
+
+  # RV-2's review: the path's first part names a program instance whole, so `k1[1].a`,
+  # which the lexer reads as one name, is a broken line told so, where it reached
+  # `Logex.Configuration.check/1` as the host's mistake. It still connects `k1`'s `a`, for
+  # what checks the rest.
+  defp whole_instance(nil, connection, rest, first), do: wire(rest, connection, first)
+
+  defp whole_instance(word, connection, _rest, first),
+    do:
+      {:error,
+       fail(
+         first,
+         "`#{path(connection)}` names an element of `#{word}`: a connection's instance is " <>
+           "named whole, never by one of its elements, as in `#{word}.#{connection.member}`"
+       ), declared(%{connection | instance: word})}
 
   defp wire([{:name, _, global}], connection, _first), do: {:ok, %{connection | to: global}}
 

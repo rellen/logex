@@ -2600,11 +2600,22 @@ defmodule Logex.Configuration do
   # M5-11 (decision 151, §4.12): a connection names an array var_input or var_output whole,
   # `m1.temps`, or an element of one by literal subscripts, `m1.temps[3]`, read as the tag
   # of its element's type under its element's name, `temps[3]` by its subscripts' values.
+  # RV-2's review: a member ending in a bracket that is no one word and one pair of
+  # brackets closing it, `[0]` of `k1.[0]`, or that has a `.` part, `o[1].[2]` or `a.[0]`,
+  # names no element: it is told as any member its program does not declare, too deep where
+  # it has a `.` part, as `k1.a.3` is.
   defp member_tag(program, %Connection{member: member} = connection)
        when binary_part(member, byte_size(member) - 1, 1) == "]",
-       do: element_tag(Logex.Name.element(member), program, "#{connection.instance}.#{member}")
+       do: element_tag(undotted(member), program, "#{connection.instance}.#{member}")
 
   defp member_tag(program, %Connection{member: member}), do: Map.fetch(program.tags, member)
+
+  defp undotted(member), do: undotted(:binary.match(member, "."), member)
+
+  defp undotted(:nomatch, member), do: Logex.Name.element(member)
+  defp undotted(_dot, _member), do: nil
+
+  defp element_tag(nil, _program, _member), do: :error
 
   defp element_tag({array, subscripts}, program, member),
     do: element_of_tag(Map.fetch(program.tags, array), {array, subscripts}, program, member)
