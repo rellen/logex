@@ -86,8 +86,8 @@ defmodule Logex.Configuration.Edit do
     back with exactly the time it had, by the resource's clock: a step's `elapsed_ms`
     moves no clock, so each switch is taken at the resource's `now`, its last cycle's,
     and the time from that cycle to the step goes to the program the step leaves holding
-    the instance, a timer's `last` never past its instance's `now` (decision 188;
-    provisional, `PLAN.md` M6-9's answers' review);
+    the instance, a timer's `last` never past its instance's `now` (decisions 188 and
+    343);
   - an instance only the configuration started runs, or one it runs as another program
     type (decision 43), which may run on another task (decision 61), comes back from
     aside where an earlier switch of this edit set it aside, as it was, its `now` the

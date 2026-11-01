@@ -10273,7 +10273,8 @@ done-when reads the next store write; and last the contract walk and the documen
   9. *How long a supervisor waits for a shutdown.* The runner's child spec gives
      `(devices + 2) * (idle + poll)` ms, never less than 5000: with the defaults a plant of
      up to eight devices keeps 5000 ms, and one of a device with `idle: 5000` 15,030 ms.
-     A shutdown longer than that is still killed and writes nothing. The options: (a) as
+     *(Corrected 2026-11-01, decision 326's note: up to seven devices; eight give 5100
+     ms.)* A shutdown longer than that is still killed and writes nothing. The options: (a) as
      built; (b) `shutdown: :infinity`, a hung disk then holding the supervisor's shutdown
      for ever; (c) every device closed at once rather than in device-name order (decision
      116), so the shutdown takes one close's time; (d) 5000 kept, the limit documented.

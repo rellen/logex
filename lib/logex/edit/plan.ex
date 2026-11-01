@@ -1648,8 +1648,8 @@ defmodule Logex.Edit.Plan do
   # decision 82 where that program runs it, as a frozen timer's is: `last` becomes `last +
   # at - max(last, held)`. Where `held` is from before the edit (nil), the program stopped
   # has held the instance for all the edit knows since the timer last ran, and `last`
-  # becomes `at` (§4.9's Resume rule, decision 23; provisional since decision 339, the
-  # time since an earlier edit's switch unknown). Whoever scanned last (decision 341), the
+  # becomes `at` (§4.9's Resume rule, decisions 23 and 344, the time since an earlier
+  # edit's switch unknown). Whoever scanned last (decision 341), the
   # program stopped held it: a candidate that holds an instance unscanned gives the
   # original's timer none of that time. M2-5: a timer both programs run is never resumed.
   #
@@ -1676,7 +1676,7 @@ defmodule Logex.Edit.Plan do
   # untest with no scan between leave the original's timers as they were (fix F11), and
   # the switch after a give-back gives it back in turn (decision 336). Where time has
   # passed since, the program that switch started has held the instance, and the move
-  # stands (decision 339; provisional, fix F11's undo across a cycle with no scan). The
+  # stands (decisions 339 and 345, fix F11's undo across a cycle with no scan). The
   # `last`s are in the edit's record, so an earlier edit's are unknown.
   defp undone(%{"last" => left} = timer, {_pre, _found, {last, left}}, true),
     do: %{timer | "last" => last}

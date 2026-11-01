@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is thirty-five small modules.
+written by hand, and the whole thing is forty modules in `lib/`.
 
 **Stage: early, and honest about it.** Forty instructions, among them four timers, two
 that run IEC's three counters and their typed variants, seven of arithmetic and `sqrt`,
@@ -3349,7 +3349,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   parent that ends `:normal` and `GenServer.stop(runner)` or `GenServer.stop(runner,
   :shutdown)` from any process, whose caller is answered `:ok`, a failed write told only
   to the subscribers; `Logex.Runner.stop/2` answers it (decisions 327 and 328). A runner
-  whose devices cannot be opened at its start writes nothing. Its child spec gives the
+  whose devices cannot be opened at its start writes nothing as it ends: a warm start
+  from a store leaves the store byte for byte, while a cold start, `start: :cold`, and a
+  start that finds no store have written the initial values before they open a device
+  (decisions 271 and 291), and that write stays. Its child spec gives the
   shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
   supervisor waits for every device's close and the store's write before it kills the
   runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
@@ -4857,7 +4860,9 @@ in every cycle's outputs at the value it holds.
   configuration's line; no retained located global, an input point read again and an
   output point at 0 at every start; no element of an array retained alone, an array
   being retained whole; no outage counted, a retained timer resuming as if no time had
-  passed; no first-scan bit nor any way for a program to tell how it started, and no
+  passed; no first-scan bit, though a program keeps its own, a `var first bool 1` its
+  last rung unlatches, 1 on the first scan after every start, which beside a bit it marks
+  `retain` and latches, `var retain ran bool`, tells a warm start from a cold one; no
   prescan; no hot restart; no warm restart that starts named paths cold; one store a
   runner, never one a program instance, and no checksum or encryption of it beyond its
   grammar; and no retained force, the forces having a file of their own.

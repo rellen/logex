@@ -3756,9 +3756,11 @@ defmodule Logex.Runtime do
 
   # The six comparisons (docs/naming.md, `eq` to `ge`) are input instructions, as a contact
   # is: energised, power is the comparison of the first operand with the second, `lt a b`
-  # reading a < b; de-energised, no power. Neither writes anything. Since M5-4 the two may
-  # be of any integer types, compared by value on Elixir's integers, so a signed -1 is less
-  # than an unsigned 0 (decision 147).
+  # reading a < b; de-energised, no power. Neither writes anything. The two may be of any
+  # integer types, compared by value on Elixir's integers, so a signed -1 is less than an
+  # unsigned 0 (decision 147), two bit strings compared as unsigned (decision 208), and
+  # reals compared by value too, a float beside a float or beside an integer of a type that
+  # widens into its real (decision 147).
   defp evaluate({op, _, [a, b]}, {true, env}, _scan) when op in @comparisons do
     {compare(op, read(env, a), read(env, b)), env}
   end
@@ -4009,8 +4011,11 @@ defmodule Logex.Runtime do
   # on the falling edge's own scan. Otherwise it is at rest: `.dn` and `.tt` 0, and `.acc`
   # where the delay left it. `.en` is 0 on every de-energised run, and `last` is stamped on
   # every run, so a `tof` a frozen block holds catches up when it next runs (decision 8).
-  # Its falling edge is read from `.en`, which every start and restart puts at 0, so no first
-  # scan sees one (decision 69). Nothing may follow it on its path (decision 73).
+  # Its falling edge is read from `.en`, which a fresh instance and a cold restart put at 0,
+  # so the first scan after either sees none (decision 69); a warm restart, or a start from
+  # an image, keeps a retained `tof`'s `.en`, so one held on at the outage sees its rung's
+  # fall on the first scan after it and starts its delay (decisions 271 and 277; decision
+  # 349, RV-3's, brings it to rest instead). Nothing may follow it on its path (decision 73).
   defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end
@@ -4072,8 +4077,11 @@ defmodule Logex.Runtime do
   # `.tt` go to 0 and no time is added, whatever the rung, `.en` taking the rung's power.
   # Otherwise, energised, it runs as a `ton` does; de-energised, `.en` and `.tt` go to 0 and
   # `.acc` and `.dn` are kept, so its time adds up across the rung's drops. `last` is stamped
-  # on every run, and `r` is kept as logic left it. Every start and restart puts it at 0, as
-  # every tag is put (decision 76). Nothing may follow it on its path (decision 73).
+  # on every run, and `r` is kept as logic left it. A fresh instance and a cold restart put
+  # it at 0, as they put every tag (decision 76); a warm restart, or a start from an image,
+  # keeps a retained one's `.acc` and `.dn`, its `last` the instance's `now`, so the outage
+  # adds no time (decisions 271, 273 and 277). Nothing may follow it on its path (decision
+  # 73).
   defp evaluate(
          {:rto, _, [timer, _preset]},
          {true, env},
@@ -4810,8 +4818,9 @@ defmodule Logex.Runtime do
   end
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
-  # complementary by construction, as `xic` and `xio` are (M1-4). Each reads integers: a
-  # state handed in holds no other value (decision 173), and a tag it leaves out reads 0.
+  # complementary by construction, as `xic` and `xio` are (M1-4). Each reads numbers, an
+  # integer or, in a real, a float of its type: a state handed in holds no other value
+  # (decision 173), and a tag it leaves out reads 0.
   defp compare(:eq, a, b), do: a == b
   defp compare(:ne, a, b), do: not compare(:eq, a, b)
   defp compare(:lt, a, b), do: a < b

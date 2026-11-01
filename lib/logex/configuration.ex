@@ -230,10 +230,10 @@ defmodule Logex.Configuration do
 
   defmodule Global do
     @moduledoc """
-    A global: `name`, `type` (an elementary type, `:bool`, `:dint` or since M5-3 any
-    integer type, `:uint` among them, or since M5-11 an array of one, `{:array, :int,
-    [8]}`), an `initial` value or nil for 0, an array's a list of its elements' values in
-    the elements' order, and
+    A global: `name`, `type` (any elementary type, a row of `Logex.Declarations.table/0`,
+    `:bool`, `:uint`, `:word` or `:real` among them, or an array of one, `{:array, :int,
+    [8]}`), an `initial` value or nil for its type's zero, a number, an array's a list of
+    its elements' values in the elements' order, and
     `at`, a location such as `"panel.i.0"`, or nil. A global located at an `i` address is
     an input point, set by the host; one at a `q` address an output point, given back to
     the host after every cycle. Since M5-13 a located array is a point an element, at
@@ -352,8 +352,10 @@ defmodule Logex.Configuration do
 
     @type t :: %__MODULE__{
             name: String.t(),
-            type: Logex.Declarations.elementary(),
-            initial: non_neg_integer | nil,
+            type:
+              Logex.Declarations.elementary()
+              | {:array, Logex.Declarations.elementary(), [pos_integer, ...]},
+            initial: number | [number] | nil,
             at: String.t() | nil,
             line: pos_integer | nil,
             retain: :retain | :non_retain | nil
@@ -380,7 +382,8 @@ defmodule Logex.Configuration do
   defmodule Connection do
     @moduledoc """
     A connection: `member`, a var_input or var_output of the program instance `instance`,
-    connected `to` a global, by name, or, for a var_input, a constant. It carries no
+    or an element of an array one, `o[1]`, connected `to` a global, by name, an element of
+    a global array, `speeds[1]`, or, for a var_input, a constant, a number. It carries no
     direction: the member's section gives it. A var_input is copied in from it before
     each scan of the instance, and a var_output copied out to it after.
     """
@@ -390,7 +393,7 @@ defmodule Logex.Configuration do
     @type t :: %__MODULE__{
             instance: String.t(),
             member: String.t(),
-            to: String.t() | non_neg_integer,
+            to: String.t() | number,
             line: pos_integer | nil
           }
   end

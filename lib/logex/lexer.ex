@@ -7,6 +7,14 @@ defmodule Logex.Lexer do
 
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
       {:name, loc, binary}  {:int_lit, loc, integer}  {:int_lit, loc, integer, spelling}
+      {:real_lit, loc, float}  {:real_lit, loc, float, spelling}
+
+  A real literal (M5-10, decision 149) is digits, a `.`, digits and an optional exponent,
+  `37.5`, `-0.25` or `1.5e3`, its token holding the nearest double, with its spelling
+  where that is not `Float.to_string/1` of the value, `{:real_lit, loc, 37.5, "37.50"}`:
+  `-0.0` is 0.0 spelled, a subnormal double is itself, `1.0e-310` (decision 228), and one
+  no double holds but 0.0, `1.0e-400`, is 0.0 spelled (decision 231), each judged by its
+  slot, not here.
 
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token, and since
   M5-9 (decision 160) a last part that is a tag's name in brackets, `status.[n]`, a bit

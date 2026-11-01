@@ -36,9 +36,14 @@ defmodule Logex.Printer do
   `//` comments do not: `Logex.Lexer` skips them, so printing drops them, until
   `PLAN.md` §5's comment above a rung gives one somewhere to live.
 
+  A real literal prints as written too, `37.50` and `1.0e-400`, and one written as its
+  float's plain text as that text, `Float.to_string/1`'s.
+
   Raises on two AST shapes that `parse/1` cannot produce, rather than emitting text
   that would read back as something else:
 
+    * `{:rung, []}` — an empty rung, which `parse/1` drops, so it would print as a
+      blank line that reads back as no rung at all.
     * `{:branches, []}` — a group with no legs at all, which differs in meaning from
       `{:branches, [[]]}`, a group with one empty leg. The first is false
       (`Enum.any?` over zero legs), the second passes power.

@@ -95,7 +95,7 @@ defmodule Logex.Edit do
     back to the one that switch found, so a test and an untest with no scan between leave
     the original's timers as they were, and the switch after a give-back gives it back in
     turn (decision 336). Where time has passed since, the program that switch started has
-    held the instance, and the move stands (decision 339, provisional). A move an earlier
+    held the instance, and the move stands (decisions 339 and 345). A move an earlier
     edit's last switch made is not given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
     when it last ran (its `last` before `now`, and `.en` 1 for a `ton` or an `rto`, `.tt` 1
@@ -107,7 +107,7 @@ defmodule Logex.Edit do
     up as a frozen timer does (decision 82): a timer the original's own jump froze before
     a test keeps that frozen time across the candidate's scans (decision 339). Where the
     program stopped has held the instance since before the edit, `last` becomes `now`, the
-    time since it last ran not caught up (decision 23; provisional, decision 339).
+    time since it last ran not caught up (decisions 23 and 344).
 
   A report names each move of `last` once, by its net: `:resumed` where it moves on,
   `:resume_undone` where it moves back.

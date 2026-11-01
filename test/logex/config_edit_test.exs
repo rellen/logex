@@ -999,8 +999,8 @@ defmodule Logex.ConfigEditTest do
       assert Runtime.get!(runtime, "m2.t1.acc") == 50 + 20 + 20
     end
 
-    test "provisional: after a cycle that does not scan it, an untest keeps the test's " <>
-           "resume, the candidate's hold counted (decision 339; fix F11 within no time)" do
+    test "after a cycle that does not scan it, an untest keeps the test's resume, the " <>
+           "candidate's hold counted (decisions 339 and 345; fix F11 within no time)" do
       # First an edit that takes the timer's rung out, assembled at 60 ms: `m2.t1` frozen,
       # timing, its `last` the 50 ms of `m2`'s last scan.
       runtime = running(60)
@@ -1017,7 +1017,7 @@ defmodule Logex.ConfigEditTest do
       # scanned between. Until decision 339 the untest gave the test's resume back, as
       # fix F11 gives one back with no scan between, `{:resume_undone, "m2.t1", 10}` and
       # `last` 50; since it, the candidate, which runs `t1`, held `m2` from 60 to 90, so
-      # that time is `t1`'s and the resume stands (provisional, `PLAN.md` M6-9's answers).
+      # that time is `t1`'s and the resume stands, as decision 345 took it.
       {edit, _} = accepted(runtime, plant())
       {edit, runtime, report} = Edit.test(edit, runtime)
       assert {:resumed, "m2.t1", 10} in report
@@ -1077,12 +1077,12 @@ defmodule Logex.ConfigEditTest do
       assert Runtime.get!(runtime, "m2.t1.acc") == acc + 10
     end
 
-    # Decision 139 beside decision 339, M6-9's answers' review, provisional: a step given
+    # Decision 139 beside decision 339, as decision 343 took it: a step given
     # `elapsed_ms` is taken at the resource's `now`, its last cycle's, for who holds the
     # instance and for what is set aside, as decision 56 takes a switch's clock, so the
     # time from that cycle to the step goes to the program the step leaves holding it,
-    # never moving a timer's `last` past its instance's `now` (decision 188). Put to the
-    # maintainer, `PLAN.md` M6-9's answers' review.
+    # never moving a timer's `last` past its instance's `now` (decision 188), as Logix's
+    # switch is taken at a program scan's time.
     @oiled_every_10 """
     task oiler interval 10 priority 1
     var_global run bool at panel.i.1
@@ -1108,7 +1108,7 @@ defmodule Logex.ConfigEditTest do
 
     defp lube_of(runtime), do: runtime.instances["c1"].env["lube"]
 
-    test "a step given elapsed_ms switches at the resource's now (provisional)" do
+    test "a step given elapsed_ms switches at the resource's now (decision 343)" do
       no_timer = oiled("var_input run bool\nvar lube rto\n\n", "conveyor")
 
       # Tested 3 ms and untested 8 ms after the cycle at 10, no cycle between: both

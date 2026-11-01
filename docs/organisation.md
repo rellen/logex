@@ -1343,7 +1343,7 @@ rules, in order:
 | `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
 | `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
-| Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back. *(Since decision 336, 2026-10-31: what that switch moved of `last`, a resume or a resume given back, goes back where `last` is still where it left it, so the switch after a give-back gives it back in turn, reported by the net move, `:resumed` or `:resume_undone`.)* *(Since decision 339, 2026-10-31: only where the switch only gives the instance back, with no scan and no time since this edit's last switch, which in a lone instance is every switch with no scan since; where time has passed, the program that switch started held the instance and the move stands, provisional.)* | `{:resume_undone, t, ms}` |
+| Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back. *(Since decision 336, 2026-10-31: what that switch moved of `last`, a resume or a resume given back, goes back where `last` is still where it left it, so the switch after a give-back gives it back in turn, reported by the net move, `:resumed` or `:resume_undone`.)* *(Since decision 339, 2026-10-31: only where the switch only gives the instance back, with no scan and no time since this edit's last switch, which in a lone instance is every switch with no scan since; where time has passed, the program that switch started held the instance and the move stands, provisional.)* *(Since decision 345, 2026-11-01: as built, no longer provisional.)* | `{:resume_undone, t, ms}` |
 | Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* *(Changed 2026-10-31 by decision 336: the rule asks too who has held the instance since this edit's last switch. Where no scan has run since it, F has held the instance only since that switch, so `last` moves on by `now - max(last, switch)`, the time before it another program's and left for the timer to catch up; otherwise it becomes `now` as before.)* *(Changed 2026-10-31 by decisions 339 to 341, the maintainer's answers, into one rule: a timer's time runs only while a program that runs it holds the instance, and not while it is set aside. `last` moves on by the time F held the instance, from the start of its hold, scanned or not, `now - max(last, held)`, and to `now` where F has held it since before the edit; whoever scanned last, so "F being the program that last scanned" is retired; a switch with no scan and no time since the last only gives the instance back to the program that held it before, which holds it on from then, and resumes nothing more than it gives back.)* | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
@@ -2120,7 +2120,10 @@ as the test found it. It found one defect and one cost the record already accept
   stopped program's hold, scanned or not, so no time the running program held is lost,
   decision 56's measurement now 60 ms; an instance back from aside counts only the time
   aside; and a candidate's unscanned hold is never caught up. The spike's fix of F11's
-  undo stands only where no time has passed since the last switch, provisional.)*
+  undo stands only where no time has passed since the last switch, provisional.)* *(Settled
+  2026-11-01 by decisions 343 to 345, each as built: the switch at a cycle's time, a hold
+  from before the edit taking all the time since the timer last ran, and the undo after a
+  cycle with no scan kept as the test's resume.)*
 
 *The forecast* is the report a test taken now would give: the switch computed over the
 runtime as it is, and thrown away. A test taken later reads the resource as it is then
@@ -11751,6 +11754,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: confirmed, as built** (the maintainer, 2026-10-30): the child spec's
      `shutdown:` computed so, never less than 5000, a host's own `shutdown:`, given by
      `Supervisor.child_spec/2`, winning.
+
+     *(Corrected 2026-11-01, the review after Milestone 6, `a7-docs-5` in
+     `docs/review-2026-11-01.md`: the worked figure above is one device out. With the
+     defaults, `idle: 500` and `poll: 10`, a plant of up to seven devices keeps 5000 ms,
+     `9 * 510 = 4590` raised to it, and eight give `10 * 510 = 5100` ms, as
+     `retain_store_test.exs` pins. The rule taken is unchanged.)*
 327. **Who may shut the runner down with a write (Milestone 6),** M6-6's review's tenth
      reading: the runner tells a shutdown by its reason, `:shutdown` or `{:shutdown,
      term}`, not by who sent it, so `GenServer.stop(runner, :shutdown)` from any process

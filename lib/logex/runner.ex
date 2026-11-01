@@ -214,7 +214,9 @@ defmodule Logex.Runner do
     other reason, writes none (decision 292), so its next fresh start meets the last
     write, a period's or an event's; and one whose devices cannot be opened, whose
     `init/1` gives `{:error, {:io_init, device, reason}}` and so ends `:normal` with no
-    `terminate/2`, writes none either, the store as the caller left it.
+    `terminate/2`, writes none as it ends either: a warm start's store is as the caller
+    left it, and a cold start's, `start: :cold`, or one with no store holds the initial
+    values it wrote before it opened a device (decisions 271 and 291).
   - *Its period* (M6-6, decision 275): every `retain_period:` ms, 1000 unless set, on a
     grid from the runner's start on its clock, as a periodic task's due times are, a due
     time passed while the runner was busy skipped, never made up, and none while tripped,
@@ -603,7 +605,8 @@ defmodule Logex.Runner do
   @doc """
   Subscribes the caller to the runner's events of the kinds named, each sent as
   `{Logex.Runner, runner, event}`: `:overlap` and `:fault`, the resource's own, and
-  `:trip`, `:restart` and `:edit` by default; `:ran`, the resource's `{:ran, task,
+  `:trip`, `:restart`, `:edit` and `:retain`, `{:retain, {:error, reason}}`, a store
+  write that failed, by default; `:ran`, the resource's `{:ran, task,
   instance, now}`, and `:round`, the runner's `{:round, now, outputs}` after each round,
   only where named, since a live display's events come at thousands a second. A
   subscriber is monitored, and dropped when it goes down; subscribing again replaces the

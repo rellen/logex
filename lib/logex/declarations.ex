@@ -4,47 +4,59 @@ defmodule Logex.Declarations do
   `var_input start bool` is a rung of three names. A declaration is a rung whose first word
   is a section keyword, and every one comes before the first rung of logic.
 
-      <section> <name> <type> [<initial>]     section: var | var_input | var_output
-                                                       | var_external
-                                              type:    bool | sint | int | dint | lint
-                                                       | usint | uint | udint | ulint
-                                                       | byte | word | dword | lword
-                                                       | a word of
-                                                       Logex.FbType.builtins/0, ton
-                                                       among them | a block's name
+      <section> [<qualifier>] <name> <type> [<initial>...]
+          section:   var | var_input | var_output | var_external
+          qualifier: retain | non_retain
+          type:      bool | sint | int | dint | lint | usint | uint | udint | ulint
+                     | byte | word | dword | lword | real | lreal
+                     | a word of Logex.FbType.builtins/0, ton among them
+                     | a block's name
+                     | any of these with an array's sizes, int[8], int[4,8]
 
-  Since M5-11 (decision 151) a type word may carry an array's sizes, `real[8]`,
-  `int[4,8]` or `bool[2,3,4]`, Logix's form, and an array's initial value is one literal
-  for every element, `var limits int[3] 10 20 30`, in the elements' order, the rightmost
-  subscript fastest: `check/1` refuses an array of no elementary type, of more than three
-  dimensions, of a dimension of 0 or of more than 65,536 elements, an initial list of
-  another length and an element's value that its type does not hold, each naming the tag
-  or the element, `limits[2]`; a type word sized by a tag's name, or of an instance's type,
-  `ton[4]`, which waits for arrays of instances (decision 154), is refused for its type
-  word, its name's uses excused. No tag is named with brackets.
+  A type word may carry an array's sizes, `real[8]`, `int[4,8]` or `bool[2,3,4]`, Logix's
+  form (decision 151), and an array's initial value is one literal for every element,
+  `var limits int[3] 10 20 30`, in the elements' order, the rightmost subscript fastest:
+  `check/1` refuses an array of more than three dimensions, of a dimension of 0 or of more
+  than 65,536 elements, an initial list of another length and an element's value that its
+  type does not hold, each naming the tag or the element, `limits[2]`; a type word sized by
+  a tag's name is refused for its type word, its name's uses excused. An array of
+  instances, `var lane_t ton[4]` or `var gates gate[4]`, is declared with `var` alone and
+  takes no initial list (decision 154). No tag is named with brackets.
 
-  The section and type words are data, in `@sections` and, since M5-1, the one table of
-  elementary types, `table/0` (`docs/organisation.md` §4.12, "The types", decisions 144 and
-  145): each type's word, kind, width, range, zero and article, which every range message,
-  article, guard (`is_elementary/1`) and `fits?/2` in `lib/` reads, and the configuration
-  file's type words and did-you-mean (`Logex.Configuration.Text`). Since M5-8 the table
-  holds IEC's four bit strings too, `byte word dword lword` (decision 155), each a row of N
-  bits whose values are 0 to 2^N - 1, of the kind `:bit_string`, with no arithmetic. A function block type's
-  word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a stanza
-  in `docs/naming.md`, not a second declaration parser. An instance of a function
-  block, `var t1 ton` (M1-6) or `var s1 seal` (M2-5), is declared with `var` and takes no
-  initial value. A user function block's name is a type word only where the compile is
-  given that block (`Logex.compile/2`'s `types:`), and is not reserved: it is built per
-  compile, not a row (PLAN.md M1-3).
+  A qualifier (decisions 267 to 270) comes straight after the section word, `var retain
+  count dint`, on a program's `var` and `var_output` and a block's three sections: never on
+  a program's `var_input` nor a `var_external`, never twice nor both, and never after the
+  name, the type or the initial value, each refused at its line; a line refused for its
+  qualifiers alone still declares its tag, keeping a qualifier only where it stands in its
+  place. A word is told a qualifier first by a guard on its length and first letter, so
+  that a line of none costs what it would with no qualifiers in the language. Both words
+  are reserved in any case.
 
-  A `var_external` (M2-4) names a configuration's global, declared there again with
-  `var_global` (Ed 2 §2.4.3): of an elementary type, exactly its global's (decision 159),
-  with no initial value (Ed 2 §2.4.3.2) and
-  no instance, and named by no configuration file's keyword
-  (`Logex.Configuration.Text.keywords/0`), since its name is a global's too
-  (`docs/organisation.md` §4.8). Logic reads and writes it. A function block's file
-  refuses it (`Logex.Compiler`), and a program run alone keeps it as a tag of its own, at
-  0, which its host cannot set (`Logex.Runtime`).
+  The section and type words are data, in `@sections` and the one table of elementary
+  types, `table/0` (`docs/organisation.md` §4.12, "The types", decisions 144 and 145): each
+  type's word, kind, width, range, zero, article and the types Ed 3 Figure 11 widens it
+  into, which every range message, article, guard (`is_elementary/1`, `is_fitting/2`) and
+  `fits?/2` in `lib/` reads, and the configuration file's type words and did-you-mean
+  (`Logex.Configuration.Text`). A type's kind is `:boolean`, `:signed`, `:unsigned`,
+  `:bit_string` (IEC's four bit strings, `byte word dword lword`, each a row of N bits
+  whose values are 0 to 2^N - 1, with no arithmetic, decision 155) or `:real` (`real` and
+  `lreal`). IEC's generic types an instruction's slot takes are data too, each the kinds it
+  holds: `:any_int`, `:any_num`, `:any_real`, `:any_bitwise` (a bool among them,
+  decision 206) and `:any_elementary` (`is_class/1`). A function block type's word is
+  `Logex.FbType.builtins/0`'s: a new section or type is a row there and a stanza in
+  `docs/naming.md`, not a second declaration parser. An instance of a function block,
+  `var t1 ton` or `var s1 seal`, is declared with `var` and takes no initial value. A user
+  function block's name is a type word only where the compile is given that block
+  (`Logex.compile/2`'s `types:`), and is not reserved: it is built per compile, not a row
+  (PLAN.md M1-3).
+
+  A `var_external` names a configuration's global, declared there again with `var_global`
+  (Ed 2 §2.4.3): of an elementary type or an array of one, exactly its global's type and
+  sizes (decision 159), with no initial value (Ed 2 §2.4.3.2) and no instance, and named
+  by no configuration file's keyword (`Logex.Configuration.Text.keywords/0`), since its
+  name is a global's too (`docs/organisation.md` §4.8). Logic reads and writes it. A
+  function block's file refuses it (`Logex.Compiler`), and a program run alone keeps it as
+  a tag of its own, at 0, which its host cannot set (`Logex.Runtime`).
   """
 
   alias Logex.{Diagnostic, FbType, Parser, Tag}
