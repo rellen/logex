@@ -1076,6 +1076,81 @@ defmodule Logex.ConfigEditTest do
       {runtime, _} = cycles(runtime, 1)
       assert Runtime.get!(runtime, "m2.t1.acc") == acc + 10
     end
+
+    # Decision 139 beside decision 339, M6-9's answers' review, provisional: a step given
+    # `elapsed_ms` is taken at the resource's `now`, its last cycle's, for who holds the
+    # instance and for what is set aside, as decision 56 takes a switch's clock, so the
+    # time from that cycle to the step goes to the program the step leaves holding it,
+    # never moving a timer's `last` past its instance's `now` (decision 188). Put to the
+    # maintainer, `PLAN.md` M6-9's answers' review.
+    @oiled_every_10 """
+    task oiler interval 10 priority 1
+    var_global run bool at panel.i.1
+    program c1 conveyor with oiler
+      c1.run run
+    """
+
+    defp oiled(conveyor, name) do
+      {:ok, program} = Logex.compile(conveyor, name: name)
+      line = String.replace(@oiled_every_10, "conveyor", name)
+      assert {:ok, config} = Configuration.compile("line", line, %{name => program})
+      config
+    end
+
+    defp oiled_at_ten do
+      timing = "var_input run bool\nvar lube rto\n\nxic run rto lube 100000\n"
+      runtime = Runtime.start(oiled(timing, "conveyor"))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+      assert %{"acc" => 10, "last" => 10} = runtime.instances["c1"].env["lube"]
+      runtime
+    end
+
+    defp lube_of(runtime), do: runtime.instances["c1"].env["lube"]
+
+    test "a step given elapsed_ms switches at the resource's now (provisional)" do
+      no_timer = oiled("var_input run bool\nvar lube rto\n\n", "conveyor")
+
+      # Tested 3 ms and untested 8 ms after the cycle at 10, no cycle between: both
+      # switches at 10, so nothing is resumed and the original's next run at 20 counts all
+      # 10 ms, the candidate's 5 from 13 to 18 among them, where counting from each step's
+      # own time would give 15.
+      runtime = oiled_at_ten()
+      {:ok, edit, _} = Edit.accept(runtime, no_timer, 3)
+      {edit, runtime, report} = Edit.test(edit, runtime, 3)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      {_edit, runtime, report} = Edit.untest(edit, runtime, 8)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+      assert %{"acc" => 20, "last" => 20} = lube_of(runtime)
+
+      # Tested at 10, the candidate's cycle at 20, untested 7 ms on: resumed by the 10 ms
+      # to 20, so the original's run at 30 counts the 10 from 20, the candidate's 7 among
+      # them, where counting from the step's own time would give 13.
+      runtime = oiled_at_ten()
+      {:ok, edit, _} = Edit.accept(runtime, no_timer)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+      {_edit, runtime, report} = Edit.untest(edit, runtime, 7)
+      assert {:resumed, "c1.lube", 10} in report
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+      assert %{"acc" => 20, "last" => 30} = lube_of(runtime)
+
+      # Set aside by a test 3 ms after the cycle at 10 and brought back 4 ms after the
+      # cycle at 60: aside from 10 to 60 by the resource's clock, resumed by those 50 ms,
+      # its run at 70 counting the 10 from 60.
+      other = oiled("var_input run bool\nvar x bool\n\nxic run ote x\n", "other")
+      runtime = oiled_at_ten()
+      {:ok, edit, _} = Edit.accept(runtime, other, 3)
+      {edit, runtime, _} = Edit.test(edit, runtime, 3)
+      runtime = Enum.reduce(1..5, runtime, fn _, rt -> elem(Runtime.cycle(rt, 10, %{}), 0) end)
+      {_edit, runtime, report} = Edit.untest(edit, runtime, 4)
+      assert {:instance_back, "c1", "conveyor"} in report
+      assert {:resumed, "c1.lube", 50} in report
+      assert %{"acc" => 10, "last" => 60} = lube_of(runtime)
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+      assert %{"acc" => 20, "last" => 70} = lube_of(runtime)
+    end
   end
 
   describe "a resume asks who has held the instance since the last switch (decision 336)" do
@@ -1198,9 +1273,22 @@ defmodule Logex.ConfigEditTest do
       {"var o1 oil[2]\nvar dd bool\n", "cal o1[1] run dd\n", "o1[1].lube"}
     ]
 
+    # A block that holds an array of timers, for the deeper arrays decision 340 resumes.
+    @oils "function_block oils\nvar_input go bool\nvar_output d bool\nvar lube rto[2]\n\n" <>
+            "xic go rto lube[1] 100000\nxic lube[1].dn ote d"
+
+    # Deeper still, each only where the instance comes back from aside: a 2-D array of
+    # timers, a block's array of timers and a 2-D array of such blocks.
+    @arrays [
+      {"var lube rto[2,2]\n", "xic run rto lube[1,0] 100000\n", "lube[1,0]"},
+      {"var o2 oils\nvar dd bool\n", "cal o2 run dd\n", "o2.lube[1]"},
+      {"var o2 oils[2,2]\nvar dd bool\n", "cal o2[0,1] run dd\n", "o2[0,1].lube[1]"}
+    ]
+
     defp depth_line(conveyor) do
       {:ok, oil} = Logex.compile(@oil, name: "oil")
-      {:ok, program} = Logex.compile(conveyor, name: "conveyor", types: [oil])
+      {:ok, oils} = Logex.compile(@oils, name: "oils")
+      {:ok, program} = Logex.compile(conveyor, name: "conveyor", types: [oil, oils])
 
       line = String.replace(@line, ~r/^var_global oil_q.*\n|^  c1\.oiled.*\n/m, "")
       assert {:ok, config} = Configuration.compile("line", line, %{"conveyor" => program})
@@ -1290,6 +1378,40 @@ defmodule Logex.ConfigEditTest do
       {runtime, _} = ticked(runtime, 0)
       assert Runtime.get!(runtime, "c1.lube.acc") == 30
       assert Runtime.get!(runtime, "c1.lube.dn") == 1
+    end
+
+    # The timer at a report's path inside an instance's env, an element by its subscripts.
+    defp timer_at(env, path), do: Enum.reduce(String.split(path, "."), env, &segment/2)
+
+    defp segment(segment, value) do
+      [name | subscripts] = String.split(segment, ["[", ",", "]"], trim: true)
+      Enum.reduce(subscripts, Map.fetch!(value, name), &elem(&2, String.to_integer(&1)))
+    end
+
+    test "one back from aside resumes each timer that was timing, in an array of timers " <>
+           "or of blocks too, at every depth (decision 340)" do
+      other = "var_input run bool\nvar x bool\n\nxic run ote x\n"
+      {:ok, program} = Logex.compile(other, name: "other")
+      line = String.replace(@line, "conveyor with", "other with")
+      line = String.replace(line, ~r/^var_global oil_q.*\n|^  c1\.oiled.*\n/m, "")
+      {:ok, retyped} = Configuration.compile("line", line, %{"other" => program})
+
+      for {_declared, _rung, path} = depth <- @depths ++ @arrays do
+        # The lube timed 10 ms from 0, set aside at the test at 10 and brought back at the
+        # untest at 60: resumed by the 50 ms aside, so its next run, 5 ms on, is at 15,
+        # where until decision 340's review an element of an array, or a timer in one,
+        # was resumed by none and caught up the 50, acc 65.
+        {runtime, _candidate} = lube_at_ten(depth)
+        {edit, _} = accepted(runtime, retyped)
+        {edit, runtime, _} = Edit.test(edit, runtime)
+        {runtime, _, []} = Runtime.cycle(runtime, 50, %{})
+        {_edit, runtime, report} = Edit.untest(edit, runtime)
+        assert {:instance_back, "c1", "conveyor"} in report, path
+        assert {:resumed, "c1." <> path, 50} in report, path
+        assert %{"acc" => 10, "last" => 60} = timer_at(runtime.instances["c1"].env, path)
+        {runtime, _} = ticked(runtime, 5)
+        assert %{"acc" => 15, "dn" => 0} = timer_at(runtime.instances["c1"].env, path)
+      end
     end
 
     test "the candidate's unscanned hold is not caught up, whoever scanned last " <>

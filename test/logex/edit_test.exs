@@ -1408,6 +1408,51 @@ defmodule Logex.EditTest do
       assert state.env["lube"]["acc"] == 10 + 10 + 5
     end
 
+    # A switch that only gives the instance back after two hold's ends gives it to the
+    # program that held it before the second, from when that hold began, so a later hold's
+    # end counts from there and never from before it.
+    test "a give-back after two holds' ends counts the original's hold from its own " <>
+           "untest, not from the timer's last run (decision 339)" do
+      head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
+      oiled = "lbl skip\nxic lube.dn ote oiled"
+      timing = c!(head <> "xic run rto lube 1000\n" <> oiled, "conveyor")
+      original = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
+      candidate = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
+
+      # The lube timed 10 ms by a program swapped out at 20 for the original; tested at 20,
+      # resumed by the 10 ms the original held it.
+      {_, state} = run(timing, [{0, %{"run" => 1}}, {10, %{}}])
+      {_, state} = Runtime.scan(original, state, 10)
+      {edit, state, report} = Edit.test(accept!(original, candidate, state), state)
+      assert {:resumed, "lube", 10} in report
+
+      # The candidate freezes it, `hold` set, from 20 to its untest at 30, a hold's end; the
+      # original holds it to 40, tested there, a second hold's end, resumed by its 10 ms
+      # since 30, and untested at once, a give-back: the original holds it from 30 again.
+      {_, state} =
+        Runtime.scan(candidate, Runtime.put_inputs(candidate, state, %{"hold" => 1}), 10)
+
+      {edit, state, _} = Edit.untest(edit, state)
+      {_, state} = Runtime.scan(original, state, 10)
+      {edit, state, report} = Edit.test(edit, state)
+      assert {:resumed, "lube", 10} in report
+      {edit, state, report} = Edit.untest(edit, state)
+      assert {:resume_undone, "lube", 10} in report
+      assert %{"acc" => 10, "last" => 20} = state.env["lube"]
+
+      # Held to 50 and tested: resumed by the original's 20 ms since its untest at 30, not
+      # by the 30 since the timer last ran at 20, the candidate's frozen 10 among them.
+      {_, state} = Runtime.scan(original, state, 10)
+      {_edit, state, report} = Edit.test(edit, state)
+      assert {:resumed, "lube", 20} in report
+      assert %{"acc" => 10, "last" => 40} = state.env["lube"]
+
+      {_, state} =
+        Runtime.scan(candidate, Runtime.put_inputs(candidate, state, %{"hold" => 0}), 5)
+
+      assert state.env["lube"]["acc"] == 10 + 10 + 5
+    end
+
     # Decision 339's rule never moves `last` by more than the time since it, so a timer
     # a warm restart under test rebased to the restart's `now` (decision 273) is resumed by
     # the candidate's hold since the restart alone, never past the untest's `now`.

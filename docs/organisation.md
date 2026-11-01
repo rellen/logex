@@ -10818,7 +10818,7 @@ unscanned hold, `PLAN.md` M6-9's review.)* *(The last three answered 2026-10-31,
 decisions 339 to 341, one rule: a timer's time runs only while a program that runs it
 holds the instance, and not while it is set aside; the one plant's "one write" confirmed,
 decision 342; two readings that rule leaves open are put to the maintainer, decision 339,
-with M6-6's seven.)*
+with M6-6's seven, and a third since M6-9's answers' review, a step's `elapsed_ms`.)*
 The example plant is §4.13's: the power fails at 14:00 with 41 boxes counted, the lube
 timer at 62 hours, the fan in its run-on and the conveyor running, and comes back at
 14:20.
@@ -11955,7 +11955,23 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      (2) where the program stopped has held the instance since before the edit, from a
      time this edit cannot know, the resume takes all the time since the timer last ran,
      as decision 23 has it, though some of it may have been held by a program that ran
-     it, an earlier edit's.
+     it, an earlier edit's; and (3), since M6-9's answers' review, a step given
+     `elapsed_ms` (decision 139), which `Logex.Runner` always gives: the step moves no
+     clock and a timer's `last` may not pass its instance's `now` (decision 188), so each
+     switch, and the time an instance is set aside, is taken at the resource's `now`, its
+     last cycle's, and the time from that cycle to the step goes to the program the step
+     leaves holding the instance, at most the time since the last cycle (a 10 ms task's
+     lube tested 3 ms and untested 8 ms after a cycle counts the candidate's 5 ms;
+     `config_edit_test.exs`, "a step given elapsed_ms switches at the resource's now
+     (provisional)"). *Pinned values changed beyond the two the answers name (M6-9's
+     answers' review):* decision 56's follow-up run, `50 + 20` becoming `50 + 20 + 20`,
+     and decision 57's, `acc + 20` becoming `acc + 20 + 10`, each the time the original
+     held the instance before the switch now caught up at its next run; decision 336's
+     second test, `acc + 40` becoming `acc + 50`, its title restated; fix F11's resource
+     test, reading (1); and the configuration edit walk's edit-agnostic bound on a timer
+     after a switch, from the time since the instance's last scan to the time since the
+     walk last saw the timer run, which the rule's catching up of the original's hold
+     forces, the walk's restated resume exact as before.
 340. **An instance back from aside (Milestone 6),** M6-9's review's fourth question: the
      same lube, its program type changed by the candidate so that each test sets the
      conveyor aside, after the original's 30 ms unscanned, tested and untested at once,
@@ -11971,7 +11987,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      aside was set aside, by name, and one brought back resumes each timer that was timing
      by `now - max(last, aside_at)`, none where that is 0, so a test and an untest at once
      leave an instance the test set aside exactly as it was, the configuration edit walk's
-     round trip now asserting it with no exemption.
+     round trip now asserting it with no exemption. *(Since M6-9's answers' review: until
+     then a timer in an array, an element of `rto[2]` or of an array of blocks, `oil[2]`,
+     was never resumed from aside, decision 57's walk of an instance's timers reaching
+     no array (M5-14), so the whole time aside was counted, at `bc3050e` as since; each
+     element is now resumed by its name, `{:resumed, "c1.lube[1]", 50}` or
+     `{:resumed, "c1.o1[1].lube", 50}`, at any depth, the array built again once,
+     `config_edit_test.exs` and `instance_array_test.exs`.)*
 341. **A candidate's unscanned hold (Milestone 6),** M6-9's review's fifth question: the
      same lube, tested at 10 ms, the candidate holding the conveyor 30 ms with no event,
      untested: nothing was resumed, the original having scanned last, so the lube caught up

@@ -83,12 +83,18 @@ defmodule Logex.Configuration.Edit do
     nothing more; any other ends the hold of the program it stops, scanned or not,
     whoever scanned last, and a timer that program does not run and the one started
     does is resumed by that hold alone, the time before it caught up, so a timer comes
-    back with exactly the time it had;
+    back with exactly the time it had, by the resource's clock: a step's `elapsed_ms`
+    moves no clock, so each switch is taken at the resource's `now`, its last cycle's,
+    and the time from that cycle to the step goes to the program the step leaves holding
+    the instance, a timer's `last` never past its instance's `now` (decision 188;
+    provisional, `PLAN.md` M6-9's answers' review);
   - an instance only the configuration started runs, or one it runs as another program
     type (decision 43), which may run on another task (decision 61), comes back from
     aside where an earlier switch of this edit set it aside, as it was, its `now` the
     resource's and each timer that was timing resumed by the time it was aside alone,
-    `:resumed` by its path, since the edit stopped it, not its logic (decision 57), and
+    at any depth, an element of an array of timers or of a user block's instances among
+    them, `c1.lube[1]` or `c1.oil[1].lube` (since decision 340's review), `:resumed` by
+    its path, since the edit stopped it, not its logic (decision 57), and
     the time the program that held it before held it is the timer's (decision 340),
     `{:instance_back, name, type}`; or is started as `Logex.Runtime.instance/1` starts it,
     its var_externals dropped as `start/1` drops them, `{:instance_added, name, type}`;
@@ -960,7 +966,7 @@ defmodule Logex.Configuration.Edit do
        ) do
     %Runtime{now: now} = context.runtime
     aside_at = Map.get(context.edit.aside_at, name)
-    {env, resumed} = resume(timers(program), state.env, {name, now, aside_at})
+    {env, resumed} = resume(Program.typed_tags(program), state.env, {name, now, aside_at})
 
     {Map.put(instances, name, %{state | env: env, now: now}), records,
      [{:instance_back, name, type} | resumed ++ reports]}
@@ -976,53 +982,102 @@ defmodule Logex.Configuration.Edit do
     {Map.put(instances, name, state), records, [{:instance_added, name, type} | reports]}
   end
 
-  # Every timer a program's state holds, at any depth, by its path: each of its tags whose
-  # type is a built-in timer, and inside each instance of a user block, each member's in
-  # turn, read inside the program's one table of types (decision 53), with the member whose
-  # 1 says it is timing (M3-2).
-  defp timers(%Program{} = program),
-    do:
-      for(
-        {name, %Tag{type: type}} <- Program.typed_tags(program),
-        timer <- timer_paths(type, [name]),
-        do: timer
-      )
+  # Every timer a program's state holds, at any depth, by its path, resumed: each of its
+  # tags whose type is a built-in timer, and inside each instance of a user block, each
+  # member's in turn, read inside the program's one table of types (decision 53), with the
+  # member whose 1 says it is timing (M3-2); and since decision 340's review each element
+  # of an array of instances (M5-14), of timers or of a user block's instances, at any
+  # depth, by its name, `lube[1]` or `oil[1].lube`, the array built again once, never an
+  # element at a time. A tag the state does not hold, a var_external split off, holds no
+  # timer. `at` is `{instance, now, aside_at}`; each step gives back the value and the
+  # reports so far.
+  defp resume(tags, env, at),
+    do: Enum.reduce(tags, {env, []}, &resumed_tag(&1, &2, at))
+
+  defp resumed_tag({name, %Tag{type: type}}, {env, reports}, at) when is_map_key(env, name) do
+    {value, reports} = resumed(type, :erlang.map_get(name, env), name, {at, reports})
+    {Map.put(env, name, value), reports}
+  end
+
+  defp resumed_tag(_tag, acc, _at), do: acc
 
   # M3-1: a built-in that keeps time (Logex.FbType.rules/1); one that keeps none, a
   # counter, has nothing to resume.
-  defp timer_paths(%FbType{body: nil} = type, path), do: timing(FbType.rules(type), path)
+  defp resumed(%FbType{body: nil} = type, value, path, acc),
+    do: timed(FbType.rules(type), value, path, acc)
 
-  defp timer_paths(%FbType{members: members} = type, path),
+  defp resumed(%FbType{members: members} = type, %{} = value, path, {at, reports}),
     do:
-      for(
-        member <- members,
-        inner <- timer_paths(FbType.type_of(type, member), [member.name | path]),
-        do: inner
-      )
-
-  defp timer_paths(_leaf, _path), do: []
-
-  defp timing(%{kind: :timer, times: times}, path), do: [{Enum.reverse(path), times}]
-  defp timing(_keeps_no_time, _path), do: []
-
-  defp resume(timers, env, at),
-    do:
-      Enum.reduce(timers, {env, []}, fn {path, times}, acc ->
-        resumed(get_in(env, path), {path, times}, at, acc)
+      Enum.reduce(members, {value, reports}, fn member, {value, reports} ->
+        member_resumed(
+          Map.fetch(value, member.name),
+          FbType.type_of(type, member),
+          {value, member.name},
+          {path, at, reports}
+        )
       end)
 
-  defp resumed(%{"last" => last} = timer, {path, times}, {name, now, aside_at}, acc)
+  defp resumed({:array, %FbType{body: nil} = type, dims}, value, path, acc),
+    do: timed_elements(FbType.rules(type), {value, dims}, path, acc)
+
+  defp resumed({:array, %FbType{} = type, dims}, value, path, acc) when is_tuple(value),
+    do: elements(value, dims, {path, []}, &resumed(type, &1, &2, &3), acc)
+
+  defp resumed(_holds_no_timer, value, _path, {_at, reports}), do: {value, reports}
+
+  defp member_resumed({:ok, member}, type, {value, key}, {path, at, reports}) do
+    {member, reports} = resumed(type, member, path <> "." <> key, {at, reports})
+    {Map.put(value, key, member), reports}
+  end
+
+  defp member_resumed(:error, _type, {value, _key}, {_path, _at, reports}), do: {value, reports}
+
+  defp timed_elements(%{kind: :timer} = rules, {value, dims}, path, acc) when is_tuple(value),
+    do: elements(value, dims, {path, []}, &timed(rules, &1, &2, &3), acc)
+
+  defp timed_elements(_keeps_no_time, {value, _dims}, _path, {_at, reports}), do: {value, reports}
+
+  # Each element of an array, in the elements' order, by its name, its subscripts' values;
+  # a row of a 2-D or 3-D array in turn, each tuple built once.
+  defp elements(value, [_count], {path, index}, each, {at, reports}) when is_tuple(value) do
+    {list, {reports, _i}} =
+      Enum.map_reduce(Tuple.to_list(value), {reports, 0}, fn element, {reports, i} ->
+        name = Logex.Array.name(path, Enum.reverse([i | index]))
+        {element, reports} = each.(element, name, {at, reports})
+        {element, {reports, i + 1}}
+      end)
+
+    {List.to_tuple(list), reports}
+  end
+
+  defp elements(value, [_count | dims], {path, index}, each, {at, reports})
+       when is_tuple(value) do
+    {list, {reports, _i}} =
+      Enum.map_reduce(Tuple.to_list(value), {reports, 0}, fn row, {reports, i} ->
+        {row, reports} = elements(row, dims, {path, [i | index]}, each, {at, reports})
+        {row, {reports, i + 1}}
+      end)
+
+    {List.to_tuple(list), reports}
+  end
+
+  defp elements(value, _dims, _path, _each, {_at, reports}), do: {value, reports}
+
+  defp timed(
+         %{kind: :timer, times: times},
+         %{"last" => last} = timer,
+         path,
+         {{_name, now, aside_at} = at, reports}
+       )
        when :erlang.map_get(times, timer) == 1 and last < now,
-       do: moved(now - max(last, aside_at || last), timer, {name, path}, acc)
+       do: moved(now - max(last, aside_at || last), timer, path, {at, reports})
 
-  defp resumed(_timer, _path, _at, acc), do: acc
+  defp timed(_rules, value, _path, {_at, reports}), do: {value, reports}
 
-  defp moved(0, _timer, _at, acc), do: acc
+  defp moved(0, timer, _path, {_at, reports}), do: {timer, reports}
 
-  defp moved(gap, %{"last" => last} = timer, {name, path}, {env, reports}),
-    do:
-      {put_in(env, path, %{timer | "last" => last + gap}),
-       [{:resumed, Enum.join([name | path], "."), gap} | reports]}
+  defp moved(gap, %{"last" => last} = timer, path, {{name, _now, _aside_at}, reports}),
+    do: {%{timer | "last" => last + gap}, [{:resumed, name <> "." <> path, gap} | reports]}
 
   defp merged(%{env: env} = state, externals, globals),
     do: %{state | env: Map.merge(env, Map.take(globals, externals))}

@@ -21,7 +21,7 @@ defmodule Logex.InstanceArrayTest do
   """
   use ExUnit.Case, async: true
 
-  alias Logex.{Edit, Fault, Runtime, Scan, Walk}
+  alias Logex.{Configuration, Edit, Fault, Runtime, Scan, Walk}
 
   @seal "function_block seal\nvar_input s bool\nvar_output q bool\nvar t ton\nvar e bool\n" <>
           "xic s ton t 30\nxic t.dn ote q\nxic s ons e\n"
@@ -1795,6 +1795,47 @@ defmodule Logex.InstanceArrayTest do
       running = program(head <> "xic go ote q", [seal()])
       candidate = program(head <> "xio go ote q", [seal()])
       {running, candidate}
+    end
+
+    # Decision 340's review: an instance a configuration edit brings back from aside
+    # resumes each element of its array of timers, the array built again once. Measured
+    # at 500 and 2,000 elements, the untest's words grow 4.1 times; with a put into the
+    # tuple an element they grow 14.5 times.
+    test "bringing an instance back from aside allocates linearly in its array of timers" do
+      words =
+        for n <- [500, 2000] do
+          prepare = fn ->
+            line = fn type ->
+              "task oiler interval 10 priority 1\nvar_global run bool at panel.i.1\n" <>
+                "program c1 #{type} with oiler\n  c1.run run\n"
+            end
+
+            other = program("var_input run bool\nvar x bool\n\nxic run ote x\n", [], "other")
+            {:ok, candidate} = Configuration.compile("line", line.("other"), %{"other" => other})
+            rungs = Enum.map_join(0..(n - 1), "\n", &"xic run rto lube[#{&1}] 100000")
+
+            conveyor =
+              program("var_input run bool\nvar lube rto[#{n}]\n\n" <> rungs, [], "conveyor")
+
+            {:ok, original} =
+              Configuration.compile("line", line.("conveyor"), %{"conveyor" => conveyor})
+
+            {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"run" => 1})
+            {runtime, _, _} = Runtime.cycle(runtime, 10, %{"run" => 1})
+            {:ok, edit, _} = Configuration.Edit.accept(runtime, candidate)
+            {edit, runtime, _} = Configuration.Edit.test(edit, runtime)
+            {runtime, _, _} = Runtime.cycle(runtime, 10, %{})
+            {edit, runtime}
+          end
+
+          allocated(prepare, fn {edit, runtime} ->
+            {_edit, _runtime, report} = Configuration.Edit.untest(edit, runtime)
+            ^n = length(for {:resumed, _, 10} <- report, do: 1)
+          end)
+        end
+
+      [small, large] = words
+      assert large < 6 * small, "untest: #{large} words at 2000, #{small} at 500"
     end
 
     # Measured, at 500 and 2,000 elements: each step's words grow some 4.1 times, as the
