@@ -11870,7 +11870,7 @@ and CI checked; each fix with a test that fails when it is reverted.
   no result (M6); an adapter whose first read fails closed (M14); `vetted/3` linear (M9);
   the report's runner and device lows.
 
-  **RV-4 as built** (2026-11-01, branch `rv4`, nine commits over `1bdc2c6`). Every finding
+  **RV-4 as built** (2026-11-01, branch `rv4`, eleven commits over `1bdc2c6`). Every finding
   below is closed with a test that fails when its fix is reverted, each revert a mutant of
   `scripts/mutate.sh`'s tables judged by the full suite and red by the test named, or kept
   for the reason given. Decision 350, in this item's heading, is RV-3's and was not built
@@ -11994,13 +11994,36 @@ and CI checked; each fix with a test that fails when it is reverted.
     45% and 86%, where round and ceil differ); c5-tests-4 (`status/1`'s unzeroed devices,
     the input-point hint and the store's global lines in name order past 32 entries).
   - *Tests given time on a loaded machine*, each line changed said in its commit and its
-    comment, no assertion of a rule removed: `stalled_disk_test.exs`'s limit 510 ms where
+    comment, no assertion of a rule removed: `stalled_disk_test.exs`'s limit 1010 ms where
     110 ms let a fresh start's or a stop's write the disk was free for miss it beside a
-    full suite's syncs; `retain_period_test.exs`'s two hung-writer tests an idle watchdog
-    of 400 and a bound of 410 ms where 60 and 70, since decision 353 gives the stop's and
-    the trip's own write that time too; `retain_store_test.exs`'s cold restart write-back
-    test and `io_test.exs`'s scripted adapter an idle watchdog of 5,000, their seams
-    needing only the first read or the restart's read answered.
+    full suite's syncs, and 510 ms a first force's once in fifty runs of `scripts/load.sh`;
+    `retain_period_test.exs`'s two hung-writer tests an idle watchdog of 400 and a bound of
+    410 ms where 60 and 70, since decision 353 gives the stop's and the trip's own write
+    that time too; `retain_store_test.exs`'s cold restart write-back test and
+    `io_test.exs`'s scripted adapter an idle watchdog of 5,000, their seams needing only
+    the first read or the restart's read answered; and an idle watchdog of 5,000 for the
+    four tests of `retain_period_test.exs` that hold the period's writer in real time while
+    a stop or a trip waits on it, for `force_test.exs`'s force taken while tripped and for
+    `retain_store_test.exs`'s trip's write that fails, none reading a limit. Under
+    `scripts/load.sh` those six failed in ten of 61 runs of the runner's files at
+    `10cc54e`: five the writer killed at the runner's 510 ms while the test held it, as
+    at the parent (one run in eleven), two a force's or a stop's own write past that
+    limit, decision 353's, and three a trip's `:timeout` either way. A store's write on
+    this machine, timed under the same busy loops, took 3 ms at the median, 41 ms at the
+    99th centile and 231 ms at most in 1,912 writes, so one past 510 ms is rare and real
+    (question 12).
+  - *The load runs* (`scripts/load.sh`, four busy loops on four cores): decision 348's
+    real-clock test alone, 0 of 50 runs failed (its first form, two writes of 400 and 300
+    ms, failed 14 of 33, the machine's sleeps stretched by a third, and was remade as four
+    of 160); the nine runner files whole (`io`, `trip`, `runner`, `runner_paths`,
+    `stalled_disk`, `force`, `clock`, `retain_store`, `retain_period`), 388 tests, at
+    `10cc54e`: 10 of 50 runs failed, one of them a new test's (`stalled_disk_test.exs`'s
+    first force, given time above), the rest older tests: the six given time above, the
+    take-out growth test's single run (RV-3 makes it the least of three) and `trip_test`'s
+    "heard at each poll meanwhile, on the real clock, short", twice, at its idle watchdog of
+    50, which passed ten runs of ten of `trip_test.exs` alone at the parent and at the tip:
+    decision 348's renewal adds a refresh at a write and never moves a deadline sooner.
+    The run at the tip of this item is below.
   - *The lows kept*:
     - c1-runner-rounds-2 (with no untimed program a host's requests are served ahead of a
       due periodic round with no bound): the moduledoc's rule, decision 108's share being
@@ -12087,6 +12110,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     11. *An address shown as text.* A trip for a misread address prints
         `{:unknown_address, ~c"\a"}`, the list `[7]` shown as a charlist. (a) As built;
         (b) a trip's address shown as its location's text, `panel.i.7`.
+    12. *A busy machine's sync.* Every write's limit is the idle watchdog and a poll
+        period, 510 ms unless set; on a machine whose cores are all busy a healthy disk's
+        sync now and then takes longer, so a technician's force answers
+        `{:error, {:forces, :timeout}}` and is not taken, or a stop answers
+        `{:error, {:retain, :timeout}}`, though nothing is wrong with the disk. (a) As
+        built, the host setting an idle watchdog that covers its disk; (b) a write's limit
+        of its own, `write_limit:`, its default seconds, the heartbeat left as it is.
 - **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
   `.dropped` copy; the report's store and file lows.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,

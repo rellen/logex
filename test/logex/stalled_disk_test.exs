@@ -4,15 +4,16 @@ defmodule Logex.StalledDiskTest do
   the store's at a trip, a stop, a cold restart and a fresh start, is limited to the idle
   watchdog and a poll period of real time, as the period's write is where the runner waits
   on it (decision 275), and so is the forces file's read at a restart: one past it fails, a
-  force `{:error, {:forces, :timeout}}`, a store write reported as any failed write, and
-  the runner answers on. A stalled disk is acted out by the VM's file server held
-  (`:sys.suspend/1`), which every write's rename goes through, and a delete of what
-  stands at its `.tmp`, its other calls raw, so that stop/2, restart/2, status/1 and force/3 are seen answering, the plant's
-  outputs 0 through the trip as ever, and the forces file's read at a restart, raw, by a
-  FIFO in its place, whose read waits for a writer. And M10: each write's `.tmp` is its own, whatever stands at
-  it deleted first, so that a write killed inside a call of the file system, which runs on
-  in the kernel after the kill, never writes into the next write's file. Not async: the
-  file server is the VM's, and a test holds it.
+  force `{:error, {:forces, :timeout}}`, a store write reported as any failed write, and the
+  runner answers on. A stalled disk is acted out by the VM's file server held
+  (`:sys.suspend/1`), which every write's rename goes through, and a delete of what stands
+  at its `.tmp`, its other calls raw, so that stop/2, restart/2, status/1 and force/3 are
+  seen answering, the plant's outputs 0 through the trip as ever, and the forces file's read
+  at a restart, raw, by a FIFO in its place, whose read waits for a writer. And M10: each
+  write's `.tmp` is its own, made new and exclusively, whatever stands at it deleted, so
+  that a write killed inside a call of the file system, which runs on in the kernel after
+  the kill, never writes into the next write's file. Not async: the file server is the
+  VM's, and a test holds it.
   """
   use ExUnit.Case, async: false
 
@@ -45,11 +46,12 @@ defmodule Logex.StalledDiskTest do
     t1.lamp lamp_q
   """
 
-  # Every write's limit, the idle watchdog and a poll period: 510 ms of real time, the
-  # runner's own unless set. At 110 ms a write the disk was free for, a fresh start's or a
-  # stop's, missed its limit on a loaded machine beside a full suite's syncs, in four runs
-  # of six; a stalled write fails at any limit, which only the time the test takes reads.
-  @idle 500
+  # Every write's limit, the idle watchdog and a poll period: 1010 ms of real time. At 110
+  # ms a write the disk was free for, a fresh start's or a stop's, missed its limit on a
+  # loaded machine beside another suite's syncs in four runs of six, and at 510 ms a
+  # force's once in fifty (scripts/load.sh); a stalled write fails at any limit, which only
+  # the time the test takes reads.
+  @idle 1000
   @poll 10
 
   defp configured do

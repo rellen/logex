@@ -230,30 +230,30 @@ defmodule Logex.Runner do
     a write's leftover, so that a write killed inside a call of the file system, which
     runs on to its end in the kernel, never writes into the next write's file: the store
     is the old or the new, never a mix (provisional). A write
-    that fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to the subscribers and
-    `failed` in `status/1`'s `retain`: a trip stays a trip; a cold restart leaves the
-    runner tripped as it was, every output still 0 and no device released or read, and
-    answers `{:error, {:retain, reason}}`; a stop stops all the same and answers it; and
-    a fresh start starts nothing and gives it. Since decision 317 a cold restart that a
-    device then refuses writes the store back, after the refusal's zeros, with the values
-    the runner still holds, the trip's, so that a refused restart changes nothing on disk
-    or in memory, a write-back that fails reported as any failed write, the runner tripped
-    either way. Since decision 316 an orderly shutdown from the runner's parent, a
-    supervisor's `:shutdown` or a `{:shutdown, term}`, writes as `stop/2` does, after
-    every output is 0 and every device closed, a failure reported to the subscribers;
-    the runner tells a shutdown by its reason alone, so `GenServer.stop(runner,
-    :shutdown)` from any other process writes as its parent's does, its caller given
-    `:ok` and the failure only to the subscribers, where `stop/2` answers it (decision
-    327). Since decision 328 a `:normal` exit writes too, a parent's that ends `:normal`
-    and a `GenServer.stop(runner)` from any process, after the same zeros and closes, so
-    that every orderly exit writes. A runner that crashes or is killed, whose clock goes
-    down, a shutdown of its own, `{:shutdown, {:clock, reason}}`, or that ends for any
-    other reason, writes none (decision 292), so its next fresh start meets the last
-    write, a period's or an event's; and one whose devices cannot be opened, whose
-    `init/1` gives `{:error, {:io_init, device, reason}}` and so ends `:normal` with no
-    `terminate/2`, writes none as it ends either: a warm start's store is as the caller
-    left it, and a cold start's, `start: :cold`, or one with no store holds the initial
-    values it wrote before it opened a device (decisions 271 and 291).
+    that fails leaves the store as it was and is reported, `{:retain, {:error, reason}}`
+    to the subscribers and `failed` in `status/1`'s `retain`: a trip stays a trip; a cold
+    restart leaves the runner tripped as it was, every output still 0 and no device
+    released or read, and answers `{:error, {:retain, reason}}`; a stop stops all the same
+    and answers it; and a fresh start starts nothing and gives it. Since decision 317 a
+    cold restart that a device then refuses writes the store back, after the refusal's
+    zeros, with the values the runner still holds, the trip's, so that a refused restart
+    changes nothing on disk or in memory, a write-back that fails reported as any failed
+    write, the runner tripped either way. Since decision 316 an orderly shutdown from the
+    runner's parent, a supervisor's `:shutdown` or a `{:shutdown, term}`, writes as
+    `stop/2` does, after every output is 0 and every device closed, a failure reported to
+    the subscribers; the runner tells a shutdown by its reason alone, so
+    `GenServer.stop(runner, :shutdown)` from any other process writes as its parent's
+    does, its caller given `:ok` and the failure only to the subscribers, where `stop/2`
+    answers it (decision 327). Since decision 328 a `:normal` exit writes too, a parent's
+    that ends `:normal` and a `GenServer.stop(runner)` from any process, after the same
+    zeros and closes, so that every orderly exit writes. A runner that crashes or is
+    killed, whose clock goes down, a shutdown of its own, `{:shutdown, {:clock, reason}}`,
+    or that ends for any other reason, writes none (decision 292), so its next fresh start
+    meets the last write, a period's or an event's; and one whose devices cannot be
+    opened, whose `init/1` gives `{:error, {:io_init, device, reason}}` and so ends
+    `:normal` with no `terminate/2`, writes none as it ends either: a warm start's store
+    is as the caller left it, and a cold start's, `start: :cold`, or one with no store
+    holds the initial values it wrote before it opened a device (decisions 271 and 291).
   - *Its period* (M6-6, decision 275): every `retain_period:` ms, 1000 unless set, on a
     grid from the runner's start on its clock, as a periodic task's due times are, a due
     time passed while the runner was busy skipped, never made up, and none while tripped,
@@ -730,13 +730,13 @@ defmodule Logex.Runner do
   crash and a fresh start (decisions 117 and 127): the whole set of forces is written to
   the file before it returns, `:ok`, or `{:error, {:forces, reason}}` where it cannot be,
   the force not taken, `{:error, {:forces, :timeout}}` where the disk has not finished
-  the write within the idle watchdog and a poll period of real time (decision 353). A force that changes what an event task's trigger reads is a change
-  of it, and makes its round at once, before it returns (decisions 120 and 138). A runner started
-  without `forces:`, an output point, a name that is no input point and a value that does
-  not fit are the host's mistakes. Since decision 241 a located array of input points
-  named whole, `"zone_t"`, is forced to a list of its shape in the elements' order, each
-  element then forced as its own point, nothing forced where its shape or any element does
-  not fit.
+  the write within the idle watchdog and a poll period of real time (decision 353). A
+  force that changes what an event task's trigger reads is a change of it, and makes its
+  round at once, before it returns (decisions 120 and 138). A runner started without
+  `forces:`, an output point, a name that is no input point and a value that does not fit
+  are the host's mistakes. Since decision 241 a located array of input points named whole,
+  `"zone_t"`, is forced to a list of its shape in the elements' order, each element then
+  forced as its own point, nothing forced where its shape or any element does not fit.
   """
   def force(runner, point, value), do: call(runner, {:force, point, value})
 

@@ -288,8 +288,12 @@ defmodule Logex.ForceTest do
       assert Runner.get!(runner, "y") == 1
     end
 
+    # An idle watchdog of 5000: since decision 353 the force's write of the forces file and
+    # the restart's read of it each have the idle watchdog and a poll period of real time,
+    # and at the runner's 510 ms a loaded machine's sync outran the force's now and then
+    # (scripts/load.sh, RV-4). The test reads no limit.
     test "is taken while tripped, and the restart's first round reads it", %{tmp_dir: dir} do
-      %{runner: runner, clock: clock, panel: panel} = started(dir)
+      %{runner: runner, clock: clock, panel: panel} = started(dir, idle: 5000)
       Manual.advance(clock, 10)
       Sim.set(panel, [1], 5)
       assert Runner.status(runner).status == :tripped

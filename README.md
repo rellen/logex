@@ -335,14 +335,14 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-3 and RV-5 to RV-8 build ("The review after Milestone 6"). The one of them that changes
-the source language has landed with RV-2: a rung that writes nothing and jumps nowhere,
-such as the first half of a rung wrapped onto two lines, `xic start xio stop` above
-`ote motor`, is refused at its line, told that a newline ends a rung (decision 351). The
-runner's answers have landed with RV-4: each device's write given its own time (decision 348),
-every file write the runner makes limited (decision 353), a restart judged as it arrives
-(decision 354) and two runners of one VM refused one store or forces file (decision 356),
-each in "Running a plant on the clock" and "The store on disk", below.
+items RV-3 and RV-5 to RV-8 build ("The review after Milestone 6"). The one of them that
+changes the source language has landed with RV-2: a rung that writes nothing and jumps
+nowhere, such as the first half of a rung wrapped onto two lines, `xic start xio stop`
+above `ote motor`, is refused at its line, told that a newline ends a rung (decision 351).
+The runner's answers have landed with RV-4: each device's write given its own time
+(decision 348), every file write the runner makes limited (decision 353), a restart judged
+as it arrives (decision 354) and two runners of one VM refused one store or forces file
+(decision 356), each in "Running a plant on the clock" and "The store on disk", below.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3881,10 +3881,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   that is running, not tripped, refuses a restart as the host's mistake, "the runner is
   running" (decision 133), judged as the restart arrives: one asked while it runs is
   refused even where a trip comes before it is served, so that a trip stands until a
-  restart asked after it (decision 354). A runner that crashes or is killed is gone, its devices writing
-  every output 0 once and closing as it goes (decision 115), a device waiting on it for
-  its own change among them; its child spec is `restart: :temporary`, so the host starts a
-  new one.
+  restart asked after it (decision 354). A runner that crashes or is killed is gone, its
+  devices writing every output 0 once and closing as it goes (decision 115), a device
+  waiting on it for its own change among them; its child spec is `restart: :temporary`, so
+  the host starts a new one.
 
 `a_warm_trip.exs` runs the same plant from `warm/packing.logex`, beside `warm/boxes.ld`,
 which is `boxes.ld` with its counter declared `var retain boxes ctu`: it starts the
@@ -4922,9 +4922,10 @@ in every cycle's outputs at the value it holds.
   behind, and one the disk finishes after the runner gave up on it may still land. Two
   runners of one VM are refused one file, but nothing sees a runner of another VM, or one
   file reached by a second path through a link: two such runners on one store write over
-  each other's, and a crash then brings one runner back with the other's values. A retained value is no safety memory: a
-  burner's lockout, a latch a guard's opening set or a count of trips must not be kept in
-  logex, whose store a person can edit, a cold start discards and a crash may set back.
+  each other's, and a crash then brings one runner back with the other's values. A
+  retained value is no safety memory: a burner's lockout, a latch a guard's opening set or
+  a count of trips must not be kept in logex, whose store a person can edit, a cold start
+  discards and a crash may set back.
 - **Not a guard against what a warm start switches on.** No output is kept: every output
   point is 0 until the first round after a start writes it. But logic that reads a
   retained bit, count or timer writes its outputs from it in that first round, so a warm

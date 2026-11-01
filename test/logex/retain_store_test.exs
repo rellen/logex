@@ -1557,9 +1557,13 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
     end
 
-    # A trip's write that fails is reported and the store left as it was.
+    # A trip's write that fails is reported and the store left as it was. An idle watchdog
+    # of 5000: since decision 353 the fresh start's, the trip's and the stop's writes each
+    # have the idle watchdog and a poll period of real time, and at the runner's 510 ms a
+    # loaded machine's sync outran the stop's now and then (scripts/load.sh, RV-4). The
+    # test reads no limit.
     test "a trip's write that fails is reported", %{tmp_dir: dir} do
-      rig = rig(dir)
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       written = File.read!(rig.store)
