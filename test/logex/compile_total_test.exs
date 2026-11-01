@@ -316,6 +316,92 @@ defmodule Logex.CompileTotalTest do
       end
     end
 
+    # RV-2's review: a connection's member read through Logex.Name.element/1, which gives
+    # nil for a member that is no one word and one pair of brackets, raised
+    # FunctionClauseError in Logex.Configuration's element_tag/3, from a configuration's
+    # text and from Elixir alike. Such a member is told as one its program does not
+    # declare, too deep where it has a `.` part, as `k1.a.3` is.
+    test "a connection's member that ends in a bracket and is no element, in text and from Elixir" do
+      {:ok, keep} =
+        Logex.compile("var_input a bool\nvar_output o int\nxic a move 1 o", name: "keep")
+
+      head =
+        "var_global x bool\nvar_global y int\ntask t interval 10 priority 1\n" <>
+          "program k1 keep with t\n  k1.a x\n  k1.o y\n"
+
+      none =
+        &"`k1` runs `keep`, which declares no `#{&1}`: its var_inputs and var_outputs are `a` and `o`"
+
+      deep =
+        &"`#{&1}` goes too deep: a connection names an instance's var_input or var_output, as in `k1.start`"
+
+      for {line, message} <- [
+            {"k1.[0] x", none.("[0]")},
+            {"k1.[n] x", none.("[n]")},
+            {"k1.[01] x", none.("[01]")},
+            {"k1.o[1].[2] y", deep.("k1.o[1].[2]")},
+            {"k1.a[1].[x] x", deep.("k1.a[1].[x]")},
+            {"k1.a.[0] x", deep.("k1.a.[0]")},
+            {"k1.a.x[0] x", deep.("k1.a.x[0]")}
+          ] do
+        assert {:error, [%Diagnostic{stage: :configure, line: 7, message: ^message}]} =
+                 Logex.Configuration.compile("plant", head <> "  " <> line <> "\n", %{
+                   "keep" => keep
+                 }),
+               line
+      end
+
+      config =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [keep],
+          globals: [
+            %Logex.Configuration.Global{name: "x", type: :bool},
+            %Logex.Configuration.Global{name: "y", type: :int}
+          ],
+          instances: [%Logex.Configuration.Instance{name: "k1", type: "keep"}],
+          connections: [%Logex.Configuration.Connection{instance: "k1", member: "a", to: "x"}]
+        )
+
+      for {member, message} <- [{"[1]", none.("[1]")}, {"o[1].[2]", deep.("k1.o[1].[2]")}] do
+        connection = %Logex.Configuration.Connection{instance: "k1", member: member, to: "y"}
+
+        assert [%Diagnostic{message: ^message}] =
+                 Logex.Configuration.check(%{
+                   config
+                   | connections: config.connections ++ [connection]
+                 }),
+               member
+      end
+    end
+
+    # RV-2's review: a connection's path is split at its first `.`, so `k1[1].a`, which the
+    # lexer reads as one name, gave the instance `k1[1]`, which check/1 refused as the
+    # host's mistake: from a configuration's text it is a broken line, told so, and it still
+    # connects `k1`'s `a`, so that nothing else is told.
+    test "a connection whose instance has brackets is a broken line" do
+      {:ok, keep} =
+        Logex.compile("var_input a bool\nvar_output o int\nxic a move 1 o", name: "keep")
+
+      text =
+        "var_global x bool\nvar_global y int\ntask t interval 10 priority 1\n" <>
+          "program k1 keep with t\n  k1.o y\n  k1[1].a x\n"
+
+      assert {:error, [%Diagnostic{stage: :configure, line: 6, column: 3, message: message}]} =
+               Logex.Configuration.compile("plant", text, %{"keep" => keep})
+
+      assert message ==
+               "`k1[1].a` names an element of `k1`: a connection's instance is named whole, " <>
+                 "never by one of its elements, as in `k1.a`"
+
+      assert {:error, [%Diagnostic{line: 2, message: "`k1[i].o[0]` names an element of " <> _}]} =
+               Logex.Configuration.compile(
+                 "plant",
+                 "program k1 keep\n  k1[i].o[0] y\n  k1.a x\nvar_global x bool\nvar_global y int\n",
+                 %{"keep" => keep}
+               )
+    end
+
     test "a host's key that is no element is told it is not declared" do
       {:ok, program} =
         Logex.compile("var_input a int[3]\nvar_output q int\nmove a[1] q", name: "m")
