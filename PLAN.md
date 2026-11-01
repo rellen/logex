@@ -234,7 +234,9 @@ while building M6-3, answered by the maintainer and built on 2026-10-30 (decisio
 the answers to their readings and reviews (decisions 316–328), M6-7, the online edit of a
 qualifier, and M6-8, the contract walks, on 2026-10-31 with the answers to theirs
 (decisions 329–338), and M6-9, the documents, the same day, so Milestone 6 has landed
-whole, its done sentence shown by one plant and put to the maintainer (§3, M6-9).
+whole, its done sentence shown by one plant and put to the maintainer (§3, M6-9), the
+maintainer's answers to M6-9's review built the same day (decisions 339–342: one rule for
+a resumed timer's time), so that done sentence is the one question left.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -11089,20 +11091,33 @@ done-when reads the next store write; and last the contract walk and the documen
   landed; a kill inside a write is `retain_period_test.exs`'s. The options: (a) as built;
   (b) "one write" read as the write in progress too, the plant killing the runner with a
   write in flight and allowing the write before it, which only a writer held in a pipe
-  can show on the manual clock, as that test does.
+  can show on the manual clock, as that test does. *(Confirmed (a) by the maintainer,
+  2026-10-31, decision 342: nothing built.)*
 
   **Put to the maintainer** (M6-9):
-  1. *Milestone 6's done sentence.* Every clause is shown, the first six whole by the one
-     plant this item built, the last by the cost and exactness tests beside it. An
-     operator sees nothing either way: the question is whether the milestone is done.
-     (a) Done as is; (b) the sentence amended to what the suite shows, the period and one
-     round; (c) more first, a named test. Recommended: (a).
-  2. *The readings still provisional*, each built as read and put to the maintainer where
-     it was found, gathered here as M5-16's review gathered Milestone 5's: M6-6's seven
-     (the period's range and its default, the grid from the start, the take-out's place,
-     nothing written while tripped, an event write waiting for the period's, a writer gone
-     down replaced, the store's age in `status/1`, each above under M6-6), decision 336's
-     three (M6-9's review, below), and the one plant's "one write" above.
+  1. *Milestone 6's done sentence: is Milestone 6 done?* The one question left for the
+     maintainer, since the review's questions 3 to 5 and the "one write" reading were
+     answered on 2026-10-31 (decisions 339 to 342, below). The sentence as it now stands:
+     a box counter, a totaliser and a lubrication timer that a program marks `retain` keep
+     their values across a warm restart, across a runner killed and started fresh from
+     its store, losing at most what changed in one store period and one write (the plant
+     killing between writes, the kill inside a write `retain_period_test.exs`'s, decision
+     342), and across a changed program, by name and type; a cold restart starts them at
+     their initial values, and a crash just after it brings none of the old values back;
+     no output comes back on from the store itself; and a program that marks nothing
+     behaves exactly as before. Every clause is shown by the table above, the first six
+     whole by the one plant, the last by the cost and exactness tests beside it; and an
+     online edit's resumed timer now comes back with exactly the time it had (decisions
+     339 to 341). An operator sees nothing either way: the question is whether the
+     milestone is done. (a) Done as is; (b) the sentence amended to what the suite shows,
+     the period and one round; (c) more first, a named test. Recommended: (a).
+  *(Its second question, the readings still provisional, is no longer one of this item's:
+  each is put to the maintainer where it was found.)* They are M6-6's seven (the period's
+  range and its default, the grid from the start, the take-out's place, nothing written
+  while tripped, an event write waiting for the period's, a writer gone down replaced, the
+  store's age in `status/1`, each above under M6-6), and the two the one rule of decisions
+  339 to 341 leaves open ("M6-9's answers", below); decision 336's three were answered
+  (decisions 339 to 341) and the one plant's "one write" confirmed (decision 342).
 
   **M6-9's review** (2026-10-31, on `dc03bd7`), its four findings and what each became.
   1. *Decision 336 gives a timer back exactly only where the candidate never scans
@@ -11167,14 +11182,16 @@ done-when reads the next store write; and last the contract walk and the documen
      timer late by the original's unscanned hold whenever the candidate scans during the
      test, decision 56's 80 ms pinned; (b) always count from the last switch, the timer
      back exactly every time, decision 56's test changed to 60 ms; (c) left open. The
-     reading taken is (a), provisional.
+     reading taken is (a), provisional. *(Answered by the maintainer, 2026-10-31: (b),
+     always exact, decision 339; built, "M6-9's answers" below.)*
   4. *An instance back from aside takes the time the original held before it was set
      aside.* The conveyor whose program type the candidate changes, so that a test sets
      it aside: after the original's 30 ms unscanned, a test and an untest at once bring
      the lube back 30 ms late though it was aside for no time. Options: (a) as built,
      resumed from the timer's last run, decision 57's pinned 130 ms; (b) count only the
      time aside, the lube on time here and decision 57's test changed to 120 ms; (c) left
-     open. The reading taken is (a), provisional.
+     open. The reading taken is (a), provisional. *(Answered by the maintainer,
+     2026-10-31: (b), only the time aside uncounted, decision 340; built below.)*
   5. *A candidate's unscanned hold is caught up where the original scanned last.* The
      same lube, tested at 10 ms, the candidate holding the conveyor 30 ms with no event,
      untested: the lube catches up those 30 ms, which the candidate, not running it,
@@ -11182,7 +11199,8 @@ done-when reads the next store write; and last the contract walk and the documen
      question 3. Options: (a) as built, caught up; (b) the time a program that does not
      run the timer held never counted, whoever scanned last, the lube on time here (a
      lone instance unchanged, its clock moving only by its scans); (c) left open. The
-     reading taken is (a), provisional.
+     reading taken is (a), provisional. *(Answered by the maintainer, 2026-10-31: (b),
+     never counted, whoever scanned last, decision 341; built below.)*
 
   IEC 61131-3 has no online edit, and says nothing of a timer whose instruction is not
   called for a while. Logix's test and untest of edits run the original's rungs or the
@@ -11194,6 +11212,178 @@ done-when reads the next store write; and last the contract walk and the documen
   `scratchpad/m6/m9/`. 2412 tests (11 doctests), up from 2411. M6-9's review's fixes: 2415 tests (11
   doctests), up from 2412, the three provisional tests in `config_edit_test.exs`, and the
   done sentence's plant changed in place.
+
+  **M6-9's answers** (the maintainer, 2026-10-31), decisions 339 to 342 in
+  `docs/organisation.md` §7, built the same day. Questions 3, 4 and 5 were answered (b),
+  each, and the one plant's "one write" confirmed (a). Together the three answers are one
+  rule, which `Logex.Edit`'s moduledoc, `Logex.Configuration.Edit`'s, §4.9's Resume rows
+  and `Logex.Edit.Plan`'s code state: **a timer's time runs only while a program that
+  runs it holds the instance, and not while the instance is set aside.**
+
+  *As built.* The edit's record of each instance (`Logex.Edit.Plan`) keeps `held`, the
+  time from which the program that holds the instance has held it, and, new, `prior`,
+  the time from which the other held it before, each nil from before the edit. A switch
+  with no scan since this edit's last one and no time since it (`back?/3`: `switched` and
+  the instance's own `now` still the switch's `at`; in a lone instance every switch with
+  no scan since the last) only gives the instance back to the program that held it
+  before: it gives back what the last switch moved (fix F11), resumes nothing more, and
+  the two times swap, the program given it back holding it on from when it held it
+  before. Any other switch ends
+  the hold of the program it stops, scanned or not. A timer the program started runs and
+  the program stopped does not, timing, resumes by `last + at - max(last, held)`, to `at`
+  where `held` is nil, whoever scanned the instance last (`stopped_last?`, M2-5's "the
+  program that last scanned", retired by decision 341). An instance back from aside
+  (`Logex.Configuration.Edit`, whose edit gains `aside_at`, the time each instance it
+  set aside was set aside) resumes each timer by `now - max(last, aside_at)`, none where
+  that is 0 (decision 340). Decision 336's special cases, the resume from the switch only
+  where no scan had run since and the give-back of a move after the clock had moved, are
+  retired into the rule; its round trip after a hold still finishes on time.
+
+  *Pinned values changed*, each the maintainer's answer, the commit and the record saying
+  so (`config_edit_test.exs`):
+  - decision 56's `{:resumed, "m2.t1", 80}` is 60 (the maintainer's value), and `m2.t1`'s
+    `acc` two cycles after it `50 + 20 + 20` where it was `50 + 20`, the 20 ms from `m2`'s
+    last scan at 50 to the test, the original's, caught up;
+  - decision 57's `{:resumed, "m2.t1", 180 - 50}` is `180 - 60`, 120 (the maintainer's
+    value), with `last` 170 where it was 180 and the `acc` two cycles on `acc + 20 + 10`
+    where it was `acc + 20`;
+  - the three provisional tests, each now the answer: after a candidate's scan, at four
+    depths, `{:resumed, …, 5}` where it was 35, the tag's `last` 15 where it was 45 and its
+    next `acc` 45 where it was 15; back from aside after no time aside nothing resumed
+    where it was 30, and the lube done at its 30 ms where its `acc` was 10; the
+    candidate's unscanned hold `{:resumed, "c1.lube", 30}` where nothing was, `last` 40
+    where it was 10 and the `acc` 10 where it was 40;
+  - decision 336's second test, "an untest gives back what the test gave back, the clock
+    having moved since with no scan", is the case decision 339 changes and the special
+    case the rule retires: its first untest resumes `m2.t1` by 50 where it was 60 (the
+    candidate's hold from the test at 60; question 3's case), `last` 100 where it was 110,
+    and the test and untest after the original's 30 ms hold move nothing, where each gave
+    the last back, `m2`'s next scan catching up `acc + 50` where it was `acc + 40`; its
+    title says so. Its other assertions, and decision 336's first test, the conveyor's,
+    pass unchanged.
+  *Changed on the rule's reading* (provisional, question 6 below): fix F11's resource test,
+  "fix F11's undo reads the instance's own clock, so a cycle that does not scan it cannot
+  hide a resume from the untest", whose untest at 90, after three cycles with no scan of
+  `m2`, gave the test's resume back, `{:resume_undone, "m2.t1", 10}` and `last` 50: the
+  candidate, which runs `t1`, held `m2` those 30 ms, so the rule keeps the resume, nothing
+  given back and `last` 60, and the test now goes on to a second test at 100 resumed by
+  the original's 10 ms alone and the candidate's scan at 150 catching up exactly its own
+  80 ms. Its title says it is provisional.
+  *New tests*: `config_edit_test.exs`, "a test and an untest at once give the instance
+  back to the original, which holds it on from before the test" (the swap: after a give-
+  back and three cycles the next test resumes by all 40 ms since `t1` last ran, not the
+  30 since the untest); `edit_test.exs`, "a lube timer the original's jump froze before
+  the test catches up that time after the candidate's scans (decision 339)", the one
+  place a lone instance changes, "a retained lube timer warm restarted under test resumes
+  from the restart, not from the test" (mutant M10's), and "a test and an untest at once
+  after an untest that resumed give the lube timer back exactly", the defect the block
+  edit walk found at a fresh family (below), and "a test and an untest at once leave the
+  original holding from its own untest, which a later test's resume counts from" (M4's). Decisions 93 to 95 agree with the rule: a `tof` in its
+  delay and a `tp` in its pulse resume by `.tt`, an `rto` by `.en`, each by the hold of a
+  program that does not run it, so none is changed.
+
+  *The walks.* The lone edit walk's restated resume reads the record's `:hold`, `{held,
+  prior}`, the walk keeps from its own record of the switches, a switch with no scan
+  since the last a give-back and a swap, any other a hold's end, and `last + now -
+  max(last, held || last)` for a timer only the program started runs; the configuration
+  edit walk's reads each kept instance's hold the same way (`ce_holds/3`), scanned or
+  not, a switch that gives back one with no scan and no time since the last, and an
+  instance back from aside by the time the walk saw it set aside, its round trip of an
+  instance the test set aside now exact, with no exemption, and every reported resume
+  above 0; a reach `:resumed_after_scan` added. The block edit walk, the life walk and the
+  runner walk restate no resume (the block walk rebuilds the state from the reports, the
+  runner walk and the life walk compare the runner with `Logex.Configuration.Edit` and
+  the core called directly), so none changed. The configuration walk's oracle that knows
+  nothing of an edit, no scan letting a timer gain more than the time since its
+  instance's last scan, is the rule decision 339 changes on purpose (decision 56's 20 ms
+  now caught up): where a switch came since that scan its bound is the time since the
+  walk last saw the timer run, a run stamping `last` with the scan's time; with none, as
+  before (`3fd65a1`).
+
+  *At 30 fresh families,* `{6901..6930, …}`, each walk's own streams moved with it, and
+  `{7613, 10, 19}` (`scratchpad/m6/a9/fams.sh`, `fams2.sh`). They found two defects of
+  this item's first commit, `8ec9fd2`, each fixed with its test: the block edit walk at
+  `6904`, a switch that gives the instance back after a swap resuming a frozen timer
+  again on top of its give-back, counting a hold twice (`2c017f7`: such a switch resumes
+  nothing more; edit_test.exs's "a test and an untest at once after an untest that
+  resumed give the lube timer back exactly" fails without it); and the configuration
+  walk at `6901`, its own oracle reading the last edit's holds at a new edit's first
+  test (fixed in `2c017f7` too). And the edit-agnostic bound above failed at 14 of the
+  30 and at 7613, each where decision 339 has a timer catch up the original's
+  unscanned hold. On the tip: the configuration edit walk passes 29 and 7613, `6929`
+  missing the report kind `:resume_undone` alone, which the parent reaches there, a
+  switch now giving a resume back only where no time has passed since the last; the
+  lone edit walk passes 28 and 7613, `6915` and `6922` missing `:misfit` alone, as the
+  parent `bc3050e` misses it at each; the block edit walk all 30. No check failed in
+  any.
+
+  *Mutation table* (`scratchpad/m6/a9/mut_results_final.txt`), fourteen mutants of the
+  change, each judged by the full suite on the tip's code: all red, M4 only once its test
+  was added (`766eecc`).
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | M1 | no switch gives the instance back (no give-back, no swap) | 8, fix F11's at depth, the swap's, the double-resume's and three walks |
+  | M2 | a switch with no scan since gives back whatever the time since (fix F11 and decision 336 as they were) | 5, the four-depth answer, decision 341's, decision 336's second, the swap's and F11's provisional test |
+  | M3 | no swap: a give-back's switch ends a hold as any other | 2, the swap's test and the lone walk |
+  | M4 | the swap keeps `prior` | 1 since `766eecc`, "a test and an untest at once leave the original holding from its own untest", none before it |
+  | M5 | a resume to `at` always, the rule before decision 336 | 7, decision 56's 60 ms, the four-depth answer and the lone frozen timer's among them |
+  | M6 | `held` read only where no scan has run since (decision 336 as built) | 7, the same family |
+  | M7 | no resume where the program started scanned last (`stopped_last?` back) | 1, decision 341's |
+  | M8 | an instance back from aside resumed to `now` (decision 57 as it was) | 3, decision 57's 120 ms, decision 340's and the configuration walk |
+  | M9 | the time set aside read as the instance's own `now`, its last scan | 3, the same three |
+  | M10 | `last + at - held`, no `max` | 1, "a retained lube timer warm restarted under test resumes from the restart", added for it in the first round |
+  | M11 | a hold from before the edit resumes nothing | 9 |
+  | M12 | the edit's first switch may give back | 2, the swap's and F11's provisional test |
+  | M13 | the give-back wherever no scan has run since, the swap as built | 3, decision 336's second, F11's provisional test and the configuration walk |
+  | M14 | a switch that gives the instance back resumes again (`8ec9fd2`'s defect) | 1, "a test and an untest at once after an untest that resumed give the lube timer back exactly" |
+
+  The first round, on `8ec9fd2` (`mut_results_round1.txt`), had M1 to M13: every one red
+  but M10, whose test came then, and M4 red by the configuration and block walks, which
+  the double resume `2c017f7` fixed had let it reach.
+
+  *Cost*, in reductions, the least of five runs, against the parent `bc3050e`
+  (`scratchpad/m6/a9/cost.exs`, M6-9's `cost.exs`, on this item's tip): a lone edit's
+  test of programs of 1, 16 and 64 timers, counters, blocks and arrays 463 to 465, 4,340
+  to 4,342 and 16,678 to 16,680, 2 a switch whatever the size, its accept, untest,
+  assemble and cancel within as many; a resource's test of 1, 16 and 64 instances 1,343
+  to 1,353, 10,965 to 11,006 and 41,997 to 42,141, about 2 an instance, and its untest
+  1,225 to 1,235, 9,842 to 9,881 and 37,651 to 37,795, about 2 an instance and the time
+  set aside merged once a switch, 0.4% at the most; accept the same as its forecast.
+  Linear.
+
+  *Readings the rule leaves open (provisional), put to the maintainer*, numbered after
+  M6-9's five:
+  6. *Fix F11's undo after a cycle with no scan.* An instance whose timer the original does
+     not run, an earlier edit having taken its rung out, and a candidate that runs it
+     again: the test resumes the timer, three cycles pass with no scan of the instance on
+     its slow task, and the untest no longer gives the resume back, since the candidate,
+     which runs the timer, held the instance those 30 ms. The operator sees nothing while
+     the original runs, the timer frozen either way; at a later test the timer comes back
+     with the candidate's 30 ms, where giving the resume back would give it the original's
+     time instead. Options: (a) as built, the resume kept, exact by the rule; (b) give it
+     back as fix F11 did across such cycles, the state exactly as the test found it but
+     the next test's timer 10 ms off, the original's hold before the test counted; (c)
+     left open. The reading taken is (a), provisional.
+  7. *A hold from before the edit.* A timer the original does not run, stopped by an
+     earlier edit, which this edit's first test starts running again: the edit cannot know
+     when the original began to hold the instance, so the resume takes all the time since
+     the timer last ran, as decision 23 resumes it, though some of that time may have been
+     held by the earlier edit's candidate, which ran the timer. A fan's run-on timer that
+     an edit stopped mid-run and a later edit restores comes back with the time it had
+     when it was stopped, not counting anything since. Options: (a) as built; (b) keep the
+     time of every instance's last switch in the instance itself, so that a later edit
+     knows it, the timer counting the earlier candidate's hold too; (c) left open. The
+     reading taken is (a), provisional.
+
+  The README's examples were run again by M6-9's harness (`scratchpad/m6/a9/ex`), the
+  library replaced by this item's: all 35 the same as printed, `edit.exs`'s `{:resumed,
+  "t1", 10}` among them, a lone instance resumed by its candidate's hold since the
+  untest, which the rule leaves as it was; no README text changed. 2420 tests (11
+  doctests), up from 2415: the swap's in `config_edit_test.exs` and four in
+  `edit_test.exs`, a lone timer frozen by the original's jump, a retained timer warm
+  restarted under test (M10's), the double resume (M14's) and two give-backs in a row
+  (M4's). Commits `8ec9fd2`, `2c017f7`, `3fd65a1` and `766eecc`, then these documents.
 
 **What stays deferred**, each a later item or milestone (§4.13): `persistent`, not
 reserved (decision 280); `program retain` on a configuration's line (281); a retained
