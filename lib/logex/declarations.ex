@@ -1104,12 +1104,12 @@ defmodule Logex.Declarations do
   # elements' order, each quoted as written where it is spelled (decision 202).
   # M5-14: an array of instances takes no initial list, as an instance takes no initial
   # value; it is still plainly an array of its line's section, so its uses are checked.
-  defp typed({:array, %FbType{}, _dims} = type, name, _word, [_ | _], _kw),
-    do: {:error, instances_initial(name, type)}
-
-  defp typed({:array, _, _} = type, name, _word, [_ | _] = tail, _kw) do
-    listed(Enum.all?(tail, &is_literal/1), type, name, tail)
-  end
+  # RV-2 (M15): a qualifier after an array's type word, before or among its initial list,
+  # `var x int[2] retain 1 2` or `var t ton[2] retain`, is told where it goes, as a scalar's
+  # is, and the line read without it, where it was told it was no literal of the list or
+  # that an array of instances takes none.
+  defp typed({:array, _, _} = type, name, word, [_ | _] = tail, at),
+    do: array_initial(Enum.find_index(tail, &qualifier_operand?/1), type, {name, word}, tail, at)
 
   # M2-5: a function block never holds an instance of itself, at any depth (Ed 2 §2.5,
   # docs/organisation.md §4.3). Logex.Compiler marks the types that would. The line's name
@@ -1169,6 +1169,20 @@ defmodule Logex.Declarations do
 
   defp after_type(false, {_type, name, _word}, [extra | _], _at),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+
+  defp array_initial(nil, {:array, %FbType{}, _dims} = type, {name, _word}, _tail, _at),
+    do: {:error, instances_initial(name, type)}
+
+  defp array_initial(nil, type, {name, _word}, tail, _at),
+    do: listed(Enum.all?(tail, &is_literal/1), type, name, tail)
+
+  defp array_initial(index, type, {name, word}, tail, {kw, _types} = at) do
+    {{:name, _, qualifier}, rest} = List.pop_at(tail, index)
+    misplaced(qualifier, kw, salvaged(typed(type, name, word, rest, at), type, {name, kw}))
+  end
+
+  defp qualifier_operand?({:name, _, word}) when may_qualify(word), do: qualifier_word?(word)
+  defp qualifier_operand?(_element), do: false
 
   defp listed(true, type, name, tail),
     do: {:ok, name, type, Enum.map(tail, &Parser.value/1), Enum.map(tail, &shown_literal/1)}

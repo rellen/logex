@@ -198,6 +198,46 @@ defmodule Logex.RetainTest do
              }
     end
 
+    # RV-2 (the review after Milestone 6, M15): so is one after an array's type word,
+    # before or among its initial list, where it was told it was no literal of the list,
+    # or for an array of instances that it takes none; the line read without it, its
+    # initial list kept and its array's uses checked.
+    test "a qualifier after an array's type word is told where it goes" do
+      assert errors(
+               "var x int[2] retain 1 2\nvar t ton[2] Retain\nvar y int[2] 1 non_retain 2\n" <>
+                 "var z int[2] 1 2 retain\nvar u ton[2] retain 5\nvar w int[2] 1 w 2\n" <>
+                 "var_input a bool\nvar_output o int\nmove x[1] o\nxic a ton t[0] 5\n" <>
+                 "xic a ton t[1] 5\nmove y[0] o\nmove z[1] o\nxic a ton u[0] 5\nxic a ton u[1] 5"
+             ) == [
+               "line 1: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 2: `Retain` comes straight after the section word, as in " <>
+                 "`var Retain count dint`",
+               "line 3: `non_retain` comes straight after the section word, as in " <>
+                 "`var non_retain count dint`",
+               "line 4: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 5: `retain` comes straight after the section word, as in " <>
+                 "`var retain count dint`",
+               "line 5: `u` is an array of 2 tons, which takes no initial values: each " <>
+                 "element's preset is the number on its `ton` instruction, as in `ton u[0] 5000`",
+               "line 6: unexpected `w` in the initial list of `w`: an array's initial list is " <>
+                 "one literal for every element"
+             ]
+
+      # Read without it, the list kept and no qualifier taken.
+      {:ok, tokens, _} =
+        Logex.Compiler.tokenize("var x int[2] retain 1 2\nvar y int[2] 1 retain 2")
+
+      {:ok, {:routine, {:rungs, rungs}}} = Logex.Compiler.parse(tokens)
+      {table, _logic, [_, _], _untyped} = Logex.Declarations.split(rungs)
+
+      assert Map.new(table, fn {n, t} -> {n, {t.retain, t.initial}} end) == %{
+               "x" => {nil, [1, 2]},
+               "y" => {nil, [1, 2]}
+             }
+    end
+
     test "a section word is quoted as written beside its qualifier" do
       assert errors("VAR_OUTPUT Retain\nVar x Retain bool") == [
                "line 1: `VAR_OUTPUT Retain` needs a tag name and a type, as in " <>
