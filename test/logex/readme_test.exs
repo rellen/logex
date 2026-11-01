@@ -56,7 +56,7 @@ defmodule Logex.ReadmeTest.Examples do
 
   # The lines of a script's output that README says are this run's alone, compared by
   # their beginning: "The keyword list is the same on every run; the figures are this
-  # run's" (provisional: no figure is held to a range).
+  # run's" (decision 364: no figure is held to a range).
   @varies %{"on_the_real_clock.exs" => "this run's figures: "}
 
   def readme, do: File.read!(@readme)

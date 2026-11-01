@@ -22,8 +22,8 @@ defmodule Logex.Compiler do
   does nothing and one that runs the motor whatever stop does; a label alone is such a
   rung. Its last instruction is looked at first, so most rungs cost one clause. A rung
   refused as it is lowered is not told this too, and one the jump checks refuse is
-  (provisional). A rung of empty groups alone, `( )`, holds no line, and is cited at the
-  first line it can stand on, after the rung before it (provisional).
+  (decision 373). A rung of empty groups alone, `( )`, holds no line, and is cited at the
+  first line it can stand on, after the rung before it (decision 368).
 
   Since M5-11 (decision 151) an operand may be an element of an array, `temps[3]`, each
   subscript a literal within its dimension, refused at its line otherwise, read and written
@@ -2000,7 +2000,7 @@ defmodule Logex.Compiler do
   # as it is lowered, for an unknown instruction, a `cal` that runs nothing or an operand
   # missing, any of which may be the write it lacks, is not told this too; one the jump
   # checks refuse after it, a label not first or used twice, which no write mends, is told
-  # both (provisional). Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
+  # both (decision 373). Its line is its parse tree's, `rung_line/1`'s, the one rule a block's
   # printed text reads too; a rung of empty groups alone, `( )`, holds none, and is cited
   # by `lowering/3` (placed/2).
   defp ends([{symbol, _line, _operands} | _earlier], _ir, {lowered, _before, _rung})
