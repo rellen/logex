@@ -223,11 +223,12 @@ defmodule Logex.Runner do
     in a process of its own and limited to the idle watchdog and a poll period of real
     time, as the period's write is where the runner waits on it, one the disk has not
     finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
-    runner answering, its outputs 0 through the trip as ever; and since M10 each write's
-    `.tmp` is its own, whatever stands at `<path>.tmp` deleted first, a FIFO, a link or a
-    write's leftover, and the file made afresh, so that a write killed inside a call of
-    the file system, which runs on to its end in the kernel, never writes into the next
-    write's file: the store is the old or the new, never a mix (provisional). A write
+    runner answering, its outputs 0 through the trip as ever, though one killed in its
+    rename may land once the disk answers; and since M10 each write's `.tmp` is its own,
+    made new and exclusively, whatever stands at `<path>.tmp` deleted, a FIFO, a link or
+    a write's leftover, so that a write killed inside a call of the file system, which
+    runs on to its end in the kernel, never writes into the next write's file: the store
+    is the old or the new, never a mix (provisional). A write
     that fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to the subscribers and
     `failed` in `status/1`'s `retain`: a trip stays a trip; a cold restart leaves the
     runner tripped as it was, every output still 0 and no device released or read, and
@@ -1130,7 +1131,8 @@ defmodule Logex.Runner do
   # reads its device's last value again. Since decision 353 the read is the runner's own
   # file call, limited as its writes are: one not made within the idle watchdog and a poll
   # period of real time answers `{:error, {:forces, :timeout}}`, the runner left tripped as
-  # it was (provisional).
+  # it was (provisional). It is raw, so that the VM's file server, busy with every other
+  # process's calls, is not on its way.
   defp serve({:restart, mode, :tripped}, state),
     do: restarting_with(forces_at_restart(state), mode, state)
 
@@ -1155,7 +1157,11 @@ defmodule Logex.Runner do
   defp forces_at_restart(%{file: nil}), do: {:ok, %{}}
 
   defp forces_at_restart(%{forces_at: path} = state),
-    do: forces_text(Writer.within(fn -> File.read(path) end, state.idle + state.poll), state)
+    do:
+      forces_text(
+        Writer.within(fn -> :file.read_file(path, [:raw]) end, state.idle + state.poll),
+        state
+      )
 
   defp forces_text({:error, :timeout}, _state), do: {:error, {:forces, :timeout}}
   defp forces_text(read, state), do: {:ok, forces_read(read, state.file, state)}

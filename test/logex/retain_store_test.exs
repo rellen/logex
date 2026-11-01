@@ -1586,12 +1586,12 @@ defmodule Logex.RetainStoreTest do
       {:ok, runner} = Runner.start_link(rig.opts)
       assert :erlang.trace_pattern({:file, :_, :_}, true, [:global]) > 0
       # Since decision 353 the write is made in a process the runner starts for it, which
-      # the trace follows, and since M10 whatever stands at the `.tmp` is deleted first.
+      # the trace follows.
       :erlang.trace(runner, true, [:call, :set_on_spawn])
       tripped(rig, runner)
       :erlang.trace(runner, false, [:call, :set_on_spawn])
       :erlang.trace_pattern({:file, :_, :_}, false, [:global])
-      assert files([]) == [:delete, :open, :write, :sync, :close, :rename]
+      assert files([]) == [:open, :write, :sync, :close, :rename]
       assert Runner.stop(runner) == :ok
     end
   end

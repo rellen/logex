@@ -6,9 +6,10 @@ defmodule Logex.StalledDiskTest do
   on it (decision 275), and so is the forces file's read at a restart: one past it fails, a
   force `{:error, {:forces, :timeout}}`, a store write reported as any failed write, and
   the runner answers on. A stalled disk is acted out by the VM's file server held
-  (`:sys.suspend/1`), which every write's delete and rename and every read go through, so
-  that stop/2, restart/2, status/1 and force/3 are seen answering, the plant's outputs
-  0 through the trip as ever. And M10: each write's `.tmp` is its own, whatever stands at
+  (`:sys.suspend/1`), which every write's rename goes through, and a delete of what
+  stands at its `.tmp`, its other calls raw, so that stop/2, restart/2, status/1 and force/3 are seen answering, the plant's
+  outputs 0 through the trip as ever, and the forces file's read at a restart, raw, by a
+  FIFO in its place, whose read waits for a writer. And M10: each write's `.tmp` is its own, whatever stands at
   it deleted first, so that a write killed inside a call of the file system, which runs on
   in the kernel after the kill, never writes into the next write's file. Not async: the
   file server is the VM's, and a test holds it.
@@ -155,9 +156,9 @@ defmodule Logex.StalledDiskTest do
       assert %{status: :tripped, retain: %{failed: :timeout}} = Runner.status(runner)
       assert Sim.outputs(rig.panel) == %{[0] => 0}
 
-      # A restart reads the forces file first, its read limited as a write is.
+      # A cold restart writes the store first, and its write times out as the trip's did.
       {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
-      assert answer == {:error, {:forces, :timeout}}
+      assert answer == {:error, {:retain, :timeout}}
       assert took < @answers
       assert %{status: :tripped} = Runner.status(runner)
 
@@ -167,8 +168,41 @@ defmodule Logex.StalledDiskTest do
       assert took < @answers
       refute Process.alive?(runner)
 
+      # The disk back, the trip's write, killed in its rename, whole and synced by then,
+      # lands, the store the new write, never a mix; the cold restart's and the stop's
+      # found it at the `.tmp` and waited behind it in their deletes, writing nothing.
       :sys.resume(server)
-      assert File.read!(rig.store) == written
+      text = File.read!(rig.store)
+      assert text != written
+      assert text =~ "t1.boxes.cv dint 1\n"
+      refute File.exists?(rig.store <> ".tmp")
+    end
+
+    test "a restart whose forces file's read does not end within its limit is " <>
+           "{:error, {:forces, :timeout}}, the runner tripped as it was",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: trip} = Runner.status(runner)
+
+      # The forces file a FIFO, whose read waits for a writer that never comes.
+      File.rm!(rig.forces)
+      {_, 0} = System.cmd("mkfifo", [rig.forces])
+      {took, answer} = timed(fn -> Runner.restart(runner, :warm) end)
+      assert answer == {:error, {:forces, :timeout}}
+      assert took >= @idle + @poll and took < @answers
+      assert %{status: :tripped, trip: ^trip, forces: %{"level" => 7}} = Runner.status(runner)
+
+      # The killed read's call let go, and the file back, the restart restarts.
+      {:ok, pipe} = :file.open(rig.forces, [:write, :raw])
+      :ok = :file.close(pipe)
+      File.rm!(rig.forces)
+      File.write!(rig.forces, "level 7\n")
+      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.stop(runner) == :ok
     end
 
     test "a cold restart's write is {:error, {:retain, :timeout}}, the runner tripped as it " <>

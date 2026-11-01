@@ -3338,8 +3338,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   (decisions 316 and 328); and at a fresh start with `start: :cold`, or
   with no store file, before any device is opened (decisions 271 and 291). Each write goes
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
-  file is, so that a crash at any moment leaves the old store or the new; whatever stands
-  at `tally.retain.tmp` is deleted first, so that each write's file is its own; and each
+  file is, so that a crash at any moment leaves the old store or the new; each write's
+  `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
   is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
   the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
   leaves the runner answering (decision 353). A write that fails leaves the store as it

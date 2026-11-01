@@ -287,8 +287,8 @@ defmodule Logex.RetainPeriodTest do
     # inside its write; the writer goes down with its runner, the store is the last whole
     # write, and a fresh start restores that. The writer was held by a pipe at the store's
     # `.tmp`, which since M10 (RV-4) its write deletes first, each write's `.tmp` its own:
-    # it is held now by the VM's file server held, its write's first call of the file
-    # system, the delete of the `.tmp`, waiting on it, as a stalled disk holds a write.
+    # it is held now before its write's calls of the file system, `:sys.suspend/1`, and a
+    # write killed inside one of them is stalled_disk_test.exs's.
     test "a runner killed in the middle of a period's write restores the write before it",
          %{tmp_dir: dir} do
       text = String.replace(@tally, "var e bool\n", "var e bool\nvar retain big dint[20000]\n")
@@ -302,14 +302,12 @@ defmodule Logex.RetainPeriodTest do
       assert total(rig.store) == "1"
       writer = writer(runner)
       ref = Process.monitor(writer)
-      server = held_file_server()
+      :sys.suspend(writer)
       eye(rig, 0, 50)
       eye(rig, 1, 50)
       assert values(runner) == [2, 2, 1, 2]
-      waits_on(server, writer)
       killed(runner)
       assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
-      :sys.resume(server)
       assert File.read!(rig.store) == before
       opener_down(rig.panel)
 
@@ -752,25 +750,6 @@ defmodule Logex.RetainPeriodTest do
       assert Runner.stop(runner) == :ok
     end
   end
-
-  # The VM's file server held, as a stalled disk holds every call of the file system made
-  # through it, a write's delete and rename among them; let go when the test ends whatever
-  # comes, since every other file call waits on it meanwhile.
-  defp held_file_server do
-    server = Process.whereis(:file_server_2)
-    :sys.suspend(server)
-    on_exit(fn -> :sys.resume(server) end)
-    server
-  end
-
-  # Waits until a call of `pid`'s waits in the held file server's mailbox.
-  defp waits_on(server, pid), do: waiting_on(Process.info(server, :messages), server, pid)
-
-  defp waiting_on({:messages, messages}, server, pid),
-    do: wait_found(Enum.any?(messages, &match?({:"$gen_call", {^pid, _}, _}, &1)), server, pid)
-
-  defp wait_found(true, _server, _pid), do: :ok
-  defp wait_found(false, server, pid), do: waits_on(server, pid)
 
   # The writes the trace saw, by the process that made each: the writer's through
   # Logex.Retain.written/2, and since decision 353 the runner's own through
