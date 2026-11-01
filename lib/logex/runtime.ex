@@ -4064,11 +4064,15 @@ defmodule Logex.Runtime do
   # on the falling edge's own scan. Otherwise it is at rest: `.dn` and `.tt` 0, and `.acc`
   # where the delay left it. `.en` is 0 on every de-energised run, and `last` is stamped on
   # every run, so a `tof` a frozen block holds catches up when it next runs (decision 8).
-  # Its falling edge is read from `.en`, which a fresh instance and a cold restart put at 0,
-  # so the first scan after either sees none (decision 69); a warm restart, or a start from
-  # an image, keeps a retained `tof`'s `.en`, so one held on at the outage sees its rung's
-  # fall on the first scan after it and starts its delay (decisions 271 and 277; decision
-  # 349, RV-3's, brings it to rest instead). Nothing may follow it on its path (decision 73).
+  # Its falling edge is read from `.en`, and no first scan sees one (decisions 69 and 93):
+  # a fresh instance and a cold restart put `.en` at 0, and since decision 349 (the
+  # maintainer, 2026-11-01) a first scan reads no edge from an `.en` a warm restart, or a
+  # start from an image, kept at 1, so a retained `tof` held on at the outage comes to rest
+  # on a false rung, `.dn` 0, as Logix's prescan leaves a TOF, where until then it started
+  # its delay and ran its output on with nothing commanding it; one already in its delay at
+  # the outage, `.tt` 1, resumes it on the first scan, its `last` at the restart's `now`
+  # (decision 273). Each first scan's run is a clause of its own, so a scan after the first
+  # costs what it did. Nothing may follow it on its path (decision 73).
   defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end
@@ -4076,9 +4080,22 @@ defmodule Logex.Runtime do
   defp evaluate(
          {:tof, _, [timer, _preset]},
          {false, env},
-         %Scan{now: now, units: nil}
+         %Scan{now: now, units: nil, first: false}
        ) do
     {false, write(env, timer, off_delay(as_map(read(env, timer)), now, 1))}
+  end
+
+  defp evaluate({:tof, line, [timer, _preset]}, {false, env}, %Scan{first: false} = scan) do
+    {false,
+     write(
+       env,
+       timer,
+       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
+     )}
+  end
+
+  defp evaluate({:tof, _, [timer, _preset]}, {false, env}, %Scan{now: now, units: nil}) do
+    {false, write(env, timer, first_off(as_map(read(env, timer)), now, 1))}
   end
 
   defp evaluate({:tof, line, [timer, _preset]}, {false, env}, scan) do
@@ -4086,7 +4103,7 @@ defmodule Logex.Runtime do
      write(
        env,
        timer,
-       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
+       first_off(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
      )}
   end
 
@@ -4983,6 +5000,11 @@ defmodule Logex.Runtime do
         now,
         per_ms
       )
+
+  # Decision 349: a first scan's de-energised run, its delay resumed where `.tt` is 1 and
+  # otherwise at rest, whatever `.en` holds.
+  defp first_off(timer, now, per_ms),
+    do: delayed(closed?(Map.get(timer, "tt")), timer, now, per_ms)
 
   defp delayed(true, timer, now, per_ms) do
     pre = integer(Map.get(timer, "pre"))

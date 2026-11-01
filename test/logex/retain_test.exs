@@ -768,6 +768,94 @@ defmodule Logex.RetainTest do
       assert counted.env["t"]["acc"] == t + 50
     end
 
+    # Decision 349 (the maintainer, 2026-11-01): a first scan reads no falling edge from a
+    # retained `tof`'s `.en` kept at 1, so one held on at the outage comes to rest, `.dn`
+    # 0, where until then it ran its whole delay with nothing commanding it; one in its
+    # delay at the outage, `.tt` 1, resumes it (decision 273). Every kind: a `tof`, a
+    # `tof_ltime`, an element of an array of them and a member of a block.
+    @run_on_block """
+    function_block runon
+    var_input go bool
+    var_output q bool
+    var t tof
+    xic go tof t 50
+    xic t.dn ote q
+    """
+
+    @run_on """
+    var_input motor bool
+    var_output k1 bool
+    var_output k2 bool
+    var_output k3 bool
+    var_output k4 bool
+    var retain fan tof
+    var retain lf tof_ltime
+    var retain fs tof[2]
+    var retain r runon
+    xic motor tof fan 50
+    xic motor tof lf 50000000
+    xic motor tof fs[1] 50
+    cal r motor k4
+    xic fan.dn ote k1
+    xic lf.dn ote k2
+    xic fs[1].dn ote k3
+    """
+
+    defp run_on_outputs(p, state, inputs) do
+      Enum.map_reduce(inputs, state, fn input, %Instance{now: now, first: first} = state ->
+        {out, state} = Runtime.call(p, state, input, %Scan{now: now + 10, first: first})
+        {Enum.map(~w(k1 k2 k3 k4), &out[&1]), state}
+      end)
+    end
+
+    defp run_on_timers(env),
+      do: [env["fan"], env["lf"], elem(env["fs"], 1), env["r"]["t"]]
+
+    test "a retained tof held on at the outage comes to rest on the first scan, of every kind" do
+      p = c!(@run_on, [block!(@run_on_block)])
+      on = scans(p, Runtime.instance(p), List.duplicate(%{"motor" => 1}, 3))
+
+      assert Enum.map(run_on_timers(on.env), &{&1["en"], &1["dn"], &1["tt"]}) ==
+               List.duplicate({1, 1, 0}, 4)
+
+      for restarted <- [
+            Runtime.restart(p, on, :warm),
+            elem(Runtime.instance(p, Runtime.retained(p, on)), 0)
+          ] do
+        {outputs, after_} = run_on_outputs(p, restarted, List.duplicate(%{"motor" => 0}, 8))
+        assert outputs == List.duplicate([0, 0, 0, 0], 8)
+
+        assert Enum.map(run_on_timers(after_.env), &{&1["en"], &1["dn"], &1["tt"], &1["acc"]}) ==
+                 List.duplicate({0, 0, 0, 0}, 4)
+      end
+
+      # The rung true on the first scan: held on, as any energised run.
+      {[first | _], _} = run_on_outputs(p, Runtime.restart(p, on, :warm), [%{"motor" => 1}])
+      assert first == [1, 1, 1, 1]
+    end
+
+    test "a retained tof in its delay at the outage resumes it on the first scan, of every kind" do
+      p = c!(@run_on, [block!(@run_on_block)])
+
+      off =
+        scans(p, Runtime.instance(p), [
+          %{"motor" => 1},
+          %{"motor" => 1},
+          %{"motor" => 0},
+          %{"motor" => 0}
+        ])
+
+      # The long timer counts its 10 ms in nanoseconds.
+      assert Enum.map(run_on_timers(off.env), &{&1["tt"], &1["acc"]}) ==
+               [{1, 10}, {1, 10_000_000}, {1, 10}, {1, 10}]
+
+      {outputs, _} =
+        run_on_outputs(p, Runtime.restart(p, off, :warm), List.duplicate(%{"motor" => 0}, 4))
+
+      # 10 ms a scan from 10: on at 20, 30 and 40, and off at 50, the preset.
+      assert outputs == [[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [0, 0, 0, 0]]
+    end
+
     test "a block's non_retain member and an unmarked nested timer follow decision 270" do
       seal = block!(@seal)
       plain = block!(@plain)

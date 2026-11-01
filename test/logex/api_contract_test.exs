@@ -11638,8 +11638,12 @@ defmodule Logex.ApiContractTest do
   # an edit left blocked, as `ons_blocked` holds it, unblocked by a warm restart. Since
   # M6-2's review its program holds a `tp`, an `osr`'s storage and pulse bits, a real, a
   # 2-D array, a typed counter and a long timer too, each kept moved, `rw_types_kept`.
+  #
+  # Since decision 349 the first scan after each restart that scans runs `fan`'s rung false
+  # too, its `tof` restated: at rest where `.tt` was 0 whatever `.en` held, a retained one
+  # held on at the outage among them (`rw_tof_at_rest`), its delay resumed where `.tt` was 1.
   @rw_reach ~w(rw_kept rw_reset_warm rw_reset_cold rw_member_out rw_element_kept rw_rebased
-               rw_no_edge rw_unblocked rw_types_kept)a
+               rw_no_edge rw_unblocked rw_types_kept rw_tof_at_rest)a
 
   test "a warm restart keeps exactly what the nearest mark retains, and a cold one nothing, " <>
          "each timer rebased and no edge on the first scan" do
@@ -11681,12 +11685,31 @@ defmodule Logex.ApiContractTest do
   # The first scan after a warm restart counts no edge of a retained counter whose `cu`
   # was 0, the eye risen (decision 274).
   defp rw_first_scan(1, restarted, w) do
-    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, restarted, %{"eye" => 1}), 10)
+    inputs = %{"eye" => 1, "run" => 0}
+    {_out, s} = Runtime.scan(w.p, Runtime.put_inputs(w.p, restarted, inputs), 10)
     assert s.env["boxes"]["cv"] == restarted.env["boxes"]["cv"]
     rw_reach(:rw_no_edge, rw_kept?(w, ["boxes"]) and w.s.env["boxes"]["cu"] == 0)
+    fan = restarted.env["fan"]
+    assert s.env["fan"] == tof_first(fan, restarted.now + 10), inspect(fan)
+    rw_reach(:rw_tof_at_rest, {fan["en"], fan["tt"]} == {1, 0})
   end
 
   defp rw_first_scan(0, _restarted, _w), do: :ok
+
+  # Decision 349, restated: a first scan's de-energised `tof`, from its value before the
+  # scan and the scan's time, resumes its delay where `.tt` is 1, adding the time since its
+  # `last`, and is at rest otherwise, `.dn` and `.tt` 0, whatever `.en` held.
+  defp tof_first(%{"tt" => 1, "acc" => acc, "pre" => pre, "last" => last} = tof, now) do
+    limit = max(pre, 0)
+    acc = min(max(acc, 0) + now - last, limit)
+    running = tof_one(acc != limit)
+    %{tof | "acc" => acc, "dn" => running, "tt" => running, "en" => 0, "last" => now}
+  end
+
+  defp tof_first(tof, now), do: %{tof | "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp tof_one(true), do: 1
+  defp tof_one(false), do: 0
 
   # The rule restated: every leaf at its first value, the var_inputs as they were, and each
   # leaf the nearest mark retains, at a warm restart, as it was, a timer's `last` the
@@ -11873,8 +11896,14 @@ defmodule Logex.ApiContractTest do
   # elements of one array of cells dropped, one past the ninth, in the order of their
   # subscripts' values, `f[2].k` before `f[10].k` (M6-4's review), `iw_past_nine`, the
   # drops' order restated by value where until then it was the text's.
+  #
+  # Since decision 349 each start's first scan with every rung false is run beside the
+  # walk, each `tof` of the changed program, a tag or a member of a cell, restated by
+  # `tof_first/2`: at rest where `.tt` was 0, a kept one held on among them
+  # (`iw_tof_at_rest`).
   @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
-               iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every)a
+               iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every
+               iw_tof_at_rest)a
 
   @iw_toward_reach ~w(iw_int_for_real iw_past_nine)a
 
@@ -11904,11 +11933,48 @@ defmodule Logex.ApiContractTest do
     assert dropped == expected_dropped
     assert started.env == expected
     assert %Instance{first: true, now: 0, ons_blocked: []} = started
+    iw_tofs_first(q, started, new)
     iw_reached(old, new, {s, started, dropped})
     iw_toward_reached(old, new, {corrupt, dropped})
     iw_same(old == new and corrupt == %{}, {p, s, image})
     iw_mistake(iw_mistakes(q, s, image))
   end
+
+  # The first scan of a start with every rung false, beside the walk: each `tof` restated.
+  defp iw_tofs_first(program, started, spec) do
+    {_out, scanned} =
+      Runtime.call(program, started, %{"eye" => 0, "run" => 0}, %Scan{now: 10, first: true})
+
+    for at <- iw_tofs(spec) do
+      tof = iw_at(started.env, at)
+      assert iw_at(scanned.env, at) == tof_first(tof, 10), inspect({at, tof})
+      iw_reach(:iw_tof_at_rest, {tof["en"], tof["tt"]} == {1, 0})
+    end
+  end
+
+  # Each `tof` a scan runs, by its keys into an env: a tag, a cell's member and the member of
+  # each element cell a `cal` runs, the first two.
+  defp iw_tofs(spec),
+    do:
+      for(
+        {name, kind, _q} <- spec.tags,
+        at <- iw_tofs_in(name, kind, spec.cell),
+        do: at
+      )
+
+  defp iw_tofs_in(name, :tof, _cell), do: [[name]]
+
+  defp iw_tofs_in(name, :cell, cell),
+    do: for({m, :tof, _q} <- cell, do: [name, m])
+
+  defp iw_tofs_in(name, {:cells, _n}, cell),
+    do: for(i <- [0, 1], {m, :tof, _q} <- cell, do: [name, {:el, i}, m])
+
+  defp iw_tofs_in(_name, _kind, _cell), do: []
+
+  defp iw_at(value, []), do: value
+  defp iw_at(values, [{:el, i} | rest]), do: iw_at(elem(values, i), rest)
+  defp iw_at(map, [key | rest]), do: iw_at(Map.fetch!(map, key), rest)
 
   defp iw_compile(spec) do
     {:ok, cell} = Logex.compile(iw_cell_text(spec.cell, spec.presets), name: "cell")
@@ -12575,13 +12641,15 @@ defmodule Logex.ApiContractTest do
   # to another program type, each kept value laid over the changed configuration's start,
   # a timer's `last` 0, and the trigger's sample kept with its global. Its reach: each row's
   # kinds of leaf and global, each trigger's case and each resource-level drop; the
-  # lone instance's drops are M6-4's walk's (`iw_`), which this one does not repeat.
+  # lone instance's drops are M6-4's walk's (`iw_`), which this one does not repeat. Since
+  # decision 349 `pp` holds a `tof`, `f`, on `t`'s qualifier, whose first scan after each
+  # restart and start is restated (`rr_tof_at_rest`).
   @rr_reach ~w(rr_kept_warm rr_reset_warm rr_reset_cold rr_member_out rr_rebased
                rr_input_kept rr_clock_kept rr_global_kept rr_global_reset rr_output_reset
                rr_sample_kept rr_rise_fires rr_image_kept rr_image_global rr_image_trigger
                rr_undeclared_global rr_retyped_global rr_resized_global rr_unretained_global
                rr_misfit_global rr_retyped_instance rr_undeclared_instance
-               rr_member_unretained rr_member_retyped rr_member_misfit)a
+               rr_member_unretained rr_member_retyped rr_member_misfit rr_tof_at_rest)a
 
   test "a resource's warm and cold restarts keep what decision 271's table says, and its " <>
          "image meets a changed configuration by decision 277" do
@@ -12636,6 +12704,7 @@ defmodule Logex.ApiContractTest do
     assert rt.now == w.rt.now
     sample = rr_sample(mode, rr_quals(w.spec)["trig"], w.sample)
     rr_fires!(rt, sample, mode)
+    rr_tof_first!(rt)
     rr_restart_reach(mode, w, {rt, fresh})
     %{w | rt: rt, sample: sample}
   end
@@ -12676,6 +12745,7 @@ defmodule Logex.ApiContractTest do
 
     sample = rr_image_sample(rr_global_kept?("trig", w.spec, expected_dropped), w.sample)
     rr_fires!(rt, sample, :image)
+    rr_tof_first!(rt)
     rr_reach(:rr_image_trigger, sample == 1)
     rr_drop_reach(expected_dropped)
     %{w | spec: spec, config: config, rt: rt, sample: sample}
@@ -12730,6 +12800,25 @@ defmodule Logex.ApiContractTest do
     rr_reach(:rr_rise_fires, mode == :warm and ran and trig == 1)
   end
 
+  # Decision 349: the first scan of each `pp` after a restart or a start, in a cycle of 0 ms
+  # beside the walk, runs its `tof` `f` as `tof_first/2` restates it where its rung is
+  # false, at rest where `.tt` was 0 whatever `.en` held, and held on where it is true.
+  defp rr_tof_first!(rt) do
+    {later, _outputs, events} = Runtime.cycle(rt, 0, %{})
+
+    for {:ran, "fast", name, now} <- events,
+        %Instance{type: "pp", first: true, env: %{"f" => f}} <- [rt.instances[name]] do
+      go = later.instances[name].env["go"]
+      assert later.instances[name].env["f"] == rr_tof_run(go, f, now), inspect({name, f})
+      rr_reach(:rr_tof_at_rest, {go, f["en"], f["tt"]} == {0, 1, 0})
+    end
+  end
+
+  defp rr_tof_run(0, f, now), do: tof_first(f, now)
+
+  defp rr_tof_run(1, f, now),
+    do: %{f | "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => now}
+
   # M6-8's review: an instance's first env restated from its program's text, each tag at
   # its type's zero, a timer's and a counter's preset the number on the instruction that
   # runs it, `last` 0, no var_external held (decision 49).
@@ -12741,6 +12830,7 @@ defmodule Logex.ApiContractTest do
       "lamp" => 0,
       "c" => %{"cu" => 0, "cv" => 0, "ov" => 0, "pv" => 1000, "q" => 0, "r" => 0},
       "t" => rr_ton(),
+      "f" => rr_ton(),
       "a" => {0, 0, 0},
       "k" => 0,
       "b" => %{"go" => 0, "k" => 0, "q" => 0, "t" => rr_ton()},
@@ -12763,6 +12853,7 @@ defmodule Logex.ApiContractTest do
       {["b", "q"], :value, :bool},
       {["b", "t"], :kind, "ton"},
       {["c"], :kind, "ctu"},
+      {["f"], :kind, "tof"},
       {["k"], :value, String.to_atom(spec.ktype)},
       {["lamp"], :value, :bool},
       {["q2"], :value, :bool},
@@ -12811,7 +12902,9 @@ defmodule Logex.ApiContractTest do
   defp rr_kind(false, _now, _path, acc), do: acc
 
   # A kind kept keeps every leaf the walk lays whole under it, a timer's map or a counter's.
-  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["b", "t"]], do: [path | kept]
+  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["f"], ["b", "t"]],
+    do: [path | kept]
+
   defp rr_kept_under(_path, kept), do: kept
 
   defp rr_value({false, _now}, _types, _path, acc), do: acc
@@ -12865,7 +12958,9 @@ defmodule Logex.ApiContractTest do
           ],
           do: {[name], rw_flag(q[name], false), kind}
 
+    # Decision 349's `tof`, `f`, on `t`'s line's qualifier, so that its draw is no draw more.
     own ++
+      [{["f"], rw_flag(q["t"], false), :timer}] ++
       for {m, kind} <- [{"go", :value}, {"q", :value}, {"k", :value}, {"t", :timer}],
           do: {["b", m], rw_flag(q["cell." <> m], rw_flag(q["b"], false)), kind}
   end
@@ -13035,12 +13130,14 @@ defmodule Logex.ApiContractTest do
           "var_output #{rr_word(q["lamp"])}lamp bool",
           "var #{rr_word(q["c"])}c ctu",
           "var #{rr_word(q["t"])}t ton",
+          "var #{rr_word(q["t"])}f tof",
           "var #{rr_word(q["a"])}a int[3]",
           "var #{rr_word(q["k"])}k #{spec.ktype}",
           "var #{rr_word(q["b"])}b cell",
           "var #{rr_word(q["q2"])}q2 bool",
           "xic go ctu c 1000",
           "xic go ton t 30",
+          "xic go tof f 30",
           "xic go add k 1 k",
           "xic go add a[1] 1 a[1]",
           "xic go add #{tot} 1 #{tot}",

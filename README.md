@@ -3105,7 +3105,10 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   every global back (`PLAN.md`'s M6-3; decisions 268 and 271 in
   [`docs/organisation.md`](docs/organisation.md) §7).
 - The first scan after any start counts no edge: the box under the eye as the plant
-  restarts is not counted, as on a first start (decision 274).
+  restarts is not counted, as on a first start (decision 274); and a retained `tof` held
+  on at the outage, its rung false at that scan, sees no falling edge and comes to rest,
+  `.dn` 0, so a fan's run-on does not start by itself, while one already in its run-on at
+  the outage resumes it (decision 349).
 - `Logex.Runtime.retained/1` takes every retained value of the resource out as plain
   data, the retained image, `%{configuration: "tally", globals: %{"total_boxes" =>
   {:dint, 5}}, instances: %{"t1" => %{program: "tally", kinds: %{"boxes" => "ctu"},
