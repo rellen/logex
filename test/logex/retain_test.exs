@@ -924,6 +924,126 @@ defmodule Logex.RetainTest do
     end
   end
 
+  # The review after Milestone 6 (c4-api-fuzz-1, c4-api-fuzz-5): a plain swap, within the
+  # contract, hands a state to a program that declares a retained path the state lacks; a
+  # warm restart starts that path at its initial value, as `instance/2` starts a path its
+  # image lacks, at any depth, where until then it gave nil or raised, and nothing after it
+  # refuses the state; and the image passes it by, blaming no hand edit.
+  describe "a warm restart after a plain swap" do
+    @swap_block_v1 "function_block blk\nvar_input en bool\nvar n dint\nxic en add n 1 n\n"
+    @swap_block_v2 "function_block blk\nvar_input en bool\nvar n dint\nvar retain k dint 7\n" <>
+                     "var t ton\nxic en add n 1 n\nxic en add k 1 k\nxic en ton t 5\n"
+
+    # Every way the program swapped in may retain what the state lacks: a tag, a timer that
+    # has not run, a member a block's new version adds under a false `cal`, the block
+    # retained whole, and that member in every element of an array of the block's
+    # instances, the array retained whole too. (A state that lacks an array whole is
+    # refused where it is handed in, as one that lacks an array always was.)
+    @swaps [
+      {"var retain k dint 5\n", "xic go add k 1 k\n", %{"k" => 5}},
+      {"var retain t ton\n", "xic go ton t 100\n", :timer},
+      {"var b blk\n", "xic go cal b go\n", :member},
+      {"var retain b blk\n", "xic go cal b go\n", :member},
+      {"var gs blk[2]\n", "xic go cal gs[1] go\n", :members},
+      {"var retain gs blk[2]\n", "xic go cal gs[1] go\n", :members}
+    ]
+
+    defp swapped({declared, rungs, _}) do
+      v1 =
+        c!(
+          "var_input go bool\nvar c dint\n" <>
+            declared_v1(declared) <> "xic go add c 1 c\n" <> rungs_v1(rungs),
+          [block!(@swap_block_v1)]
+        )
+
+      v2 =
+        c!("var_input go bool\nvar c dint\n" <> declared <> "xic go add c 1 c\n" <> rungs, [
+          block!(@swap_block_v2)
+        ])
+
+      {v1, v2}
+    end
+
+    # The original declares the block instances, under its first version, and none of the
+    # rest.
+    defp declared_v1("var" <> _ = declared), do: blocks_only(declared)
+    defp blocks_only(declared), do: block_line(String.contains?(declared, "blk"), declared)
+    defp block_line(true, declared), do: declared
+    defp block_line(false, _declared), do: ""
+    defp rungs_v1(rungs), do: block_line(String.contains?(rungs, "cal"), rungs)
+
+    test "each path the state lacks starts at its initial value, and the state is taken on" do
+      for {_, _, expect} = swap <- @swaps do
+        {v1, v2} = swapped(swap)
+        state = scans(v1, Runtime.instance(v1), [%{"go" => 1}, %{"go" => 1}])
+        warm = Runtime.restart(v2, state, :warm)
+        assert lacked(expect, warm.env, Runtime.instance(v2).env), inspect(swap)
+        taken_on!(v2, warm)
+
+        # Swapped in and scanned with `go` false first, so that no `cal` runs the new body
+        # and no rung writes what the state lacks: as the review's repro had it.
+        warm = Runtime.restart(v2, scans(v2, state, [%{"go" => 0}]), :warm)
+        taken_on!(v2, warm)
+      end
+    end
+
+    # Nothing after the warm restart refuses the state: a cold restart, inputs, scans and
+    # the image.
+    defp taken_on!(program, state) do
+      assert %Instance{} = Runtime.restart(program, state, :cold)
+      assert %Instance{} = Runtime.put_inputs(program, state, %{"go" => 1})
+      assert %Instance{} = scans(program, state, [%{"go" => 1}, %{"go" => 1}])
+      assert %{program: "m"} = Runtime.retained(program, state)
+    end
+
+    defp lacked(%{"k" => k}, env, _fresh), do: env["k"] == k
+    defp lacked(:timer, env, fresh), do: env["t"] == fresh["t"]
+
+    defp lacked(:member, env, fresh),
+      do: env["b"]["k"] == fresh["b"]["k"] and env["b"]["t"] == fresh["b"]["t"]
+
+    defp lacked(:members, env, fresh),
+      do:
+        Enum.map(Tuple.to_list(env["gs"]), &Map.take(&1, ["k", "t"])) ==
+          Enum.map(Tuple.to_list(fresh["gs"]), &Map.take(&1, ["k", "t"]))
+
+    test "the image of a swapped state lacks what the state lacks, and laid over a new " <>
+           "instance starts it as the warm restart does" do
+      for {_, _, _} = swap <- @swaps do
+        {v1, v2} = swapped(swap)
+        state = scans(v1, Runtime.instance(v1), [%{"go" => 1}])
+        image = Runtime.retained(v2, state)
+        assert {laid, []} = Runtime.instance(v2, image)
+        warm = Runtime.restart(v2, state, :warm)
+
+        assert Map.drop(laid.env, ["c", "go"]) ==
+                 Map.drop(rebased(warm.env, laid.now), ["c", "go"]),
+               inspect(swap)
+      end
+    end
+
+    # A block instance the state held keeps the timers it holds, each `last` at the
+    # restart's `now` (decision 273), where a fresh instance's is 0.
+    defp rebased(env, now),
+      do: Map.new(env, fn {name, value} -> {name, rebased_value(value, now)} end)
+
+    defp rebased_value(%{"last" => _} = timer, now), do: %{timer | "last" => now}
+    defp rebased_value(%{} = map, now), do: rebased(map, now)
+    defp rebased_value(value, _now), do: value
+
+    test "a retained path the program's tags do not give is still a hand edit's" do
+      {_v1, v2} = swapped(hd(@swaps))
+      state = Runtime.instance(v2)
+      edited = %{v2 | retained: ["k", "zz"]}
+
+      raises(
+        "a warm restart keeps the retained path `zz`, which the program's tags do not give: " <>
+          "the program was edited by hand after it was handed in and checked",
+        fn -> Runtime.restart(edited, state, :warm) end
+      )
+    end
+  end
+
   describe "M6-2: the runner's warm restart (decisions 113, 271 and 273)" do
     alias Logex.IO.Sim
     alias Logex.Runner

@@ -507,7 +507,9 @@ defmodule Logex.Runtime do
   array of instances `{:array, "ton", [4]}`, its elements' members named by their
   subscripts' values, `"lane_t[2].acc"`. A timer's `last` is never in it (decision 273).
   A program that retains nothing gives empty maps. Its cost is the retained values' and
-  the program's retained paths', besides the state's check.
+  the program's retained paths', besides the state's check. A retained path the state
+  lacks, which a plain swap gives, is not in it, so `instance/2` starts it at its initial
+  value, as a warm restart does.
   """
   def retained(program, state) do
     program!(program)
@@ -575,6 +577,12 @@ defmodule Logex.Runtime do
   counted (decision 273), a frozen block's timer among them. The next scan is marked
   first, warm or cold, so no edge fires on it, a retained counter's among them (decision
   274), and no one-shot is blocked; there is no prescan (decision 279).
+
+  A retained path the state lacks, where a plain swap hands a state to a program that
+  declares a tag, a timer that has not run, or a block's member the state never held, at
+  any depth, in every element of an array of instances among it, keeps nothing: it starts
+  at its initial value, as a cold restart starts it and as `instance/2` starts a path its
+  image lacks, and the state is then one every entry point takes.
   """
   def restart(program, state, mode) do
     program!(program)
@@ -604,10 +612,16 @@ defmodule Logex.Runtime do
   # program `instance/1` checked and the host then edited by hand is trusted, as decision
   # 194 has it, and a warm restart that reaches retained paths its tags do not give raises
   # a pinned ArgumentError there (M6-2's review).
+  #
+  # The review after Milestone 6 (c4-api-fuzz-1): a state a plain swap hands to a program
+  # that declares a retained path the state lacks, a tag, a timer that has not run, a
+  # member a block's new version adds, at any depth, an element's among them, keeps
+  # nothing there: the path starts at its initial value, the cold env's, as `instance/2`
+  # starts a path its image lacks, where until then it was taken as nil or raised.
   defp warm([path | paths], started, env, {tags, now} = at) when is_binary(path) do
     [name | members] = String.split(path, ".")
     {name, each} = each(name)
-    kept = {env[name], started[name]}
+    kept = {Map.fetch(env, name), Map.get(started, name)}
     put = warm_tag(Map.fetch(tags, name), {each, members}, kept, {now, path})
     warm(paths, Map.put(started, name, put), env, at)
   end
@@ -639,20 +653,29 @@ defmodule Logex.Runtime do
   defp each_of([name, ""], _whole), do: {name, true}
   defp each_of(_parts, name), do: {name, false}
 
-  defp warm_kept({false, []}, type, {value, _started}, {now, _path}),
-    do: rebased(type, value, now)
+  defp warm_kept({false, []}, type, {{:ok, value}, started}, {now, _path}),
+    do: rebased(type, value, started, now)
 
-  defp warm_kept({true, members}, {:array, type, dims}, {values, started}, at),
-    do: zipped(length(dims), values, started, &warm_kept({false, members}, type, {&1, &2}, at))
+  defp warm_kept({true, members}, {:array, type, dims}, {{:ok, values}, started}, at),
+    do:
+      zipped(
+        length(dims),
+        values,
+        started,
+        &warm_kept({false, members}, type, {{:ok, &1}, &2}, at)
+      )
 
-  defp warm_kept({false, [member | rest]}, %FbType{} = type, kept, at) do
+  defp warm_kept({false, [member | rest]}, %FbType{} = type, {{:ok, _value}, _started} = kept, at) do
     {name, each} = each(member)
     warm_member(Enum.find(type.members, &(&1.name == name)), {type, {each, rest}}, kept, at)
   end
 
+  defp warm_kept(members, type, {:error, started}, {_now, path}),
+    do: lacked(retainable?(members, type), started, path)
+
   defp warm_kept(_members, _type, _kept, {_now, path}), do: unretainable(path)
 
-  defp warm_member(%Member{name: name} = found, {type, rest}, {value, started}, at),
+  defp warm_member(%Member{name: name} = found, {type, rest}, {{:ok, value}, started}, at),
     do:
       Map.put(
         started,
@@ -660,12 +683,32 @@ defmodule Logex.Runtime do
         warm_kept(
           rest,
           FbType.type_of(type, found),
-          {Map.fetch!(value, name), Map.fetch!(started, name)},
+          {Map.fetch(value, name), Map.fetch!(started, name)},
           at
         )
       )
 
   defp warm_member(nil, _type, _kept, {_now, path}), do: unretainable(path)
+
+  # A retained path the state lacks starts at its cold value, where the program's tags give
+  # it; one they do not give is a hand edit's, refused as before.
+  defp lacked(true, started, _path), do: started
+  defp lacked(false, _started, path), do: unretainable(path)
+
+  defp retainable?({false, []}, _type), do: true
+
+  defp retainable?({true, members}, {:array, %FbType{} = type, _dims}),
+    do: retainable?({false, members}, type)
+
+  defp retainable?({false, [member | rest]}, %FbType{} = type) do
+    {name, each} = each(member)
+    member_retainable?(Enum.find(type.members, &(&1.name == name)), {each, rest}, type)
+  end
+
+  defp retainable?(_members, _type), do: false
+
+  defp member_retainable?(nil, _rest, _type), do: false
+  defp member_retainable?(found, rest, type), do: retainable?(rest, FbType.type_of(type, found))
 
   defp unretainable(path),
     do:
@@ -690,28 +733,37 @@ defmodule Logex.Runtime do
       |> Enum.zip_with(Tuple.to_list(started), &zipped(depth - 1, &1, &2, fun))
       |> List.to_tuple()
 
-  # Decision 273: a retained timer's `last` is the instance's `now`, at any depth.
-  defp rebased(%FbType{body: nil} = type, value, now),
+  # Decision 273: a retained timer's `last` is the instance's `now`, at any depth. A member
+  # the state lacks, one a block's new version adds that a plain swap's state never held,
+  # starts at its cold value, `started`'s, as the review after Milestone 6 found
+  # (c4-api-fuzz-1), where `Map.update!/3` raised.
+  defp rebased(%FbType{body: nil} = type, value, _started, now),
     do: rebased_built_in(FbType.rules(type), value, now)
 
-  defp rebased(%FbType{} = type, value, now),
+  defp rebased(%FbType{} = type, value, started, now),
     do:
       Enum.reduce(type.members, value, fn member, value ->
-        Map.update!(value, member.name, &rebased(FbType.type_of(type, member), &1, now))
+        rebased_member(Map.fetch(value, member.name), {type, member}, {value, started}, now)
       end)
 
-  defp rebased({:array, %FbType{} = type, dims}, values, now),
-    do: mapped(length(dims), values, &rebased(type, &1, now))
+  defp rebased({:array, %FbType{} = type, dims}, values, started, now),
+    do: zipped(length(dims), values, started, &rebased(type, &1, &2, now))
 
-  defp rebased(_elementary, value, _now), do: value
+  defp rebased(_elementary, value, _started, _now), do: value
+
+  defp rebased_member({:ok, kept}, {type, member}, {value, started}, now),
+    do:
+      Map.put(
+        value,
+        member.name,
+        rebased(FbType.type_of(type, member), kept, Map.fetch!(started, member.name), now)
+      )
+
+  defp rebased_member(:error, {_type, member}, {value, started}, _now),
+    do: Map.put(value, member.name, Map.fetch!(started, member.name))
 
   defp rebased_built_in(%{kind: :timer}, value, now), do: Map.put(value, "last", now)
   defp rebased_built_in(_counter, value, _now), do: value
-
-  defp mapped(1, values, fun), do: values |> Tuple.to_list() |> Enum.map(fun) |> List.to_tuple()
-
-  defp mapped(depth, values, fun),
-    do: values |> Tuple.to_list() |> Enum.map(&mapped(depth - 1, &1, fun)) |> List.to_tuple()
 
   @doc """
   A resource running `config`, at time 0 before its first cycle: every global at its
