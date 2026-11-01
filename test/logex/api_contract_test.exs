@@ -2065,7 +2065,8 @@ defmodule Logex.ApiContractTest do
     found = was["last"]
     edit_reach(:undo_after_restart, given? and found?(undo) and not left?(undo, found))
     was = resume_undone(was, undo, given?)
-    resumed? = from == nil and to != nil and was["en"] == 1 and was["last"] < now
+    # A switch that only gives the instance back resumes nothing more.
+    resumed? = from == nil and to != nil and was["en"] == 1 and was["last"] < now and not given?
     moved = Map.put(was, "pre", target)
     last = resumed_to(resumed?, was["last"], {now, held})
     assert later.env[tag] == last_put(moved, last)
@@ -5348,7 +5349,8 @@ defmodule Logex.ApiContractTest do
     ce_rebuilt!(w.rt, rt, report, :switch)
     first? = step == :test and stage == :accepted
     {holds, aside_at} = ce_holds(w, rt, first?)
-    ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, w.holds, w.aside_at}})
+    {held, set_aside} = ce_hold_start(first?, w)
+    ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, held, set_aside}})
     ce_one_copy!(rt, ce_switched_to(step, w))
     ce_round!(step, w, rt, report)
     ce_reach(:model_after_switch)
@@ -5432,6 +5434,7 @@ defmodule Logex.ApiContractTest do
     {holds, Map.merge(aside_at, aside)}
   end
 
+  # An edit's first test knows nothing of an earlier edit's holds or what it set aside.
   defp ce_hold_start(true, _w), do: {%{}, %{}}
   defp ce_hold_start(false, w), do: {w.holds, w.aside_at}
 
@@ -5439,6 +5442,10 @@ defmodule Logex.ApiContractTest do
   # aside was set aside.
   defp ce_since(false, {name, holds, _aside_at}), do: elem(Map.get(holds, name, {nil, nil}), 0)
   defp ce_since(true, {name, _holds, aside_at}), do: Map.get(aside_at, name)
+
+  # A switch that only gives the instance back resumes nothing more than it gives back.
+  defp ce_resumed_to(true, base, _clock), do: base
+  defp ce_resumed_to(false, base, {now, since}), do: base + now - max(base, since || base)
 
   defp ce_move(true, move), do: move
   defp ce_move(false, _move), do: nil
@@ -5786,7 +5793,7 @@ defmodule Logex.ApiContractTest do
       given? = ce_given?(first?, state, before.now) and name not in back
       base = ce_given_back(last, ce_move(given?, moves[path]), given?)
       since = ce_since(name in back, {name, holds, aside_at})
-      assert last + gap == base + later.now - max(base, since || base), path
+      assert last + gap == ce_resumed_to(given?, base, {later.now, since}), path
       assert gap > 0, path
       ce_reach(:resumed_after_hold, since != nil and since > base and name not in back)
       ce_reach(:resumed_after_scan, since != nil and since > base and not state.switched)

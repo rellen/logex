@@ -87,9 +87,9 @@ defmodule Logex.Edit do
     edit's record of the instance keeps the time from which the program that holds it has
     held it, and the time from which the other held it before. A switch with no scan
     since this edit's last one and no time since it only gives the instance back to the
-    program that held it before, which holds it on from then; a lone instance's switch
-    with no scan since the last is always one, its clock moving only by its scans. Any
-    other switch ends the hold of the program it stops, scanned or not;
+    program that held it before, which holds it on from then, and resumes nothing; a lone
+    instance's switch with no scan since the last is always one, its clock moving only by
+    its scans. Any other switch ends the hold of the program it stops, scanned or not;
   - *a resume undone* (fix F11): where the switch only gives the instance back, a `last`
     still where this edit's last switch left it, a resume or a resume given back, goes
     back to the one that switch found, so a test and an untest with no scan between leave

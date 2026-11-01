@@ -1434,7 +1434,7 @@ defmodule Logex.Edit.Plan do
     found = key_get(env, key)
     value = undone(found, undo, back?)
     target = target(undo, pre, from, to)
-    value = resumed({from, to}, Map.put(value, member, target), {at, held, rules})
+    value = resumed(back?, {from, to}, Map.put(value, member, target), {at, held, rules})
 
     {key_put(env, key, value),
      moved(name, {pre, target, to}, value, rules) ++ lasted(name, found, value) ++ report,
@@ -1655,11 +1655,15 @@ defmodule Logex.Edit.Plan do
   #
   # M3-1: a timer's, by its kind (Logex.FbType.rules/1): a type that keeps no time has no
   # `last` to resume. M3-2: "timing" is the member the type's rules name, `times`, at 1.
-  defp resumed({nil, to}, timer, {at, held, %{kind: :timer, times: times}})
+  #
+  # A switch that only gives the instance back resumes nothing: it gives back what the
+  # last switch moved, so the state is as it was before that switch, when the program it
+  # gives the instance back to held it, and the program stopped held it for no time.
+  defp resumed(false, {nil, to}, timer, {at, held, %{kind: :timer, times: times}})
        when to != nil,
        do: resume(Map.get(timer, times), timer, {at, held})
 
-  defp resumed(_presets, timer, _at), do: timer
+  defp resumed(_back?, _presets, timer, _at), do: timer
 
   defp resume(1, %{"last" => last} = timer, {at, held}) when last < at,
     do: %{timer | "last" => last + at - max(last, held || last)}

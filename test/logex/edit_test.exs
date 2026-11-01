@@ -1335,6 +1335,39 @@ defmodule Logex.EditTest do
       assert state.env["lube"]["acc"] == 10 + 20 + 5
     end
 
+    # A switch that only gives the instance back, with no scan since the last, resumes
+    # nothing more: it gives back what the last switch moved, so an untest that resumed,
+    # a test and an untest at once leave the timer where that untest left it.
+    test "a test and an untest at once after an untest that resumed give the lube timer " <>
+           "back exactly (decision 339, fix F11)" do
+      head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
+      oiled = "lbl skip\nxic lube.dn ote oiled"
+      original = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
+      candidate = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
+
+      # Timing 10 ms, frozen by `hold` from 10 to the test at 20; the candidate's scan at
+      # 40, untested: resumed by its 20 ms, `last` 30, behind the clock by the original's
+      # frozen 10 ms.
+      {_, state} = run(original, [{0, %{"run" => 1}}, {10, %{}}, {10, %{"hold" => 1}}])
+      {edit, state, _} = Edit.test(accept!(original, candidate, state), state)
+      {_, state} = Runtime.scan(candidate, state, 20)
+      {edit, state, report} = Edit.untest(edit, state)
+      assert {:resumed, "lube", 20} in report
+      assert %{"acc" => 10, "last" => 30} = state.env["lube"]
+
+      # Tested and untested at once: the test gives the resume back, and the untest gives
+      # that back and resumes nothing more, the timer where the first untest left it.
+      {edit, state, report} = Edit.test(edit, state)
+      assert {:resume_undone, "lube", 20} in report
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert {:resumed, "lube", 20} in report
+      assert %{"acc" => 10, "last" => 30} = state.env["lube"]
+
+      # `hold` let go at 45: the original's frozen 10 ms and the 5 since the untest.
+      {_, state} = Runtime.scan(original, Runtime.put_inputs(original, state, %{"hold" => 0}), 5)
+      assert state.env["lube"]["acc"] == 10 + 10 + 5
+    end
+
     # Decision 339's rule never moves `last` by more than the time since it, so a timer
     # a warm restart under test rebased to the restart's `now` (decision 273) is resumed by
     # the candidate's hold since the restart alone, never past the untest's `now`.

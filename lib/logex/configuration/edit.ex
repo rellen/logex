@@ -79,10 +79,11 @@ defmodule Logex.Configuration.Edit do
     `Logex.Edit`'s rules): a timer's time runs only while a program that runs it holds
     the instance, and not while the instance is set aside. A switch with no scan of the
     instance and no time since this edit's last one only gives it back to the program
-    that held it before, giving back what that switch moved (fix F11); any other ends the
-    hold of the program it stops, scanned or not, whoever scanned last, and a timer that
-    program does not run and the one started does is resumed by that hold alone, the
-    time before it caught up, so a timer comes back with exactly the time it had;
+    that held it before, giving back what that switch moved (fix F11) and resuming
+    nothing more; any other ends the hold of the program it stops, scanned or not,
+    whoever scanned last, and a timer that program does not run and the one started
+    does is resumed by that hold alone, the time before it caught up, so a timer comes
+    back with exactly the time it had;
   - an instance only the configuration started runs, or one it runs as another program
     type (decision 43), which may run on another task (decision 61), comes back from
     aside where an earlier switch of this edit set it aside, as it was, its `now` the
