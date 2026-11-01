@@ -233,8 +233,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   trees of the walks, the end-to-end tests and the README harness.
 - `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
   `$ mix run` follows, run in a fresh VM and its output compared with README's, and every
-  other `elixir` block a fragment it names and parses (`CONTRIBUTING.md`, "Landing work
-  stales the plan").
+  other `elixir` block a fragment it names and parses, and runs in a setup it makes where
+  it gives one, held to README's prose (`CONTRIBUTING.md`, "Landing work stales the
+  plan").
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.

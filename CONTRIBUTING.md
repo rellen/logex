@@ -273,10 +273,12 @@ test's `@derived` table from the file it names, and a script README shows as the
 another, `a_trip.exs`, in its `@continues`, each beside README's words, which the test
 checks are still there. The real-clock example's figures line, which README says is this
 run's alone, is compared by its beginning. An `elixir` block that no `$ mix run` block
-follows is never run, so the test refuses one unless its `@fragments` names it by its first
-line, a fragment of prose the test only parses: today the one call made from another
-process in "Running a plant on the clock". So a new example needs its files marked and its
-output shown, and
+follows is no example, so the test refuses one unless its `@fragments` names it by its
+first line, a fragment of prose the test parses and, where the table gives it a setup, runs
+in that setup, held to what README's prose says of it (decision 365): today the one call
+made from another process in "Running a plant on the clock", run on a runner whose first
+round's write was slow, which must wait for an owed round and then answer. So a new
+example needs its files marked and its output shown, and
 a changed one is run by the suite: when the test fails, the code or the README is wrong,
 and the diff it prints says which line. The prose, the syntax list and the instruction
 table have no test behind them.

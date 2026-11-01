@@ -3039,8 +3039,21 @@ eye as it restarts, takes the plant's retained image and restarts cold; starts a
 resource from the image, and another whose program counts in a `ctu_int`, the plant's
 text compiled again with that program by `Logex.Configuration.compile/3`, so that the
 configuration it starts is checked whole; then it loads `wired.logex`, the same plant with
-`full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
-`broken.logex`, a mistake on each of its last five lines:
+`full` wired to an output point, `case_lamp` at `panel.q.0`, where `tally.logex` wires it
+to a global of no point:
+
+<!-- file: wired.logex -->
+```
+var_global eye_1              bool at panel.i.0
+var_global retain total_boxes dint 0
+var_global case_lamp          bool at panel.q.0
+
+program t1 tally
+  t1.eye  eye_1
+  t1.full case_lamp
+```
+
+and `broken.logex`, a mistake on each of its last five lines:
 
 <!-- file: broken.logex -->
 ```

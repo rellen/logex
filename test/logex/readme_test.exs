@@ -14,15 +14,9 @@ defmodule Logex.ReadmeTest.Examples do
 
   # The files README describes in its prose rather than shows, each made from a file it
   # shows, by replacing text, beside the words of README that describe it, which the test
-  # finds there. `wired.logex` is `tally.logex` without its comment line, which puts the
-  # connection its warning cites on line 7, as README prints it (provisional: README does
-  # not say the comment goes).
+  # finds there. Since decision 363 `wired.logex` is no longer one: README shows it, its
+  # warning citing a line README shows.
   @derived [
-    {"wired.logex", "tally.logex", :uncommented,
-     [
-       {"var_global case_full          bool", "var_global case_lamp          bool at panel.q.0"},
-       {"t1.full case_full", "t1.full case_lamp"}
-     ], "loads `wired.logex`, the same plant with\n`full` wired to an output point"},
     {"faster/packing.logex", "packing.logex", :as_is, [{"interval 10", "interval 5"}],
      "`faster/packing.logex`\nbeing `packing.logex` with `interval 5`"},
     {"faster/conveyor.ld", "conveyor.ld", :as_is, [], "`faster/packing.logex`"},
@@ -45,13 +39,62 @@ defmodule Logex.ReadmeTest.Examples do
     "a_trip.exs" => {"on_the_clock.exs", "show = fn label", "`a_trip.exs` runs the same plant"}
   }
 
+  # "Running a plant on the clock": the state its fragment's prose describes, a runner on
+  # the manual clock with a round owed after a slow drive's write, the first round's, and
+  # a count, kept by a process of its own, of the fragment's advances of the clock.
+  @owed ~S"""
+  alias Logex.Runner
+  alias Logex.Runner.Clock.Manual
+  alias Logex.IO.Sim
+
+  {:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+  {:ok, clock} = Manual.start_link()
+  {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+  Sim.fail(panel, :write, {:delay, 2})
+
+  {:ok, runner} =
+    Runner.start_link(
+      configuration: plant,
+      io: %{"panel" => {Sim, sim: panel}},
+      clock: {Manual, clock}
+    )
+
+  counted = fn counted, n ->
+    receive do
+      {:trace, _pid, :call, {Manual, :advance, [_clock, 0]}} -> counted.(counted, n + 1)
+      {:count, from} -> send(from, {:advances, n})
+    end
+  end
+
+  counter = spawn(fn -> counted.(counted, 0) end)
+  1 = :erlang.trace_pattern({Manual, :advance, 2}, true, [:global])
+  1 = :erlang.trace(self(), true, [:call, {:tracer, counter}])
+  """
+
+  # Held to the prose: the call waited for an owed round, so the fragment moved the clock
+  # on at least once, and at most four times ("at most 4 bring the slot"), and then it was
+  # answered, with the count.
+  @answered ~S"""
+  :erlang.trace(self(), false, [:call])
+  send(counter, {:count, self()})
+  advances = receive(do: ({:advances, n} -> n))
+  held = fn n when n in 1..4 -> "after 1 to 4 owed rounds"; n -> "after #{n} owed rounds" end
+  IO.puts("b1.count waited, then answered #{inspect(value)} #{held.(advances)}")
+  """
+
   # The `elixir` blocks README shows that no `$ mix run` follows, each by its first line:
-  # fragments of prose, which the suite parses and does not run (provisional: README shows
-  # no output to compare). Every other `elixir` block is an example's script.
+  # fragments of prose, each parsed, and since decision 365 run where the test makes the
+  # state its prose describes, `{example, setup, check, prints, words}`: the setup the
+  # test writes, then the fragment, its last value bound to `value`, then the check, run
+  # beside the files of the example it continues, as an example is, the check printing
+  # `prints` where the fragment does what the prose says, which README still says,
+  # `words`. Every other `elixir` block is an example's script.
   @fragments [
-    # "Running a plant on the clock": a call made from another process while the clock is
-    # moved on, which needs a round owed after a slow write to show its wait.
-    ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|
+    {~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|,
+     {"on_the_clock.exs", @owed, @answered,
+      "b1.count waited, then answered 0 after 1 to 4 owed rounds\n",
+      "One made while a round is owed, after a round\n  that passed time, a slow drive's " <>
+        "write, waits for its slot"}}
   ]
 
   # The lines of a script's output that README says are this run's alone, compared by
@@ -62,7 +105,25 @@ defmodule Logex.ReadmeTest.Examples do
   def readme, do: File.read!(@readme)
   def derived, do: @derived
   def continues, do: @continues
-  def fragments, do: @fragments
+  def fragments, do: Enum.map(@fragments, &elem(&1, 0))
+
+  # Decision 365: each fragment the suite runs, as an example, named after the example it
+  # continues, `on_the_clock.fragment_3790.exs` for the one at README's line 3790.
+  def run_fragments do
+    by_name = Map.new(all(), &{&1.name, &1})
+    runs = Map.new(@fragments)
+
+    for {n, first, body} <- unrun(),
+        {from, setup, check, prints, words} <- [Map.get(runs, first)],
+        do: %{
+          name: "#{Path.rootname(from)}.fragment_#{n}.exs",
+          line: n,
+          script: setup <> "\nvalue = (\n" <> body <> ")\n\n" <> check,
+          files: Map.fetch!(by_name, from).files,
+          expected: prints,
+          words: words
+        }
+  end
 
   # Each `elixir` block no `$ mix run` follows, `{line, first line, body}`.
   def unrun do
@@ -148,10 +209,6 @@ defmodule Logex.ReadmeTest.Examples do
 
   defp kept(:as_is, text), do: text
 
-  defp kept(:uncommented, text),
-    do:
-      text |> String.split("\n") |> Enum.reject(&String.starts_with?(&1, "//")) |> Enum.join("\n")
-
   defp edited({old, new}, text), do: String.replace(text, old, new, global: false)
 
   defp continued(nil, example, _by_name), do: example
@@ -228,6 +285,23 @@ for example <- Logex.ReadmeTest.Examples.all() do
   end
 end
 
+# Decision 365: each fragment the suite runs, in the setup its test makes, a module of its
+# own, `Logex.ReadmeTest.OnTheClockFragment3790`.
+for fragment <- Logex.ReadmeTest.Examples.run_fragments() do
+  defmodule Module.concat(
+              Logex.ReadmeTest,
+              Macro.camelize(String.replace(Path.rootname(fragment.name), ".", "_"))
+            ) do
+    @moduledoc false
+    use ExUnit.Case, async: true
+    @fragment fragment
+
+    test "README's fragment at line #{@fragment.line} does what README's prose says" do
+      Logex.ReadmeTest.check(@fragment)
+    end
+  end
+end
+
 defmodule Logex.ReadmeTest.Extraction do
   @moduledoc false
   alias Logex.ReadmeTest.Examples
@@ -244,6 +318,15 @@ defmodule Logex.ReadmeTest.Extraction do
 
     for {name, {_from, _cut, words}} <- Examples.continues(),
         do: assert(readme =~ words, "README no longer says #{inspect(words)} of #{name}")
+
+    for %{name: name, words: words} <- Examples.run_fragments(),
+        do: assert(readme =~ words, "README no longer says #{inspect(words)} of #{name}")
+  end
+
+  # Decision 365: every fragment `@fragments` gives a setup is found in README and run.
+  test "README's fragment of a call that waits for an owed round is run, not parsed alone" do
+    assert [%{name: "on_the_clock.fragment_" <> _, script: script}] = Examples.run_fragments()
+    assert script =~ ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|
   end
 
   # An `elixir` block README shows with no `$ mix run` after it is never run, so each is
