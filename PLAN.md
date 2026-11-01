@@ -12299,12 +12299,16 @@ and CI checked; each fix with a test that fails when it is reverted.
      so the connection stays on line 7 and the warning README prints is unchanged. (a) As
      built; (b) a comment line as `tally.logex` has, the warning citing line 8.
 
-  CI on each commit, and the gates. Two local gates, of `1453de6`'s tree and of
-  `1f2b840`'s, failed once each on `retain_image_test.exs`'s growth bound for an array of
-  instances' image, 4.79x and 4.63x against 4.6, with another workflow's suite running on
-  the same machine (load 13); alone it reads 4.00 to 4.06 at the tip and 4.09 at
-  `d7a1290`, and each gate run again passed. It is the kind of scheduler-sensitive bound
-  RV-7 takes up (decision 357).
+  CI on each commit, and the gates. `fa04f39` was red in CI on its first run (run
+  41358731876): README's real-clock example, `on_the_real_clock.exs`, printed otherwise,
+  the assertion not showing what; run again (attempt 2) it was green, and every other
+  commit of the item was green at once. Nothing of this item touches the runner, but the
+  README test now runs one VM more beside that example, the fragment's. Two local gates,
+  of `1453de6`'s tree and of `1f2b840`'s, failed once each on `retain_image_test.exs`'s
+  growth bound for an array of instances' image, 4.79x and 4.63x against 4.6, with
+  another workflow's suite running on the same machine (load 13); alone it reads 4.00 to
+  4.06 at the tip and 4.09 at `d7a1290`, and each gate run again passed. Both are the
+  kind of scheduler-sensitive check RV-7 takes up (decision 357).
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
