@@ -2385,6 +2385,27 @@ defmodule Logex.ConfigEditTest do
       assert Runtime.get!(tested, "level") == 0
     end
 
+    test "a kept instance's own connection an untest would hold, of a wider global, is no " <>
+           "refusal either: the candidate's rung writes it, and the untest holds its value" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global level dint\nprogram m1 p with fast\n  m1.start pb\n  m1.small level\n"
+
+      frozen = "var_input start bool\nvar_output small int\nvar x bool\nxic start ote x\n"
+      writes = "var_input start bool\nvar_output small int\nxic start move 5 small\n"
+      original = held_plant(text, %{"p" => frozen})
+      candidate = held_plant(text, %{"p" => writes})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+      {edit, _forecast} = accepted(runtime, candidate)
+      {edit, tested, _} = Edit.test(edit, runtime)
+      {tested, _, _} = Runtime.cycle(tested, 10, %{"pb" => 1})
+      assert Runtime.get!(tested, "level") == 5
+      {_edit, untested, report} = Edit.untest(edit, tested)
+      assert {:held, "level", 5} in report
+      {_outputs, untested} = under_test(untested, 3, %{"pb" => 0})
+      assert Runtime.get!(untested, "level") == 5
+    end
+
     test "an element a kept instance copies out frozen through one whole connection in both " <>
            "versions is held by neither, and one the edit stops writing is" do
       head =

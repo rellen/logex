@@ -130,7 +130,7 @@ defmodule Logex.RetainStoreTest do
     ref = Process.monitor(runner)
     Process.exit(runner, :kill)
     # Within 5 s, as every other wait here, where the default 100 ms met a loaded machine
-    # (RV-3's review).
+    # (RV-3's review, which gave the runner's own reports below the same 5 s).
     assert_receive {:DOWN, ^ref, :process, _, :killed}, 5000
   end
 
@@ -1283,7 +1283,7 @@ defmodule Logex.RetainStoreTest do
       Process.flag(:trap_exit, true)
 
       assert Runner.stop(runner, :shutdown) == {:error, {:retain, :eisdir}}
-      assert_receive {:EXIT, ^runner, :shutdown}
+      assert_receive {:EXIT, ^runner, :shutdown}, 5000
       assert Sim.outputs(rig.panel) == %{[0] => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written
@@ -1353,7 +1353,7 @@ defmodule Logex.RetainStoreTest do
       File.mkdir_p!(rig.store <> ".tmp")
 
       assert Runner.restart(runner, :cold) == {:error, {:retain, :eisdir}}
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == {reads, writes}
@@ -1444,7 +1444,7 @@ defmodule Logex.RetainStoreTest do
       Sim.fail(rig.panel, :read, {:error, :eio})
 
       assert {:error, {:io_init, "panel", _cause}} = Runner.restart(runner, :cold)
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert values(runner) == [2, 2, 1, 2]
       assert File.read!(rig.store) =~ "global total_boxes dint 0\n"
@@ -1465,8 +1465,8 @@ defmodule Logex.RetainStoreTest do
       File.mkdir_p!(rig.store <> ".tmp")
       tripped(rig, runner)
 
-      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
-      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, 5000
+      assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
       assert %{status: :tripped, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       File.rm_rf!(rig.store <> ".tmp")

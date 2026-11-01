@@ -11977,10 +11977,30 @@ and CI checked; each fix with a test that fails when it is reverted.
   pin moved with it); `get/2` tells `m1.0` as a bit of the instance, as `m1.[0]`. The
   probe's `Configuration.new!/1` KeyError was the probe's own (it read `c.name` of a
   struct it had stripped), and new!/1 refuses any struct with its pinned line. Two tests
-  a loaded machine failed read the least of three runs and wait 5 s for a kill. Each fix
+  a loaded machine failed read the least of three runs and wait 5 s for a kill; CI then
+  failed `cb18575` on `retain_period_test.exs`'s bound, 10.35 reductions a round more
+  with a long period where four runs here read 6.6 to 7.8, so that test reads the least
+  of nine, its bound as it was, and `retain_store_test.exs` waits 5 s for the runner's
+  own reports as for a kill. Each fix
   has a test that fails when it is reverted (mutation table below); the review's b5
   configuration-edit fuzzer, extended with unwritten var_outputs, passes 4 of 4 seeds
   where it failed 4 of 4, with a cycle after every restart 6 of 6, and unchanged 3 of 3.
+  Its cost, the review's probe, the least of eleven runs in a fresh process each, against
+  `1bdc2c6` (`origin/main`) and against `e97dc7f`, the tip reviewed: a scan of 200 mixed
+  rungs exactly both, a first scan after a warm restart 125 fewer than `1bdc2c6`, every
+  `tof` scan exactly `e97dc7f`'s (28 fewer on a first scan than `1bdc2c6`), a cycle of 50
+  periodic and 50 event tasks 98 to 101 fewer than `1bdc2c6` whatever is due and exactly
+  `e97dc7f`'s; a configuration edit's switch of 100 kept instances within 2 of
+  `e97dc7f`'s and 28 of `1bdc2c6`'s, a lone edit's exactly both. Not reported until the
+  review, and so here: accept on that plant, which has no var_external writer, 437,357,
+  2,180 more than `e97dc7f` (0.5%) and 12,918 more than `1bdc2c6` (3.0%), decision 347's
+  holders read for both directions at accept, which `1bdc2c6` has none of, the
+  frozen-in-both look-up paid only where an element is held, and each connection read
+  in one pass with a clause for one that holds nothing; `restart/2` warm and cold about
+  400 more than `1bdc2c6` (4 an instance, b2-resource-6's check of each var_external's
+  global, paid where an instance holds none too), `start/1` within its own run-to-run
+  spread of `e97dc7f`'s, about 1,700 more than `1bdc2c6`'s (M12's checks), and a lone
+  instance's warm restart within 13 of both.
 
   *Provisional readings, put to the maintainer.* (1) Decision 347's held value a
   var_output's type does not hold, `speed` held at 70000 and wired from an `int`

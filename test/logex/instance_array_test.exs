@@ -1560,6 +1560,12 @@ defmodule Logex.InstanceArrayTest do
           ],
           do: assert_raise(ArgumentError, message, door)
 
+      # So is one a program built by hand gives the block's type itself, as
+      # `Logex.Tag.new!/2` takes it, where a compiled program names it `{:block, "mid"}`.
+      hand = %{v2 | tags: Map.put(v2.tags, "mm", %{v2.tags["mm"] | type: mid})}
+      assert refused(hand, state, %{"go" => 1}) == message
+      assert_raise ArgumentError, message, fn -> Runtime.scan(hand, state, 10) end
+
       # A member a block's new version adds, `o.m`, of a block holding one, told by its path.
       {:ok, outer_v1} =
         Logex.compile("function_block outer\nvar_input en bool\nvar k dint\nxic en add k 1 k\n",
