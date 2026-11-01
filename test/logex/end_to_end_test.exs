@@ -4233,8 +4233,8 @@ defmodule Logex.EndToEndTest do
     lbl start xic jog_pb ote jog_lamp
     xio manual jmp start
     xio manual jmp atuo
-    xic jog_pb lbl auto
-    lbl atuo2
+    xic jog_pb lbl auto ote jog_lamp
+    lbl atuo2 ote jog_lamp
     """
 
     test "M3-5's Done-when: a backward jump, a missing label and a label not first on its " <>
@@ -7394,12 +7394,13 @@ defmodule Logex.EndToEndTest do
     var retain total dint 1000
     var retain lube rto
     var e bool
+    var landed bool
 
     xic eye ctu boxes 100000
     xic eye ons e add total 5 total
     xic hold jmp past
     xic eye rto lube 100000000
-    lbl past
+    lbl past ote landed
     """
 
     # The changed program: the total a lint, and a new retained tag at its initial value.
@@ -7411,12 +7412,13 @@ defmodule Logex.EndToEndTest do
     var retain lube rto
     var retain shifts dint 7
     var e bool
+    var landed bool
 
     xic eye ctu boxes 100000
     xic eye ons e add total 5 total
     xic hold jmp past
     xic eye rto lube 100000000
-    lbl past
+    lbl past ote landed
     """
 
     @life """

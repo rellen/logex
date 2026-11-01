@@ -1313,7 +1313,7 @@ defmodule Logex.EditTest do
     test "a lube timer the original's jump froze before the test catches up that time " <>
            "after the candidate's scans (decision 339)" do
       head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
-      oiled = "lbl skip\nxic lube.dn ote oiled"
+      oiled = "lbl skip xic lube.dn ote oiled"
       original = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
       candidate = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
 
@@ -1341,7 +1341,7 @@ defmodule Logex.EditTest do
     test "a test and an untest at once after an untest that resumed give the lube timer " <>
            "back exactly (decision 339, fix F11)" do
       head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
-      oiled = "lbl skip\nxic lube.dn ote oiled"
+      oiled = "lbl skip xic lube.dn ote oiled"
       original = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
       candidate = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
 
@@ -1373,7 +1373,7 @@ defmodule Logex.EditTest do
     test "a test and an untest at once leave the original holding from its own untest, " <>
            "which a later test's resume counts from (decision 339)" do
       head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
-      oiled = "lbl skip\nxic lube.dn ote oiled"
+      oiled = "lbl skip xic lube.dn ote oiled"
       timing = c!(head <> "xic run rto lube 1000\n" <> oiled, "conveyor")
       original = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
       candidate = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
@@ -1414,7 +1414,7 @@ defmodule Logex.EditTest do
     test "a give-back after two holds' ends counts the original's hold from its own " <>
            "untest, not from the timer's last run (decision 339)" do
       head = "var_input run bool\nvar_input hold bool\nvar_output oiled bool\nvar lube rto\n\n"
-      oiled = "lbl skip\nxic lube.dn ote oiled"
+      oiled = "lbl skip xic lube.dn ote oiled"
       timing = c!(head <> "xic run rto lube 1000\n" <> oiled, "conveyor")
       original = c!(head <> "xic hold jmp skip\n" <> oiled, "conveyor")
       candidate = c!(head <> "xic hold jmp skip\nxic run rto lube 1000\n" <> oiled, "conveyor")
@@ -2547,7 +2547,7 @@ defmodule Logex.EditTest do
 
   describe "a jump across a switch (decisions 82 and 106)" do
     @dj "var_input skip bool\nvar_input go bool\nvar_input b bool\nvar_output pulse bool\n" <>
-          "var_output y bool\nvar s9 bool\nvar boxes ctu\nvar t1 ton\n"
+          "var_output y bool\nvar s9 bool\nvar boxes ctu\nvar t1 ton\nvar landed bool\n"
 
     # Runs `src1` through `before`, tests `src2` over its state: the test's report, its
     # state, and the candidate.
@@ -2564,8 +2564,8 @@ defmodule Logex.EditTest do
     test "a one-shot whose rung the edit changes on a skipped rung stays blocked over every " <>
            "scan that skips it, and its first run passes no power, though its condition rose " <>
            "meanwhile" do
-      src1 = "xic skip jmp done\nxic go ons s9 ote pulse\nlbl done"
-      src2 = "xic skip jmp done\nxic go xio b ons s9 ote pulse\nlbl done"
+      src1 = "xic skip jmp done\nxic go ons s9 ote pulse\nlbl done ote landed"
+      src2 = "xic skip jmp done\nxic go xio b ons s9 ote pulse\nlbl done ote landed"
 
       {report, tested, v2} = jump_switched(src1, src2, [{0, %{"skip" => 1}}, {10, %{}}])
       assert report == [{:ons_blocked, "s9", 0}]
@@ -2583,8 +2583,8 @@ defmodule Logex.EditTest do
     end
 
     test "a counter whose rung the edit changes on a skipped rung stays blocked until it runs" do
-      src1 = "xic skip jmp done\nxic go ctu boxes 5\nlbl done"
-      src2 = "xic skip jmp done\nxic go xio b ctu boxes 5\nlbl done"
+      src1 = "xic skip jmp done\nxic go ctu boxes 5\nlbl done ote landed"
+      src2 = "xic skip jmp done\nxic go xio b ctu boxes 5\nlbl done ote landed"
       {report, tested, v2} = jump_switched(src1, src2, [{0, %{"skip" => 1}}, {10, %{}}])
       assert report == [{:ons_blocked, "boxes.cu", 0}]
       {_, skipped} = drive(v2, tested, [{10, %{"go" => 1}}])
@@ -2596,7 +2596,7 @@ defmodule Logex.EditTest do
     test "a jmp the edit adds freezes its section from the switch, a timer in it catching up " <>
            "when it next runs, and blocks no one-shot whose rung it leaves alone" do
       src1 = "xic go ons s9 ote pulse\nxic go ton t1 1000"
-      src2 = "xic skip jmp done\nxic go ons s9 ote pulse\nxic go ton t1 1000\nlbl done"
+      src2 = "xic skip jmp done\nxic go ons s9 ote pulse\nxic go ton t1 1000\nlbl done ote landed"
       {report, tested, v2} = jump_switched(src1, src2, [{0, %{"go" => 1}}, {100, %{}}])
       assert report == []
       {_, frozen} = drive(v2, tested, [{100, %{"skip" => 1, "go" => 0}}, {100, %{}}])
@@ -2607,11 +2607,11 @@ defmodule Logex.EditTest do
 
     test "a label the edit puts on a one-shot's rung, or a jmp it adds to it, blocks the " <>
            "one-shot: a rung is compared whole (decision 106)" do
-      src1 = "xic go ons s9 ote pulse\nxic go jmp done\nlbl done"
+      src1 = "xic go ons s9 ote pulse\nxic go jmp done\nlbl done ote landed"
 
       for src2 <- [
-            "lbl here xic go ons s9 ote pulse\nxic go jmp done\nlbl done",
-            "xic go ons s9 ote pulse jmp done\nxic go jmp done\nlbl done"
+            "lbl here xic go ons s9 ote pulse\nxic go jmp done\nlbl done ote landed",
+            "xic go ons s9 ote pulse jmp done\nxic go jmp done\nlbl done ote landed"
           ] do
         assert {[{:ons_blocked, "s9", 0}], _, _} = jump_switched(src1, src2, [{0, %{}}])
       end
@@ -2622,11 +2622,11 @@ defmodule Logex.EditTest do
     # decision 101's rung compared whole, at the cost of one possible press.
     test "a label or jmp the edit puts on a pulse coil's rung blocks it once: a press that " <>
            "rises on the first scan after the switch sets no pulse, and the next sets one" do
-      src1 = "xic go osr s9 pulse\nxic go jmp done\nlbl done"
+      src1 = "xic go osr s9 pulse\nxic go jmp done\nlbl done ote landed"
 
       for src2 <- [
-            "lbl here xic go osr s9 pulse\nxic go jmp done\nlbl done",
-            "xic go osr s9 pulse jmp done\nxic go jmp done\nlbl done"
+            "lbl here xic go osr s9 pulse\nxic go jmp done\nlbl done ote landed",
+            "xic go osr s9 pulse jmp done\nxic go jmp done\nlbl done ote landed"
           ] do
         {report, tested, v2} = jump_switched(src1, src2, [{0, %{}}])
         assert report == [{:ons_blocked, "s9", 0}]

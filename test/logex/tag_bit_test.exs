@@ -730,7 +730,7 @@ defmodule Logex.TagBitTest do
                 "`s.[16#10]` names bit 16 of `s`, a word (declared on line 1), which has bits 0 to 15"}
              ]
 
-      assert messages("var s sint\nvar q bool\nxic q\nxic s.[-1] ote q") == [
+      assert messages("var s sint\nvar q bool\nxic q ote q\nxic s.[-1] ote q") == [
                {4,
                 "`s.[-1]` names bit -1 of `s`, an sint (declared on line 1), which has bits 0 to 7"}
              ]

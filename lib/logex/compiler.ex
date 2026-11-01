@@ -216,6 +216,17 @@ defmodule Logex.Compiler do
 
   @instructions Map.merge(@instructions, @conversions)
 
+  # RV-2 (decision 351): the symbols of the instructions that do something a rung is for,
+  # each one that writes a tag, a member, a bit or a one-shot's storage bit, or runs an
+  # instance, as its slots say (`Logex.Walk`'s writes read the same slots), with `cal`,
+  # which runs its block's, and `jmp`, which jumps.
+  @doing for(
+           {_word, {symbol, signature}} when is_list(signature) <- @instructions,
+           Enum.any?(signature, fn {access, _type} -> access in [:write, :instance] end),
+           into: %{cal: true, jmp: true},
+           do: {symbol, true}
+         )
+
   @doc """
   The mnemonic table: each lowercase mnemonic to its IR symbol and operand signature, or
   for `cal` the marker `:block`, since its signature is the block's (M2-5; `signature/2`).
@@ -317,7 +328,7 @@ defmodule Logex.Compiler do
     {tags, timing} = presets(instructions, tags)
     calls = calls(instructions)
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
-    found = Enum.reject(Enum.reverse(lowering), &excused?(&1, untyped))
+    found = Enum.reject(Enum.reverse(placed(lowering, routine)), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
 
     {rungs, tags,
@@ -1707,7 +1718,7 @@ defmodule Logex.Compiler do
   defp printed({:routine, {:rungs, rungs}}) do
     {lines, _line} =
       Enum.map_reduce(rungs, 1, fn rung, at ->
-        line = printed_at(rung_line(rung), at)
+        line = rung_line(rung)
         {String.duplicate("\n", line - at) <> Logex.Printer.print(rung), line}
       end)
 
@@ -1716,8 +1727,8 @@ defmodule Logex.Compiler do
 
   # RV-2 (H5's first root): a rung's line is its first element's that has one, an empty
   # leg passed over, `( | xic a ) ote b` on the line of its `xic`, at any depth. A rung of
-  # empty groups alone, `( )`, which holds no line, is printed on the line after the one
-  # before it, a rung of its own whatever its line was, since nothing in it is cited.
+  # empty groups alone, `( )`, holds no line, nil, and is refused (decision 351), so no
+  # block printed holds one.
   defp rung_line({:rung, elements}), do: element_line(elements)
 
   defp element_line([{:branches, legs} | elements]), do: leg_line(legs, elements)
@@ -1730,9 +1741,6 @@ defmodule Logex.Compiler do
 
   defp or_later(nil, legs, elements), do: leg_line(legs, elements)
   defp or_later(line, _legs, _elements), do: line
-
-  defp printed_at(nil, at), do: at + 1
-  defp printed_at(line, _at), do: line
 
   # The tags, each instance of a user block naming its type, and the table: every type the
   # instances reach, at any depth, once, by name, the one version of it the compile holds,
@@ -1961,9 +1969,83 @@ defmodule Logex.Compiler do
   end
 
   defp lower_rung({:rung, elements}, diagnostics, known) do
-    {ir, diagnostics} = lower(elements, [], diagnostics, known)
-    {{:rung, ir}, diagnostics}
+    {ir, lowered} = lower(elements, [], diagnostics, known)
+    {{:rung, ir}, idle(ir, [], {lowered, diagnostics, ir})}
   end
+
+  # RV-2 (decision 351): a rung that writes nothing and jumps nowhere is refused at its
+  # line, told that a newline ends a rung: `xic start xio stop` and `ote motor` on two lines
+  # are a rung that does nothing and one that runs the motor whatever stop does (Logix's
+  # rule, a rung's last instruction an output). Its instructions are looked at in order, a
+  # group's legs where they stand, until one does something (`@doing`), so a rung costs a
+  # look-up for each instruction before its first output, one for most; a rung refused
+  # already, for an unknown instruction, a `cal` that runs nothing or any other mistake, is
+  # not told this too. A rung of empty groups alone, `( )`, holds no line, and is placed
+  # by `lowering/3` (placed/2).
+  defp idle([{symbol, _line, _operands} | _rest], _later, {lowered, _before, _ir})
+       when is_map_key(@doing, symbol),
+       do: lowered
+
+  defp idle([{:branches, legs} | rest], later, at), do: idle_legs(legs, [rest | later], at)
+  defp idle([_instruction | rest], later, at), do: idle(rest, later, at)
+  defp idle([], [next | later], at), do: idle(next, later, at)
+  defp idle([], [], {before, before, ir}), do: [idle_rung(ir_line(ir, [])) | before]
+  defp idle([], [], {lowered, _before, _ir}), do: lowered
+
+  defp idle_legs([leg | legs], later, at), do: idle(leg, [legs_of(legs) | later], at)
+  defp idle_legs([], later, at), do: idle([], later, at)
+
+  defp legs_of([]), do: []
+  defp legs_of(legs), do: [{:branches, legs}]
+
+  defp ir_line([{:branches, legs} | rest], later), do: ir_line(List.flatten(legs), [rest | later])
+  defp ir_line([{_symbol, line, _operands} | _rest], _later), do: line
+  defp ir_line([], [next | later]), do: ir_line(next, later)
+  defp ir_line([], []), do: nil
+
+  defp idle_rung(nil), do: {:idle_rung, nil}
+  defp idle_rung(line), do: diagnostic(line, idle_message())
+
+  defp idle_message,
+    do:
+      "this rung writes nothing and jumps nowhere: none of its instructions writes a tag, " <>
+        "a member or a bit, runs an instance or keeps a one-shot's storage bit. A newline " <>
+        "ends a rung, so a rung's conditions and its outputs go on one line, as in " <>
+        "`xic start xio stop ote motor`"
+
+  # A rung of empty groups alone holds no line in the parse tree, so it is cited at the
+  # first line it can stand on, the one after the rung before it, a declaration among them
+  # (provisional): each, in order, takes the place of its marker, which comes newest first.
+  defp placed(lowering, routine),
+    do: placed_in(Enum.member?(lowering, {:idle_rung, nil}), lowering, routine)
+
+  defp placed_in(false, lowering, _routine), do: lowering
+
+  defp placed_in(true, lowering, {:routine, {:rungs, rungs}}) do
+    {lineless, _at} =
+      Enum.flat_map_reduce(rungs, {0, 0}, fn rung, at -> lineless(rung_line(rung), at) end)
+
+    {placed, []} = Enum.map_reduce(lowering, Enum.reverse(lineless), &place/2)
+    placed
+  end
+
+  defp place({:idle_rung, nil}, [{after_line, line} | lines]),
+    do: {diagnostic(line, empty_groups(after_line)), lines}
+
+  defp place(diagnostic, lines), do: {diagnostic, lines}
+
+  # The last line a rung holds, and how many rungs of empty groups alone came after it.
+  defp lineless(nil, {line, count}), do: {[{line, line + count + 1}], {line, count + 1}}
+  defp lineless(line, _at), do: {[], {line, 0}}
+
+  defp empty_groups(0), do: "a rung of empty groups alone, at the start, " <> empty_groups()
+  defp empty_groups(at), do: "a rung of empty groups alone, after line #{at}, " <> empty_groups()
+
+  defp empty_groups,
+    do:
+      "writes nothing and jumps nowhere: a group holds no instruction until a leg has one. " <>
+        "A newline ends a rung, so a rung's conditions and its outputs go on one line, as " <>
+        "in `xic start ( xio stop | xic jog ) ote motor`"
 
   # Diagnostics are accumulated newest first and reversed once, in instructionize/2. An
   # undeclared tag is accumulated as `{:undeclared, line, name, slot}`, with the slot it is

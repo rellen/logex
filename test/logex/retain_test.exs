@@ -764,8 +764,8 @@ defmodule Logex.RetainTest do
       p =
         c!(
           "var_input run bool\nvar_input skip bool\nvar retain t ton\nvar retain f tof\n" <>
-            "var retain pulse tp\nxic skip jmp past\nxic run ton t 100\nxio run tof f 100\n" <>
-            "xic run tp pulse 100\nlbl past"
+            "var retain pulse tp\nvar landed bool\nxic skip jmp past\nxic run ton t 100\n" <>
+            "xio run tof f 100\nxic run tp pulse 100\nlbl past ote landed"
         )
 
       # The pulse's rising edge after the first scan, then 20 ms of running, then the
