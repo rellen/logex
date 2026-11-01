@@ -11530,6 +11530,81 @@ output comes back on from the store itself; and a program that marks nothing beh
 exactly as before.
 
 
+### The review after Milestone 6 — 2026-11-01
+
+The maintainer asked for a critical review of the whole codebase once Milestone 6 closed,
+with a PMI and two pre-mortems, every finding tried and its refutation tried in turn. Four
+workflows ran 27 reviewers at `d422608`, 63 agents in all: each reviewer attacked its scope
+by running code (fuzzers, metamorphic tests, independent IEC oracles, random walks of the
+edits and the runner, real-clock probes, mutation), a second agent in its own clone tried
+to refute each finding, and a third tried to refute that verdict. Of 203 findings 13 were
+refuted, each by a recorded decision, and 190 survive, 12 high, 35 medium and 143 low,
+about 60 defects once merged. The report, with every finding, the PMI and both
+pre-mortems, is `docs/review-2026-11-01.md`; its labels (H1 to H5, M1 to M17, and the
+reviewers' own, `b5-config-edit-1`) are this section's and the report's alone.
+
+What held: no reviewer found a wrong value from the evaluator (1,200 fuzzed programs, three
+metamorphic relations over 1,300 more, IEC oracles of every timer and counter at every
+width), the front end's round trip over about 100,000 mutated sources, the lone edit over
+380,000 walk steps, and the runner's scheduling under 10,000 concurrent calls and a clock
+jump of 10^9 ms. The defects gather where code reads again names the lexer has cut, at
+combinations added late (a bit of a member of an element), in the runner's own work against
+a real-time deadline, and in the configuration edit's held reasoning.
+
+**The questions, answered by the maintainer on 2026-11-01**, decisions 347–360:
+
+1. A held output an unwritten var_output is wired to (H1): kept held, decision 347.
+2. One write's time limit (H2): each device its own, decision 348.
+3. A retained `tof` held on at the outage (M3): it stays off, decision 349.
+4. A trigger's sample whose task a trip cut off (M4): counted after, decision 350.
+5. A rung that writes nothing (M5): refused, decision 351.
+6. The runner's own long work (M7): cheaper and bounded, decision 352.
+7. A stalled disk (M8): every write time-limited, decision 353.
+8. A restart asked while running: judged when asked, decision 354.
+9. A store cut short: an end line, `logex retain 2`, decision 355.
+10. Two runners on one store: refused within one VM, decision 356.
+11. Exact reduction pins: same-run bounds, decision 357.
+12. CLAUDE.md: a slim index with a size test, decision 358.
+13. The receipts and the toolchain: everything before Elixir 1.20 dropped, the checks
+    committed, decision 359.
+14. A store a fresh start drops from: a copy kept, `<store>.dropped`, decision 360.
+
+**The items.** Each runs as every item does: built, reviewed adversarially, fixed, landed
+and CI checked; each fix with a test that fails when it is reverted.
+
+- **RV-1 — the documents and the toolchain** (decisions 358 and 359). CLAUDE.md as a slim
+  index under a size test; the older-toolchain sandbox gone; README's examples checked by
+  a test; the mutation and load scripts under `scripts/`; the report's stale and false
+  claims made true (its "Documents and process" list, the stale comments of
+  `runtime.ex`, the "provisional" marks decisions 343–345 settled, `Logex.IO.Point`'s and
+  `Logex.Declarations`' moduledocs).
+- **RV-2 — the compiler** (decision 351). Every source text `Logex.compile/2` raises on
+  given a diagnostic (H5's six roots, by one parsed-name structure the readers of a
+  lexed name share, and M13's huge numbers); a one-shot's storage bit and a pulse bit in
+  a member of an element refused as their scalar twins are (M1, M2); a misplaced
+  qualifier told where it goes (M15); a rung that writes nothing refused; the report's
+  compiler, warnings and loader lows.
+- **RV-3 — the core and the edits** (decisions 347, 349 and 350). A held output held (H1);
+  an edit's one-shot blocking in an array of user blocks (H3); a warm restart after a
+  plain swap, a path the state lacks started at its initial value as `instance/2` starts
+  it (H4); a retained `tof` at rest on a first scan; a trigger's sample after its task;
+  the configuration crashes (M12); the report's runtime, edit and configuration lows.
+- **RV-4 — the runner and its devices** (decisions 348, 350, 353, 354 and 356). Each
+  device its own write limit (H2); every file write time-limited, a write's temporary
+  file its own (M10); a restart judged when asked; one VM's runners on one path refused;
+  `start: :cold` written after the name is checked (M11); an adapter's struct refused as
+  no result (M6); an adapter whose first read fails closed (M14); `vetted/3` linear (M9);
+  the report's runner and device lows.
+- **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
+  `.dropped` copy; the report's store and file lows.
+- **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,
+  the period's take-out and an edit's switch made cheaper, the bound measured and
+  documented, a trip during the runner's own work naming it (M7).
+- **RV-7 — same-run cost bounds** (decision 357).
+- **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
+  findings each closed or kept by a recorded reason, and the review's done sentence put to
+  the maintainer.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

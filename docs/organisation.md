@@ -12054,6 +12054,152 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      stands, its readings still provisional (M6-6's seven) left so until a later item
      meets them.
 
+347. **A held output an unwritten var_output is wired to (the review after Milestone 6),**
+     `PLAN.md`, "The review after Milestone 6", question 1: a configuration edit's switch
+     reports `{:held, global, value}` for a global no connection's program writes, by
+     decision 20 and §4.9's reasoning that such a connection "copies out a frozen value".
+     A var_output that never held the global's value, one the candidate wires to it for
+     the first time, or in an instance it adds or retypes, copies its initial value over
+     the held point at the first cycle under test, against the forecast and the report:
+     a conveyor's contactor reported held at 0 comes on.
+
+     **Taken: keep it held (a)** (the maintainer, 2026-11-01): at the switch, each
+     var_output its program does not write whose connection drives a held global starts
+     at the global's value, so the point holds as reported until a rung writes it. To
+     build in RV-3.
+
+348. **One write's time limit (the review after Milestone 6),** question 2: a round
+     writes its devices in name order against the one deadline the refresh before the
+     writes set, idle + poll, so a device written after a slow one is killed in its write
+     though it answers in a few ms, never takes the trip's 0, and is the one the trip
+     names. Logix gives each I/O module its own connection and timeout.
+
+     **Taken: each its own limit (a)** (the maintainer, 2026-11-01): each device's write
+     gets its own idle + poll of real time from the start of its own write, so a device
+     is killed only for its own slowness and named for it, and every device that answers
+     takes the trip's 0. To build in RV-4.
+
+349. **A retained `tof` held on at the outage (the review after Milestone 6),** question
+     3: a warm or fresh start keeps a retained `tof`'s `.en` at 1, so the first scan sees
+     the rung false as a falling edge and runs the off-delay, a fan starting by itself,
+     where every other edge-driven instruction ignores a first scan's edges (decision
+     274). Logix's prescan clears a TOF's `.EN`, `.TT` and `.DN` at every power-up; in
+     IEC a retained TOF keeps its memory.
+
+     **Taken: stay off (a)** (the maintainer, 2026-11-01): on a first scan a `tof` whose
+     `.en` is 1 and `.tt` 0 sees no falling edge and comes to rest, `.dn` 0; one already
+     in its run-on, `.tt` 1, resumes it as decision 273 has it. Decisions 69 and 93's
+     "no first scan sees one" hold again. To build in RV-3.
+
+350. **A trigger's sample whose task a trip cut off (the review after Milestone 6),**
+     question 4: a cycle records every task's trigger sample before any step runs, so a
+     trip at the end of an earlier step of the round leaves a later event task's rise
+     seen and never run; a warm restart keeps a retained trigger's sample (decisions 305
+     and 313), and so does the store, so a box the event task counts is lost and, where
+     the event task alone clears the bit, the bit never rises again.
+
+     **Taken: count it after (a)** (the maintainer, 2026-11-01): a task's sample stands
+     as its trigger's last only once the step that runs the task has run; a round a trip
+     stops before it leaves the last sample as it was, so the event task runs on the
+     next cycle that samples the rise, a warm restart's first among them. To build in
+     RV-3 and RV-4.
+
+351. **A rung that writes nothing (the review after Milestone 6),** question 5: a
+     newline ends a rung, so a rung wrapped onto two lines, `xic start xio stop` and
+     `ote motor`, compiles with no diagnostic into a rung that does nothing and one that
+     runs the motor whatever stop does. Logix's ladder manual: a rung's last instruction
+     must be an output.
+
+     **Taken: refuse it (a)** (the maintainer, 2026-11-01): a rung that writes nothing
+     and jumps nowhere, no instruction of it writing a tag, a member, a bit or a
+     one-shot's storage bit, and no `jmp`, is refused at its line, told that a newline
+     ends a rung. To build in RV-2.
+
+352. **The runner's own long work (the review after Milestone 6),** question 6: the
+     period's take-out of the retained image, an edit's switch, a force's write and the
+     scan of a large array of instances run inside the runner while every device waits
+     on idle + poll, so a healthy plant with a large retained array of instances trips at
+     its first period, which the manual clock cannot show.
+
+     **Taken: cheaper and bounded (a)** (the maintainer, 2026-11-01): each made cheaper,
+     the size of plant the default idle carries measured and documented, and a trip met
+     during the runner's own work naming that work. A plant past the bound still trips
+     with its outputs at 0. To build in RV-6.
+
+353. **A stalled disk (the review after Milestone 6),** question 7: a force's write of
+     the forces file and the store's writes at a trip, a stop and a cold restart run in
+     the runner with no limit, so a stalled disk hangs the runner and every host call.
+
+     **Taken: time-limited writes (a)** (the maintainer, 2026-11-01): every file write the
+     runner makes is limited to idle + poll of real time, as the period's write is
+     (decision 275); one past it fails, a force with `{:error, {:forces, :timeout}}`, a
+     store write reported as any failed write, and the runner answers on. To build in
+     RV-4.
+
+354. **A restart asked while the runner runs (the review after Milestone 6),** question
+     8: a `restart/2` that waits for its slot while a round is owed is served by a trip
+     that comes before the slot, which it then clears, though decision 133 refuses a
+     restart asked while running.
+
+     **Taken: judged when asked (a)** (the maintainer, 2026-11-01): a restart is judged
+     as it arrives; one asked while the runner runs is refused whatever comes before it
+     is served, and the trip stands until a restart asked after it. The three tests of
+     `trip_test.exs` that pin the other reading change with the maintainer's leave. To
+     build in RV-4.
+
+355. **A store cut short (the review after Milestone 6),** question 9: a store cut at a
+     line boundary is read as whole, its lost values started at their initial values,
+     and a number cut in its digits is read as a smaller number.
+
+     **Taken: an end line (a)** (the maintainer, 2026-11-01): a store's first line is
+     `logex retain 2` and its last gives its count of lines; a store without it, or whose
+     count is wrong, is refused at start naming the file; a `logex retain 1` store is
+     still read. To build in RV-5.
+
+356. **Two runners on one store (the review after Milestone 6),** question 10: nothing
+     refuses two runners one store or forces path, so each writes over the other's.
+
+     **Taken: refused within one VM (a)** (the maintainer, 2026-11-01): a runner refuses
+     at start a store or forces path another runner of the same VM holds, naming it; two
+     VMs on one path are the host's to avoid, as the documents say. To build in RV-4.
+
+357. **Exact reduction pins (the review after Milestone 6),** question 11: about 27 tests
+     pin a scan's or a compile's reductions exactly, so a toolchain release that moves
+     code generation by one reduction turns them red with no change to logex, and so
+     does making logex cheaper.
+
+     **Taken: same-run bounds (a)** (the maintainer, 2026-11-01): each exact pin becomes
+     a bound against a reference program measured in the same run, with the maintainer's
+     leave to change the pinned tests. To build in RV-7.
+
+358. **CLAUDE.md (the review after Milestone 6),** question 12: CLAUDE.md, which every
+     agent session loads whole, is 237 KB, grew 46% in eight days and reads as replayed
+     history.
+
+     **Taken: a slim index (a)** (the maintainer, 2026-11-01): the commands, the
+     conventions and a line for each module saying what it is now, a few hundred lines;
+     each module's present rules in its moduledoc; the history in `PLAN.md` and this
+     record; its size capped by a test. To build in RV-1.
+
+359. **The receipts and the toolchain (the review after Milestone 6),** question 13 and
+     its follow-up: the receipts `PLAN.md` cites live in one session's scratchpad, and
+     the Elixir 1.14 sandbox `CONTRIBUTING.md` and CLAUDE.md offer cannot build the code,
+     which calls `Map.split_with/2`, new in 1.15.
+
+     **Taken: drop everything before Elixir 1.20, and commit the checks (a)** (the
+     maintainer, 2026-11-01): the older-toolchain sandbox goes from the documents, the
+     receipts produced on 1.14 stay as history, marked so; the check that runs README's
+     examples and compares their output becomes a test, and the mutation and load
+     scripts are committed under `scripts/`. To build in RV-1.
+
+360. **A store a fresh start drops from (the review after Milestone 6),** question 14: a
+     fresh start that drops retained values the program no longer matches (decision 277)
+     overwrites the old store within a period, so a mistaken deploy loses them for good.
+
+     **Taken: keep a copy (a)** (the maintainer, 2026-11-01): before its first write over
+     a store it dropped anything from, a fresh start copies the store to
+     `<store>.dropped`, kept until the next such start. To build in RV-5.
+
 ---
 
 ## 8. Sources, and what is unverified
