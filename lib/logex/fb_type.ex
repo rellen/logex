@@ -707,7 +707,9 @@ defmodule Logex.FbType do
   defp recompiled(:error, _held), do: false
 
   defp read_from?(nil, _name), do: true
-  defp read_from?(file, name) when is_binary(file), do: Path.rootname(Path.basename(file)) == name
+  # RV-2 (the review after Milestone 6, a5-data-model-9): read from the file its loader
+  # reads, `<name>.ld` exactly, where any extension and the extension's case were taken.
+  defp read_from?(file, name) when is_binary(file), do: Path.basename(file) == name <> ".ld"
   defp read_from?(_file, _name), do: false
 
   defp filed(%Program{warnings: warnings} = body, file),

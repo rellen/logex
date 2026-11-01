@@ -98,6 +98,9 @@ own documentation holds:
   an element's word and subscripts (`element/1`), a subscript (`subscript/1`), a bit number
   in brackets (`bracketed/1`), a type word's base (`base/1`) and a host key's word
   (`word/1`), each total on a text.
+- `lib/logex/source_file.ex` — `Logex.SourceFile`, internal: how both loaders read a
+  source file, a FIFO or a device refused before it is read, and tell what is beside one,
+  a link to nothing or one that loops among it.
 - `lib/logex/runtime.ex` — `Logex.Runtime`, the core: a program run as an instance
   (`instance/1,2`, `call/4`, `put_inputs/3`, `scan/2,3`, `restart/3`, `retained/2`) and a
   configuration as an opaque resource (`start/1,2`, `cycle/3`, `next_due_in/1`,
@@ -164,6 +167,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
   name readers, a number's bounds, a rung that writes nothing, the compile's cost against
   recorded figures, and a seeded mutation walk that nothing escapes.
+- `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
+  loader's lesser fixes, each by its reviewer's label.
 - `test/logex/diagnostic_test.exs` — what each stage stamps on a diagnostic, and
   `format/1`.
 - `test/logex/naming_test.exs` — every mnemonic and keyword has its `docs/naming.md`

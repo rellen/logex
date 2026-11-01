@@ -36,7 +36,7 @@ defmodule Logex do
       "line 2: unknown instruction `xyz`"
   """
 
-  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Program}
+  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Program, SourceFile}
 
   @doc """
   Compiles `source` into a program named `name`: `{:ok, %Logex.Program{}}`, or
@@ -179,6 +179,17 @@ defmodule Logex do
   # The gate in front of the loader: the extension says what a file is, so only a `.ld`
   # file is read. A file named only `.ld` has no extension to Elixir, and is a `.ld` file
   # whose name names nothing, which the loader says.
+  # RV-2 (the review after Milestone 6, a6-compile-scale-12): a path that ends in a `/`
+  # names a directory, whatever comes before it, where it was told `x.ld` is no `.ld` file.
+  defp of_kind(_extension, _basename, path, call)
+       when binary_part(path, byte_size(path) - 1, 1) == "/",
+       do:
+         {not_ld(
+            path,
+            "`#{path}` names a directory, not a `.ld` file: Logex.compile_file/1 compiles a " <>
+              "program or a function block from its `.ld` file"
+          ), call}
+
   defp of_kind(".ld", _basename, path, call), do: loaded(path, call)
   defp of_kind("", ".ld", path, call), do: loaded(path, call)
 
@@ -216,15 +227,20 @@ defmodule Logex do
   # reached, cyclic}`: `reached` the paths of the blocks it holds, at any depth, each once,
   # a block after those it holds, and `cyclic` whether a cycle gave it. Beside it, the
   # paths this load gave a cyclic result.
+  # RV-2 (the review after Milestone 6, a6-compile-scale-14): the memo is keyed by each
+  # path expanded, so a block reached as `./seal.ld` and as `sub/../seal.ld` is one file,
+  # compiled once and its warnings handed back once; a file is still cited as its first
+  # path spells it. A directory reached through a link is another path (provisional).
   defp load(path, held, {memo, _cyclic} = state),
-    do: loading(Map.fetch(memo, path), path, held, state)
+    do: loading(Map.fetch(memo, Path.expand(path)), path, held, state)
 
   defp loading({:ok, entry}, _path, _held, state), do: {entry, state}
 
   defp loading(:error, path, held, state) do
-    {{result, reached, cyclic}, {memo, cyclics}} = read(File.read(path), path, held, state)
+    {{result, reached, cyclic}, {memo, cyclics}} = read(SourceFile.read(path), path, held, state)
     entry = {in_file(result, path), reached, cyclic}
-    {entry, {Map.put(memo, path, entry), cyclics(cyclic, path, cyclics)}}
+    key = Path.expand(path)
+    {entry, {Map.put(memo, key, entry), cyclics(cyclic, key, cyclics)}}
   end
 
   defp cyclics(true, path, cyclics), do: [path | cyclics]
@@ -249,9 +265,7 @@ defmodule Logex do
   defp handed_back(result, _reached, _memo, handed), do: {result, handed}
 
   defp read({:error, reason}, _path, _held, state),
-    do:
-      {{{:error, [file_problem("cannot be read: #{:file.format_error(reason)}")]}, [], false},
-       state}
+    do: {{{:error, [file_problem(SourceFile.unreadable(reason))]}, [], false}, state}
 
   defp read({:ok, source}, path, held, state) do
     name = Path.rootname(Path.basename(path))
@@ -294,14 +308,19 @@ defmodule Logex do
   # file's, and the compiler reports it where it is written.
   # Since M5-14 an array of a block's instances names the block by its type word's base,
   # `gate` of `gate[4]` (decision 154).
-  defp needed({:routine, {:rungs, rungs}}, own) do
+  # RV-2 (the review after Milestone 6, a6-compile-scale-12): a program's file that names
+  # its own name as a type word is looked for too, and so told it is a program, where it
+  # was told its own name is an unknown type, with every type word logex has.
+  defp needed({:routine, {:rungs, rungs}} = ast, own) do
+    program? = kind({:ok, ast}) == :program
+
     words =
       for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, typed} | _]} <-
             Enum.map(rungs, &Declarations.unqualified/1),
           Declarations.reserved(section) == :section,
           word = unsized(typed),
           Declarations.block_name?(word),
-          word != own,
+          program? or word != own,
           do: {word, line}
 
     Enum.uniq_by(words, &elem(&1, 0))
@@ -311,7 +330,7 @@ defmodule Logex do
 
   defp dependency({word, line}, acc, {path, held}) do
     file = Path.join(Path.dirname(path), word <> ".ld")
-    found(File.exists?(file), {word, line, file}, acc, held)
+    found(SourceFile.present?(file), {word, line, file}, acc, held)
   end
 
   # Nothing of that name: the compiler reports the type as unknown. Something that is no
@@ -338,7 +357,7 @@ defmodule Logex do
   # A file's kind, from the first word of its first rung, in any case, as the compiler
   # reads a block's header: `:unknown` for a file that cannot be read or parsed, which is
   # loaded to report why.
-  defp peek(file), do: peeked(File.read(file))
+  defp peek(file), do: peeked(SourceFile.read(file))
 
   defp peeked({:ok, source}), do: kind(parse(source))
   defp peeked({:error, _reason}), do: :unknown
@@ -366,19 +385,25 @@ defmodule Logex do
      {reached, true}, state}
   end
 
-  defp cycle(false, {_word, _line, file}, {types, problems, reach, state}, held) do
+  defp cycle(false, {_word, _line, file} = named, {types, problems, reach, state}, held) do
     {{result, below, cyclic}, state} = load(file, held, state)
-    dependent(result, {types, problems, reached(reach, below, file, cyclic), state})
+    dependent(result, named, {types, problems, reached(reach, below, file, cyclic), state})
   end
 
   # The blocks a file reaches, newest first: those its block reaches, then the block.
   defp reached({reached, cyclic}, below, file, below_cyclic),
-    do: {[file | Enum.reverse(below, reached)], cyclic or below_cyclic}
+    do: {[Path.expand(file) | Enum.reverse(below, reached)], cyclic or below_cyclic}
 
-  defp dependent({:ok, %FbType{} = type}, {types, problems, reach, state}),
+  defp dependent({:ok, %FbType{} = type}, _named, {types, problems, reach, state}),
     do: {[type | types], problems, reach, state}
 
-  defp dependent({:error, diagnostics}, {types, problems, reach, state}),
+  # RV-2 (the review after Milestone 6, a6-compile-scale-2): a file peeked as a block and
+  # compiled as a program, saved again between the two reads, is told it is a program, as
+  # one peeked so is, where it raised.
+  defp dependent({:ok, %Program{}}, named, {types, problems, reach, state}),
+    do: kind_of(:program, named, {types, problems, reach, state}, nil)
+
+  defp dependent({:error, diagnostics}, _named, {types, problems, reach, state}),
     do: {types, Enum.reverse(diagnostics, problems), reach, state}
 
   defp mistakes_in({:ok, _program}), do: []

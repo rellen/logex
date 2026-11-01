@@ -231,8 +231,8 @@ defmodule Logex.Declarations do
   sound.
   """
   def a_or_an(word, shown \\ nil)
-  def a_or_an(word, nil), do: a_or_an(word, word)
-  def a_or_an(word, shown), do: "#{Map.get(@articles, word, "a")} #{shown}"
+  def a_or_an(word, nil) when is_binary(word), do: a_or_an(word, word)
+  def a_or_an(word, shown) when is_binary(shown), do: "#{Map.get(@articles, word, "a")} #{shown}"
 
   @doc """
   What a function block type given where a program goes is told, after its name (M2-5):
@@ -453,8 +453,15 @@ defmodule Logex.Declarations do
   """
   def class_range(class) when class in @class_atoms do
     ranges = for type <- @integers, in_class?(type, class), do: range(type)
-    Enum.min(Enum.map(ranges, & &1.first))..Enum.max(Enum.map(ranges, & &1.last))//1
+    ranged(ranges)
   end
+
+  # RV-2 (the review after Milestone 6, a3-compiler2-10): a class of no integer type,
+  # `:any_real`, has no integer range, nil, where Enum.min/1 of none raised.
+  defp ranged([]), do: nil
+
+  defp ranged(ranges),
+    do: Enum.min(Enum.map(ranges, & &1.first))..Enum.max(Enum.map(ranges, & &1.last))//1
 
   @doc """
   The conversion that takes a value of `from` into `to`, its mnemonic, `dint_to_int`, or
@@ -557,10 +564,16 @@ defmodule Logex.Declarations do
   for it, a comparison's of two literals (M5-4): an integer within `class_range/1`, and
   since M5-10 a real literal where the class holds a real.
   """
-  def class_holds?(class, value) when is_integer(value), do: value in class_range(class)
+  def class_holds?(class, value) when is_integer(value),
+    do: integer_held(class_range(class), value)
 
   def class_holds?(class, value) when is_float(value),
     do: :real in Map.fetch!(@classes, class).kinds
+
+  # A class of reals alone holds an integer literal where an lreal holds it exactly, as a
+  # real slot holds one (decision 147's literal rule).
+  defp integer_held(nil, value), do: Logex.Real.exact?(:lreal, value)
+  defp integer_held(range, value), do: value in range
 
   # Decision 216: a real literal nearer 0.0 than the type's smallest normal value, which a
   # write would flush to 0.0, told so, as one past the range is told the range.
@@ -681,7 +694,20 @@ defmodule Logex.Declarations do
   """
   def split(rungs, declared \\ [], types \\ %{}, checked \\ %{}, kind \\ :program)
 
-  def split(rungs, declared, types, checked, kind) when is_list(declared) do
+  # RV-2 (the review after Milestone 6, c4-api-fuzz-7): an improper list of tags is
+  # refused as any other value that is no list, where it raised in a map over it.
+  def split(rungs, declared, types, checked, kind) when is_list(declared),
+    do: proper_split(proper?(declared), {rungs, declared, types, checked, kind})
+
+  def split(_rungs, declared, _types, _checked, _kind), do: declared!(declared)
+
+  defp proper?([_ | rest]), do: proper?(rest)
+  defp proper?([]), do: true
+  defp proper?(_improper), do: false
+
+  defp proper_split(false, {_rungs, declared, _types, _checked, _kind}), do: declared!(declared)
+
+  defp proper_split(true, {rungs, declared, types, checked, kind}) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
@@ -698,7 +724,7 @@ defmodule Logex.Declarations do
     {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
 
-  def split(_rungs, declared, _types, _checked, _kind),
+  defp declared!(declared),
     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
 
   @doc """
@@ -1687,9 +1713,12 @@ defmodule Logex.Declarations do
        when type in @reals and not is_number(v),
        do: ["the initial value of #{label(name)} must be a number, found #{inspect(v)}"]
 
-  defp initial(%Tag{type: type, name: name, initial: v}, _shown)
+  # RV-2 (the review after Milestone 6, a3-compiler2-9): a real literal is quoted as written,
+  # `1.5e1`, as every message quotes a literal (decision 202), where it was its value,
+  # 15.0; a value from Elixir, which has no spelling, as the value it is.
+  defp initial(%Tag{type: type, name: name, initial: v}, shown)
        when type not in @reals and not is_integer(v),
-       do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
+       do: ["the initial value of #{label(name)} must be an integer, found #{found(shown, v)}"]
 
   # Decision 231: an initial value that underflowed, `var big lreal 1.0e-400`, its value
   # 0.0 and its spelling no zero's, is refused as too near 0.0, as a subnormal one is.
@@ -1761,6 +1790,9 @@ defmodule Logex.Declarations do
 
   defp plus_one(-1), do: -1
   defp plus_one(n), do: n + 1
+
+  defp found(spelling, _v) when is_binary(spelling), do: spelling
+  defp found(_none, v), do: inspect(v)
 
   defp quoted(nil, v) when is_float(v), do: "`#{Float.to_string(v)}`"
   defp quoted(nil, v), do: "`#{v}`"

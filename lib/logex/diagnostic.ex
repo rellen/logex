@@ -62,13 +62,16 @@ defmodule Logex.Diagnostic do
   def format(%__MODULE__{} = diagnostic),
     do: where(diagnostic) <> label(diagnostic.severity) <> diagnostic.message
 
-  defp where(%__MODULE__{file: nil, line: nil}), do: ""
+  # RV-2 (the review after Milestone 6, a5-data-model-10): an empty file names no file, as
+  # nil does, where it gave a leading `: `. A column with no line names no place, and is
+  # not shown.
+  defp where(%__MODULE__{file: file, line: nil}) when file in [nil, ""], do: ""
   defp where(%__MODULE__{file: file, line: nil}), do: "#{file}: "
 
   defp where(%__MODULE__{file: file, line: line, column: column}),
     do: in_file(file) <> "line #{line}" <> at_column(column) <> ": "
 
-  defp in_file(nil), do: ""
+  defp in_file(file) when file in [nil, ""], do: ""
   defp in_file(file), do: "#{file}: "
 
   defp at_column(nil), do: ""
@@ -76,4 +79,13 @@ defmodule Logex.Diagnostic do
 
   defp label(:error), do: ""
   defp label(:warning), do: "warning: "
+
+  # A severity no stage gives is the host's mistake, a pinned `ArgumentError`, where it
+  # was a FunctionClauseError.
+  defp label(severity),
+    do:
+      raise(
+        ArgumentError,
+        "a diagnostic's severity is :error or :warning, got: #{inspect(severity)}"
+      )
 end

@@ -1579,6 +1579,12 @@ defmodule Logex.Compiler do
   defp read_instance(symbol, [{:name, _, instance} | _], known),
     do: read(runnable(symbol, instance, known), symbol, instance)
 
+  # RV-2 (the review after Milestone 6, a2-compiler1-7): an element of an array of
+  # instances by its own type, so that a `ctud`'s element is told its `.qu`, where it was
+  # told the plain counter's `.q`.
+  defp read_instance(symbol, [{:element, _, _array, _index, element} | _], known),
+    do: read(runnable(symbol, element, known), symbol, element)
+
   defp read_instance(symbol, _no_instance, _known), do: read(nil, symbol, nil)
 
   defp read(nil, symbol, _instance),
@@ -2201,6 +2207,29 @@ defmodule Logex.Compiler do
        ),
        do: [diagnostic(line, subscripted_instance(word, name))]
 
+  # RV-2 (the review after Milestone 6, a2-compiler1-9): an element of an array of built-in
+  # instances a tag subscripts is shown the instruction that runs it by literal subscripts,
+  # `ton tt[0]`, where it was shown `ton tt[i]`, which the compiler refuses.
+  defp not_run(
+         nil,
+         {:tag_element, {:ok, %Tag{type: %FbType{name: type, body: nil} = fb} = tag}, _},
+         line,
+         name,
+         word
+       ),
+       do: [
+         diagnostic(
+           line,
+           "`#{word}` runs an instance of a user function block, but `#{name}` is " <>
+             "#{Declarations.a_or_an(type)}#{declared(tag)}, " <>
+             run_by_own(
+               Enum.sort(Map.keys(FbType.rules(fb).runs), :desc),
+               subscripted_example(name)
+             ) <>
+             ", each element by literal subscripts"
+         )
+       ]
+
   defp not_run(nil, {:tag_element, found, _subscripts}, line, name, word),
     do: not_run(nil, found, line, name, word)
 
@@ -2220,8 +2249,8 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{word}` runs an instance of a user function block, but `#{name}` is a " <>
-          "#{type}#{declared(tag)}, " <>
+        "`#{word}` runs an instance of a user function block, but `#{name}` is " <>
+          "#{Declarations.a_or_an(type)}#{declared(tag)}, " <>
           run_by_own(Enum.sort(Map.keys(FbType.rules(fb).runs), :desc), name)
       )
     ]
@@ -2256,8 +2285,8 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{word}` runs an instance of a function block, but `#{name}` is a " <>
-          "#{tag.type}#{declared(tag)}"
+        "`#{word}` runs an instance of a function block, but `#{name}` is " <>
+          "#{a_type(tag.type)}#{declared(tag)}"
       )
     ]
 
@@ -2932,20 +2961,22 @@ defmodule Logex.Compiler do
   # that is 0 for a while is the run's to report (Logex.Runtime). Since M5-10 so is a
   # literal negative source of `sqrt`, whose destination must be a real (decisions 164 and
   # 167): one call an instruction, as before reals.
-  defp check_literals(symbol, [_dividend, {:int_lit, line, 0} = zero | _], {at, _scope}, d)
+  # RV-2 (the review after Milestone 6, a3-compiler2-11): the zero it gives is its
+  # destination's, `0` in an integer and `0.0` in a real, whatever the literal's own kind.
+  defp check_literals(symbol, [_dividend, {:int_lit, line, 0} = zero | rest], {at, scope}, d)
        when symbol in [:div, :mod],
-       do: zero_divisor(line, zero, at, d)
+       do: zero_divisor(line, {zero, written_zero(rest, zero, scope)}, at, d)
 
   # Decision 202: `16#0`, `0_0`, `00` and `-0` are zero too, each quoted as written.
-  defp check_literals(symbol, [_dividend, {:int_lit, line, 0, _} = zero | _], {at, _scope}, d)
+  defp check_literals(symbol, [_dividend, {:int_lit, line, 0, _} = zero | rest], {at, scope}, d)
        when symbol in [:div, :mod],
-       do: zero_divisor(line, zero, at, d)
+       do: zero_divisor(line, {zero, written_zero(rest, zero, scope)}, at, d)
 
   # M5-10 (decision 150): a real literal zero, `0.0` or `-0.0`, which lexes as 0.0, as an
   # integer's is refused.
-  defp check_literals(symbol, [_dividend, zero | _], {at, _scope}, d)
+  defp check_literals(symbol, [_dividend, zero | rest], {at, scope}, d)
        when symbol in [:div, :mod] and is_real_zero(zero),
-       do: zero_divisor(elem(zero, 1), zero, at, d)
+       do: zero_divisor(elem(zero, 1), {zero, written_zero(rest, zero, scope)}, at, d)
 
   # M5-10 (decision 167): a literal negative source of `sqrt`, `sqrt -4.0 root`, would raise
   # `:negative_sqrt` on every scan, so it is refused where it stands, as decision 78
@@ -2996,18 +3027,26 @@ defmodule Logex.Compiler do
       | diagnostics
     ]
 
-  defp zero_divisor(line, zero, {_, word}, diagnostics),
+  defp zero_divisor(line, {zero, gives}, {_, word}, diagnostics),
     do: [
       diagnostic(
         line,
         "`#{word}` divides by the literal `#{Parser.spelling(zero)}`: a zero divisor gives " <>
-          "#{zero_of(zero)} and passes no power on every scan, so a literal one is refused"
+          "#{gives} and passes no power on every scan, so a literal one is refused"
       )
       | diagnostics
     ]
 
-  defp zero_of(literal) when is_int_lit(literal), do: "0"
-  defp zero_of(_real), do: "0.0"
+  # The zero a zero divisor writes, its destination's, and where its destination has no
+  # type found, which was reported already, its literal's.
+  defp written_zero([{:name, _, destination} | _], zero, scope),
+    do: zero_in(container_type(lookup(destination, scope)), zero)
+
+  defp written_zero(_no_destination, zero, _scope), do: zero_in(nil, zero)
+
+  defp zero_in(type, _zero) when type in [:real, :lreal], do: "0.0"
+  defp zero_in(nil, zero) when is_real_lit(zero), do: "0.0"
+  defp zero_in(_type, _zero), do: "0"
 
   # Since M5-6 a timer's unit is its instance's, a long timer's nanoseconds (decision 158).
   defp unit(symbol, type), do: unit_of(kind_of(symbol), per_ms(type), type)

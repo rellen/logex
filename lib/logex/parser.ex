@@ -77,7 +77,20 @@ defmodule Logex.Parser do
   AST leaves keep only the line, `{:name, line, value}`, because the suite pins that
   shape; the column is used for diagnostics only.
   """
-  def parse(tokens), do: rungs(tokens, [])
+  def parse(tokens) when is_list(tokens), do: rungs(tokens, [])
+
+  # RV-2 (the review after Milestone 6, a1-frontend-9): a host's mistake is a pinned
+  # `ArgumentError`, as instructionize/2's is, where it was a FunctionClauseError or the
+  # BIF's own error: a value that is no list of tokens, a list that is improper, and a
+  # token that is no tuple of a kind and its location.
+  def parse(tokens), do: not_tokens!(tokens)
+
+  defp not_tokens!(tokens),
+    do:
+      raise(
+        ArgumentError,
+        "parse/1 takes the list of tokens Logex.Lexer.tokenize/1 gives, got: #{inspect(tokens)}"
+      )
 
   @doc """
   The tree, if `parse/1` could have produced it; otherwise an `ArgumentError` that names
@@ -226,6 +239,7 @@ defmodule Logex.Parser do
   defp line_end([{:rnd, _} | rest], elems, acc), do: rungs(rest, keep(elems, acc))
   defp line_end([], elems, acc), do: {:ok, {:routine, {:rungs, Enum.reverse(keep(elems, acc))}}}
   defp line_end([token | _], _elems, _acc), do: unexpected(token, ["a newline", "end of input"])
+  defp line_end(tail, _elems, _acc), do: not_tokens!(tail)
 
   # `branch -> '$empty'` makes an empty rung derivable, so leading, trailing and repeated
   # newlines would otherwise become phantom `{:rung, []}` — drop them here. Empty branch
@@ -413,8 +427,16 @@ defmodule Logex.Parser do
         "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{inspect(node)}"
       )
 
-  defp unexpected(token, expected),
+  defp unexpected(token, expected) when is_tuple(token) and tuple_size(token) >= 2,
     do: {:error, {elem(token, 1), __MODULE__, {:unexpected, describe(token), expected}}}
+
+  defp unexpected(token, _expected),
+    do:
+      raise(
+        ArgumentError,
+        "parse/1 takes tokens, each a tuple of its kind and its location, got: " <>
+          inspect(token)
+      )
 
   defp describe({:rnd, _}), do: "a newline"
   defp describe({:nxb, _}), do: "`|`"
