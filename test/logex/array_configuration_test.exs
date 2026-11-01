@@ -841,14 +841,17 @@ defmodule Logex.ArrayConfigurationTest do
                  {text, [{"g[0]", 1}, {"g[3]", 3}]}
       end
 
-      # Driven by no connection at all, the array is held whole, as before.
+      # Driven by no connection at all, the array is held whole, as before, its value a
+      # list, as `get/2` gives it, since the review's b5-config-edit-2 (where until then it
+      # was the resource's tuple).
       {:ok, none} = configured("var_global g int[4]\nprogram a w4\n")
       {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, none)
 
       assert for({:held, name, value} <- forecast, do: {name, value}) == [
-               {"g",
-                Runtime.get!(runtime, "g") |> then(&Logex.Array.from_list(&1, [4], fn v -> v end))}
+               {"g", Runtime.get!(runtime, "g")}
              ]
+
+      assert Runtime.get!(runtime, "g") == [1, 0, 0, 3]
     end
   end
 

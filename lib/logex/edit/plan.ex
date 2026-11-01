@@ -1139,6 +1139,13 @@ defmodule Logex.Edit.Plan do
   # more dimensions, as a host's input takes one, where the state holds it whole.
   defp host(%{lists: lists}, name, value), do: listed_value(Map.get(lists, name), value)
 
+  # A value no program of the edit declares, a tag or member a prune drops, as a report gives
+  # one to a host by its shape alone (b5-config-edit-2): an array, the state's tuple, as a
+  # list, a list of lists for more dimensions; an instance's members each so.
+  defp listed(value) when is_tuple(value), do: Enum.map(Tuple.to_list(value), &listed/1)
+  defp listed(value) when is_map(value), do: Map.new(value, fn {k, v} -> {k, listed(v)} end)
+  defp listed(value), do: value
+
   defp listed_value(nil, value), do: value
   defp listed_value(dims, value) when is_tuple(value), do: Logex.Array.to_list(value, dims)
   defp listed_value(_dims, value), do: value
@@ -1731,7 +1738,7 @@ defmodule Logex.Edit.Plan do
   # point, and the record has the value.
   def prune(plan, record, %Instance{env: env} = state) do
     {kept, gone} = Map.split_with(env, fn {name, _value} -> is_map_key(plan.keep, name) end)
-    pruned = for {name, value} <- gone, do: {:pruned, name, value}
+    pruned = for {name, value} <- gone, do: {:pruned, name, listed(value)}
     {kept, inside} = Enum.reduce(plan.nested, {opened(kept, plan.opens), []}, &prune_in/2)
     kept = closed(kept, plan.opens)
     {%{state | env: kept}, Enum.sort(holding(plan, record.shown, env) ++ pruned ++ inside)}
@@ -1754,7 +1761,7 @@ defmodule Logex.Edit.Plan do
 
     reports =
       Enum.reduce(gone, reports, fn {name, v}, acc ->
-        [{:pruned, prefix <> "." <> name, v} | acc]
+        [{:pruned, prefix <> "." <> name, listed(v)} | acc]
       end)
 
     {kept, reports} =

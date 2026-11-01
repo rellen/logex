@@ -1263,12 +1263,18 @@ defmodule Logex.ApiContractTest do
     # Decision 302: a global's qualifier, added or taken away, which a switch writes
     # nothing for.
     :retain_added,
-    :retain_removed
+    :retain_removed,
+    # Decision 347: a var_output no rung writes, wired to a global the step holds,
+    # started at the global's value, and given back by the next switch.
+    :holds,
+    :hold_undone
   ]
 
   # The kinds only a configuration's edit gives, which the walk of a lone instance's edit
   # cannot reach.
   @configuration_kinds [
+    :holds,
+    :hold_undone,
     :instance_added,
     :instance_back,
     :instance_pruned,
@@ -4133,7 +4139,10 @@ defmodule Logex.ApiContractTest do
     # Decision 329: a value reported without a timer's `last`, and `b1` whole without a
     # member the state holds that the version switched to does not declare.
     :retain_no_last,
-    :retain_undeclared
+    :retain_undeclared,
+    # Decision 347: a held global kept at its reported value through a cycle while a
+    # connection of the configuration running still names it.
+    :held_kept
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -4204,6 +4213,8 @@ defmodule Logex.ApiContractTest do
       moves: %{},
       holds: %{},
       aside_at: %{},
+      held_writes: %{},
+      held_points: %{},
       o: nil
     }
 
@@ -5189,6 +5200,13 @@ defmodule Logex.ApiContractTest do
     assert rt.globals == model.globals
     assert rt.instances == model.states
 
+    # Decision 347: a global the last step reported held keeps the value it reported,
+    # whatever the configuration running copies out, until the next step or restart.
+    for {global, value} <- w.held_points do
+      assert rt.globals[global] == value, "#{global} was held at #{value}"
+      ce_reach(:held_kept, Enum.any?(rt.config.connections, &(&1.to == global)))
+    end
+
     {prev, onsp} =
       Enum.reduce(events, {w.prev, w.onsp}, fn
         {:ran, _task, name, now}, {prev, onsp} ->
@@ -5371,7 +5389,11 @@ defmodule Logex.ApiContractTest do
     first? = step == :test and stage == :accepted
     {holds, aside_at} = ce_holds(w, rt, first?)
     {held, set_aside} = ce_hold_start(first?, w)
-    ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, held, set_aside}})
+    last = ce_held_writes(first?, w)
+
+    held_writes =
+      ce_restated!(w.rt, rt, report, {:switch, first?, {w.moves, held, set_aside, last}})
+
     ce_one_copy!(rt, ce_switched_to(step, w))
     ce_round!(step, w, rt, report)
     ce_reach(:model_after_switch)
@@ -5389,7 +5411,9 @@ defmodule Logex.ApiContractTest do
         resumed: Enum.any?(report, &match?({:resumed, _, _}, &1)),
         moves: ce_moves(w.rt, report),
         holds: holds,
-        aside_at: aside_at
+        aside_at: aside_at,
+        held_writes: held_writes,
+        held_points: ce_held_points(report)
     }
   end
 
@@ -5415,9 +5439,29 @@ defmodule Logex.ApiContractTest do
         stale: [w.e | w.stale],
         passed: w.sup ++ w.passed,
         sup: [],
-        round: nil
+        round: nil,
+        held_points: ce_points_after(stage, report, w.held_points)
     }
   end
+
+  # Decision 347: the globals a step reports held, by name, each at the value it reports;
+  # cancel from accept changes nothing, so what the last step held stays held.
+  defp ce_held_points(report),
+    do:
+      for(
+        {:held, name, value} <- report,
+        not String.contains?(name, "."),
+        into: %{},
+        do: {name, value}
+      )
+
+  defp ce_points_after(:accepted, [], points), do: points
+  defp ce_points_after(_stage, report, _points), do: ce_held_points(report)
+
+  # An edit's first test knows nothing of the var_outputs an earlier edit's switch started
+  # at a held global's value.
+  defp ce_held_writes(true, _w), do: %{}
+  defp ce_held_writes(false, w), do: w.held_writes
 
   # Decisions 339 to 341, restated from the two configurations, the walk's own record of
   # the edit's switches and each state alone: a timer's time runs only while a program that
@@ -5628,7 +5672,7 @@ defmodule Logex.ApiContractTest do
   # configurations' text and the resource before the step; and what a step leaves in every
   # running state, read from its program's text: a switch every tag its program declares
   # but a var_external, and a prune those alone.
-  defp ce_restated!(before, later, report, {:switch, first?, {moves, holds, aside_at}}) do
+  defp ce_restated!(before, later, report, {:switch, first?, {moves, holds, aside_at, last}}) do
     {from, to} = {before.config, later.config}
     {before, dropped} = ce_left(before, from, first?)
     was = Map.new(from.tasks, &{&1.name, &1})
@@ -5730,11 +5774,16 @@ defmodule Logex.ApiContractTest do
             {kind, "#{name}.#{path}",
              ce_declared(ce_held_at(later.instances[name].env, path), path, to.programs[type])}
 
+    {held_through, held_writes} = ce_held_through(before, later, {from, to, kept}, last)
+
     restated =
       Enum.sort(
         dropped ++
           tasks ++
-          globals ++ stopped ++ started ++ shared ++ unwritten ++ retains ++ ce_orders(from, to)
+          globals ++
+          stopped ++
+          started ++
+          shared ++ unwritten ++ retains ++ ce_orders(from, to) ++ held_through
       )
 
     given =
@@ -5753,7 +5802,9 @@ defmodule Logex.ApiContractTest do
             :order,
             :unwritten,
             :retain_added,
-            :retain_removed
+            :retain_removed,
+            :holds,
+            :hold_undone
           ] or
             (not String.contains?(to_string(name), ".") and
                kind in [:added, :initial_changed, :held, :pruned]),
@@ -5792,9 +5843,10 @@ defmodule Logex.ApiContractTest do
     fresh = Runtime.start(to)
 
     for {:instance_added, name, _} <- report,
-        do: assert(later.instances[name] == fresh.instances[name], name)
+        do:
+          assert(later.instances[name] == ce_held_into(fresh.instances[name], name, report), name)
 
-    ce_first_fresh!(first?, {from, to, old, kept}, later, fresh)
+    ce_first_fresh!(first?, {from, to, old, kept}, later, {fresh, report})
 
     # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
     # timing; and, but at the first test, no start over a value the state already holds.
@@ -5840,6 +5892,7 @@ defmodule Logex.ApiContractTest do
         do: refute(tag in ce_externals(to.programs[state.type]), "#{path} started")
 
     ce_declared!(later, &MapSet.subset?/2)
+    held_writes
   end
 
   defp ce_restated!(before, later, report, {:prune, from}) do
@@ -5885,6 +5938,78 @@ defmodule Logex.ApiContractTest do
     ce_declared!(later, &MapSet.equal?/2)
   end
 
+  # Decision 347, restated from the two configurations' text, the resource before the step
+  # and the walk's own record of the last switch's writes: first each var_output that
+  # switch started at a held global's value, in an instance this one keeps too, that still
+  # holds it with no restart since, given back the value it had, `:hold_undone`; then each
+  # connection of the configuration started from a var_output no rung of its program
+  # writes, to a global the step holds, started at the global's value where it holds
+  # another, `:holds`. Gives the entries and this switch's writes, each `{old, new,
+  # first}`, a kept instance's alone.
+  defp ce_held_through(before, later, {from, to, kept}, last) do
+    undone =
+      for {{name, member}, {old, new, first}} <- Enum.sort(last),
+          name in kept,
+          state = before.instances[name],
+          state.env[member] == new and state.first == first,
+          do: {name, member, old}
+
+    gave = Map.new(undone, fn {name, member, old} -> {{name, member}, old} end)
+    held = for {:held, global, _} <- ce_held(from, to, later), do: global
+    types = Map.new(to.instances, &{&1.name, &1.type})
+
+    started =
+      for c <- to.connections,
+          c.to in held,
+          c.member in ~w(out q r),
+          not ce_writes?(to.programs[types[c.instance]], c.member),
+          base = ce_unheld({c.instance, c.member}, {before, kept, gave}),
+          base != later.globals[c.to],
+          do: {c.instance, c.member, base, later.globals[c.to]}
+
+    {for({name, member, old} <- undone, do: {:hold_undone, "#{name}.#{member}", old}) ++
+       for({name, member, _base, value} <- started, do: {:holds, "#{name}.#{member}", value}),
+     for(
+       {name, member, base, value} <- started,
+       name in kept,
+       into: %{},
+       do: {{name, member}, {base, value, later.instances[name].first}}
+     )}
+  end
+
+  # What a var_output holds at a switch before decision 347's write: what the last switch's
+  # give-back leaves, or a kept instance's own value, 0 where the switch adds it; one back
+  # from aside as it was set aside; one started at 0, its initial value in these draws.
+  defp ce_unheld({name, member} = key, {before, kept, gave}),
+    do: ce_unheld_of(name in kept, Map.fetch(gave, key), {name, member, before})
+
+  defp ce_unheld_of(true, {:ok, old}, _at), do: old
+
+  defp ce_unheld_of(true, :error, {name, member, before}),
+    do: Map.get(before.instances[name].env, member, 0)
+
+  defp ce_unheld_of(false, _gave, {name, member, before}),
+    do: ce_aside_value(before.aside[name], member)
+
+  defp ce_aside_value(nil, _member), do: 0
+  defp ce_aside_value(state, member), do: Map.get(state.env, member, 0)
+
+  # An instance a switch starts, as start/1 starts it, with decision 347's writes into it.
+  defp ce_held_into(state, name, report),
+    do:
+      Enum.reduce(report, state, fn
+        {:holds, path, value}, state ->
+          ce_held_member(String.split(path, ".", parts: 2), name, {state, value})
+
+        _entry, state ->
+          state
+      end)
+
+  defp ce_held_member([name, member], name, {state, value}),
+    do: %{state | env: Map.put(state.env, member, value)}
+
+  defp ce_held_member(_path, _name, {state, _value}), do: state
+
   defp ce_depth(path), do: length(String.split(path, ".")) - 1
 
   # Decision 66: at an edit's first switch what the resource holds that the original does
@@ -5916,8 +6041,10 @@ defmodule Logex.ApiContractTest do
 
   # Decision 20 for the plant, from the programs' text: a global a connection copies out a
   # var_output that some rung writes to, or that a rung writes through a var_external.
+  defp ce_writes?(program, name), do: program.source =~ ~r/\b(ote|otl|otu) #{name}\b/
+
   defp ce_drives(config) do
-    writes = fn program, name -> program.source =~ ~r/\b(ote|otl|otu) #{name}\b/ end
+    writes = &ce_writes?/2
     types = Map.new(config.instances, &{&1.name, &1.type})
 
     MapSet.new(
@@ -5951,10 +6078,14 @@ defmodule Logex.ApiContractTest do
 
   defp ce_first_fresh!(false, _configs, _later, _fresh), do: nil
 
-  defp ce_first_fresh!(true, {from, to, old, kept}, later, fresh) do
+  defp ce_first_fresh!(true, {from, to, old, kept}, later, {fresh, report}) do
     for i <- to.instances,
         i.name not in kept,
-        do: assert(later.instances[i.name] == fresh.instances[i.name], i.name)
+        do:
+          assert(
+            later.instances[i.name] == ce_held_into(fresh.instances[i.name], i.name, report),
+            i.name
+          )
 
     for g <- to.globals,
         not Map.has_key?(old, g.name),
@@ -6102,8 +6233,9 @@ defmodule Logex.ApiContractTest do
 
   defp ce_switched_kept!(_prune, _later, _report, _started), do: nil
 
-  defp ce_write({kind, path, value}, env) when kind in [:added, :input, :left],
-    do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
+  defp ce_write({kind, path, value}, env)
+       when kind in [:added, :input, :left, :holds, :hold_undone],
+       do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
 
   defp ce_write({:preset, path, {_from, to}}, env),
     do: put_in(env, String.split(path, ".") ++ ["pre"], to)
@@ -6267,7 +6399,11 @@ defmodule Logex.ApiContractTest do
     {:ok, rt} = ce_attempt(fn -> Runtime.restart(w.rt, :cold) end)
     assert rt.aside == %{} and rt.generation == w.rt.generation
     ce_reach(:restart_in_edit, w.e != nil)
-    %{w | rt: rt, model: ce_seed(rt), round: nil}
+
+    # A restart starts a held point and the var_output wired to it again, each at 0 in
+    # these draws, and nothing drives the point after it either.
+    points = for {name, _value} <- w.held_points, into: %{}, do: {name, rt.globals[name]}
+    %{w | rt: rt, model: ce_seed(rt), round: nil, held_points: points}
   end
 
   # A step on an edit that has ended, or that another has stepped past.

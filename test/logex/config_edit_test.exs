@@ -1996,6 +1996,291 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
+  # Decision 347 (the maintainer, 2026-11-01): a var_output no rung writes whose
+  # connection drives a held global starts at the global's value at the switch, so the
+  # point holds as the forecast and the report say until a rung writes it. Each case the
+  # review found (b5-config-edit-1), both ways, with the forecast pinned against the cycles
+  # under test.
+  describe "a held global stays held through a var_output no rung writes (decision 347)" do
+    @relay_ld "var_input start bool\nvar_output run bool\nxic start ote run\n"
+    @spare_ld "var_input start bool\nvar_output run bool\nvar_output aux bool 1\n" <>
+                "xic start ote run\n"
+    @stub_ld "var_input start bool\nvar_output run bool\nvar x bool\nxic start ote x\n"
+    @lamps_ld "var_input in bool\nvar_output o bool[2]\nxic in ote o[0]\nxic in ote o[1]\n"
+    @dark_ld "var_input in bool\nvar_output o bool[2]\nvar x bool\nxic in ote x\n"
+
+    defp held_plant(text, sources) do
+      programs =
+        Map.new(sources, fn {name, source} ->
+          {:ok, program} = Logex.compile(source, name: name)
+          {name, program}
+        end)
+
+      plant(text, programs)
+    end
+
+    @two_motors """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at panel.q.0
+    var_global k2 bool at panel.q.1
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+    program m2 motor with fast
+      m2.start 0
+      m2.run k2
+    """
+
+    # The cycles under test, `pb` as given, and each one's outputs.
+    defp under_test(runtime, n, inputs) do
+      Enum.map_reduce(1..n, runtime, fn _, runtime ->
+        {runtime, outputs, _events} = Runtime.cycle(runtime, 10, inputs)
+        {outputs, runtime}
+      end)
+    end
+
+    test "a var_output the candidate wires to the point for the first time, held at 0: " <>
+           "it starts at 0, and the contactor stays off" do
+      original = held_plant(@two_motors, %{"motor" => @relay_ld})
+
+      candidate =
+        held_plant(
+          @two_motors
+          |> String.replace("  m1.run k1\n", "")
+          |> String.replace("  m2.run k2\n", "  m2.run k2\n  m2.aux k1\n"),
+          %{"motor" => @spare_ld}
+        )
+
+      {runtime, %{"k1" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, forecast} = accepted(runtime, candidate)
+
+      assert forecast == [
+               {:added, "m1.aux", 1},
+               {:added, "m2.aux", 1},
+               {:held, "k1", 0},
+               {:holds, "m2.aux", 0}
+             ]
+
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      assert report == forecast
+      assert runtime.instances["m2"].env["aux"] == 0
+      {outputs, _runtime} = under_test(runtime, 5, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k1"]) == [0, 0, 0, 0, 0]
+    end
+
+    test "an instance retyped to one that never writes its var_output, held at 1: the " <>
+           "running contactor stays on" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global k1 bool at panel.q.0\nprogram m1 motor with fast\n  m1.start pb\n" <>
+          "  m1.run k1\n"
+
+      original = held_plant(text, %{"motor" => @relay_ld})
+      candidate = held_plant(String.replace(text, "m1 motor", "m1 stub"), %{"stub" => @stub_ld})
+      {runtime, %{"k1" => 1}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+      {edit, forecast} = accepted(runtime, candidate)
+
+      assert forecast == [
+               {:held, "k1", 1},
+               {:holds, "m1.run", 1},
+               {:instance_added, "m1", "stub"},
+               {:instance_stopped, "m1", "motor"}
+             ]
+
+      {_edit, runtime, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _runtime} = under_test(runtime, 5, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k1"]) == [1, 1, 1, 1, 1]
+    end
+
+    test "an instance added with an element of its array var_output wired to an element of " <>
+           "the held array, in both directions" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global lamps bool[2] at panel.q.0\nprogram m1 w with fast\n  m1.in pb\n"
+
+      original = held_plant(text <> "  m1.o lamps\n", %{"w" => @lamps_ld})
+      lit = String.replace(@dark_ld, "bool[2]", "bool[2] 1 1")
+
+      for {pb, dark, held} <- [{0, lit, 0}, {1, @dark_ld, 1}] do
+        candidate =
+          held_plant(text <> "program m2 s with fast\n  m2.in pb\n  m2.o[1] lamps[0]\n", %{
+            "w" => @lamps_ld,
+            "s" => dark
+          })
+
+        {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => pb})
+        {edit, forecast} = accepted(runtime, candidate)
+
+        assert forecast == [
+                 {:held, "lamps", [held, held]},
+                 {:holds, "m2.o[1]", held},
+                 {:instance_added, "m2", "s"}
+               ]
+
+        {_edit, runtime, ^forecast} = Edit.test(edit, runtime)
+        {outputs, _runtime} = under_test(runtime, 3, %{"pb" => 1 - pb})
+        assert Enum.uniq(outputs) == [%{"lamps[0]" => held, "lamps[1]" => held}]
+      end
+    end
+
+    @swapped """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at panel.q.0
+    var_global k2 bool at panel.q.1
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+      m1.aux k2
+    """
+
+    test "two connections swapped: the point the written var_output leaves is held by the " <>
+           "spare one, given back by an untest, kept by assemble" do
+      original = held_plant(@swapped, %{"motor" => @spare_ld})
+
+      candidate =
+        held_plant(
+          @swapped
+          |> String.replace("  m1.run k1\n  m1.aux k2\n", "  m1.run k2\n  m1.aux k1\n"),
+          %{"motor" => @spare_ld}
+        )
+
+      # k1 runs at 0 with the button released, k2 holds the spare's 1.
+      {runtime, %{"k1" => 0, "k2" => 1}, _} =
+        Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+
+      {edit, forecast} = accepted(runtime, candidate)
+      assert forecast == [{:held, "k1", 0}, {:holds, "m1.aux", 0}]
+      {edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, after_test} = under_test(tested, 3, %{"pb" => 1})
+      assert Enum.uniq(outputs) == [%{"k1" => 0, "k2" => 1}]
+
+      # Untest at once gives the spare back its 1, so the original's k2 keeps it, and the
+      # resource is as the test found it; after cycles under test it gives it back too.
+      {_edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:held, "k2", 1}, {:hold_undone, "m1.aux", 1}]
+      assert untested.instances["m1"].env == runtime.instances["m1"].env
+      {edit, untested, ^report} = Edit.untest(edit, after_test)
+      {outputs, untested} = under_test(untested, 2, %{"pb" => 0})
+      assert Enum.uniq(outputs) == [%{"k1" => 0, "k2" => 1}]
+
+      # Tested again and assembled: assemble writes nothing, and the point stays held.
+      {edit, tested, _} = Edit.test(edit, untested)
+      {_config, assembled, report} = Edit.assemble(edit, tested)
+      assert report == [{:held, "k1", 0}]
+      {outputs, _} = under_test(assembled, 3, %{"pb" => 1})
+      assert Enum.uniq(outputs) == [%{"k1" => 0, "k2" => 1}]
+    end
+
+    test "a restart since the switch makes what the var_output holds the restart's: the " <>
+           "untest gives nothing back" do
+      retained = String.replace(@spare_ld, "var_output aux", "var_output retain aux")
+      original = held_plant(@swapped, %{"motor" => retained})
+
+      candidate =
+        held_plant(String.replace(@swapped, "  m1.run k1\n  m1.aux k2\n", "  m1.aux k1\n"), %{
+          "motor" => retained
+        })
+
+      {runtime, %{"k1" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, [{:held, "k1", 0}, {:holds, "m1.aux", 0}]} = accepted(runtime, candidate)
+      {edit, tested, _} = Edit.test(edit, runtime)
+      assert {_edit, _, [{:hold_undone, "m1.aux", 1}]} = Edit.untest(edit, tested)
+
+      # A warm restart keeps the retained spare at the hold's 0, now the restart's.
+      restarted = Runtime.restart(tested, :warm)
+      assert restarted.instances["m1"].env["aux"] == 0
+      assert {_edit, _, []} = Edit.untest(edit, restarted)
+    end
+
+    test "a var_output whose type does not hold the global's value is left as it is " <>
+           "(provisional)" do
+      text =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global level dint\nprogram m1 big with fast\n  m1.start pb\n" <>
+          "  m1.level level\n"
+
+      big = "var_input start bool\nvar_output level dint\nxic start move 100000 level\n"
+      small = "var_input start bool\nvar_output small int\nvar x bool\nxic start ote x\n"
+      original = held_plant(text, %{"big" => big})
+
+      candidate =
+        held_plant(
+          "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+            "var_global level dint\nprogram m1 tiny with fast\n  m1.start pb\n" <>
+            "  m1.small level\n",
+          %{"tiny" => small}
+        )
+
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+      {_edit, forecast} = accepted(runtime, candidate)
+
+      assert forecast == [
+               {:held, "level", 100_000},
+               {:instance_added, "m1", "tiny"},
+               {:instance_stopped, "m1", "big"}
+             ]
+    end
+  end
+
+  # b5-config-edit-2: a report gives every array as a host is given one, a list, as `get/2`
+  # does, where until the review it gave a global array, and a tag a prune dropped, as the
+  # resource's tuple, mixed with lists in one report.
+  describe "a report's arrays are lists" do
+    test "a held global, a left var_external, a pruned global and a pruned tag, by edit " <>
+           "of a configuration and of a lone instance" do
+      {:ok, p1} =
+        Logex.compile(
+          "var_input in bool\nvar_output a int[3]\nvar_external h int[3]\nvar buf int[2] 3 4\n" <>
+            "xic in move 5 a[1]\nxic in move 6 h[2]\nxic in move 1 buf[0]\n",
+          name: "p"
+        )
+
+      {:ok, p2} =
+        Logex.compile(
+          "var_input in bool\nvar_output a int[3]\nvar h int[3]\nvar x bool\nxic in ote x\n",
+          name: "p"
+        )
+
+      head =
+        "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+          "var_global outa int[3]\nvar_global h int[3]\n"
+
+      original =
+        plant(
+          head <> "var_global xs int[2] 3 4\nprogram m1 p with fast\n  m1.in pb\n  m1.a outa\n",
+          %{
+            "p" => p1
+          }
+        )
+
+      candidate = plant(head <> "program m1 p with fast\n  m1.in pb\n", %{"p" => p2})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+      {edit, _} = accepted(runtime, candidate)
+      {edit, runtime, report} = Edit.test(edit, runtime)
+
+      assert report == [
+               {:added, "m1.x", 0},
+               {:held, "h", [0, 0, 6]},
+               {:held, "m1.a", [0, 5, 0]},
+               {:held, "outa", [0, 5, 0]},
+               {:left, "m1.h", [0, 0, 6]}
+             ]
+
+      {_config, _runtime, report} = Edit.assemble(edit, runtime)
+      assert {:pruned, "xs", [3, 4]} in report
+      assert {:pruned, "m1.buf", [1, 4]} in report
+
+      state = Runtime.instance(p1)
+      {_outputs, state} = Runtime.scan(p1, Runtime.put_inputs(p1, state, %{"in" => 1}))
+      {:ok, lone, _} = Logex.Edit.accept(p1, p2, state)
+      {lone, state, _} = Logex.Edit.test(lone, state)
+      {_program, _state, report} = Logex.Edit.assemble(lone, state)
+      assert {:pruned, "buf", [1, 4]} in report
+    end
+  end
+
   # Decision 96: a kept instance's member input that its program type's candidate version
   # writes no more keeps its value, and is reported by its path.
   describe "a member input no logic writes any more keeps its value, by path (decision 96)" do

@@ -1910,7 +1910,9 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:retain_added` | global | the value it holds | a switch | fact: nothing written; the next warm restart keeps it (decisions 278 and 302) |
 | `:retain_removed` | global | the value it holds | a switch | fact: nothing written; the next warm restart puts it back (decisions 278 and 302) |
 | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused (decision 66) | write |
-| `:held` | global | its value | every step | fact: nothing drives it any more (decision 20; decision 58) |
+| `:held` | global | its value, an array's as a list | every step | fact: nothing drives it any more (decision 20; decision 58) |
+| `:holds` | `instance.member` | the held global's value | a switch | write: a var_output no rung writes, wired to a global the step holds, started at the global's value, so that its copy-out holds the point (decision 347) |
+| `:hold_undone` | `instance.member` | the value it had | a switch | write: a var_output the edit's last switch started at a held global's value, still holding it with no restart since, given back (decision 347) |
 | `:interval` | task | `{old, new}` ms | a switch | fact |
 | `:next_due` | task | `{from, to}` ms | a switch | write: decision 40 |
 | `:priority` | task | `{old, new}` | a switch | fact |
@@ -1922,8 +1924,9 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 The writes a report lists, applied to the resource before its step, give the resource
 after it, exactly, with each instance's `switched` and block list as OE-1 states them and
 its `now` as decision 56 sets it, a first test's `:instance_pruned` and `:pruned` written
-before the rest (decision 66). `api_contract_test.exs`'s walk of a configuration's edit
-checks it.
+before the rest (decision 66), and since decision 347 a kept instance's `:hold_undone` and
+`:holds` written in the report's order, after its `:added`, and an added instance's after
+its `:instance_added`. `api_contract_test.exs`'s walk of a configuration's edit checks it.
 
 *Host mistakes* raise `ArgumentError`, each message pinned by a test. A step checks the
 edit, then the runtime, then that the edit is current, its generation first and then the

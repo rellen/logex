@@ -593,6 +593,70 @@ defmodule Logex.RunnerEditTest do
     end
   end
 
+  # Decision 347 through the runner: a held contactor a candidate wires to a var_output no
+  # rung writes stays where the forecast says, on the sim's own outputs, both ways
+  # (b5-config-edit-1's probe, held at 0 that came on, and held at 1 that went off).
+  describe "a held output through the runner (decision 347)" do
+    @motors """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at drive.q.0
+    var_global k2 bool at drive.q.1
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+    program m2 motor with fast
+      m2.start 0
+      m2.run k2
+    """
+
+    defp motors(text, spare) do
+      {:ok, config} =
+        Configuration.compile("plant", text, %{
+          "motor" =>
+            program(
+              "var_input start bool\nvar_output run bool\nvar_output aux bool #{spare}\n" <>
+                "xic start ote run\n",
+              "motor"
+            )
+        })
+
+      config
+    end
+
+    test "the forecast's held point keeps its value on the device under test" do
+      for {pb, spare} <- [{0, 1}, {1, 0}] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} =
+          started(motors(@motors, spare))
+
+        Sim.set(panel, [0], pb)
+        Manual.advance(clock, 30)
+        assert Sim.outputs(drive) == %{[0] => pb, [1] => 0}
+
+        candidate =
+          motors(
+            @motors
+            |> String.replace("  m1.run k1\n", "")
+            |> String.replace("  m2.run k2\n", "  m2.run k2\n  m2.aux k1\n"),
+            spare
+          )
+
+        assert {:ok, forecast} = Runner.accept(runner, candidate)
+        assert {:held, "k1", pb} in forecast
+        assert {:holds, "m2.aux", pb} in forecast
+        assert Runner.test(runner) == {:ok, forecast}
+
+        # The button released and pressed again: nothing drives k1, which holds.
+        Sim.set(panel, [0], 1 - pb)
+        Manual.advance(clock, 30)
+        Sim.set(panel, [0], pb)
+        Manual.advance(clock, 30)
+        assert Sim.outputs(drive) == %{[0] => pb, [1] => 0}
+        assert Runner.get(runner, "k1") == {:ok, pb}
+      end
+    end
+  end
+
   describe "accept's work, in the caller's process (decision 119)" do
     test "Logex.Configuration.Edit.accept/2 runs in the caller, the steps in the runner" do
       %{runner: runner} = started()
