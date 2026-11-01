@@ -1076,6 +1076,20 @@ defmodule Logex.Compiler do
        do:
          {first, member_bits(Map.get(tags, instance), {line, symbol}, {instance, member, bit}, d)}
 
+  # RV-2 (M1): so for a bit of a member of an element of an array of instances,
+  # `cl[1].pv.3` or `cl[i].pv.3`, in its scalar twin's words: the member is its element's
+  # instance's, which reads it, and the bit escaped every one-shot rule until then.
+  defp shared_bit(
+         {symbol, line, [{:bit, _, {:member, _, element, [member]}, _, _, bit} | _]},
+         {first, d},
+         tags
+       )
+       when symbol in @one_shots do
+    instance = element_name(element)
+    of = of_instances(Map.get(tags, elem(element, 2)), instance)
+    {first, member_bits(of, {line, symbol}, {instance, member, bit}, d)}
+  end
+
   # M3-1: a counter's `r` and `ld` are the first bool members logic may write, and neither
   # is a storage bit: the counter reads it as its input, and an online edit's block list
   # names a storage bit as a tag of the routine (decision 21).
@@ -1148,6 +1162,28 @@ defmodule Logex.Compiler do
 
   defp own_pulse(
          [{:bit, _, {:element_at, _, _, index, _, _}, _, _, written}],
+         _tag,
+         {_bit, line, symbol, _storage},
+         diagnostics
+       ),
+       do: [diagnostic(line, subscripted_pulse(symbol, written, index)) | diagnostics]
+
+  # RV-2 (M2): so for a pulse bit in a member of an element a tag subscripts, `ta[i].r`,
+  # and in a bit of one, `ta[i].pv.3`: the member moves as the tag does, and a pulse left
+  # in the element it moved from stays there.
+  defp own_pulse(
+         [{:member, _, {:element_at, _, _, index, _, element}, members}],
+         _tag,
+         {_bit, line, symbol, _storage},
+         diagnostics
+       ),
+       do: [
+         diagnostic(line, subscripted_pulse(symbol, Enum.join([element | members], "."), index))
+         | diagnostics
+       ]
+
+  defp own_pulse(
+         [{:bit, _, {:member, _, {:element_at, _, _, index, _, _}, _}, _, _, written}],
          _tag,
          {_bit, line, symbol, _storage},
          diagnostics
