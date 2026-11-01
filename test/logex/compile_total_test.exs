@@ -565,6 +565,27 @@ defmodule Logex.CompileTotalTest do
       end
     end
 
+    # RV-2's review: the jump checks run over the lowered rungs, after this check, and find
+    # a mistake no write mends, so a rung they refuse is told both, as a provisional
+    # reading: a misplaced label, a second label and a label used twice.
+    test "a rung a jump check refuses is told it writes nothing too" do
+      for {source, lines} <- [
+            {"var a bool\nxic a lbl x\nxic a ote a", [{2, @idle}, {2, "`lbl x` is not first"}]},
+            {"var a bool\nlbl x lbl y\nxic a ote a", [{2, @idle}, {2, "`lbl y` is not first"}]},
+            {"var a bool\nxic a jmp done\nlbl done\nlbl done\nxic a ote a",
+             [{3, @idle}, {4, @idle}, {4, "`done` already labels the rung on line 3"}]}
+          ] do
+        assert {:error, diagnostics} = Logex.compile(source, name: "m"), source
+        assert length(diagnostics) == length(lines), source
+
+        for {%Diagnostic{line: line, message: message}, {at, start}} <-
+              Enum.zip(diagnostics, lines) do
+          assert line == at, source
+          assert String.starts_with?(message, start), "#{source}: #{message}"
+        end
+      end
+    end
+
     test "a rung of empty groups alone is cited at the first line it can stand on, after the last rung of a line" do
       assert compiled("( )") ==
                {:error,
@@ -604,6 +625,95 @@ defmodule Logex.CompileTotalTest do
 
       assert {:error, [%Diagnostic{line: 4, message: @idle}, %Diagnostic{line: 5}]} =
                block("function_block fb\n" <> head <> "( | xic a )\n( )\n( | ote b )", "fb")
+    end
+  end
+
+  # RV-2's review: decision 351's check walked a rung's instructions from its first until
+  # one did something, 12 reductions a rung of ten contacts, and Logex.Name.element/1 cost
+  # an element's name 15 to 18 reductions where Logex.Array.split/1 had cost 4, so that a
+  # program of arrays compiled up to 7.6% dearer than at `e365fa4`. A rung's last
+  # instruction is now looked at first, and an element's name read in one split. Each
+  # program here compiles within a bound a rung of what it did at `e365fa4`, whose compile
+  # and parse these are, measured in a process of its own with a heap the collector never
+  # visits, the least of three runs, on Elixir 1.20.4 and OTP 28; the parse is the same at
+  # both, so the parent's compile is restated as its ratio to the parse.
+  describe "the cost of RV-2's checks against the parent" do
+    test "a program compiles within a few reductions a rung of what it did at e365fa4" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+      rungs = fn rung -> Enum.map_join(1..200, "\n", fn _ -> rung end) end
+      seal = seal()
+
+      # {label, source, the parent's compile, its parse, the bound a rung}: 8 for a program
+      # of no arrays, decision 351's look at the last instruction and the lows' checks of a
+      # `cal`, and 16 for one of arrays, a reduction or two for each element's name more.
+      for {label, source, compiled_then, parsed_then, per_rung} <- [
+            {"ten contacts",
+             "var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
+               rungs.("xic a xio b xic a xio b xic a xio b xic a xio b xic a xio b ote q"),
+             710_150, 46_239, 8},
+            {"groups",
+             "var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
+               rungs.("( xic a | xio b | xic a xio b ) ote q"), 385_610, 28_013, 8},
+            {"jumps",
+             "var_input a bool\nvar_output q bool\n" <>
+               Enum.map_join(1..100, "\n", &"xic a jmp l#{&1}\nlbl l#{&1} xic a ote q"), 198_013,
+             12_519, 8},
+            {"blocks",
+             "var_input a bool\nvar_output q bool\n" <>
+               Enum.map_join(1..200, "\n", &"var s#{&1} seal") <>
+               "\n" <> Enum.map_join(1..200, "\n", &"cal s#{&1} a q"), 229_598, 19_132, 8},
+            {"bits",
+             "var_input a bool\nvar w word\nvar n int\nvar_output q bool\n" <>
+               rungs.("xic w.3 xio w.[n] ote w.4"), 309_678, 15_421, 8},
+            {"elements",
+             "var_input a bool\nvar e bool[8]\nvar i int\nvar_output q bool\n" <>
+               rungs.("xic e[1] xio e[i] ote q"), 280_354, 16_630, 16},
+            {"literal subscripts",
+             "var_input a bool\nvar e bool[8]\nvar g int[4,4]\nvar_output q bool\n" <>
+               rungs.("xic e[1] move g[1,2] g[3,3] ote q"), 408_696, 25_251, 16},
+            {"tag subscripts",
+             "var_input a bool\nvar e bool[8]\nvar i int\nvar j int\nvar g int[4,4]\n" <>
+               "var_output q bool\n" <> rungs.("xic e[i] move g[i,j] g[j,i] ote q"), 390_543,
+             19_334, 16},
+            {"an array of timers",
+             "var_input a bool\nvar t ton[200]\nvar_output q bool\n" <>
+               Enum.map_join(0..199, "\n", &"xic a ton t[#{&1}] 5") <>
+               "\n" <> rungs.("xic t[3].dn ote q"), 450_799, 27_096, 16}
+          ] do
+        assert {:ok, %Logex.Program{}} = Logex.compile(source, name: "p", types: [seal]), label
+        compiled = least.(fn -> Logex.compile(source, name: "p", types: [seal]) end)
+
+        parsed =
+          least.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        at_parent = div(compiled_then * parsed, parsed_then)
+
+        assert compiled - at_parent <= per_rung * 200,
+               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
+                 "at e365fa4, #{Float.round((compiled - at_parent) / 200, 1)} a rung"
+      end
     end
   end
 

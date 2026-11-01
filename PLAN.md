@@ -11679,9 +11679,14 @@ and CI checked; each fix with a test that fails when it is reverted.
     cuts read through it. The compiler's operand path still splits a name at `.` and tells
     each part's shape by its last byte in a clause's guard, as it did: a full walk of each
     name's bytes would have cost every operand of every program, and the per-part readers
-    close the class, since the crashes came from a part reader given a whole name. A
-    program of no arrays compiles in exactly the reductions it did (the six programs of
-    `bit_string_test.exs`'s M5-8 bound measured at the parent and at the tip).
+    close the class, since the crashes came from a part reader given a whole name. Since
+    RV-2's review `element/1` reads an element's name in one split, a reduction or two
+    dearer than `Logex.Array.split/1`, where its first form cost 15 to 18 reductions to
+    split/1's 4 and made a program of arrays up to 7.6% dearer to compile; a program
+    compiles within 8 reductions a rung of what it did at `e365fa4`, one of arrays within
+    16 (the most measured 13, a rung of three elements subscripted by tags, 0.7%), pinned
+    in `compile_total_test.exs` ("the cost of RV-2's checks against the parent"), and every
+    program scans in exactly the reductions it did.
   - *M13* (`compile_total_test.exs`): a bit number past its word's bits is judged before
     its mask 2^n is made; a number is at most 10,000 characters and a real's exponent at
     most 9,999 (provisional, `Logex.Lexer.longest_number/0` and `largest_exponent/0`), a
@@ -11698,10 +11703,16 @@ and CI checked; each fix with a test that fails when it is reverted.
     initial list, told it comes straight after the section word, the line read without it.
   - *Decision 351* (`compile_total_test.exs`, "a rung that writes nothing"): a rung no
     instruction of which writes a tag, a member, a bit or a storage bit or runs an
-    instance, with no `jmp`, refused at its line, told that a newline ends a rung; looked
-    at in order until an instruction does something, about 2 reductions a rung; a rung
-    refused already is not told this too. A label alone is such a rung, as in Logix,
-    whose LBL needs an output after it on its rung: the test programs that ended in
+    instance, with no `jmp`, refused at its line, told that a newline ends a rung; its
+    last instruction looked at first, which does something in a rung of Logix's shape, so
+    that most rungs cost one clause however long, about 2 reductions a rung (since RV-2's
+    review, where a walk from its first instruction cost 12 a rung of ten contacts), and
+    any other rung's instructions in order until one does something. A rung refused for a
+    mistake found as it is lowered, an unknown instruction, a `cal` that runs nothing or
+    an operand missing, any of which may be the write it lacks, is not told this too; one
+    a jump check refuses, a label not first or used twice, which no write mends, is told
+    both (since RV-2's review, which found the first wording claimed both; provisional).
+    A label alone is such a rung, as in Logix, whose LBL needs an output after it on its rung: the test programs that ended in
     `lbl done` alone now end `lbl done ote landed`, and every other program the rule
     refuses was adapted keeping its intent (the commit lists them). The front end's
     golden record did not move; no README example held such a rung.
