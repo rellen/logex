@@ -15,7 +15,8 @@ defmodule Logex.ReadmeTest.Examples do
   # The files README describes in its prose rather than shows, each made from a file it
   # shows, by replacing text, beside the words of README that describe it, which the test
   # finds there. `wired.logex` is `tally.logex` without its comment line, which puts the
-  # connection its warning cites on line 7, as README prints it.
+  # connection its warning cites on line 7, as README prints it (provisional: README does
+  # not say the comment goes).
   @derived [
     {"wired.logex", "tally.logex", :uncommented,
      [
@@ -45,8 +46,8 @@ defmodule Logex.ReadmeTest.Examples do
   }
 
   # The `elixir` blocks README shows that no `$ mix run` follows, each by its first line:
-  # fragments of prose, which the suite parses and does not run. Every other `elixir`
-  # block is an example's script.
+  # fragments of prose, which the suite parses and does not run (provisional: README shows
+  # no output to compare). Every other `elixir` block is an example's script.
   @fragments [
     # "Running a plant on the clock": a call made from another process while the clock is
     # moved on, which needs a round owed after a slow write to show its wait.
@@ -55,7 +56,7 @@ defmodule Logex.ReadmeTest.Examples do
 
   # The lines of a script's output that README says are this run's alone, compared by
   # their beginning: "The keyword list is the same on every run; the figures are this
-  # run's".
+  # run's" (provisional: no figure is held to a range).
   @varies %{"on_the_real_clock.exs" => "this run's figures: "}
 
   def readme, do: File.read!(@readme)

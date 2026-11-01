@@ -11631,6 +11631,24 @@ and CI checked; each fix with a test that fails when it is reverted.
   `lib/logex/name.ex` and `test/logex/compile_total_test.exs` each owe CLAUDE.md a line,
   which `claude_md_test.exs` holds, and README's sentence that a rung writing nothing
   compiles today goes with decision 351's landing.)*
+
+  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
+  Logix say nothing of a project's documents, and no plant runs differently under any
+  option. (1) CLAUDE.md's cap is 40,000 characters, the figure of Claude Code's own
+  warning, CLAUDE.md 22,939 now; a tighter cap, or one in lines, are the others.
+  (2) The README test runs in the default suite, the 2 s real-clock example among them,
+  about 6 s more a run (50 runs under a busy loop a core all green); a tag CI alone runs,
+  or the default suite without the real-clock example, are the others. (3) `wired.logex`
+  is `tally.logex` without its comment line, so README's warning cites line 7, which
+  README does not say; showing `wired.logex` as a block of its own is the other. (4) The
+  real-clock example's figures line is compared by its beginning alone; holding each
+  figure to a range, which would see a runner that stalls, is the other. (5) README's one
+  fragment, the call from another process in "Running a plant on the clock", is parsed
+  and not run; running it in a setup the test makes, a round owed after a slow write, or
+  showing it in README as an example with its output, are the others. (6) A work item's
+  label or a commit anywhere in CLAUDE.md is history, "`ctu` counts boxes (M3-1)" among
+  it; letting a label stand as a pointer into this file, which no check can tell from
+  history, is the other.
 - **RV-2 — the compiler** (decision 351). Every source text `Logex.compile/2` raises on
   given a diagnostic (H5's six roots, by one parsed-name structure the readers of a
   lexed name share, and M13's huge numbers); a one-shot's storage bit and a pulse bit in
