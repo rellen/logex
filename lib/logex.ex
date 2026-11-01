@@ -307,7 +307,7 @@ defmodule Logex do
     Enum.uniq_by(words, &elem(&1, 0))
   end
 
-  defp unsized(word), do: hd(:binary.split(word, "["))
+  defp unsized(word), do: Logex.Name.base(word)
 
   defp dependency({word, line}, acc, {path, held}) do
     file = Path.join(Path.dirname(path), word <> ".ld")

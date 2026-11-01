@@ -94,6 +94,10 @@ own documentation holds:
   names and a host's list form, the one place they are read and made.
 - `lib/logex/real.ex` — `Logex.Real`, internal: the one place a real's value is made,
   read, rounded and spelled.
+- `lib/logex/name.ex` — `Logex.Name`, internal: the one reading of a lexed name's parts,
+  an element's word and subscripts (`element/1`), a subscript (`subscript/1`), a bit number
+  in brackets (`bracketed/1`), a type word's base (`base/1`) and a host key's word
+  (`word/1`), each total on a text.
 - `lib/logex/runtime.ex` — `Logex.Runtime`, the core: a program run as an instance
   (`instance/1,2`, `call/4`, `put_inputs/3`, `scan/2,3`, `restart/3`, `retained/2`) and a
   configuration as an opaque resource (`start/1,2`, `cycle/3`, `next_due_in/1`,
@@ -157,6 +161,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/instructionize_test.exs` — the compiler's stage on hand-typed input.
 - `test/logex/validation_test.exs` — every diagnostic and warning `instructionize/2`
   gives, from source.
+- `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
+  name readers, a number's bounds, a rung that writes nothing, the compile's cost against
+  recorded figures, and a seeded mutation walk that nothing escapes.
 - `test/logex/diagnostic_test.exs` — what each stage stamps on a diagnostic, and
   `format/1`.
 - `test/logex/naming_test.exs` — every mnemonic and keyword has its `docs/naming.md`

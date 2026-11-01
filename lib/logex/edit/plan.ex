@@ -1151,11 +1151,11 @@ defmodule Logex.Edit.Plan do
 
   # M5-11: an element kept as a storage bit, `edge[2]` or `s1.edge[2]`, is its value.
   defp path_at(%{} = map, [key]) when binary_part(key, byte_size(key) - 1, 1) == "]",
-    do: element_at(Logex.Array.split(key), map)
+    do: element_at(Logex.Name.element(key), map)
 
   # M5-14: an element of an array of instances on the way, `lane_c[1]` of `lane_c[1].r`.
   defp path_at(%{} = map, [key | path]) when is_element_key(key),
-    do: path_at(element_at(Logex.Array.split(key), map), path)
+    do: path_at(element_at(Logex.Name.element(key), map), path)
 
   defp path_at(%{} = map, [key | path]), do: path_at(Map.get(map, key, 0), path)
   # M5-8: a storage bit that is a bit of a word, `status.3`, is that bit's value.
@@ -1166,7 +1166,7 @@ defmodule Logex.Edit.Plan do
     do:
       element_value(
         Map.get(map, array),
-        Enum.map(subscripts, &elem(Logex.Array.subscript(&1), 1))
+        Enum.map(subscripts, &elem(Logex.Name.subscript(&1), 1))
       )
 
   defp element_value(value, index) when is_tuple(value), do: Logex.Array.fetch(value, index)
@@ -1473,8 +1473,8 @@ defmodule Logex.Edit.Plan do
   defp key_put(map, key, value), do: Map.put(map, key, value)
 
   defp element_key(key) do
-    {array, subscripts} = Logex.Array.split(key)
-    {array, Enum.map(subscripts, &elem(Logex.Array.subscript(&1), 1))}
+    {array, subscripts} = Logex.Name.element(key)
+    {array, Enum.map(subscripts, &elem(Logex.Name.subscript(&1), 1))}
   end
 
   defp element_fetch({:ok, {@opened, value, changes}}, index),
