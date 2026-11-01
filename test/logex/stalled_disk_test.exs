@@ -1,0 +1,292 @@
+defmodule Logex.StalledDiskTest do
+  @moduledoc """
+  Decision 353 (RV-4): every file write the runner makes, a force's of the forces file and
+  the store's at a trip, a stop, a cold restart and a fresh start, is limited to the idle
+  watchdog and a poll period of real time, as the period's write is where the runner waits
+  on it (decision 275), and so is the forces file's read at a restart: one past it fails, a
+  force `{:error, {:forces, :timeout}}`, a store write reported as any failed write, and
+  the runner answers on. A stalled disk is acted out by the VM's file server held
+  (`:sys.suspend/1`), which every write's delete and rename and every read go through, so
+  that stop/2, restart/2, status/1 and force/3 are seen answering, the plant's outputs
+  0 through the trip as ever. And M10: each write's `.tmp` is its own, whatever stands at
+  it deleted first, so that a write killed inside a call of the file system, which runs on
+  in the kernel after the kill, never writes into the next write's file. Not async: the
+  file server is the VM's, and a test holds it.
+  """
+  use ExUnit.Case, async: false
+
+  @moduletag :tmp_dir
+  @moduletag capture_log: true
+
+  alias Logex.{Configuration, Runner}
+  alias Logex.IO.Sim
+  alias Logex.Runner.Clock.Manual
+
+  # A box counter: a retained count of the eye's rises, and its lamp at the panel.
+  @tally """
+  var_input eye bool
+  var_output lamp bool
+  var retain boxes ctu
+
+  xic eye ctu boxes 1000
+  xic eye ote lamp
+  """
+
+  @plant """
+  task fast interval 10 priority 1
+  var_global eye_1 bool at panel.i.0
+  var_global level dint at panel.i.1
+  var_global lamp_q bool at panel.q.0
+  var_global retain total dint 0
+
+  program t1 tally with fast
+    t1.eye eye_1
+    t1.lamp lamp_q
+  """
+
+  # Every write's limit, the idle watchdog and a poll period: 110 ms of real time.
+  @idle 100
+  @poll 10
+
+  defp configured do
+    {:ok, tally} = Logex.compile(@tally, name: "tally")
+    {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+    config
+  end
+
+  defp rig(dir, extra \\ []) do
+    {:ok, clock} = Manual.start_link()
+    {:ok, panel} = Sim.start_link(clock: clock)
+    store = Path.join(dir, "plant.retain")
+    forces = Path.join(dir, "plant.forces")
+
+    opts =
+      Keyword.merge(
+        [
+          configuration: configured(),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          idle: @idle,
+          poll: @poll,
+          retain: store,
+          forces: forces,
+          retain_period: 3_600_000
+        ],
+        extra
+      )
+
+    %{opts: opts, clock: clock, panel: panel, store: store, forces: forces}
+  end
+
+  defp eye(%{panel: panel, clock: clock}, eye) do
+    Sim.set(panel, [0], eye)
+    Manual.advance(clock, 10)
+  end
+
+  # The VM's file server held, as a stalled disk holds every call of the file system made
+  # through it; let go when the test ends whatever comes, since every file call waits on
+  # it meanwhile.
+  defp held do
+    server = Process.whereis(:file_server_2)
+    :sys.suspend(server)
+    on_exit(fn -> :sys.resume(server) end)
+    server
+  end
+
+  defp caller_alive?({:"$gen_call", {pid, _tag}, _request}) when is_pid(pid),
+    do: Process.alive?(pid)
+
+  defp caller_alive?(_message), do: false
+
+  defp timed(fun) do
+    {us, result} = :timer.tc(fun)
+    {div(us, 1000), result}
+  end
+
+  # A call that does not hang answers within a few of its limits; one that hangs, as every
+  # call did on a stalled disk before decision 353, never does.
+  @answers 2000
+
+  describe "a stalled disk (decision 353)" do
+    test "a force whose write does not end within its limit is {:error, {:forces, :timeout}}, " <>
+           "nothing forced, and the runner answers on",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      server = held()
+
+      {took, answer} = timed(fn -> Runner.force(runner, "eye_1", 1) end)
+      assert answer == {:error, {:forces, :timeout}}
+      assert took >= @idle + @poll and took < @answers
+
+      # The write past its limit was killed, its call of the file system left to the disk:
+      # nothing that waits on the file server is alive to write on once the disk is back.
+      assert {:messages, [_ | _] = waiting} = Process.info(server, :messages)
+      refute Enum.any?(waiting, &caller_alive?/1)
+
+      assert %{status: :running, forces: %{"level" => 7}} = Runner.status(runner)
+      eye(rig, 0)
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+
+      # The disk back, the next force writes the whole set.
+      :sys.resume(server)
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a trip's write is reported :timeout, and status/1, restart/2 and stop/2 answer",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1)
+      eye(rig, 0)
+      written = File.read!(rig.store)
+      server = held()
+
+      # The panel's notice trips the runner as it next runs; the trip's write, after the
+      # zeros, waits its limit on the disk and is reported.
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, @answers
+      assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
+      assert %{status: :tripped, retain: %{failed: :timeout}} = Runner.status(runner)
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+
+      # A restart reads the forces file first, its read limited as a write is.
+      {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
+      assert answer == {:error, {:forces, :timeout}}
+      assert took < @answers
+      assert %{status: :tripped} = Runner.status(runner)
+
+      # The stop's write times out too, and the stop says so, the runner gone.
+      {took, answer} = timed(fn -> Runner.stop(runner) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took < @answers
+      refute Process.alive?(runner)
+
+      :sys.resume(server)
+      assert File.read!(rig.store) == written
+    end
+
+    test "a cold restart's write is {:error, {:retain, :timeout}}, the runner tripped as it " <>
+           "was, and a warm one, which writes nothing, restarts",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner)
+      eye(rig, 1)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: trip} = Runner.status(runner)
+      server = held()
+
+      {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took < @answers
+      assert %{status: :tripped, trip: ^trip, retain: %{failed: :timeout}} = Runner.status(runner)
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running} = Runner.status(runner)
+      assert Runner.get!(runner, "t1.boxes.cv") == 1
+
+      :sys.resume(server)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a stop waits on a period's write in progress and on its own each within its limit",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain_period: 100)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      server = held()
+
+      # The period's write at 100 waits on the disk; the plant runs on meanwhile.
+      Manual.advance(rig.clock, 100)
+      eye(rig, 0)
+      eye(rig, 1)
+      assert Runner.get!(runner, "t1.boxes.cv") == 2
+
+      {took, answer} = timed(fn -> Runner.stop(runner) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= 2 * (@idle + @poll) and took < 2 * @answers
+      assert Sim.closed?(rig.panel)
+      :sys.resume(server)
+    end
+
+    test "a fresh start's write, start: :cold, is {:error, {:retain, :timeout}}, nothing " <>
+           "started",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil, start: :cold)
+      server = held()
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took < @answers
+      assert Sim.reads(rig.panel) == 0
+      :sys.resume(server)
+    end
+  end
+
+  describe "each write's `.tmp` its own (M10)" do
+    # A write killed inside a call of the file system runs that call on after the kill;
+    # here the test's own open of a file at the store's `.tmp` stands in for such a
+    # write's, its descriptor still open on it. The runner's next write deletes it first
+    # and writes a file of its own, so the late write lands in a file no name reaches,
+    # never in the store; with one `.tmp` written through again it was the store's own.
+    test "a write's late call into an earlier `.tmp` never reaches the store",
+         %{tmp_dir: dir} do
+      for write <- [:stop, :trip] do
+        rig = rig(Path.join(dir, "#{write}"), forces: nil)
+        File.mkdir_p!(Path.dirname(rig.store))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        eye(rig, 1)
+        File.write!(rig.store <> ".tmp", "logex retain 1\n")
+        {:ok, late} = :file.open(rig.store <> ".tmp", [:read, :write, :raw, :binary])
+        eye(rig, 0)
+        eye(rig, 1)
+        written(write, rig, runner)
+        :ok = :file.pwrite(late, 0, "junk junk junk junk junk junk junk junk\n")
+        :ok = :file.close(late)
+
+        text = File.read!(rig.store)
+        assert text =~ ~r/\Alogex retain 1\nconfiguration plant written /
+        assert text =~ "t1.boxes.cv dint 2\n"
+        refute text =~ "junk"
+        refute File.exists?(rig.store <> ".tmp")
+        stopped(write, runner)
+      end
+    end
+
+    # Whatever stands at the `.tmp` is deleted, never written through: a link there no
+    # longer carries the store's text to the file it names.
+    test "a link at the store's `.tmp` is removed, the file it names untouched",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      victim = Path.join(dir, "victim")
+      File.write!(victim, "kept\n")
+      File.ln_s!(victim, rig.store <> ".tmp")
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      assert File.read!(victim) == "kept\n"
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
+      refute File.exists?(rig.store <> ".tmp")
+    end
+  end
+
+  # The write the test's late call races: a stop's, or a trip's, the runner then stopped
+  # once the store has been read.
+  defp written(:stop, _rig, runner), do: assert(Runner.stop(runner) == :ok)
+
+  defp written(:trip, rig, runner) do
+    Sim.fail(rig.panel, :read, {:error, :eio})
+    Manual.advance(rig.clock, 10)
+    assert %{status: :tripped, retain: %{failed: nil}} = Runner.status(runner)
+  end
+
+  defp stopped(:stop, _runner), do: :ok
+  defp stopped(:trip, runner), do: assert(Runner.stop(runner) == :ok)
+end

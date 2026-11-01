@@ -198,8 +198,16 @@ defmodule Logex.Runner do
     after the refusal's zeros (decision 317); and at a fresh start with `start: :cold`, or with no store file,
     in the caller, before any device is opened. Each is synchronous, written whole to
     `<path>.tmp` beside it, flushed and renamed over it, the forces file's rule, so that a
-    crash at any moment leaves the old store or the new. A write that fails leaves the
-    store as it was and is reported, `{:retain, {:error, reason}}` to the subscribers and
+    crash at any moment leaves the old store or the new; since decision 353 each is made
+    in a process of its own and limited to the idle watchdog and a poll period of real
+    time, as the period's write is where the runner waits on it, one the disk has not
+    finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
+    runner answering, its outputs 0 through the trip as ever; and since M10 each write's
+    `.tmp` is its own, whatever stands at `<path>.tmp` deleted first, a FIFO, a link or a
+    write's leftover, and the file made afresh, so that a write killed inside a call of
+    the file system, which runs on to its end in the kernel, never writes into the next
+    write's file: the store is the old or the new, never a mix (provisional). A write
+    that fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to the subscribers and
     `failed` in `status/1`'s `retain`: a trip stays a trip; a cold restart leaves the
     runner tripped as it was, every output still 0 and no device released or read, and
     answers `{:error, {:retain, reason}}`; a stop stops all the same and answers it; and
@@ -291,7 +299,12 @@ defmodule Logex.Runner do
   one force a line, `name value`, in name order, the empty file for none, written to
   `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any
   moment leaves the old set or the new; a write that fails changes nothing and gives
-  `{:error, {:forces, reason}}`. Every start reads it, `start_link/1` in the caller,
+  `{:error, {:forces, reason}}`, and since decision 353 one the disk has not finished
+  within the idle watchdog and a poll period of real time is killed and gives
+  `{:error, {:forces, :timeout}}`, the force not taken and the runner answering on: a
+  call the disk makes after the kill can still bring the file to the new set, the old or
+  the new, which a restart, reading the file as every start does, then takes, and
+  `status/1` lists (provisional). Every start reads it, `start_link/1` in the caller,
   after the configuration and the bindings, and `restart/2` before it releases anything,
   so that a runner killed while an input is forced, and started again from the same file,
   comes back with it forced and listed: a file that does not exist is no force; one that
@@ -533,8 +546,13 @@ defmodule Logex.Runner do
   defp begun(:ok, start, name), do: GenServer.start_link(__MODULE__, first_written(start), name)
   defp begun({:error, reason}, _start, _name), do: {:error, {:retain, reason}}
 
-  defp first_write(%{retain: %{path: path}, at: %DateTime{} = at, runtime: runtime}),
-    do: Logex.Retain.written(path, Logex.Retain.encode(Runtime.retained(runtime), at))
+  defp first_write(%{retain: %{path: path}, at: %DateTime{} = at, runtime: runtime} = start),
+    do:
+      Writer.written(
+        path,
+        Logex.Retain.encode(Runtime.retained(runtime), at),
+        start.idle + start.poll
+      )
 
   defp first_write(_start), do: :ok
 
@@ -632,7 +650,8 @@ defmodule Logex.Runner do
   round until it is unforced, across a restart and, kept in the forces file, across a
   crash and a fresh start (decisions 117 and 127): the whole set of forces is written to
   the file before it returns, `:ok`, or `{:error, {:forces, reason}}` where it cannot be,
-  the force not taken. A force that changes what an event task's trigger reads is a change
+  the force not taken, `{:error, {:forces, :timeout}}` where the disk has not finished
+  the write within the idle watchdog and a poll period of real time (decision 353). A force that changes what an event task's trigger reads is a change
   of it, and makes its round at once, before it returns (decisions 120 and 138). A runner started
   without `forces:`, an output point, a name that is no input point and a value that does
   not fit are the host's mistakes. Since decision 241 a located array of input points
@@ -728,7 +747,10 @@ defmodule Logex.Runner do
   whose read fails, the runner left tripped with its first reason and every device that
   answers written 0 once more (decisions 136 and 142); a runner that is running is the
   host's mistake (decision 133). It reads the forces file again first, as every start does
-  (decision 127): a force it cannot take is raised here, the runner left tripped. Since
+  (decision 127): a force it cannot take is raised here, the runner left tripped, and
+  since decision 353 a read the disk has not finished within the idle watchdog and a poll
+  period of real time answers `{:error, {:forces, :timeout}}`, the runner tripped as it
+  was (provisional). Since
   M6-5 a cold restart of a runner given `retain:` then writes its store, of the resource
   as it restarts it, before it releases or reads any device, so that a crash right after
   it brings back none of what it discarded (decisions 271 and 291): a write that fails
@@ -1041,11 +1063,12 @@ defmodule Logex.Runner do
 
   # A restart reads the forces file again, as every start does (decision 127): a force it
   # cannot take is raised in the caller, the runner left tripped; a point no longer forced
-  # reads its device's last value again.
-  defp serve({:restart, mode}, state) do
-    forces = read_forces(state.file, state)
-    restarting(cold_store(mode, state), mode, forces)
-  end
+  # reads its device's last value again. Since decision 353 the read is the runner's own
+  # file call, limited as its writes are: one not made within the idle watchdog and a poll
+  # period of real time answers `{:error, {:forces, :timeout}}`, the runner left tripped as
+  # it was (provisional).
+  defp serve({:restart, mode}, state),
+    do: restarting_with(forces_at_restart(state), mode, state)
 
   defp serve(other, _state),
     do:
@@ -1064,6 +1087,19 @@ defmodule Logex.Runner do
   defp cold_store(_mode, %{retain: nil} = state), do: {:ok, state}
   defp cold_store(:cold, state), do: kept_store(state, Runtime.restart(state.runtime, :cold))
   defp cold_store(:warm, state), do: {:ok, state}
+
+  defp forces_at_restart(%{file: nil}), do: {:ok, %{}}
+
+  defp forces_at_restart(%{file: path} = state),
+    do: forces_text(Writer.within(fn -> File.read(path) end, state.idle + state.poll), state)
+
+  defp forces_text({:error, :timeout}, _state), do: {:error, {:forces, :timeout}}
+  defp forces_text(read, state), do: {:ok, forces_read(read, state.file, state)}
+
+  defp restarting_with({:ok, forces}, mode, state),
+    do: restarting(cold_store(mode, state), mode, forces)
+
+  defp restarting_with(failed, _mode, state), do: {failed, state}
 
   defp restarting({{:error, _reason}, _state} = failed, _mode, _forces), do: failed
 
@@ -1313,7 +1349,7 @@ defmodule Logex.Runner do
   # unforced reads its device's last value again; each trigger whose reading changed makes
   # its own round (decision 120), in kicked/1.
   defp kept(state, forces, names),
-    do: taken(stored(state.file, forces, state.types), forces, names, state)
+    do: taken(stored(state, forces), forces, names, state)
 
   defp taken({:error, reason}, _forces, _names, state), do: {{:error, {:forces, reason}}, state}
 
@@ -1547,15 +1583,20 @@ defmodule Logex.Runner do
 
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
-  # the old set or the new (decision 127); a write that fails leaves the file as it was.
-  defp stored(path, forces, types),
+  # the old set or the new (decision 127); a write that fails leaves the file as it was, and
+  # since decision 353 one not made within the idle watchdog and a poll period of real time
+  # fails, `:timeout`, the runner answering on.
+  defp stored(%{file: path, types: types} = state, forces),
     do:
-      Logex.Retain.written(
+      Writer.written(
         path,
-        for(
-          {name, value} <- Enum.sort(forces),
-          do: [name, ?\s, spelled_force(Map.fetch!(types, name), value), ?\n]
-        )
+        IO.iodata_to_binary(
+          for(
+            {name, value} <- Enum.sort(forces),
+            do: [name, ?\s, spelled_force(Map.fetch!(types, name), value), ?\n]
+          )
+        ),
+        state.idle + state.poll
       )
 
   # M5-10 (decision 156): a real's value in the shortest text that reads back to it, a
@@ -2254,7 +2295,7 @@ defmodule Logex.Runner do
     state = drained_writer(state)
     at = wall(state.clock)
     text = Logex.Retain.encode(Runtime.retained(runtime), at)
-    noted(Logex.Retain.written(retain.path, text), at, state)
+    noted(Writer.written(retain.path, text, state.idle + state.poll), at, state)
   end
 
   defp noted(:ok, at, %{retain: retain} = state),

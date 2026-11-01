@@ -136,7 +136,8 @@ own documentation holds:
 - `lib/logex/runner/device.ex` — `Logex.Runner.Device`, internal: one bound device's
   process, its reads, writes again at every poll, latch and close.
 - `lib/logex/runner/writer.ex` — `Logex.Runner.Writer`, internal: the process that writes
-  the store every period.
+  the store every period, and every other file call of the runner's, each in a process of
+  its own limited to the idle watchdog and a poll period of real time.
 - `lib/logex/runner/clock.ex` — `Logex.Runner.Clock`, the clock behaviour the runner reads
   time through.
 - `lib/logex/runner/clock/monotonic.ex` — `Logex.Runner.Clock.Monotonic`, the machine's
@@ -220,6 +221,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   start.
 - `test/logex/retain_period_test.exs` — the store's periodic writer.
 - `test/logex/retain_edit_test.exs` — an online edit of a qualifier.
+- `test/logex/stalled_disk_test.exs` — every file write the runner makes on a stalled
+  disk, the file server held, and each write's `.tmp` its own.
 - `test/logex/clock_test.exs` — the two clocks.
 - `test/logex/io_test.exs` — `Logex.IO.Sim`, `Logex.IO.points/1` and `bind!/2`.
 - `test/logex/runner_test.exs` — the runner on the manual clock.

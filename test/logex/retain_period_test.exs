@@ -283,10 +283,12 @@ defmodule Logex.RetainPeriodTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # M6-6's review: a runner killed in the middle of a period's write, its writer
-    # writing the store's `.tmp`, which here is a pipe the test reads a little of, so that
-    # the writer is held inside its write; the writer goes down with its runner, the store
-    # is the last whole write, and a fresh start restores that.
+    # M6-6's review: a runner killed in the middle of a period's write, its writer held
+    # inside its write; the writer goes down with its runner, the store is the last whole
+    # write, and a fresh start restores that. The writer was held by a pipe at the store's
+    # `.tmp`, which since M10 (RV-4) its write deletes first, each write's `.tmp` its own:
+    # it is held now by the VM's file server held, its write's first call of the file
+    # system, the delete of the `.tmp`, waiting on it, as a stalled disk holds a write.
     test "a runner killed in the middle of a period's write restores the write before it",
          %{tmp_dir: dir} do
       text = String.replace(@tally, "var e bool\n", "var e bool\nvar retain big dint[20000]\n")
@@ -298,21 +300,17 @@ defmodule Logex.RetainPeriodTest do
       synced(runner)
       before = File.read!(rig.store)
       assert total(rig.store) == "1"
-      beside = rig.store <> ".tmp"
-      {_, 0} = System.cmd("mkfifo", [beside])
+      writer = writer(runner)
+      ref = Process.monitor(writer)
+      server = held_file_server()
       eye(rig, 0, 50)
       eye(rig, 1, 50)
       assert values(runner) == [2, 2, 1, 2]
-      writer = writer(runner)
-      ref = Process.monitor(writer)
-      {:ok, pipe} = :file.open(beside, [:read, :raw, :binary])
-      assert {:ok, "logex retain 1\n" <> _} = :file.read(pipe, 4096)
+      waits_on(server, writer)
       killed(runner)
-      :ok = :file.close(pipe)
       assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
+      :sys.resume(server)
       assert File.read!(rig.store) == before
-      # The writer may meet the pipe closed before its kill and drop the `.tmp` itself.
-      _ = File.rm(beside)
       opener_down(rig.panel)
 
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -503,6 +501,8 @@ defmodule Logex.RetainPeriodTest do
       assert values(runner) == [3, 3, 1, 3]
       Code.ensure_loaded!(Logex.Retain)
       assert :erlang.trace_pattern({Logex.Retain, :written, 2}, true, [:global]) == 1
+      # Decision 353: the runner's own write is Writer.written/3's, in a process of its own.
+      assert :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, true, [:global]) == 1
       :erlang.trace(writer, true, [:call])
       :erlang.trace(runner, true, [:call])
       stopping = Task.async(fn -> Runner.stop(runner) end)
@@ -512,6 +512,7 @@ defmodule Logex.RetainPeriodTest do
       :sys.resume(writer)
       assert Task.await(stopping) == :ok
       :erlang.trace_pattern({Logex.Retain, :written, 2}, false, [:global])
+      :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, false, [:global])
       assert writes_by() == [writer, runner]
       assert total(rig.store) == "3"
       refute Process.alive?(writer)
@@ -650,6 +651,8 @@ defmodule Logex.RetainPeriodTest do
       assert values(runner) == [3, 3, 1, 3]
       Code.ensure_loaded!(Logex.Retain)
       assert :erlang.trace_pattern({Logex.Retain, :written, 2}, true, [:global]) == 1
+      # Decision 353: the runner's own write is Writer.written/3's, in a process of its own.
+      assert :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, true, [:global]) == 1
       :erlang.trace(writer, true, [:call])
       :erlang.trace(runner, true, [:call])
 
@@ -664,6 +667,7 @@ defmodule Logex.RetainPeriodTest do
       _ = :sys.get_state(writer)
       _ = :sys.get_state(runner)
       :erlang.trace_pattern({Logex.Retain, :written, 2}, false, [:global])
+      :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, false, [:global])
       assert writes_by() == [writer, runner]
       assert total(rig.store) == "3"
       assert Runner.stop(runner) == :ok
@@ -749,10 +753,32 @@ defmodule Logex.RetainPeriodTest do
     end
   end
 
-  # The writes the trace saw, by the process that made each.
+  # The VM's file server held, as a stalled disk holds every call of the file system made
+  # through it, a write's delete and rename among them; let go when the test ends whatever
+  # comes, since every other file call waits on it meanwhile.
+  defp held_file_server do
+    server = Process.whereis(:file_server_2)
+    :sys.suspend(server)
+    on_exit(fn -> :sys.resume(server) end)
+    server
+  end
+
+  # Waits until a call of `pid`'s waits in the held file server's mailbox.
+  defp waits_on(server, pid), do: waiting_on(Process.info(server, :messages), server, pid)
+
+  defp waiting_on({:messages, messages}, server, pid),
+    do: wait_found(Enum.any?(messages, &match?({:"$gen_call", {^pid, _}, _}, &1)), server, pid)
+
+  defp wait_found(true, _server, _pid), do: :ok
+  defp wait_found(false, server, pid), do: waits_on(server, pid)
+
+  # The writes the trace saw, by the process that made each: the writer's through
+  # Logex.Retain.written/2, and since decision 353 the runner's own through
+  # Logex.Runner.Writer.written/3, which makes it in a process of its own.
   defp writes_by(acc \\ []) do
     receive do
       {:trace, pid, :call, {Logex.Retain, :written, _args}} -> writes_by([pid | acc])
+      {:trace, pid, :call, {Logex.Runner.Writer, :written, _args}} -> writes_by([pid | acc])
     after
       100 -> Enum.reverse(acc)
     end

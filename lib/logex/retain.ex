@@ -93,8 +93,21 @@ defmodule Logex.Retain do
   # the text written whole to `<path>.tmp` beside the file, flushed to the disk, closed and
   # renamed over it, so that a crash at any moment leaves the old file or the new; a write
   # that fails leaves the file as it was, `{:error, reason}`, its `.tmp` deleted.
+  #
+  # Each write's `.tmp` is its own (M10, RV-4): whatever stands at `<path>.tmp` is deleted
+  # first, a file a write killed earlier left there among it, and the file made afresh, a
+  # new one. A write the runner killed inside a call of the file system goes on to that
+  # call's end in the kernel after the kill, a process killed in a file's call being down
+  # at once while the call runs on, and then does nothing more: its file is unlinked by the
+  # next write's delete, or its delete or its rename, which the file server makes in the
+  # order asked, comes before the next write's, so that it never writes into the next
+  # write's file and the store is the old or the new, never a mix. A FIFO, a link or a
+  # leftover at `<path>.tmp` is removed, never written through; a directory there is not,
+  # and the write fails, `:eisdir`. (Provisional: a unique name a write, which the review
+  # suggested, would leave each killed write's file beside the store.)
   def written(path, text) do
     beside = path <> ".tmp"
+    _ = :file.delete(beside)
     renamed(written_out(:file.open(beside, [:write, :raw, :binary]), text), beside, path)
   end
 

@@ -3338,8 +3338,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   (decisions 316 and 328); and at a fresh start with `start: :cold`, or
   with no store file, before any device is opened (decisions 271 and 291). Each write goes
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
-  file is, so that a crash at any moment leaves the old store or the new. A write that
-  fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
+  file is, so that a crash at any moment leaves the old store or the new; whatever stands
+  at `tally.retain.tmp` is deleted first, so that each write's file is its own; and each
+  is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
+  the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
+  leaves the runner answering (decision 353). A write that fails leaves the store as it
+  was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
@@ -4036,7 +4040,9 @@ stage: nil
   the runner keeps for each input point.
 - Each force and unforce writes the whole set to the file before it returns, `name
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
-  the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`. A
+  the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
+  one the disk has not finished within the idle watchdog and a poll period of real time
+  `{:error, {:forces, :timeout}}` (decision 353). A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
@@ -4894,7 +4900,10 @@ in every cycle's outputs at the value it holds.
   the last good write while they fail, and what an edit stepped while tripped changed.
   Each write is synced and renamed over the store, the rename not itself made durable,
   so on some file systems a power failure just after a write may bring back the write
-  before it ("The store on disk", above). A retained value is no safety memory: a
+  before it ("The store on disk", above); and each write the runner makes at an event, a
+  force's among them, is given the idle watchdog and a poll period of real time, so a
+  disk slower than that fails every one of them, the plant running on with its store
+  behind, and one the disk finishes after the runner gave up on it may still land. A retained value is no safety memory: a
   burner's lockout, a latch a guard's opening set or a count of trips must not be kept in
   logex, whose store a person can edit, a cold start discards and a crash may set back.
 - **Not a guard against what a warm start switches on.** No output is kept: every output
