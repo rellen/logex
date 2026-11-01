@@ -2419,7 +2419,10 @@ defmodule Logex.ApiContractTest do
     :overlap_under_single,
     :tie_event_periodic,
     # M5-8: a word's bit read through a connection, at a point or not.
-    :word_bit
+    :word_bit,
+    # Decision 350: a round cut after its first step, as a trip cuts it, keeping back the
+    # rise of a task whose step it did not run.
+    :cut_rise_kept
   ]
 
   # The program types a configuration of the walk draws from: a contact, a latch, a timer
@@ -2848,6 +2851,7 @@ defmodule Logex.ApiContractTest do
        ) do
     before = model
     refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
+    cut!(config, {runtime, elapsed, inputs}, Process.get(:config_samples, %{}))
     samples!(config, runtime, inputs, events)
 
     {model, expected_outputs, expected_events} =
@@ -2965,6 +2969,32 @@ defmodule Logex.ApiContractTest do
 
   defp single_ran!(nil, runs, edge?), do: assert(runs == bit(edge?))
   defp single_ran!(_interval, _runs, _edge?), do: nil
+
+  # Decision 350, restated from the triggers' samples alone: the same cycle cut after its
+  # first step, as a trip at that step's end cuts a round, beside the walk. Each task with
+  # a single keeps its last sample as it was where its sample is a rise and its step is not
+  # the one run, and takes its sample otherwise.
+  defp cut!(config, {runtime, elapsed, inputs}, seen) do
+    {cut, steps} = Runtime.cycle_steps(runtime, elapsed, inputs)
+    cut_after(steps, cut, {config, runtime, inputs, seen})
+  end
+
+  defp cut_after([{_kind, first, _run} = step, _ | _], cut, {config, runtime, inputs, seen}) do
+    {partial, _events} = Runtime.cycle_step(cut, step)
+
+    for task <- config.tasks, task.single != nil do
+      sample = Map.get(inputs, task.single, Runtime.get!(runtime, task.single))
+      last = Map.get(seen, task.name, 0)
+      kept = {last, sample} == {0, 1} and task.name != first
+      assert partial.tasks[task.name].last == cut_last(kept, last, sample), task.name
+      config_reach(:cut_rise_kept, kept)
+    end
+  end
+
+  defp cut_after(_steps, _cut, _at), do: :ok
+
+  defp cut_last(true, last, _sample), do: last
+  defp cut_last(false, _last, sample), do: sample
 
   defp samples!(config, runtime, inputs, events) do
     seen = Process.get(:config_samples, %{})
@@ -13861,7 +13891,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # count the store holds as unretained (decision 277).
     :keep_requalified,
     :original_after_crash,
-    :store_unretained
+    :store_unretained,
+    # Decision 350: the trigger `g`'s rise standing once `l`'s step has run.
+    :rise_stood_at_step
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14528,6 +14560,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
     reach(:trip, true)
     reach(trip_kind(reason), true)
+    reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
     w = all_steps(round.steps, w, round.took)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end
@@ -15189,7 +15222,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_trigger_kept,
     :life_latest_wins,
     :life_leaf_kept,
-    :life_changed_store
+    :life_changed_store,
+    # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
+    # `l`'s step, its last sample, a store's `trigger` line, as it was.
+    :rise_kept_by_trip
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -15973,10 +16009,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {cycled, outputs, events} = Runtime.cycle(w.rt, elapsed, inputs)
     reach(:"round_#{kind}", true)
     reach({:trigger_round, w.doing || :poll}, kind == :trigger)
+    {g_sample, g_rise} = g_sampled(w.g_sample, Runtime.get!(w.rt, "g"), w.draws.running.logic)
 
     %{
       w
-      | g_sample: Runtime.get!(w.rt, "g"),
+      | g_sample: g_sample,
         logical: w.logical + elapsed,
         begun: w.begun + 1,
         round: %{
@@ -15990,7 +16027,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
           cycled: cycled,
           outputs: outputs,
           expected: events,
-          trip: nil
+          trip: nil,
+          g_rise: g_rise
         }
     }
   end
@@ -16020,7 +16058,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     %{
       w
-      | longest: Map.update(w.longest, task, ms, &max(&1, ms)),
+      | g_sample: g_stood(task, round.g_rise, w.g_sample),
+        longest: Map.update(w.longest, task, ms, &max(&1, ms)),
         round: %{
           round
           | rt: rt,
@@ -16032,6 +16071,19 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         }
     }
   end
+
+  # Decision 350, restated: the trigger `g`'s sample as a round begins, the one its task `l`
+  # reads, stands as its last at once, but a rise, which makes `l` run, only once `l`'s
+  # step has run; a round a trip stops before it keeps the last sample as it was.
+  defp g_sampled(0, 1, logic) when logic != nil, do: {0, true}
+  defp g_sampled(_last, sample, _logic), do: {sample, false}
+
+  defp g_stood("l", true, _sample) do
+    reach(:rise_stood_at_step, true)
+    1
+  end
+
+  defp g_stood(_task, _rise, sample), do: sample
 
   # M5-9, restated (decisions 153 and 160): a step whose run met a major fault trips at its
   # end, for the first, before any later step of its round and before a watchdog.
@@ -16063,6 +16115,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert reason == expected, "tripped #{inspect(reason)}, the rules give #{inspect(expected)}"
     reach(:trip, true)
     reach(trip_kind(reason), true)
+    reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
     w = all_steps(round.steps, w, round.took)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end

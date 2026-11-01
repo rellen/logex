@@ -1492,6 +1492,51 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rise stands as its task's last
+  # sample only once the step that runs the task has run, so a round stopped after an
+  # earlier step, as the runner stops one a major fault trips, leaves it as it was, in the
+  # resource and in its retained image, and the task runs on the next cycle that samples
+  # the rise, a warm restart's first; every other sample stands at once.
+  describe "a trigger's sample after its task's step (decision 350)" do
+    @handler "var_external hits dint\nvar_external arm bool\nadd hits 1 hits\notu arm"
+
+    defp armed_plant do
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\ntask ev single arm priority 5\n" <>
+            "var_global eye bool at panel.i.0\nvar_global retain arm bool\n" <>
+            "var_global retain hits dint\nvar_global lamp bool at panel.q.0\n" <>
+            "program r relay with fast\n  r.in eye\n  r.out lamp\nprogram h handler with ev\n",
+          %{"relay" => program(@relay, "relay"), "handler" => program(@handler, "handler")}
+        )
+
+      config
+    end
+
+    test "a round stopped before the event task's step keeps the rise for the next cycle" do
+      runtime = Runtime.start(armed_plant())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{})
+      # Logic outside the plant latches `arm`: the next cycle samples its rise.
+      runtime = %{runtime | globals: %{runtime.globals | "arm" => 1}}
+      {cut, steps} = Runtime.cycle_steps(runtime, 10, %{})
+      assert [{:timed, "fast", _}, {:timed, "ev", _}] = steps
+      {cut, _events} = Runtime.cycle_step(cut, hd(steps))
+      assert cut.tasks["ev"].last == 0
+      assert Runtime.retained(cut).triggers == %{"arm" => 0}
+
+      # The whole cycle takes it, as before.
+      {whole, _, events} = Runtime.cycle(runtime, 10, %{})
+      assert {:ran, "ev", "h", 10} in events
+      assert whole.tasks["ev"].last == 1
+
+      # A warm restart of the stopped round runs the handler in its first cycle.
+      {restarted, _, events} = Runtime.cycle(Runtime.restart(cut, :warm), 0, %{})
+      assert {:ran, "ev", "h", 10} in events
+      assert Runtime.get!(restarted, "hits") == 1 and Runtime.get!(restarted, "arm") == 0
+    end
+  end
+
   describe "growth" do
     # A cycle of n instances, each on a task of its own, all due, each copying an input
     # point in and an output point out. Counted in reductions, the least of three.

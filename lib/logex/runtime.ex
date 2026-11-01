@@ -193,7 +193,12 @@ defmodule Logex.Runtime do
     sampled at 1 fires on no rising edge (decision 274) and a rise logic wrote after the
     sample fires once, and since M6-4 `start/2`'s for a `single` the image put back, the
     sample the image holds for it (decision 313), every other 0; and a cycle
-    samples it once, after the input merge and before any scan. An edit's switch keeps it, so a
+    samples it once, after the input merge and before any scan, the sample standing as
+    its last at once, but since decision 350 a rise, which runs the task, only with the
+    step that runs it (`cycle_step/2`), so a round the runner's trip stops before that
+    step leaves it as it was, in the resource and in its retained image, and the task runs
+    on the next cycle that samples the rise; a cycle, which runs every step, ends as it
+    did. An edit's switch keeps it, so a
     switch fires no event, and its accept refuses a changed `single`, or an `interval`
     added to or removed from a task with one, while the plant runs (§4.9);
   - the generation (OE-2), the count of the configuration edits' steps taken on the
@@ -994,11 +999,15 @@ defmodule Logex.Runtime do
     runtime = %{runtime | now: now + elapsed, globals: image!(runtime, inputs)}
     {runtime, due} = due(runtime)
 
-    {runtime,
-     Enum.map(due, fn {name, _trigger, _priority, _index, _instances} = task ->
-       {:timed, name, task}
-     end) ++ untimed_step(runtime.wiring.untimed)}
+    {runtime, Enum.map(due, &timed_step/1) ++ untimed_step(runtime.wiring.untimed)}
   end
+
+  # A due task's step, an edge's run carrying its trigger's sample (decision 350).
+  defp timed_step({name, _trigger, _priority, _index, _instances} = task),
+    do: {:timed, name, task}
+
+  defp timed_step({name, _trigger, _priority, _index, _instances, _sample} = task),
+    do: {:timed, name, task}
 
   defp untimed_step({_task, []}), do: []
   defp untimed_step({task, instances}), do: [{:untimed, task, instances}]
@@ -2942,11 +2951,22 @@ defmodule Logex.Runtime do
   # being seen in this cycle; a periodic run's is its due time. A task with both that
   # samples 1 skips the due times that have come, moving its next one past `now` on its
   # phase, and counts none of them (decisions 39 and 51).
+  #
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rising edge, the sample that
+  # makes its task run, stands as its last sample only once the step that runs the task
+  # has run, the step carrying it, so that a round a trip stops before that step leaves the
+  # last sample as it was and the task runs on the next cycle that samples the rise, a warm
+  # restart's first among them (decisions 305 and 313), where until then every sample stood
+  # before any step ran. Every other sample stands at once, a fall's and a periodic run's
+  # among them (provisional for a task with an interval too, whose periodic run while its
+  # trigger samples 0 holds nothing back): holding a 0 back would lose the next rise.
   defp due(%__MODULE__{now: now, globals: globals, tasks: states, wiring: %{tasks: tasks}} = rt) do
     {due, states} =
       Enum.flat_map_reduce(tasks, states, fn {name, trigger, priority, index, _} = task, states ->
-        {plan, state} = plan(trigger, sample(trigger, globals), Map.fetch!(states, name), now)
-        {for(at <- plan, do: {{priority, at, index}, task}), Map.put(states, name, state)}
+        {runs, state} =
+          plan(trigger, sample(trigger, globals), Map.fetch!(states, name), {now, task})
+
+        {for({at, run} <- runs, do: {{priority, at, index}, run}), Map.put(states, name, state)}
       end)
 
     {%{rt | tasks: states}, due |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))}
@@ -2955,35 +2975,42 @@ defmodule Logex.Runtime do
   defp sample({nil, _interval}, _globals), do: nil
   defp sample({single, _interval}, globals), do: Map.fetch!(globals, single)
 
-  # What a task does in this cycle: `{[due time], state}` when it runs, `{[], state}`
-  # when not, its trigger's last sample kept.
-  defp plan({nil, _interval}, nil, %{next_due: next} = state, now) when next <= now,
-    do: {[next], state}
-
-  defp plan({nil, _interval}, nil, state, _now), do: {[], state}
-
-  defp plan({_single, nil}, sample, %{last: last} = state, now),
-    do: {edge(last, sample, now), %{state | last: sample}}
-
-  defp plan({_single, interval}, sample, %{last: last, next_due: next} = state, now),
-    do: both(edge(last, sample, now), sample, {next, interval}, %{state | last: sample}, now)
-
-  defp edge(0, 1, now), do: [now]
-  defp edge(_last, _sample, _now), do: []
-
+  # What a task does in this cycle: `{[{due time, run}], state}` when it runs, `{[],
+  # state}` when not; an edge's run, a rise sampled where the last sample is 0, the task
+  # with the sample its step stands, every other run the task as the wiring holds it.
+  #
   # Decision 39: at most one run a cycle; on an edge, or while the trigger samples 0 and a
   # periodic due time has come. A due time that comes while it samples 1, an edge cycle's
   # among them, is skipped and not counted, the next on the same phase, so an edge run
   # does not move the phase; and one that came while the image held 1 runs in the cycle
   # that samples 0 (decision 52), since only the sample is known.
-  defp both([now], _sample, {next, interval}, state, now),
-    do: {[now], %{state | next_due: skipped(next, interval, now)}}
+  defp plan({nil, _interval}, nil, %{next_due: next} = state, {now, task}) when next <= now,
+    do: {[{next, task}], state}
 
-  defp both([], 1, {next, interval}, state, now),
-    do: {[], %{state | next_due: skipped(next, interval, now)}}
+  defp plan({nil, _interval}, nil, state, _at), do: {[], state}
 
-  defp both([], 0, {next, _interval}, state, now) when next <= now, do: {[next], state}
-  defp both([], 0, _due, state, _now), do: {[], state}
+  defp plan({_single, nil}, 1, %{last: 0} = state, {now, {name, trigger, priority, index, ins}}),
+    do: {[{now, {name, trigger, priority, index, ins, 1}}], state}
+
+  defp plan({_single, nil}, sample, state, _at), do: {[], %{state | last: sample}}
+
+  defp plan(
+         {_single, interval} = trigger,
+         1,
+         %{last: 0, next_due: next} = state,
+         {now, {name, trigger, priority, index, instances}}
+       ),
+       do:
+         {[{now, {name, trigger, priority, index, instances, 1}}],
+          %{state | next_due: skipped(next, interval, now)}}
+
+  defp plan({_single, interval}, 1, %{next_due: next} = state, {now, _task}),
+    do: {[], %{state | last: 1, next_due: skipped(next, interval, now)}}
+
+  defp plan({_single, _interval}, 0, %{next_due: next} = state, {now, task}) when next <= now,
+    do: {[{next, task}], %{state | last: 0}}
+
+  defp plan({_single, _interval}, 0, state, _at), do: {[], %{state | last: 0}}
 
   defp skipped(next, interval, now) when next <= now,
     do: next + (div(now - next, interval) + 1) * interval
@@ -2996,6 +3023,17 @@ defmodule Logex.Runtime do
   defp run_task({name, {_single, interval}, _priority, _index, instances}, {runtime, events}) do
     {missed, state} = periods(interval, Map.fetch!(runtime.tasks, name), runtime.now)
     runtime = %{runtime | tasks: Map.put(runtime.tasks, name, state)}
+    Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
+  end
+
+  # Decision 350: an edge's run, whose sample stands with its step, which nothing in the
+  # step reads: a round a trip stops before the step leaves it as it was.
+  defp run_task(
+         {name, {_single, interval}, _priority, _index, instances, sample},
+         {runtime, events}
+       ) do
+    {missed, state} = periods(interval, Map.fetch!(runtime.tasks, name), runtime.now)
+    runtime = %{runtime | tasks: Map.put(runtime.tasks, name, %{state | last: sample})}
     Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
   end
 

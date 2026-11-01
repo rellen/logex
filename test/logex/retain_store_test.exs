@@ -1550,6 +1550,81 @@ defmodule Logex.RetainStoreTest do
     end
   end
 
+  # Decision 350 (the maintainer, 2026-11-01): a trigger's rise stands as its last sample
+  # only once the step that runs its task has run, so a round a major fault in an earlier
+  # step trips leaves it as it was, in the resource and in the store, and the event task
+  # runs on the next cycle that samples the rise: a warm restart's first, and a fresh
+  # start's from the store, where until the review after Milestone 6 (b2-resource-1) the
+  # rise was taken and the handler never ran. A box is counted where the task runs, and it
+  # clears the latch.
+  describe "a trigger's rise a trip cut off (decision 350)" do
+    @arming "var_input eye bool\nvar_external arm bool\nxic eye otl arm"
+    @counting "var_external hits dint\nvar_external arm bool\nadd hits 1 hits\notu arm"
+    @faulting "var_external arm bool\nvar w int[2]\nvar i dint\nvar s bool\n" <>
+                "xic arm ons s move 5 i\nxic arm move 1 w[i]"
+
+    defp armed(dir) do
+      programs =
+        for {name, text} <- [arming: @arming, counting: @counting, faulting: @faulting],
+            into: %{} do
+          {:ok, program} = Logex.compile(text, name: Atom.to_string(name))
+          {Atom.to_string(name), program}
+        end
+
+      source = """
+      task fast interval 1 priority 1
+      task ev single arm priority 5
+      var_global eye_1 bool at panel.i.0
+      var_global retain arm bool
+      var_global retain hits dint
+      program f1 faulting with fast
+      program a1 arming with fast
+        a1.eye eye_1
+      program c1 counting with ev
+      """
+
+      rig(dir, configuration: configured(source, programs), poll: 10)
+    end
+
+    # The eye latches `arm` in one round; the next samples its rise, and `f1`, on `fast`,
+    # before `ev`, faults on it: the round trips before `ev`'s step.
+    defp cut_off(rig) do
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 30)
+      Sim.set(rig.panel, [0], 1)
+      Manual.advance(rig.clock, 30)
+      assert %{status: :tripped, trip: {:fault, "fast", "f1", _}} = Runner.status(runner)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {1, 0}
+      Sim.set(rig.panel, [0], 0)
+      Manual.advance(rig.clock, 10)
+      runner
+    end
+
+    test "the event task runs after a warm restart, and the store kept the old sample",
+         %{tmp_dir: dir} do
+      rig = armed(dir)
+      runner = cut_off(rig)
+      {image, _at} = Retain.decode!(File.read!(rig.store), {rig.store, "plant"})
+      assert image.triggers == %{"arm" => 0}
+      assert Runner.restart(runner, :warm) == :ok
+      Manual.advance(rig.clock, 20)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {0, 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "the event task runs after a crash and a fresh start from the store",
+         %{tmp_dir: dir} do
+      rig = armed(dir)
+      runner = cut_off(rig)
+      killed(runner)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 20)
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {0, 1}
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
   describe "a runner with no store costs as before" do
     # Traced: a runner given no `retain:` takes no image out at a trip, a cold restart or a
     # stop, and restarts its resource once a restart, as before M6-5; one given a store takes

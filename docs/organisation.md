@@ -12078,7 +12078,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: keep it held (a)** (the maintainer, 2026-11-01): at the switch, each
      var_output its program does not write whose connection drives a held global starts
      at the global's value, so the point holds as reported until a rung writes it. To
-     build in RV-3.
+     build in RV-3. *(Built in RV-3, 2026-11-01: `Logex.Configuration.Edit` starts each
+     such var_output at the switch, `{:holds, path, value}`, a kept instance's before its
+     plan's switch, and the next switch of the edit gives it back, `{:hold_undone, path,
+     old}`, where it still holds the value and no restart came since; a var_output whose
+     type does not hold the value is left as it is, provisional, put to the maintainer in
+     `PLAN.md`'s RV-3 entry.)*
 
 348. **One write's time limit (the review after Milestone 6),** question 2: a round
      writes its devices in name order against the one deadline the refresh before the
@@ -12101,7 +12106,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: stay off (a)** (the maintainer, 2026-11-01): on a first scan a `tof` whose
      `.en` is 1 and `.tt` 0 sees no falling edge and comes to rest, `.dn` 0; one already
      in its run-on, `.tt` 1, resumes it as decision 273 has it. Decisions 69 and 93's
-     "no first scan sees one" hold again. To build in RV-3.
+     "no first scan sees one" hold again. To build in RV-3. *(Built in RV-3,
+     2026-11-01: a first scan's de-energised `tof` clauses, every kind of `tof`, a scan
+     after the first costing what it did.)*
 
 350. **A trigger's sample whose task a trip cut off (the review after Milestone 6),**
      question 4: a cycle records every task's trigger sample before any step runs, so a
@@ -12114,7 +12121,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as its trigger's last only once the step that runs the task has run; a round a trip
      stops before it leaves the last sample as it was, so the event task runs on the
      next cycle that samples the rise, a warm restart's first among them. To build in
-     RV-3 and RV-4.
+     RV-3 and RV-4. *(Built in RV-3, 2026-11-01, core and runner both: a rise's step
+     carries its sample, which stands as the step runs; every other sample stands at
+     once, a periodic run's while the trigger samples 0 among them, provisional.)*
 
 351. **A rung that writes nothing (the review after Milestone 6),** question 5: a
      newline ends a rung, so a rung wrapped onto two lines, `xic start xio stop` and

@@ -326,7 +326,10 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-2 to RV-8 build ("The review after Milestone 6"). One of them changes the source
+items RV-2 to RV-8 build ("The review after Milestone 6"); RV-3's three have landed, a
+held output held through a var_output no rung writes (decision 347), a retained `tof`
+at rest on a first scan (decision 349) and a trigger's rise a trip cut off taken in the
+next cycle (decision 350). One of them changes the source
 language: a rung that writes nothing and jumps nowhere, such as the first half of a rung
 wrapped onto two lines, `xic start xio stop` above `ote motor`, is to be refused at its
 line, told that a newline ends a rung (decision 351, RV-2), where today it compiles and
@@ -3147,7 +3150,11 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   restart, as the resource last took it, so one kept at 1 and sampled at 1 is no rising
   edge and its event task waits for a real one (decision 305, decision 274's rule), and
   one logic set after the last sample, just before a trip, runs its task once in the first
-  cycle (decision 313); a start from the image lays the sample back the same way. A cold
+  cycle (decision 313); a start from the image lays the sample back the same way. A rise
+  stands as the last sample only once the step that runs its task has run, so a round a
+  trip stops before that step, a major fault in an earlier task's, leaves the sample as it
+  was, in the resource and in the store, and the task runs on the next cycle that samples
+  the rise, a warm restart's or a fresh start's (decision 350). A cold
   restart puts it back with its trigger, and an input point's trigger already 1 still
   runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and
