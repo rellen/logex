@@ -21,7 +21,9 @@ defmodule Logex.IO do
     a device that cannot be opened, not a mistake.
   - `read/1` gives values for some or all of the device's input points; the runner keeps
     an image of them, so an adapter may give only what changed. The runner reads every
-    device every poll period (decision 120).
+    device every poll period (decision 120). The values are a map and no struct, as
+    `report/2`'s are: a MapSet, a URI or any struct is no result of this behaviour's, an
+    I/O fault, on the first read as on any (M6).
   - `write/2` is given every output point of the device, by address, a snapshot, so an
     adapter may skip what did not change; it gives back its state, so that a connection
     can be opened again inside it.
@@ -30,13 +32,23 @@ defmodule Logex.IO do
     does not know: an adapter that implements it reports its changes as they come, between
     reads (decisions 112 and 120), and one that does not is only read.
   - `close/1`, optional, is called once, after the last write of zeros, when the runner
-    stops or dies.
+    stops or dies, and since M14 where the first read after an `init/3` that succeeded
+    fails, so that what `init/3` opened is closed, the device then not opened.
   - `check/3`, optional, is given what `init/3` will be, in the host's process, when
     `bind!/2` checks the bindings, and gives the host's mistakes in the options, a line
     each, `[]` for none, so that a typo in them is an `ArgumentError` at start rather than
     an I/O fault in the device's process (§4.11). It checks what the host wrote, and
     reaches no device: one that cannot be opened is `init/3`'s `{:error, reason}`. It runs
     as the host's own code, so what it raises is raised there.
+
+  **The device's process** calls every callback but `check/3`, and traps exits, so that
+  its runner's death, a crash or a kill, stops it through a last write of zeros and a
+  close (decision 115). A process an adapter links to it, a reader of its own or a port's
+  owner, is linked as to any process: its `:normal` end is passed over, and any other
+  stops the device with that reason, every output written 0 once and the adapter closed,
+  which the runner trips on as a device gone down, `{:io, device, {:down, reason}}`, and
+  opens again at a restart (M14). An adapter that would outlive a helper's end monitors it
+  instead: the monitor's `{:DOWN, ...}` is a message as any other, given to `report/2`.
 
   A callback that fails says so, `{:error, reason, state}`, and does not raise: a device
   that does not answer is the plant's state, not a bug. A raise, a throw or an exit in a

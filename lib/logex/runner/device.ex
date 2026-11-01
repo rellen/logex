@@ -112,7 +112,10 @@ defmodule Logex.Runner.Device do
   # - Its runner's death (decision 115): it traps exits, so that its runner going down, a
   #   crash or a kill, stops it through terminate/2, which writes every output 0 once,
   #   where it is not latched already, and closes the adapter, as a close does; one closed
-  #   already does neither again.
+  #   already does neither again. Since M14 (RV-4) an exit from any other process linked
+  #   to it, a helper its adapter linked, stops it as a link would, `:normal` passed over,
+  #   and a first read that fails after init/3 succeeded closes the adapter, its outputs 0.
+  # - A read's or a report's values are a map and no struct (M6).
 
   use GenServer
 
@@ -265,6 +268,17 @@ defmodule Logex.Runner.Device do
   # that restart is over, its hold ended by a `taken/2` or a zero.
   def handle_info({__MODULE__, :unheld}, state), do: waited(fn -> holding(state) end)
 
+  # M14 (RV-4): the device traps exits, so that its runner's death stops it through
+  # terminate/2 (decision 115), its runner's exit taken by GenServer itself; an exit from
+  # any other process linked to it, a helper its adapter linked, is the device's own as a
+  # link has it, `:normal` passed over and any other stopping the device with its reason,
+  # every output written 0 once and the adapter closed, so that its runner sees the device
+  # gone down, `{:io, device, {:down, reason}}`, and opens it again at a restart. An
+  # adapter that would outlive a helper monitors it: the monitor's `:DOWN` is a message
+  # as any other, given to report/2.
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
+
   def handle_info(message, %{module: module} = state),
     do: waited(fn -> reported(function_exported?(module, :report, 2), message, state) end)
 
@@ -281,8 +295,14 @@ defmodule Logex.Runner.Device do
     do: adapted(:init, [name, points, opts], state)
 
   # Opened, the adapter is read once, all it gives taken as changed, and its first poll is
-  # one period on; an init/3 or a first read that fails stops the device.
-  defp opened({:ok, adapter}, state), do: first_read(adapted(:read, [adapter], state), state)
+  # one period on; an init/3 or a first read that fails stops the device. Since M14 (RV-4)
+  # a first read that fails after an init/3 that succeeded closes what init/3 opened, every
+  # output written 0 once and the adapter's close/1 called, as a device opened is closed,
+  # with the adapter's state the read gave back or, where it gave none, init/3's.
+  defp opened({:ok, adapter}, state) do
+    state = %{state | adapter: adapter}
+    first_read(adapted(:read, [adapter], state), state)
+  end
 
   defp opened({:fault, {:init, reason}, _adapter}, state),
     do: {:stop, :normal, {:error, reason}, state}
@@ -302,7 +322,8 @@ defmodule Logex.Runner.Device do
      })}
   end
 
-  defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
+  defp first_read({:fault, cause, adapter}, state),
+    do: {:stop, :normal, {:error, cause}, closed(last_zero(%{state | adapter: adapter}))}
 
   # A restart's read answered: merged over every reading the device holds that the runner
   # has not taken, where an adapter's read gives some of its points and reports the rest
@@ -351,8 +372,11 @@ defmodule Logex.Runner.Device do
   defp shaped(:init, {:ok, adapter}, _module, _old), do: {:ok, adapter}
   defp shaped(:init, {:error, reason}, _module, old), do: {:fault, {:init, reason}, old}
 
+  # M6 (RV-4): a read's or a report's values are a map and no struct, as Logex.IO.Sim's
+  # values!/1 and Logex.IO's io!/1 take one: a MapSet, a URI or any struct is no result of
+  # Logex.IO's, on a first read as on any.
   defp shaped(callback, {:ok, values, adapter}, _module, _old)
-       when callback in [:read, :report] and is_map(values),
+       when callback in [:read, :report] and is_map(values) and not is_struct(values),
        do: {:ok, values, adapter}
 
   defp shaped(:write, {:ok, adapter}, _module, _old), do: {:ok, adapter}

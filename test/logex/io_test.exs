@@ -10,6 +10,7 @@ defmodule Logex.IOTest do
   use ExUnit.Case, async: true
 
   alias Logex.IO.{Point, Sim}
+  alias Logex.Runner
   alias Logex.Runner.Clock.Manual
 
   # A device's process, as the runner's will be: it opens the sim in its own process,
@@ -859,6 +860,189 @@ defmodule Logex.IOTest do
     def init(_device, _points, _opts), do: {:ok, nil}
     def read(state), do: {:ok, %{}, state}
   end
+
+  # An adapter over an Agent, `agent:`, holding `reads` and `reports`, the answers its next
+  # reads and reports give, each a result to give back as it is or `:raise`, `{:ok, %{},
+  # agent}` once none is left; every write and close recorded, `writes` newest first and
+  # `closes` a count; and `helpers`, the reasons each helper process init/3 links to the
+  # device's process will exit with when the test sends it `:go`, their pids in `linked`.
+  defmodule Scripted do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts) do
+      agent = Keyword.fetch!(opts, :agent)
+      reasons = Agent.get(agent, & &1.helpers)
+      linked = for reason <- reasons, do: spawn_link(fn -> receive(do: (:go -> exit(reason))) end)
+      Agent.update(agent, &%{&1 | linked: linked})
+      {:ok, agent}
+    end
+
+    @impl true
+    def read(agent), do: agent |> Agent.get_and_update(&next(&1, :reads)) |> answered(agent)
+
+    @impl true
+    def report(_message, agent),
+      do: agent |> Agent.get_and_update(&next(&1, :reports)) |> answered(agent)
+
+    @impl true
+    def write(values, agent) do
+      Agent.update(agent, &%{&1 | writes: [values | &1.writes]})
+      {:ok, agent}
+    end
+
+    @impl true
+    def close(agent), do: Agent.update(agent, &%{&1 | closes: &1.closes + 1})
+
+    defp next(state, key), do: next(Map.fetch!(state, key), key, state)
+    defp next([], _key, state), do: {nil, state}
+    defp next([answer | rest], key, state), do: {answer, Map.put(state, key, rest)}
+
+    defp answered(nil, agent), do: {:ok, %{}, agent}
+    defp answered(:raise, _agent), do: raise("the bus is gone")
+    defp answered(answer, _agent), do: answer
+  end
+
+  @scripted """
+  task fast interval 10 priority 1
+  var_global x bool at panel.i.0
+  var_global y bool at panel.q.0
+  program r relay with fast
+    r.in x
+    r.out y
+  """
+
+  defp scripted(state) do
+    {:ok, agent} =
+      Agent.start_link(fn ->
+        Map.merge(
+          %{reads: [], reports: [], writes: [], closes: 0, helpers: [], linked: []},
+          state
+        )
+      end)
+
+    {:ok, relay} =
+      Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out", name: "relay")
+
+    {:ok, config} = Logex.Configuration.compile("plant", @scripted, %{"relay" => relay})
+    {:ok, clock} = Manual.start_link()
+
+    opts = [
+      configuration: config,
+      io: %{"panel" => {Scripted, agent: agent}},
+      clock: {Manual, clock},
+      poll: 10
+    ]
+
+    %{agent: agent, clock: clock, opts: opts}
+  end
+
+  defp gave(agent, read),
+    do:
+      "Logex.IOTest.Scripted.#{read} gave #{inspect({:ok, read_value(read), agent})}, which is " <>
+        "none of Logex.IO's results"
+
+  defp read_value("read/1"), do: MapSet.new([[0]])
+  defp read_value("report/2"), do: URI.parse("http://panel")
+
+  describe "an adapter's results and its links (M6, M14)" do
+    @describetag capture_log: true
+
+    # M6: a struct is no map of values, as Sim's values!/1 and bind!/2's io!/1 refuse one;
+    # a MapSet once froze every later input of its device, a URI crashed it, and on the first
+    # read a struct crashed the runner's init/1 and with it the host linked to it.
+    test "a read that answers a struct is no result, on the first read as on any, and the " <>
+           "host that started the runner runs on" do
+      for struct <- [MapSet.new([[0]]), URI.parse("http://panel")] do
+        %{agent: agent, opts: opts} = scripted(%{})
+        Agent.update(agent, &%{&1 | reads: [{:ok, struct, agent}]})
+
+        assert Runner.start_link(opts) ==
+                 {:error,
+                  {:io_init, "panel",
+                   {:raised,
+                    "Logex.IOTest.Scripted.read/1 gave #{inspect({:ok, struct, agent})}, " <>
+                      "which is none of Logex.IO's results"}}}
+
+        assert Agent.get(agent, & &1.closes) == 1
+      end
+
+      %{agent: agent, clock: clock, opts: opts} = scripted(%{})
+      {:ok, runner} = Runner.start_link(opts)
+      Runner.subscribe(runner)
+      Agent.update(agent, &%{&1 | reads: [{:ok, MapSet.new([[0]]), agent}]})
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:raised, message}}}}
+      assert message == gave(agent, "read/1")
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a report that answers a struct is no result, and trips" do
+      %{agent: agent, opts: opts} = scripted(%{})
+      {:ok, runner} = Runner.start_link(opts)
+      Runner.subscribe(runner)
+      Agent.update(agent, &%{&1 | reports: [{:ok, URI.parse("http://panel"), agent}]})
+      device = device_of(runner)
+      send(device, :anything)
+      _ = :sys.get_state(device)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:raised, message}}}}, 5000
+      assert message == gave(agent, "report/2")
+      assert Runner.stop(runner) == :ok
+    end
+
+    # M14: what init/3 opened is closed where the first read then fails, its outputs 0 as a
+    # device opened is closed, so that it leaks nothing and the next start finds it free.
+    test "an adapter whose init/3 succeeded is closed, every output 0, where its first read " <>
+           "fails" do
+      for read <- [{:error, :no_bus, nil}, :raise] do
+        %{agent: agent, opts: opts} = scripted(%{})
+        Agent.update(agent, &%{&1 | reads: [error_of(read, agent)]})
+        assert {:error, {:io_init, "panel", _cause}} = Runner.start_link(opts)
+        assert Agent.get(agent, &{&1.writes, &1.closes}) == {[%{[0] => 0}], 1}
+      end
+    end
+
+    # M14: the device's process traps exits, so that its runner's death zeroes and closes
+    # it; a helper the adapter linked is linked as any process is, its :normal end passed
+    # over and any other the device's own, which stops it, its outputs 0 and its adapter
+    # closed, and trips the runner as a device gone down.
+    test "a linked helper's crash stops its device as a link would, the runner tripped; " <>
+           "its :normal end is passed over" do
+      %{agent: agent, clock: clock, opts: opts} = scripted(%{helpers: [:normal, :bus_lost]})
+      {:ok, runner} = Runner.start_link(opts)
+      Runner.subscribe(runner)
+      [quiet, lost] = Agent.get(agent, & &1.linked)
+      device = device_of(runner)
+
+      ref = Process.monitor(quiet)
+      send(quiet, :go)
+      assert_receive {:DOWN, ^ref, :process, ^quiet, :normal}
+      _ = :sys.get_state(device)
+      Manual.advance(clock, 10)
+      assert %{status: :running} = Runner.status(runner)
+
+      send(lost, :go)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:down, :bus_lost}}}}, 5000
+      assert Agent.get(agent, &{hd(&1.writes), &1.closes}) == {%{[0] => 0}, 1}
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  defp error_of({:error, reason, nil}, agent), do: {:error, reason, agent}
+  defp error_of(:raise, _agent), do: :raise
+
+  # The runner's one device's process, among its links.
+  defp device_of(runner) do
+    {:links, links} = Process.info(runner, :links)
+
+    Enum.find(
+      links,
+      &(initial_call(Process.info(&1, :dictionary)) == {Logex.Runner.Device, :init, 1})
+    )
+  end
+
+  defp initial_call({:dictionary, dictionary}), do: dictionary[:"$initial_call"]
+  defp initial_call(nil), do: nil
 
   describe "a configuration's points, by device" do
     @describetag :tmp_dir

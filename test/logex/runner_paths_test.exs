@@ -52,6 +52,12 @@ defmodule Logex.RunnerPathsTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # The claims the VM's table holds for a store and its `.tmp`: a runner that stops, or
+  # whose start is refused after it claimed them, gives them up as it ends, not merely by
+  # being gone.
+  defp claims(store),
+    do: :ets.lookup(Logex.Runner.Paths, store) ++ :ets.lookup(Logex.Runner.Paths, store <> ".tmp")
+
   # A start from a task, the runner unlinked so that the task's end leaves it running, or
   # refused for a file another runner holds.
   defp started_or_refused(opts) do
@@ -174,6 +180,7 @@ defmodule Logex.RunnerPathsTest do
       store = Path.join(dir, "plant.retain")
       {:ok, first} = Runner.start_link(opts(retain: store))
       assert Runner.stop(first) == :ok
+      assert claims(store) == []
       {:ok, second} = Runner.start_link(opts(retain: store))
 
       Process.unlink(second)
@@ -187,6 +194,7 @@ defmodule Logex.RunnerPathsTest do
       refused = opts(retain: Path.join(dir, "other.retain"))
       Sim.fail(panel(refused), :init, {:error, :no_card})
       assert Runner.start_link(refused) == {:error, {:io_init, "panel", :no_card}}
+      assert claims(Path.join(dir, "other.retain")) == []
       {:ok, fourth} = Runner.start_link(opts(retain: Path.join(dir, "other.retain")))
 
       assert Runner.stop(third) == :ok
