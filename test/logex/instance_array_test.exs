@@ -379,7 +379,8 @@ defmodule Logex.InstanceArrayTest do
       assert messages(source <> "xic go ton lane_t[1] 500 ote q") == [
                {6,
                 "`ote q` follows `ton lane_t[1]` on its path: what passes on after a `ton` is " <>
-                  "not settled, so a `ton` ends its path; read the timer's `.dn` on a rung below"}
+                  "not settled, so a `ton` ends its path; read the timer with `xic lane_t[1].dn` on a " <>
+                  "rung below"}
              ]
 
       assert messages(source <> "xic go ons lane_c[1].r ote q") == [

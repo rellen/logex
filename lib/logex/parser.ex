@@ -62,9 +62,11 @@ defmodule Logex.Parser do
   `{:real_lit, line, x}` where it is written as the plain text of its float,
   `Float.to_string/1`'s, the shortest that reads back to it, and `{:real_lit, line, x,
   spelling}` otherwise, `37.50`, `1.5E3` or `-0.0`, whose value is 0.0, so no leaf holds
-  −0.0 (decision 150), nor, since decision 216, a value nearer 0.0 than an lreal's
-  smallest normal one, which no text lexes as. Until then what the compiler does with one, an
-  element cited at a line of its own, is kept for it, but nothing reaches it.
+  −0.0 (decision 150). Since decision 228 a subnormal double lexes as itself, `1.0e-310`,
+  a plain or spelled leaf of that float, which its slot refuses when the program
+  compiles, and since decision 231 one no double holds but 0.0, `1.0e-400`, is the
+  spelled leaf of 0.0, `{:real_lit, line, 0.0, "1.0e-400"}`, which `underflowed?/1` tells
+  from a zero; neither widened the tree, each a leaf of a float it already held.
   """
 
   @doc """
@@ -74,7 +76,20 @@ defmodule Logex.Parser do
   AST leaves keep only the line, `{:name, line, value}`, because the suite pins that
   shape; the column is used for diagnostics only.
   """
-  def parse(tokens), do: rungs(tokens, [])
+  def parse(tokens) when is_list(tokens), do: rungs(tokens, [])
+
+  # RV-2 (the review after Milestone 6, a1-frontend-9): a host's mistake is a pinned
+  # `ArgumentError`, as instructionize/2's is, where it was a FunctionClauseError or the
+  # BIF's own error: a value that is no list of tokens, a list that is improper, and a
+  # token that is no tuple of a kind and its location.
+  def parse(tokens), do: not_tokens!(tokens)
+
+  defp not_tokens!(tokens),
+    do:
+      raise(
+        ArgumentError,
+        "parse/1 takes the list of tokens Logex.Lexer.tokenize/1 gives, got: #{inspect(tokens)}"
+      )
 
   @doc """
   The tree, if `parse/1` could have produced it; otherwise an `ArgumentError` that names
@@ -223,6 +238,7 @@ defmodule Logex.Parser do
   defp line_end([{:rnd, _} | rest], elems, acc), do: rungs(rest, keep(elems, acc))
   defp line_end([], elems, acc), do: {:ok, {:routine, {:rungs, Enum.reverse(keep(elems, acc))}}}
   defp line_end([token | _], _elems, _acc), do: unexpected(token, ["a newline", "end of input"])
+  defp line_end(tail, _elems, _acc), do: not_tokens!(tail)
 
   # `branch -> '$empty'` makes an empty rung derivable, so leading, trailing and repeated
   # newlines would otherwise become phantom `{:rung, []}` — drop them here. Empty branch
@@ -410,8 +426,16 @@ defmodule Logex.Parser do
         "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{inspect(node)}"
       )
 
-  defp unexpected(token, expected),
+  defp unexpected(token, expected) when is_tuple(token) and tuple_size(token) >= 2,
     do: {:error, {elem(token, 1), __MODULE__, {:unexpected, describe(token), expected}}}
+
+  defp unexpected(token, _expected),
+    do:
+      raise(
+        ArgumentError,
+        "parse/1 takes tokens, each a tuple of its kind and its location, got: " <>
+          inspect(token)
+      )
 
   defp describe({:rnd, _}), do: "a newline"
   defp describe({:nxb, _}), do: "`|`"

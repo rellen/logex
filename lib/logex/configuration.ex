@@ -698,7 +698,8 @@ defmodule Logex.Configuration do
 
   # The extension says what a file is (decision 35), and a file named only `.logex` reads
   # as logex's own settings, which no configuration is.
-  defp configuration_file(".logex", _basename, path), do: source_file(File.read(path), path)
+  defp configuration_file(".logex", _basename, path),
+    do: source_file(Logex.SourceFile.read(path), path)
 
   defp configuration_file("", ".logex", path),
     do:
@@ -723,7 +724,7 @@ defmodule Logex.Configuration do
        ]}
 
   defp source_file({:error, reason}, path),
-    do: {:error, [file_problem(path, "cannot be read: #{:file.format_error(reason)}")]}
+    do: {:error, [file_problem(path, Logex.SourceFile.unreadable(reason))]}
 
   defp source_file({:ok, source}, path) do
     name = Path.rootname(Path.basename(path))
@@ -754,7 +755,10 @@ defmodule Logex.Configuration do
     {read, rounded, spelled} = Text.read_rounded(source)
     types = program_types(read)
     file = &Path.join(Path.dirname(path), &1 <> ".ld")
-    {found, missing} = Enum.split_with(types, fn {type, _line} -> File.exists?(file.(type)) end)
+
+    {found, missing} =
+      Enum.split_with(types, fn {type, _line} -> Logex.SourceFile.present?(file.(type)) end)
+
     results = Logex.compile_files(Enum.map(found, fn {type, _line} -> file.(type) end))
 
     {programs, cited, theirs} =

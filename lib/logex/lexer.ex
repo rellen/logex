@@ -7,6 +7,7 @@ defmodule Logex.Lexer do
 
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
       {:name, loc, binary}  {:int_lit, loc, integer}  {:int_lit, loc, integer, spelling}
+      {:real_lit, loc, float}  {:real_lit, loc, float, spelling}
 
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token, and since
   M5-9 (decision 160) a last part that is a tag's name in brackets, `status.[n]`, a bit
@@ -82,94 +83,99 @@ defmodule Logex.Lexer do
   """
   def tokenize(source) when is_binary(source), do: lex(source, 1, 1, [])
 
-  def format_error({:illegal, text}), do: "illegal character #{inspect(text)}"
+  # RV-2 (the review after Milestone 6, a1-frontend-9): a host's mistake, a pinned
+  # `ArgumentError`.
+  def tokenize(source),
+    do: raise(ArgumentError, "tokenize/1 takes a source text, a binary, got: #{inspect(source)}")
+
+  def format_error({:illegal, text}), do: "illegal character #{shown(text)}"
 
   def format_error({:missing_separator, text}),
     do:
-      "missing separator after #{after_what(text)}: #{inspect(text)} is neither a number nor a tag"
+      "missing separator after #{after_what(text)}: #{shown(text)} is neither a number nor a tag"
 
   def format_error({:separator, text}),
-    do: "#{inspect(text)} is no number: a `_` in a number stands only between two digits"
+    do: "#{shown(text)} is no number: a `_` in a number stands only between two digits"
 
   def format_error({:base, text}),
     do:
-      "#{inspect(text)} is no number: a based number is written in base 16, `16#ff`, or " <>
+      "#{shown(text)} is no number: a based number is written in base 16, `16#ff`, or " <>
         "base 2, `2#1010`, and logex reads no other base"
 
   def format_error({:signed_based, text}),
-    do: "#{inspect(text)} is no number: a based number takes no sign"
+    do: "#{shown(text)} is no number: a based number takes no sign"
 
   def format_error({:digits, 16, text}),
     do:
-      "#{inspect(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
+      "#{shown(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
         "and a to f, in either case, after its `16#`"
 
   def format_error({:digits, 2, text}),
     do:
-      "#{inspect(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
+      "#{shown(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
         "after its `2#`"
 
   def format_error({:hash, text}),
     do:
-      "#{inspect(text)} is no number: a based number holds one `#`, between its base and " <>
+      "#{shown(text)} is no number: a based number holds one `#`, between its base and " <>
         "its digits, `16#ff`"
 
   def format_error({:after_bracket, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets, `status.[n]`, ends its name, " <>
+      "#{shown(text)} is no name: a bit number in brackets, `status.[n]`, ends its name, " <>
         "and nothing may follow its `]` but a space"
 
   def format_error({:bracketed, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is a tag's name, `status.[n]`, " <>
+      "#{shown(text)} is no name: a bit number in brackets is a tag's name, `status.[n]`, " <>
         "or one number closed by its `]`, `status.[4]` or `status.[16#4]`"
 
   def format_error({:bracket, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is one tag's name between `[` " <>
+      "#{shown(text)} is no name: a bit number in brackets is one tag's name between `[` " <>
         "and `]`, with no space, `status.[n]`"
 
   def format_error({:detached, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is written straight after its " <>
+      "#{shown(text)} is no name: a bit number in brackets is written straight after its " <>
         "name's `.`, with no space, `status.[n]`"
 
   def format_error({:subscripts, text}),
     do:
-      "#{inspect(text)} is no name: an element's subscripts are one pair of brackets " <>
+      "#{shown(text)} is no name: an element's subscripts are one pair of brackets " <>
         "straight after its array's name, each a number or a tag's name, split by `,` " <>
         "with no space, as in `grid[1,7]`"
 
   def format_error({:after_subscripts, text}),
     do:
-      "#{inspect(text)} is no name: an element's subscripts end at their `]`, after which " <>
+      "#{shown(text)} is no name: an element's subscripts end at their `]`, after which " <>
         "only a `.` part may follow, so every subscript goes inside the one pair of " <>
         "brackets, as in `grid[1,7]`"
 
   def format_error({:point, text}),
     do:
-      "#{inspect(text)} is no number: a real has digits on both sides of its `.`, " <>
+      "#{shown(text)} is no number: a real has digits on both sides of its `.`, " <>
         "`1.0` or `0.5`"
 
   def format_error({:no_point, text}),
     do:
-      "#{inspect(text)} is no number: a real has a `.` with digits on both sides before its " <>
+      "#{shown(text)} is no number: a real has a `.` with digits on both sides before its " <>
         "exponent, `1.0e5`"
 
   def format_error({:plus, text}),
-    do: "#{inspect(text)} is no number: logex takes no `+`, so an exponent is `e3` or `e-3`"
+    do: "#{shown(text)} is no number: logex takes no `+`, so an exponent is `e3` or `e-3`"
 
   def format_error({:exponent, text}),
-    do: "#{inspect(text)} is no number: an exponent is `e` and its digits, `1.5e3` or `1.5e-3`"
+    do: "#{shown(text)} is no number: an exponent is `e` and its digits, `1.5e3` or `1.5e-3`"
 
   def format_error({:real_range, text}),
     do:
-      "#{inspect(text)} is no number logex holds: an lreal's largest is " <>
+      "#{shown(text)} is no number logex holds: an lreal's largest is " <>
         "1.7976931348623157e308"
 
   def format_error({:real_small, text}),
     do:
-      "#{inspect(text)} is no number logex holds: an lreal's smallest above 0.0 is " <>
+      "#{shown(text)} is no number logex holds: an lreal's smallest above 0.0 is " <>
         "2.2250738585072014e-308"
 
   # RV-2 (M13): a number past the longest logex reads is quoted by its first characters
@@ -191,12 +197,17 @@ defmodule Logex.Lexer do
 
   def format_error({:signed_inside, text}),
     do:
-      "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
+      "missing separator before `-`: #{shown(text)} is neither a tag nor a number, " <>
         "and a sign begins a number"
 
   # The first 24 characters of a long run, then `…`, and a short run whole.
   defp quoted_start(<<start::binary-size(24), _::binary>>), do: "`#{start}…`"
-  defp quoted_start(text), do: inspect(text)
+  defp quoted_start(text), do: shown(text)
+
+  # RV-2 (the review after Milestone 6, a1-frontend-10): a run quoted as a string even
+  # where it holds a control byte, `"a.[n\0]"`, where inspect/1 showed it as a list of
+  # bytes.
+  defp shown(text), do: inspect(text, binaries: :as_strings)
 
   # M5-10: B2's lexeme after a real, `1.5L`, is told so, and after an integer as it was.
   defp after_what(text),
@@ -756,6 +767,10 @@ defmodule Logex.Lexer do
   defp closing(rest, n, :open), do: n + unspaced(rest, 0)
 
   defp through(<<?], _::binary>>, m), do: {:closed, m + 1}
+
+  # RV-2 (the review after Milestone 6, a1-frontend-10): a comment is no part of the run,
+  # `a.[n // see .[3]` named `a.[n`, where the run went on into the comment to its `]`.
+  defp through(<<?/, ?/, _::binary>>, _m), do: :open
 
   defp through(<<ch, _::binary>>, _m) when ch in [?\n, ?\r, ?(, ?|, ?)] or ch > 127,
     do: :open
