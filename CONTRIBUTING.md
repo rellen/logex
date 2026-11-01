@@ -71,29 +71,16 @@ generated `src/*.erl` but leaves their modules behind; building any other enviro
 compiles them afresh. Run `rm -rf src/*.erl _build` once. `frontend_test.exs` fails, naming
 that command, until you do.
 
-### Running the suite on an older toolchain
+### The toolchain
 
-`mix.exs` requires Elixir `~> 1.20`, and that bound is deliberate — but the machine in front
-of you may not have it, and then `mix` aborts before running anything at all. Most
-receipts in these documents were produced in a throwaway copy instead, on Elixir 1.14;
-those that ran on the pinned 1.20.4 say so:
-
-    SB=$(mktemp -d)
-    cp -r . "$SB"/ && rm -rf "$SB/.git"
-    sed -i 's/elixir: "~> [0-9.]\+"/elixir: "~> 1.14"/' "$SB/mix.exs"   # 1.14 = your version
-    cd "$SB" && rm -rf _build
-    mix compile --warnings-as-errors && mix format --check-formatted && mix test
-
-The bound is matched by a pattern, not spelled out, on purpose: the floor has moved once
-(`~> 1.15` → `~> 1.20`) and a recipe naming the old number fails *silently* —
-`sed` matches nothing, `mix` aborts, and the copy looks broken rather than unpatched.
-
-Patch the **copy**, never the tracked file. That distinction is the entire point: relaxing
-the bound is a legitimate way to observe this code on the toolchain you happen to have, and
-an illegitimate thing to commit. It is not a hypothetical confusion — seven of seven fresh
-agents handed this repo on a 1.14 box edited the tracked `mix.exs` and none of them said so.
-Three files warn against the edit; this is the sanctioned alternative, and without it the
-warning has no exit.
+Elixir 1.20.4 on Erlang/OTP 28, the pair `mix.exs`, `shell.nix`, `flake.nix`,
+`.tool-versions` and CI pin. `nix develop` (or `nix-shell`) gives it, and so does
+[asdf](https://asdf-vm.com) from `.tool-versions`: `asdf plugin add erlang`, `asdf plugin
+add elixir`, then `asdf install` in the checkout. `mix.exs` requires `~> 1.20`, so on an
+older Elixir `mix` aborts before it runs anything; install the pinned pair rather than
+loosen the bound (below). Nothing in this repository is run or kept working on an older
+toolchain: the receipts `PLAN.md` records from Elixir 1.14, before the bound moved, are
+history (decision 359).
 
 ### A fix needs a test that fails when the fix is reverted
 
@@ -268,14 +255,27 @@ clause" until `b8a9bd8`.
 
 ### Landing work stales the plan
 
-`PLAN.md` §1's counts, §7's Status column and the README's "Settled, not yet landed" list
-all go out of date when you ship. This repo brings them current in a separate audit pass
+`PLAN.md` §1's counts, §7's Status column and the README's "What has landed" list all go
+out of date when you ship. This repo brings them current in a separate audit pass
 (`440bc83`, `4e256ff`) rather than in the same commit — either is fine, but the pass has to
 happen. A plan that disagrees with the code is worse than no plan, because it is trusted.
 
-The README has no test behind it. Any language change stales it: a new instruction adds a
-row, a syntax change touches the syntax list, the instruction table *and* the worked
-example — whose output is real, so re-run it.
+Any language change stales the README: a new instruction adds a row, a syntax change
+touches the syntax list, the instruction table *and* the worked examples. The examples'
+output is real, and `test/logex/readme_test.exs` keeps it so (decision 359): each `elixir`
+block followed at once by a block beginning `$ mix run x.exs` is an example, run in a
+fresh VM in a directory of its own, `tmp/readme/x.exs/`, its output compared exactly with
+the rest of that block. A block a script reads from the disk is marked by the line
+straight above its fence, `<!-- file: conveyor.ld -->`, which GitHub does not show, and
+from there on it is that file of every later example; a file README only describes in
+prose, `faster/packing.logex` "being `packing.logex` with `interval 5`", is made in the
+test's `@derived` table from the file it names, and a script README shows as the rest of
+another, `a_trip.exs`, in its `@continues`, each beside README's words, which the test
+checks are still there. The real-clock example's figures line, which README says is this
+run's alone, is compared by its beginning. So a new example needs its files marked, and
+a changed one is run by the suite: when the test fails, the code or the README is wrong,
+and the diff it prints says which line. The prose, the syntax list and the instruction
+table have no test behind them.
 
 ### Do not restore vendor names
 
@@ -289,10 +289,12 @@ choice, not an oversight to fix.
 ## Things that will bite you
 
 - **Do not relax `mix.exs`.** On an older toolchain `mix compile` aborts and the obvious
-  fix is to loosen `elixir: "~> 1.20"`. Install a newer Elixir, or use the throwaway sandbox
-  in "Running the suite on an older toolchain" above — patch a copy. An automated audit
-  of this repo recommended relaxing it, having mistaken a test rig's patched copy for the
-  repository's own — a wrong conclusion from real evidence.
+  fix is to loosen `elixir: "~> 1.20"`. Install the pinned pair instead, Elixir 1.20.4 on
+  OTP 28, with `nix develop` or `asdf install` ("The toolchain", above). The code itself
+  needs it: `lib/` calls `Map.split_with/2`, new in 1.15, so no sandbox that patches the
+  bound on an older Elixir builds it either. An automated audit of this repo once
+  recommended relaxing it, having mistaken a test rig's patched copy for the repository's
+  own — a wrong conclusion from real evidence.
 - **Nothing checks the grammar for ambiguity.** The parser is written by hand (its
   moduledoc gives the grammar and which function parses each production), so there is no
   generator to report a conflict. What stands in
@@ -372,13 +374,18 @@ choice, not an oversight to fix.
   process `Logex.IO.Sim` names as holding it, to go down first, since the killed runner's
   device tries its 0 once more as it closes and a fresh runner's check finds the sim
   still held (`2adf13a`); and a new runner test runs 50 times with every core busy before
-  it lands.
-- **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
-  or over a list built from one, is invisible to every test with a small table. M1-5 hit
-  it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in
-  the did-you-mean, whose `Enum.sort` could be deleted with the suite green at `4a1079c`. A
-  test of an order that comes from a map gives *that map* more than 32 keys — for the
-  var_input list, the whole tag table.
+  it lands (`scripts/load.sh -n 50 <file>`).
+- **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
+  missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
+  invisible to every test with a small table. M1-5 hit it twice: the order of the input
+  problems (pinned in `ee91fe5`), and the var_input list in the did-you-mean, whose
+  `Enum.sort` could be deleted with the suite green at `4a1079c`. A test of an order that
+  comes from a map gives *that map* more than 32 keys — for the var_input list, the whole
+  tag table. Atom keys are another matter: since OTP 26 a small map orders its atoms by
+  when the VM made them, not by their names, so on OTP 28 `Map.keys(%{zz_new: 1,
+  aa_new: 2, mm: 3})` is `[:mm, :zz_new, :aa_new]` in a fresh VM, while `Map.keys(%{"zz"
+  => 1, "aa" => 2, "mm" => 3})` is `["aa", "mm", "zz"]`; an order that must hold over
+  atom keys comes from a list.
 - **A deliberate host mistake draws a type warning.** Elixir 1.20's type checker sees
   `Runtime.instance(:motor)` and warns on every run. Pass the bad value through a helper it
   cannot see through, as `runtime_test.exs`'s `opaque/1` does (copy it into another file
@@ -399,6 +406,8 @@ choice, not an oversight to fix.
     mix test --warnings-as-errors
 
 All four must pass, judged by exit code; the third builds `lib/` as the suite builds it.
+`scripts/gate.sh` runs the four in order and names the tests that failed ("Scripts",
+below).
 CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
 exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 through
 `erlef/setup-beam`: a red run there is a red commit. `--force` recompiles every module in `lib/`, so a
@@ -414,3 +423,36 @@ commit and read its diff:
 Apart from the header line, which names the commit the tree was on top of, the diff is the
 exact list of inputs whose meaning changed. If it lists anything you did not intend, the
 change is wrong, not the record.
+
+---
+
+## Scripts
+
+`scripts/` holds the checks this file asks for, each run from anywhere in the checkout,
+each judging what it runs by its exit code, never by its output. Each `mix test` they run
+starts by deleting ExUnit's failures manifest, so the tests they name are that run's.
+
+- **`scripts/gate.sh [log] [mix test args]`** runs the four gates of "Before you commit"
+  in order, the first that fails stopping the rest, writes what they print to the log
+  (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
+  rc=<n>`, and exits with the gates' code. A failed suite is followed by the tests that
+  failed, `file: Module: test name` a line, read from ExUnit's failures manifest by
+  `scripts/failed.exs`, since `Result: 2406/2407 passed` names none, and a long log hides
+  them.
+- **`elixir scripts/failed.exs`** prints those tests for the last `mix test` run alone.
+- **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
+  mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
+  then restore the tree; the script applies each patch in turn (`git apply`), runs the
+  named test files and then the full suite, restores the tree (`git apply -R`, on an
+  interrupt too) and prints a Markdown row, `| patch | named files | full suite | failed
+  tests |`, each suite's exit code and Result line, a mutant the full suite passes marked
+  `SURVIVED`, and the files whose tests failed with their counts. Each run's log is kept
+  beside its patch. `-N` skips the full suite, for a quick look; a mutant counts only by
+  the full suite, and one red only on a real-clock test, or under load, is run again
+  alone before it counts ("A fix needs a test that fails when the fix is reverted").
+- **`scripts/load.sh [-n runs] [-l loops] [mix test args]`** runs `mix test` with the
+  arguments `runs` times (10 unless given) while `loops` busy loops (one a core unless
+  given) hold the machine, a line a run with its exit code, Result line and failed tests,
+  and then how many failed, its logs in `_build/load/`. A new real-clock or runner test
+  runs under it before it lands, `scripts/load.sh -n 50 test/logex/runner_test.exs`
+  ("Wait for a process's `DOWN`…", above).

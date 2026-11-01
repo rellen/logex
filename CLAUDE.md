@@ -10,12 +10,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   grepping its output: Elixir 1.20 prints `Result: 39/40 passed`, which a grep for
   `[0-9]+ passed` reads as a pass.
 - `mix format` — format code before committing
+- `scripts/gate.sh` — the four gates of `CONTRIBUTING.md`'s "Before you commit", by exit
+  code, naming the tests that failed; `scripts/mutate.sh` a mutation table and
+  `scripts/load.sh` runs under load (`CONTRIBUTING.md`, "Scripts").
 - Requires Elixir ~> 1.20; on anything older `mix` aborts before it runs. **Never relax
   `mix.exs`** — the constraint is deliberate, and a loosened version bound is the kind of
-  edit that lands by accident. If you cannot install a newer Elixir, run the suite in the
-  throwaway sandbox in `CONTRIBUTING.md` ("Running the suite on an older toolchain"), which
-  patches a *copy*. That is how most receipts in these documents were produced, on Elixir
-  1.14; those that ran on the pinned 1.20.4 say so.
+  edit that lands by accident. Get Elixir 1.20.4 on OTP 28 with `nix develop`, or with
+  asdf or mise from `.tool-versions`.
 
 ## Key Files
 
@@ -2123,7 +2124,7 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   the same on every run and its figures that run's; and "What logex is not" says plainly
   what logex does not do, a safety function first, each claim checked against the code,
   so a change that adds an adapter, output forcing, retained values, a backward jump or a
-  type stales it. Nothing tests this.
+  type stales it. `test/logex/readme_test.exs` runs every example and compares its output.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic, declaration

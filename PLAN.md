@@ -12,7 +12,9 @@ review of the codebase and turns them into an ordered plan.
 **Keeping this document true.** Landing work stales it: §1's counts, §7's Status column and
 any "Settled, not yet landed" bullet in the README all go out of date. The repo's practice
 is a separate audit pass rather than editing this file in the same commit — but the pass
-has to happen, or the next reader inherits a plan that disagrees with the code.
+has to happen, or the next reader inherits a plan that disagrees with the code. *(Since
+2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, since
+nothing decided waits to land.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -245,7 +247,15 @@ repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied 
 copy and the result checked, including `mix test` and, for grammar changes, a yecc
 conflict check. Where a proposed fix turned out not to work as first written, the
 corrected version is what appears here. Claims that ran on the pinned Elixir 1.20.4 /
-OTP 28 instead say so; the yecc conflict check went with yecc (§6).
+OTP 28 instead say so; the yecc conflict check went with yecc (§6). *(History, 2026-11-01,
+decision 359: the scratch copy on Erlang/OTP 25 and Elixir 1.14 is how the early receipts
+were made, and they stand as the record of what was run then; nothing is run on it now.
+`mix.exs` requires Elixir 1.20, and `lib/` calls `Map.split_with/2`, new in 1.15, so no
+copy on 1.14 builds the code; every check since is run on the pinned 1.20.4 on OTP 28, the
+older-toolchain sandbox is gone from `CONTRIBUTING.md` and CLAUDE.md, and the checks the
+receipts in a session's scratchpad came from are committed: `scripts/` (the gate that
+names the tests that failed, the mutation table and the load runner) and
+`test/logex/readme_test.exs` (README's examples).)*
 
 ---
 
@@ -11950,7 +11960,8 @@ online edit that changes a tag's type or an array's size.
   (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on; both
   met, M1-5 on 2026-09-29), and a
   re-run of the whole study on Elixir 1.20, the floor in `mix.exs` — every receipt is from the 1.14
-  sandbox. The report's §15 lists the decisions this item is waiting on, and they are still
+  sandbox. *(History, 2026-11-01, decision 359: the 1.14 sandbox is gone from the
+  documents; the study's receipts stay 1.14's, and its re-run is on 1.20.4.)* The report's §15 lists the decisions this item is waiting on, and they are still
   open. One seam came forward on its own: M1-3, decided 2026-09-28, provides the
   Elixir-side declarer (`instructionize(ast, declared)` and `Logex.Tag.new!/4`) that §11's
   M1-3 row asks for; §15's decision 3 (head declarations in the DSL's output) stays B9's.

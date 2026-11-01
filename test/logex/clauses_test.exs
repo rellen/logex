@@ -7,7 +7,8 @@ defmodule Logex.ClausesTest do
   `unless` lies only in one of them, and every other function, macro and test, each
   oracle and the harness that compares it with logex, and every other form of a module's
   body, a `setup`, a module attribute's anonymous function or the body's own code, is
-  clauses. `end_to_end_test.exs` holds none. The files are read as syntax trees, so that a
+  clauses. `end_to_end_test.exs` holds none, nor does `readme_test.exs`, the harness that
+  runs README's examples. The files are read as syntax trees, so that a
   conditional in a string, a comment or a heredoc is none and one written inline,
   `if(x, do: 1, else: 0)`, or through its module, `Kernel.if(x, do: 1)`, is one.
   """
@@ -17,6 +18,7 @@ defmodule Logex.ClausesTest do
   @kinds [:case, :cond, :if, :unless]
   @defs [:def, :defp, :defmacro, :defmacrop]
   @kernel [[:Kernel], [:Kernel, :SpecialForms]]
+  @each_example "Module.concat(Logex.ReadmeTest, Macro.camelize(Path.rootname(example.name)))"
 
   test "a walk's conditional lies only in a draw its module names, and each draw named is one of its functions" do
     path = Path.join(@root, "test/logex/api_contract_test.exs")
@@ -43,6 +45,30 @@ defmodule Logex.ClausesTest do
 
     for {module, %{conditionals: conditionals}} <- modules(path),
         do: assert(conditionals == [], inspect(module))
+  end
+
+  test "README's examples' harness, and every function and test beside it, holds no conditional" do
+    path = Path.join(@root, "test/logex/readme_test.exs")
+    modules = modules(path)
+    assert Map.has_key?(modules, Logex.ReadmeTest.Examples)
+    # The module each example is, defined by a `for`, is read too.
+    assert Map.has_key?(modules, Module.concat([@each_example]))
+
+    for {module, %{conditionals: conditionals}} <- modules,
+        do: assert(conditionals == [], inspect(module))
+  end
+
+  test "a module named by an expression is read, by the expression's text" do
+    source = ~S'''
+    for n <- [1, 2] do
+      defmodule Module.concat(M, "N#{n}") do
+        def f(x), do: if(x, do: 1)
+      end
+    end
+    '''
+
+    name = Module.concat([~S|Module.concat(M, "N#{n}")|])
+    assert %{^name => %{functions: [:f], conditionals: [{:f, _, :if}]}} = read(source)
   end
 
   # The check itself: each kind found, inline and in a block, where it is, and nothing in
@@ -130,6 +156,12 @@ defmodule Logex.ClausesTest do
     modules = Map.put(modules, name, %{found | conditionals: Enum.reverse(found.conditionals)})
     # A module inside it is read as its own.
     {{:__block__, [], []}, Map.merge(read_nested(body), modules)}
+  end
+
+  # A module named by an expression, one a `for` defines for each of its elements, is read
+  # as one, named by the expression's text.
+  defp module({:defmodule, _, [name, [do: body]]}, modules) do
+    module({:defmodule, [], [{:__aliases__, [], [Macro.to_string(name)]}, [do: body]]}, modules)
   end
 
   defp module(node, modules), do: {node, modules}

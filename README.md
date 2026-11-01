@@ -320,10 +320,10 @@ it from a state: a value outside its tag's type, a 5 in a `bool` or 5000000000 i
 refused where the state is handed in, an `ArgumentError` naming each such value, so no
 scan ever sees one (decisions 171 and 173). A tag the state leaves out reads open, as 0.
 
-### Settled, not yet landed
+### What has landed
 
 Nothing decided waits to land: retained values, the last milestone decided, have landed
-whole (the first bullet below). Everything decided so far (see [`docs/naming.md`](docs/naming.md), and
+whole (the first bullet below, the milestones newest first). Everything decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
 108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),
@@ -409,6 +409,7 @@ Neither file below is in the repository — create them to follow along.
 first rung: what it holds (`bool`, `dint` or another type), and whether it is supplied from outside
 (`var_input`), produced for outside (`var_output`) or the program's own (`var`):
 
+<!-- file: motor.ld -->
 ```
 var_input start bool
 var_input stop bool
@@ -488,6 +489,7 @@ instance again, keeping the inputs that fit their types.
 `delay.ld` — a lamp that lights once `go` has been held for three seconds, and a pulse on
 the scan `go` rises:
 
+<!-- file: delay.ld -->
 ```
 var_input go bool
 var_output lamp bool
@@ -553,6 +555,7 @@ delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after 
 `boxes.ld` — a box counter on a conveyor: a photo-eye adds one for each box, the
 case-full lamp lights at three, and a button resets the count for the next case:
 
+<!-- file: boxes.ld -->
 ```
 var_input eye bool
 var_input reset_pb bool
@@ -650,6 +653,7 @@ the other changes nothing. An edit that changes a counter's width is refused, as
 change is. `stock.ld`, a buffer counted as an int, its case counter declared with IEC's
 dint word:
 
+<!-- file: stock.ld -->
 ```
 var_input infeed bool
 var_input outfeed bool
@@ -725,6 +729,7 @@ task is a configuration warning, since it sees its rung only when the task runs.
 lubrication timer that adds up the motor's running time, each with a preset of a few
 scans so the run is short:
 
+<!-- file: line.ld -->
 ```
 var_input motor bool
 var_input fault bool
@@ -830,6 +835,7 @@ above is its kind's.
 `cure.ld` — a curing oven that cures a load for 36 hours with its door shut, and a fan
 that runs on for 90 s once the door opens:
 
+<!-- file: cure.ld -->
 ```
 var_input door_shut bool
 var_output cured bool
@@ -918,6 +924,7 @@ the valve once the total reaches the setpoint, a lamp shows the total did not wr
 scan, a latched lamp that it ever did, and the flow per minute is worked out from the
 minutes run:
 
+<!-- file: fill.ld -->
 ```
 var_input flow dint
 var_input setpoint dint
@@ -1038,6 +1045,7 @@ rest of the program works in and doubled in a `uint`, with a lamp that is off wh
 double did not fit, and a level trimmed into an `sint`, with a lamp that is off when the
 level did not fit:
 
+<!-- file: drive.ld -->
 ```
 var_input  hz       uint
 var_input  level    dint
@@ -1157,6 +1165,7 @@ program is given, with a lamp that is off when the count was negative, and copie
 word of flags whose top bit the program latches while the drive is at speed, and a
 `slow` lamp, a bool, the inverse of the at-speed bit, and the same inverse in a `word`:
 
+<!-- file: status.ld -->
 ```
 var_input  status   word
 var_input  shift    sint
@@ -1287,6 +1296,7 @@ line 10: `and` computes in `code`'s type, an int, but `lamp` is a bool (declared
 `selected.ld` — a fault lamp that shows the bit of a drive's 16-bit fault word that the
 operator selects, and a lamp lit while that bit is clear:
 
+<!-- file: selected.ld -->
 ```
 var_input  faults  word
 var_input  sel     int
@@ -1430,6 +1440,7 @@ status.[16#4] of 16#0010: %{"on" => 1}
 revolutions a minute in a `real` and in an `lreal`, rounded and truncated into `int`s,
 with the square root of its frequency and a lamp that is off when there is none:
 
+<!-- file: fan.ld -->
 ```
 var_input  hz      real
 var_output speed   real
@@ -1590,6 +1601,7 @@ line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 1
 shifting them along on each pick, copies the fourth into a corner of a grid, and lights a
 lamp while it is over 500:
 
+<!-- file: weigh.ld -->
 ```
 var_input  load    int
 var_input  pick    bool
@@ -1755,6 +1767,7 @@ faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
 `scales.ld` — a box counter that weighs each box the photo-eye sees into the slot the
 panel names, and shows the weight in that slot, a lamp lit while it is over 500:
 
+<!-- file: scales.ld -->
 ```
 var_input  eye    bool
 var_input  weight int
@@ -1924,6 +1937,7 @@ line 11: `sloot` is not declared — did you mean `slot`?
 `step.ld` — a start button that steps a sequence once a press, while a lamp on the same
 rung shows the button held, and a pulse when a box leaves a photo-eye:
 
+<!-- file: step.ld -->
 ```
 var_input start_pb bool
 var_input eye bool
@@ -2016,6 +2030,7 @@ line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse 
 with a lamp that shows the button held and another once it has been held for three
 seconds. While the line is in auto, a `jmp` skips the manual section:
 
+<!-- file: jog.ld -->
 ```
 var_input manual bool
 var_input jog_pb bool
@@ -2117,6 +2132,7 @@ line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, t
 first rung, `function_block seal`, says what kind of file it is and names the block, as
 the file is named; its declarations are the block's members, and its rungs its body:
 
+<!-- file: seal.ld -->
 ```
 // A seal-in: `run` holds itself in from `start` until `stop`.
 function_block seal
@@ -2130,6 +2146,7 @@ var_output run bool
 `belts.ld` — three conveyors, each sealed in by an instance of its own, `s1` to `s3`, with
 one stop button. The third runs only while `auto` is on:
 
+<!-- file: belts.ld -->
 ```
 var_input start_1 bool
 var_input start_2 bool
@@ -2225,6 +2242,7 @@ eye for 30 ms is counted in that lane. The third box in a lane pulses that lane'
 through an instance of `gate.ld`, the block beside it. The panel names a lane, and the
 program shows that lane's count and whether a box is in front of it now:
 
+<!-- file: lanes.ld -->
 ```
 var_input  eye    bool[4]
 var_input  lane   int
@@ -2251,6 +2269,7 @@ move lane_c[lane].cv count
 xic lane_t[lane].dn ote held
 ```
 
+<!-- file: gate.ld -->
 ```
 function_block gate
 var_input  open  bool
@@ -2424,6 +2443,7 @@ keeps exactly what a program marks `retain` (`PLAN.md`'s Milestone 6; decisions 
 `shift.ld` — a box counter, a totaliser of the boxes' weights and a lubrication timer,
 all three marked, beside the last box's weight, which is not:
 
+<!-- file: shift.ld -->
 ```
 var_input eye bool
 var_input weight dint
@@ -2569,6 +2589,7 @@ every output point and what ran.
 50 ms one, each wired to its own buttons, contactor and speed setpoint; `m2`'s `overtemp`
 and `reset` are tied to 0. Every global located `at` a point is the plant's I/O list:
 
+<!-- file: plant.logex -->
 ```
 // plant.logex -- two conveyors, one program type (motor.ld)
 task fast interval 10 priority 1
@@ -2604,6 +2625,7 @@ program m2 motor with slow
 
 `broken.logex`, beside it, has a mistake on four of its lines:
 
+<!-- file: broken.logex -->
 ```
 task fast interval 10 priority 1
 var_global pb_start_1 bool at panel.i.0
@@ -2810,6 +2832,7 @@ no task `slwo` — did you mean `slow`?
 `conveyor.ld` reads an e-stop that every conveyor shares, through `var_external`, and
 latches its `fault` on it until `reset`:
 
+<!-- file: conveyor.ld -->
 ```
 var_input start bool
 var_input stop bool
@@ -2827,6 +2850,7 @@ xic reset otu fault
 on a 10 ms task and `c2` on a 50 ms one. Neither connects `estop`: each reads the global
 by name.
 
+<!-- file: line.logex -->
 ```
 // line.logex -- two conveyors, one e-stop
 task fast interval 10 priority 1
@@ -2856,6 +2880,7 @@ program c2 conveyor with slow
 10 ms press at 20 ms, then loads `wrong.logex`, which misspells the global and connects
 the var_external besides:
 
+<!-- file: wrong.logex -->
 ```
 var_global estp       bool at panel.i.7
 var_global pb_start_1 bool at panel.i.0
@@ -2950,6 +2975,7 @@ wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches t
 total it shares through `var_external`, and latches a retained `full` once three are
 counted:
 
+<!-- file: tally.ld -->
 ```
 var_input eye bool
 var_output retain full bool
@@ -2965,6 +2991,7 @@ xic boxes.q otl full
 `tally.logex` declares the total `retain`, the qualifier straight after `var_global`, as
 on a `.ld` declaration line:
 
+<!-- file: tally.logex -->
 ```
 // tally.logex -- a box counter whose count and total survive a warm restart
 var_global eye_1              bool at panel.i.0
@@ -2984,6 +3011,7 @@ configuration it starts is checked whole; then it loads `wired.logex`, the same 
 `full` wired to an output point, `var_global case_lamp bool at panel.q.0`, and
 `broken.logex`, a mistake on each of its last five lines:
 
+<!-- file: broken.logex -->
 ```
 var_global eye_1              bool at panel.i.0
 var_global retain case_lamp   bool at panel.q.0
@@ -3341,6 +3369,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
 `trip.logex` runs a conveyor of `conveyor.ld`, above, on a 10 ms task, and `snapshot.ld`
 on an event task, `trip`, which the e-stop's rising edge makes due:
 
+<!-- file: snapshot.ld -->
 ```
 var_input a bool
 var_output a_was bool
@@ -3348,6 +3377,7 @@ var_output a_was bool
 xic a ote a_was
 ```
 
+<!-- file: trip.logex -->
 ```
 // trip.logex -- a conveyor, and a snapshot of its contactor when the e-stop rises
 task fast interval 10 priority 1
@@ -3375,6 +3405,7 @@ restarts the conveyor and raises the e-stop again; then it loads `timed.logex`, 
 a program with a timer under an event task, and `wrong_trip.logex`, which has a mistake on
 each of its task lines. `debounce.ld` and the two files:
 
+<!-- file: debounce.ld -->
 ```
 var_input in bool
 var_output out bool
@@ -3384,6 +3415,7 @@ xic in ton t1 20
 xic t1.dn ote out
 ```
 
+<!-- file: timed.logex -->
 ```
 task trip single pb priority 0
 var_global pb bool at panel.i.0
@@ -3391,6 +3423,7 @@ program d debounce with trip
   d.in pb
 ```
 
+<!-- file: wrong_trip.logex -->
 ```
 task trip single sp priority 0
 task tick priority 1
@@ -3476,6 +3509,7 @@ every program instance with no timed task ([`docs/organisation.md`](docs/organis
 on a 10 ms task that must finish within 50 ms, and the box counter of `boxes.ld`, above, in
 the continuous task, `main`, watched to 200 ms:
 
+<!-- file: packing.logex -->
 ```
 // packing.logex -- a conveyor on a 10 ms task, and a box counter in the continuous task
 task fast interval 10 priority 1 watchdog 50
@@ -3503,6 +3537,7 @@ program b1 boxes
 `packing.exs` starts the conveyor and passes three boxes, 5 ms apart; then it loads
 `wrong_packing.logex`, which has a mistake on each of its task lines:
 
+<!-- file: wrong_packing.logex -->
 ```
 task fast interval 10 priority 1 watchdog 0
 task main continuous priority 2
@@ -4106,6 +4141,7 @@ its element, `zone_t[3]`. `oven.logex` reads an oven card's eight zone temperatu
 one array and lights a lamp for each zone over its setpoint through another, beside
 `zones.ld`:
 
+<!-- file: oven.logex -->
 ```
 // oven.logex -- eight zones, their temperatures from the oven card
 task fast interval 10 priority 1
@@ -4120,6 +4156,7 @@ program oven zones with fast
   oven.hot zone_hot
 ```
 
+<!-- file: zones.ld -->
 ```
 var_input  t   real[8]
 var_input  sp  real
@@ -4334,6 +4371,7 @@ the design and every rule, and `Logex.Edit`'s moduledoc the rules as built.
 `motor_v2.ld` — the motor of `motor.ld`, with `run_lamp` replaced by `at_speed`, lit once
 the motor has run for two seconds, and a pulse, `started`, on the scan the motor starts:
 
+<!-- file: motor_v2.ld -->
 ```
 var_input start bool
 var_input stop bool
@@ -4601,6 +4639,7 @@ edit has installed, and the host chooses nothing. It never writes a global: deci
 `var_external`, while the conveyor is faulted; `v2/trip.logex` checks it every 5 ms and
 drops the snapshot:
 
+<!-- file: v2/conveyor.ld -->
 ```
 var_input start bool
 var_input stop bool
@@ -4616,6 +4655,7 @@ xic reset otu fault
 xic fault ote horn
 ```
 
+<!-- file: v2/trip.logex -->
 ```
 // trip.logex -- the conveyor sounds a horn while it is faulted, checked every 5 ms
 task fast interval 5 priority 1
@@ -4858,11 +4898,12 @@ build time, so a bare Erlang/OTP plus Elixir is enough — no `erlang-parsetools
 
 On an older toolchain `mix compile` aborts with *"you're trying to run :logex on Elixir
 v1.14.0 but it has declared in its mix.exs file it supports only Elixir ~> 1.20"*.
-**Install a newer Elixir rather than relaxing `mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
-of edit that gets committed by accident. `nix develop` gives you the pinned toolchain; the
-committed `flake.lock` predates the current pin, so the first run re-locks it — commit the
-result. If you cannot install one, run the suite in the throwaway sandbox in
-`CONTRIBUTING.md`, which relaxes the bound in a *copy*.
+**Install the pinned pair rather than relaxing `mix.exs`** — the requirement is deliberate,
+the code needs it, and a loosened version constraint is the kind of edit that gets
+committed by accident. `nix develop` gives you the pinned toolchain; the committed
+`flake.lock` predates the current pin, so the first run re-locks it — commit the result.
+Or install it with asdf or mise from `.tool-versions`: `asdf install` (with the `erlang`
+and `elixir` plugins added) or `mise install`, in the checkout.
 
 ```
 mix compile
@@ -4873,7 +4914,9 @@ mix format
 CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors`, the same under
 `MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
-Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`).
+Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`); `scripts/gate.sh` runs the
+same four here. The suite runs every example in this file and compares what it prints
+with what is printed here (`test/logex/readme_test.exs`).
 
 ## Documents
 
