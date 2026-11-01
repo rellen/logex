@@ -173,7 +173,9 @@ defmodule Logex.Runner do
     275). It is served at once, whatever the share, a system message, so that a runner
     suspended is stopped too.
   - `restart/2` starts a tripped runner again (below); a runner that is running is the
-    host's mistake (decision 133).
+    host's mistake (decision 133), judged as the restart arrives (decision 354): one asked
+    while the runner runs and waiting for the share's slot is refused all the same where a
+    trip comes before the slot.
 
   **Its store** (M6-5, `docs/organisation.md` §4.13; decisions 271, 275, 276, 284, 285,
   291 and 292). A runner given `retain:` keeps every value its configuration retains, the
@@ -360,11 +362,13 @@ defmodule Logex.Runner do
   runner tripped already keeps its first reason; the devices' notices that waited for it,
   a latch or a fault of their own, are taken together, in the order of the time each was
   raised, ties in device-name order, so that two devices that latch in one millisecond
-  trip it for the same reason on every run, and each is acted on before the trip, which
-  may serve a restart that waited, so that its first round finds every device heard as
-  late as they say. A notice carries the count of restarts its device had been released
-  for, and one raised before the last restart's release, taken with the notice that made
-  the trip or come in behind a restart the trip served, trips nothing. The reasons:
+  trip it for the same reason on every run, and each is acted on before the trip, so that
+  a restart asked after it finds every device heard as late as they say. A notice
+  carries the count of restarts its device had been released for, and one raised before
+  the last restart's release, come in behind that restart, trips nothing. A restart is
+  judged as it arrives (decision 354): one asked while the runner runs is refused,
+  whatever comes before it is served, a trip that answers it among it, so that a trip
+  stands until a restart asked after it. The reasons:
   - `{:watchdog, {:task, task, took_ms, limit_ms}}`: a timed task's run, from the start of
     its first instance's scan to the end of its last, longer than its task's watchdog,
     checked after its step and before the round's write (decision 110);
@@ -746,7 +750,10 @@ defmodule Logex.Runner do
   device, reason}}` for the first device, in device-name order, that cannot be opened or
   whose read fails, the runner left tripped with its first reason and every device that
   answers written 0 once more (decisions 136 and 142); a runner that is running is the
-  host's mistake (decision 133). It reads the forces file again first, as every start does
+  host's mistake (decision 133), judged as the restart arrives, so that one asked while
+  it runs is refused whatever comes before it is served, a trip among it, and the trip
+  stands until a restart asked after it (decision 354). It reads the forces file again
+  first, as every start does
   (decision 127): a force it cannot take is raised here, the runner left tripped, and
   since decision 353 a read the disk has not finished within the idle watchdog and a poll
   period of real time answers `{:error, {:forces, :timeout}}`, the runner tripped as it
@@ -835,6 +842,12 @@ defmodule Logex.Runner do
   def handle_call({:changes, device, _stale, _changes}, {pid, _tag}, %{pids: pids} = state)
       when :erlang.map_get(device, pids) == pid,
       do: {:reply, :stale, state}
+
+  # Decision 354: a restart is judged as it arrives, the runner's status then kept with it,
+  # so that one asked while the runner runs is refused whatever comes before it is served,
+  # a trip among it, and a trip stands until a restart asked after it.
+  def handle_call({:restart, mode}, from, state) when mode in [:cold, :warm],
+    do: {:noreply, requested(owed?(state), {from, {:restart, mode, state.status}}, state)}
 
   # A host's request is the runner's own work: served at once where no round is owed, and
   # otherwise queued for the share's slot (decision 122).
@@ -954,7 +967,7 @@ defmodule Logex.Runner do
   # Each request answered; one that took longer than the idle watchdog, served whole,
   # trips the runner once it is answered, `{:watchdog, {:idle, ms}}` (decision 128). A
   # restart is the tripped runner's own, its first round timed by its steps' watchdogs.
-  defp answered({from, {:restart, _mode} = request}, state) do
+  defp answered({from, {:restart, _mode, _asked} = request}, state) do
     {reply, state} = served(request, state)
     GenServer.reply(from, reply)
     state
@@ -1024,7 +1037,9 @@ defmodule Logex.Runner do
     kept(state, %{}, Map.keys(state.forces))
   end
 
-  defp serve({:restart, _mode}, %{status: :running}),
+  # Decision 133: a restart asked while the runner runs is the host's mistake, judged as it
+  # arrived (decision 354), whatever has come since.
+  defp serve({:restart, _mode, :running}, _state),
     do:
       raise(
         ArgumentError,
@@ -1067,7 +1082,7 @@ defmodule Logex.Runner do
   # file call, limited as its writes are: one not made within the idle watchdog and a poll
   # period of real time answers `{:error, {:forces, :timeout}}`, the runner left tripped as
   # it was (provisional).
-  defp serve({:restart, mode}, state),
+  defp serve({:restart, mode, :tripped}, state),
     do: restarting_with(forces_at_restart(state), mode, state)
 
   defp serve(other, _state),
@@ -2123,14 +2138,13 @@ defmodule Logex.Runner do
   # names the first, so that two devices that latch in one millisecond, whose notices
   # come in whichever order their processes ran, trip the runner for one reason, the same
   # on every run on the manual clock. Every notice taken is acted on before the trip, which
-  # may serve a host's restart that waited: so that none taken with it is acted on after
-  # that restart, a "back" among them, which would leave its device unheard as the
-  # restart's first round begins.
+  # answers the host's requests that waited, a restart among them refused since decision
+  # 354, it having been asked while the runner ran: so that a "back" taken with the trip's
+  # notice leaves its device heard as late as it says for a restart asked after.
   #
   # Each notice carries the count of restarts its device had heard as it raised it, the
   # count its last release, or its opening, gave it: one raised before the last restart's
-  # release, which may wait in the mailbox behind a restart served inside the trip it
-  # raced, or be taken with the notice that made that trip, never trips the restarted
+  # release, which may wait in the mailbox behind that restart, never trips the restarted
   # runner. A "back" is a fact whenever it was raised, so it counts whatever its count.
   defp noticed(taken, state) do
     receive do

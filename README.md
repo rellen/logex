@@ -3865,7 +3865,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   {:io_init, device, cause}}`, every device latched again and written 0 once more
   (decision 136): nothing switches on, and the card at fault is named. A runner
   that is running, not tripped, refuses a restart as the host's mistake, "the runner is
-  running" (decision 133). A runner that crashes or is killed is gone, its devices writing
+  running" (decision 133), judged as the restart arrives: one asked while it runs is
+  refused even where a trip comes before it is served, so that a trip stands until a
+  restart asked after it (decision 354). A runner that crashes or is killed is gone, its devices writing
   every output 0 once and closing as it goes (decision 115), a device waiting on it for
   its own change among them; its child spec is `restart: :temporary`, so the host starts a
   new one.

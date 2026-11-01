@@ -318,6 +318,9 @@ defmodule Logex.TripTest do
   # mutation run's three suites (see "growth").
   @trip_bound 5.08
 
+  # Decision 133's refusal of a restart asked while the runner runs.
+  @running "the runner is running: restart/2 starts a runner again once it has tripped"
+
   # One var_input copied to one var_output, and a counter of its own runs.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
   @count "var_output n dint\nadd n 1 n"
@@ -3471,24 +3474,38 @@ defmodule Logex.TripTest do
       assert %{status: :running, trip: nil} = Runner.status(runner)
     end
 
-    test "a restart a trip serves from its queue trips on no notice taken with the one " <>
-           "that made the trip, two devices latching in one millisecond" do
+    # Decision 354: a restart is judged as it arrives. The three tests below pinned the
+    # other reading, a restart asked while the runner ran and queued for the share's slot
+    # served by a trip that came before the slot, which it then cleared; with the
+    # maintainer's leave each now pins the restart refused and the trip standing, and the
+    # notices' rule, that none raised before a restart's release trips it, on a restart
+    # asked after the trip.
+    test "a restart asked while running is refused though a trip comes first (decision " <>
+           "354), and one asked after trips on no notice taken with the trip's" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = relayed_both()
       Runner.subscribe(runner)
 
       # The host's restart waits in the stuck runner's mailbox, a round owed, so that it is
-      # queued for the share's slot; then both devices latch at their deadline, 111, each
-      # notice behind it. The drive's trips the runner, whose trip serves the restart; the
-      # panel's, taken with it and raised before that restart's release, trips nothing.
+      # judged as the runner runs and queued for the share's slot; then both devices latch
+      # at their deadline, 111, each notice behind it. The drive's trips the runner, whose
+      # trip answers the restart refused; the panel's, taken with it, trips nothing more.
       :sys.suspend(runner)
-      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
       Manual.advance(clock, 110)
       zeroed_once(panel, 1)
       zeroed_once(drive, 1)
       :sys.resume(runner)
-      assert Task.await(task) == :ok
+      assert Task.await(task) == {:raised, @running}
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}
+
+      assert %{status: :tripped, trip: {:watchdog, {:device, "drive", 110}}} =
+               Runner.status(runner)
+
+      refute_received {Runner, ^runner, {:restart, _}}
+
+      # The trip stands until a restart asked after it.
+      assert Runner.restart(runner, :cold) == :ok
       assert_receive {Runner, ^runner, {:restart, :cold}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
       Manual.advance(clock, 50)
@@ -3499,17 +3516,16 @@ defmodule Logex.TripTest do
                {%{[0] => 1}, %{[0] => 1}}
     end
 
-    test "a restart a trip serves from its queue trips on no notice that came while the " <>
-           "trip ran, from a device not yet latched as the trip began" do
+    test "a restart asked while running is refused at the trip (decision 354), and one " <>
+           "asked after trips on no notice that came in while the trip ran" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = relayed_both()
       Runner.subscribe(runner)
 
       # As above, but the drive's process is held, so that its wake at 111 waits for it and
       # the panel's notice alone trips the runner. The drive is let go once the trip waits
-      # on its zero: it latches at its wake first, its notice coming in as the trip runs,
-      # behind the restart the trip serves.
+      # on its zero: it latches at its wake first, its notice coming in as the trip runs.
       :sys.suspend(runner)
-      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
       drive_device = device_pid(runner, "drive")
       :sys.suspend(drive_device)
@@ -3518,8 +3534,12 @@ defmodule Logex.TripTest do
       :sys.resume(runner)
       zero_waiting(drive_device)
       :sys.resume(drive_device)
-      assert Task.await(task) == :ok
+      assert Task.await(task) == {:raised, @running}
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "panel", 110}}}}
+      assert %{status: :tripped} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:restart, _}}
+
+      assert Runner.restart(runner, :cold) == :ok
       assert_receive {Runner, ^runner, {:restart, :cold}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Enum.take(Sim.writes(drive), -3) == [%{[0] => 1}, %{[0] => 0}, %{[0] => 1}]
@@ -3528,21 +3548,24 @@ defmodule Logex.TripTest do
       refute_received {Runner, ^runner, {:trip, _}}
     end
 
-    test "a restart a trip serves from its queue finds each device heard as late as the " <>
-           "notices taken with the trip's say, so that none is taken for hung" do
+    test "a restart asked while running is refused (decision 354), and one asked after " <>
+           "finds each device heard as late as its notices say" do
       %{runner: runner, clock: clock} = relayed_both()
       Runner.subscribe(runner)
 
       # Both devices latch at 111 and go on reading, each read's "back" waiting in the
-      # stuck runner's mailbox to 300; the restart the trip serves runs its first round
-      # with each device heard at 300, not at the latch, 189 ms and more before it.
+      # stuck runner's mailbox to 300, behind the restart, which is refused; the restart
+      # asked after runs its first round with each device heard at 300, not at the latch,
+      # 189 ms and more before it.
       :sys.suspend(runner)
-      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
       Manual.advance(clock, 299)
       :sys.resume(runner)
-      assert Task.await(task) == :ok
+      assert Task.await(task) == {:raised, @running}
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, _, 110}}}}
+      assert %{status: :tripped} = Runner.status(runner)
+      assert Runner.restart(runner, :cold) == :ok
       assert_receive {Runner, ^runner, {:restart, :cold}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
       refute_received {Runner, ^runner, {:trip, _}}
@@ -3575,6 +3598,14 @@ defmodule Logex.TripTest do
   # The relay copying the panel's x to the panel's y and the drive's z, untimed, so that a
   # round is always owed, on a 10 ms poll and a 100 ms idle watchdog; its first rounds
   # written by 1, each device's deadline then 111.
+  # A restart's answer, or the message of the host's mistake it raised, from a task of its
+  # own, so that a refusal does not take the test down with the task.
+  defp restart_answer(runner, mode) do
+    Runner.restart(runner, mode)
+  rescue
+    error in ArgumentError -> {:raised, error.message}
+  end
+
   defp relayed_both do
     text =
       "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
