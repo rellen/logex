@@ -1065,5 +1065,60 @@ defmodule Logex.ArrayConfigurationTest do
         end
       end
     end
+
+    # The review after Milestone 6 (b2-resource-3): a name whose first `[` is its last byte,
+    # given at a resource's doors, an input key, an image's path and a store's line, is
+    # refused in logex's words, read by RV-2's `Logex.Name`, where `Logex.Array.split/1`
+    # raised the BEAM's `binary_part/3` error.
+    test "a key or path ending in a bracket is refused at a resource's doors" do
+      {:ok, p} =
+        Logex.compile(
+          "var_input in bool\nvar_output out bool\nvar retain k dint\nxic in ote out",
+          name: "p"
+        )
+
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+            "var_global y bool at panel.q.0\nvar_global temps int[4] at card.i.0\n" <>
+            "program m1 p with fast\nm1.in x\nm1.out y",
+          %{"p" => p}
+        )
+
+      runtime = Runtime.start(config)
+
+      for {key, message} <- [
+            {"x[", ~s|input "x[" is not an input point — did you mean `x`?|},
+            {"temps[",
+             ~s|input "temps[" is not an input point: `temps` is an array of input points, | <>
+               "each element set by its name as its subscripts' values, `temps[0]` to " <>
+               "`temps[3]`"},
+            {"[",
+             ~s|input "[" is not an input point: the input points are `temps[0]` to | <>
+               "`temps[3]` and `x`"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Runtime.cycle(runtime, 0, %{key => 1}) end
+      end
+
+      image = Runtime.retained(runtime)
+      [{"m1", values}] = Map.to_list(image.instances)
+      bracketed = put_in(image.instances["m1"], %{values | values: %{"k[" => {:dint, 1}}})
+
+      assert_raise ArgumentError, ~s|instance "m1": `values` holds "k[", which is no path|, fn ->
+        Runtime.start(config, bracketed)
+      end
+
+      {decoded, _at} =
+        Logex.Retain.decode!(
+          "logex retain 1\nconfiguration plant written 2026-11-01T00:00:00Z\n" <>
+            "instance m1 p\nm1.k[ dint 0\n",
+          {"store", "plant"}
+        )
+
+      assert_raise ArgumentError, ~s|instance "m1": `values` holds "k[", which is no path|, fn ->
+        Runtime.start(config, decoded)
+      end
+    end
   end
 end

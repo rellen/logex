@@ -379,7 +379,8 @@ defmodule Logex.InstanceArrayTest do
       assert messages(source <> "xic go ton lane_t[1] 500 ote q") == [
                {6,
                 "`ote q` follows `ton lane_t[1]` on its path: what passes on after a `ton` is " <>
-                  "not settled, so a `ton` ends its path; read the timer's `.dn` on a rung below"}
+                  "not settled, so a `ton` ends its path; read the timer with `xic lane_t[1].dn` on a " <>
+                  "rung below"}
              ]
 
       assert messages(source <> "xic go ons lane_c[1].r ote q") == [
@@ -387,6 +388,85 @@ defmodule Logex.InstanceArrayTest do
                 "`ons` keeps its storage bit in a bool of its own, not in `lane_c[1].r`, a " <>
                   "member of `lane_c[1]`, which its instance reads"}
              ]
+    end
+  end
+
+  # RV-2 (the review after Milestone 6, M1): a bit of a member of an element keeps no
+  # storage bit, refused in its scalar twin's words, `ons c.pv.3`'s, where it compiled and
+  # its one-shot rewrote the counter's preset, 5 and 13 in turn, and escaped an edit's block
+  # list; and (M2) a pulse bit in a member an element a tag subscripts holds, or a bit of
+  # one, moves as the tag does, refused as `osr s e[i]` is, where the pulse stayed in the
+  # element it left and held that lane's counter reset for good.
+  describe "a one-shot in a member of an element (RV-2, M1 and M2)" do
+    @one_shot "var_input b bool\nvar_input i int\nvar_output o bool\nvar s bool\n" <>
+                "var cl ctu[2]\nvar tl ton[2]\nvar c ctu\n"
+
+    test "a storage bit in a bit of a member of an element is refused in its scalar twin's words" do
+      for {storage, rung} <- [
+            {"cl[1].pv.3", "xic b ons cl[1].pv.3 ote o"},
+            {"cl[i].pv.3", "xic b ons cl[i].pv.3 ote o"},
+            {"cl[1].pv.3", "xic b osr cl[1].pv.3 s"},
+            {"cl[1].pv.3", "xic b osf cl[1].pv.3 s"},
+            {"tl[1].pre.3", "xic b ons tl[1].pre.3 ote o"},
+            {"tl[i].acc.3", "xic b ons tl[i].acc.3 ote o"}
+          ] do
+        [symbol] = Regex.run(~r/o(ns|sr|sf)/, rung, capture: :first)
+        [instance | _] = String.split(storage, ".")
+
+        assert messages(@one_shot <> rung) == [
+                 {8,
+                  "`#{symbol}` keeps its storage bit in a bool or a bit of a tag of its own, not " <>
+                    "in `#{storage}`, a bit of a member of `#{instance}`, which its instance reads"}
+               ],
+               rung
+      end
+
+      # The scalar twin, as it was.
+      assert messages(@one_shot <> "xic b ons c.pv.3 ote o") == [
+               {8,
+                "`ons` keeps its storage bit in a bool or a bit of a tag of its own, not in " <>
+                  "`c.pv.3`, a bit of a member of `c`, which its instance reads"}
+             ]
+    end
+
+    test "a pulse bit in a member of an element a tag subscripts, or in a bit of one, is refused" do
+      for {pulse, example} <- [
+            {"cl[i].r", "cl[0].r"},
+            {"cl[i].pv.3", "cl[0].pv.3"},
+            {"tl[i].pre.0", "tl[0].pre.0"}
+          ] do
+        assert messages(@one_shot <> "xic b osr s #{pulse}") == [
+                 {8,
+                  "`osr` sets its pulse bit in `#{pulse}`, whose subscript `i` holds: a pulse " <>
+                    "coil's pulse bit is a bool, a bit with a literal number or an element with " <>
+                    "literal subscripts, as in `#{example}`, so that it is one bit whatever the " <>
+                    "program does"}
+               ],
+               pulse
+      end
+
+      # As a bool element's is.
+      assert messages(@one_shot <> "var e bool[2]\nxic b osf s e[i]") == [
+               {9,
+                "`osf` sets its pulse bit in `e[i]`, whose subscript `i` holds: a pulse coil's " <>
+                  "pulse bit is a bool, a bit with a literal number or an element with literal " <>
+                  "subscripts, as in `e[0]`, so that it is one bit whatever the program does"}
+             ]
+    end
+
+    test "a pulse bit in a member of an element by literal subscripts is still one bit" do
+      p =
+        program(
+          @one_shot <>
+            "xic b osr s cl[1].r\nxic b ctu cl[1] 5\nxic b ctu cl[0] 5\nxic cl[1].r ote o\n" <>
+            "xic b ton tl[1] 5\nxic b ton tl[0] 5\nxic b ctu c 5"
+        )
+
+      {outputs, state} = run(p, [{0, %{"b" => 0, "i" => 0}}, {1, %{"b" => 1}}])
+      assert outputs["o"] == 1
+      assert element(state, "cl", 1)["r"] == 1
+      {outputs, _state} = run(p, [{2, %{"b" => 1}}], state)
+      assert outputs["o"] == 0
     end
   end
 

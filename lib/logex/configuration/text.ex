@@ -60,7 +60,8 @@ defmodule Logex.Configuration.Text do
   - `<instance>.<member> <global or constant>`, a `%Logex.Configuration.Connection{}`, its
     path split at its first `.`, so `m1.t1.pre` is the instance `m1` and the member
     `t1.pre`, connected `to` a global's name or a constant. The member's section gives
-    the direction, so the line carries no arrow (decision 5).
+    the direction, so the line carries no arrow (decision 5). The instance is named
+    whole: a path whose first part has brackets, `k1[1].a`, is a broken line, told so.
 
   This is the grammar only, and a mistake in it is a `:configure` diagnostic at its token,
   with a column. What the words mean, a name declared once and a location that is one, a
@@ -213,6 +214,13 @@ defmodule Logex.Configuration.Text do
   # double no other literal of the text holds, which every rule of `check/1` refuses as it
   # refuses a subnormal one, `1.0e-310`, in the global's or the member's words, and whose
   # text, `shown`, `Logex.Configuration.compile/3` puts back as written in each message. No configuration holding a stand-in compiles, so none is ever handed out.
+  #
+  # Since RV-2's review a real literal written other than as its value's plain text, an
+  # initial value of a `var_global` line whose global holds no real, `var_global g dint
+  # 1.5e1` or `var_global g int[2] 1 2.5e0`, is stood in for too, which every rule refuses
+  # as it refuses any real there, so that it is quoted as written, as a `.ld` line's is
+  # (a3-compiler2-9's twin); and a line's qualifier is passed over, so that decision 227's
+  # warning is given on `var_global retain sp real 16777217.0` too.
   def read_rounded(source) when is_binary(source) do
     {lexed, spelled} = stood_in(Logex.Lexer.tokenize(source))
     {read, rounded} = lexed_rounded(lexed)
@@ -221,31 +229,51 @@ defmodule Logex.Configuration.Text do
 
   # Decision 237: each underflowed literal, in source order, stood in for by a subnormal
   # double, the next `k * 5.0e-324`, k from 7919, that no real literal of the text holds, so
-  # that its shortest text, which a message quotes, is no other literal's.
-  # A text with none, nearly every one, is passed over at a reduction a token.
-  defp stood_in({:ok, tokens, _end_line} = lexed), do: stood_in(underflows?(tokens), lexed)
+  # that its shortest text, which a message quotes, is no other literal's; and since RV-2's
+  # review each spelled real literal a `var_global` line gives a global that holds no real
+  # (`misfits/1`). A text with no spelled real literal, nearly every one, is passed over at
+  # a reduction a token.
+  defp stood_in({:ok, tokens, _end_line} = lexed), do: stood_in(spelled_real?(tokens), lexed)
   defp stood_in(error), do: {error, []}
 
   defp stood_in(false, lexed), do: {lexed, []}
 
   defp stood_in(true, {:ok, tokens, end_line}) do
+    misfits = misfits(split(tokens, [], []))
+
     {tokens, {_count, _held, spelled}} =
-      Enum.map_reduce(tokens, {7919, held(tokens), []}, &stand_in/2)
+      Enum.map_reduce(tokens, {7919, held(tokens), []}, &stand_in(&1, &2, misfits))
 
     {{:ok, tokens, end_line}, Enum.reverse(spelled)}
   end
 
-  defp underflows?([{:real_lit, _, zero, _} = token | rest]) when zero == 0.0,
-    do: Parser.underflowed?(token) or underflows?(rest)
+  defp spelled_real?([{:real_lit, _, _value, _spelling} | _rest]), do: true
+  defp spelled_real?([_token | rest]), do: spelled_real?(rest)
+  defp spelled_real?([]), do: false
 
-  defp underflows?([_token | rest]), do: underflows?(rest)
-  defp underflows?([]), do: false
+  defp stand_in({:real_lit, {line, _} = location, _value, spelling} = token, acc, misfits),
+    do:
+      stand_in(
+        Parser.underflowed?(token) or MapSet.member?(misfits, location),
+        token,
+        {location, line, spelling},
+        acc
+      )
 
-  defp stand_in({:real_lit, {line, _} = location, zero, spelling} = token, acc)
-       when zero == 0.0,
-       do: stand_in(Parser.underflowed?(token), token, {location, line, spelling}, acc)
+  defp stand_in(token, acc, _misfits), do: {token, acc}
 
-  defp stand_in(token, acc), do: {token, acc}
+  # The location of each spelled real literal among a `var_global` line's initial values
+  # whose global's type is known and holds no real, an integer, a bit string or a bool, or
+  # an array of one: a real there is always refused, so its configuration never compiles.
+  defp misfits(lines),
+    do:
+      MapSet.new(
+        for tokens <- lines,
+            {_line, type, values} <- [global_line(tokens)],
+            type != nil and type not in @reals,
+            {:real_lit, location, _value, _spelling} <- Enum.take_while(values, &is_literal/1),
+            do: location
+      )
 
   defp stand_in(true, token, {location, line, spelling} = at, {k, held, spelled}),
     do:
@@ -296,37 +324,39 @@ defmodule Logex.Configuration.Text do
 
   defp lexed_rounded(error), do: {lexed(error), []}
 
-  # The review after Milestone 6 (b6-configuration-5): a qualified line, `var_global retain
-  # total real 0.1`, is read by place without its qualifier, so that it is warned of as
-  # the same line with none, where until then its warning was lost.
-  defp rounded_line([first, {:name, _, qualifier} | rest] = tokens)
-       when may_qualify(qualifier),
-       do: rounded_by(Map.get(@qualifiers, String.downcase(qualifier)), first, rest, tokens)
-
-  defp rounded_line(tokens), do: rounded_unqualified(tokens)
-
-  defp rounded_by(nil, _first, _rest, tokens), do: rounded_unqualified(tokens)
-  defp rounded_by(_qualifier, first, rest, _tokens), do: rounded_unqualified([first | rest])
-
-  defp rounded_unqualified([
-         {:name, {line, _}, word},
-         {:name, _, _name},
-         {:name, _, type} | values
-       ]),
-       do: rounded_global(String.downcase(word), line, real_word(String.downcase(type)), values)
-
   # The review after Milestone 6 (b6-configuration-10): a connection's real constant,
   # `m1.sp 16777217.0`, with its spelling, which `Logex.Configuration.compile/3` judges in
   # the type of the member it fills, as a `var_global` line's is judged in its global's.
-  defp rounded_unqualified([{:name, {line, _}, path}, value]) when is_real_lit(value),
+  defp rounded_line([{:name, {line, _}, path}, value]) when is_real_lit(value),
     do: rounded_constant(String.split(path, ".", parts: 2), line, value)
 
-  defp rounded_unqualified(_tokens), do: []
+  defp rounded_line(tokens), do: rounded_global(global_line(tokens))
 
   defp rounded_constant([instance, member], line, value),
     do: [{:constant, line, {instance, member}, Parser.value(value), Parser.spelling(value)}]
 
   defp rounded_constant(_unparted, _line, _value), do: []
+
+  # A `var_global` line as `{line, type, values}`, its type word read as `real_word/1` reads
+  # it and the tokens after it, a qualifier straight after `var_global` passed over (M6-3),
+  # or nil for any other line.
+  defp global_line([{:name, {line, _}, word} | rest]),
+    do: global_words(String.downcase(word), line, rest)
+
+  defp global_line(_tokens), do: nil
+
+  defp global_words("var_global", line, [{:name, _, first} | rest] = words),
+    do: unqualified(is_map_key(@qualifiers, String.downcase(first)), line, rest, words)
+
+  defp global_words(_word, _line, _rest), do: nil
+
+  defp unqualified(true, line, words, _whole), do: typed_line(line, words)
+  defp unqualified(false, line, _rest, words), do: typed_line(line, words)
+
+  defp typed_line(line, [{:name, _, _name}, {:name, _, type} | values]),
+    do: {line, real_word(String.downcase(type)), values}
+
+  defp typed_line(_line, _words), do: nil
 
   defp real_word(word) when is_map_key(@types, word), do: Map.fetch!(@types, word)
 
@@ -338,7 +368,7 @@ defmodule Logex.Configuration.Text do
   defp array_real({:ok, {:array, type, _dims}}), do: type
   defp array_real(:error), do: nil
 
-  defp rounded_global("var_global", line, type, values) when type in @reals,
+  defp rounded_global({line, type, values}) when type in @reals,
     do:
       for(
         value <- Enum.take_while(values, &is_literal/1),
@@ -349,7 +379,7 @@ defmodule Logex.Configuration.Text do
         do: {line, Parser.spelling(value), type, held}
       )
 
-  defp rounded_global(_word, _line, _type, _values), do: []
+  defp rounded_global(_other), do: []
 
   defp lines([], entries, []), do: {:ok, Enum.reverse(entries)}
   defp lines([], entries, problems), do: {:error, Enum.reverse(problems), Enum.reverse(entries)}
@@ -718,7 +748,7 @@ defmodule Logex.Configuration.Text do
       {:error, fail(token, unknown_array(FbType.builtin(base_word(word)), word, global.name)),
        declared(global)}
 
-  defp base_word(word), do: hd(:binary.split(word, "["))
+  defp base_word(word), do: Logex.Name.base(word)
 
   # M5-14 (decision 154): an array of instances is a program's own, as an instance is.
   defp unknown_array(%FbType{name: type}, word, name),
@@ -981,8 +1011,24 @@ defmodule Logex.Configuration.Text do
   # connection -> PATH (NAME | INT)
   defp connection(rest, path, first, line) do
     [instance, member] = String.split(path, ".", parts: 2)
-    wire(rest, %Connection{instance: instance, member: member, to: nil, line: line}, first)
+    connection = %Connection{instance: instance, member: member, to: nil, line: line}
+    whole_instance(Logex.Name.word(instance), connection, rest, first)
   end
+
+  # RV-2's review: the path's first part names a program instance whole, so `k1[1].a`,
+  # which the lexer reads as one name, is a broken line told so, where it reached
+  # `Logex.Configuration.check/1` as the host's mistake. It still connects `k1`'s `a`, for
+  # what checks the rest.
+  defp whole_instance(nil, connection, rest, first), do: wire(rest, connection, first)
+
+  defp whole_instance(word, connection, _rest, first),
+    do:
+      {:error,
+       fail(
+         first,
+         "`#{path(connection)}` names an element of `#{word}`: a connection's instance is " <>
+           "named whole, never by one of its elements, as in `#{word}.#{connection.member}`"
+       ), declared(%{connection | instance: word})}
 
   defp wire([{:name, _, global}], connection, _first), do: {:ok, %{connection | to: global}}
 

@@ -1287,7 +1287,7 @@ defmodule Logex.Runtime do
 
   defp value!(runtime, path) do
     [head | rest] = String.split(path!(path), ".")
-    at_head(Logex.Array.split(head), {head, rest, path}, runtime)
+    at_head(Logex.Name.element(head), {head, rest, path}, runtime)
   end
 
   defp at_head(nil, {head, _rest, _path} = at, runtime),
@@ -1340,7 +1340,7 @@ defmodule Logex.Runtime do
     do:
       Logex.Array.fetch(
         value,
-        path_index(Enum.map(subscripts, &Logex.Array.subscript/1), dims, {head, array, what})
+        path_index(Enum.map(subscripts, &Logex.Name.subscript/1), dims, {head, array, what})
       )
 
   defp element_at(_type, _subscripts, {head, array, what}, _value),
@@ -2138,7 +2138,7 @@ defmodule Logex.Runtime do
   defp element_index(key, %Program{tags: tags})
        when is_binary(key) and not is_map_key(tags, key) and byte_size(key) > 0 and
               binary_part(key, byte_size(key) - 1, 1) == "]",
-       do: indexed(Logex.Array.split(key), key, tags)
+       do: indexed(Logex.Name.element(key), key, tags)
 
   defp element_index(_key, _program), do: []
 
@@ -2152,7 +2152,7 @@ defmodule Logex.Runtime do
          {:ok, [{:name, _, key}], _line},
          {array, subscripts, key}
        ),
-       do: in_dims(Enum.map(subscripts, &Logex.Array.subscript/1), dims, {array, key})
+       do: in_dims(Enum.map(subscripts, &Logex.Name.subscript/1), dims, {array, key})
 
   defp of_input(_not_an_input, _tokens, _key), do: []
 
@@ -2239,7 +2239,7 @@ defmodule Logex.Runtime do
   # element, its value fitting the elements' type, the rest of the array kept.
   defp declared(:error, key, value, %Program{tags: tags} = program)
        when binary_part(key, byte_size(key) - 1, 1) == "]",
-       do: element_key(Logex.Array.split(key), {key, value}, tags, program)
+       do: element_key(Logex.Name.element(key), {key, value}, tags, program)
 
   # A key naming no tag is told what its first part is, an instance's type itself (tag_of/2).
   defp declared(:error, key, _value, %Program{tags: tags} = program) do
@@ -2283,7 +2283,7 @@ defmodule Logex.Runtime do
   end
 
   defp one_name({:ok, [{:name, _, key}], _line}, {tag, key, subscripts, value}, _world),
-    do: subscripted_input(Enum.map(subscripts, &Logex.Array.subscript/1), {tag, key, value})
+    do: subscripted_input(Enum.map(subscripts, &Logex.Name.subscript/1), {tag, key, value})
 
   defp one_name(_not_one_name, {_tag, key, _subscripts, _value}, {tags, program}),
     do: element_input(:error, {key, [], nil}, tags, program)
@@ -2537,7 +2537,7 @@ defmodule Logex.Runtime do
   # Decision 223: a connection's far end that is an element of a global array, `speeds[1]`,
   # is `{:at, array, index}`, its subscripts' values, which check/1 took; any other is kept.
   defp far_end(to) when is_binary(to) and binary_part(to, byte_size(to) - 1, 1) == "]" do
-    {array, subscripts} = Logex.Array.split(to)
+    {array, subscripts} = Logex.Name.element(to)
     {:at, array, Enum.map(subscripts, &literal_subscript/1)}
   end
 
@@ -2620,7 +2620,7 @@ defmodule Logex.Runtime do
   # with the element's type.
   defp connected_tag(%Program{tags: tags}, member)
        when binary_part(member, byte_size(member) - 1, 1) == "]" do
-    {array, subscripts} = Logex.Array.split(member)
+    {array, subscripts} = Logex.Name.element(member)
     %Tag{type: {:array, type, _dims}} = Map.fetch!(tags, array)
     {:element, array, Enum.map(subscripts, &literal_subscript/1), type}
   end
@@ -2628,7 +2628,7 @@ defmodule Logex.Runtime do
   defp connected_tag(%Program{tags: tags}, member), do: {:whole, Map.fetch!(tags, member)}
 
   defp literal_subscript(text) do
-    {:literal, n} = Logex.Array.subscript(text)
+    {:literal, n} = Logex.Name.subscript(text)
     n
   end
 
@@ -2887,7 +2887,7 @@ defmodule Logex.Runtime do
       "input #{label(key)} is the configuration's name, not an input point: " <>
         "only an input point is set from outside"
 
-  defp named_point(:none, key, runtime), do: element_point(Logex.Array.split(key), key, runtime)
+  defp named_point(:none, key, runtime), do: element_point(Logex.Name.word(key), key, runtime)
 
   # Decision 241: a located array of input points set whole is a list of its shape, each
   # element fitting its type, its misfits ten and then a count, in a host's array
@@ -2905,9 +2905,10 @@ defmodule Logex.Runtime do
       "input #{label(key)} is an array with no location, not an input point: only an input " <>
         "point is set from outside"
 
-  # A name with subscripts: an element of a located array of output points, or of a global
-  # array with no location, is told what it is; any other is no input point.
-  defp element_point({array, _subscripts}, key, %__MODULE__{wiring: wiring} = runtime),
+  # A name with subscripts, however they are written: an element of a located array of
+  # output points, or of a global array with no location, is told what it is; any other is
+  # no input point.
+  defp element_point(array, key, %__MODULE__{wiring: wiring} = runtime) when is_binary(array),
     do: element_global(Map.fetch(wiring.globals, array), key, runtime)
 
   defp element_point(nil, key, runtime), do: no_point(key, runtime.wiring)
@@ -3336,11 +3337,26 @@ defmodule Logex.Runtime do
 
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    tag_at(Logex.Array.split(tag), program, {head, tag, members, path}, runtime)
+    instance_part(Logex.Name.bracketed(tag), program, {head, tag, members, path}, runtime)
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
     do: raise(ArgumentError, unknown_head(kind(runtime, head), head, runtime))
+
+  # The review after Milestone 6 (b2-resource-9): `m1.[0]`, which the lexer reads as a
+  # bit of `m1`, a bit number in brackets (`Logex.Name.bracketed/1`), names no tag of the
+  # instance, which has no bits, where until then it was told the program declares no
+  # ``, or since RV-2 no `[0]`, a tag of no name.
+  defp instance_part(nil, program, {_head, tag, _members, _path} = at, runtime),
+    do: tag_at(Logex.Name.element(tag), program, at, runtime)
+
+  defp instance_part(_bit, program, {head, _tag, _members, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` names a bit of `#{head}`, a program instance of `#{program.name}`, which " <>
+          "has no bits: an access path names one of its tags" <> example_tag(program, head)
+      )
 
   defp unknown_head(:task, head, _runtime),
     do:
@@ -3375,17 +3391,6 @@ defmodule Logex.Runtime do
 
   defp tag_at(nil, program, {_head, tag, _members, _path} = at, runtime),
     do: read_tag(tag_of(program, tag), at, program, runtime)
-
-  # The review after Milestone 6 (b2-resource-9): `m1.[0]`, which the lexer reads as a
-  # bit of `m1`, names no tag of the instance, which has no bits, where until then it was
-  # told the program declares no ``, a tag of no name.
-  defp tag_at({"", _subscripts}, program, {head, _tag, _members, path}, _runtime),
-    do:
-      raise(
-        ArgumentError,
-        "`#{path}` names a bit of `#{head}`, a program instance of `#{program.name}`, which " <>
-          "has no bits: an access path names one of its tags" <> example_tag(program, head)
-      )
 
   # M5-11 (§4.12): an element of an instance's array, `m1.temps[3]`, a var_external's read
   # in its global, and nothing below it.

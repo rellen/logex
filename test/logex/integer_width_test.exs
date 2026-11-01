@@ -518,7 +518,8 @@ defmodule Logex.IntegerWidthTest do
     test "a configuration's refusals quote a literal as its line writes it" do
       {:ok, p} =
         Logex.compile(
-          "var_input x int\nvar_input b bool\nvar_output y int\nmove x y\nxic b",
+          "var_input x int\nvar_input b bool\nvar_output y int\nvar_output q bool\n" <>
+            "move x y\nxic b ote q",
           name: "p"
         )
 

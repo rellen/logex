@@ -38,6 +38,14 @@ defmodule Logex.Lexer do
   one with a second `#`, `16#ff#`, are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
   B2's mistyped lexeme.
 
+  Since RV-2 (M13, provisional) a number is at most 10,000 characters, `longest_number/0`,
+  and a real's exponent at most 9,999, `largest_exponent/0`, each far past any value a type
+  holds: a longer literal is `{:long_number, run}`, quoted by its first 24 characters, a
+  name holding a longer subscript or bit number `{:long_name, run}`, and an exponent past
+  it, `0.0e10000000`, `{:exponent_range, run}`, so that no number read costs more than its
+  text, and the store's and the forces file's readers, which read a number here, refuse
+  them too.
+
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
 
@@ -56,6 +64,24 @@ defmodule Logex.Lexer do
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
+
+  # RV-2 (M13, provisional): the longest number logex reads, in characters, its sign, `_`s,
+  # base, point and exponent among them, and the largest exponent a real may have, each
+  # far past any value a type holds: 10,000 characters hold every integer type's values,
+  # 20 digits at most, and every double written in full, some 1,100 digits at most, and an
+  # exponent of 9,999 every double a mantissa of up to 9,000 digits writes. Past either, a
+  # number would only grow the work of reading it and of every message that quotes it,
+  # `0.0e10000000` a power of ten of 33 million bits, so it is a located error, in a
+  # literal, a subscript or a bit's number alike, and the store's and the forces file's
+  # readers, which read a number through this lexer, refuse it too.
+  @longest_number 10_000
+  @largest_exponent 9_999
+
+  @doc false
+  def longest_number, do: @longest_number
+
+  @doc false
+  def largest_exponent, do: @largest_exponent
   defguardp is_name_char(ch) when is_name_start(ch) or ch in ?0..?9
 
   @doc """
@@ -64,100 +90,132 @@ defmodule Logex.Lexer do
   """
   def tokenize(source) when is_binary(source), do: lex(source, 1, 1, [])
 
-  def format_error({:illegal, text}), do: "illegal character #{inspect(text)}"
+  # RV-2 (the review after Milestone 6, a1-frontend-9): a host's mistake, a pinned
+  # `ArgumentError`.
+  def tokenize(source),
+    do: raise(ArgumentError, "tokenize/1 takes a source text, a binary, got: #{inspect(source)}")
+
+  def format_error({:illegal, text}), do: "illegal character #{shown(text)}"
 
   def format_error({:missing_separator, text}),
     do:
-      "missing separator after #{after_what(text)}: #{inspect(text)} is neither a number nor a tag"
+      "missing separator after #{after_what(text)}: #{shown(text)} is neither a number nor a tag"
 
   def format_error({:separator, text}),
-    do: "#{inspect(text)} is no number: a `_` in a number stands only between two digits"
+    do: "#{shown(text)} is no number: a `_` in a number stands only between two digits"
 
   def format_error({:base, text}),
     do:
-      "#{inspect(text)} is no number: a based number is written in base 16, `16#ff`, or " <>
+      "#{shown(text)} is no number: a based number is written in base 16, `16#ff`, or " <>
         "base 2, `2#1010`, and logex reads no other base"
 
   def format_error({:signed_based, text}),
-    do: "#{inspect(text)} is no number: a based number takes no sign"
+    do: "#{shown(text)} is no number: a based number takes no sign"
 
   def format_error({:digits, 16, text}),
     do:
-      "#{inspect(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
+      "#{shown(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
         "and a to f, in either case, after its `16#`"
 
   def format_error({:digits, 2, text}),
     do:
-      "#{inspect(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
+      "#{shown(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
         "after its `2#`"
 
   def format_error({:hash, text}),
     do:
-      "#{inspect(text)} is no number: a based number holds one `#`, between its base and " <>
+      "#{shown(text)} is no number: a based number holds one `#`, between its base and " <>
         "its digits, `16#ff`"
 
   def format_error({:after_bracket, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets, `status.[n]`, ends its name, " <>
+      "#{shown(text)} is no name: a bit number in brackets, `status.[n]`, ends its name, " <>
         "and nothing may follow its `]` but a space"
 
   def format_error({:bracketed, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is a tag's name, `status.[n]`, " <>
+      "#{shown(text)} is no name: a bit number in brackets is a tag's name, `status.[n]`, " <>
         "or one number closed by its `]`, `status.[4]` or `status.[16#4]`"
 
   def format_error({:bracket, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is one tag's name between `[` " <>
+      "#{shown(text)} is no name: a bit number in brackets is one tag's name between `[` " <>
         "and `]`, with no space, `status.[n]`"
 
   def format_error({:detached, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is written straight after its " <>
+      "#{shown(text)} is no name: a bit number in brackets is written straight after its " <>
         "name's `.`, with no space, `status.[n]`"
 
   def format_error({:subscripts, text}),
     do:
-      "#{inspect(text)} is no name: an element's subscripts are one pair of brackets " <>
+      "#{shown(text)} is no name: an element's subscripts are one pair of brackets " <>
         "straight after its array's name, each a number or a tag's name, split by `,` " <>
         "with no space, as in `grid[1,7]`"
 
   def format_error({:after_subscripts, text}),
     do:
-      "#{inspect(text)} is no name: an element's subscripts end at their `]`, after which " <>
+      "#{shown(text)} is no name: an element's subscripts end at their `]`, after which " <>
         "only a `.` part may follow, so every subscript goes inside the one pair of " <>
         "brackets, as in `grid[1,7]`"
 
   def format_error({:point, text}),
     do:
-      "#{inspect(text)} is no number: a real has digits on both sides of its `.`, " <>
+      "#{shown(text)} is no number: a real has digits on both sides of its `.`, " <>
         "`1.0` or `0.5`"
 
   def format_error({:no_point, text}),
     do:
-      "#{inspect(text)} is no number: a real has a `.` with digits on both sides before its " <>
+      "#{shown(text)} is no number: a real has a `.` with digits on both sides before its " <>
         "exponent, `1.0e5`"
 
   def format_error({:plus, text}),
-    do: "#{inspect(text)} is no number: logex takes no `+`, so an exponent is `e3` or `e-3`"
+    do: "#{shown(text)} is no number: logex takes no `+`, so an exponent is `e3` or `e-3`"
 
   def format_error({:exponent, text}),
-    do: "#{inspect(text)} is no number: an exponent is `e` and its digits, `1.5e3` or `1.5e-3`"
+    do: "#{shown(text)} is no number: an exponent is `e` and its digits, `1.5e3` or `1.5e-3`"
 
   def format_error({:real_range, text}),
     do:
-      "#{inspect(text)} is no number logex holds: an lreal's largest is " <>
+      "#{shown(text)} is no number logex holds: an lreal's largest is " <>
         "1.7976931348623157e308"
 
   def format_error({:real_small, text}),
     do:
-      "#{inspect(text)} is no number logex holds: an lreal's smallest above 0.0 is " <>
+      "#{shown(text)} is no number logex holds: an lreal's smallest above 0.0 is " <>
         "2.2250738585072014e-308"
+
+  # RV-2 (M13): a number past the longest logex reads is quoted by its first characters
+  # alone, so that its message stays short however long the number is.
+  def format_error({:long_number, text}),
+    do:
+      "#{quoted_start(text)} is no number logex reads: a number is written in at most " <>
+        "#{@longest_number} characters, and this one has #{byte_size(text)}"
+
+  def format_error({:long_name, text}),
+    do:
+      "#{quoted_start(text)} is no name logex reads: a number in a name, a subscript or a " <>
+        "bit's number, is written in at most #{@longest_number} characters"
+
+  def format_error({:exponent_range, text}),
+    do:
+      "#{quoted_start(text)} is no number logex reads: a real's exponent is at most " <>
+        "#{@largest_exponent}, `e#{@largest_exponent}` or `e-#{@largest_exponent}`"
 
   def format_error({:signed_inside, text}),
     do:
-      "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
+      "missing separator before `-`: #{shown(text)} is neither a tag nor a number, " <>
         "and a sign begins a number"
+
+  # The first 24 characters of a long run, then `…`, and a short run whole, each quoted as
+  # every other run is (since RV-2's review, where a long one was quoted in backticks).
+  defp quoted_start(<<start::binary-size(24), _::binary>>), do: shown(start <> "…")
+  defp quoted_start(text), do: shown(text)
+
+  # RV-2 (the review after Milestone 6, a1-frontend-10): a run quoted as a string even
+  # where it holds a control byte, `"a.[n\0]"`, where inspect/1 showed it as a list of
+  # bytes.
+  defp shown(text), do: inspect(text, binaries: :as_strings)
 
   # M5-10: B2's lexeme after a real, `1.5L`, is told so, and after an integer as it was.
   defp after_what(text),
@@ -352,6 +410,11 @@ defmodule Logex.Lexer do
   # `007`, or `-0`, which is 0, and every number with a `_` or a base. A plain decimal, the
   # commonest by far, keeps the three-element token, told apart by its first two bytes in
   # the clause head, so it costs what it did.
+  defp number(src, {_kind, n}, l, c, _acc) when n > @longest_number do
+    <<text::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {:long_number, text}}, l}
+  end
+
   defp number(<<?0, d, _::binary>> = src, {:decimal, n}, l, c, acc) when d in ?0..?9,
     do: spelled(src, n, l, c, acc)
 
@@ -416,7 +479,7 @@ defmodule Logex.Lexer do
     [whole, rest] = :binary.split(unsigned, ".")
     {fraction, power} = exponent_split(rest)
     runs = [whole, fraction | power]
-    real_read(Enum.all?(runs, &(digits(&1, 10) == :ok)), text)
+    real_read(Enum.all?(runs, &(digits(&1, 10) == :ok)), power, text)
   end
 
   defp unsigned(<<?-, unsigned::binary>>), do: {unsigned, true}
@@ -428,10 +491,20 @@ defmodule Logex.Lexer do
   defp split_exponent([fraction, power]), do: {fraction, [power]}
   defp split_exponent([fraction]), do: {fraction, []}
 
-  defp real_read(false, text), do: {:error, {:separator, text}}
+  defp real_read(false, _power, text), do: {:error, {:separator, text}}
+  defp real_read(true, [], text), do: real_read(text)
 
-  defp real_read(true, text) do
-    float = IO.iodata_to_binary(:binary.split(text, "_", [:global]))
+  # RV-2 (M13): an exponent past the largest is named whole, before the BEAM reads it.
+  defp real_read(true, [power], text),
+    do: exponent_read(String.to_integer(unseparated(power)) <= @largest_exponent, text)
+
+  defp exponent_read(true, text), do: real_read(text)
+  defp exponent_read(false, text), do: {:error, {:exponent_range, text}}
+
+  defp unseparated(digits), do: IO.iodata_to_binary(:binary.split(digits, "_", [:global]))
+
+  defp real_read(text) do
+    float = unseparated(text)
     held(:erlang.binary_to_float(float))
   rescue
     ArgumentError -> {:error, {:real_range, text}}
@@ -510,7 +583,14 @@ defmodule Logex.Lexer do
   end
 
   defp name(src, {kind, n}, l, c, _acc)
-       when kind in [:after_bracket, :bracketed, :bracket, :detached, :after_subscripts] do
+       when kind in [
+              :after_bracket,
+              :bracketed,
+              :bracket,
+              :detached,
+              :after_subscripts,
+              :long_name
+            ] do
     <<run::binary-size(^n), _::binary>> = src
     {:error, {{l, c}, __MODULE__, {kind, run}}, l}
   end
@@ -574,6 +654,9 @@ defmodule Logex.Lexer do
 
   defp subscript_name(rest, n), do: subscript_end(rest, n)
 
+  # RV-2 (M13): a subscript past the longest number is the name's, named through it.
+  defp subscript_number(_rest, {_kind, m}, n) when m > @longest_number, do: {:long_name, n + m}
+
   defp subscript_number(rest, {kind, m}, n) when kind in [:decimal, :separated, :based] do
     <<text::binary-size(^m), tail::binary>> = rest
     one_number(number?(kind, text), tail, n + m)
@@ -599,15 +682,19 @@ defmodule Logex.Lexer do
   # caller cuts the run, which closing/2 takes through the first `]` on its line.
   defp subscripts_refused(n), do: {:subscripts, n}
 
-  defp integer_part(<<d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 1)
+  # A bit's number, `3` of `w.3`, its digits counted, `k`, so that one past the longest
+  # number is the name's (RV-2, M13).
+  defp integer_part(<<d, rest::binary>>, n, k) when d in ?0..?9,
+    do: integer_part(rest, n + 1, k + 1)
 
-  defp integer_part(<<h, _::binary>> = rest, n) when is_name_start(h),
+  defp integer_part(<<h, _::binary>> = rest, n, _k) when is_name_start(h),
     do: {:mistyped, n + word(rest, 0)}
 
-  defp integer_part(rest, n), do: dot(rest, n)
+  defp integer_part(_rest, n, k) when k > @longest_number, do: {:long_name, n}
+  defp integer_part(rest, n, _k), do: dot(rest, n)
 
   defp dot(<<?., h, rest::binary>>, n) when is_name_start(h), do: name_part(rest, n + 2)
-  defp dot(<<?., d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 2)
+  defp dot(<<?., d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 2, 1)
 
   # M5-9 (decision 160, §4.12's routine choice): a name's last part may be a tag's name in
   # brackets, `status.[n]` or `t1.acc.[n]`, a bit whose number the tag holds, Logix's form
@@ -645,6 +732,8 @@ defmodule Logex.Lexer do
 
   # A number in brackets: its lexeme `m` long after the `.[`, read as a number is, and
   # then its `]`, after which the name ends as one whose bracket holds a tag's name does.
+  defp in_brackets(_rest, {_kind, m}, n) when m > @longest_number, do: {:long_name, n + 2 + m}
+
   defp in_brackets(rest, {kind, m}, n) when kind in [:decimal, :separated, :based] do
     <<_::binary-size(2), text::binary-size(^m), tail::binary>> = rest
     numbered_bit(number?(kind, text), tail, {rest, n}, n + 2 + m)
@@ -686,6 +775,10 @@ defmodule Logex.Lexer do
   defp closing(rest, n, :open), do: n + unspaced(rest, 0)
 
   defp through(<<?], _::binary>>, m), do: {:closed, m + 1}
+
+  # RV-2 (the review after Milestone 6, a1-frontend-10): a comment is no part of the run,
+  # `a.[n // see .[3]` named `a.[n`, where the run went on into the comment to its `]`.
+  defp through(<<?/, ?/, _::binary>>, _m), do: :open
 
   defp through(<<ch, _::binary>>, _m) when ch in [?\n, ?\r, ?(, ?|, ?)] or ch > 127,
     do: :open

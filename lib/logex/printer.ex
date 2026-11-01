@@ -51,8 +51,13 @@ defmodule Logex.Printer do
   Both are reachable only by building an AST by hand, which is what the test
   generator does. Neither compiles: `Logex.Compiler.instructionize/2` refuses both on
   entry, as it refuses every tree `Logex.Parser.well_formed!/1` does not take (OE-1).
+  Since RV-2 (the review after Milestone 6) anything else that is no such tree, a leaf of
+  another shape among it, is an `ArgumentError` naming it, and the text is built in one
+  pass, linear in the rung's depth of nesting, where each group copied every token
+  inside it.
   """
-  def print({:routine, {:rungs, rungs}}), do: Enum.map_join(rungs, "\n", &print/1)
+  def print({:routine, {:rungs, rungs}}) when is_list(rungs),
+    do: rungs |> lines([]) |> Enum.reverse() |> Enum.join("\n")
 
   def print({:rung, []}) do
     raise ArgumentError,
@@ -60,28 +65,49 @@ defmodule Logex.Printer do
             "so one here was built by hand"
   end
 
-  def print({:rung, elements}), do: elements |> tokens() |> Enum.join(" ")
+  def print({:rung, elements}) when is_list(elements),
+    do: elements |> series([]) |> Enum.reverse() |> Enum.join(" ")
 
-  defp tokens(elements) when is_list(elements), do: Enum.flat_map(elements, &tokens/1)
+  def print(tree), do: unprintable!(tree)
 
-  defp tokens({:name, _, name}), do: [name]
+  # Each rung's line newest first, a list that is no proper one refused as any node is.
+  defp lines([rung | rest], acc), do: lines(rest, [print(rung) | acc])
+  defp lines([], acc), do: acc
+  defp lines(tail, _acc), do: unprintable!(tail)
 
-  defp tokens({:int_lit, _, value}), do: [Integer.to_string(value)]
-  defp tokens({:int_lit, _, _value, spelling}), do: [spelling]
+  # The tokens newest first, each group's opened, its legs split and closed on the way.
+  defp series([element | rest], acc), do: series(rest, token(element, acc))
+  defp series([], acc), do: acc
+  defp series(tail, _acc), do: unprintable!(tail)
+
+  defp token({:name, _, name}, acc) when is_binary(name), do: [name | acc]
+
+  defp token({:int_lit, _, value}, acc) when is_integer(value),
+    do: [Integer.to_string(value) | acc]
+
+  defp token({:int_lit, _, _value, spelling}, acc) when is_binary(spelling), do: [spelling | acc]
 
   # M5-10: a real literal as written too, a plain one as its float's plain text.
-  defp tokens({:real_lit, _, value}), do: [Float.to_string(value)]
-  defp tokens({:real_lit, _, _value, spelling}), do: [spelling]
+  defp token({:real_lit, _, value}, acc) when is_float(value), do: [Float.to_string(value) | acc]
+  defp token({:real_lit, _, _value, spelling}, acc) when is_binary(spelling), do: [spelling | acc]
 
-  defp tokens({:branches, []}) do
+  defp token({:branches, []}, _acc) do
     raise ArgumentError,
           "cannot print a branch group with no legs: it would print as `( )`, " <>
             "which parses back as one empty leg and passes power"
   end
 
-  defp tokens({:branches, legs}) do
-    ["("] ++
-      (legs |> Enum.map(&tokens/1) |> Enum.intersperse(["|"]) |> Enum.concat()) ++
-      [")"]
-  end
+  defp token({:branches, [leg | legs]}, acc), do: legs(legs, series(leg, ["(" | acc]))
+  defp token(element, _acc), do: unprintable!(element)
+
+  defp legs([leg | legs], acc), do: legs(legs, series(leg, ["|" | acc]))
+  defp legs([], acc), do: [")" | acc]
+  defp legs(tail, _acc), do: unprintable!(tail)
+
+  defp unprintable!(node),
+    do:
+      raise(
+        ArgumentError,
+        "cannot print #{inspect(node)}: not a tree Logex.Parser.parse/1 can produce"
+      )
 end

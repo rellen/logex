@@ -86,9 +86,10 @@ defmodule Logex.JumpTest do
         var_input a bool
         var_output lamp bool
         var_output inside bool
+        var landed bool
         xic skip jmp done ote lamp
         xic a ote inside
-        lbl done
+        lbl done ote landed
         """)
 
       inputs = for s <- [1, 0, 1, 1, 0], do: %{"skip" => s, "a" => 1}
@@ -105,9 +106,10 @@ defmodule Logex.JumpTest do
         var_input other bool
         var_output y bool
         var_output inside bool
+        var landed bool
         ( xic skip jmp done | xic other ) ote y
         xic other ote inside
-        lbl done
+        lbl done ote landed
         """)
 
       inputs = for {s, o} <- [{0, 1}, {1, 0}, {1, 1}, {0, 0}], do: %{"skip" => s, "other" => o}
@@ -120,10 +122,11 @@ defmodule Logex.JumpTest do
         var_input skip bool
         var_output first bool
         var_output second bool
+        var landed bool
         xic skip jmp far
         lbl near xio skip ote first
         xio skip ote second
-        lbl far
+        lbl far ote landed
         """)
 
       assert trace(p, skip([0, 1]), [["first"], ["second"]]) == [[1, 1], [1, 1]]
@@ -138,14 +141,14 @@ defmodule Logex.JumpTest do
         var_output y1 bool
         var_output y2 bool
         var_output y3 bool
+        var landed bool
         xic j1 jmp one
         xic j2 jmp two
         ote y1
         lbl one xic j3 jmp three
         ote y2
-        lbl two
-        ote y3
-        lbl three
+        lbl two ote y3
+        lbl three ote landed
         """)
 
       at = [["y1"], ["y2"], ["y3"]]
@@ -184,10 +187,11 @@ defmodule Logex.JumpTest do
         var_input a bool
         var_output y bool
         var_output z bool
+        var landed bool
         lbl here xic a ote y
         lbl there ote z
         xic a jmp here2
-        lbl here2
+        lbl here2 ote landed
         """)
 
       assert trace(p, [%{"a" => 1}, %{"a" => 0}], [["y"], ["z"]]) == [[1, 1], [0, 1]]
@@ -221,12 +225,13 @@ defmodule Logex.JumpTest do
         var_output y bool
         var_output l bool
         var_output n dint
+        var landed bool
         xic skip jmp done
         xic a ote y
         xic a otl l
         xio a otu l
         xic a move d n
-        lbl done
+        lbl done ote landed
         """)
 
       inputs = [
@@ -251,9 +256,10 @@ defmodule Logex.JumpTest do
         var_input skip bool
         var_input go bool
         var t1 ton
+        var landed bool
         xic skip jmp done
         xic go ton t1 1000
-        lbl done
+        lbl done ote landed
         """)
 
       inputs = [%{"skip" => 0, "go" => 1}, %{}, %{"skip" => 1}, %{}, %{}, %{"skip" => 0}]
@@ -278,11 +284,12 @@ defmodule Logex.JumpTest do
         var f tof
         var t tp
         var r rto
+        var landed bool
         xic skip jmp done
         xic fa tof f 1000
         xic tb tp t 1000
         xic rc rto r 1000
-        lbl done
+        lbl done ote landed
         """)
 
       inputs = [
@@ -311,9 +318,10 @@ defmodule Logex.JumpTest do
         var_input skip bool
         var_input eye bool
         var boxes ctu
+        var landed bool
         xic skip jmp done
         xic eye ctu boxes 9
-        lbl done
+        lbl done ote landed
         """)
 
       inputs =
@@ -341,10 +349,11 @@ defmodule Logex.JumpTest do
         var_output step bool
         var s1 bool
         var s2 bool
+        var landed bool
         xic skip jmp done
         xic go ons s1 ote pulse
         xic go osr s2 step
-        lbl done
+        lbl done ote landed
         """)
 
       inputs =
@@ -379,9 +388,10 @@ defmodule Logex.JumpTest do
           var_input go bool
           var_output q bool
           var s seal
+          var landed bool
           xic skip jmp done
           cal s go q
-          lbl done
+          lbl done ote landed
           """,
           [seal]
         )
@@ -402,9 +412,10 @@ defmodule Logex.JumpTest do
         var_input skip bool
         var_input z dint
         var_output q dint 5
+        var landed bool
         xic skip jmp done
         div 7 z q
-        lbl done
+        lbl done ote landed
         """)
 
       {_out, state} =
@@ -413,7 +424,7 @@ defmodule Logex.JumpTest do
       assert {state.faults, state.env["q"]} == {[], 5}
 
       {_out, state} = Runtime.call(p, state, %{"skip" => 0}, %Scan{now: 10, first: false})
-      assert [%Logex.Fault{severity: :minor, kind: :divide_by_zero, line: 5}] = state.faults
+      assert [%Logex.Fault{severity: :minor, kind: :divide_by_zero, line: 6}] = state.faults
     end
   end
 
@@ -454,9 +465,10 @@ defmodule Logex.JumpTest do
     var_input go bool
     var_output pulse bool
     var s1 bool
+    var landed bool
     xic skip jmp done
     xic go ons s1 ote pulse
-    lbl done
+    lbl done ote landed
     """
 
     test "a storage bit on a skipped rung stays listed, and its one-shot's next run is " <>
@@ -497,12 +509,13 @@ defmodule Logex.JumpTest do
         var s1 bool
         var s2 bool
         var stock ctud
+        var landed bool
         xic b ctd stock 9
         xic skip jmp done
         ( xic b | xic go ons s1 ) ote pulse
         ( xic b ote lamp | ( xic b | xic go ons s2 ote deep ) )
         ( xic go ctu stock 9 | xic b ote full )
-        lbl done
+        lbl done ote landed
         """)
 
       blocked = ["s1", "s2", "stock.cu"]
@@ -528,10 +541,11 @@ defmodule Logex.JumpTest do
         var_output fall bool
         var sr bool
         var sf bool
+        var landed bool
         xic skip jmp done
         xic go osr sr rise
         xic go osf sf fall
-        lbl done
+        lbl done ote landed
         """)
 
       state = %{drive(p, [%{"skip" => 0, "go" => 0}]) | ons_blocked: ["sf", "sr"]}
@@ -543,16 +557,16 @@ defmodule Logex.JumpTest do
     test "so does a counter's edge memory, and a ctud's side a jump skips stays listed " <>
            "while the other side's runs and is used up, whichever side runs first" do
       skipped_up =
-        "xic outfeed ctd stock 9\nxic skip jmp done\nxic infeed ctu stock 9\nlbl done"
+        "xic outfeed ctd stock 9\nxic skip jmp done\nxic infeed ctu stock 9\nlbl done ote landed"
 
       skipped_down =
-        "xic skip jmp done\nxic outfeed ctd stock 9\nlbl done\nxic infeed ctu stock 9"
+        "xic skip jmp done\nxic outfeed ctd stock 9\nlbl done xic infeed ctu stock 9"
 
       for {rungs, kept} <- [{skipped_up, "stock.cu"}, {skipped_down, "stock.cd"}] do
         p =
           c!(
             "var_input skip bool\nvar_input infeed bool\nvar_input outfeed bool\n" <>
-              "var stock ctud\n" <> rungs
+              "var stock ctud\nvar landed bool\n" <> rungs
           )
 
         state = %{drive(p, [%{"skip" => 0}]) | ons_blocked: ["stock.cd", "stock.cu"]}
@@ -572,9 +586,10 @@ defmodule Logex.JumpTest do
         var_input skip bool
         var_input fault bool
         var horn tp
+        var landed bool
         xic skip jmp done
         xic fault tp horn 3000
-        lbl done
+        lbl done ote landed
         """)
 
       state = %{drive(p, [%{"skip" => 0}]) | ons_blocked: ["horn.en"]}
@@ -588,7 +603,8 @@ defmodule Logex.JumpTest do
       {:ok, pulse} =
         Logex.compile(
           "function_block pulse\nvar_input skip bool\nvar_input go bool\nvar_output y bool\n" <>
-            "var edge bool\nxic skip jmp done\nxic go ons edge ote y\nlbl done",
+            "var edge bool\nvar landed bool\nxic skip jmp done\nxic go ons edge ote y\n" <>
+            "lbl done ote landed",
           name: "pulse"
         )
 
@@ -617,7 +633,7 @@ defmodule Logex.JumpTest do
       p =
         c!(
           "var_input skip bool\nvar_input go bool\nvar_output y bool\nvar p pulse\n" <>
-            "xic skip jmp done\ncal p go y\nlbl done",
+            "var landed bool\nxic skip jmp done\ncal p go y\nlbl done ote landed",
           [pulse]
         )
 
@@ -710,17 +726,23 @@ defmodule Logex.JumpTest do
   # `n` sections, each a jump over a rung to its own label.
   defp sections(n),
     do:
-      "var_input j bool\nvar_input a bool\n" <>
+      "var_input j bool\nvar_input a bool\nvar landed bool\n" <>
         Enum.map_join(1..n, "\n", &"var_output y#{&1} bool") <>
-        "\n" <> Enum.map_join(1..n, "\n", &"xic j jmp l#{&1}\nxic a ote y#{&1}\nlbl l#{&1}")
+        "\nxic j jmp l1\n" <>
+        Enum.map_join(1..n, "\n", &"xic a ote y#{&1}\nlbl l#{&1} #{section_end(&1, n)}")
+
+  # Since decision 351 a label heads a rung that writes or jumps: each section's the next
+  # one's jump, and the last's a write.
+  defp section_end(n, n), do: "ote landed"
+  defp section_end(i, _n), do: "xic j jmp l#{i + 1}"
 
   # One jump over `n` rungs, each a one-shot.
   defp one_shots(n),
     do:
-      "var_input j bool\nvar_input a bool\nvar_output y bool\n" <>
+      "var_input j bool\nvar_input a bool\nvar_output y bool\nvar landed bool\n" <>
         Enum.map_join(1..n, "\n", &"var s#{&1} bool") <>
         "\nxic j jmp done\n" <>
-        Enum.map_join(1..n, "\n", &"xic a ons s#{&1} ote y") <> "\nlbl done"
+        Enum.map_join(1..n, "\n", &"xic a ons s#{&1} ote y") <> "\nlbl done ote landed"
 
   defp bits(n), do: Enum.map(1..n, &"s#{&1}")
 

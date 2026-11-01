@@ -79,10 +79,12 @@ defmodule Logex.Warnings do
       Map.new(Walk.storage_bits(rungs), fn {bit, line, symbol} -> {bit, {line, symbol}} end)
       |> written_bits(instructions)
 
+    run = elements_run(Enum.any?(Map.values(tags), &instances?/1), instructions)
+
     tags
     |> Map.values()
     |> Enum.filter(& &1.line)
-    |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, []), instructions))
+    |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, []), run))
     |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
@@ -134,6 +136,9 @@ defmodule Logex.Warnings do
 
   defp qualified_initial(_not_a_qualifier, _at, _type, _values), do: []
 
+  # RV-2 (the review after Milestone 6, a3-compiler2-7): an array's initial list is warned
+  # of to ten literals, the rest counted in one warning, as its misfits are listed
+  # (`Logex.Array.capped/2`), where each of 65,536 was a warning of its own.
   defp initial_in(:section, line, type, values),
     do:
       for(
@@ -142,8 +147,22 @@ defmodule Logex.Warnings do
         {:rounded, held} <- [Logex.Real.held_as(type, Parser.value(literal), text(literal))],
         do: rounded_warning(line, literal, type, held)
       )
+      |> Logex.Array.capped(&rounded_more(line, type, &1))
 
   defp initial_in(_not_a_declaration, _line, _type, _values), do: []
+
+  defp rounded_more(line, type, count),
+    do:
+      warning(
+        line,
+        "#{count} more #{plural(count, "literal")} of this initial list #{plural(count, "is", "are")} " <>
+          "more precise than #{Declarations.a_type(type)} keeps, not listed"
+      )
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
+  defp plural(1, one, _many), do: one
+  defp plural(_count, _one, many), do: many
 
   defp rounded_warning(line, literal, type, held),
     do:
@@ -195,6 +214,9 @@ defmodule Logex.Warnings do
   defp ir_real(_access, {:member, _, [instance, member]}, tags),
     do: {:tag, member_real(Map.get(tags, instance), member)}
 
+  defp ir_real(_access, {:member, _, element, [member]}, tags),
+    do: {:tag, element_member_real(Map.get(tags, elem(element, 2)), member)}
+
   # M5-11: an element is its array's elements' real.
   defp ir_real(_access, {:element, _, array, _index, _name}, tags),
     do: {:tag, element_real(Map.get(tags, array))}
@@ -215,6 +237,13 @@ defmodule Logex.Warnings do
     do: member_type_real(FbType.member(type, member))
 
   defp member_real(_other, _member), do: nil
+
+  # RV-2 (the review after Milestone 6, a4-warnings-walk-6): a member of an element of an
+  # array of instances is its member's real, `gs[1].r`'s.
+  defp element_member_real(%Tag{type: {:array, %FbType{}, _dims}} = tag, member),
+    do: member_real(of_elements(tag), member)
+
+  defp element_member_real(_other, _member), do: nil
 
   defp member_type_real({:ok, %FbType.Member{type: type}}) when type in @reals, do: type
   defp member_type_real(_other), do: nil
@@ -271,32 +300,43 @@ defmodule Logex.Warnings do
         do: warning(line, "`#{name}` labels this rung, but no `jmp` names it: nothing jumps here")
   end
 
-  defp about(%Tag{} = tag, [], _instructions),
+  defp about(%Tag{} = tag, [], _run),
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]
 
-  defp about(%Tag{section: :var_output} = tag, accesses, _instructions),
+  defp about(%Tag{section: :var_output} = tag, accesses, _run),
     do: unwritten(:write in accesses, tag)
 
-  defp about(%Tag{type: %FbType{body: nil}} = tag, accesses, _instructions),
+  defp about(%Tag{type: %FbType{body: nil}} = tag, accesses, _run),
     do: unrun(:instance in accesses, tag)
 
-  defp about(%Tag{type: %FbType{}} = tag, accesses, _instructions),
+  defp about(%Tag{type: %FbType{}} = tag, accesses, _run),
     do: uncalled(:instance in accesses, tag)
 
   # M5-14 (decision 154): an array of instances, each element an instance of its own, is
   # told the elements no instruction runs, in the elements' order, the first ten and then a
   # count, in one warning at its line.
-  defp about(%Tag{type: {:array, %FbType{}, _dims}} = tag, _accesses, instructions),
-    do: elements_unrun(unrun_elements(tag, instructions), tag)
+  defp about(%Tag{type: {:array, %FbType{}, _dims}} = tag, _accesses, run),
+    do: elements_unrun(unrun_elements(tag, run), tag)
 
-  defp about(_tag, _accesses, _instructions), do: []
+  defp about(_tag, _accesses, _run), do: []
 
-  defp unrun_elements(%Tag{name: array, type: {:array, _type, dims}}, instructions) do
-    run =
-      for {_symbol, _, [{:element, _, ^array, _, name} | _]} <- instructions,
-          into: %{},
-          do: {name, true}
+  # RV-2 (the review after Milestone 6, a4-warnings-walk-7): every element an instruction
+  # runs, by its name, gathered in one pass where a routine holds an array of instances,
+  # where each array walked every instruction again; a routine of none walks nothing.
+  defp instances?(%Tag{type: {:array, %FbType{}, _dims}}), do: true
+  defp instances?(_tag), do: false
 
+  defp elements_run(false, _instructions), do: %{}
+
+  defp elements_run(true, instructions),
+    do:
+      for(
+        {_symbol, _, [{:element, _, _array, _, name} | _]} <- instructions,
+        into: %{},
+        do: {name, true}
+      )
+
+  defp unrun_elements(%Tag{name: array, type: {:array, _type, dims}}, run) do
     for index <- Logex.Array.indexes(dims),
         name = Logex.Array.name(array, index),
         not is_map_key(run, name),
@@ -389,14 +429,19 @@ defmodule Logex.Warnings do
     do: [
       warning(
         tag.line,
-        "`#{tag.name}` is a var_output, but no rung writes it: it stays at #{start(tag.initial)}"
+        "`#{tag.name}` is a var_output, but no rung writes it: it stays at " <>
+          start(tag.initial, tag.type)
       )
     ]
 
-  defp start(nil), do: 0
+  # RV-2 (the review after Milestone 6, a4-warnings-walk-9): a real stays at 0.0, its zero,
+  # where it was told 0, and since RV-2's review each element of an array of reals too.
+  defp start(nil, type) when type in @reals, do: "0.0"
+  defp start(nil, {:array, type, _dims}) when type in @reals, do: "0.0"
+  defp start(nil, _type), do: "0"
   # M5-11: an array's initial list, which no one value says.
-  defp start(initial) when is_list(initial), do: "its initial values"
-  defp start(initial), do: initial
+  defp start(initial, _type) when is_list(initial), do: "its initial values"
+  defp start(initial, _type), do: "#{initial}"
 
   # Each `ote` after the first on a tag declared in source cites the first. An `ons`
   # storage bit is left to storage_writes/3, which warns about every `ote` on it: the `ons`
@@ -1264,9 +1309,20 @@ defmodule Logex.Warnings do
       |> Enum.filter(&String.contains?(&1, "."))
       |> Enum.group_by(&container_of/1)
 
+    # RV-2 (the review after Milestone 6, a4-warnings-walk-3): the storage bits kept in
+    # each array, in name order, gathered once, where each write through a tag subscript
+    # sorted and searched every one-shot of the routine.
+    arrays =
+      owners
+      |> Enum.sort()
+      |> Enum.filter(fn {name, _owner} -> String.contains?(name, "[") end)
+      |> Enum.group_by(fn {name, _owner} -> word_of(name) end, fn {name, owner} ->
+        {name, own_shown(owner, name)}
+      end)
+
     for instruction <- instructions,
         {operand, line, symbol} <- others(instruction, written(instruction, tags)),
-        {name, shown} <- storage_names(operand, {words, owners}),
+        {name, shown} <- storage_names(operand, {words, arrays}),
         {:ok, first} <- [Map.fetch(owners, name)],
         from_source?(tags, word_of(name)),
         do: storage_write(symbol, shown(shown, first), first, line)
@@ -1336,26 +1392,19 @@ defmodule Logex.Warnings do
   # M5-12 (§4.12's routine choice): a write through a tag subscript, of an element or of a
   # bit of one, may reach any element of its array, so every storage bit kept in the
   # array, an element's or a bit of one's, in name order.
-  defp storage_names({:element_at, _, array, _, _, _}, {_words, owners}),
-    do: in_array(array, owners)
+  defp storage_names({:element_at, _, array, _, _, _}, {_words, arrays}),
+    do: Map.get(arrays, array, [])
 
-  defp storage_names({:bit, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, owners}),
-    do: in_array(array, owners)
+  defp storage_names({:bit, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, arrays}),
+    do: Map.get(arrays, array, [])
 
-  defp storage_names({:bit_at, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, owners}),
-    do: in_array(array, owners)
+  defp storage_names({:bit_at, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, arrays}),
+    do: Map.get(arrays, array, [])
 
   defp storage_names(_member, _known), do: []
 
   # Each quoted as its one-shot writes it, an element's by its subscripts' values, `e[2]`,
   # a bit of one as written (written_bits/2).
-  defp in_array(array, owners),
-    do:
-      for(
-        {name, owner} <- Enum.sort(owners),
-        String.starts_with?(name, array <> "["),
-        do: {name, own_shown(owner, name)}
-      )
 
   defp own_shown({_line, _owner}, name), do: name
   defp own_shown({_line, _owner, _shown}, _name), do: nil
@@ -1545,7 +1594,9 @@ defmodule Logex.Warnings do
   defp of_integer(%Tag{type: type}) when type in @integers, do: {:ok, type}
   defp of_integer(_other), do: :error
 
-  defp member_integer(%Tag{type: %FbType{body: nil} = type}, member),
+  # RV-2 (the review after Milestone 6, a4-warnings-walk-4): a user block's member too,
+  # which decision 183 types, scalar or of an element.
+  defp member_integer(%Tag{type: %FbType{} = type}, member),
     do: member_type(FbType.member(type, member))
 
   defp member_integer(_other, _member), do: :error

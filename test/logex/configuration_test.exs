@@ -5546,8 +5546,8 @@ defmodule Logex.ConfigurationTest do
     test "a write through a var_external on a rung a jump may skip is a write" do
       {:ok, manual} =
         Logex.compile(
-          "var_input jog bool\nvar_external alarm bool\nxio jog jmp done\n" <>
-            "xic jog ote alarm\nlbl done",
+          "var_input jog bool\nvar_external alarm bool\nvar landed bool\n" <>
+            "xio jog jmp done\nxic jog ote alarm\nlbl done ote landed",
           name: "manual"
         )
 
@@ -5560,7 +5560,7 @@ defmodule Logex.ConfigurationTest do
       }
 
       assert formatted(config) == [
-               "`manual` writes its var_external `alarm` on its line 4, but `alarm` is an " <>
+               "`manual` writes its var_external `alarm` on its line 5, but `alarm` is an " <>
                  "input point: nothing writes an input point"
              ]
     end

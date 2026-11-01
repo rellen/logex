@@ -194,28 +194,6 @@ defmodule Logex.Array do
   def name(array, index), do: "#{array}[#{Enum.join(index, ",")}]"
 
   @doc false
-  # A name with subscripts split into its array's name and each subscript as written,
-  # `{"grid", ["1", "7"]}` for `grid[1,7]`, or nil for a name with none. The lexer took
-  # the name only where its brackets close one to many subscripts with no space.
-  def split(name), do: split_at(:binary.split(name, "["))
-
-  defp split_at([array, bracketed]),
-    do:
-      {array, :binary.split(binary_part(bracketed, 0, byte_size(bracketed) - 1), ",", [:global])}
-
-  defp split_at([_name]), do: nil
-
-  @doc false
-  # A subscript as written: `{:literal, n}`, the number a literal spells, `16#a` 10, or
-  # `{:tag, name}`, a tag's name, whose value a scan reads (M5-12, decision 152).
-  def subscript(<<d, _::binary>> = text) when d in ?0..?9 or d == ?-,
-    do: {:literal, literal(Logex.Lexer.tokenize(text))}
-
-  def subscript(text), do: {:tag, text}
-
-  defp literal({:ok, [literal], _line}), do: elem(literal, 2)
-
-  @doc false
   # Whether `value` is an array of `dims` as a state holds one, a tuple of tuples of the
   # right sizes, its every element passing `each`.
   def held?(value, [count], each) when is_tuple(value) and tuple_size(value) == count,

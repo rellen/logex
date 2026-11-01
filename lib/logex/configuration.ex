@@ -669,7 +669,7 @@ defmodule Logex.Configuration do
 
   # The type a connection's member is filled in, an element's its array's elements'; a
   # configuration that compiled holds the member.
-  defp member_type(program, member), do: member_typed(Logex.Array.split(member), program, member)
+  defp member_type(program, member), do: member_typed(Logex.Name.element(member), program, member)
 
   defp member_typed(nil, program, member), do: Map.fetch!(program.tags, member).type
 
@@ -809,7 +809,8 @@ defmodule Logex.Configuration do
 
   # The extension says what a file is (decision 35), and a file named only `.logex` reads
   # as logex's own settings, which no configuration is.
-  defp configuration_file(".logex", _basename, path), do: source_file(File.read(path), path)
+  defp configuration_file(".logex", _basename, path),
+    do: source_file(Logex.SourceFile.read(path), path)
 
   defp configuration_file("", ".logex", path),
     do:
@@ -834,7 +835,7 @@ defmodule Logex.Configuration do
        ]}
 
   defp source_file({:error, reason}, path),
-    do: {:error, [file_problem(path, "cannot be read: #{:file.format_error(reason)}")]}
+    do: {:error, [file_problem(path, Logex.SourceFile.unreadable(reason))]}
 
   defp source_file({:ok, source}, path) do
     name = Path.rootname(Path.basename(path))
@@ -865,7 +866,10 @@ defmodule Logex.Configuration do
     {read, rounded, spelled} = Text.read_rounded(source)
     types = program_types(read)
     file = &Path.join(Path.dirname(path), &1 <> ".ld")
-    {found, missing} = Enum.split_with(types, fn {type, _line} -> File.exists?(file.(type)) end)
+
+    {found, missing} =
+      Enum.split_with(types, fn {type, _line} -> Logex.SourceFile.present?(file.(type)) end)
+
     results = Logex.compile_files(Enum.map(found, fn {type, _line} -> file.(type) end))
 
     {programs, cited, theirs} =
@@ -2814,11 +2818,22 @@ defmodule Logex.Configuration do
   # M5-11 (decision 151, §4.12): a connection names an array var_input or var_output whole,
   # `m1.temps`, or an element of one by literal subscripts, `m1.temps[3]`, read as the tag
   # of its element's type under its element's name, `temps[3]` by its subscripts' values.
+  # RV-2's review: a member ending in a bracket that is no one word and one pair of
+  # brackets closing it, `[0]` of `k1.[0]`, or that has a `.` part, `o[1].[2]` or `a.[0]`,
+  # names no element: it is told as any member its program does not declare, too deep where
+  # it has a `.` part, as `k1.a.3` is.
   defp member_tag(program, %Connection{member: member} = connection)
        when binary_part(member, byte_size(member) - 1, 1) == "]",
-       do: element_tag(Logex.Array.split(member), program, "#{connection.instance}.#{member}")
+       do: element_tag(undotted(member), program, "#{connection.instance}.#{member}")
 
   defp member_tag(program, %Connection{member: member}), do: Map.fetch(program.tags, member)
+
+  defp undotted(member), do: undotted(:binary.match(member, "."), member)
+
+  defp undotted(:nomatch, member), do: Logex.Name.element(member)
+  defp undotted(_dot, _member), do: nil
+
+  defp element_tag(nil, _program, _member), do: :error
 
   defp element_tag({array, subscripts}, program, member),
     do: element_of_tag(Map.fetch(program.tags, array), {array, subscripts}, program, member)
@@ -2829,7 +2844,7 @@ defmodule Logex.Configuration do
   defp element_of_tag({:ok, %Tag{type: {:array, type, dims}} = tag}, {_, subscripts}, _p, member),
     do:
       subscripted(
-        Enum.map(subscripts, &Logex.Array.subscript/1),
+        Enum.map(subscripts, &Logex.Name.subscript/1),
         {tag, type, dims},
         member
       )
@@ -2850,7 +2865,7 @@ defmodule Logex.Configuration do
     do:
       {:element,
        "`#{member}`'s subscript `#{name}` is a tag's name: a connection names an element by " <>
-         "literal subscripts, as in `#{elem(Logex.Array.split(member), 0)}[0]`"}
+         "literal subscripts, as in `#{elem(Logex.Name.element(member), 0)}[0]`"}
 
   defp element_index([], {index, _}, {tag, _type, dims}, member)
        when length(index) != length(dims),
@@ -2970,7 +2985,7 @@ defmodule Logex.Configuration do
   # A var_input: connected once, to a global of its type or a constant that fits it.
   defp input(connection, tag, {wiring, problems}, world) do
     key = {connection.instance, tag.name}
-    first = first_source(Logex.Array.split(tag.name), wiring.inputs, key)
+    first = first_source(Logex.Name.element(tag.name), wiring.inputs, key)
 
     sourced(
       first,
@@ -2992,7 +3007,7 @@ defmodule Logex.Configuration do
     do: Map.get(inputs, key) || Map.get(inputs, {:elements, instance, name})
 
   defp parted({instance, name}, inputs, connection),
-    do: element_part(Logex.Array.split(name), instance, inputs, connection)
+    do: element_part(Logex.Name.element(name), instance, inputs, connection)
 
   defp element_part({array, _subscripts}, instance, inputs, connection),
     do: Map.put_new(inputs, {:elements, instance, array}, connection)
@@ -3024,7 +3039,7 @@ defmodule Logex.Configuration do
         world
       )
 
-  defp parted?(member), do: Logex.Array.split(member) != nil
+  defp parted?(member), do: Logex.Name.element(member) != nil
 
   defp already(false, %Connection{member: member} = first, {_key, connection, _tag}, acc, _world),
     do:
@@ -3189,7 +3204,7 @@ defmodule Logex.Configuration do
        ),
        do:
          global_subscripts(
-           Enum.map(elem(Logex.Array.split(name), 1), &Logex.Array.subscript/1),
+           Enum.map(elem(Logex.Name.element(name), 1), &Logex.Name.subscript/1),
            {global, etype, dims},
            name
          )
@@ -3883,7 +3898,7 @@ defmodule Logex.Configuration do
   defp together(told) do
     {keys, groups} =
       Enum.reduce(told, {[], %{}}, fn {target, writer, first, bit} = one, {keys, groups} ->
-        key = together_key(Logex.Array.split(target), {target, writer, first, bit})
+        key = together_key(Logex.Name.element(target), {target, writer, first, bit})
         {[key | keys], Map.update(groups, key, [one], &[one | &1])}
       end)
 
@@ -3898,7 +3913,7 @@ defmodule Logex.Configuration do
     do: {:one, target, instance.name}
 
   defp element_order({target, _writer, _first, _bit}),
-    do: element_index(Logex.Array.split(target))
+    do: element_index(Logex.Name.element(target))
 
   defp element_index({_array, subscripts}), do: Enum.map(subscripts, &String.to_integer/1)
   defp element_index(nil), do: []
@@ -4056,7 +4071,7 @@ defmodule Logex.Configuration do
   # An instance's tag by its name in a routine's typed tags, and since M5-14 an element's of
   # an array of instances, `lane_t[2]`, as a tag of its array's elements' type.
   defp instance_tag(typed, name) when binary_part(name, byte_size(name) - 1, 1) == "]" do
-    {array, _subscripts} = Logex.Array.split(name)
+    {array, _subscripts} = Logex.Name.element(name)
     %Tag{type: {:array, type, _dims}} = tag = Map.fetch!(typed, array)
     %{tag | type: type}
   end

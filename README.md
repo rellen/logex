@@ -127,7 +127,10 @@ Source syntax today:
   printed back, `move 16#00ff mask` reads as written, `007` and `-0` too, and every
   message quotes a literal so, "`move` writes `16#ffff` into `i`", while its value is
   what every rule judges, so an edit that only respells one changes nothing. A
-  configuration file's numbers take the same forms, its reader quoting each as written
+  configuration file's numbers take the same forms, its reader quoting each as written.
+  A number is at most 10,000 characters and a real's exponent at most 9,999, far past any
+  value a type holds, and past either it is an error naming the number by its start
+  (provisional), the store's and the forces file's readers refusing it too
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
@@ -151,7 +154,13 @@ Source syntax today:
   ("Arrays", below). An array may hold timers, counters or a block's instances, `var
   lane_t ton[4]`, each element run by literal subscripts and its members read and written
   through any ("Arrays of instances", below)
-- a newline ends a rung: LF, CRLF or a lone CR
+- a newline ends a rung: LF, CRLF or a lone CR. So a rung that writes nothing and jumps
+  nowhere, none of its instructions writing a tag, a member, a bit or a one-shot's storage
+  bit or running an instance, and no `jmp` on it, is refused at its line, told that a
+  newline ends a rung: `xic start xio stop` on one line and `ote motor` on the next are
+  that rung and one that runs the motor whatever stop does (decision 351, Logix's rule,
+  a rung's last instruction an output). A label alone is such a rung too, so a jump to
+  the end lands on a rung that writes, `lbl done ote landed`
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
   reserved word, `function_block` among them in a function block's file, and never a tag:
@@ -323,17 +332,17 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 ### What has landed
 
 Every milestone decided has landed, retained values the last (the first bullet below,
-the milestones newest first). What waits to land is the maintainer's answers to the
+the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-2 to RV-8 build ("The review after Milestone 6"); RV-3's three have landed, a
+items RV-4 to RV-8 build ("The review after Milestone 6"). RV-3's three have landed, a
 held output held through a var_output no rung writes (decision 347), a retained `tof`
 at rest on a first scan (decision 349) and a trigger's rise a trip cut off taken in the
-next cycle (decision 350). One of them changes the source
-language: a rung that writes nothing and jumps nowhere, such as the first half of a rung
-wrapped onto two lines, `xic start xio stop` above `ote motor`, is to be refused at its
-line, told that a newline ends a rung (decision 351, RV-2), where today it compiles and
-does nothing. Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
+next cycle (decision 350). The one of them that changes the source language has landed
+with RV-2: a rung that writes nothing and jumps nowhere, such as the first half of a rung
+wrapped onto two lines, `xic start xio stop` above `ote motor`, is refused at its line,
+told that a newline ends a rung (decision 351).
+Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
 108–143 in [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11),

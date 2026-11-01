@@ -11655,12 +11655,216 @@ and CI checked; each fix with a test that fails when it is reverted.
   a member of an element refused as their scalar twins are (M1, M2); a misplaced
   qualifier told where it goes (M15); a rung that writes nothing refused; the report's
   compiler, warnings and loader lows.
+
+  **RV-2 as built** (2026-11-01, branch `rv2`, five commits over `e365fa4`). Every finding
+  below is closed with a test that fails when its fix is reverted (checked by reverting),
+  or kept for the reason given.
+
+  - *H5, the six roots* (`compile_total_test.exs`): a block rung led by an empty first leg
+    at any depth (`element_line/1` passes an empty leg over); a literal bit number in
+    brackets on an instance, told it has no bits as `t.[n]` is; a pulse bit in a bit of a
+    member of an element, named `lc[1].pv.0` by `Logex.Walk.bit_name/1`; a bit number held
+    in an array, told an array holds no one number; `cal` of a name that goes on past an
+    element, its element lowered only where the name is one; and a lexed name that is no
+    element. **The parsed-name structure**, `Logex.Name`: a name is its `.` parts, split
+    once, exact since the lexer puts no `.` inside brackets, each part one of four shapes
+    (a word, a word with one pair of brackets closing it, an integer, a bit number in
+    brackets), read by the one reader of its shape: `element/1` (one word and one pair of
+    brackets closing it, nothing else, where `Logex.Array.split/1` cut at the first `[`
+    and took the text to the last `]`), `subscript/1` and `bracketed/1` (total), `base/1`
+    (a type word's base, the loader's and the configuration reader's) and `word/1` (a
+    host's key's array, however its brackets are written). Every former caller of
+    `Logex.Array.split/1` and `subscript/1`, the compiler's bracket readers, the loader's
+    `unsized`, the configuration reader's `base_word`, `Logex.IO`'s and `Logex.Declarations`'
+    cuts read through it. The compiler's operand path still splits a name at `.` and tells
+    each part's shape by its last byte in a clause's guard, as it did: a full walk of each
+    name's bytes would have cost every operand of every program, and the per-part readers
+    close the class, since the crashes came from a part reader given a whole name. Since
+    RV-2's review `element/1` reads an element's name in one split, a reduction or two
+    dearer than `Logex.Array.split/1`, where its first form cost 15 to 18 reductions to
+    split/1's 4 and made a program of arrays up to 7.6% dearer to compile; a program
+    compiles within 8 reductions a rung of what it did at `e365fa4`, one of arrays within
+    16 (the most measured 13, a rung of three elements subscripted by tags, 0.7%), pinned
+    in `compile_total_test.exs` ("the cost of RV-2's checks against the parent"), and every
+    program scans in exactly the reductions it did.
+  - *M13* (`compile_total_test.exs`): a bit number past its word's bits is judged before
+    its mask 2^n is made; a number is at most 10,000 characters and a real's exponent at
+    most 9,999 (provisional, `Logex.Lexer.longest_number/0` and `largest_exponent/0`), a
+    located lex error past either, `{:long_number, run}`, `{:long_name, run}` or
+    `{:exponent_range, run}`, quoted by its first 24 characters; `0.0e10000000` among them;
+    the store's and the forces file's readers, which read a number through the lexer,
+    refuse such a number in their own words. 10,000 keeps `frontend_test.exs`'s growth
+    test of a 4,003-character based literal as it is.
+  - *M1, M2* (`instance_array_test.exs`, "a one-shot in a member of an element"): a
+    storage bit in a bit of a member of an element refused in its scalar twin's words; a
+    pulse bit in a member, or a bit of a member, of an element a tag subscripts refused as
+    `osr s e[i]` is.
+  - *M15* (`retain_test.exs`): a qualifier after an array's type word, before or among its
+    initial list, told it comes straight after the section word, the line read without it.
+  - *Decision 351* (`compile_total_test.exs`, "a rung that writes nothing"): a rung no
+    instruction of which writes a tag, a member, a bit or a storage bit or runs an
+    instance, with no `jmp`, refused at its line, told that a newline ends a rung; its
+    last instruction looked at first, which does something in a rung of Logix's shape, so
+    that most rungs cost one clause however long, about 2 reductions a rung (since RV-2's
+    review, where a walk from its first instruction cost 12 a rung of ten contacts), and
+    any other rung's instructions in order until one does something. A rung refused for a
+    mistake found as it is lowered, an unknown instruction, a `cal` that runs nothing or
+    an operand missing, any of which may be the write it lacks, is not told this too; one
+    a jump check refuses, a label not first or used twice, which no write mends, is told
+    both (since RV-2's review, which found the first wording claimed both; provisional).
+    A label alone is such a rung, as in Logix, whose LBL needs an output after it on its rung: the test programs that ended in
+    `lbl done` alone now end `lbl done ote landed`, and every other program the rule
+    refuses was adapted keeping its intent (the commit lists them). The front end's
+    golden record did not move; no README example held such a rung.
+  - *The lows fixed* (`review_lows_test.exs`): a1-frontend-6, b3-store-image-2,
+    a3-compiler2-5, a5-data-model-3 (M13's bounds); a1-frontend-7 and a6-compile-scale-11
+    (the printer in one pass, linear in nesting depth); a1-frontend-8 (the parser's,
+    lexer's and printer's moduledocs); a1-frontend-9 (`tokenize/1`, `parse/1` and
+    `print/1` refuse a host's mistake in pinned words); a1-frontend-10 (a lex error's run
+    stops at a comment, and a control byte is quoted in a string); a2-compiler1-7 (a
+    `ctud` element's path told `.qu`); a2-compiler1-8 (`cal` of an elementary tag with its
+    article); a2-compiler1-9 (`cal tt[i]` shown `ton tt[0]`); a3-compiler2-7 and
+    a6-compile-scale-13 (an initial list's rounded reals warned of to ten, the rest
+    counted); a3-compiler2-8 and a5-data-model-4 (an integer of 2^64 or more held at its
+    nearest lreal, rounded once); a3-compiler2-9 (a real initial value on an integer tag
+    quoted as written); a3-compiler2-10 (`class_range(:any_real)` nil, and a class of
+    reals holding an integer it holds exactly); a3-compiler2-11 (a zero divisor told its
+    destination's zero); a4-warnings-walk-3 and -7 (the storage-write and unrun-element
+    warnings linear); a4-warnings-walk-4 and -6 (decisions 187's and 219's warnings on a
+    user block's member, scalar or of an element); a4-warnings-walk-9 (a real var_output
+    stays at 0.0); a5-data-model-5 (`Logex.Real.spelled/2` the shortest at a power of
+    two, the nearest decimal's neighbours tried); a5-data-model-9 (`user?/1` takes a body
+    read from `<name>.ld` alone); a5-data-model-10 (`Diagnostic.format/1` of an empty file
+    names none, and an unknown severity is a pinned `ArgumentError`); c4-api-fuzz-6
+    (`a_or_an/1` of nil raises where it looped) and c4-api-fuzz-7 (an improper list of
+    tags refused in pinned words); a6-compile-scale-2 (a block swapped for a program
+    during a load told it is a program); a6-compile-scale-5 (H5's fifth root);
+    a6-compile-scale-10 (a link to nothing or a link that loops told it cannot be read,
+    by the loader and by a configuration's); a6-compile-scale-12 and a7-docs-8 (a program
+    that names its own name as a type told it is a program; a path ending in `/` told it
+    names a directory; a FIFO or a device beside a program refused before it is read,
+    where its read hung the load); a6-compile-scale-14 (the loader's memo keyed by each
+    path expanded).
+  - *The lows kept*:
+    - a3-compiler2-12 (stale docs in `Logex.Declarations`): RV-1's, which names
+      `Logex.Declarations`' moduledoc.
+    - a2-compiler1-6 (an array of instances' scan super-linear) and a4-warnings-walk-5
+      (`Logex.Walk.member_writes/1` expanding a member through a tag subscript to every
+      element, an edit's accept O(writes x elements)): RV-6's, the runner's own long work
+      and an edit's switch made cheaper (decision 352).
+    - a4-warnings-walk-8 (the second-`ote` warning between coils through a tag subscript
+      that can never share an element, `ee[1,i]` and `ee[0,i]`): the warning says the array
+      *may* be written through the subscript, true of the rule as built, which reads no
+      subscript's value range; telling disjoint rows apart is a static analysis of its own,
+      put to the maintainer below.
+    - a4-warnings-walk-9's second half (an unwritten var_output's spelled initial value
+      shown as its value, `16#ff` as 255): the warning states the value the output holds,
+      a quantity, as decision 202 has a message show what it computes, and the tag table
+      keeps no spelling.
+    - a1-frontend-10's first half (a lex error's run through the first `]` on its line,
+      `a[1 ote b ote c[2]`): M5-9's review's provisional reading, a bracket's run named
+      through its `]`; only a comment now ends it.
+    - a5-data-model-10's third (a column with no line not shown): a column alone names no
+      place, and no stage gives one.
+    - a6-compile-scale-8 (the 65,536-element limit counting each array alone, so an array
+      of 256 blocks each holding `k[256]` of blocks holding `ton[256]` needs gigabytes):
+      a limit on what an instance holds at every depth is a rule of its own, put to the
+      maintainer below.
+    - a6-compile-scale-9 (the loader recompiles a block shared by a chain of files once a
+      file, d(d-1)/2 for a chain of depth d): decision 54's check, every type a compile is
+      given recompiled from its source to be the one it says; trusting the loader's own
+      types is a change to that decision, put to the maintainer below.
+    - a6-compile-scale-14's link half (one directory reached through a link a second path):
+      the memo is keyed by each path expanded, lexically; resolving links would read the
+      file system for every path (provisional).
+  - *Provisional readings*: the bounds, 10,000 characters and an exponent of 9,999; a rung
+    of empty groups alone, which holds no line in the parse tree, cited at the first line
+    it can stand on, after the rung before it, "a rung of empty groups alone, after line
+    1"; a label alone refused as a rung that writes nothing; a link to a directory a path
+    of its own in the loader's memo; since RV-2's review a rung the jump checks refuse
+    told that it writes nothing too (question 7).
+  - *Questions for the maintainer*, by what an operator sees:
+    1. *A jump to the end.* `jmp done` … `lbl done` on the routine's last rung is now
+       refused, the label alone writing nothing (decision 351 read literally, and Logix's
+       LBL needs an output after it). The operator writes `lbl done ote landed` with a tag
+       of no use. (a) As built; (b) a label alone taken as a rung, the end of a jump, and
+       refused only where nothing jumps to it; (c) a `nop` instruction for it, IEC having
+       none, Logix's NOP.
+    2. *A rung of empty groups alone*, `( )`, is cited at the first line it can stand on,
+       so after blank lines its line is the one after the rung before it, not its own.
+       (a) As built; (b) the parser keeps a group's line in its tree, which moves the
+       front end's golden record, every group a line more.
+    3. *A number's bound.* A literal past 10,000 characters, or a real whose exponent is
+       past 9,999, is a lex error at its column; a store or forces file that holds one is
+       refused at start. (a) As built; (b) a tighter bound, 100 characters, which no value
+       of a type needs more than 25 of; (c) none, reading a long one slowly.
+    4. *An instance's size at every depth.* `var row cell[256]`, a block holding
+       `var c k[256]` of blocks holding `ton[256]`, compiles and needs gigabytes on its
+       first scan. (a) As built, the limit an array's alone; (b) 65,536 elements counted
+       through every array of instances an instance holds, refused at its line.
+    5. *The loader's recompiles.* A chain of 30 blocks, each holding the next, compiles in
+       435 recompiles, decision 54 checking every type given. (a) As built; (b) the loader
+       trusting the types it compiled itself, so a chain costs its length.
+    6. *Disjoint subscripts.* `ote ee[1,i]` and `ote ee[0,i]` are warned as two coils that
+       may share an element, which they never do. (a) As built, the warning's "may"; (b) a
+       subscript literal in the same place told apart, so rows that differ are no warning.
+    7. *A misplaced label told twice.* `xic auto lbl done` is refused for its label, which
+       stands first on its rung, and told too that the rung writes nothing, since moving
+       the label first, `lbl done xic auto`, still leaves a rung that writes nothing.
+       (a) As built, both; (b) the label's message alone, the second given once it is
+       moved.
+
+  **RV-2's review** (2026-11-01, of `cc98165`: eleven findings, each fixed with a test that
+  fails when its fix is reverted, checked by reverting, or with its document made true).
+
+  1. *A connection's member that ends in `]` and is no element*, `k1.[0]` or `k1.o[1].[2]`,
+     raised `FunctionClauseError` from `Logex.Configuration.compile/3`, `compile_file/1` and
+     `check/1`, `Logex.Name.element/1` giving nil, which no clause took: it is told as a
+     member its program does not declare, too deep where it has a `.` part, as `k1.a.3` is
+     (`compile_total_test.exs`, H5's sixth root).
+  2. *H5's first root not pinned*: a reading of a rung's line that stopped at a group's
+     first leg survived the suite. A group alone whose first leg is empty, `( | xic a ote
+     b )` or `( | ote b )`, compiles in a block and runs, and beside a rung of empty groups
+     alone each is cited by its own line; a rung that writes nothing is cited by its parse
+     tree's line, and a rung of empty groups alone by a walk of the tree once a routine
+     holds one, so the citing no longer depends on how many markers there are.
+  3. *A connection's instance with brackets*, `k1[1].a x`, raised the host's
+     `ArgumentError` from `compile/3`: the configuration reader breaks the line, told the
+     instance is named whole, and the line still connects `k1`'s `a`.
+  4. *The compile's cost*: decision 351's check looks at a rung's last instruction first,
+     and `Logex.Name.element/1` reads a name in one split (the H5 and decision 351
+     paragraphs above); every program within 8 reductions a rung of `e365fa4`, one of
+     arrays within 16, pinned.
+  5. *A rung refused already*: the claim narrowed to a refusal found as the rung is
+     lowered, and a rung the jump checks refuse told both, pinned (question 7).
+  6. *`Logex.Printer.print/1` of a routine whose rungs are no proper list* is the printer's
+     pinned `ArgumentError`, where `Enum.map_join/3` raised.
+  7. *An array of reals no rung writes* is told it stays at 0.0, as a real is.
+  8. *`Logex.Declarations.a_or_an/2` of a word that is no binary* raises a pinned
+     `ArgumentError`, where it raised `FunctionClauseError`.
+  9. *The documents*: `docs/naming.md`'s `lbl` stanza amended, a label alone no longer a
+     landing that does nothing; `Logex.Name.bracketed/1` made total, nil for a text of no
+     bit number in brackets, so its comment's "each is total" is true.
+  10. *Older twins*: a configuration global's real initial value quoted as written,
+      `var_global g dint 1.5e1` told "`1.5e1` is a real" and `int[2] 1 2.5e0` "found
+      2.5e0", the reader standing each such literal in for a value no other literal holds,
+      as decision 237 stands in `1.0e-400`; decision 227's warning given on a qualified
+      `var_global` line, which read its third word as the type; and a qualifier out of
+      its place on a program's var_input or a var_external told that the section takes
+      none, as where it stands in its place, where it was told to move to a place that
+      refuses it too.
+  11. *Observations*: `retain_configuration_test.exs`'s warm-restart bound reads the least
+      of three runs, where one run, read once on a busy machine, was 6 reductions dearer;
+      a long number's start quoted in double quotes, as every other run the lexer refuses;
+      a second rung of empty groups alone citing the same "after line N" as the first is
+      question 2's reading, kept.
 - **RV-3 — the core and the edits** (decisions 347, 349 and 350). A held output held (H1);
   an edit's one-shot blocking in an array of user blocks (H3); a warm restart after a
   plain swap, a path the state lacks started at its initial value as `instance/2` starts
   it (H4); a retained `tof` at rest on a first scan; a trigger's sample after its task;
   the configuration crashes (M12); the report's runtime, edit and configuration lows.
-  *(Landed 2026-11-01, branch `rv3` on `e09be54`, eight commits.)* H1,
+  *(Landed 2026-11-01, branch `rv3` on `e09be54`, eight commits, then `origin/main` with
+  RV-2 merged and its last two lows built on RV-2's reader.)* H1,
   decision 347: at a configuration edit's switch each connection from a var_output no
   rung of its program writes to a global the step holds, or to an element of an array
   held whole, starts that var_output at the global's value, `{:holds, path, value}`, so
@@ -11715,9 +11919,16 @@ and CI checked; each fix with a test that fails when it is reverted.
   c5-tests-5, the `aside_at || last` that no instance this edit did not set aside
   reaches, the rule's total form; b6-configuration-9's did-you-mean, quadratic as
   documented; c4-api-fuzz-11, the public surface wider than the host contract, for
-  RV-8's pass; c4-api-fuzz-9's Runner `{:via, ...}` name, RV-4's. b2-resource-8 and
-  b2-resource-3 wait for RV-2's `lib/logex/name.ex`, which `origin/main` did not hold
-  when this item closed; b6-configuration-12 was RV-1's and c4-api-fuzz-6 and -7 RV-2's.
+  RV-8's pass; c4-api-fuzz-9's Runner `{:via, ...}` name, RV-4's; and b2-resource-8, a
+  located array's element named with its subscripts spelled another way, `temps[03]`,
+  which a cycle and the forces file refuse as no input point, M5-13's rule that
+  `located_array_test.exs` pins, while `get/2` and `put_inputs/3` read a subscript by its
+  value (decisions 222 and 312), so that one reading would change a pinned value no
+  decision changes (question 11). b2-resource-3 was fixed by RV-2's `Logex.Name`, which
+  `origin/main` held when this item came to it last, merged into `rv3` and pinned at a
+  resource's doors, an input key, an image's path and a store's line, in
+  `array_configuration_test.exs`; b6-configuration-12 was RV-1's and c4-api-fuzz-6 and -7
+  RV-2's, and b6-configuration-5 RV-2's too, its fix and this item's one on the merge.
 
   Its cost against `e09be54`, in reductions, the least of eleven runs each in a fresh
   process whose heap is large enough that no collection falls inside it: a scan of 200
@@ -11763,7 +11974,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   as `start/2` does, is the other. (10) `program retain motor`, a qualifier and one word,
   is still an instance named by a keyword (decision 298), and `program retain m1 motor`
   the deferred `PROGRAM RETAIN`; reading every qualifier there as `PROGRAM RETAIN` is the
-  other.
+  other. (11) b2-resource-8: `temps[03]` in a cycle's inputs and the forces file is no
+  input point, the name `temps[3]` alone, where `get/2` reads `earr[01]` as `earr[1]` and
+  `put_inputs/3` takes `steps[03]`; reading every one by its value, or none, are the
+  others.
 - **RV-4 — the runner and its devices** (decisions 348, 350, 353, 354 and 356). Each
   device its own write limit (H2); every file write time-limited, a write's temporary
   file its own (M10); a restart judged when asked; one VM's runners on one path refused;

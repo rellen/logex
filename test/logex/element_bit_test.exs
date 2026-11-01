@@ -243,7 +243,7 @@ defmodule Logex.ElementBitTest do
       p =
         program(
           "var_input skip bool\nvar_input go bool\nvar_output pulse bool\nvar s word[2]\n" <>
-            "xic skip jmp done\nxic go ons s[1].3 ote pulse\nlbl done"
+            "var landed bool\nxic skip jmp done\nxic go ons s[1].3 ote pulse\nlbl done ote landed"
         )
 
       state = %{Runtime.instance(p) | first: false, ons_blocked: ["s[1].3"]}

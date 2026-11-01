@@ -70,6 +70,9 @@ defmodule Logex.Declarations do
     "var_output" => :var_output,
     "var_external" => :var_external
   }
+  # A program's var_input told apart, the one section of a program that takes no qualifier
+  # (of_kind/2).
+  @program_sections Map.put(@sections, "var_input", {:program, :var_input})
   # M6-1 (docs/organisation.md §4.13, decisions 267 to 270): IEC's two qualifiers, a third
   # kind of word beside the sections and the types, each straight after a line's section
   # word, `var retain count dint`, and reserved in any case.
@@ -228,11 +231,23 @@ defmodule Logex.Declarations do
   that takes `an`, and the elementary ones and the plain built-ins, has its row; any other,
   a typed counter, `a ctu_int`, or one only a type built by hand can name, takes `a`. A user block's name is never given
   one: `instance_of/1` names its instance's type `` an instance of `seal` ``, whatever its
-  sound.
+  sound. A word or a shown word that is no binary raises `ArgumentError`.
   """
   def a_or_an(word, shown \\ nil)
-  def a_or_an(word, nil), do: a_or_an(word, word)
-  def a_or_an(word, shown), do: "#{Map.get(@articles, word, "a")} #{shown}"
+  def a_or_an(word, nil) when is_binary(word), do: a_or_an(word, word)
+
+  def a_or_an(word, shown) when is_binary(word) and is_binary(shown),
+    do: "#{Map.get(@articles, word, "a")} #{shown}"
+
+  # RV-2's review: a word that is no binary is a caller's mistake, said so in pinned words,
+  # where the clauses above left it a FunctionClauseError (and before RV-2 recursed for ever).
+  def a_or_an(word, shown),
+    do:
+      raise(
+        ArgumentError,
+        "a_or_an/2 takes a word and the word as shown, each a binary, got: " <>
+          "#{inspect(word)} and #{inspect(shown)}"
+      )
 
   @doc """
   What a function block type given where a program goes is told, after its name (M2-5):
@@ -453,8 +468,15 @@ defmodule Logex.Declarations do
   """
   def class_range(class) when class in @class_atoms do
     ranges = for type <- @integers, in_class?(type, class), do: range(type)
-    Enum.min(Enum.map(ranges, & &1.first))..Enum.max(Enum.map(ranges, & &1.last))//1
+    ranged(ranges)
   end
+
+  # RV-2 (the review after Milestone 6, a3-compiler2-10): a class of no integer type,
+  # `:any_real`, has no integer range, nil, where Enum.min/1 of none raised.
+  defp ranged([]), do: nil
+
+  defp ranged(ranges),
+    do: Enum.min(Enum.map(ranges, & &1.first))..Enum.max(Enum.map(ranges, & &1.last))//1
 
   @doc """
   The conversion that takes a value of `from` into `to`, its mnemonic, `dint_to_int`, or
@@ -557,10 +579,16 @@ defmodule Logex.Declarations do
   for it, a comparison's of two literals (M5-4): an integer within `class_range/1`, and
   since M5-10 a real literal where the class holds a real.
   """
-  def class_holds?(class, value) when is_integer(value), do: value in class_range(class)
+  def class_holds?(class, value) when is_integer(value),
+    do: integer_held(class_range(class), value)
 
   def class_holds?(class, value) when is_float(value),
     do: :real in Map.fetch!(@classes, class).kinds
+
+  # A class of reals alone holds an integer literal where an lreal holds it exactly, as a
+  # real slot holds one (decision 147's literal rule).
+  defp integer_held(nil, value), do: Logex.Real.exact?(:lreal, value)
+  defp integer_held(range, value), do: value in range
 
   # Decision 216: a real literal nearer 0.0 than the type's smallest normal value, which a
   # write would flush to 0.0, told so, as one past the range is told the range.
@@ -681,7 +709,20 @@ defmodule Logex.Declarations do
   """
   def split(rungs, declared \\ [], types \\ %{}, checked \\ %{}, kind \\ :program)
 
-  def split(rungs, declared, types, checked, kind) when is_list(declared) do
+  # RV-2 (the review after Milestone 6, c4-api-fuzz-7): an improper list of tags is
+  # refused as any other value that is no list, where it raised in a map over it.
+  def split(rungs, declared, types, checked, kind) when is_list(declared),
+    do: proper_split(proper?(declared), {rungs, declared, types, checked, kind})
+
+  def split(_rungs, declared, _types, _checked, _kind), do: declared!(declared)
+
+  defp proper?([_ | rest]), do: proper?(rest)
+  defp proper?([]), do: true
+  defp proper?(_improper), do: false
+
+  defp proper_split(false, {_rungs, declared, _types, _checked, _kind}), do: declared!(declared)
+
+  defp proper_split(true, {rungs, declared, types, checked, kind}) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
@@ -698,7 +739,7 @@ defmodule Logex.Declarations do
     {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
 
-  def split(_rungs, declared, _types, _checked, _kind),
+  defp declared!(declared),
     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
 
   @doc """
@@ -782,6 +823,14 @@ defmodule Logex.Declarations do
        when may_qualify(word) do
     section = Map.fetch!(@sections, String.downcase(keyword))
     qualified(qualifier(rest), {keyword, of_kind(section, kind), line}, diagnostics, types)
+  end
+
+  # A line of no qualifier: its section told apart for a program by a table of its own, so
+  # that a qualifier out of its place on a program's var_input is told the section takes
+  # none (RV-2's review) at no cost to any other line.
+  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, types, :program) do
+    section = Map.fetch!(@program_sections, String.downcase(keyword))
+    declared(shape(rest, keyword, types), {section, nil}, line, diagnostics, types)
   end
 
   defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, types, _kind) do
@@ -879,11 +928,30 @@ defmodule Logex.Declarations do
   # M6-1: a qualifier anywhere but straight after the section word is told where it goes.
   # Since M6-2's review the line is read without it and declares its tag, with the
   # qualifier in its place where it has one and none otherwise (provisional reading 2).
-  defp misplaced(word, kw, shaped),
+  # Since RV-2's review a section that takes no qualifier, a program's var_input or a
+  # var_external, is told so instead, as where the qualifier stands in its place: moved
+  # there it would still be refused (refusal/3).
+  defp misplaced(word, kw, shaped), do: {:refused, {:misplaced, word, kw}, shaped, :kept}
+
+  defp refusal({:misplaced, word, kw}, section, shaped),
+    do: misplaced_in(section, word, kw, shaped_name(shaped))
+
+  defp refusal(message, _section, _shaped), do: message
+
+  defp misplaced_in({:program, :var_input}, word, _kw, name) when is_binary(name),
+    do: input_message(name, Map.fetch!(@qualifiers, String.downcase(word)))
+
+  defp misplaced_in(:var_external, word, _kw, name) when is_binary(name),
+    do: external_message(name, Map.fetch!(@qualifiers, String.downcase(word)))
+
+  defp misplaced_in(_section, word, kw, _name),
     do:
-      {:refused,
-       "`#{word}` comes straight after the section word, as in " <>
-         "`#{section_word(kw)} #{word} count dint`", shaped, :kept}
+      "`#{word}` comes straight after the section word, as in " <>
+        "`#{section_word(kw)} #{word} count dint`"
+
+  defp shaped_name({:ok, name, _type, _initial, _shown}), do: name
+  defp shaped_name({:error, _message, %Tag{name: name}}), do: name
+  defp shaped_name(_shaped), do: nil
 
   defp section_word(kw), do: kw |> String.split(" ") |> hd()
 
@@ -903,7 +971,7 @@ defmodule Logex.Declarations do
         shaped,
         {section, refused_keeps(kept, retain)},
         line,
-        [diagnostic(line, message) | diagnostics],
+        [diagnostic(line, refusal(message, section, shaped)) | diagnostics],
         types
       )
 
@@ -1065,14 +1133,14 @@ defmodule Logex.Declarations do
   # Told from a scalar's type word by its last byte, which the clause's guard reads, so a
   # scalar's declaration costs what it did before arrays.
   defp declared_type(word, types) when binary_part(word, byte_size(word) - 1, 1) == "]",
-    do: sized(Logex.Array.split(word), word, types)
+    do: sized(Logex.Name.element(word), word, types)
 
   defp declared_type(word, types), do: type_of(String.downcase(word), word, types)
 
   defp sized(nil, word, types), do: type_word(word, types)
 
   defp sized({base, sizes}, word, types),
-    do: array_of(type_word(base, types), Enum.map(sizes, &Logex.Array.subscript/1), {base, word})
+    do: array_of(type_word(base, types), Enum.map(sizes, &Logex.Name.subscript/1), {base, word})
 
   defp array_of(type, sizes, at) when is_elementary(type),
     do: literal_sizes(Enum.find(sizes, &match?({:tag, _}, &1)), type, sizes, at)
@@ -1119,12 +1187,12 @@ defmodule Logex.Declarations do
   # elements' order, each quoted as written where it is spelled (decision 202).
   # M5-14: an array of instances takes no initial list, as an instance takes no initial
   # value; it is still plainly an array of its line's section, so its uses are checked.
-  defp typed({:array, %FbType{}, _dims} = type, name, _word, [_ | _], _kw),
-    do: {:error, instances_initial(name, type)}
-
-  defp typed({:array, _, _} = type, name, _word, [_ | _] = tail, _kw) do
-    listed(Enum.all?(tail, &is_literal/1), type, name, tail)
-  end
+  # RV-2 (M15): a qualifier after an array's type word, before or among its initial list,
+  # `var x int[2] retain 1 2` or `var t ton[2] retain`, is told where it goes, as a scalar's
+  # is, and the line read without it, where it was told it was no literal of the list or
+  # that an array of instances takes none.
+  defp typed({:array, _, _} = type, name, word, [_ | _] = tail, at),
+    do: array_initial(Enum.find_index(tail, &qualifier_operand?/1), type, {name, word}, tail, at)
 
   # M2-5: a function block never holds an instance of itself, at any depth (Ed 2 §2.5,
   # docs/organisation.md §4.3). Logex.Compiler marks the types that would. The line's name
@@ -1184,6 +1252,20 @@ defmodule Logex.Declarations do
 
   defp after_type(false, {_type, name, _word}, [extra | _], _at),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+
+  defp array_initial(nil, {:array, %FbType{}, _dims} = type, {name, _word}, _tail, _at),
+    do: {:error, instances_initial(name, type)}
+
+  defp array_initial(nil, type, {name, _word}, tail, _at),
+    do: listed(Enum.all?(tail, &is_literal/1), type, name, tail)
+
+  defp array_initial(index, type, {name, word}, tail, {kw, _types} = at) do
+    {{:name, _, qualifier}, rest} = List.pop_at(tail, index)
+    misplaced(qualifier, kw, salvaged(typed(type, name, word, rest, at), type, {name, kw}))
+  end
+
+  defp qualifier_operand?({:name, _, word}) when may_qualify(word), do: qualifier_word?(word)
+  defp qualifier_operand?(_element), do: false
 
   defp listed(true, type, name, tail),
     do: {:ok, name, type, Enum.map(tail, &Parser.value/1), Enum.map(tail, &shown_literal/1)}
@@ -1299,7 +1381,7 @@ defmodule Logex.Declarations do
         "a function block never holds an instance of itself, at any depth"
 
   defp type_word?({:name, _, word}, types),
-    do: declared_type(word, types) not in [nil, {:unknown, hd(String.split(word, "["))}]
+    do: declared_type(word, types) not in [nil, {:unknown, Logex.Name.base(word)}]
 
   defp type_word?(_element, _types), do: false
 
@@ -1612,10 +1694,7 @@ defmodule Logex.Declarations do
 
   defp retain_of(%Tag{retain: retain, section: :var_external, name: name})
        when retain in @qualifier_atoms,
-       do: [
-         "#{label(name)} is a var_external, which takes no `#{retain}`: its global carries " <>
-           "it, as the configuration declares it"
-       ]
+       do: [external_message(name, retain)]
 
   defp retain_of(%Tag{retain: retain}) when retain in @qualifier_atoms, do: []
 
@@ -1624,6 +1703,11 @@ defmodule Logex.Declarations do
       "unknown qualifier #{inspect(retain)} on #{label(name)}: logex has :retain and " <>
         ":non_retain, or nil for none"
     ]
+
+  defp external_message(name, retain),
+    do:
+      "#{label(name)} is a var_external, which takes no `#{retain}`: its global carries " <>
+        "it, as the configuration declares it"
 
   defp section(section) when section in @section_atoms, do: []
   defp section(section), do: ["unknown section #{inspect(section)}"]
@@ -1673,9 +1757,12 @@ defmodule Logex.Declarations do
        when type in @reals and not is_number(v),
        do: ["the initial value of #{label(name)} must be a number, found #{inspect(v)}"]
 
-  defp initial(%Tag{type: type, name: name, initial: v}, _shown)
+  # RV-2 (the review after Milestone 6, a3-compiler2-9): a real literal is quoted as written,
+  # `1.5e1`, as every message quotes a literal (decision 202), where it was its value,
+  # 15.0; a value from Elixir, which has no spelling, as the value it is.
+  defp initial(%Tag{type: type, name: name, initial: v}, shown)
        when type not in @reals and not is_integer(v),
-       do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
+       do: ["the initial value of #{label(name)} must be an integer, found #{found(shown, v)}"]
 
   # The review after Milestone 6 (a5-data-model-8): -0.0 from Elixir, which no line gives,
   # a line's `-0.0` being read as 0.0, and which no real holds (decision 150), is refused,
@@ -1758,6 +1845,9 @@ defmodule Logex.Declarations do
 
   defp plus_one(-1), do: -1
   defp plus_one(n), do: n + 1
+
+  defp found(spelling, _v) when is_binary(spelling), do: spelling
+  defp found(_none, v), do: inspect(v)
 
   defp quoted(nil, v) when is_float(v), do: "`#{Float.to_string(v)}`"
   defp quoted(nil, v), do: "`#{v}`"

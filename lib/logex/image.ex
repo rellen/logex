@@ -525,7 +525,7 @@ defmodule Logex.Image do
   defp segments([], done, _path), do: Enum.reverse(done)
 
   defp segments([segment | rest], done, path),
-    do: segment(Array.split(segment), segment, {rest, done, path})
+    do: segment(Logex.Name.element(segment), segment, {rest, done, path})
 
   defp segment(nil, name, {rest, done, path}),
     do: segment_named(Declarations.name?(name), {name, nil}, {rest, done, path})
@@ -629,7 +629,7 @@ defmodule Logex.Image do
 
   defp order_key(path), do: path |> :binary.split(".", [:global]) |> Enum.map(&order_segment/1)
 
-  defp order_segment(segment), do: order_split(Array.split(segment), segment)
+  defp order_segment(segment), do: order_split(Logex.Name.element(segment), segment)
 
   defp order_split(nil, segment), do: {segment, []}
   defp order_split({name, subscripts}, _segment), do: {name, Enum.map(subscripts, &order_of/1)}

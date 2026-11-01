@@ -831,7 +831,7 @@ defmodule Logex.Configuration.Edit do
     do: {Map.new(Walk.writes(program)), Map.new(Walk.element_writes(program))}
 
   defp member_written?({writes, elements}, member),
-    do: written_member(Logex.Array.split(member), member, {writes, elements})
+    do: written_member(Logex.Name.element(member), member, {writes, elements})
 
   defp written_member(nil, member, {writes, _elements}), do: is_map_key(writes, member)
 
@@ -840,12 +840,12 @@ defmodule Logex.Configuration.Edit do
 
   # Decision 223: a connection may drive an element of a global array, `speeds[1]`, named by
   # its subscripts' values, held and reported as that element.
-  defp driven_name(global), do: element_name(Logex.Array.split(global), global)
+  defp driven_name(global), do: element_name(Logex.Name.element(global), global)
 
   defp element_name(nil, global), do: global
 
   defp element_name({array, subscripts}, _global),
-    do: Logex.Array.name(array, for(text <- subscripts, do: elem(Logex.Array.subscript(text), 1)))
+    do: Logex.Array.name(array, for(text <- subscripts, do: elem(Logex.Name.subscript(text), 1)))
 
   # Each held global with its value, an array's as a host is given one, a list
   # (b5-config-edit-2's fix: a report gives no array as the resource's tuple).
@@ -853,7 +853,7 @@ defmodule Logex.Configuration.Edit do
     do:
       for(
         name <- names,
-        do: {:held, name, host(held_value(Logex.Array.split(name), name, globals))}
+        do: {:held, name, host(held_value(Logex.Name.element(name), name, globals))}
       )
 
   # Decision 347 (the maintainer, 2026-11-01): a connection the configuration a direction
@@ -874,7 +874,7 @@ defmodule Logex.Configuration.Edit do
           to.connections,
         is_binary(global),
         name = driven_name(global),
-        held_name?(Logex.Array.split(name), name, held),
+        held_name?(Logex.Name.element(name), name, held),
         program = Map.fetch!(to.programs, Map.fetch!(types, instance)),
         output?(connected(program, member)),
         not member_written?(Map.fetch!(writes, Map.fetch!(types, instance)), member),
@@ -887,12 +887,12 @@ defmodule Logex.Configuration.Edit do
 
   # A connection's member as the runtime's copy-out reads it: a tag whole, or an element of
   # an array var_output by its subscripts' values, with the tag and the element's type.
-  defp connected(%Program{tags: tags}, member), do: slot(Logex.Array.split(member), member, tags)
+  defp connected(%Program{tags: tags}, member), do: slot(Logex.Name.element(member), member, tags)
 
   defp slot(nil, member, tags), do: {Map.fetch!(tags, member), member, nil}
 
   defp slot({array, subscripts}, _member, tags) do
-    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    index = for text <- subscripts, do: elem(Logex.Name.subscript(text), 1)
     {Map.fetch!(tags, array), array, index}
   end
 
@@ -948,7 +948,7 @@ defmodule Logex.Configuration.Edit do
         reduce: {state, [], %{}} do
       acc ->
         started_at(
-          held_value(Logex.Array.split(global), global, context.globals),
+          held_value(Logex.Name.element(global), global, context.globals),
           {name, member, slot},
           acc
         )
@@ -1007,7 +1007,7 @@ defmodule Logex.Configuration.Edit do
     do:
       Logex.Array.fetch(
         Map.fetch!(globals, array),
-        for(text <- subscripts, do: elem(Logex.Array.subscript(text), 1))
+        for(text <- subscripts, do: elem(Logex.Name.subscript(text), 1))
       )
 
   # ---- a switch, between two cycles -------------------------------------------------------

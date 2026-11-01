@@ -82,7 +82,7 @@ defmodule Logex.Real do
 
   def nearest(:real, value) when is_integer(value), do: normal(single_of(value), @single_min)
   def nearest(:lreal, value) when is_float(value), do: normal(value, @double_min)
-  def nearest(:lreal, value) when is_integer(value), do: normal(:erlang.float(value), @double_min)
+  def nearest(:lreal, value) when is_integer(value), do: normal(double_of(value), @double_min)
 
   defp normal(value, min) when value > -min and value < min, do: 0.0
   defp normal(value, _min), do: value
@@ -95,6 +95,23 @@ defmodule Logex.Real do
 
   defp single_of(value) do
     shift = bits(value, 0) - 24
+    kept = value >>> shift
+    rest = value - (kept <<< shift)
+    half = 1 <<< (shift - 1)
+    :erlang.float(rounded(kept, rest, half) <<< shift)
+  end
+
+  # RV-2 (the review after Milestone 6): so a double's, rounded once from the integer
+  # itself, since `:erlang.float/1` of an integer of 2^64 or more rounds it twice, 2^116 +
+  # 2^63 + 1 coming out at 2^116 where its nearest double is 2^116 + 2^64. Up to 2^53 every
+  # integer is a double.
+  defp double_of(value) when value > -9_007_199_254_740_992 and value < 9_007_199_254_740_992,
+    do: value * 1.0
+
+  defp double_of(value) when value < 0, do: -double_of(-value)
+
+  defp double_of(value) do
+    shift = bits(value, 0) - 53
     kept = value >>> shift
     rest = value - (kept <<< shift)
     half = 1 <<< (shift - 1)
@@ -141,15 +158,32 @@ defmodule Logex.Real do
   def spelled(:lreal, value), do: Float.to_string(value)
   def spelled(:real, value), do: shortest(value, 1)
 
+  # Each count of digits from 1 is tried with the decimal of that many digits nearest the
+  # value and its two neighbours, the first that reads back to the value taken, the nearest
+  # of them to it: since RV-2 (the review after Milestone 6), at a power of two, whose
+  # single's interval is half as wide below it as above, the nearest decimal may read back
+  # to the single below where its neighbour above reads back to the value, `1.2621775e-29`
+  # the shortest for 2^-96, which the nearest alone spelled `1.26217745e-29`.
   defp shortest(value, digits) when digits <= 9 do
-    {read, ""} = Float.parse(:erlang.float_to_binary(value, [{:scientific, digits - 1}]))
-    shorter(in_range?(:real, read) and nearest(:real, read) === value, read, value, digits)
+    [mantissa, exponent] =
+      :binary.split(:erlang.float_to_binary(value, [{:scientific, digits - 1}]), "e")
+
+    whole = String.to_integer(String.replace(mantissa, ".", ""))
+    power = String.to_integer(exponent) - digits + 1
+
+    found =
+      for step <- [0, 1, -1],
+          {read, ""} = Float.parse("#{whole + step}e#{power}"),
+          in_range?(:real, read) and nearest(:real, read) === value,
+          do: read
+
+    shorter(found, value, digits)
   end
 
   defp shortest(value, _digits), do: Float.to_string(value)
 
-  defp shorter(true, read, _value, _digits), do: Float.to_string(read)
-  defp shorter(false, _read, value, digits), do: shortest(value, digits + 1)
+  defp shorter([], value, digits), do: shortest(value, digits + 1)
+  defp shorter([read | _], _value, _digits), do: Float.to_string(read)
 
   @doc false
   # Decision 219: what a real literal written `text`, of value `value`, is held as in a real

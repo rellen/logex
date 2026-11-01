@@ -251,9 +251,9 @@ defmodule Logex.IO do
       "`#{first.name}` to `#{last.name}` (#{located_at(device, first)} to #{located_at(device, last)})"
     ]
 
-  defp array_of(name), do: array_named(:binary.split(name, "["))
-  defp array_named([array, _subscripts]), do: array
-  defp array_named([_name]), do: nil
+  defp array_of(name), do: array_named(Logex.Name.element(name))
+  defp array_named({array, _subscripts}), do: array
+  defp array_named(nil), do: nil
 
   defp shown(device, %Point{name: name} = point), do: "`#{name}` (#{located_at(device, point)})"
 

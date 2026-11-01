@@ -1616,7 +1616,12 @@ defmodule Logex.RetainConfigurationTest do
             "m#{i}.start pb#{i}\nm#{i}.stop st#{i}\nm#{i}.run k#{i}\nm#{i}.sp sp#{i}\n"
         end)
 
-  defp reductions(fun) do
+  # A function's cost in reductions, the least of three runs, each in a process of its own
+  # whose heap the collector does not visit: one run read once was 6 reductions dearer on a
+  # busy machine, where the warm restart's bound is 4 (RV-2's review).
+  defp reductions(fun), do: Enum.min(for _ <- 1..3, do: reductions_once(fun))
+
+  defp reductions_once(fun) do
     parent = self()
 
     {_pid, ref} =
