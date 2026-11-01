@@ -3378,7 +3378,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
-  `.tmp` the other is written through, is refused at start, a pinned line.
+  `.tmp` the other is written through, is refused at start, a pinned line. And one
+  runner's: a start naming a store, a forces file or a `.tmp` of either that another
+  runner of the same VM holds is refused, naming it and that runner, until the holder
+  stops, crashes or is killed, when the file is free again (decision 356); two VMs on one
+  file are the host's to avoid, as are two paths to one file through a link. Each path is
+  resolved once, at the start, so a `File.cd` after it moves neither file. A start under
+  a name another process holds is `{:error, {:already_started, pid}}` and writes nothing,
+  `start: :cold` among it, its write made once the name is registered (M11).
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
@@ -4905,7 +4912,10 @@ in every cycle's outputs at the value it holds.
   before it ("The store on disk", above); and each write the runner makes at an event, a
   force's among them, is given the idle watchdog and a poll period of real time, so a
   disk slower than that fails every one of them, the plant running on with its store
-  behind, and one the disk finishes after the runner gave up on it may still land. A retained value is no safety memory: a
+  behind, and one the disk finishes after the runner gave up on it may still land. Two
+  runners of one VM are refused one file, but nothing sees a runner of another VM, or one
+  file reached by a second path through a link: two such runners on one store write over
+  each other's, and a crash then brings one runner back with the other's values. A retained value is no safety memory: a
   burner's lockout, a latch a guard's opening set or a count of trips must not be kept in
   logex, whose store a person can edit, a cold start discards and a crash may set back.
 - **Not a guard against what a warm start switches on.** No output is kept: every output
