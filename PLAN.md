@@ -12456,8 +12456,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     not loaded or exports no registry's four functions is the host's pinned mistake; a
     `Registry` name starts and is reached by its name. Mutant: no check, red.
   - *10, the mutants that survived* B, E, I and J: B, two claims at once over a dead
-    holder, a test on the VM's table of four claims at once four thousand times, which
-    the mutant failed four runs of four with 15 to 44 rounds won twice; E, a notice
+    holder: `Logex.Runner.Paths.claim/3` takes the holder's liveness as its one seam, so
+    that a test makes the race in one process, another claimer taking the file over
+    inside the claimer's look at the dead holder, and the claimer, its replace taking
+    nothing, tries again and is refused, red under the mutant; beside it a test of four
+    claims at once four thousand times on the VM's table, which the mutant failed four
+    runs of four alone but passed one full suite on a machine loaded by other suites, so
+    a concurrency check and no more; E, a notice
     bearing its device's own pid with a time or a kind no device sends, passed over, where
     the mutant crashed the runner; I, which found a real fault: a stop whose request waits
     in a runner another stop ends is ended by `{reason, {:sys, :terminate, args}}`, which
@@ -12471,6 +12476,19 @@ and CI checked; each fix with a test that fails when it is reverted.
     process's file call answers. Mutant: the read through the file server, red within the
     limit (the test waits for the raw read a limit's time and lets the FIFO go however it
     ends).
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at
+    `29e2aa3`, eighteen patches): sixteen red, each by the test named above. Two survived:
+    the review's B, killed since by the one-process race test; and the renewal not read at
+    a device's poll, kept: a poll past the deadline the device holds comes, in every case
+    a test makes, after its wake at that deadline, set before the poll's timer and so
+    delivered first on the manual clock, which takes the renewal; the read is kept for the
+    poll whose timer was set before the wake's, a wake re-armed within a poll period of
+    the deadline it moved to, and for a clock that delivers two wakes of one millisecond
+    in either order, where the poll's write again would stop at a deadline the renewal
+    had moved on (decision 130). Three clauses of the renewal's first form, a refresh older
+    than a renewal passed over, a release's deadline forgotten and a latched device taking
+    none, were found unobservable before the table, every decision of the device's going
+    through its wake or its poll, and were removed rather than kept untested.
   - *The cost* of a round of three devices on the manual clock, writes taking no time, is
     as before the review; with writes that take time, as the review's probe above.
   - *Load runs* of every new or changed real-clock and runner test under

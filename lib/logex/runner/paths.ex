@@ -30,7 +30,11 @@ defmodule Logex.Runner.Paths do
 
   # Every file claimed for `pid`, `:ok`, or the first of them another live runner holds,
   # `{:held, path, holder, role}`, the holder's role for the path, nothing claimed then.
-  def claim(files, pid), do: claimed(files, pid, table(), [])
+  # `alive?` tells a holder alive, `Process.alive?/1` but in a test of the take-over's
+  # race, which stands its own in, the one seam to the window between a claim's look-up
+  # of a holder and its replace of that holder's claim.
+  def claim(files, pid, alive? \\ &Process.alive?/1),
+    do: claimed(files, {pid, table(), alive?}, [])
 
   # The first of the files a live runner holds, `{:held, path, holder, role}`, or `:ok`,
   # claiming nothing: the check a start makes in its caller before it reads either file,
@@ -58,36 +62,35 @@ defmodule Logex.Runner.Paths do
     :ok
   end
 
-  defp claimed([], _pid, _table, _done), do: :ok
+  defp claimed([], _claim, _done), do: :ok
 
-  defp claimed([{path, role} = file | rest], pid, table, done),
-    do: claiming(:ets.insert_new(table, {path, pid, role}), file, rest, pid, table, done)
+  defp claimed([{path, role} = file | rest], {pid, table, _alive?} = claim, done),
+    do: claiming(:ets.insert_new(table, {path, pid, role}), file, rest, claim, done)
 
-  defp claiming(true, file, rest, pid, table, done),
-    do: claimed(rest, pid, table, [file | done])
+  defp claiming(true, file, rest, claim, done), do: claimed(rest, claim, [file | done])
 
-  defp claiming(false, {path, _role} = file, rest, pid, table, done),
-    do: holder(:ets.lookup(table, path), file, rest, pid, table, done)
+  defp claiming(false, {path, _role} = file, rest, {_pid, table, _alive?} = claim, done),
+    do: holder(:ets.lookup(table, path), file, rest, claim, done)
 
   # The file's holder: alive, the claim refused and every file claimed before it given up;
   # down, its claim taken over where it is still that holder's, and otherwise tried again.
-  defp holder([{path, holder, role}], file, rest, pid, table, done),
-    do: holder_alive(Process.alive?(holder), {path, holder, role}, file, rest, {pid, table, done})
+  defp holder([{_path, holder, _role} = held], file, rest, {_pid, _table, alive?} = claim, done),
+    do: holder_alive(alive?.(holder), held, file, rest, claim, done)
 
-  defp holder([], file, rest, pid, table, done), do: claimed([file | rest], pid, table, done)
+  defp holder([], file, rest, claim, done), do: claimed([file | rest], claim, done)
 
-  defp holder_alive(true, {path, holder, role}, _file, _rest, {pid, _table, done}) do
+  defp holder_alive(true, {path, holder, role}, _file, _rest, {pid, _table, _alive?}, done) do
     release(done, pid)
     {:held, path, holder, role}
   end
 
-  defp holder_alive(false, held, {path, role} = file, rest, {pid, table, done}) do
+  defp holder_alive(false, held, {path, role} = file, rest, {pid, table, _alive?} = claim, done) do
     taken = :ets.select_replace(table, [{held, [], [{:const, {path, pid, role}}]}])
-    taken_over(taken, file, rest, pid, table, done)
+    taken_over(taken, file, rest, claim, done)
   end
 
-  defp taken_over(1, file, rest, pid, table, done), do: claimed(rest, pid, table, [file | done])
-  defp taken_over(0, file, rest, pid, table, done), do: claimed([file | rest], pid, table, done)
+  defp taken_over(1, file, rest, claim, done), do: claimed(rest, claim, [file | done])
+  defp taken_over(0, file, rest, claim, done), do: claimed([file | rest], claim, done)
 
   # The VM's table, made the first time a runner claims a file.
   defp table, do: made(:ets.whereis(@table))

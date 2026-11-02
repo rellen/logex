@@ -230,6 +230,45 @@ defmodule Logex.RunnerPathsTest do
       assert Enum.frequencies(winners) == %{1 => 4000}
     end
 
+    # The take-over's race made in one process, through the claim's one seam, the holder's
+    # liveness: the claimer's look at the dead holder, between its look-up of the holder's
+    # claim and its replace of it, is where another claimer takes the file over, so that
+    # its replace finds the claim changed and it tries again, meeting the winner, alive,
+    # and is refused, where a replace that took nothing taken as a claim let both hold it.
+    test "a claim whose take-over of a dead holder's file another made first is refused" do
+      dead = spawn(fn -> :ok end)
+      ref = Process.monitor(dead)
+      assert_receive {:DOWN, ^ref, :process, ^dead, _reason}, 5000
+
+      winner =
+        spawn(fn ->
+          receive do
+            :done -> :ok
+          end
+        end)
+
+      file = {"/logex-runner-paths-test/taken-over", :retain}
+      :ok = Logex.Runner.Paths.claim([file], dead)
+
+      meanwhile = fn
+        ^dead ->
+          :ok = Logex.Runner.Paths.claim([file], winner)
+          false
+
+        holder ->
+          Process.alive?(holder)
+      end
+
+      assert Logex.Runner.Paths.claim([file], self(), meanwhile) ==
+               {:held, "/logex-runner-paths-test/taken-over", winner, :retain}
+
+      assert :ets.lookup(Logex.Runner.Paths, "/logex-runner-paths-test/taken-over") ==
+               [{"/logex-runner-paths-test/taken-over", winner, :retain}]
+
+      Logex.Runner.Paths.release([file], winner)
+      send(winner, :done)
+    end
+
     test "a path is free again once its holder stops, crashes or is killed", %{tmp_dir: dir} do
       store = Path.join(dir, "plant.retain")
       {:ok, first} = Runner.start_link(opts(retain: store))
