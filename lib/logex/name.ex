@@ -76,7 +76,8 @@ defmodule Logex.Name do
   @doc false
   # Decision 384 (the maintainer, 2026-11-01): an element a host or the forces file names
   # by numbers, each subscript one integer literal, is the element of their values, so
-  # `temps[03]` and `temps[16#3]` name `temps[3]` and `w[01,2]` `w[1,2]`, as `put_inputs/3`
+  # `temps[03]` and `temps[16#3]` name `temps[3]`, a based literal by its value too
+  # (provisional), and `w[01,2]` `w[1,2]`, as `put_inputs/3`
   # and `get/2` read a subscript (decisions 222 and 312): the name by its values, or the
   # text as it is where it is no element named by numbers, `temps[i]`, `temps` or `x.y`.
   def by_value(name) when is_binary(name), do: valued(element(name), name)

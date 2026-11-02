@@ -125,10 +125,10 @@ defmodule Logex.Edit do
   drop, which cannot happen; an `rto`'s forecast so too. And since decision 381 (the
   maintainer, 2026-11-01) such a timer whose `.dn` is 0 and whose `.acc` is below the new
   `.pre` but reaches it with the time it catches up is forecast `:dn_rises`, `{acc, pre}`
-  with the state's `.acc`, its `.dn` rising at its next run with its rung true, a `ton`'s
-  and an `rto`'s alike, so that a lamp the catch-up alone lights at the first scan after
-  the test is in the forecast, where until RV-10 only a `.acc` at or past the new `.pre`
-  was.
+  with the state's `.acc` (provisional), its `.dn` rising at its next run with its rung
+  true, a `ton`'s and an `rto`'s alike, so that a lamp the catch-up alone lights at the
+  first scan after the test is in the forecast, where until RV-10 only a `.acc` at or past
+  the new `.pre` was.
 
   The other timers (M3-2, decisions 93 on) are timers by every rule above, each by its own
   type: a change of a timer's type, a `ton` made a `tof`, needs a restart. A `tof`'s `.dn`

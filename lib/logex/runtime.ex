@@ -1240,7 +1240,7 @@ defmodule Logex.Runtime do
   # Decision 382 (the maintainer, 2026-11-01): an instance restarted at the resource's
   # clock, so that `restart/3` sets each retained timer's `last` to the resource's `now`, as
   # `start/2` starts every one at its `now`; the instance's `now` moves with it, since a
-  # timer's `last` is never later than its instance's (decision 188).
+  # timer's `last` is never later than its instance's (decision 188, provisional).
   defp at_now(%Instance{} = state, now), do: %{state | now: now}
 
   # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger, as
@@ -2862,7 +2862,8 @@ defmodule Logex.Runtime do
   # reads an array var_input's element, where until RV-10 it was no input point; each such
   # key is told by `point_problem/3` only where it names no point as written, so that a
   # cycle of points named as their values pays one clause for it, and is set under the
-  # point's own name, two keys that name one point a line each, in key order.
+  # point's own name, two keys that name one point a line each, in key order
+  # (provisional).
   defp by_values([], inputs, _wiring), do: {[], inputs}
 
   defp by_values(problems, inputs, wiring) do

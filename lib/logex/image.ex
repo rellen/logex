@@ -252,9 +252,9 @@ defmodule Logex.Image do
   # of a global the image holds; and since RV-3's review a task's own, by the name of a
   # task, which no global can have. Since decision 389 (the maintainer, 2026-11-01) one of a
   # task the configuration no longer declares with a single is the start's to drop and
-  # report, as a changed configuration's (`dropped_triggers/3`), so only a name the
+  # report, as a changed configuration's (`dropped_triggers/2`), so only a name the
   # configuration declares as a global, which the image does not hold, is the image's own
-  # mistake: a global's sample kept without its global.
+  # mistake: a global's sample kept without its global (provisional).
   defp trigger_lines(name, sample, {globals, declared}),
     do:
       name_lines(name, "triggers") ++
@@ -270,9 +270,10 @@ defmodule Logex.Image do
   # by a task's name, which a round cut short leaves (decision 350), where the
   # configuration declares no task of that name with a single, the task taken out or its
   # trigger, is dropped and reported as a dropped value is (decision 277), `{task,
-  # :undeclared}`, and the resource starts, where until RV-10 the start was refused; so a
-  # store that held it is copied to `<store>.dropped` before the runner's first write over
-  # it, as decision 360 has every store a fresh start drops from.
+  # :undeclared}`, a dropped global's reason (provisional), and the resource starts, where
+  # until RV-10 the start was refused; so the runner's fresh start reports it in
+  # `status/1`, and decision 360's copy of the store to `<store>.dropped`, RV-5's, made
+  # from that start's dropped list, needs nothing of its own for it.
   def dropped_triggers(%{triggers: triggers, globals: globals}, %{tasks: tasks}) do
     singles =
       for(%{name: name, single: single} <- tasks, is_binary(single), into: %{}, do: {name, true})

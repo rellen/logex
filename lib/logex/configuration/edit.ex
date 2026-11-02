@@ -171,13 +171,14 @@ defmodule Logex.Configuration.Edit do
   element a kept instance copies out frozen through that same connection in both is held
   by neither, since nothing of it changes. Since decisions 386 and 387 (the maintainer,
   2026-11-01) a point the configuration a switch starts copies out frozen through a
-  connection the one it stops does not make, of an instance both run as one type, holds
-  too, and is reported `{:held, global, value}` as one decision 347 holds: a point rewired
-  from one var_output no rung writes to another, `m1.aux k2` made `m1.aux2 k2`, and a point
-  no connection drove that is newly wired from one, a scalar, an element and each element
-  of an array wired whole its program does not write, both ways, so that the point keeps
-  its value until a rung writes the var_output, where until RV-10 it moved at the first
-  cycle with an empty forecast. A var_output that holds the value already is
+  connection the one it stops does not make, of an instance both run as one type
+  (provisional), holds too, and is reported `{:held, global, value}` as one decision 347
+  holds: a point rewired from one var_output no rung writes to another, `m1.aux k2` made
+  `m1.aux2 k2`, and a point no connection drove that is newly wired from one, a scalar, an
+  element and each element of an array wired whole its program does not write, both
+  ways, an untest's among them (provisional), so that the point keeps its value until a
+  rung writes the var_output, where until RV-10 it moved at the first cycle with an empty
+  forecast. A var_output that holds the value already is
   not written. One of another type than its point's cannot hold every value the point
   may, so accept refuses its connection (decision 374), one decisions 386 and 387 hold
   among them, told as the one the candidate holds or an untest holds, but a kept
@@ -185,7 +186,8 @@ defmodule Logex.Configuration.Edit do
   out and so holds it from the instance's first run on; before that run, one whose type
   does not hold the point's value is left as it is (decision 374). And since decision 388
   accept refuses a connection that would hold a var_output a rung of its program reads,
-  `xic aux ote lamp`, its element `o[1]` or `o[i]`, or a bit of it, `w.3`, since the hold
+  `xic aux ote lamp`, its element `o[1]` or `o[i]`, any element through a tag subscript,
+  or a bit of it, `w.3` (provisional), since the hold
   would turn the lamp off while the report said only that `aux` holds: `` `m1.aux` is a
   var_output no rung of `motor` writes and line 9 of `motor` reads, wired to `k2`, a global
   the candidate holds: ... ``, the kept instance's own connection again the one exception
