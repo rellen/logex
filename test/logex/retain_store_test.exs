@@ -196,7 +196,7 @@ defmodule Logex.RetainStoreTest do
       text = Retain.encode(image, Retain.at(@wall + 999))
 
       assert text == """
-             logex retain 1
+             logex retain 2
              configuration plant written 2026-10-30T14:00:00Z
              global arm bool 0
              global limits int[3] 10 -20 30
@@ -226,6 +226,7 @@ defmodule Logex.RetainStoreTest do
              m1.w real[3] 0.1 -2.5 3.4e38
              m1.x bool 1
              m1.z lreal 0.1
+             end 31 lines
              """
 
       assert Retain.decode!(text, {"plant.retain", "plant"}) ==
@@ -283,7 +284,7 @@ defmodule Logex.RetainStoreTest do
     # order, the store's path and the line's number before each (decisions 276 and 285).
     test "a store that does not read is refused, a line each" do
       text = """
-      logex retain 2
+      logex retain 3
       configuration other written junk
       global x foo 1
       m1.a dint 1
@@ -305,8 +306,8 @@ defmodule Logex.RetainStoreTest do
       raises(
         Enum.join(
           [
-            "s: line 1: the store is of version 2, which this logex does not read: it reads " <>
-              "`logex retain 1`",
+            "s: line 1: the store is of version 3, which this logex does not read: it reads " <>
+              "`logex retain 2` and `logex retain 1`",
             "s: line 2: the store is of configuration `other`, and this configuration is " <>
               "`plant`: a store starts only the configuration it was written for, so a " <>
               "renamed configuration starts only cold: start it with start: :cold to start " <>
@@ -338,13 +339,13 @@ defmodule Logex.RetainStoreTest do
         fn -> Retain.decode!(text, {"s", "plant"}) end
       )
 
-      raises("s: line 1: the store is empty: its first line is `logex retain 1`", fn ->
+      raises("s: line 1: the store is empty: its first line is `logex retain 2`", fn ->
         Retain.decode!("", {"s", "plant"})
       end)
 
       raises(
         "s: line 1: `logex forces 1` is no store's header: a store's first line is " <>
-          "`logex retain 1`\ns: line 2: the store names no configuration: its second line " <>
+          "`logex retain 2`\ns: line 2: the store names no configuration: its second line " <>
           "is `configuration <name> written <time>`",
         fn -> Retain.decode!("logex forces 1\n", {"s", "plant"}) end
       )
@@ -489,6 +490,245 @@ defmodule Logex.RetainStoreTest do
       end
 
       assert Sim.reads(rig.panel) == 0
+    end
+  end
+
+  # Decision 355 (the review after Milestone 6, b3-store-image-6 and c7-premortem-plant-7):
+  # a store's first line is `logex retain 2` and its last its count of lines, `end <count>
+  # lines`, so that a store cut short, at a line's end or inside a number, is refused at a
+  # fresh start, naming the file and the line, where it was read short, its lost values
+  # started at their initial values unreported and a number cut in its digits read as a
+  # smaller one. A store of `logex retain 1` is read as before.
+  describe "a store cut short (decision 355)" do
+    # A counter and a total that a cut inside their digits would read smaller, a real
+    # array, a latched lamp at the end, and no device, so that a start costs no open.
+    @counting """
+    var_external total dint
+    var retain n dint
+    var retain w real[3] 0.25 -2.5 3.4e38
+    var retain lamp bool
+    var go bool 1
+    xic go add n 1 n
+    xic go add total 1 total
+    xic go otl lamp
+    """
+
+    @counted """
+    task fast interval 10 priority 1
+    var_global retain total dint 123456
+    program t1 counting with fast
+    """
+
+    defp counted_rig(dir) do
+      {:ok, counting} = Logex.compile(@counting, name: "counting")
+      {:ok, config} = Configuration.compile("plant", @counted, %{"counting" => counting})
+      {:ok, clock} = Manual.start_link(now: @wall)
+      store = Path.join(dir, "plant.retain")
+
+      opts = [configuration: config, io: %{}, clock: {Manual, clock}, poll: 10, retain: store]
+      %{clock: clock, store: store, opts: opts}
+    end
+
+    # Every store the runner writes is of version 2, its last line counting its lines as
+    # `wc -l` does, the header and the end line among them.
+    test "a store's last line counts its lines", %{tmp_dir: dir} do
+      rig = counted_rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 1000)
+      assert Runner.stop(runner) == :ok
+      text = File.read!(rig.store)
+
+      assert text == """
+             logex retain 2
+             configuration plant written 2026-10-30T14:00:01Z
+             global total dint 123557
+             instance t1 counting
+             t1.lamp bool 1
+             t1.n dint 101
+             t1.w real[3] 0.25 -2.5 3.4e38
+             end 8 lines
+             """
+
+      lines = String.split(text, "\n", trim: true)
+      assert List.last(lines) == "end #{length(lines)} lines"
+    end
+
+    # The fuzz: the store a runner wrote cut at every byte offset and a fresh start made on
+    # each, every one refused, naming the file, but the cut of the last newline alone,
+    # which keeps every line whole and starts with every value the stop wrote.
+    test "a store cut at any byte is refused, or read whole", %{tmp_dir: dir} do
+      rig = counted_rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Manual.advance(rig.clock, 1000)
+      assert Runner.stop(runner) == :ok
+      text = File.read!(rig.store)
+
+      # The values a fresh start from the whole store gives after its first round.
+      whole = cut_start(rig)
+      assert {:read, [123_558, 102, _w, 1]} = whole
+      File.write!(rig.store, text)
+
+      results =
+        for at <- 0..(byte_size(text) - 1) do
+          File.write!(rig.store, binary_part(text, 0, at))
+          cut_start(rig)
+        end
+
+      {read, refused} = Enum.split_with(results, &match?({:read, _}, &1))
+      assert read == [whole]
+      assert List.last(results) == whole
+      assert length(refused) == byte_size(text) - 1
+
+      for {:refused, message} <- refused,
+          do: assert(message =~ ~r/\A#{Regex.escape(rig.store)}: line \d+: /, message)
+    end
+
+    defp cut_start(rig) do
+      {:ok, runner} = Runner.start_link(rig.opts)
+      values = for path <- ~w(total t1.n t1.w t1.lamp), do: Runner.get!(runner, path)
+      assert Runner.stop(runner) == :ok
+      {:read, values}
+    rescue
+      error in ArgumentError -> {:refused, error.message}
+    end
+
+    # The same cuts read by the store's reader alone: every one refused but the last
+    # newline's, a cut at a line's end and one inside a number among them, each told at
+    # the line the cut left last; where version 1, which has no end line, read both short.
+    test "a cut at a line's end and one inside a number, each told" do
+      text = """
+      logex retain 2
+      configuration plant written 2026-10-30T14:00:00Z
+      global total dint 1234567
+      instance l1 line
+      l1.boxes ctu
+      l1.boxes.cv dint 1234567
+      l1.lamp bool 1
+      l1.t ton
+      l1.t.acc dint 5
+      l1.t.dn bool 0
+      l1.t.pre dint 100
+      end 12 lines
+      """
+
+      assert {%{globals: %{"total" => {:dint, 1_234_567}}}, ~U[2026-10-30 14:00:00Z]} =
+               Retain.decode!(text, {"s", "plant"})
+
+      # The text up to and with `tail`, the last of what a cut keeps.
+      cut = fn tail ->
+        [kept, _lost] = :binary.split(text, tail)
+        kept <> tail
+      end
+
+      told = fn n, last ->
+        "s: line #{n}: `#{last}` is the store's last line, and no end line: a store of " <>
+          "`logex retain 2` ends with `end <count> lines`, its count of lines, so this one " <>
+          "was cut short, and a store cut short is not read: start it with start: :cold to " <>
+          "start over it"
+      end
+
+      # At a line's end, the lines after it lost.
+      raises(told.(6, "l1.boxes.cv dint 1234567"), fn ->
+        Retain.decode!(cut.("l1.boxes.cv dint 1234567\n"), {"s", "plant"})
+      end)
+
+      raises(told.(11, "l1.t.pre dint 100"), fn ->
+        Retain.decode!(cut.("l1.t.pre dint 100\n"), {"s", "plant"})
+      end)
+
+      # Inside a number, which version 1 read as a smaller one.
+      raises(told.(3, "global total dint 12"), fn ->
+        Retain.decode!(cut.("global total dint 12"), {"s", "plant"})
+      end)
+
+      # A line the cut left half is told once, as the store's last, never as a line of no
+      # store's shape too.
+      raises(told.(5, "l1.box"), fn -> Retain.decode!(cut.("l1.box"), {"s", "plant"}) end)
+
+      # Inside the end line: its count cut in its digits, and the word after it cut.
+      for last <- ["end 1", "end 12", "end 12 li"] do
+        raises(told.(12, last), fn -> Retain.decode!(cut.(last), {"s", "plant"}) end)
+      end
+
+      # Version 1, as before: the same lines cut at a line's end, or in a number, read
+      # short.
+      v1 = fn kept -> String.replace(kept, "logex retain 2", "logex retain 1") end
+
+      assert {%{instances: %{"l1" => %{values: values}}}, _at} =
+               Retain.decode!(v1.(cut.("l1.boxes.cv dint 1234567\n")), {"s", "plant"})
+
+      refute Map.has_key?(values, "lamp")
+
+      assert {%{globals: %{"total" => {:dint, 12}}}, _at} =
+               Retain.decode!(v1.(cut.("global total dint 12")), {"s", "plant"})
+    end
+
+    # A hand edit's end line (decision 284): one line changed in place keeps the count; a
+    # line added or taken away without it, a count no whole number, and an end line that is
+    # not last are each refused at their lines.
+    test "a hand edit's end line, its count and its place" do
+      head = "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\n"
+
+      assert {%{globals: %{"total" => {:dint, 0}}}, _at} =
+               Retain.decode!(head <> "global total dint 0\nend 4 lines\n", {"s", "plant"})
+
+      # Any whole number the lexer reads, as every number of a store is, and no newline
+      # after the end line.
+      assert {%{globals: %{"total" => {:dint, 0}}}, _at} =
+               Retain.decode!(head <> "global total dint 0\nend 16#4 lines", {"s", "plant"})
+
+      raises(
+        "s: line 5: the store's end line counts 4 lines, and the store has 5: a line was " <>
+          "lost or doubled, or a hand edit added or removed one without changing the count, " <>
+          "which counts every line, the end line among them, and the store is not read",
+        fn ->
+          Retain.decode!(
+            head <> "global total dint 0\nglobal x dint 1\nend 4 lines\n",
+            {"s", "plant"}
+          )
+        end
+      )
+
+      raises(
+        "s: line 3: the store's end line counts 4 lines, and the store has 3: a line was " <>
+          "lost or doubled, or a hand edit added or removed one without changing the count, " <>
+          "which counts every line, the end line among them, and the store is not read",
+        fn -> Retain.decode!(head <> "end 4 lines\n", {"s", "plant"}) end
+      )
+
+      for count <- ["four", "-4", "4.0"] do
+        raises(
+          "s: line 4: `end #{count} lines` counts no lines: a store's end line is `end " <>
+            "<count> lines`, its count of lines a whole number",
+          fn ->
+            Retain.decode!(head <> "global total dint 0\nend #{count} lines\n", {"s", "plant"})
+          end
+        )
+      end
+
+      raises(
+        "s: line 3: `end 5 lines` comes before the store's last line: a store's end line is " <>
+          "its last line",
+        fn ->
+          Retain.decode!(
+            head <> "end 5 lines\nglobal total dint 0\nend 5 lines\n",
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # A store of version 1 has no end line: one a hand edit gave it is a line of no
+      # store's shape there, as any other.
+      raises(
+        "s: line 3: `end 3 lines` comes before the store's last line: a store's end line is " <>
+          "its last line",
+        fn ->
+          Retain.decode!(
+            "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\nend 3 lines\n",
+            {"s", "plant"}
+          )
+        end
+      )
     end
   end
 

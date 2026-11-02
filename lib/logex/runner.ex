@@ -202,16 +202,19 @@ defmodule Logex.Runner do
   resource's retained image (`Logex.Runtime.retained/1`), in a file on the host's disk,
   which stands in for battery-backed memory:
   - *Its text* is a person's to read, and to edit by hand where a retained value tripped
-    the plant (decision 284): `logex retain 1`; `configuration <name> written <time>`,
+    the plant (decision 284): `logex retain 2`; `configuration <name> written <time>`,
     the time of the write on the host's wall clock, in UTC to the second, read through
     the clock's `wall_ms/1` (`Logex.Runner.Clock`), for a person and for `status/1`, never
     for a timer; each retained global, `global total_boxes dint 41`; each retained
-    `single`'s last sample, `trigger arm 0` (decision 313); and each instance whose program
+    `single`'s last sample, `trigger arm 0` (decision 313); each instance whose program
     retains anything, `instance m1 motor`, then its lines in path order, each instance on
     the way to a value with its kind, `m1.boxes ctu`, and each value with its type,
     `m1.boxes.cv dint 41`, an array's elements in the elements' order, `m1.weights int[8]
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
-    `last` never.
+    `last` never; and since decision 355 its end line, `end 9 lines`, its count of lines,
+    the header and the end line among them (the words provisional), so that a store cut
+    short anywhere, at a line's end or inside a number, is refused at a fresh start, never
+    read short. A store of `logex retain 1`, which has no end line, is read as before.
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
     is 0; at every `stop/2`, and since decisions 316 and 328 at every orderly exit, a
     parent's shutdown or `:normal`, after every output is 0 and every device closed; at every cold restart, of the
@@ -293,9 +296,10 @@ defmodule Logex.Runner do
     path, of exactly its type, and it fits, the rest dropped and reported in `status/1`'s
     `retain`; a file that does not exist none, written at once; and one that cannot be
     read, that is no store, a line of no store's shape, an image `Logex.Runtime.start/2`
-    refuses, or a store of another configuration, which a renamed configuration's is, the
-    host's mistake, one `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner
-    not started and no device opened. `start: :cold` reads none, a broken one among them,
+    refuses, a store of another configuration, which a renamed configuration's is, or
+    since decision 355 one of `logex retain 2` cut short, its last line no end line or its
+    end line's count not its lines', the host's mistake, one `ArgumentError`, a line each,
+    `<path>: line <n>: ...`, the runner not started and no device opened. `start: :cold` reads none, a broken one among them,
     and writes a new store at once.
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
     keeps retained values in memory, and `status/1`'s `retain` is nil. `start:` without

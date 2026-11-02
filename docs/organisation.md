@@ -4615,7 +4615,18 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
 
   A store that cannot be read, or a line of no such shape, is the host's mistake, one
   `ArgumentError` a line each, and the runner does not start; `start: :cold` does not
-  read it.
+  read it. *(Since decision 355, RV-5, 2026-11-02: the header is `logex retain 2` and the
+  last line the store's count of lines, `end 11 lines` for the store above, the header
+  and the end line among them, as `wc -l` counts them (the words provisional); a store of
+  version 2 whose last line is no end line, or whose end line counts other than its
+  lines, is refused at a fresh start, naming the file and the line. A cut keeps a file's
+  first bytes and the end line is the last of them, so a cut at a line boundary or inside
+  any earlier line, a number cut in its digits among them, leaves a last line that is no
+  end line, and a cut inside the end line cuts its count, which is then smaller than the
+  lines it has, or the word after it: every cut but the last newline's alone is refused,
+  and that one keeps every line whole and is read, as `retain_store_test.exs`'s cut at
+  every byte offset of a store a runner wrote shows. A store of `logex retain 1` is read
+  as before, a cut one among it, and every write since is of version 2.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

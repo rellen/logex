@@ -3352,7 +3352,7 @@ end
 $ mix run kept.exs
 four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
-logex retain 1
+logex retain 2
 configuration tally written 2026-10-30T14:00:08Z
 global total_boxes dint 4
 instance t1 tally
@@ -3364,6 +3364,7 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 1
 t1.boxes.r bool 0
 t1.full bool 1
+end 13 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
@@ -3371,14 +3372,23 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
-  tripped the plant (decision 284): a header, `logex retain 1`; the configuration's name
+  tripped the plant (decision 284): a header, `logex retain 2`; the configuration's name
   and the time of the write on the host's wall clock, in UTC, which a clock gives through
   its `wall_ms/1` (the manual clock's own time, read from the epoch); each retained global;
-  each retained `single`'s last sample, `trigger arm 0`; and each instance whose program
+  each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
   text that reads back to it, and never a timer's `last` (`PLAN.md`'s M6-5; decisions 275
-  and 276 in [`docs/organisation.md`](docs/organisation.md) §7).
+  and 276 in [`docs/organisation.md`](docs/organisation.md) §7); and last its count of
+  lines, `end 13 lines`, the header and the end line among them, as `wc -l` counts them
+  (decision 355). A store cut short, at a line's end or inside a number, as a copy cut off
+  or a file system that loses a file's tail can leave one, has lost its end line or cut
+  it, and is refused at a fresh start, naming the file and its last line, so that no
+  store is read short, its lost values started at their initial values unreported or a
+  number cut in its digits read as a smaller one; a hand edit that changes a line in
+  place keeps the count, and one that adds or takes away a line changes it too. A store
+  of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
+  before, and the next write makes it `logex retain 2`.
 - It is written at every trip, of the resource as the trip left it, after every output is
   0; at every `stop/2`, after every output is 0 and every device closed, which then answers
   `:ok`, or `{:error, {:retain, reason}}` where the write failed, stopped all the same; at
@@ -3449,8 +3459,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
   store's path, the time its header names and what the start dropped. A store of another
-  configuration, a line of no store's shape, or a store `Logex.Runtime.start/2` refuses is
-  the host's mistake, every problem a line, the runner not started (decision 285);
+  configuration, a line of no store's shape, a store cut short (decision 355), or a store
+  `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
+  not started (decision 285);
   `start: :cold` reads none of it and writes a new store at once.
 
 ### An event task
@@ -4963,7 +4974,8 @@ in every cycle's outputs at the value it holds.
   `retain` and latches, `var retain ran bool`, tells a warm start from a cold one; no
   prescan; no hot restart; no warm restart that starts named paths cold; one store a
   runner, never one a program instance, and no checksum or encryption of it beyond its
-  grammar; and no retained force, the forces having a file of their own.
+  grammar and its count of lines, which tells a store cut short but not a value changed
+  in place; and no retained force, the forces having a file of their own.
 - **Not battery-backed memory, and no safety memory.** What a program marks `retain`
   is kept on the host's disk, by a runner given a store, `retain:`, and only there; in
   the core, `Logex.Runtime.restart/2,3` with `:warm`, it is kept in memory alone. The

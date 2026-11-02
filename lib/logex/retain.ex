@@ -6,9 +6,9 @@ defmodule Logex.Retain do
   # retained image, `Logex.Runtime.retained/1`'s, is what it holds.
   #
   # Its text is decision 276's, a person's to read after an incident and, where decision
-  # 284 has it, to edit by hand:
+  # 284 has it, to edit by hand, and since decision 355 (RV-5) of version 2:
   #
-  #     logex retain 1
+  #     logex retain 2
   #     configuration plant written 2026-10-27T14:00:00Z
   #     global total_boxes dint 41
   #     trigger arm 0
@@ -17,8 +17,9 @@ defmodule Logex.Retain do
   #     m1.boxes.cu bool 1
   #     m1.boxes.cv dint 41
   #     m1.weights int[8] 0 0 12 14 0 0 0 0
+  #     end 10 lines
   #
-  # a header, `logex retain 1`; the configuration's name and the time of the write on the
+  # a header, `logex retain 2`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; each retained global, `global <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
@@ -32,10 +33,27 @@ defmodule Logex.Retain do
   # subscripts' values (decision 312). An integer and a bool are written in decimal, a real
   # in the shortest text that reads back to it, a single's for a `real` (`Logex.Real.
   # spelled/2`), and a timer's `last` never (decision 273).
+  #
+  # The end line (decision 355): a store's last line is `end <count> lines`, its count of
+  # lines, the header and the end line among them, as `wc -l` counts a file whose last
+  # line ends with a newline (the words provisional). A store of version 2 whose last
+  # line is no end line, or whose end line counts other than the lines it has, is refused
+  # at a fresh start, naming the file and the line, so that a store is read whole or not
+  # at all. Why a count of lines catches both kinds of cut: a cut keeps a file's first
+  # bytes, and the end line, which holds the count, is the last of them. A cut at a line
+  # boundary, or inside a line before the end line, a value's number cut in its digits
+  # among them, takes the end line with it, and the line that is then last counts
+  # nothing; a cut inside the end line cuts its count or the word after it, and a count
+  # cut in its digits is smaller than the lines before it and it, which the cut did not
+  # change. Only a cut of the last newline alone keeps every line whole, and that store is
+  # read. The count catches, too, a line lost or doubled inside the file, and a line a hand
+  # edit added or removed without changing it. A store of version 1, which has no end
+  # line, is read as it was, a cut one among it; every store written since is of version
+  # 2.
 
   alias Logex.{Array, Declarations, Image, Real}
 
-  @header "logex retain 1"
+  @header "logex retain 2"
 
   @reals Declarations.reals()
 
@@ -44,17 +62,23 @@ defmodule Logex.Retain do
 
   # ---- written ------------------------------------------------------------------------
 
-  # A resource's retained image as the store's text, written at `at`, a UTC DateTime.
+  # A resource's retained image as the store's text, written at `at`, a UTC DateTime, its
+  # last line its count of lines (decision 355).
   def encode(%{configuration: name, globals: globals, instances: instances} = image, at) do
-    [
+    globals = for {name, entry} <- Enum.sort(globals), do: ["global #{name} ", entry(entry), "\n"]
+    triggers = for {name, sample} <- Enum.sort(image.triggers), do: "trigger #{name} #{sample}\n"
+    instances = for {name, lone} <- Enum.sort(instances), do: instance(name, lone)
+    count = 3 + length(globals) + length(triggers) + Enum.sum(Enum.map(instances, &length/1))
+
+    IO.iodata_to_binary([
       @header,
       "\n",
       "configuration #{name} written #{DateTime.to_iso8601(at)}\n",
-      for({name, entry} <- Enum.sort(globals), do: ["global #{name} ", entry(entry), "\n"]),
-      for({name, sample} <- Enum.sort(image.triggers), do: "trigger #{name} #{sample}\n"),
-      for({name, lone} <- Enum.sort(instances), do: instance(name, lone))
-    ]
-    |> IO.iodata_to_binary()
+      globals,
+      triggers,
+      instances,
+      "end #{count} lines\n"
+    ])
   end
 
   defp instance(name, %{program: program, kinds: kinds, values: values}) do
@@ -176,11 +200,54 @@ defmodule Logex.Retain do
   def decode!(text, {path, name}) do
     lines = text |> String.split("\n") |> unended() |> Enum.with_index(1)
     {written_at, problems} = headed(lines, name)
+    {body, ending} = ended(lines)
     acc = %{image: empty(name), instance: nil, seen: %{}, problems: Enum.reverse(problems)}
-    acc = lines |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
-    refused!(Enum.reverse(acc.problems), path)
+    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
+    refused!(Enum.reverse(acc.problems) ++ ending, path)
     {acc.image, written_at}
   end
+
+  # Decision 355: a store of version 2 ends with its end line, `end <count> lines`, the
+  # count every line it has, the header and the end line among them; its lines before it
+  # are the store's, and a last line that is no end line, or whose count is not the
+  # store's, is a problem of its line, the store refused whole, so that a store cut short
+  # anywhere is never read short (see the head of this module). The last line of such a
+  # store is judged as its end line alone, so that a line a cut left half is told once. A
+  # store of version 1 has no end line and is read as it was.
+  defp ended([{"logex retain 2", 1} | _rest] = lines),
+    do: end_line(List.last(lines), lines)
+
+  defp ended(lines), do: {lines, []}
+
+  defp end_line({text, n}, lines),
+    do: {Enum.drop(lines, -1), ending(String.split(text, " "), text, n)}
+
+  defp ending(["end", count, "lines"], text, n), do: counted(number(count), text, n)
+
+  defp ending(_other, text, n),
+    do: [
+      {n,
+       "`#{text}` is the store's last line, and no end line: a store of `#{@header}` ends " <>
+         "with `end <count> lines`, its count of lines, so this one was cut short, and a " <>
+         "store cut short is not read: start it with start: :cold to start over it"}
+    ]
+
+  defp counted({:ok, n}, _text, n), do: []
+
+  defp counted({:ok, count}, _text, n) when is_integer(count) and count >= 0,
+    do: [
+      {n,
+       "the store's end line counts #{count} lines, and the store has #{n}: a line was " <>
+         "lost or doubled, or a hand edit added or removed one without changing the count, " <>
+         "which counts every line, the end line among them, and the store is not read"}
+    ]
+
+  defp counted(_other, text, n),
+    do: [
+      {n,
+       "`#{text}` counts no lines: a store's end line is `end <count> lines`, its count of " <>
+         "lines a whole number"}
+    ]
 
   # The text after the last newline, empty in a file the runner wrote, is no line.
   defp unended(lines), do: unended(List.last(lines), lines)
@@ -208,13 +275,13 @@ defmodule Logex.Retain do
   defp headed([{first, 1} | rest], name),
     do: {written_at(rest), header(String.split(first, " "), first) ++ named(rest, name)}
 
-  defp header(["logex", "retain", "1"], _text), do: []
+  defp header(["logex", "retain", version], _text) when version in ["1", "2"], do: []
 
   defp header(["logex", "retain", version], _text),
     do: [
       {1,
        "the store is of version #{version}, which this logex does not read: it reads " <>
-         "`#{@header}`"}
+         "`#{@header}` and `logex retain 1`"}
     ]
 
   defp header(_other, text),
@@ -282,6 +349,16 @@ defmodule Logex.Retain do
     do: entered(sample(number(sample), sample), {:trigger, name}, at, acc)
 
   defp line(["instance", name, program], at, acc), do: instance(name, program, at, acc)
+
+  # Decision 355: an end line anywhere but last, which no path is, having no `.`.
+  defp line(["end", _count, "lines"], {text, n}, acc),
+    do:
+      problem(
+        acc,
+        n,
+        "`#{text}` comes before the store's last line: a store's end line is its last line"
+      )
+
   defp line([path, kind], at, acc), do: under(acc.instance, path, {:kind, kind}, at, acc)
 
   defp line([path, type | values], at, acc) when values != [],

@@ -15535,11 +15535,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_body!(nil, _text), do: :ok
 
+  # Since decision 355 the header `logex retain 2` and the last line the count of every
+  # line, the header, the configuration's line and the end line among them.
   defp life_body!(image, text) do
-    [_text, body] =
-      Regex.run(~r/\Alogex retain 1\nconfiguration plant written \S+\n(.*)\z/s, text)
+    [_text, body, count] =
+      Regex.run(
+        ~r/\Alogex retain 2\nconfiguration plant written \S+\n(.*)end (\d+) lines\n\z/s,
+        text
+      )
 
     assert body == life_body(image)
+    assert String.to_integer(count) == 3 + length(:binary.matches(body, "\n"))
 
     reach(
       :life_trigger_kept,
