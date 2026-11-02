@@ -12406,7 +12406,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      program instance is not counted: a program that holds such a declaration does not
      compile. RV-9's review, 2026-11-02: an instance that is no array's element counts
      nothing of its own, so a block of single timers holds 0 and an array of 65,536 of
-     them is taken (provisional, put to the maintainer).)*
+     them is taken (provisional, put to the maintainer).)* *(RV-12, 2026-11-02: both
+     provisional readings are decision 403's now, which counts every tag, element and
+     instance, so `cell[256]` of `ton[256]` alone holds 65,792 and is refused.)*
 
 371. **The loader's recompiles (the review after Milestone 6),** RV-2's question 5: a chain
      of 30 blocks, each holding the next, compiles 435 times, as decision 54 rechecks every
@@ -12422,6 +12424,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      where it compiled 435 more, and a configuration of 20 types over it 50 times, none
      again, where it compiled 1,035 more. RV-9's review, 2026-11-02: what `loaded/2` is
      handed is held to a type list's shape, and junk is refused as a compile's `types:` is.)*
+     *(RV-12, 2026-11-02: decision 404 makes the trust a closure only the loader makes,
+     and a list handed to `loaded/2` is checked as decision 54 has it.)*
 
 372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
      6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
@@ -12436,7 +12440,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      element's member are judged so too, and the warnings stay linear; an array of one
      dimension, where a tag meets every element, and one no write names through a tag
      subscript keep their plain keys. A bit's number and a member's path are no
-     subscripts: `w[i].3` beside `w[j].4` is warned as before.)*
+     subscripts: `w[i].3` beside `w[j].4` is warned as before.)* *(RV-12, 2026-11-02:
+     decision 405 makes a bit's literal number one more place and judges a storage bit as
+     a write is, so `w[i].3` beside `w[j].4`, and `ote e[i,0]` beside `ons e[1,1]`, are
+     not warned.)*
 
 373. **A rung told twice (the review after Milestone 6),** RV-2's question 7: a rung the
      jump checks refuse, `xic auto lbl done`, is told too that it writes nothing.
@@ -12756,7 +12763,22 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      tag, element and instance its first state holds, at every depth, summed, and past
      65,536 is refused at its line, so `var x two` of two `int[40000]`, `cell[256]` of a
      block holding `ton[256]` (65,792), `wide[65536]` and the chain are refused. Decision
-     370 stands with this count. To build in RV-12.
+     370 stands with this count. To build in RV-12. *(Landed with RV-12, 2026-11-02: an
+     elementary tag, an element of an elementary array, a timer and a counter count one
+     each, a timer's or a counter's members not counted, and an array is its elements;
+     an instance of a user block counts one and every tag, element and instance its type
+     holds, its var_inputs and var_outputs among them, which `Logex.FbType`'s `elements`
+     keeps, counted once a type as decision 370 has it. `Logex.Declarations` refuses a
+     declaration past 65,536 at its line, `` `c` would hold 65792 elements at every
+     depth, 256 instances of `k`, `[256]`, each counting itself and the 256 its type
+     holds: a declaration holds 65536 at most, counting every tag, element and instance
+     it holds at every depth ``, from Elixir too: `wide[65536]` of 200 single timers at
+     13,172,736, and a chain of blocks each holding two single instances of the one
+     below at depth 16, 131,071, its refusal costing no more than the compile at depth 1.
+     A block's own declarations are each bounded, not their sum, so `two` compiles and no
+     instance of it can be declared, `var x two` refused at 80,001, the instance itself
+     among them (provisional, put to the maintainer: the 80,000 its type holds is the
+     other reading).)*
 
 404. **The loader's trust (the review after Milestone 6),** RV-9's question 3: a host that
      calls the internal `Logex.Compiler.loaded/2` with a hand-edited block type gets it
@@ -12765,7 +12787,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a token only the loader holds (b)** (the maintainer, 2026-11-01): a type is
      trusted as the loader's own only through what the loader alone makes during its
      load, so a hand-edited type handed in any way is checked as decision 54 has it. To
-     build in RV-12.
+     build in RV-12. *(Landed with RV-12, 2026-11-02: the loader hands its own types to
+     `Logex.Compiler.loaded/2` through a closure it makes in `Logex` during the load, `fn
+     -> types end`, and `loaded/2` trusts only a closure of no arguments local to
+     `Logex`, which no host code can make, short of building one from the external term
+     format; no field of a type, no option and no atom marks a type the loader's. A list
+     handed to `loaded/2` is checked as decision 54 has it, each type its table holds
+     compiled again, and one edited by hand refused in `types:`'s words, as through
+     `compile/2`; any other closure, a host's or an external function of `Logex`, is
+     refused as junk in those words (provisional, put to the maintainer). A chain of
+     files still compiles once a file, none again.)*
 
 405. **What decision 372 tells apart (the review after Milestone 6),** RV-9's question 4:
      `ote w[i].3` beside `ote w[j].4`, two bit numbers, and `ons e[1,1]` beside `ote
@@ -12774,7 +12805,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: both told apart (b and c)** (the maintainer, 2026-11-01): a bit's literal
      number is one more place, and a one-shot's storage bit is judged as a write is. To
-     build in RV-12.
+     build in RV-12. *(Landed with RV-12, 2026-11-02: `Logex.Warnings` gives a write of a
+     bit of an element its bit's number as one more place, a bit a tag numbers and an
+     element of a word array written whole a tag's there, so two bits of one array whose
+     literal numbers differ never meet, in one dimension too, and at most 16 projections
+     are kept for a bit of three dimensions; a member's bits were told apart already by
+     their path (decision 257). A write through a tag subscript writes only the storage
+     bits its places may meet, an element written whole meeting every bit of it, each
+     storage bit kept under every projection of its places so that a write finds them in
+     one lookup, linear in the writes; so `ote e[i,0]` beside `ons e[1,1]` and `ote w[i].4`
+     beside `ons w[1].3` are not warned, and `ote e[i,1]` and `ote w[i].3` are. A
+     differential fuzz of 10,000 programs against the parent finds every warning dropped
+     one that never meets by an oracle of its own, and no line warned that was not, eleven
+     now citing the earliest write that does meet them.)*
 
 406. **The fragment's setup (the review after Milestone 6),** RV-9's question 5: decision
      365's setup is the test's own packing line, allowing 1 to 4 advances where 1 happens.

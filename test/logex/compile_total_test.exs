@@ -689,8 +689,8 @@ defmodule Logex.CompileTotalTest do
       end
     end
 
-    # RV-9's review (provisional): a label and empty groups, `lbl done ( )`, are no label
-    # alone, and write nothing, as a label and a contact do.
+    # RV-9's review, as decision 408 has it: a label and empty groups, `lbl done ( )`, are
+    # no label alone, and write nothing, as a label and a contact do.
     test "a label and a contact still write nothing, a jmp naming the label or not" do
       for rung <- [
             "lbl done xic start",
