@@ -20,6 +20,14 @@ defmodule Logex.Runner.Writer do
   # `{:error, {:down, reason}}`. A write killed inside a call of the file system runs that
   # call on to its end in the kernel and then does nothing more, so its file may yet be
   # the old or the new, never a mix (`Logex.Retain.written/2`).
+  #
+  # Since RV-4's review the one write's process is linked to the runner as the period's
+  # writer is, so that a runner killed, or crashed, while it waits on a write takes the
+  # write down with it: the write does at most the call of the file system it is in and
+  # nothing after, never a rename once the runner is gone and its files are free for the
+  # next runner of this VM (decision 356), whose write it would otherwise rename into the
+  # store. The runner traps exits, so the write's exit is a message to it, taken here with
+  # the write's answer, nothing left in its mailbox.
 
   use GenServer
 
@@ -32,13 +40,19 @@ defmodule Logex.Runner.Writer do
   def written(path, text, ms), do: within(fn -> Logex.Retain.written(path, text) end, ms)
 
   # One call of the file system, a write's or the forces file's read at a restart, in a
-  # process of its own, waited on for `ms` of real time; its result rides on its process's
-  # exit, so that nothing is left in the caller's mailbox, whichever way it ends.
-  def within(call, ms) do
-    {pid, ref} = spawn_monitor(fn -> exit({__MODULE__, call.()}) end)
+  # process of its own linked to the caller, a runner, which traps exits, waited on for
+  # `ms` of real time; its result rides on its process's exit, so that nothing is left in
+  # the caller's mailbox, whichever way it ends, its link's exit taken with its monitor's.
+  def within(call, ms),
+    do: waited(:erlang.spawn_opt(fn -> exit({__MODULE__, call.()}) end, [:link, :monitor]), ms)
 
+  # The same for a read made in a start's caller, which need not trap exits, its process
+  # unlinked: a read that outlives its caller writes nothing.
+  def read(call, ms), do: waited(spawn_monitor(fn -> exit({__MODULE__, call.()}) end), ms)
+
+  defp waited({pid, ref}, ms) do
     receive do
-      {:DOWN, ^ref, :process, ^pid, reason} -> answered(reason)
+      {:DOWN, ^ref, :process, ^pid, reason} -> unlinked(pid, answered(reason))
     after
       ms -> timed_out(pid, ref)
     end
@@ -50,8 +64,20 @@ defmodule Logex.Runner.Writer do
     Process.exit(pid, :kill)
 
     receive do
-      {:DOWN, ^ref, :process, ^pid, :killed} -> {:error, :timeout}
-      {:DOWN, ^ref, :process, ^pid, reason} -> answered(reason)
+      {:DOWN, ^ref, :process, ^pid, :killed} -> unlinked(pid, {:error, :timeout})
+      {:DOWN, ^ref, :process, ^pid, reason} -> unlinked(pid, answered(reason))
+    end
+  end
+
+  # The link's exit, which comes in the caller's mailbox once its process is down, taken:
+  # once unlink/1 returns none comes after it, so one that came is there now.
+  defp unlinked(pid, result) do
+    Process.unlink(pid)
+
+    receive do
+      {:EXIT, ^pid, _reason} -> result
+    after
+      0 -> result
     end
   end
 

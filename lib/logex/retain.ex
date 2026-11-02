@@ -98,9 +98,11 @@ defmodule Logex.Retain do
   #
   # Each write's `.tmp` is its own (M10, RV-4), a new file made under the one name,
   # exclusively: where something stands at `<path>.tmp` it is deleted and the file made
-  # then, so that a write the runner killed inside a call of the file system, which runs
-  # on to its end in the kernel after the kill, a process killed in a file's call being
-  # down at once, and then does nothing more, never reaches this write's file:
+  # then, so that a write killed inside a call of the file system, by the runner past its
+  # limit or with the runner as it is killed, the write linked to it
+  # (`Logex.Runner.Writer`), which runs on to its end in the kernel after the kill, a
+  # process killed in a file's call being down at once, and then does nothing more, never
+  # reaches this write's file:
   # - a killed write's open, write, sync or close, raw, reaches its own file, which this
   #   write's delete unlinks; an open of its that ends after this one finds this file there
   #   and makes none;

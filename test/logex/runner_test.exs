@@ -148,6 +148,11 @@ defmodule Logex.RunnerTest do
   @instances_bound 4.24
   @devices_bound 1.40
 
+  # Decision 348's renewal's growth, a fifth above the highest ratio of 64 devices' rounds
+  # to 16's in six runs, 3.669, where a refresh sent to every device at every write took
+  # 9.19 (see "growth").
+  @renewal_bound 4.40
+
   # One var_input copied to one var_output.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
 
@@ -407,7 +412,10 @@ defmodule Logex.RunnerTest do
         )
       end
 
-      for answer <- [1.5, :now, 253_402_300_800_000, -377_705_116_800_001] do
+      # Past 9999-12-31T23:59:59.999Z, before 0000-01-01T00:00:00Z (year -1, which a
+      # DateTime holds and a header would spell -0001-12-31T23:59:59Z), and before year
+      # -9999, which none holds.
+      for answer <- [1.5, :now, 253_402_300_800_000, -62_167_219_200_001, -377_705_116_800_001] do
         {:ok, clock} = Manual.start_link()
         :ets.insert(__MODULE__, {{clock, :wall_ms}, answer})
 
@@ -423,6 +431,36 @@ defmodule Logex.RunnerTest do
             )
           end
         )
+      end
+    end
+
+    # The range's ends, and a time before 1970, a negative number of milliseconds, each a
+    # wall time a store's header holds, spelled to the second.
+    test "a wall clock's time from year 0 to year 9999 is taken, one before 1970 among it" do
+      {opts, _rig} = rig()
+      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      for {answer, header} <- [
+            {-62_167_219_200_000, "0000-01-01T00:00:00Z"},
+            {-1, "1969-12-31T23:59:59Z"},
+            {0, "1970-01-01T00:00:00Z"},
+            {253_402_300_799_999, "9999-12-31T23:59:59Z"}
+          ] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :wall_ms}, answer})
+        store = Path.join(dir, "#{System.unique_integer([:positive])}")
+
+        {:ok, runner} =
+          Runner.start_link(
+            opts
+            |> Keyword.put(:clock, {OddClock, clock})
+            |> Keyword.put(:retain, store)
+          )
+
+        assert File.read!(store) =~ "\nconfiguration plant written #{header}\n"
+        assert Runner.stop(runner) == :ok
       end
     end
 
@@ -511,6 +549,26 @@ defmodule Logex.RunnerTest do
       assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
       {opts, _rig} = rig()
       assert {:error, {:already_started, ^runner}} = Runner.start_link(opts ++ [name: name])
+
+      # c4-api-fuzz-9: a via name whose module is no registry, one not loaded and one
+      # without a registry's functions, is told in the runner's words, where the first
+      # escaped as an UndefinedFunctionError; a registry's is taken.
+      for module <- [:no_such_registry, Enum] do
+        raises(
+          "the runner's name: {:via, #{inspect(module)}, :plant} names #{inspect(module)}, " <>
+            "which is no registry: a via name's module exports register_name/2, " <>
+            "unregister_name/1, whereis_name/1 and send/2",
+          fn -> Runner.start_link(opts ++ [name: {:via, module, :plant}]) end
+        )
+      end
+
+      registry = :"registry_#{System.unique_integer([:positive])}"
+      start_supervised!({Registry, keys: :unique, name: registry})
+      name = {:via, Registry, {registry, :plant}}
+      assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
+      assert %{status: :running} = Runner.status(name)
+      assert Runner.stop(name) == :ok
+      refute Process.alive?(runner)
     end
   end
 
@@ -2432,6 +2490,64 @@ defmodule Logex.RunnerTest do
       assert Runner.get!(runner, "big[#{n - 1}]") == 1
       Runner.stop(runner)
       later - before
+    end
+
+    # Decision 348's renewal (RV-4's review): where each device's write takes time, 1 ms on
+    # the manual clock as any write does on the real one, every write renews every device's
+    # deadline, by one shared write since the review, where a refresh sent to every device
+    # at every write cost a round the square of its devices. The runner's and the devices'
+    # reductions a round of 64 devices against 16, each written every round, the least of
+    # three runs.
+    defp renewal_cost(n) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, src} = Sim.start_link(clock: clock, reports: true)
+      devices = for i <- 1..n, do: "d#{String.pad_leading("#{i}", 3, "0")}"
+      sims = Map.new(devices, fn d -> {d, elem(Sim.start_link(clock: clock), 1)} end)
+
+      text =
+        "task fast interval 1000 priority 1\nvar_global x bool at src.i.0\n" <>
+          Enum.map_join(devices, fn d ->
+            "var_global y#{d} bool at #{d}.q.0\nprogram r#{d} relay with fast\n" <>
+              "  r#{d}.in x\n  r#{d}.out y#{d}\n"
+          end)
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+      io = Map.new(sims, fn {d, sim} -> {d, {Sim, sim: sim}} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: Map.put(io, "src", {Sim, sim: src}),
+          clock: {Manual, clock},
+          poll: 100_000,
+          idle: 100_000
+        )
+
+      Manual.advance(clock, 1000)
+      pids = for {_name, pid, _points} <- :sys.get_state(runner).devices, do: pid
+
+      cost = fn ->
+        Enum.sum(for pid <- [runner | pids], do: elem(Process.info(pid, :reductions), 1))
+      end
+
+      before = cost.()
+
+      for i <- 1..4 do
+        Sim.set(src, [0], rem(i, 2))
+        for {_name, sim} <- sims, do: Sim.fail(sim, :write, {:delay, 1})
+        Manual.advance(clock, 1000)
+      end
+
+      later = cost.()
+      Runner.stop(runner)
+      (later - before) / 4
+    end
+
+    test "a round whose writes take time renews its devices in time linear in them " <>
+           "(decision 348)" do
+      [small, large] = for n <- [16, 64], do: Enum.min(for(_ <- 1..3, do: renewal_cost(n)))
+      ratio = large / small
+      assert ratio < @renewal_bound, "4x the devices took #{Float.round(ratio, 2)}x"
     end
 
     test "a device's change is checked in time linear in its points (M9)" do

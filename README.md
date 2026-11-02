@@ -3364,8 +3364,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
   is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
   the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
-  leaves the runner answering (decision 353). A write that fails leaves the store as it
-  was and is reported, `{:retain, {:error, reason}}` to
+  leaves the runner answering (decision 353); a runner killed while it writes takes its
+  write down with it, which does nothing after the call of the file system it was in, so
+  that the next runner's write on the file is never overwritten by it. A write that fails
+  leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
@@ -3374,7 +3376,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   due time, with untimed programs in the share's slot ("Running a plant on the clock",
   below) and otherwise at a wake of its own, and a writer process of its own writes them,
   so that a slow disk delays no round; a write still in progress makes the next wait, the
-  newest replacing any that waited. `status/1`'s `written_at` follows each write made,
+  newest replacing any that waited. One the disk has not finished within the idle
+  watchdog and a poll period of real time is reported, `{:retain, {:error, :timeout}}`
+  and `failed: :timeout`, and left to finish, its answer taken when it comes, a write made
+  clearing the failure (decision 353). `status/1`'s `written_at` follows each write made,
   the store's age; one that fails is reported as above and the plant runs on. While
   tripped nothing is written but the trip's own write. Each write at an event waits for
   the period's in progress and drops the one waiting, so the event's is the last.
@@ -3403,8 +3408,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `.tmp` the other is written through, is refused at start, a pinned line. And one
   runner's: a start naming a store, a forces file or a `.tmp` of either that another
   runner of the same VM holds is refused, naming it and that runner, until the holder
-  stops, crashes or is killed, when the file is free again (decision 356); two VMs on one
-  file are the host's to avoid, as are two paths to one file through a link. Each path is
+  stops, crashes or is killed, when the file is free again (decision 356), the VM's
+  table of them kept by a process of logex's own that no application's stop takes down;
+  two VMs on one file are the host's to avoid, as are two paths to one file through a
+  link. Each path is
   resolved once, at the start, so a `File.cd` after it moves neither file. A start under
   a name another process holds is `{:error, {:already_started, pid}}` and writes nothing,
   `start: :cold` among it, its write made once the name is registered (M11).
@@ -3898,8 +3905,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   (decision 136): nothing switches on, and the card at fault is named. A runner
   that is running, not tripped, refuses a restart as the host's mistake, "the runner is
   running" (decision 133), judged as the restart arrives: one asked while it runs is
-  refused even where a trip comes before it is served, so that a trip stands until a
-  restart asked after it (decision 354). A runner that crashes or is killed is gone, its
+  refused even where a trip comes before it is served, a restart that reaches the runner
+  while a round is under way or behind a device's change among them, the trip refusing
+  every restart already waiting, so that a trip stands until a restart asked after it
+  (decision 354). A runner that crashes or is killed is gone, its
   devices writing every output 0 once and closing as it goes (decision 115), a device
   waiting on it for its own change among them; its child spec is `restart: :temporary`, so
   the host starts a new one.
@@ -4076,7 +4085,10 @@ stage: nil
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
   the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
   one the disk has not finished within the idle watchdog and a poll period of real time
-  `{:error, {:forces, :timeout}}` (decision 353). A
+  `{:error, {:forces, :timeout}}` (decision 353). A start reads the file raw, off the
+  VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
+  other process's file calls: one the disk has not answered within that time refuses the
+  start, the file told as one that cannot be read. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
@@ -4936,8 +4948,9 @@ in every cycle's outputs at the value it holds.
   so on some file systems a power failure just after a write may bring back the write
   before it ("The store on disk", above); and each write the runner makes at an event, a
   force's among them, is given the idle watchdog and a poll period of real time, so a
-  disk slower than that fails every one of them, the plant running on with its store
-  behind, and one the disk finishes after the runner gave up on it may still land. Two
+  disk slower than that fails every one of them, and has every period's write reported
+  late, the plant running on with its store behind, and one the disk finishes after the
+  runner gave up on it may still land. Two
   runners of one VM are refused one file, but nothing sees a runner of another VM, or one
   file reached by a second path through a link: two such runners on one store write over
   each other's, and a crash then brings one runner back with the other's values. A

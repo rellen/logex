@@ -12107,7 +12107,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      write's start, the device written hearing its own deadline and every other the runner
      well while it waits on a slow one in time; c3-io-contract-1, three of three on the
      real clock before, none after, and five devices on the real clock under load, 50 of
-     50.)*
+     50.)* *(RV-4's review, 2026-11-02: the renewal is one shared write every device reads
+     at its wake and its poll, an `:atomics` of the runner's, where a refresh sent to every
+     device at every write made a round's cost the square of its devices wherever writes
+     take time; a write after a long one is given the whole of its own limit in real time,
+     tested with writes of 3,000 and 2,500 ms against 5,100; the real-clock test scaled to
+     writes of 600 ms against 2,100, the review having met five failures in fifty under
+     load.)*
 
 349. **A retained `tof` held on at the outage (the review after Milestone 6),** question
      3: a warm or fresh start keeps a retained `tof`'s `.en` at 1, so the first scan sees
@@ -12183,6 +12189,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      never reaches the next write's file (provisional, one name where the review
      suggested a unique one); the period's write, by its writer and holding up no round,
      limited where the runner waits on it, as decision 275 had it (provisional).)*
+     *(RV-4's review, 2026-11-02: each write's process linked to its runner, so that a
+     runner killed while it writes takes the write down with it, which then renames
+     nothing into the next runner's file; a period's write not answered within its limit
+     reported `:timeout` and left to finish, its answer taken when it comes (provisional:
+     killing it, as an event's, would break decision 275's latest wins while a write is in
+     progress); the start's forces read raw and limited as the restart's, a FIFO or a
+     stalled disk refusing the start as a file that cannot be read (provisional).)*
 
 354. **A restart asked while the runner runs (the review after Milestone 6),** question
      8: a `restart/2` that waits for its slot while a round is owed is served by a trip
@@ -12196,7 +12209,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      build in RV-4. *(Landed with RV-4, 2026-11-01: the runner keeps its status with the
      restart as it takes it from its mailbox, its arrival (provisional: a device's notice
      behind it in the mailbox that a round's start takes first comes before it); the three
-     tests changed, each citing this decision.)*
+     tests changed, each citing this decision.)* *(RV-4's review, 2026-11-02: the
+     provisional window was as wide as a device's write limit, a restart asked while a
+     round waited on a slow write served by the trip that round made; the trip now refuses
+     every restart already in the mailbox, each having arrived while the runner ran, so a
+     restart is judged as it arrives, exactly, and the window is gone.)*
 
 355. **A store cut short (the review after Milestone 6),** question 9: a store cut at a
      line boundary is read as whole, its lost values started at their initial values,
@@ -12219,7 +12236,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      that the refusal names the file before either is read; a holder that stops, crashes
      or is killed leaves the file free; each path expanded once at the start, so a
      `File.cd` moves neither file (c2-runner-persist-9); README's "What logex is not"
-     says two VMs, and two paths through a link, are the host's to avoid.)*
+     says two VMs, and two paths through a link, are the host's to avoid.)* *(RV-4's
+     review, 2026-11-02: the table's keeper takes the VM's `init` for its group leader, so
+     that an application whose runner made the table, stopped, takes no claim down with
+     it.)*
 
 357. **Exact reduction pins (the review after Milestone 6),** question 11: about 27 tests
      pin a scan's or a compile's reductions exactly, so a toolchain release that moves

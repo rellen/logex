@@ -309,6 +309,33 @@ defmodule Logex.TripTest do
     end
   end
 
+  # An adapter whose first write of a 1 tells the test, `{Held, pid}`, and waits for the
+  # test's answer, `{Held, :ok}` or `{Held, {:error, reason}}`, which it gives as its own:
+  # so that a test holds a round inside a device's write. Every other write is taken.
+  defmodule Held do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, %{test: Keyword.fetch!(opts, :test), held: false}}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(%{[0] => 1}, %{held: false, test: test} = state) do
+      send(test, {Held, self()})
+
+      receive do
+        {Held, answer} -> answered(answer, %{state | held: true})
+      end
+    end
+
+    def write(_values, state), do: {:ok, state}
+
+    defp answered(:ok, state), do: {:ok, state}
+    defp answered({:error, reason}, state), do: {:error, reason, state}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -604,6 +631,35 @@ defmodule Logex.TripTest do
       for message <- junk, do: send(runner, message)
       :sys.resume(runner)
       assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+    end
+
+    # The notice's guard reads every field, so that one bearing its device's own pid but a
+    # time, or a kind, that no device sends is passed over, where taken it would leave the
+    # device heard at no time, or ask a trip's reason of a kind there is none for.
+    test "a message bearing its device's own pid, with a field no notice holds, is passed " <>
+           "over" do
+      text =
+        "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      panel = device_pid(runner, "panel")
+
+      for message <- [
+            {Logex.Runner.Device, panel, 0, :later, {:back, "panel", nil}},
+            {Logex.Runner.Device, panel, 0, 0, {:stuck, "panel", nil}},
+            {Logex.Runner.Device, panel, :first, 0, {:latched, "panel", 110}},
+            {Logex.Runner.Device, :panel, 0, 0, {:fault, "panel", {:error, :forged}}},
+            {Logex.Runner.Device, panel, 0, 0, {:fault, :panel, {:error, :forged}}}
+          ],
+          do: send(runner, message)
+
+      Manual.advance(clock, 20)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Manual.advance(clock, 200)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
     end
 
     test "the hidden option's mistake, raised in the caller" do
@@ -1285,6 +1341,33 @@ defmodule Logex.TripTest do
       end
     end
 
+    # Decision 348's renewal (RV-4's review): a renewal made while a round wrote, which a
+    # device takes at its wake where it is newer than the refresh it last heard, is older
+    # than every refresh after that round, and is never taken over one: the stuck step's
+    # deadline stands, where the renewal's, the idle watchdog's from 5 ms into an earlier
+    # round, would keep every device running through it.
+    test "a renewal older than the step's refresh since is not taken: every device is at " <>
+           "0 within the step's watchdog and a poll period" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 600)
+
+      # A round whose drive takes 5 ms to write, so that the panel's write after it renews
+      # every device's deadline; then a round with no time in its writes.
+      Sim.fail(drive, :write, {:delay, 5})
+      Sim.set(panel, [0], 0)
+      Manual.advance(clock, 10)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+      Sim.set(panel, [1], 60)
+      Manual.advance(clock, 10)
+      [drive_seen, panel_seen] = seen(runner)
+      assert {List.last(drive_seen), List.last(panel_seen)} == {%{[0] => 0}, %{[0] => 0}}
+      assert Runner.status(runner).trip == {:watchdog, {:task, "fast", 60, 50}}
+    end
+
     test "a step that takes exactly its watchdog leaves a poll period's margin: no " <>
            "device latches, and the runner runs on" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
@@ -1527,15 +1610,16 @@ defmodule Logex.TripTest do
 
   # Decision 348's plant on the real clock: a panel that reports its e-stop, and the
   # devices a to e, each a SlowOnce over an agent of its own, each written the e-stop by a
-  # relay of its own, every write's limit 500 ms and a poll period of 100.
+  # relay of its own, every write's limit the idle watchdog given and a poll period of 100.
   @five "task e single t priority 0\nvar_global t bool at panel.i.0\n" <>
           Enum.map_join(~w(a b c d e), fn d ->
             "var_global y#{d} bool at #{d}.q.0\nprogram r#{d} relay with e\n  r#{d}.in t\n" <>
               "  r#{d}.out y#{d}\n"
           end)
 
-  defp slow_rig(text) do
-    {:ok, panel} = Sim.start_link(reports: true)
+  # The panel's report waited on as long as a round of slow writes takes.
+  defp slow_rig(text, idle) do
+    {:ok, panel} = Sim.start_link(reports: true, wait: 30_000)
 
     agents =
       for _ <- 1..5,
@@ -1551,7 +1635,7 @@ defmodule Logex.TripTest do
         configuration: configured(text),
         io: Map.put(io, "panel", {Sim, sim: panel}),
         clock: {Logex.Runner.Clock.Monotonic, nil},
-        idle: 500,
+        idle: idle,
         poll: 100
       )
 
@@ -1793,30 +1877,49 @@ defmodule Logex.TripTest do
     test "on the real clock, a device written after slow ones that answered in time has " <>
            "its own idle watchdog and poll period, and every device that answers takes " <>
            "the trip's 0 (decision 348)" do
-      # Each write's limit is 500 ms and a poll period of 100, 600 ms of real time. The
-      # e-stop's round writes a, b, c and d in 160 ms each, their own time a quarter of
-      # their limit, so that a loaded machine that stretches each sleep by half again is
-      # still in time, and the four together more than one deadline shared, which left d
-      # 120 ms at most: every device is written in time and nothing trips.
-      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five)
-      for agent <- Enum.take(agents, 4), do: Agent.update(agent, &%{&1 | slow: {:sleep, 160}})
+      # Each write's limit is an idle watchdog of 2000 ms and a poll period of 100, 2100 ms
+      # of real time. The e-stop's round writes a, b, c and d in 600 ms each, their own time
+      # under a third of their limit, and the four together 300 ms more than one deadline
+      # shared, which left d 300 ms: every device is written in time and nothing trips.
+      # (Scaled from writes of 160 ms against 600, in which a loaded machine stretched a
+      # write past its limit in five runs of fifty, RV-4's review: the margin each write has
+      # is 1500 ms now, and the four writes' excess over one deadline only grows with load.)
+      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five, 2000)
+      for agent <- Enum.take(agents, 4), do: Agent.update(agent, &%{&1 | slow: {:sleep, 600}})
       Sim.set(panel, [0], 1)
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1], 5)
       Runner.stop(runner)
 
-      # And e, after them, hangs: it is killed at its own limit, 600 ms from its own start,
+      # And e, after them, hangs: it is killed at its own limit, 2100 ms from its own start,
       # and named, where a shared deadline named d, and a to d, which answered, each take
       # the trip's 0.
-      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five)
+      %{runner: runner, panel: panel, agents: agents} = slow_rig(@five, 2000)
       [a, b, c, d, e] = agents
       Runner.subscribe(runner, [:trip])
-      for agent <- [a, b, c, d], do: Agent.update(agent, &%{&1 | slow: {:sleep, 160}})
+      for agent <- [a, b, c, d], do: Agent.update(agent, &%{&1 | slow: {:sleep, 600}})
       Agent.update(e, &%{&1 | slow: :hang})
       Sim.set(panel, [0], 1)
-      assert_receive {Runner, ^runner, {:trip, {:io, "e", :timeout}}}, 5000
+      assert_receive {Runner, ^runner, {:trip, {:io, "e", :timeout}}}, 15_000
       assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1, 0], 4) ++ [[0]]
       assert Runner.status(runner).unzeroed == ["e"]
+      Runner.stop(runner)
+    end
+
+    # RV-4's review: decision 348's limit is idle + poll of real time from the write's own
+    # start, never what was left of the deadline the refresh before it carried. A long
+    # write and then one shorter, each well within the limit and together past it: a
+    # write's wait taken from the deadline before the clock moved cut b short at 5100 -
+    # 3000 = 2100 ms, though it answered at 2500, which the manual clock, whose writes take
+    # no real time, cannot show.
+    test "on the real clock, a write after a long one has the whole of its own limit in " <>
+           "real time (decision 348)" do
+      %{runner: runner, panel: panel, agents: [a, b | _] = agents} = slow_rig(@five, 5000)
+      Agent.update(a, &%{&1 | slow: {:sleep, 3000}})
+      Agent.update(b, &%{&1 | slow: {:sleep, 2500}})
+      Sim.set(panel, [0], 1)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1], 5)
       Runner.stop(runner)
     end
 
@@ -3684,6 +3787,75 @@ defmodule Logex.TripTest do
       refute_received {Runner, ^runner, {:trip, _}}
     end
 
+    test "a restart that reaches the runner behind a device's change whose round trips is " <>
+           "refused by the trip (decision 354), and one asked after it is served" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@drive_stopped), poll: 10, idle: 500, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.fail(drive, :write, {:error, :eio})
+
+      # The runner held: the panel's e-stop waits in its mailbox and the host's restart
+      # behind it, asked while the runner runs. The e-stop's round, taken first, trips on
+      # the drive's write, and the trip refuses the restart, which reached the runner before
+      # it, where the restart taken after the trip would have been served and cleared it.
+      :sys.suspend(runner)
+      setter = Task.async(fn -> Sim.set(panel, [0], 1) end)
+      change_waiting(runner)
+      task = Task.async(fn -> restart_answer(runner, :cold) end)
+      restart_waiting(runner)
+      :sys.resume(runner)
+      Task.await(setter)
+      assert Task.await(task) == {:raised, @running}
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:error, :eio}}}}, 5000
+      assert %{status: :tripped, trip: {:io, "drive", {:error, :eio}}} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:restart, _}}
+
+      # The trip stands until a restart asked after it.
+      assert Runner.restart(runner, :cold) == :ok
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+    end
+
+    test "a restart asked while a round is under way, the runner inside a device's write, " <>
+           "is refused by the trip that round makes (decision 354)" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(String.replace(@drive_stopped, "drive.q", "held.q")),
+          io: %{"panel" => {Sim, sim: panel}, "held" => {Held, test: self()}},
+          clock: {Manual, clock},
+          poll: 10,
+          idle: 60_000,
+          steps: Runtime
+        )
+
+      Runner.subscribe(runner)
+
+      # The e-stop's round writes the held device, whose write waits on the test: the
+      # host's restart reaches the runner while it waits there, then the write fails, and
+      # the round's trip refuses the restart.
+      setter = Task.async(fn -> Sim.set(panel, [0], 1) end)
+      assert_receive {Held, writer}, 5000
+      task = Task.async(fn -> restart_answer(runner, :cold) end)
+      restart_waiting(runner)
+      send(writer, {Held, {:error, :eio}})
+      Task.await(setter)
+      assert Task.await(task) == {:raised, @running}
+      assert_receive {Runner, ^runner, {:trip, {:io, "held", {:error, :eio}}}}, 5000
+      assert %{status: :tripped} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:restart, _}}
+
+      assert Runner.restart(runner, :cold) == :ok
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Runner.stop(runner)
+    end
+
     test "its host mistakes, raised in the caller with the runner still alive" do
       %{runner: runner, clock: clock, panel: panel} = rig()
 
@@ -3708,9 +3880,6 @@ defmodule Logex.TripTest do
     end
   end
 
-  # The relay copying the panel's x to the panel's y and the drive's z, untimed, so that a
-  # round is always owed, on a 10 ms poll and a 100 ms idle watchdog; its first rounds
-  # written by 1, each device's deadline then 111.
   # A restart's answer, or the message of the host's mistake it raised, from a task of its
   # own, so that a refusal does not take the test down with the task.
   defp restart_answer(runner, mode) do
@@ -3718,6 +3887,10 @@ defmodule Logex.TripTest do
   rescue
     error in ArgumentError -> {:raised, error.message}
   end
+
+  # The relay copying the panel's x to the panel's y and the drive's z, untimed, so that a
+  # round is always owed, on a 10 ms poll and a 100 ms idle watchdog; its first rounds
+  # written by 1, each device's deadline then 111.
 
   defp relayed_both do
     text =
@@ -3820,6 +3993,20 @@ defmodule Logex.TripTest do
   defp restarts_found(false, runner, n), do: restarts_waiting(runner, n)
 
   # Waits until a host's restart waits in the runner's mailbox.
+  # Waits until a device's change waits in the held runner's mailbox.
+  defp change_waiting(runner),
+    do: change_waited(Process.info(runner, :messages), runner)
+
+  defp change_waited({:messages, messages}, runner),
+    do:
+      change_found(
+        Enum.any?(messages, &match?({:"$gen_call", _, {:changes, _, _, _}}, &1)),
+        runner
+      )
+
+  defp change_found(true, _runner), do: :ok
+  defp change_found(false, runner), do: change_waiting(runner)
+
   defp restart_waiting(runner),
     do: restart_waited(Process.info(runner, :messages), runner)
 

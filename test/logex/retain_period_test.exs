@@ -181,6 +181,34 @@ defmodule Logex.RetainPeriodTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # What stands at the store's `.tmp` before the period's write: a leftover, so that the
+  # write's first call through the file server is its delete of it, or nothing, so that
+  # it is the rename.
+  defp leftover(:delete, beside), do: File.write!(beside, "left over\n")
+  defp leftover(:rename, _beside), do: :ok
+
+  # The store after a write killed in its delete, the old whole, or in its rename, the
+  # new whole.
+  defp stored(:delete, text, before), do: text == before
+  defp stored(:rename, text, before), do: text != before and total_in(text) == "2"
+
+  defp total_in(text),
+    do: hd(Regex.run(~r/global total_boxes dint (\d+)\n/, text, capture: :all_but_first))
+
+  # The process whose call of `kind` waits in the held file server's mailbox, once one does.
+  defp waiting_call(server, kind), do: caller(Process.info(server, :messages), server, kind)
+
+  defp caller({:messages, messages}, server, kind),
+    do:
+      caller_found(
+        for({:"$gen_call", {pid, _}, request} <- messages, elem(request, 0) == kind, do: pid),
+        server,
+        kind
+      )
+
+  defp caller_found([pid | _], _server, _kind), do: pid
+  defp caller_found([], server, kind), do: waiting_call(server, kind)
+
   # Every message the seam sent, in order, from the mailbox.
   defp seen(acc \\ []) do
     receive do
@@ -286,34 +314,48 @@ defmodule Logex.RetainPeriodTest do
     # M6-6's review: a runner killed in the middle of a period's write, its writer held
     # inside its write; the writer goes down with its runner, the store is the last whole
     # write, and a fresh start restores that. The writer was held by a pipe at the store's
-    # `.tmp`, which since M10 (RV-4) its write deletes first, each write's `.tmp` its own:
-    # it is held now before its write's calls of the file system, `:sys.suspend/1`, and a
-    # write killed inside one of them is stalled_disk_test.exs's.
+    # `.tmp`, which since M10 (RV-4) its write deletes first, each write's `.tmp` its own;
+    # since RV-4's review it is held inside Logex.Retain.written/2 by the VM's file server
+    # held, `:sys.suspend/1`, which its write's delete of what stands at the `.tmp` and its
+    # rename go through, its other calls raw. Killed in the delete, before its file is
+    # made, the store is the write before it; killed in the rename, its file whole and
+    # synced, the rename the server holds lands once the server answers and the store is
+    # that write: the old or the new, whole, never a mix.
     test "a runner killed in the middle of a period's write restores the write before it",
          %{tmp_dir: dir} do
       text = String.replace(@tally, "var e bool\n", "var e bool\nvar retain big dint[20000]\n")
       {:ok, tally} = Logex.compile(text, name: "tally")
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
-      rig = rig(dir, configuration: config)
-      {:ok, runner} = Runner.start_link(rig.opts)
-      eye(rig, 1, 100)
-      synced(runner)
-      before = File.read!(rig.store)
-      assert total(rig.store) == "1"
-      writer = writer(runner)
-      ref = Process.monitor(writer)
-      :sys.suspend(writer)
-      eye(rig, 0, 50)
-      eye(rig, 1, 50)
-      assert values(runner) == [2, 2, 1, 2]
-      killed(runner)
-      assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
-      assert File.read!(rig.store) == before
-      opener_down(rig.panel)
 
-      {:ok, runner} = Runner.start_link(rig.opts)
-      assert values(runner) == [1, 1, 1, 1]
-      assert Runner.stop(runner) == :ok
+      for {held_in, restored} <- [delete: [1, 1, 1, 1], rename: [2, 2, 1, 2]] do
+        rig = rig(Path.join(dir, "#{held_in}"), configuration: config)
+        File.mkdir_p!(Path.dirname(rig.store))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        eye(rig, 1, 100)
+        synced(runner)
+        before = File.read!(rig.store)
+        assert total(rig.store) == "1"
+        writer = writer(runner)
+        ref = Process.monitor(writer)
+        leftover(held_in, rig.store <> ".tmp")
+        server = Process.whereis(:file_server_2)
+        :sys.suspend(server)
+        on_exit(fn -> :sys.resume(server) end)
+        eye(rig, 0, 50)
+        eye(rig, 1, 50)
+        assert values(runner) == [2, 2, 1, 2]
+        assert waiting_call(server, held_in) == writer
+        killed(runner)
+        assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
+        :sys.resume(server)
+        assert stored(held_in, File.read!(rig.store), before)
+        refute File.exists?(rig.store <> ".tmp")
+        opener_down(rig.panel)
+
+        {:ok, runner} = Runner.start_link(rig.opts)
+        assert values(runner) == restored
+        assert Runner.stop(runner) == :ok
+      end
     end
 
     # Decision 316's shutdown and decision 292's crash measured against the period's: a

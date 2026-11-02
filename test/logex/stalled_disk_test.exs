@@ -104,6 +104,122 @@ defmodule Logex.StalledDiskTest do
 
   defp caller_alive?(_message), do: false
 
+  # The process whose call of `kind`, a delete or a rename, waits in the held file
+  # server's mailbox, once one does.
+  defp waiting_call(server, kind), do: caller(Process.info(server, :messages), server, kind)
+
+  defp caller({:messages, messages}, server, kind),
+    do:
+      caller_found(
+        for({:"$gen_call", {pid, _}, request} <- messages, elem(request, 0) == kind, do: pid),
+        server,
+        kind
+      )
+
+  defp caller_found([pid | _], _server, _kind), do: pid
+  defp caller_found([], server, kind), do: waiting_call(server, kind)
+
+  # Waits until a stop's request to terminate waits in the runner's mailbox.
+  defp terminate_waiting(runner),
+    do: terminate_found(Process.info(runner, :messages), runner)
+
+  defp terminate_found({:messages, messages}, runner),
+    do:
+      terminate_seen(
+        Enum.any?(messages, &match?({:system, _, {:terminate, _}}, &1)),
+        runner
+      )
+
+  defp terminate_seen(true, _runner), do: :ok
+  defp terminate_seen(false, runner), do: terminate_waiting(runner)
+
+  # The first stop's reason, and its end: its write let through, or its runner killed as
+  # it writes, which ends both stops.
+  defp reason_of(:killed), do: :normal
+  defp reason_of(reason), do: reason
+
+  defp ended(:killed, runner), do: Process.exit(runner, :kill)
+  defp ended(_reason, _runner), do: :ok
+
+  defp answers(:killed, runner),
+    do: {gone_told(runner), gone_told(runner)}
+
+  defp answers(_reason, _runner), do: {:ok, :ok}
+
+  defp gone_told(runner), do: {:raised, "the runner #{inspect(runner)} is not running"}
+
+  defp stop_answer(runner, reason) do
+    Runner.stop(runner, reason)
+  rescue
+    error in ArgumentError -> {:raised, error.message}
+  end
+
+  # The period's writer and the runner each through their mailboxes twice, so that a
+  # write handed has been made and its answer taken.
+  defp period_settled(runner) do
+    {:links, links} = Process.info(runner, :links)
+
+    writers =
+      for pid <- links,
+          {:dictionary, dictionary} <- [Process.info(pid, :dictionary)],
+          dictionary[:"$initial_call"] == {Logex.Runner.Writer, :init, 1},
+          do: pid
+
+    for writer <- writers, _ <- 1..2 do
+      _ = :sys.get_state(writer)
+      _ = :sys.get_state(runner)
+    end
+  end
+
+  # The runner's status once a period's write has answered and been taken.
+  defp written(runner), do: written_status(Runner.status(runner), runner)
+
+  defp written_status(%{retain: %{failed: :timeout}}, runner), do: written(runner)
+  defp written_status(status, _runner), do: status
+
+  # A FIFO's reader let go: the FIFO opened for reading and writing, which never waits,
+  # by a shell spawned straight, its path an argument, since a file call through the VM's
+  # file server may be the one held.
+  defp let_go(fifo) do
+    port =
+      Port.open({:spawn_executable, "/bin/sh"}, [
+        :exit_status,
+        args: ["-c", "exec 3<>\"$0\"", fifo]
+      ])
+
+    receive do
+      {^port, {:exit_status, status}} -> status
+    end
+  end
+
+  # Waits until a process of the runner's reads a file raw, inside the start's limit, a
+  # limit's time at most.
+  defp reading_raw, do: reading_raw(System.monotonic_time(:millisecond) + @idle + @poll)
+
+  defp reading_raw(until),
+    do: raw_found(Enum.any?(Process.list(), &raw_reader?/1), until)
+
+  defp raw_found(true, _until), do: :ok
+
+  defp raw_found(false, until),
+    do: raw_waited(System.monotonic_time(:millisecond) < until, until)
+
+  defp raw_waited(true, until), do: reading_raw(until)
+  defp raw_waited(false, _until), do: flunk("no process of the runner's read the file raw")
+
+  defp raw_reader?(pid), do: frames_read(Process.info(pid, :current_stacktrace))
+
+  defp frames_read({:current_stacktrace, frames}),
+    do: Enum.any?(frames, &match?({Logex.Runner.Writer, _, _, _}, &1))
+
+  defp frames_read(nil), do: false
+
+  defp start_refused(opts) do
+    Runner.start_link(opts)
+  rescue
+    error in ArgumentError -> error.message
+  end
+
   defp timed(fun) do
     {us, result} = :timer.tc(fun)
     {div(us, 1000), result}
@@ -183,6 +299,59 @@ defmodule Logex.StalledDiskTest do
       refute File.exists?(rig.store <> ".tmp")
     end
 
+    test "a runner killed while its own write waits on the disk takes the write down with " <>
+           "it, which does nothing after the call it was in, and the next runner's write stands",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      eye(rig, 1)
+      eye(rig, 0)
+      written = File.read!(rig.store)
+
+      # A leftover at the store's `.tmp`, so that the trip's write, past its raw open,
+      # waits on the held disk in its delete of it; the runner is killed meanwhile, its
+      # files free for the next runner at once (decision 356). The write, linked to it,
+      # goes down with it, while the disk still holds its delete.
+      File.write!(rig.store <> ".tmp", "leftover\n")
+      server = held()
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      writer = waiting_call(server, :delete)
+      ref = Process.monitor(writer)
+      Process.exit(runner, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^writer, _reason}, @answers
+
+      # The disk back, the killed write's delete lands and nothing after it: the store is
+      # as it was, where a write left alive would go on to make its file and rename it,
+      # into the next runner's write. The next runner's cold start writes its own.
+      :sys.resume(server)
+      assert File.read!(rig.store) == written
+      refute File.exists?(rig.store <> ".tmp")
+      next = rig(dir, forces: nil, start: :cold)
+      {:ok, again} = Runner.start_link(next.opts)
+      assert %{status: :running, retain: %{failed: nil}} = Runner.status(again)
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 0\n"
+      refute File.exists?(rig.store <> ".tmp")
+      assert Runner.stop(again) == :ok
+    end
+
+    test "a write's exit, its process linked to the runner, is taken with its answer, and " <>
+           "never reaches the runner as a message of its own",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :erlang.trace_pattern({Runner, :handle_info, 2}, true, [:local])
+      on_exit(fn -> :erlang.trace_pattern({Runner, :handle_info, 2}, false, [:local]) end)
+      :erlang.trace(runner, true, [:call])
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.unforce(runner, "level") == :ok
+      assert %{status: :running} = Runner.status(runner)
+      :erlang.trace(runner, false, [:call])
+      refute_received {:trace, ^runner, :call, {Runner, :handle_info, [{:EXIT, _, _}, _]}}
+      assert Runner.stop(runner) == :ok
+    end
+
     test "a restart whose forces file's read does not end within its limit is " <>
            "{:error, {:forces, :timeout}}, the runner tripped as it was",
          %{tmp_dir: dir} do
@@ -210,6 +379,43 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    test "a start whose forces file's read does not end within its limit is refused, " <>
+           "naming the file, and every other file call answers meanwhile",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {_, 0} = System.cmd("mkfifo", [rig.forces])
+      on_exit(fn -> let_go(rig.forces) end)
+
+      # The read raw, off the VM's file server, so that another process's file call, made
+      # while the start waits on the FIFO, answers, where a read through the server held
+      # it and every other file call of the VM's for as long as the FIFO had no writer.
+      start = Task.async(fn -> timed(fn -> start_refused(rig.opts) end) end)
+      reading_raw()
+      other = Path.join(dir, "other")
+
+      call =
+        Task.async(fn ->
+          File.write!(other, "answered\n")
+          File.read!(other)
+        end)
+
+      assert Task.yield(call, @answers) == {:ok, "answered\n"}
+      assert Task.yield(start, 0) == nil
+      {took, refused} = Task.await(start, 2 * @answers)
+
+      assert refused ==
+               "#{rig.forces}: the forces file cannot be read: the disk did not answer within " <>
+                 "the idle watchdog and a poll period"
+
+      assert took >= @idle + @poll and took < @answers
+
+      # The killed read's call let go, and the file gone, the start starts.
+      let_go(rig.forces)
+      File.rm!(rig.forces)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.stop(runner) == :ok
+    end
+
     test "a cold restart's write is {:error, {:retain, :timeout}}, the runner tripped as it " <>
            "was, and a warm one, which writes nothing, restarts",
          %{tmp_dir: dir} do
@@ -233,6 +439,40 @@ defmodule Logex.StalledDiskTest do
       assert Runner.get!(runner, "t1.boxes.cv") == 1
 
       :sys.resume(server)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a period's write that does not end within its limit is reported :timeout, and " <>
+           "its answer, the disk back, taken",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain_period: 100)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner, [:retain])
+      eye(rig, 1)
+      server = held()
+
+      # The period's write at 100 waits on the disk past its limit: reported, the plant
+      # running on, where nothing told it while the writer waited for ever.
+      {took, _} =
+        timed(fn ->
+          Manual.advance(rig.clock, 100)
+          assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
+        end)
+
+      assert took >= @idle + @poll
+      assert %{status: :running, retain: %{failed: :timeout}} = Runner.status(runner)
+      eye(rig, 0)
+      eye(rig, 1)
+      assert Runner.get!(runner, "t1.boxes.cv") == 2
+
+      # The disk back, the late write lands and its answer is taken, the failure cleared;
+      # the next period's write then writes the newest.
+      :sys.resume(server)
+      assert %{retain: %{failed: nil}} = written(runner)
+      Manual.advance(rig.clock, 100)
+      period_settled(runner)
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 2\n"
+      refute_received {Runner, ^runner, {:retain, {:error, _}}}
       assert Runner.stop(runner) == :ok
     end
 
@@ -275,6 +515,35 @@ defmodule Logex.StalledDiskTest do
     # write's, its descriptor still open on it. The runner's next write deletes it first
     # and writes a file of its own, so the late write lands in a file no name reaches,
     # never in the store; with one `.tmp` written through again it was the store's own.
+    # c1-runner-rounds-10: a stop that names itself to the runner once its stoppers are
+    # taken, while another stop's write waits on the disk, is ended by that stop's
+    # `{:shutdown, term}`, an orderly end, which answers it `:ok`.
+    test "a stop made while another's write waits on the disk, ended by that stop's " <>
+           "orderly reason, answers :ok, and one ended by a kill raises",
+         %{tmp_dir: dir} do
+      for ending <- [:normal, :shutdown, {:shutdown, :end_of_shift}, :killed] do
+        rig =
+          rig(Path.join(dir, "#{System.unique_integer([:positive])}"), forces: nil, idle: 5000)
+
+        File.mkdir_p!(Path.dirname(rig.store))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        Process.unlink(runner)
+        eye(rig, 1)
+        server = held()
+        stop = Task.async(fn -> stop_answer(runner, reason_of(ending)) end)
+        waiting_call(server, :rename)
+        second = Task.async(fn -> stop_answer(runner, :normal) end)
+        terminate_waiting(runner)
+        ended(ending, runner)
+        :sys.resume(server)
+
+        assert {Task.await(stop, 2 * @answers), Task.await(second, 2 * @answers)} ==
+                 answers(ending, runner)
+
+        refute Process.alive?(runner)
+      end
+    end
+
     test "a write's late call into an earlier `.tmp` never reaches the store",
          %{tmp_dir: dir} do
       for write <- [:stop, :trip] do

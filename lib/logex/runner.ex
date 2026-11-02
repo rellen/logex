@@ -25,7 +25,8 @@ defmodule Logex.Runner do
   unless set or nil (decision 275), and `start:`, `:warm` or `:cold`, how a fresh start
   meets that store, `:warm` unless set (decision 271), each of the last two the host's
   mistake without `retain:` (decision 323), and `name:`, a name to register it under, as
-  `GenServer.start_link/3` takes one. It
+  `GenServer.start_link/3` takes one, a `{:via, module, term}` name's module a registry
+  that exports register_name/2, unregister_name/1, whereis_name/1 and send/2. It
   checks every option in the caller before anything starts, the configuration as
   `Logex.Runtime.start/1` checks it and the bindings as `Logex.IO.bind!/2` does, so a
   host's mistake is an `ArgumentError` in the host's own process, with a message a test
@@ -192,8 +193,9 @@ defmodule Logex.Runner do
     suspended is stopped too.
   - `restart/2` starts a tripped runner again (below); a runner that is running is the
     host's mistake (decision 133), judged as the restart arrives (decision 354): one asked
-    while the runner runs and waiting for the share's slot is refused all the same where a
-    trip comes before the slot.
+    while the runner runs, waiting in its mailbox while a round is under way or in its
+    queue for the share's slot, is refused all the same where a trip comes before it is
+    served, the trip refusing it.
 
   **Its store** (M6-5, `docs/organisation.md` §4.13; decisions 271, 275, 276, 284, 285,
   291 and 292). A runner given `retain:` keeps every value its configuration retains, the
@@ -225,7 +227,9 @@ defmodule Logex.Runner do
     time, as the period's write is where the runner waits on it, one the disk has not
     finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
     runner answering, its outputs 0 through the trip as ever, though one killed in its
-    rename may land once the disk answers; and since M10 each write's `.tmp` is its own,
+    rename may land once the disk answers; since RV-4's review that process is linked to
+    the runner, so that a runner killed while it writes takes the write down with it, the
+    write doing nothing after the call of the file system it was in; and since M10 each write's `.tmp` is its own,
     made new and exclusively, whatever stands at `<path>.tmp` deleted, a FIFO, a link or
     a write's leftover, so that a write killed inside a call of the file system, which
     runs on to its end in the kernel, never writes into the next write's file: the store
@@ -268,9 +272,12 @@ defmodule Logex.Runner do
     delays no round: while one is in progress the next waits, the newest replacing the
     one before, latest wins. A write made is the store's age in `status/1`'s
     `written_at`; one that fails leaves the store as it was and is reported,
-    `{:retain, {:error, reason}}` and `failed`, the plant running on; a writer gone down
-    is reported, `{:down, reason}`, and a new one writes the next (provisional), one gone
-    down while idle forgotten. Every
+    `{:retain, {:error, reason}}` and `failed`, the plant running on; since RV-4's review
+    one the disk has not finished within the idle watchdog and a poll period of real time
+    is reported `{:error, :timeout}` so, and left to finish, its answer taken when it
+    comes, a write made clearing the failure (decision 353, provisional); a writer gone
+    down is reported, `{:down, reason}`, and a new one writes the next (provisional), one
+    gone down while idle forgotten. Every
     write at an event waits first for the write in progress and drops the one pending,
     so that the event's is the last on disk: the trip's, the stop's, a shutdown's and a
     cold restart's, a writer that has not answered by the idle watchdog and a poll period,
@@ -329,6 +336,10 @@ defmodule Logex.Runner do
   the new, which a restart, reading the file as every start does, then takes, and
   `status/1` lists (provisional). Every start reads it, `start_link/1` in the caller,
   after the configuration and the bindings, and `restart/2` before it releases anything,
+  each raw, off the VM's file server, and limited to the idle watchdog and a poll period
+  of real time (decision 353): a read the disk has not finished by then, a FIFO's among
+  them, is a file that cannot be read at a start, and `{:error, {:forces, :timeout}}` at
+  a restart (provisional),
   so that a runner killed while an input is forced, and started again from the same file,
   comes back with it forced and listed: a file that does not exist is no force; one that
   cannot be read, a line that is no force, a point forced twice, and a force the
@@ -666,7 +677,10 @@ defmodule Logex.Runner do
   # and its store's write, to every stop that named itself to it by then; a runner that
   # went down by itself meanwhile sends none. One ended meanwhile by another's orderly stop
   # is `:ok`, that stop's answer its own; one gone for any other reason, a crash, a kill or
-  # gone before this call reached it, is a runner that is not running.
+  # gone before this call reached it, is a runner that is not running. A runner that ends
+  # while this stop's request waits in its mailbox ends the request with its own reason,
+  # `{reason, {:sys, :terminate, args}}`, which is read for that reason (RV-4's review:
+  # only the bare reason was, which no stop meets).
   defp stopped(:ok, ref, _pid), do: answer_of(ref, :ok)
   defp stopped({:ended, ended}, ref, pid), do: answer_of(ref, orderly(ended, pid))
 
@@ -678,6 +692,7 @@ defmodule Logex.Runner do
     end
   end
 
+  defp orderly({ended, {:sys, :terminate, _args}}, pid), do: orderly(ended, pid)
   defp orderly(:normal, _pid), do: :ok
   defp orderly(:shutdown, _pid), do: :ok
   defp orderly({:shutdown, _term}, _pid), do: :ok
@@ -826,14 +841,14 @@ defmodule Logex.Runner do
   whose read fails, the runner left tripped with its first reason and every device that
   answers written 0 once more (decisions 136 and 142); a runner that is running is the
   host's mistake (decision 133), judged as the restart arrives, so that one asked while
-  it runs is refused whatever comes before it is served, a trip among it, and the trip
-  stands until a restart asked after it (decision 354). It reads the forces file again
-  first, as every start does
-  (decision 127): a force it cannot take is raised here, the runner left tripped, and
-  since decision 353 a read the disk has not finished within the idle watchdog and a poll
-  period of real time answers `{:error, {:forces, :timeout}}`, the runner tripped as it
-  was (provisional). Since
-  M6-5 a cold restart of a runner given `retain:` then writes its store, of the resource
+  it runs is refused whatever comes before it is served, a trip among it, which refuses
+  every restart that reached the runner before it, waiting in its mailbox or its queue,
+  and the trip stands until a restart asked after it (decision 354). It reads the forces
+  file again first, as every start does (decision 127): a force it cannot take is raised
+  here, the runner left tripped, and since decision 353 a read the disk has not finished
+  within the idle watchdog and a poll period of real time answers `{:error, {:forces,
+  :timeout}}`, the runner tripped as it was (provisional). Since M6-5 a cold restart of a
+  runner given `retain:` then writes its store, of the resource
   as it restarts it, before it releases or reads any device, so that a crash right after
   it brings back none of what it discarded (decisions 271 and 291): a write that fails
   answers `{:error, {:retain, reason}}`, the runner left tripped as it was, the store as
@@ -893,7 +908,22 @@ defmodule Logex.Runner do
   @impl GenServer
   def init(start) do
     Process.flag(:trap_exit, true)
-    held(Paths.claim(start.files, self()), start)
+    held(Paths.claim(start.files, self()), Map.put(start, :beat, beat()))
+  end
+
+  # Decision 348's renewal (RV-4's review): the one shared write by which the runner renews
+  # every device's deadline while it writes a round's devices, the deadline and the time
+  # it renewed at, made once at the start, kept by every restart and every edit, as the
+  # runner's devices are, and never written but by renew/2; a device takes a renewal only
+  # where it was made after the refresh it last heard (`Logex.Runner.Device`), so one from
+  # before a trip or a restart is never taken after it. Its time starts at the least an
+  # `:atomics` holds, before every time on any clock.
+  @never -9_223_372_036_854_775_808
+
+  defp beat do
+    beat = :atomics.new(2, signed: true)
+    :atomics.put(beat, 2, @never)
+    beat
   end
 
   # Decision 356: the runner's files claimed, all or none, once its name is registered, a
@@ -980,6 +1010,13 @@ defmodule Logex.Runner do
   # M6-6: the writer's answer to the period's write it was handed (decision 275).
   def handle_info({Writer, pid, at, result}, %{retain: %{period: %{writer: pid}}} = state),
     do: {:noreply, period_written(state, at, result)}
+
+  # Decision 353, since RV-4's review: the period's write not answered within its limit.
+  def handle_info(
+        {Writer, :late, token},
+        %{retain: %{period: %{busy: true, late: {_timer, token}}}} = state
+      ),
+      do: {:noreply, late_writer(state)}
 
   # M6-5: the caller of stop/2, named before its stop, answered as the runner terminates.
   def handle_info({__MODULE__, :stopping, pid, ref}, state),
@@ -1516,11 +1553,25 @@ defmodule Logex.Runner do
   # (decision 127): a file that does not exist is no force; one that cannot be read, a
   # line that is no force, a point forced twice, and a force the configuration cannot
   # take are the host's mistakes, every one named, a line each, the runner not started or
-  # left tripped.
-  defp read_forces(nil, nil, _points), do: %{}
-  defp read_forces(path, at, points), do: forces_read(File.read(at), path, points)
+  # left tripped. Since RV-4's review the start's read is raw and limited as the
+  # restart's is (decision 353), so that a FIFO or a stalled disk in its place holds
+  # neither the caller for ever nor, through the VM's file server, every other process's
+  # file calls: one not read within the idle watchdog and a poll period of real time is a
+  # file that cannot be read, told so (provisional).
+  defp read_forces(nil, nil, _points, _ms), do: %{}
+
+  defp read_forces(path, at, points, ms),
+    do: forces_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, points)
 
   defp forces_read({:error, :enoent}, _path, _points), do: %{}
+
+  defp forces_read({:error, :timeout}, path, _points),
+    do:
+      raise(
+        ArgumentError,
+        "#{path}: the forces file cannot be read: the disk did not answer within the idle " <>
+          "watchdog and a poll period"
+      )
 
   defp forces_read({:error, reason}, path, _points),
     do:
@@ -1792,7 +1843,8 @@ defmodule Logex.Runner do
         clock: start.clock,
         poll: start.poll,
         idle: start.idle,
-        restarts: restarts
+        restarts: restarts,
+        beat: start.beat
       })
 
   defp reading({:ok, values}, {name, _pid, _points} = device, rest, opened, read, start),
@@ -2258,8 +2310,9 @@ defmodule Logex.Runner do
   # names the first, so that two devices that latch in one millisecond, whose notices
   # come in whichever order their processes ran, trip the runner for one reason, the same
   # on every run on the manual clock. Every notice taken is acted on before the trip, which
-  # answers the host's requests that waited, a restart among them refused since decision
-  # 354, it having been asked while the runner ran: so that a "back" taken with the trip's
+  # answers the host's requests that waited, every restart in its queue or its mailbox
+  # refused since decision 354, each having been asked while the runner ran: so that a
+  # "back" taken with the trip's
   # notice leaves its device heard as late as it says for a restart asked after.
   #
   # Each notice carries the count of restarts its device had heard as it raised it, the
@@ -2398,19 +2451,39 @@ defmodule Logex.Runner do
   defp device_answered({:error, _reason}, name, state), do: went_down(name, state)
 
   # A trip's one path, whatever caused it (decision 113): scheduling stopped, its wake
-  # cancelled and any that comes stale; every output written 0 once, through each device,
-  # in device-name order, which latches; `{:trip, reason}` sent to the subscribers; and the
-  # host's requests that waited answered, every one from now on served at once. The
-  # resource is kept as the last round computed it, for get/2.
+  # cancelled and any that comes stale; every restart that reached the mailbox before the
+  # trip refused; every output written 0 once, through each device, in device-name order,
+  # which latches; `{:trip, reason}` sent to the subscribers; and the host's requests that
+  # waited answered, every one from now on served at once. The resource is kept as the
+  # last round computed it, for get/2.
   defp tripped(%{status: :tripped} = state, _reason), do: state
 
   defp tripped(state, reason) do
     cancel(state.wake, state.clock)
     state = %{state | status: :tripped, trip: reason, wake: nil, next_round: nil, written: %{}}
+    refused_waiting(state)
     state = zeroed(state)
     published(state, [{:trip, reason}])
     {_written, state} = kept_store(state, state.runtime)
     drained(:queue.out(state.queue), state)
+  end
+
+  # Decision 354, since RV-4's review: a restart is judged as it arrives, and every one in
+  # the mailbox as the runner trips arrived while it ran, before the trip, so each is
+  # refused there and then in decision 133's words, whatever the runner would have taken
+  # before it, a device's change whose round trips or a notice a round's start takes; one
+  # that arrives once the trip has begun is the trip's own to serve. A restart taken from
+  # the mailbox before the trip, waiting in the queue for the share's slot, keeps the
+  # status it was taken under and is refused as the queue is drained.
+  defp refused_waiting(state) do
+    receive do
+      {:"$gen_call", from, {:restart, mode}} when mode in [:cold, :warm] ->
+        {refusal, _state} = served({:restart, mode, :running}, state)
+        GenServer.reply(from, refusal)
+        refused_waiting(state)
+    after
+      0 -> :ok
+    end
   end
 
   defp drained({:empty, _queue}, state), do: state
@@ -2465,7 +2538,8 @@ defmodule Logex.Runner do
         taker: taker,
         writer: nil,
         busy: false,
-        pending: nil
+        pending: nil,
+        late: nil
       })
 
   # The period's state is the store's, under `retain`, so that a runner with no store
@@ -2528,14 +2602,39 @@ defmodule Logex.Runner do
   end
 
   # The image handed to the writer where it is idle, and otherwise kept until it answers,
-  # the newest taken out replacing the one that waited, latest wins.
+  # the newest taken out replacing the one that waited, latest wins. Since RV-4's review
+  # the write is limited as every other file write the runner makes is (decision 353):
+  # one not answered within the idle watchdog and a poll period of real time from when it
+  # was handed is reported failed, `{:retain, {:error, :timeout}}` and `failed: :timeout`,
+  # the plant running on, where nothing told a stalled disk before. The writer is left to
+  # its write, one at a time and the newest image waiting as ever (decision 275), since a
+  # write the disk finishes late is still the newest on it: its answer, when it comes, is
+  # taken as any, a write made clearing the failure (provisional). An event's write still
+  # waits on it within its own limit and kills it past that (drained_writer/1).
   defp handed(%{retain: %{period: %{busy: true} = periodic}} = state, write),
     do: put_period(state, %{periodic | pending: write})
 
   defp handed(%{retain: %{period: periodic}} = state, {at, image}) do
     pid = writer(periodic.writer, periodic.path)
     Writer.write(pid, at, image)
-    put_period(state, %{periodic | writer: pid, busy: true})
+    token = make_ref()
+    late = {Process.send_after(self(), {Writer, :late, token}, state.idle + state.poll), token}
+    put_period(state, %{periodic | writer: pid, busy: true, late: late})
+  end
+
+  # The period's write past its limit, reported, its writer left to it.
+  defp late_writer(state) do
+    {_failed, state} = noted({:error, :timeout}, nil, state)
+    put_period(state, %{state.retain.period | late: nil})
+  end
+
+  # A write answered, drained or gone down has its limit's timer cancelled, any message of
+  # it already sent passed over as stale.
+  defp timer_off(%{late: nil} = periodic), do: periodic
+
+  defp timer_off(%{late: {timer, _token}} = periodic) do
+    Process.cancel_timer(timer)
+    %{periodic | late: nil}
   end
 
   defp writer(nil, path) do
@@ -2550,7 +2649,7 @@ defmodule Logex.Runner do
   # plant running on; and the image that waited, if any, handed on.
   defp period_written(state, at, result) do
     {_written, state} = noted(result, at, state)
-    next_write(put_period(state, %{state.retain.period | busy: false}))
+    next_write(put_period(state, %{timer_off(state.retain.period) | busy: false}))
   end
 
   defp next_write(%{retain: %{period: %{pending: nil}}} = state), do: state
@@ -2587,7 +2686,8 @@ defmodule Logex.Runner do
   defp drained_writer(state), do: state
 
   defp idled_writer(state, pid),
-    do: put_period(state, %{state.retain.period | writer: pid, busy: false, pending: nil})
+    do:
+      put_period(state, %{timer_off(state.retain.period) | writer: pid, busy: false, pending: nil})
 
   defp hung_writer(state, pid) do
     killed_writer(pid)
@@ -2617,7 +2717,7 @@ defmodule Logex.Runner do
   # `{:down, reason}`, and the image that waited handed to a new one (provisional).
   defp writer_down(%{retain: %{period: %{busy: true}}} = state, reason) do
     {_failed, state} = noted({:error, {:down, reason}}, nil, state)
-    next_write(put_period(state, %{state.retain.period | writer: nil, busy: false}))
+    next_write(put_period(state, %{timer_off(state.retain.period) | writer: nil, busy: false}))
   end
 
   defp writer_down(state, _reason),
@@ -2919,10 +3019,12 @@ defmodule Logex.Runner do
   # start, on the runner's clock, and as long in real time, so that a device written after
   # a slow one that answered in time is not cut short by it. Where the clock has moved
   # since the refresh before the writes, so that the deadline it carried comes sooner than
-  # that, every device is refreshed again first, at the write's start: the one written
-  # hears its own deadline, and those written after it or not at all hear the runner well
-  # while it waits on a slow device in time. A write in the millisecond of the last refresh
-  # needs none, its deadline that refresh's.
+  # that, every device is renewed first, at the write's start: the one written hears its
+  # own deadline, and those written after it or not at all hear the runner well while it
+  # waits on a slow device in time. A write in the millisecond of the last refresh needs
+  # none, its deadline that refresh's. Since RV-4's review the renewal is one shared
+  # write every device reads (renew/2), where a refresh sent to every device at every
+  # write made a round's cost the square of its devices wherever writes take time.
   defp wrote(true, name, pid, values, state) do
     begun = now(state)
     state = renewed(begun + state.idle + state.poll > state.deadline, begun, state)
@@ -2930,8 +3032,18 @@ defmodule Logex.Runner do
     in_time(answer, now(state), name, pid, values, state)
   end
 
-  defp renewed(true, begun, state), do: refresh(state, begun, state.idle)
+  defp renewed(true, begun, state), do: renew(state, begun)
   defp renewed(false, _begun, state), do: state
+
+  # Every device's deadline the idle watchdog and a poll period from `at`, by the shared
+  # write each device reads at its wake and its poll, the deadline written before the time
+  # (`Logex.Runner.Device`): the runner's wait between two refreshes counts it as one.
+  defp renew(%{beat: beat, refreshed: last} = state, at) do
+    deadline = at + state.idle + state.poll
+    :atomics.put(beat, 1, deadline)
+    :atomics.put(beat, 2, at)
+    %{state | refreshed: at, deadline: deadline, refresh_gap: max(state.refresh_gap, at - last)}
+  end
 
   # A write answered in time: the device is back from its adapter, heard then.
   defp in_time(:ok, answered, name, _pid, values, %{deadline: deadline} = state)
@@ -3033,8 +3145,8 @@ defmodule Logex.Runner do
 
     named = held_files(store, store_at, file, forces_at)
     files = Enum.map(named, fn {at, role, _option, _given} -> {at, role} end)
-    unheld!(registered?(Keyword.get(opts, :name)), Paths.held(files), named)
-    forces = read_forces(file, forces_at, points)
+    unheld!(registered?(name!(Keyword.get(opts, :name))), Paths.held(files), named)
+    forces = read_forces(file, forces_at, points, idle + poll)
     {runtime, retain, at} = store_read!({store, store_at}, mode, configuration, runtime, clock)
 
     {%{
@@ -3254,6 +3366,32 @@ defmodule Logex.Runner do
   defp registered?(nil), do: false
   defp registered?(name), do: is_pid(where(name))
 
+  # c4-api-fuzz-9 (RV-4's review): a `{:via, module, term}` name whose module is no
+  # registry, which GenServer calls in the caller to look the name up, is the host's
+  # mistake told in the runner's words, where it escaped as an UndefinedFunctionError;
+  # every other name GenServer checks in its own.
+  @registry [register_name: 2, unregister_name: 1, whereis_name: 1, send: 2]
+
+  defp name!({:via, module, _term} = name) when is_atom(module),
+    do:
+      registry!(
+        Code.ensure_loaded?(module) and Enum.all?(@registry, &exported?(module, &1)),
+        name
+      )
+
+  defp name!(name), do: name
+
+  defp registry!(true, name), do: name
+
+  defp registry!(false, {:via, module, _term} = name),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's name: #{inspect(name)} names #{inspect(module)}, which is no " <>
+          "registry: a via name's module exports register_name/2, unregister_name/1, " <>
+          "whereis_name/1 and send/2"
+      )
+
   # A file another runner of this VM holds, told by what it is to each: the option that
   # names it here, as the host spelled it, and the holder's file it meets.
   defp held_told({_at, ours, option, given}, holder, theirs),
@@ -3432,15 +3570,20 @@ defmodule Logex.Runner do
 
   # The host's wall clock, to the second, for a store's header, `{:ok, at}`; since RV-4
   # (c2-runner-persist-6) an answer that is no whole number of milliseconds since the Unix
-  # epoch a `DateTime` holds, years 0 to 9999, `{:error, {:clock, {:wall_ms, answer}}}`,
-  # a write it was asked for failing so, reported as any failed write.
+  # epoch from year 0 to year 9999, `{:error, {:clock, {:wall_ms, answer}}}`, a write it
+  # was asked for failing so, reported as any failed write. A time before 1970 is a
+  # negative number, and taken; since RV-4's review a year before 0, which a `DateTime`
+  # holds to year -9999 and a header would spell `-0001-...`, is refused as the message
+  # says.
   defp wall({module, clock}), do: walled(clocked(fn -> module.wall_ms(clock) end))
 
   defp walled(ms) when is_integer(ms), do: in_range(DateTime.from_unix(ms, :millisecond), ms)
   defp walled(other), do: {:error, {:clock, {:wall_ms, other}}}
 
-  defp in_range({:ok, _at}, ms), do: {:ok, Logex.Retain.at(ms)}
-  defp in_range({:error, _reason}, ms), do: {:error, {:clock, {:wall_ms, ms}}}
+  defp in_range({:ok, %DateTime{year: year}}, ms) when year >= 0,
+    do: {:ok, Logex.Retain.at(ms)}
+
+  defp in_range(_beyond, ms), do: {:error, {:clock, {:wall_ms, ms}}}
 
   # At a fresh start, in the caller: a wall clock that gives no time a store's header can
   # hold is the host's mistake, before anything starts.

@@ -52,6 +52,16 @@ defmodule Logex.RunnerPathsTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # The VM's table of claims gone, its keeper killed, so that the next claim makes it anew.
+  defp table_gone(:undefined), do: :ok
+
+  defp table_gone(keeper) do
+    ref = Process.monitor(keeper)
+    Process.exit(keeper, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^keeper, :killed}, 5000
+    table_gone(:ets.info(Logex.Runner.Paths, :owner))
+  end
+
   # The claims the VM's table holds for a store and its `.tmp`: a runner that stops, or
   # whose start is refused after it claimed them, gives them up as it ends, not merely by
   # being gone.
@@ -176,6 +186,50 @@ defmodule Logex.RunnerPathsTest do
       end
     end
 
+    # A file whose holder is down is taken over by one replace of exactly the dead holder's
+    # claim: of several claims at once that each found it down, the one whose replace comes
+    # second finds the claim changed and tries again, meeting the winner. Made on the VM's
+    # table itself, four at once four thousand times, since the window between a claim's
+    # look-up and its replace is a few instructions wide.
+    test "of several claims at once on a file whose holder is down, one takes it over" do
+      dead = spawn(fn -> :ok end)
+      ref = Process.monitor(dead)
+      assert_receive {:DOWN, ^ref, :process, ^dead, _reason}, 5000
+
+      winners =
+        for n <- 1..4000 do
+          file = {"/logex-runner-paths-test/#{n}", :retain}
+          :ok = Logex.Runner.Paths.claim([file], dead)
+          test = self()
+
+          claimers =
+            for _ <- 1..4 do
+              spawn(fn ->
+                receive do
+                  :go -> send(test, {:claimed, self(), Logex.Runner.Paths.claim([file], self())})
+                end
+
+                receive do
+                  :done -> Logex.Runner.Paths.release([file], self())
+                end
+              end)
+            end
+
+          for claimer <- claimers, do: send(claimer, :go)
+
+          answers =
+            for claimer <- claimers do
+              assert_receive {:claimed, ^claimer, answer}, 5000
+              answer
+            end
+
+          for claimer <- claimers, do: send(claimer, :done)
+          Enum.count(answers, &(&1 == :ok))
+        end
+
+      assert Enum.frequencies(winners) == %{1 => 4000}
+    end
+
     test "a path is free again once its holder stops, crashes or is killed", %{tmp_dir: dir} do
       store = Path.join(dir, "plant.retain")
       {:ok, first} = Runner.start_link(opts(retain: store))
@@ -199,6 +253,60 @@ defmodule Logex.RunnerPathsTest do
 
       assert Runner.stop(third) == :ok
       assert Runner.stop(fourth) == :ok
+    end
+  end
+
+  # An application of the test's own whose one child is a runner on the options its start
+  # is given, standing for a host's application that starts the VM's first runner.
+  defmodule Plant do
+    use Application
+
+    @impl true
+    def start(_type, opts),
+      do:
+        Supervisor.start_link(
+          [%{id: :runner, start: {Runner, :start_link, [opts]}, restart: :temporary}],
+          strategy: :one_for_one
+        )
+  end
+
+  describe "the VM's table of claims" do
+    test "outlives an application's stop: one whose runner made the table, stopped, leaves " <>
+           "every other runner's claims standing",
+         %{tmp_dir: dir} do
+      # The table made afresh, by the application's runner: its keeper gone first, the
+      # claims of runners other tests left running with it, which no later test reads.
+      table_gone(:ets.info(Logex.Runner.Paths, :owner))
+      store = Path.join(dir, "plant.retain")
+      app = :logex_paths_test_plant
+
+      spec = [
+        description: ~c"a host's plant",
+        vsn: ~c"1",
+        modules: [Plant],
+        registered: [],
+        applications: [:kernel, :stdlib],
+        mod: {Plant, opts(retain: Path.join(dir, "app.retain"))}
+      ]
+
+      :ok = :application.load({:application, app, spec})
+      on_exit(fn -> :application.unload(app) end)
+      {:ok, _started} = Application.ensure_all_started(app)
+      keeper = :ets.info(Logex.Runner.Paths, :owner)
+      assert is_pid(keeper)
+
+      # A runner of the test's own holds the store; the application's stop, which kills
+      # every process whose group leader is the application's, leaves the keeper and the
+      # claim, and a second runner on the store is still refused.
+      {:ok, held} = Runner.start_link(opts(retain: store))
+      :ok = Application.stop(app)
+      assert Process.alive?(keeper)
+
+      raises(held(:retain, store, "names the store", held), fn ->
+        Runner.start_link(opts(retain: store))
+      end)
+
+      assert Runner.stop(held) == :ok
     end
   end
 

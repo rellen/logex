@@ -29,8 +29,9 @@ defmodule Logex.Runner.Device do
   #   requests to it, so that neither waits on the other.
   # - `write/2` writes the outputs a round gave, answered once the adapter has written them;
   #   `refresh/2` tells it the deadline by which it will hear from the runner again, without
-  #   a wait (decision 125); `close/1` writes 0 to every output once, closes the adapter,
-  #   and stops (decision 116).
+  #   a wait (decision 125), and so does the runner's renewal while it writes a round's
+  #   devices, one shared write every device reads (decision 348, beat/1); `close/1`
+  #   writes 0 to every output once, closes the adapter, and stops (decision 116).
   # - `zero/1` is a trip's (M4-4, decision 113): every output written 0 once, and the device
   #   latched, writing nothing more, a round's write and a poll's write again among it,
   #   until `release/2`, a restart's, which forgets what it last wrote, so that nothing is
@@ -156,6 +157,7 @@ defmodule Logex.Runner.Device do
        runner: runner,
        clock: args.clock,
        poll: args.poll,
+       beat: Map.get(args, :beat),
        restarts: args.restarts,
        adapter: nil,
        image: %{},
@@ -471,8 +473,10 @@ defmodule Logex.Runner.Device do
   defp rewritten(%{written: nil} = state), do: state
   defp rewritten(%{deadline: nil} = state), do: state
 
-  defp rewritten(%{clock: {mod, clock}, deadline: deadline} = state),
-    do: rewrite(whole(clocked(fn -> mod.now_ms(clock) end)) < deadline, state)
+  defp rewritten(%{clock: {mod, clock}} = state) do
+    %{deadline: deadline} = state = beat(state)
+    rewrite(whole(clocked(fn -> mod.now_ms(clock) end)) < deadline, state)
+  end
 
   defp rewrite(true, state), do: again(wrote(state.written, state))
   defp rewrite(false, state), do: state
@@ -627,10 +631,36 @@ defmodule Logex.Runner.Device do
 
   # The wake came: a deadline later than now moves it on; one reached, with no refresh
   # since that brought a later one, latches the device, which tells the runner.
-  defp expired(%{clock: {mod, clock}, deadline: deadline} = state) do
+  defp expired(%{clock: {mod, clock}} = state) do
+    %{deadline: deadline} = state = beat(state)
     now = whole(clocked(fn -> mod.now_ms(clock) end))
     expire(now >= deadline, now, state)
   end
+
+  # Decision 348's renewal (RV-4's review): while a round writes its devices, the runner
+  # renews every device's deadline by one shared write, `beat`, two slots of an
+  # `:atomics`, the deadline and the time on its clock it renewed at, where a refresh sent
+  # to every device at every write cost the devices and the runner the square of their
+  # number a round. A device takes the renewal at its wake and at its poll, the two places
+  # it reads its deadline, where it was made after the refresh it last heard, as that
+  # refresh sent would have been taken, and so never one from before the refresh a
+  # release's restart sends first. A refresh sent before a renewal it took and handled
+  # after it sets the older deadline again until the next wake or poll takes the renewal
+  # once more, so every deadline the device acts on is the newest. The runner writes the
+  # deadline first and the time after, and a device reads the time first, so that a
+  # renewal it takes is never older than the time it reads with it. A device started
+  # without a beat, a test's alone, hears none, and one never refreshed none either.
+  defp beat(%{beat: nil} = state), do: state
+
+  defp beat(%{heard: heard, beat: beat} = state) when is_integer(heard),
+    do: renewal(:atomics.get(beat, 2), beat, state)
+
+  defp beat(state), do: state
+
+  defp renewal(at, beat, %{heard: heard} = state) when at > heard,
+    do: %{state | deadline: :atomics.get(beat, 1), heard: at}
+
+  defp renewal(_at, _beat, state), do: state
 
   defp expire(false, _now, state), do: armed(state)
 

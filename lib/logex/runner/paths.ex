@@ -16,7 +16,11 @@ defmodule Logex.Runner.Paths do
   #   killed.
   # - The claims live in a public table of the VM's own, `{path, pid, role}`, made by a
   #   process of its own that the first claim starts, unlinked, which holds the table as
-  #   long as the VM runs and does nothing else; each claim is one `:ets.insert_new/2`,
+  #   long as the VM runs and does nothing else. Since RV-4's review its group leader is
+  #   the VM's `init`, not that of the process that started it: an application stopped
+  #   kills every process whose group leader is its own, and the keeper, started by
+  #   whichever runner of an application first claimed a file, would otherwise go with it
+  #   and every other runner's claims with the table. Each claim is one `:ets.insert_new/2`,
   #   and a dead holder's is taken over by one `:ets.select_replace/2` of exactly its
   #   object, so that two runners that start at once on one file never both hold it.
   # - Two VMs on one file are the host's to avoid: nothing here sees another VM, nor a
@@ -90,7 +94,7 @@ defmodule Logex.Runner.Paths do
 
   defp made(:undefined) do
     starter = self()
-    {keeper, ref} = spawn_monitor(fn -> kept(own_table(), starter) end)
+    {keeper, ref} = spawn_monitor(fn -> kept(own_table(away()), starter) end)
 
     receive do
       {@table, ^keeper, :made} -> Process.demonitor(ref, [:flush])
@@ -102,8 +106,12 @@ defmodule Logex.Runner.Paths do
 
   defp made(table), do: table
 
+  # The keeper's group leader the VM's own, before it makes the table, so that no
+  # application's stop takes the table down.
+  defp away, do: Process.group_leader(self(), Process.whereis(:init))
+
   # The keeper: the table made, or another keeper's made first, which this one leaves to it.
-  defp own_table do
+  defp own_table(true) do
     :ets.new(@table, [:named_table, :public, :set])
   rescue
     ArgumentError -> nil

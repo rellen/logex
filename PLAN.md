@@ -12314,30 +12314,35 @@ and CI checked; each fix with a test that fails when it is reverted.
     round costs 2041.2 where `d7a1290`'s cost 2019.1 (+1.1%), and 1735.4 where 1727.8
     (+0.4%).
   - *Provisional readings*: the restart's forces read limited and refused
-    `{:error, {:forces, :timeout}}` (question 1); a write killed past its limit may land
-    once the disk answers (question 2); a restart's arrival the runner's taking it from its
-    mailbox (question 3); M10's one `.tmp` name made new each write (question 4); the
-    zeros of a failed first read's close (question 5); the period's write limited only
-    where the runner waits on it, as decision 275 had it; a bad clock answer later a
-    shutdown naming the clock (question 6); a killed runner's hung device killed after the
-    idle watchdog and a poll period (question 7); `Logex.IO.Sim`'s 100,000 writes.
+    `{:error, {:forces, :timeout}}`, and since RV-4's review the start's refused as a file
+    that cannot be read (question 1); a write killed past its limit may land once the disk
+    answers (question 2); M10's one `.tmp` name made new each write (question 4); the zeros
+    of a failed first read's close (question 5); since RV-4's review a period's write past
+    its limit reported and left to finish (question 13), where before it was limited only
+    where the runner waits on it; a bad clock answer later a shutdown naming the clock
+    (question 6); a killed runner's hung device killed after the idle watchdog and a poll
+    period (question 7); `Logex.IO.Sim`'s 100,000 writes. A restart's arrival, which was
+    the runner's taking it from its mailbox (question 3), is decision 354's exactly since
+    RV-4's review.
   - *Questions for the maintainer*, by what an operator sees:
     1. *A restart on a stalled disk.* The plant trips, the disk stalls, the operator asks
        a warm restart: it answers `{:error, {:forces, :timeout}}` after 510 ms and the
-       plant stays tripped, every output 0. (a) As built; (b) the restart goes on with
-       the forces the runner holds, the file unread, and says so.
+       plant stays tripped, every output 0; and since RV-4's review a fresh start whose
+       forces file the disk does not answer for 510 ms, or that is a FIFO, is refused, an
+       `ArgumentError` saying the forces file cannot be read, nothing started. (a) As
+       built; (b) the restart goes on with the forces the runner holds, the file unread,
+       and says so, and the start with none, saying so.
     2. *A write that timed out.* A stop on a disk that stalls for a second answers
        `{:error, {:retain, :timeout}}`, yet once the disk wakes the store may hold that
        very write, since nothing can stop a call the kernel has begun; the operator who
        reads the message thinks the store is the old one. (a) As built, README saying a
        write that timed out may still land; (b) `status/1`'s `retain` saying the last
        write is unknown until a later one lands.
-    3. *A trip that comes just after a restart is asked.* The operator presses restart
-       on a tripped plant as a card fails: where the card's notice reaches the runner
-       before it has taken the restart from its mailbox, the round takes the notice
-       first, and the restart, judged as the runner takes it, clears that new trip too.
-       (a) As built, a window of one round; (b) each restart stamped with the runner's
-       time as it is called, and refused where a trip came after that time.
+    3. *Withdrawn since RV-4's review.* A trip that came just after a restart was asked
+       could be cleared by it, the restart judged as the runner took it from its mailbox;
+       the review found that window as wide as a device's whole write limit, not a round.
+       The trip now refuses every restart already in the mailbox, each asked while the
+       runner ran, as decision 354 says, and nothing is left to choose.
     4. *One `.tmp` name.* Each write uses `tally.retain.tmp`, made new each time, where
        the review suggested a name a write; the operator sees at most one `.tmp` beside
        the store. (a) As built; (b) a name a write, `tally.retain.<n>.tmp`, the leftovers
@@ -12375,6 +12380,103 @@ and CI checked; each fix with a test that fails when it is reverted.
         `{:error, {:retain, :timeout}}`, though nothing is wrong with the disk. (a) As
         built, the host setting an idle watchdog that covers its disk; (b) a write's limit
         of its own, `write_limit:`, its default seconds, the heartbeat left as it is.
+        RV-4's review met it again: decision 348's real-clock test, four writes of 160
+        ms against 600, failed five runs of fifty under a load average of 10 to 13, where
+        a sleep of 10 ms overshot by up to 668 ms; it is scaled since to writes of 600 ms
+        against 2,100, and the long-write test to writes of 3,000 and 2,500 against 5,100.
+    13. *A box counter's period write on a stalled disk* (RV-4's review). The SD card
+        stalls; the period's write of the tally does not finish in 510 ms: the runner
+        reports `{:retain, {:error, :timeout}}`, `status/1` says `failed: :timeout`, the
+        writer is left to its write and the newest count waits for it, so the HMI shows one
+        failure until the card answers, when the late write lands, the failure clears and
+        the newest count is written next. (a) As built; (b) the late write killed as an
+        event's is and the newest count handed at once to a new writer, the failure then
+        reported again at every period while the card stalls, and each killed write's
+        rename may still land when it answers.
+  **RV-4's review** (2026-11-02, the review of `5208e60`; its probes under the review's
+  scratchpad, `probes4/`). Eleven findings, each closed with a test that fails when its
+  fix is reverted, each revert run by hand and the mutants rerun through
+  `scripts/mutate.sh` judged by the full suite, or with a document made true:
+  - *1, H2's real-time half* (`trip_test.exs`, "a write after a long one has the whole
+    of its own limit"): the review's mutant, the wait taken from the deadline before the
+    renewal, passed every test, since the manual clock's writes take no real time and the
+    real-clock test's writes never outran what was left of a deadline. An idle watchdog
+    of 5,000, a write of 3,000 ms and then one of 2,500: nothing trips, where the mutant
+    cut the second at 2,100 ms, red.
+  - *2, a killed runner's own write* (`stalled_disk_test.exs`): `Writer.within/2`'s
+    process is linked to its runner, which traps exits, its exit taken with its answer and
+    none left in the mailbox, so that a runner killed while it writes takes the write down
+    with it, the write doing nothing after the call of the file system it was in; the
+    review's repro, a killed runner's write renaming the next runner's `.tmp` into the
+    store, is a write held in its delete on the held file server: the writer goes down
+    with the runner, the store stays as it was and the next runner's cold write stands.
+    Mutants: no link, red; the exit not taken, red by a trace of the runner's
+    `handle_info/2`.
+  - *3, decision 354 exactly* (`trip_test.exs`): every restart already in the runner's
+    mailbox when it trips was asked while it ran and is refused there, decision 133's
+    words, so a restart behind a device's change whose round trips (the review's
+    manual-clock repro) and one asked while a round waits on a device's write (its
+    real-clock repro, held here by an adapter that waits on the test) are each refused, and
+    a restart asked after is served. The stamp taken as the runner takes a restart keeps
+    the queue's; a restart in flight as the trip begins arrives after it and is the
+    trip's own. Question 3 is withdrawn. Mutant: no refusal at the trip, red by both.
+  - *4, an application's stop* (`runner_paths_test.exs`): the claims' keeper sets its
+    group leader to the VM's `init` before it makes the table, so that an application
+    whose runner made the table, stopped, kills no keeper; a test application of its own
+    makes it and stops, and a second runner on a file a live runner holds is still
+    refused. Mutant: the caller's group leader kept, red.
+  - *5, the renewal's cost* (`runner_test.exs`, "a round whose writes take time renews
+    its devices in time linear in them"): decision 348's renewal is one shared write, two
+    slots of an `:atomics` made at the runner's start, the deadline and the time it was
+    renewed at, which each device reads at its wake and its poll, taking a renewal made
+    after the refresh it last heard, so never one from before the refresh a restart sends
+    first (`trip_test.exs`, "a renewal older than the step's refresh since is not taken",
+    red where any renewal is taken). The review's
+    probe, 64 devices whose writes take 1 ms on the manual clock, the least of five runs:
+    the runner 25,766 reductions a round against `d7a1290`'s 25,289 and `5208e60`'s
+    65,340, the devices 11,786 against 11,934 and 115,097; the growth test's 64 devices
+    against 16, the least of three runs, 3.669 times at most in six runs, bound 4.40,
+    where a refresh a device took 9.19, red.
+  - *6, decision 348's real-clock test under load*: scaled to an idle watchdog of 2,000
+    and writes of 600 ms, the margin of each write 1,500 ms and the four together still
+    300 ms past one shared deadline, the hang named at 2,100 ms; question 12 records the
+    five failures of fifty the review met.
+  - *7, retain_period's mid-write kill* (`retain_period_test.exs`): the writer held inside
+    `Logex.Retain.written/2` by the VM's file server held, killed with its runner in its
+    delete of a leftover, the store the write before it, and in its rename, the store the
+    write itself once the server answers: the old or the new, whole, each restored by a
+    fresh start; the test's title true again.
+  - *8, a period's write on a stalled disk* (`stalled_disk_test.exs`): one not answered
+    within the idle watchdog and a poll period of real time from when it was handed is
+    reported, `{:retain, {:error, :timeout}}` and `failed: :timeout`, and left to finish,
+    its answer taken when it comes (provisional, question 13): killing it broke the
+    API-contract LifeWalk's oracle of decision 275's latest wins, which holds the writer
+    for three periods. Mutant: no limit, red.
+  - *9, c4-api-fuzz-9* (`runner_test.exs`): a `{:via, module, term}` name whose module is
+    not loaded or exports no registry's four functions is the host's pinned mistake; a
+    `Registry` name starts and is reached by its name. Mutant: no check, red.
+  - *10, the mutants that survived* B, E, I and J: B, two claims at once over a dead
+    holder, a test on the VM's table of four claims at once four thousand times, which
+    the mutant failed four runs of four with 15 to 44 rounds won twice; E, a notice
+    bearing its device's own pid with a time or a kind no device sends, passed over, where
+    the mutant crashed the runner; I, which found a real fault: a stop whose request waits
+    in a runner another stop ends is ended by `{reason, {:sys, :terminate, args}}`, which
+    `orderly/2` never read, so the second stop raised that the runner was not running;
+    the reason is read through it now, a test over `:normal`, `:shutdown`, `{:shutdown,
+    term}` and a kill on the held file server, each mutant red; J, a wall time before 1970
+    taken (`1969-12-31T23:59:59Z`) and, the message true, one before year 0 refused.
+  - *11, the start's forces read* (`stalled_disk_test.exs`): raw and limited as the
+    restart's, through `Writer.read/2`, a process of its own unlinked from the caller: a
+    FIFO in its place refuses the start within its limit, the file named, while another
+    process's file call answers. Mutant: the read through the file server, red within the
+    limit (the test waits for the raw read a limit's time and lets the FIFO go however it
+    ends).
+  - *The cost* of a round of three devices on the manual clock, writes taking no time, is
+    as before the review; with writes that take time, as the review's probe above.
+  - *Load runs* of every new or changed real-clock and runner test under
+    `scripts/load.sh`, 30 tests a run: a first run stopped at 21 runs, one failed, the
+    dead-holder race test's 100 ms wait for a claimer's answer, given 5,000 ms since; the
+    final run of 50 is recorded with the mutation table.
 - **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
   `.dropped` copy; the report's store and file lows.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,
