@@ -743,9 +743,13 @@ defmodule Logex.TagSubscriptTest do
                   @later}
              ]
 
-      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[i].4") == [
+      # Decision 405: a bit's literal number is one more place, so two bits whose numbers
+      # differ never meet, through the very tag too; two of one number may.
+      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[i].4") == []
+
+      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[n].3") == [
                {8,
-                "`w[i].4` is in `w`, which the `ote` on line 7 may write through a tag subscript: " <>
+                "`w[n].3` is in `w`, which the `ote` on line 7 may write through a tag subscript: " <>
                   @later}
              ]
     end
@@ -784,8 +788,8 @@ defmodule Logex.TagSubscriptTest do
             {"xic a ote w[i].1\nmove a w[2].[n]", later.("w[2].[n]", "ote", 9)},
             {"xic a ote w[2].1\nmove a w[i].[n]",
              as.("w[i].[n]", "w[2].1", "already has an `ote` on line 8", 9)},
-            {"xic a ote w[2].1\nmove a w[i].3",
-             as.("w[i].3", "w[2].1", "already has an `ote` on line 8", 9)},
+            {"xic a ote w[2].1\nmove a w[i].1",
+             as.("w[i].1", "w[2].1", "already has an `ote` on line 8", 9)},
             {"xic a osr o w[2].1\nmove x w[i]",
              as.("w[i]", "w[2].1", "is already the pulse bit of the `osr` on line 8", 9)}
           ] do
@@ -798,6 +802,14 @@ defmodule Logex.TagSubscriptTest do
       assert warnings(head <> "xic a ote w[2].1\nmove x w[3]") == [
                {2, "`i` is declared but no rung uses it"}
              ]
+
+      # Decision 405: a write of a bit through a tag subscript, beside a coil on a bit of
+      # another number, never meets it.
+      assert Enum.filter(
+               warnings(head <> "xic a ote w[2].1\nmove a w[i].3"),
+               &(elem(&1, 1) =~ "is in `w`")
+             ) ==
+               []
     end
 
     # Decision 235: a write through a tag subscript other than a coil's, any instruction's
@@ -905,15 +917,22 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    test "a coil on a bit of an element a tag subscripts is a write of each storage bit in its array" do
+    # Decision 405: of each storage bit in its array it may meet, a bit's literal number
+    # one more place, so a coil on a bit of another number writes none.
+    test "a coil on a bit of an element a tag subscripts is a write of each storage bit in its array it may meet" do
       assert warnings(
                "var w word[2]\nvar_input i int\nvar_input a bool\nvar_output p bool\n" <>
-                 "xic a ons w[1].3 ote p\nxic a ote w[i].4"
+                 "xic a ons w[1].3 ote p\nxic a ote w[i].3"
              ) == [
                {6,
                 "`ote` writes `w[1].3`, the storage bit of the `ons` on line 5: the one-shot " <>
                   "then fires on the wrong scans"}
              ]
+
+      assert warnings(
+               "var w word[2]\nvar_input i int\nvar_input a bool\nvar_output p bool\n" <>
+                 "xic a ons w[1].3 ote p\nxic a ote w[i].4"
+             ) == []
     end
 
     test "an element a tag subscripts compared with a literal at its type's limit is warned" do
@@ -1274,6 +1293,165 @@ defmodule Logex.TagSubscriptTest do
         )
 
       assert (two - one) / 200 <= 36, "one dimension #{one}, two #{two}"
+    end
+  end
+
+  # Decision 405: a bit's literal number is one more place, so two writes of bits of one
+  # word array whose literal numbers differ never meet and are not warned, in one, two and
+  # three dimensions, in either order, through tags or beside a literal element's, as a
+  # member's bits of two numbers are not (decision 257); and a one-shot's storage bit is
+  # judged as a write is, so a write whose literal places differ from it, a subscript or a
+  # bit's number, does not write it. Each beside its twin, which may meet, warned as before.
+  describe "a bit's number and a storage bit told apart (decision 405)" do
+    @later "the last one in the scan decides it"
+    @wrong "the one-shot then fires on the wrong scans"
+    @words "var_input a bool\nvar_input i int\nvar_input j int\nvar_input k int\n" <>
+             "var_input n int\nvar_input m int\nvar w word[4]\nvar e bool[2,4]\n" <>
+             "var e1 bool[4]\nvar cube bool[2,3,3]\nvar g word[2,3]\nvar g3 word[2,2,2]\n" <>
+             "var lc ctu[2,2]\nvar l1 ctu[3]\nvar_output o bool\nvar_output p bool\n" <>
+             "xic w[i].[k] xic e[i,j] xic e1[i] xic cube[i,j,k] xic g[i,j].[k] " <>
+             "xic g3[i,j,k].[n] xic lc[i,j].q xic l1[i].q ote o\n"
+
+    defp said(rungs),
+      do:
+        for(
+          {line, message} <- warnings(@words <> rungs),
+          String.ends_with?(message, @later) or String.ends_with?(message, @wrong),
+          do: {line, message}
+        )
+
+    defp array_in(write), do: hd(String.split(write, "["))
+
+    defp may_write(write, symbol \\ "ote"),
+      do: [
+        {19,
+         "`#{write}` is in `#{array_in(write)}`, which the `#{symbol}` on line 18 may write " <>
+           "through a tag subscript: " <> @later}
+      ]
+
+    defp as_had(write, other),
+      do: [
+        {19,
+         "`#{write}` is in `#{array_in(write)}`, as `#{other}` is, which already has an " <>
+           "`ote` on line 18: " <> @later}
+      ]
+
+    defp stored(line, symbol, bit, one_shot, at),
+      do: [
+        {line,
+         "`#{symbol}` writes `#{bit}`, the storage bit of the `#{one_shot}` on line #{at}: " <>
+           @wrong}
+      ]
+
+    test "two bits whose literal numbers differ never meet, in one, two and three dimensions" do
+      for {apart, twin, told} <- [
+            {"xic a ote w[i].3\nxic a ote w[j].4", "xic a ote w[i].3\nxic a ote w[j].3",
+             may_write("w[j].3")},
+            {"xic a ote w[i].3\nxic a ote w[1].4", "xic a ote w[i].3\nxic a ote w[1].3",
+             may_write("w[1].3")},
+            {"xic a ote w[1].4\nxic a ote w[i].3", "xic a ote w[1].3\nxic a ote w[i].3",
+             as_had("w[i].3", "w[1].3")},
+            {"xic a ote w[i].3\nxic a otl w[j].4", "xic a ote w[i].3\nxic a otl w[j].3",
+             may_write("w[j].3")},
+            {"xic a otl w[i].3\nxic a ote w[j].4", "xic a otl w[i].3\nxic a ote w[j].3",
+             may_write("w[j].3", "otl")},
+            {"xic a ote w[i].3\nxic a ote w[j].04", "xic a ote w[i].3\nxic a ote w[j].03",
+             may_write("w[j].03")},
+            {"xic a ote g[i,j].3\nxic a ote g[k,n].4", "xic a ote g[i,j].3\nxic a ote g[k,n].3",
+             may_write("g[k,n].3")},
+            {"xic a ote g[1,j].3\nxic a ote g[1,2].4", "xic a ote g[1,j].3\nxic a ote g[1,2].3",
+             may_write("g[1,2].3")},
+            {"xic a ote g[1,2].4\nxic a ote g[1,j].3", "xic a ote g[1,2].3\nxic a ote g[1,j].3",
+             as_had("g[1,j].3", "g[1,2].3")},
+            {"xic a ote g3[i,j,k].3\nxic a ote g3[i,j,k].4",
+             "xic a ote g3[i,j,k].3\nxic a ote g3[n,m,1].3", may_write("g3[n,m,1].3")},
+            {"xic a ote g3[1,j,k].3\nxic a ote g3[1,1,1].4",
+             "xic a ote g3[1,j,k].3\nxic a ote g3[1,1,1].3", may_write("g3[1,1,1].3")},
+            {"xic a ote g3[1,1,1].4\nxic a ote g3[1,j,k].3",
+             "xic a ote g3[1,1,1].3\nxic a ote g3[1,j,k].3",
+             as_had("g3[1,j,k].3", "g3[1,1,1].3")},
+            {"xic a ote lc[i,j].pv.3\nxic a ote lc[k,n].pv.4",
+             "xic a ote lc[i,j].pv.3\nxic a ote lc[k,n].pv.3", may_write("lc[k,n].pv.3")},
+            {"xic a ote l1[i].pv.3\nxic a ote l1[j].pv.4",
+             "xic a ote l1[i].pv.3\nxic a ote l1[j].pv.3", may_write("l1[j].pv.3")},
+            {"xic a ote lc[1,1].pv.4\nxic a ote lc[1,j].pv.3",
+             "xic a ote lc[1,1].pv.3\nxic a ote lc[1,j].pv.3",
+             as_had("lc[1,j].pv.3", "lc[1,1].pv.3")}
+          ] do
+        assert {apart, said(apart)} == {apart, []}
+        assert {twin, said(twin)} == {twin, told}
+      end
+    end
+
+    # A bit a tag numbers, and an element written whole, may be any bit of it: each meets a
+    # bit of any number, as before.
+    test "a bit a tag numbers and an element written whole meet every bit" do
+      for {rungs, told} <- [
+            {"xic a ote w[i].3\nxic a ote w[j].[n]", may_write("w[j].[n]")},
+            {"xic a ote w[i].[n]\nxic a ote w[j].3", may_write("w[j].3")},
+            {"xic a ote w[i].3\nmove 5 w[j]", may_write("w[j]")},
+            {"xic a ote w[i].3\nmove 5 w[1]", may_write("w[1]")},
+            {"move 5 w[j]\nxic a ote w[i].3", may_write("w[i].3", "move")},
+            {"xic a ote g[i,j].3\nxic a ote g[k,n].[m]", may_write("g[k,n].[m]")},
+            {"xic a ote g[i,j].3\nmove 5 g[k,n]", may_write("g[k,n]")},
+            {"xic a ote g[1,j].3\nmove 5 g[1,2]", may_write("g[1,2]")}
+          ] do
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
+
+      assert said("xic a ote g[1,j].3\nmove 5 g[0,2]") == []
+    end
+
+    test "a storage bit is judged as a write is, a bit's number among its places" do
+      for {apart, twin, told} <- [
+            {"xic a ons e[1,1] ote p\nxic a ote e[i,0]",
+             "xic a ons e[1,1] ote p\nxic a ote e[i,1]", stored(19, "ote", "e[1,1]", "ons", 18)},
+            {"xic a ote e[i,0]\nxic a ons e[1,1] ote p",
+             "xic a ote e[i,1]\nxic a ons e[1,1] ote p", stored(18, "ote", "e[1,1]", "ons", 19)},
+            {"xic a ons e[1,1] ote p\nxic a ote e[0,i]",
+             "xic a ons e[1,1] ote p\nxic a ote e[1,i]", stored(19, "ote", "e[1,1]", "ons", 18)},
+            {"xic a ons e[1,1] ote p\nxic a otu e[i,0]",
+             "xic a ons e[1,1] ote p\nxic a otl e[i,1]", stored(19, "otl", "e[1,1]", "ons", 18)},
+            {"xic a osr e[1,1] p\nxic a ote e[i,0]", "xic a osf e[1,1] p\nxic a ote e[i,1]",
+             stored(19, "ote", "e[1,1]", "osf", 18)},
+            {"xic a ons cube[1,1,1] ote p\nxic a ote cube[i,1,0]",
+             "xic a ons cube[1,1,1] ote p\nxic a ote cube[i,1,1]",
+             stored(19, "ote", "cube[1,1,1]", "ons", 18)},
+            {"xic a ons cube[1,1,1] ote p\nxic a ote cube[0,j,k]",
+             "xic a ons cube[1,1,1] ote p\nxic a ote cube[i,j,k]",
+             stored(19, "ote", "cube[1,1,1]", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nxic a ote w[i].4",
+             "xic a ons w[1].3 ote p\nxic a ote w[i].3", stored(19, "ote", "w[1].3", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nxic a ote w[i].04",
+             "xic a ons w[1].3 ote p\nxic a ote w[i].[n]",
+             stored(19, "ote", "w[1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nxic a ote g[i,1].4",
+             "xic a ons g[1,1].3 ote p\nxic a ote g[i,1].3",
+             stored(19, "ote", "g[1,1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nxic a ote g[i,0].3",
+             "xic a ons g[1,1].3 ote p\nxic a ote g[i,j].3",
+             stored(19, "ote", "g[1,1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nmove 5 g[i,0]", "xic a ons g[1,1].3 ote p\nmove 5 g[i,1]",
+             stored(19, "move", "g[1,1].3", "ons", 18)},
+            {"xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,1,1].4",
+             "xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,1,1].3",
+             stored(19, "ote", "g3[1,1,1].3", "ons", 18)},
+            {"xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,0,1].3",
+             "xic a ons g3[1,1,1].3 ote p\nmove 5 g3[i,j,1]",
+             stored(19, "move", "g3[1,1,1].3", "ons", 18)}
+          ] do
+        assert {apart, said(apart)} == {apart, []}
+        assert {twin, said(twin)} == {twin, told}
+      end
+
+      # In one dimension a tag subscript meets every element, and an element written whole
+      # every bit of it, as before.
+      for {rungs, told} <- [
+            {"xic a ons e1[1] ote p\nxic a ote e1[i]", stored(19, "ote", "e1[1]", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nmove 5 w[i]", stored(19, "move", "w[1].3", "ons", 18)}
+          ] do
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
     end
   end
 

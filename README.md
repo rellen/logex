@@ -1975,8 +1975,14 @@ line 11: `sloot` is not declared — did you mean `slot`?
   global array through its `var_external` may write any element, told by the element it
   may share with another writer, "`f2` writes `speeds[1]` through its var_external, as
   `f1` may" (decision 236), an instance writing several named on one line, "`t1` writes
-  `speeds[1]`, `speeds[2]` and `speeds[3]` …", ten and then a count (decision 239). A subscript's tag is a use of it, read, and part of its rung, so an edit
-  that changes it changes the rung.
+  `speeds[1]`, `speeds[2]` and `speeds[3]` …", ten and then a count (decision 239). Two
+  writes that never meet are not told: since decision 372 two whose literal subscripts
+  differ in any place, `ote ee[1,i]` beside `ote ee[0,i]`, and since decision 405 two
+  bits whose literal numbers differ, `ote faults[i].1` beside `ote faults[j].2`, the
+  bit's number one more place, and a write beside a storage bit whose literal places
+  differ from its own, `ote edges[i,0]` beside `ons edges[1,1]`, where `ote edges[i,1]`
+  and `ote faults[j].[n]` may meet and are told. A subscript's tag is a use of it, read,
+  and part of its rung, so an edit that changes it changes the rung.
 
 ### Two pulse coils
 

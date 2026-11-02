@@ -47,8 +47,15 @@ defmodule Logex.Warnings do
   warned, the rows of a lamp panel `ote ee[1,i]` and `ote ee[0,i]`, or `ote ee[0,i]` and
   `ote ee[1,3]`; two that may meet, `ee[i,0]` and `ee[j,0]`, or `ee[i]` and `ee[1]`, are
   warned as before, a write told the earliest that may meet it. So for an element's bit,
-  `g[1,c].3` and `g[0,c].3`, and an element's member, `lc[0,i].r` and `lc[1,i].r`; a bit's
-  number and a member's path are no subscripts, so `w[i].3` and `w[j].4` are still warned.
+  `g[1,c].3` and `g[0,c].3`, and an element's member, `lc[0,i].r` and `lc[1,i].r`. Since
+  RV-12 (decision 405) a bit's literal number is one more place, a bit a tag numbers and
+  an element written whole a tag's, so two bits of one word array whose numbers differ,
+  `w[i].3` and `w[j].4`, or `g[1,j].3` and `g[1,2].4`, never meet, in an array of one
+  dimension too, and `w[i].3` and `w[j].[n]`, or `move x w[j]`, may; a member's bits are
+  told apart by its path, the bit's number one more part of it (decision 257). And a
+  one-shot's storage bit is judged as a write is: a write through a tag subscript writes
+  only the storage bits its places may meet, so `ote e[i,0]` beside `ons e[1,1]`, or
+  `ote w[i].4` beside `ons w[1].3`, is not warned, and `ote e[i,1]` or `ote w[i].3` is.
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
   one in a section a `jmp` skips and one outside it, are still two, the warning saying the
@@ -542,7 +549,13 @@ defmodule Logex.Warnings do
   # then reads; one of one dimension, whose places are nil, marks nothing.
   defp in_arrays(words, [_ | _]), do: Map.put(words, :in_arrays, true)
   defp in_arrays(words, {:element_at, _array, [_, _ | _]}), do: Map.put(words, :in_arrays, true)
-  defp in_arrays(words, {:bit, element, _n}), do: in_arrays(words, element)
+  # Decision 405: a bit of an element has its number's place, two at least.
+  defp in_arrays(words, {:bit, _element, _n}), do: Map.put(words, :in_arrays, true)
+
+  defp in_arrays(words, {:bit_at, {:element_at, _, _}, _n}),
+    do: Map.put(words, :in_arrays, true)
+
+  defp in_arrays(words, {:bit_at, {:element, _, _}, _n}), do: Map.put(words, :in_arrays, true)
   defp in_arrays(words, {:bit_at, element, _n}), do: in_arrays(words, element)
   defp in_arrays(words, {:element, _array, [_, _ | _]}), do: Map.put(words, :in_arrays, true)
 
@@ -588,7 +601,7 @@ defmodule Logex.Warnings do
   defp decides?({:element_whole, array, _at, _shown, _places}, tags, _owners),
     do: from_source?(tags, array)
 
-  defp decides?({:whole_at, array, _at, _shown, _id}, tags, _owners),
+  defp decides?({:whole_at, array, _at, _shown, _id, _places}, tags, _owners),
     do: from_source?(tags, array)
 
   defp decides?({:member_coil, _key, {array, _members}, _at, _shown, _places}, tags, _owners),
@@ -635,7 +648,7 @@ defmodule Logex.Warnings do
       )
 
   defp tagged_in({:coil_at, {:array, array}, _tag, _at, _shown, _id}), do: array
-  defp tagged_in({:whole_at, array, _at, _shown, _id}), do: array
+  defp tagged_in({:whole_at, array, _at, _shown, _id, _places}), do: array
   defp tagged_in({:member_coil_at, {array, _}, _at, _shown, _id}), do: array
   defp tagged_in({:member_bit_at, {array, _}, _word, _at, _shown, _id}), do: array
   defp tagged_in({:member_word_whole_at, {array, _}, _at, _shown, _id}), do: array
@@ -803,9 +816,7 @@ defmodule Logex.Warnings do
   # w[i]`, writes its array whole, so it comes after any coil on a bit of an element of
   # it, a literal one's or one through a tag subscript, as the second-`ote` warning, and is
   # for what comes later a write of the array whole.
-  defp decided({:whole_at, array, at, shown, id}, {coils, wholes, bitted}) do
-    places = places(id)
-
+  defp decided({:whole_at, array, at, shown, id, places}, {coils, wholes, bitted}) do
     {array_after(
        unlike_meeting(coils, {:array, array}, places, id),
        unlike_meeting(bitted, {:array, array}, places, id),
@@ -1004,9 +1015,18 @@ defmodule Logex.Warnings do
   # element keeps and looks up its key as before, and so does one of an array of one
   # dimension, where a tag subscript meets every element and two literal ones are no
   # array's to compare, so that it costs what it did before.
+  #
+  # Decision 405 (RV-12): a bit's literal number is one more place, `w[i].3` at `[:tag, 3]`,
+  # a bit a tag numbers and an element written whole a tag's, so two bits of one word array
+  # whose literal numbers differ, `w[i].3` and `w[j].4`, never meet, in an array of one
+  # dimension too, whose bits then have two places, and at most 16 projections are kept for
+  # a bit of three dimensions. A member's bit is told apart by its member's path, its
+  # number one more part of it (decision 257), so a member's places are its element's.
   defp places({:element_at, _array, [_one]}), do: nil
   defp places({:element_at, _array, subscripts}), do: Enum.map(subscripts, &place/1)
-  defp places({:bit, element, _n}), do: places(element)
+  defp places({:bit, element, n}), do: subscripts(element) ++ [n]
+  defp places({:bit_at, {:element_at, _, _} = element, _n}), do: subscripts(element) ++ [:tag]
+  defp places({:bit_at, {:element, _, _} = element, _n}), do: subscripts(element) ++ [:tag]
   defp places({:bit_at, container, _n}), do: places(container)
   defp places({:element, _array, index}), do: placed(index)
   defp places({:member, _array, index, _members}), do: placed(index)
@@ -1014,6 +1034,18 @@ defmodule Logex.Warnings do
 
   defp placed([_one]), do: nil
   defp placed(index), do: index
+
+  defp subscripts({:element_at, _array, subscripts}), do: Enum.map(subscripts, &place/1)
+  defp subscripts({:element, _array, index}), do: index
+
+  # An element written whole through a tag subscript: a word array's at every bit.
+  defp whole_places(id, %Tag{type: {:array, :bool, _dims}}), do: places(id)
+  defp whole_places(id, _words), do: subscripts(id) ++ [:tag]
+
+  # The bit's place of an element written whole: none for a bool array's, which has no
+  # bits, and a tag's, which meets every bit, for a word array's.
+  defp bit_place(%Tag{type: {:array, :bool, _dims}}), do: []
+  defp bit_place(_words), do: [:tag]
 
   defp place({:tag, _tag}), do: :tag
   defp place(value), do: value
@@ -1282,8 +1314,15 @@ defmodule Logex.Warnings do
   # decision 235 so for a bool array, `move 0 lamps[slot]` beside `ote lamps[2]` and `move
   # 0 lamps[2]` beside `ote lamps[slot]`, each the write of any instruction but a coil
   # through its write slot, where a tag subscript stands on either side.
+  # Decision 405 (RV-12): an element of a word array written whole writes every bit of it,
+  # its bit's place a tag's; a bool array's element has no bits.
   defp in_arrays({:element, _, array, index, shown}, tags, words, at),
-    do: element_whole({array, shown, index}, words, written_at(Map.get(tags, array), at))
+    do:
+      element_whole(
+        {array, shown, index ++ bit_place(Map.get(tags, array))},
+        words,
+        written_at(Map.get(tags, array), at)
+      )
 
   defp in_arrays(
          {:bit_at, _, {:element, _, array, index, _}, _n, _width, shown},
@@ -1291,10 +1330,17 @@ defmodule Logex.Warnings do
          words,
          at
        ),
-       do: element_whole({array, shown, index}, words, at)
+       do: element_whole({array, shown, index ++ [:tag]}, words, at)
 
-  defp in_arrays({:element_at, _, array, _index, _dims, shown} = at_tag, _tags, words, at),
-    do: whole_at({array, shown, same(at_tag)}, words, at)
+  # Decision 405 (RV-12): an element of a word array written whole through a tag subscript
+  # writes every bit of it, its bit's place a tag's.
+  defp in_arrays({:element_at, _, array, _index, _dims, shown} = at_tag, tags, words, at),
+    do:
+      whole_at(
+        {array, shown, same(at_tag), whole_places(same(at_tag), Map.get(tags, array))},
+        words,
+        at
+      )
 
   defp in_arrays(
          {:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, shown} = at_tag,
@@ -1302,7 +1348,7 @@ defmodule Logex.Warnings do
          words,
          at
        ),
-       do: whole_at({array, shown, same(at_tag)}, words, at)
+       do: whole_at({array, shown, same(at_tag), places(same(at_tag))}, words, at)
 
   defp in_arrays(
          {:bit_at, _, {:element_at, _, array, _, _, _}, _index, _width, shown} = at_tag,
@@ -1310,7 +1356,7 @@ defmodule Logex.Warnings do
          words,
          at
        ),
-       do: whole_at({array, shown, same(at_tag)}, words, at)
+       do: whole_at({array, shown, same(at_tag), places(same(at_tag))}, words, at)
 
   # Decision 253: a write of a member of an element, `otl lane_c[1].r` or `otl
   # lane_c[i].r`, any instruction's but a coil's, where a coil names that member.
@@ -1394,9 +1440,9 @@ defmodule Logex.Warnings do
 
   defp written_at(_tag, at), do: at
 
-  defp whole_at({array, shown, id}, words, at)
+  defp whole_at({array, shown, id, places}, words, at)
        when is_map_key(words, {:array, array}) or is_map_key(words, {:coiled_in, array}),
-       do: [{:whole_at, array, at, shown, id}]
+       do: [{:whole_at, array, at, shown, id, places}]
 
   defp whole_at(_element, _words, _at), do: []
 
@@ -1444,15 +1490,16 @@ defmodule Logex.Warnings do
   end
 
   # Decision 221: a coil on a bit of an element, `ote faults[2].3`, decides that bit of the
-  # element's word, keyed by its subscripts' values, its tag its array.
+  # element's word, keyed by its subscripts' values, its tag its array; since decision 405
+  # its places its subscripts and its bit's number.
   defp target(
-         {:bit, _, {:element, _, array, index, _} = element, _n, _mask, shown} = bit,
+         {:bit, _, {:element, _, array, index, _} = element, n, _mask, shown} = bit,
          line,
          at
        ),
        do: [
          {:coil, Walk.bit_name(bit), Walk.bit_name(element), array, {line, at}, shown,
-          placed(index)}
+          index ++ [n]}
        ]
 
   defp target({:bit, _, [container | _] = path, _n, _mask, shown} = bit, line, symbol),
@@ -1592,13 +1639,16 @@ defmodule Logex.Warnings do
 
     # RV-2 (the review after Milestone 6, a4-warnings-walk-3): the storage bits kept in
     # each array, in name order, gathered once, where each write through a tag subscript
-    # sorted and searched every one-shot of the routine.
+    # sorted and searched every one-shot of the routine; since decision 405 each with its
+    # places, its subscripts' values and a bit's number.
+    placed = storage_places(instructions)
+
     arrays =
       owners
       |> Enum.sort()
       |> Enum.filter(fn {name, _owner} -> String.contains?(name, "[") end)
       |> Enum.group_by(fn {name, _owner} -> word_of(name) end, fn {name, owner} ->
-        {name, own_shown(owner, name)}
+        {name, own_shown(owner, name), Map.fetch!(placed, name)}
       end)
 
     for instruction <- instructions,
@@ -1672,17 +1722,62 @@ defmodule Logex.Warnings do
 
   # M5-12 (§4.12's routine choice): a write through a tag subscript, of an element or of a
   # bit of one, may reach any element of its array, so every storage bit kept in the
-  # array, an element's or a bit of one's, in name order.
-  defp storage_names({:element_at, _, array, _, _, _}, {_words, arrays}),
-    do: Map.get(arrays, array, [])
+  # array, an element's or a bit of one's, in name order. Since RV-12 (decision 405) a
+  # storage bit is judged as decision 372 judges two writes: only those its places may
+  # meet, a tag subscript meeting every value and a literal its own, a bit's literal
+  # number one more place and a bit a tag numbers a tag's, so `ote e[i,0]` reaches no
+  # `ons e[1,1]` and `ote w[i].4` no `ons w[1].3`, and an element written whole meets
+  # every bit of it.
+  defp storage_names({:element_at, _, array, index, _, _}, {_words, arrays}),
+    do: meeting_storage(Map.get(arrays, array, []), Enum.map(index, &subscript_place/1))
 
-  defp storage_names({:bit, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, arrays}),
-    do: Map.get(arrays, array, [])
+  defp storage_names({:bit, _, {:element_at, _, array, index, _, _}, n, _, _}, {_words, arrays}),
+    do: meeting_storage(Map.get(arrays, array, []), Enum.map(index, &subscript_place/1) ++ [n])
 
-  defp storage_names({:bit_at, _, {:element_at, _, array, _, _, _}, _, _, _}, {_words, arrays}),
-    do: Map.get(arrays, array, [])
+  defp storage_names(
+         {:bit_at, _, {:element_at, _, array, index, _, _}, _, _, _},
+         {_words, arrays}
+       ),
+       do:
+         meeting_storage(
+           Map.get(arrays, array, []),
+           Enum.map(index, &subscript_place/1) ++ [:tag]
+         )
 
   defp storage_names(_member, _known), do: []
+
+  defp meeting_storage(bits, places),
+    do: for({name, shown, kept} <- bits, meets_storage?(places, kept), do: {name, shown})
+
+  # A write's places against a storage bit's, place by place, as far as both go: an
+  # element written whole has no bit's place, and meets every bit of the element.
+  defp meets_storage?([:tag | places], [_kept | bit]), do: meets_storage?(places, bit)
+  defp meets_storage?([place | places], [place | bit]), do: meets_storage?(places, bit)
+  defp meets_storage?([], _bit), do: true
+  defp meets_storage?(_places, _bit), do: false
+
+  defp subscript_place({:name, _, _tag}), do: :tag
+  defp subscript_place(value), do: value
+
+  # Decision 405: each storage bit an element or a bit of one keeps, by its name, at its
+  # places, its subscripts' values and a bit's number.
+  defp storage_places(instructions),
+    do:
+      for(
+        {symbol, _line, [storage | _]} <- instructions,
+        symbol in @one_shots,
+        {name, places} <- storage_place(storage),
+        into: %{},
+        do: {name, places}
+      )
+
+  defp storage_place({:element, _, _array, index, _name} = element),
+    do: [{Walk.bit_name(element), index}]
+
+  defp storage_place({:bit, _, {:element, _, _array, index, _}, n, _mask, _name} = bit),
+    do: [{Walk.bit_name(bit), index ++ [n]}]
+
+  defp storage_place(_tag_or_bit), do: []
 
   # Each quoted as its one-shot writes it, an element's by its subscripts' values, `e[2]`,
   # a bit of one as written (written_bits/2).
