@@ -851,7 +851,9 @@ defmodule Logex.RetainTest do
     # retained `tof`'s `.en` kept at 1, so one held on at the outage comes to rest, `.dn`
     # 0, where until then it ran its whole delay with nothing commanding it; one in its
     # delay at the outage, `.tt` 1, resumes it (decision 273). Every kind: a `tof`, a
-    # `tof_ltime`, an element of an array of them and a member of a block.
+    # `tof_ltime`, an element of an array of them and a member of a block. Since decision
+    # 385 the restart or the start puts it at rest itself, and a scan reads no `first` for
+    # it (the tests after these two).
     @run_on_block """
     function_block runon
     var_input go bool
@@ -935,19 +937,21 @@ defmodule Logex.RetainTest do
       assert outputs == [[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [0, 0, 0, 0]]
     end
 
-    # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): decision 349 is a first scan's
-    # rule, so a retained `tof` held on at the outage that the first scan does not run, on
-    # a rung a jump skips or in a block whose `cal` is false, keeps its `.en` 1, and its
-    # first run with its rung false sees a falling edge and runs the off-delay, as one held
-    # on and skipped does with no restart. Pinned as built until the maintainer rules.
+    # Decision 385 (the maintainer, 2026-11-01), RV-3's review's question 12: a retained
+    # `tof` held on at the outage that the first scan does not run, on a rung a jump skips
+    # or in a block whose `cal` is false, is put at rest by the restart or the start itself,
+    # so its first run with its rung false, whenever it comes, sees no falling edge and runs
+    # no off-delay, where until RV-10 decision 349's rest was a first scan's and such a
+    # `tof` kept its `.en` 1 and ran its delay at its first run, a fan coming on with nobody
+    # pressing anything (`[1, 1, 1]` and `[0, 1, 1]` below, RV-3's pins).
     @skipped_tof "var_input a bool\nvar_input j bool\nvar_output q bool\nvar retain t tof\n" <>
                    "xic j jmp over\nxic a tof t 100\nlbl over xic t.dn ote q\n"
 
     @skipped_block "function_block fb\nvar_input a bool\nvar_output q bool\n" <>
                      "var retain t tof\nxic a tof t 100\nxic t.dn ote q\n"
 
-    test "a retained tof the first scan does not run runs its off-delay at its first run " <>
-           "(provisional)" do
+    test "a retained tof the first scan does not run is at rest at its first run " <>
+           "(decision 385)" do
       top = c!(@skipped_tof)
 
       inb =
@@ -959,8 +963,8 @@ defmodule Logex.RetainTest do
 
       for {p, on, steps, expected} <- [
             {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 0}, %{}], [0, 0]},
-            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 1}, %{"j" => 0}, %{}], [1, 1, 1]},
-            {inb, %{"a" => 1, "go" => 1}, [%{"a" => 0, "go" => 0}, %{"go" => 1}, %{}], [0, 1, 1]}
+            {top, %{"a" => 1, "j" => 0}, [%{"a" => 0, "j" => 1}, %{"j" => 0}, %{}], [0, 0, 0]},
+            {inb, %{"a" => 1, "go" => 1}, [%{"a" => 0, "go" => 0}, %{"go" => 1}, %{}], [0, 0, 0]}
           ] do
         held = scans(p, Runtime.instance(p), [on, on])
 
@@ -978,6 +982,216 @@ defmodule Logex.RetainTest do
 
           assert outputs == expected, inspect({p.source, steps})
         end
+      end
+    end
+
+    # Decision 385 (the maintainer, 2026-11-01): the restart or the start itself puts every
+    # retained `tof` held on and not timing, `.en` 1 and `.tt` 0, at rest, `.dn`, `.tt` and
+    # `.en` 0 and `.acc` kept, wherever it sits: a `tof` and a `tof_ltime`, an element of an
+    # array of them, a member of a block, of a block inside a block and of an element of an
+    # array of blocks, and one on a rung a jump skips; one in its delay, `.tt` 1, keeps it,
+    # its `last` the restart's `now`, and one at rest stays at rest. So before any scan its
+    # `.dn` already reads 0, where decision 349's first scan left it 1 until the `tof` ran.
+    @deep_runon """
+    function_block deep
+    var_input go bool
+    var_output q bool
+    var r runon
+    cal r go q
+    """
+
+    @everywhere """
+    var_input motor bool
+    var_input j bool
+    var_output k bool
+    var retain fan tof
+    var retain lf tof_ltime
+    var retain fs tof[2]
+    var retain r runon
+    var retain d deep
+    var retain rs runon[2]
+    var retain sk tof
+    var retain run tof
+    var retain idle tof
+    xic motor tof fan 50
+    xic motor tof lf 50000000
+    xic motor tof fs[1] 50
+    cal r motor k
+    cal d motor k
+    cal rs[1] motor k
+    xic motor xio j tof run 50
+    xic j jmp over
+    xic motor tof sk 50
+    lbl over xic j xio j tof idle 50
+    """
+
+    defp everywhere(env),
+      do: [
+        env["fan"],
+        env["lf"],
+        elem(env["fs"], 1),
+        env["r"]["t"],
+        env["d"]["r"]["t"],
+        elem(env["rs"], 1)["t"],
+        env["sk"]
+      ]
+
+    test "the restart and the start put every retained tof held on at rest themselves, " <>
+           "wherever it sits (decision 385)" do
+      runon = block!(@run_on_block)
+      p = c!(@everywhere, [runon, block!(@deep_runon, [runon])])
+
+      # Held on everywhere, then `run` into its delay with `j`, which `idle` never saw.
+      held = scans(p, Runtime.instance(p), [%{"motor" => 1}, %{"motor" => 1}, %{"j" => 1}])
+
+      assert Enum.map(everywhere(held.env), &{&1["en"], &1["dn"], &1["tt"]}) ==
+               List.duplicate({1, 1, 0}, 7)
+
+      assert {held.env["run"]["tt"], held.env["run"]["acc"]} == {1, 0}
+      assert {held.env["idle"]["en"], held.env["idle"]["dn"]} == {0, 0}
+
+      for {door, restarted} <- [
+            warm: Runtime.restart(p, held, :warm),
+            image: elem(Runtime.instance(p, Runtime.retained(p, held)), 0)
+          ] do
+        assert Enum.map(everywhere(restarted.env), &{&1["en"], &1["dn"], &1["tt"], &1["acc"]}) ==
+                 List.duplicate({0, 0, 0, 0}, 7),
+               inspect(door)
+
+        # The long timer's `.acc` and every other member kept, `last` the restart's `now`.
+        now = restarted.now
+        assert restarted.env["fan"] == %{held.env["fan"] | "dn" => 0, "en" => 0, "last" => now}
+        assert restarted.env["run"] == %{held.env["run"] | "last" => now}, inspect(door)
+        assert restarted.env["idle"] == %{held.env["idle"] | "last" => now}, inspect(door)
+
+        # Its first run with its rung false, the jump taken and then not, runs no delay;
+        # `run` resumes its own, 10 ms a scan from where it was.
+        {outs, after_} =
+          Enum.map_reduce([%{"motor" => 0, "j" => 1}, %{"j" => 0}, %{}], restarted, fn input,
+                                                                                       state ->
+            state = Runtime.put_inputs(p, state, input)
+
+            {out, state} =
+              Runtime.call(p, state, %{}, %Scan{now: state.now + 10, first: state.first})
+
+            {{out["k"], state.env["run"]["acc"]}, state}
+          end)
+
+        assert outs == [{0, 10}, {0, 20}, {0, 30}], inspect(door)
+        assert Enum.map(everywhere(after_.env), & &1["dn"]) == List.duplicate(0, 7)
+      end
+    end
+
+    # Decision 385 where the one retained `tof` held on is an element of an array of them:
+    # `instance/2` and `start/2` tell by each element's `.en` that the image kept one held
+    # on, and rest it, where no `tof` held on outside the array has them walk the env.
+    test "an element of an array of retained tofs, the only one held on, is put at rest by " <>
+           "instance/2 and start/2 (decision 385)" do
+      p =
+        c!(
+          "var_input motor bool\nvar_output k bool\nvar retain fs tof[3]\n" <>
+            "xic motor tof fs[1] 50\nxic fs[1].dn ote k"
+        )
+
+      at_rest = %{"en" => 0, "dn" => 0, "tt" => 0}
+      held = scans(p, Runtime.instance(p), [%{"motor" => 1}, %{"motor" => 1}])
+      assert Map.take(elem(held.env["fs"], 1), ~w(en dn tt)) == %{at_rest | "en" => 1, "dn" => 1}
+
+      {laid, []} = Runtime.instance(p, Runtime.retained(p, held))
+      assert Map.take(elem(laid.env["fs"], 1), ~w(en dn tt)) == at_rest
+
+      assert {%{"k" => 0}, _} =
+               Runtime.call(p, laid, %{"motor" => 0}, %Scan{now: 10, first: true})
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global m bool at panel.i.0\n" <>
+            "var_global k bool at panel.q.0\nprogram f1 m with fast\nf1.motor m\nf1.k k",
+          %{"m" => p}
+        )
+
+      rt = Runtime.start(config)
+      rt = Enum.reduce([%{"m" => 1}, %{}], rt, &elem(Runtime.cycle(&2, 10, &1), 0))
+      assert Map.take(elem(rt.instances["f1"].env["fs"], 1), ~w(en dn)) == %{"en" => 1, "dn" => 1}
+
+      {started, []} = Runtime.start(config, Runtime.retained(rt))
+      assert Map.take(elem(started.instances["f1"].env["fs"], 1), ~w(en dn tt)) == at_rest
+      assert {_, %{"k" => 0}, _} = Runtime.cycle(started, 10, %{"m" => 0})
+    end
+
+    # Decision 385: the rest is the restart's, so a scan pays nothing for it: the first scan
+    # after a warm restart of retained `tof`s held on at the outage, every kind, costs
+    # exactly what the same scan not marked first does, its rung false and true, where
+    # decision 349's first-scan clauses read `first` and ran a rule of their own.
+    test "a scan reads no first for a tof: the first after a restart costs as any other" do
+      p = c!(@run_on, [block!(@run_on_block)])
+      on = scans(p, Runtime.instance(p), List.duplicate(%{"motor" => 1}, 3))
+      warm = Runtime.restart(p, on, :warm)
+      later = %{warm | first: false}
+
+      for motor <- [0, 1] do
+        scan = fn state, first ->
+          fn ->
+            Runtime.call(p, state, %{"motor" => motor}, %Scan{now: warm.now + 10, first: first})
+          end
+        end
+
+        {out, first} = scan.(warm, true).()
+        {^out, again} = scan.(later, false).()
+        assert first.env == again.env
+        assert reductions(scan.(warm, true)) == reductions(scan.(later, false)), inspect(motor)
+      end
+    end
+
+    # Decision 385 in a resource: a warm `restart/2` and `start/2` from the resource's
+    # image put a retained `tof` held on at rest, a member of a block whose `cal` was false
+    # at the last scan, frozen held on, among them, so the first cycle's run of the block
+    # with its rung false lights nothing.
+    test "a resource's warm restart and start from its image put every retained tof held on " <>
+           "at rest (decision 385)" do
+      runon = block!(@run_on_block)
+
+      {:ok, fans} =
+        Logex.compile(
+          "var_input motor bool\nvar_input go bool\nvar_output k bool\nvar_output l bool\n" <>
+            "var retain fan tof\nvar retain r runon\nxic motor tof fan 50\n" <>
+            "xic go cal r motor k\nxic fan.dn ote l",
+          name: "fans",
+          types: [runon]
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global m bool at panel.i.0\n" <>
+            "var_global g bool at panel.i.1\nvar_global k bool at panel.q.0\n" <>
+            "var_global l bool at panel.q.1\nprogram f1 fans with fast\nf1.motor m\n" <>
+            "f1.go g\nf1.k k\nf1.l l",
+          %{"fans" => fans}
+        )
+
+      cycled = fn rt, inputs -> elem(Runtime.cycle(rt, 10, inputs), 0) end
+      rt = Runtime.start(config)
+      rt = Enum.reduce([%{"m" => 1, "g" => 1}, %{"g" => 0}], rt, &cycled.(&2, &1))
+      env = rt.instances["f1"].env
+      assert {env["fan"]["dn"], env["r"]["t"]["en"], env["r"]["t"]["dn"]} == {1, 1, 1}
+
+      for restarted <- [
+            Runtime.restart(rt, :warm),
+            elem(Runtime.start(config, Runtime.retained(rt)), 0)
+          ] do
+        env = restarted.instances["f1"].env
+        assert Map.take(env["fan"], ~w(en dn tt)) == %{"en" => 0, "dn" => 0, "tt" => 0}
+        assert Map.take(env["r"]["t"], ~w(en dn tt)) == %{"en" => 0, "dn" => 0, "tt" => 0}
+
+        {outputs, _rt} =
+          Enum.map_reduce([%{"m" => 0, "g" => 0}, %{"g" => 1}, %{}], restarted, fn inputs, rt ->
+            {rt, outputs, _events} = Runtime.cycle(rt, 10, inputs)
+            {outputs, rt}
+          end)
+
+        assert Enum.uniq(outputs) == [%{"k" => 0, "l" => 0}]
       end
     end
 
@@ -1136,12 +1350,14 @@ defmodule Logex.RetainTest do
       assert Runtime.get!(cold, "m1.total") == 0 and Runtime.get!(cold, "m1.boxes.cv") == 0
     end
 
-    # The review after Milestone 6 (b2-resource-2), kept as decision 273 has it: a
-    # resource's instance's retained timer's `last` is set to that instance's own `now`,
-    # its last scan, so a slow task's `rto` counts, at its first run after `restart/2`, the
-    # time from that scan to the restart, as a run with no restart would, where `start/2`
-    # from the image, which keeps no `last`, counts none of it.
-    test "a resource's warm restart counts a timer's time from its instance's last scan" do
+    # The review after Milestone 6 (b2-resource-2), decision 382 (the maintainer,
+    # 2026-11-01): a resource's warm restart sets each retained timer's `last` to the
+    # resource's `now`, as `start/2` from the image starts each at its own, so a slow
+    # task's `rto` counts, at its first run after `restart/2`, none of the time from its
+    # instance's last scan to the restart, as after `start/2`; until RV-10 its `last` was
+    # its instance's own `now`, and it counted that time, 140 where `start/2` gave 90
+    # (RV-3's pin, changed as decision 382 says).
+    test "a resource's warm restart counts a timer's time from the restart (decision 382)" do
       {:ok, relay} = Logex.compile("var_input in bool\nvar o bool\nxic in ote o", name: "relay")
 
       {:ok, lube} =
@@ -1166,11 +1382,115 @@ defmodule Logex.RetainTest do
       assert {runtime.now, runtime.instances["m2"].now} == {150, 100}
       assert Runtime.get!(runtime, "m2.t.acc") == 90
 
-      warm = cycled.(Runtime.restart(runtime, :warm), 0)
-      assert Runtime.get!(warm, "m2.t.acc") == 140
+      restarted = Runtime.restart(runtime, :warm)
+      assert restarted.instances["m2"].now == 150
+      assert restarted.instances["m2"].env["t"]["last"] == 150
+      warm = cycled.(restarted, 0)
+      assert Runtime.get!(warm, "m2.t.acc") == 90
 
       {started, []} = Runtime.start(config, Runtime.retained(runtime))
       assert Runtime.get!(cycled.(started, 0), "m2.t.acc") == 90
+    end
+  end
+
+  # Decision 382 (the maintainer, 2026-11-01): every kind of timer at any depth, a `ton`, a
+  # `tof` in its run-on, a `tp` in its pulse, an `rto`, a `ton_ltime`, an element of an
+  # array of timers, a block's timer, a block's block's and an element of an array of
+  # blocks', in a slow task whose instance last ran 50 ms before the restart: a warm
+  # `restart/2` sets each one's `last` to the resource's `now`, and the resource then runs
+  # on exactly as one `start/2` starts from its image, every retained value alike cycle by
+  # cycle and the fan's run-on ending on the same cycle.
+  describe "decision 382: a warm restart/2 counts each timer from the restart" do
+    @slow_blk "function_block blk\nvar_input go bool\nvar_output q bool\nvar t ton\n" <>
+                "xic go ton t 300\nxic t.dn ote q\n"
+    @slow_deep "function_block deep\nvar_input go bool\nvar_output q bool\nvar b blk\n" <>
+                 "cal b go q\n"
+
+    @slow_fans """
+    var_input run bool
+    var_output fan bool
+    var_output q bool
+    var retain f tof
+    var retain t ton
+    var retain p tp
+    var retain r rto
+    var retain l ton_ltime
+    var retain ts ton[2]
+    var retain b blk
+    var retain d deep
+    var retain bs blk[2]
+    xic run tof f 250
+    xic run ton t 300
+    xic run tp p 300
+    xic run rto r 300
+    xic run ton l 300000000
+    xic run ton ts[1] 300
+    cal b run q
+    cal d run q
+    cal bs[1] run q
+    xic f.dn ote fan
+    """
+
+    defp slow_timers(env),
+      do: [
+        env["f"],
+        env["t"],
+        env["p"],
+        env["r"],
+        env["l"],
+        elem(env["ts"], 1),
+        env["b"]["t"],
+        env["d"]["b"]["t"],
+        elem(env["bs"], 1)["t"]
+      ]
+
+    test "every timer's last is the resource's now, and the resource runs on as start/2's" do
+      {:ok, relay} = Logex.compile("var_input in bool\nvar o bool\nxic in ote o", name: "relay")
+      blk = block!(@slow_blk)
+      deep = block!(@slow_deep, [blk])
+      {:ok, fans} = Logex.compile(@slow_fans, name: "fans", types: [blk, deep])
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\ntask slow interval 100 priority 2\n" <>
+            "var_global x bool at panel.i.0\nvar_global lamp bool at panel.q.0\n" <>
+            "program m1 relay with fast\nm1.in x\nprogram m2 fans with slow\nm2.run x\n" <>
+            "m2.fan lamp",
+          %{"relay" => relay, "fans" => fans}
+        )
+
+      cycled = fn runtime, inputs -> elem(Runtime.cycle(runtime, 10, inputs), 0) end
+
+      # Run at 0 and 100 with `x` 1, then at 200 with `x` 0, the fan's run-on started: the
+      # restart at 250, 50 ms after `m2`'s last scan.
+      xs = List.duplicate(1, 15) ++ List.duplicate(0, 10)
+      runtime = Enum.reduce(xs, Runtime.start(config), &cycled.(&2, %{"x" => &1}))
+
+      assert {runtime.now, runtime.instances["m2"].now} == {250, 200}
+      assert runtime.instances["m2"].env["f"]["tt"] == 1
+
+      restarted = Runtime.restart(runtime, :warm)
+      assert restarted.instances["m2"].now == 250
+
+      assert Enum.map(slow_timers(restarted.instances["m2"].env), & &1["last"]) ==
+               List.duplicate(250, 9)
+
+      {started, []} = Runtime.start(config, Runtime.retained(runtime))
+
+      {_, runs} =
+        Enum.reduce(1..40, {{restarted, started}, []}, fn i, {{a, b}, runs} ->
+          {a, out_a, _} = Runtime.cycle(a, 10, %{"x" => 0})
+          {b, out_b, _} = Runtime.cycle(b, 10, %{"x" => 0})
+          assert out_a == out_b, inspect(i)
+          assert Runtime.retained(a) == Runtime.retained(b), inspect(i)
+          {{a, b}, [out_a["lamp"] | runs]}
+        end)
+
+      # The fan's run-on, started at 200, counts none of the 50 ms before the restart: 10 ms
+      # at the slow task's first run after it, 260, and 90 at each run after, so on until
+      # its run at 550, the 30th cycle, where counted from its last scan it went off at 450.
+      assert Enum.reverse(runs) == List.duplicate(1, 29) ++ List.duplicate(0, 11)
     end
   end
 

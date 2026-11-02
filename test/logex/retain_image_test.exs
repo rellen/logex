@@ -1140,6 +1140,72 @@ defmodule Logex.RetainImageTest do
                Runtime.instance(wrote, Runtime.retained(wrote, s))
     end
 
+    # Decision 378 (the maintainer, 2026-11-01), RV-3's question 5 (b5-config-edit-3): a
+    # stored preset that no instruction of the program gives, a retained timer or counter
+    # the program declares and runs no instruction on, is kept as any member is and
+    # reported as nothing, as a warm restart keeps it, at the top level, in an element of
+    # an array of them, in a block's member, an element of an array of blocks' and a
+    # block's own array; one an instruction gives follows the program as decision 308 has
+    # it. Until RV-10 every stored preset followed the program, `{:preset, 25, 0}`.
+    test "a stored preset no instruction gives is kept, unreported (decision 378)" do
+      ran =
+        "function_block blk\nvar_input go bool\nvar t ton\nvar ts ton[2]\n" <>
+          "xic go ton t 30\nxic go ton ts[1] 40\n"
+
+      idle =
+        "function_block blk\nvar_input go bool\nvar_output q bool\nvar t ton\n" <>
+          "var ts ton[2]\nxic t.dn ote q\n"
+
+      src = fn rungs ->
+        "var_input run bool\nvar_output a dint\nvar retain t ton\nvar retain c ctu\n" <>
+          "var retain tl ton[3]\nvar retain b blk\nvar retain bs blk[2]\n" <>
+          "move t.acc a\n" <> rungs
+      end
+
+      runs =
+        "xic run ton t 25\nxic run ctu c 4\nxic run ton tl[1] 50\ncal b run\ncal bs[1] run\n"
+
+      p = c!(src.(runs), [block!(ran)])
+      s = scans(p, Runtime.instance(p), List.duplicate(%{"run" => 1}, 3))
+      image = Runtime.retained(p, s)
+
+      # No instruction runs any of them: every stored preset kept, nothing dropped.
+      q = c!(src.(""), [block!(idle)])
+      {started, dropped} = Runtime.instance(q, image)
+      assert dropped == []
+      assert {started.env["t"]["pre"], started.env["c"]["pv"]} == {25, 4}
+      assert started.env["t"]["acc"] == s.env["t"]["acc"]
+      assert elem(started.env["tl"], 1)["pre"] == 50
+      assert {started.env["b"]["t"]["pre"], elem(started.env["b"]["ts"], 1)["pre"]} == {30, 40}
+      assert elem(started.env["bs"], 1)["t"]["pre"] == 30
+      # As a warm restart keeps them.
+      assert Runtime.restart(q, s, :warm).env["t"]["pre"] == 25
+      # A fresh instance of it starts each at 0.
+      assert Runtime.instance(q).env["t"]["pre"] == 0
+
+      # One an instruction gives, another number, follows the program, reported; the others
+      # kept.
+      r = c!(src.("xic run ton t 60\n"), [block!(idle)])
+      {started, dropped} = Runtime.instance(r, image)
+      assert dropped == [{"t.pre", {:preset, 25, 60}}]
+      assert {started.env["t"]["pre"], started.env["c"]["pv"]} == {60, 4}
+
+      # Through a resource's start from its own image too.
+      config = fn program ->
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [program],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "run", to: 1}]
+        )
+      end
+
+      {rt, _, _} = Runtime.cycle(Runtime.start(config.(p)), 10, %{})
+      {started, []} = Runtime.start(config.(q), Runtime.retained(rt))
+      assert Runtime.get!(started, "m1.t.pre") == 25
+    end
+
     # Decision 311: a stored integer where a real is held is taken at its nearest real, as
     # a host's input is; past the real's range, a float for an integer, or no number, a
     # misfit. Until decision 311 every integer for a real was a misfit.
@@ -1225,6 +1291,13 @@ defmodule Logex.RetainImageTest do
 
     # Decision 313: the image's `triggers`, each retained single's last sample by its
     # global's name, a bool's value, of a global the image holds; any other a pinned line.
+    # Since decision 389 a name the configuration declares as no global is a task's own
+    # sample (decision 350), of a task the configuration no longer declares with a single,
+    # which the start drops and reports, `total2` among them, where until RV-10 it was
+    # refused as `a.b`'s second line was; and since the review of RV-10 so is one it
+    # declares as a global the image does not hold, `shown`, since the image keeps a
+    # global's sample only with its global, where until the review it was refused, "`triggers`
+    # holds \"shown\", which `globals` does not hold".
     test "an image's triggers that are none, or that hold no sample of a retained global" do
       config = plant()
       image = Runtime.retained(Runtime.start(config))
@@ -1239,18 +1312,26 @@ defmodule Logex.RetainImageTest do
         Enum.join(
           [
             "`triggers` holds \"a.b\", which names no global",
-            "`triggers` holds \"a.b\", which `globals` does not hold: a trigger's last " <>
-              "sample is kept only with its retained global",
-            "`triggers` holds \"arm\" at 2, which is no last sample of a trigger, a bool's value",
-            "`triggers` holds \"total2\", which `globals` does not hold: a trigger's last " <>
-              "sample is kept only with its retained global"
+            "`triggers` holds \"arm\" at 2, which is no last sample of a trigger, a bool's value"
           ],
           "\n"
         ),
         fn ->
-          Runtime.start(config, %{image | triggers: %{"arm" => 2, "a.b" => 0, "total2" => 1}})
+          Runtime.start(config, %{
+            image
+            | triggers: %{"arm" => 2, "a.b" => 0, "total2" => 1, "shown" => 0}
+          })
         end
       )
+
+      assert {_started, [{"total2", :undeclared}]} =
+               Runtime.start(config, %{image | triggers: %{"arm" => 0, "total2" => 1}})
+
+      assert {_started, [{"shown", :undeclared}, {"total2", :undeclared}]} =
+               Runtime.start(config, %{
+                 image
+                 | triggers: %{"arm" => 0, "total2" => 1, "shown" => 0}
+               })
 
       raises(
         "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>
@@ -1258,6 +1339,96 @@ defmodule Logex.RetainImageTest do
           inspect(Map.delete(image, :triggers)),
         fn -> Runtime.start(config, Map.delete(image, :triggers)) end
       )
+    end
+  end
+
+  # Decision 389 since the review of RV-10: every stored trigger sample the start lays back
+  # on no task is dropped and reported, and the resource starts. The review found a store
+  # a valid older configuration wrote refused where the new one declares a global by the
+  # dropped task's name, and two samples dropped unreported, so that no `.dropped` copy
+  # (decision 360) kept them: a global's, every task on it taken out, and a task's own,
+  # its single changed, which until then was laid on the new trigger where the image held
+  # that global.
+  describe "a stored sample laid on no task (decision 389, the review of RV-10)" do
+    @counting "var_external hits dint\nvar_external arm bool\nadd hits 1 hits\notu arm"
+    @tallying "var_external early_hits dint\nadd early_hits 1 early_hits"
+    @head "task fast interval 1 priority 1\nvar_global retain arm bool\n" <>
+            "var_global retain arm2 bool\nvar_global retain hits dint\n" <>
+            "var_global retain early_hits dint\n"
+
+    defp sampled(text) do
+      programs =
+        for {name, source} <- [counting: @counting, tallying: @tallying], into: %{} do
+          {:ok, program} = Logex.compile(source, name: Atom.to_string(name))
+          {Atom.to_string(name), program}
+        end
+
+      {:ok, config} = Configuration.compile("plant", @head <> text, programs)
+      config
+    end
+
+    # The store a round cut between `ev` and `early` leaves: `early`'s own sample, 1 where
+    # `arm`'s is 0 (decision 350).
+    defp cut_image do
+      config =
+        sampled(
+          "task ev single arm priority 5\ntask early single arm priority 0\n" <>
+            "program c1 counting with ev\nprogram t1 tallying with early\n"
+        )
+
+      image = Runtime.retained(Runtime.start(config))
+      %{image | triggers: %{"arm" => 0, "early" => 1}}
+    end
+
+    test "a task taken out whose name a global of the configuration now has is dropped" do
+      for global <- ["var_global early bool\n", "var_global retain early dint\n"] do
+        config = sampled("task ev single arm priority 5\n#{global}program c1 counting with ev\n")
+        assert {started, [{"early", :undeclared}]} = Runtime.start(config, cut_image())
+        assert started.tasks["ev"].last == 0
+      end
+    end
+
+    test "a global's sample no task of the configuration takes is dropped, where its " <>
+           "global is kept" do
+      config = sampled("program c1 counting with fast\n")
+      image = %{cut_image() | triggers: %{"arm" => 1}}
+      assert {_started, [{"arm", :undeclared}]} = Runtime.start(config, image)
+
+      # Where the start drops the global, its sample goes with it, reported once.
+      unretained = String.replace(@head, "var_global retain arm bool", "var_global arm bool")
+
+      {:ok, config} =
+        Configuration.compile("plant", unretained <> "program c1 counting with fast\n", %{
+          "counting" => elem(Logex.compile(@counting, name: "counting"), 1)
+        })
+
+      assert {_started, [{"arm", :unretained}]} = Runtime.start(config, image)
+    end
+
+    test "a task's own sample of a trigger its single no longer names is dropped, and the " <>
+           "task starts at its new trigger's value" do
+      moved =
+        sampled(
+          "task ev single arm priority 5\ntask early single arm2 priority 0\n" <>
+            "program c1 counting with ev\nprogram t1 tallying with early\n"
+        )
+
+      # `arm2` kept from the image at 1, which holds no sample of it: `early`'s own sample
+      # of `arm`, 1, is not laid on it, and `early` starts at `arm2`'s value (decision 319).
+      image = put_in(cut_image().globals["arm2"], {:bool, 1})
+      image = %{image | triggers: %{"arm" => 1, "early" => 0}}
+      assert {started, [{"early", :undeclared}]} = Runtime.start(moved, image)
+      assert {started.tasks["ev"].last, started.tasks["early"].last} == {1, 1}
+
+      # Its own sample laid where the image holds its single's apart from it, as before.
+      kept =
+        sampled(
+          "task ev single arm priority 5\ntask early single arm priority 0\n" <>
+            "program c1 counting with ev\nprogram t1 tallying with early\n"
+        )
+
+      assert {started, []} = Runtime.start(kept, image)
+      assert {started.tasks["ev"].last, started.tasks["early"].last} == {1, 0}
     end
   end
 

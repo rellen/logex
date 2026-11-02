@@ -35,7 +35,9 @@ defmodule Logex.Runtime do
      values between cycles: a host sends only what changed, and every scan of the cycle
      sees the one sample. Since M5-13 an element of a located array is an input point of
      its own, keyed by its element's name, `%{"temps[3]" => 37.5}`, the rest of its array
-     kept, and since decision 241 an array of input points named whole is a list of its
+     kept, since decision 384 by its subscripts' values however a host writes them,
+     `%{"temps[03]" => 37.5}` setting `temps[3]`, two keys that name one point refused, and
+     since decision 241 an array of input points named whole is a list of its
      shape, `%{"temps" => [...]}`, as a program's array var_input is (decision 222), set
      whole or by its elements in one call, never both; the outputs give each element of a
      located array of output points by its name, `"lamps[2]"` (decision 156).
@@ -161,14 +163,16 @@ defmodule Logex.Runtime do
     or member its running program does not declare, whatever left it there;
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
-    restarts it through `restart/3`: since M6-2 a warm one keeps each path its program
-    retains (`Logex.Program`'s `retained`, decisions 266 and 270), a retained timer's
-    `last` set to the instance's own `now`, its last scan's, so the time before the
-    restart since the timer last ran is not counted (decision 273, decision 188 holding),
-    and puts back every other, a cold one every path; an instance set
+    restarts it through `restart/3`, its `now` the resource's since decision 382: since
+    M6-2 a warm one keeps each path its program retains (`Logex.Program`'s `retained`,
+    decisions 266 and 270), a retained timer's `last` set to the resource's `now`, so the
+    time before the restart since the timer last ran is not counted (decision 273, decision
+    188 holding), as at `start/2`, and since decision 385 a retained `tof` held on and not
+    timing put at rest, and puts back every other, a cold one every path; an instance set
     aside is dropped either way (decision 65); and since M6-4 `start/2` starts one as
     `start/1` does and lays the image's values over it where decision 277's matching keeps
-    them, a timer's or counter's preset the program's (decision 308), each retained
+    them, a timer's or counter's preset the program's where an instruction gives it
+    (decisions 308 and 378), each retained
     timer's `last` the start's `now`, 0 (decision 273), as `instance/2` does a lone one. A cycle reports the faults of its scan as events and
     keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
     and an edit's switch find it so. An edit's switch moves a kept one by its program
@@ -514,9 +518,14 @@ defmodule Logex.Runtime do
   by `Logex.Program.initial_env/1`, and a value whose initial value changed keeps the
   stored one, but a timer's or counter's preset, `.pre` or `.pv`, is the program's, the
   number on the instruction that runs it, a stored one that differs reported
-  `{:preset, stored, now}` (decision 308). A retained timer's `last` is never in an image,
+  `{:preset, stored, now}` (decision 308); since decision 378 a preset no instruction of
+  the program gives, a retained `ton t` the program declares and runs no `ton` on, is
+  kept from the image as any member is, as a warm restart keeps it, and reported as
+  nothing. A retained timer's `last` is never in an image,
   so each starts at the instance's `now`, 0, and the first scan is marked first, so no
-  edge fires on it (decisions 273 and 274).
+  edge fires on it (decisions 273 and 274); and each retained `tof` the image holds held
+  on and not timing is put at rest by the start itself, as `restart/3` puts it (decision
+  385).
 
   `image` is what `retained/2` gives, `%{program: name, kinds: kinds, values: values}`. An
   element is named by its subscripts' values, a subscript with leading zeros, `tl[01]`,
@@ -529,9 +538,23 @@ defmodule Logex.Runtime do
     checked!(program)
     Image.lone!(image, program)
     %Instance{env: env} = state = fresh(program)
-    {env, dropped} = Image.matched(program, env, image, "")
-    {%{state | env: env}, dropped}
+    {env, dropped, held_on} = Image.matched(program, env, image, "")
+    {%{state | env: rested(held_on, program, env)}, dropped}
   end
+
+  # Decision 385 (the maintainer, 2026-11-01): a start from an image puts each retained
+  # `tof` held on and not timing at rest itself, as a warm restart does, by the warm
+  # restart's own walk of the retained paths over the env the image laid, so that the rule
+  # is one (`rebased_built_in/3`); each retained timer's `last` is the start's `now`, 0, as
+  # the fresh instance had it. It walks only an instance where the image kept a `tof` held
+  # on, `held_on` (`Logex.Image.matched/4`), so that a start of one that holds none pays
+  # one clause.
+  defp rested(false, _program, env), do: env
+
+  # The guard tells the compiler the env is a map, as the warm restart's cold env is, so
+  # that the walk's own writes cost what they did before it had a second caller.
+  defp rested(true, %Program{retained: retained} = program, env) when is_map(env),
+    do: warm(retained, env, env, {Program.typed_tags(program), 0})
 
   @doc """
   A lone instance's retained image (M6-4, decision 282): `%{program: name, kinds: kinds,
@@ -615,7 +638,13 @@ defmodule Logex.Runtime do
   as cold, as before (decision 266): the rule beside `initial_env/1`, a retained path
   keeping its value, which a state handed in fits. Each retained timer's `last` is set to
   the instance's `now`, so the time before the restart since the timer last ran is not
-  counted (decision 273), a frozen block's timer among them. The next scan is marked
+  counted (decision 273), a frozen block's timer among them. Since decision 385 each
+  retained `tof`, a `tof_ltime` among them, held on and not timing, `.en` 1 and `.tt` 0,
+  is put at rest by the restart itself, `.dn`, `.tt` and `.en` 0 and `.acc` kept, wherever
+  it sits, a block's member at any depth and an element of an array of them, so its first
+  run with its rung false, on the first scan or on a later one where a jump skipped its
+  rung or its block's `cal` was false, reads no falling edge and runs no off-delay; one in
+  its delay, `.tt` 1, resumes it. The next scan is marked
   first, warm or cold, so no edge fires on it, a retained counter's among them (decision
   274), and no one-shot is blocked; there is no prescan (decision 279).
 
@@ -803,6 +832,14 @@ defmodule Logex.Runtime do
   defp rebased_member(:error, {_type, member}, {value, started}, _now),
     do: Map.put(value, member.name, Map.fetch!(started, member.name))
 
+  # Decision 385 (the maintainer, 2026-11-01): a `tof`, a `tof_ltime` among them, held on
+  # and not timing, `.en` 1 and `.tt` 0, is put at rest by the restart or the start itself,
+  # `.dn`, `.tt` and `.en` 0 and `.acc` kept, as its de-energised run at rest leaves it, so
+  # that no first run, whenever it comes, reads a falling edge from an `.en` the outage
+  # kept; one in its delay, `.tt` 1, is rebased and resumes it (decision 273).
+  defp rebased_built_in(%{family: "tof"}, %{"en" => 1, "tt" => 0} = value, now),
+    do: Map.merge(value, %{"dn" => 0, "tt" => 0, "en" => 0, "last" => now})
+
   defp rebased_built_in(%{kind: :timer}, value, now), do: Map.put(value, "last", now)
   defp rebased_built_in(_counter, value, _now), do: value
 
@@ -856,16 +893,20 @@ defmodule Logex.Runtime do
   member its new version adds starting at its initial value, and an array of instances
   element by element where its sizes are unchanged; a value whose initial value changed
   keeps the stored one, as decision 44 keeps a running one, but a timer's or counter's
-  preset follows the program (decision 308); and a path newly retained starts at its
+  preset follows the program where an instruction of it gives one (decision 308), and one
+  no instruction gives is kept as any member is, unreported (decision 378); and a path
+  newly retained starts at its
   initial value, unreported. Each retained timer starts with `last` at the start's `now`,
-  0, so the outage is not counted (decision 273); every scan's first is marked first
-  (decision 274); and a task's `single` that the image put back starts its trigger's last
+  0, so the outage is not counted (decision 273), and each retained `tof` held on and not
+  timing is put at rest by the start itself, as `restart/3` puts it (decision 385); every
+  scan's first is marked first (decision 274); and a task's `single` that the image put back starts its trigger's last
   sample at the sample the image holds for it, the task's own by its name where it holds
-  one and otherwise its trigger's, as a warm `restart/2` keeps it (decisions 305, 313 and
-  350), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
-  after the sample fires once, every other at 0 as `start/1` has it; one the image holds
-  no sample for, which only a host's own image lacks, at the value put back, so nothing
-  fires (decision 319). So a resource started from another's image cycles as that one does
+  one beside a different one of its trigger, as `retained/1` keeps a task's own (since
+  the review of RV-10, provisional), and otherwise its trigger's, as a warm `restart/2`
+  keeps it (decisions 305, 313 and 350), so a trigger sampled at 1 fires on no rising
+  edge and a rise logic wrote after the sample fires once, every other at 0 as `start/1`
+  has it; one the image holds no sample of its trigger for, which a host's own image or
+  a single changed leaves, at the value put back, so nothing fires (decision 319). So a resource started from another's image cycles as that one does
   after a warm `restart/2`, given the same inputs, where the program writes no preset.
 
   `dropped` lists each value not kept once, in path order, `{path, reason}`, a path
@@ -875,7 +916,14 @@ defmodule Logex.Runtime do
   declare; `{:retyped, stored, now}` for a type or kind changed, `{:resized, from, to}`
   for an array's or an array of instances' sizes; `:unretained` where the qualifier went;
   `:misfit` for a value of the right type that does not fit it; and `{:preset, stored,
-  now}` for a timer's or counter's stored preset the program's replaced (decision 308).
+  now}` for a timer's or counter's stored preset the program's replaced, the number on
+  the instruction that runs it (decisions 308 and 378); and since decision 389 `{name,
+  :undeclared}` for a stored trigger sample the start lays on no task: a task's own
+  (decision 350), which a store written at a cut round keeps, of a task `config` declares
+  with no single or not at all, a global of that name among them, or, since the review of
+  RV-10, whose single's sample the image does not hold apart from it, so that it is of
+  another trigger; and a global's sample whose global the start keeps and no task of
+  `config` takes, every task on it taken out (provisional).
   Every entry is a stored value the start did not keep, so the list keeps its name. A
   member every element of an array of instances drops for one reason is one entry,
   `"m1.gates[*].j"`, decision 259's path form, at any depth, `hs[*].ws[*].x`; elements
@@ -883,11 +931,13 @@ defmodule Logex.Runtime do
 
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
   instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
-  One that is not, or whose parts are not, a sample that is no bool's value or of a
-  global `globals` does not hold among them, a task's sample being of a task `config`
-  declares with a single, or one of another configuration, which a line naming both
-  tells, is the host's mistake: one `ArgumentError`, a line each, after `config`'s own
-  check.
+  One that is not, or whose parts are not, a sample that is no bool's value among them,
+  or one of another configuration, which a line naming both tells, is the host's mistake:
+  one `ArgumentError`, a line each, after `config`'s own check. A sample by a name
+  `globals` does not hold is a task's (decision 350), since the image keeps a global's
+  sample only with its global, whatever `config` declares by that name, and is dropped
+  where no task of `config` takes it (decision 389), where until the review of RV-10 one
+  by the name of a global `config` declares was refused.
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -910,7 +960,9 @@ defmodule Logex.Runtime do
       )
 
     {%{runtime | globals: globals, instances: instances, tasks: tasks},
-     Image.ordered(dropped_globals ++ dropped_instances)}
+     Image.ordered(
+       dropped_globals ++ dropped_instances ++ Image.dropped_triggers(image, config, kept)
+     )}
   end
 
   # Each image instance's type by its name in the wiring, a map, where until the review
@@ -928,8 +980,11 @@ defmodule Logex.Runtime do
 
   defp restored_as(type, {name, image}, config, {instances, dropped}) do
     %Instance{env: env} = state = Map.fetch!(instances, name)
-    {env, more} = Image.matched(Map.fetch!(config.programs, type), env, image, name <> ".")
-    {Map.put(instances, name, %{state | env: env}), Enum.reverse(more, dropped)}
+    program = Map.fetch!(config.programs, type)
+    {env, more, held_on} = Image.matched(program, env, image, name <> ".")
+
+    {Map.put(instances, name, %{state | env: rested(held_on, program, env)}),
+     Enum.reverse(more, dropped)}
   end
 
   # Decision 313's rule at a start from an image (the maintainer, 2026-10-30, restating
@@ -939,20 +994,16 @@ defmodule Logex.Runtime do
   # which only a host's own image lacks, at the value put back, so nothing fires
   # (decision 319, confirmed by the maintainer, 2026-10-30). Since RV-3's review a task the
   # image holds a sample of by its own name, which a round cut short before its step
-  # leaves (decision 350), starts at that one.
+  # leaves (decision 350), starts at that one, and since the review of RV-10 only where the
+  # image holds its single's sample apart from it, as a task's own of that trigger always
+  # has beside it (`Logex.Image.laid_sample/3`, provisional).
   defp put_back(
          %{last: _} = state,
          %Configuration.Task{single: single, name: name},
          {kept, globals, triggers}
        ),
        do:
-         kept_sample(
-           single in kept,
-           state,
-           Map.get_lazy(triggers, name, fn ->
-             Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
-           end)
-         )
+         kept_sample(single in kept, state, Image.laid_sample(triggers, {name, single}, globals))
 
   defp put_back(state, _task, _kept), do: state
 
@@ -1146,12 +1197,15 @@ defmodule Logex.Runtime do
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
 
-  An instance's retained timer's `last` is set to that instance's own `now`, the time of
-  its last scan (decision 273), so the time from that scan to the restart, while the
-  resource ran on and the instance's task was not yet due, is counted at its next run, as
-  that run would count it with no restart; `start/2` from the image, which keeps no
-  `last`, counts none of it, so the two can differ by up to a task's interval (the review
-  after Milestone 6, b2-resource-2, kept as decision 273 has it, `PLAN.md` RV-3).
+  Since decision 382 (the maintainer, 2026-11-01) every instance is restarted at the
+  resource's `now`, which becomes its own, so each retained timer's `last` is the
+  resource's `now` (decision 273 at the resource's clock), every kind of timer at any
+  depth, an element of an array of them and a block's member among them: the time from an
+  instance's last scan to the restart, while the resource ran on and the instance's task
+  was not yet due, is not counted, as `start/2` from the image counts none of it, so a
+  fan's run-on in a slow task runs on the same after a warm restart as after a start from
+  the store, where until then it counted from that instance's last scan and could stop up
+  to one interval sooner (the review after Milestone 6, b2-resource-2).
 
   A retained global a connection drives from a var_output its program does not retain
   keeps its value only until that instance's first run, whose copy-out writes the
@@ -1172,7 +1226,7 @@ defmodule Logex.Runtime do
             restarted =
               restart(
                 Map.fetch!(config.programs, state.type),
-                attached(state, runtime, name),
+                at_now(attached(state, runtime, name), now),
                 mode
               )
 
@@ -1186,6 +1240,12 @@ defmodule Logex.Runtime do
         aside: %{}
     }
   end
+
+  # Decision 382 (the maintainer, 2026-11-01): an instance restarted at the resource's
+  # clock, so that `restart/3` sets each retained timer's `last` to the resource's `now`, as
+  # `start/2` starts every one at its `now`; the instance's `now` moves with it, since a
+  # timer's `last` is never later than its instance's (decision 188, provisional).
+  defp at_now(%Instance{} = state, now), do: %{state | now: now}
 
   # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger, as
   # decision 313 restates it (the maintainer, 2026-10-30): after a warm restart the last
@@ -2788,7 +2848,8 @@ defmodule Logex.Runtime do
           problem = point_problem(key, value, runtime),
           do: problem
 
-    imaged(problems, {globals, runtime.wiring}, inputs)
+    {problems, inputs, written} = by_values(problems, inputs, runtime.wiring)
+    imaged(problems, {globals, runtime.wiring, written}, inputs)
   end
 
   defp image!(_runtime, inputs),
@@ -2799,19 +2860,70 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
+  # Decision 384 (the maintainer, 2026-11-01): an element of a located array of input
+  # points a host names by numbers otherwise than as its subscripts' values, `temps[03]`,
+  # is the point of their values, `temps[3]` (`Logex.Name.by_value/1`), as `put_inputs/3`
+  # reads an array var_input's element, where until RV-10 it was no input point; each such
+  # key is told by `point_problem/3` only where it names no point as written, so that a
+  # cycle of points named as their values pays one clause for it, and is set under the
+  # point's own name, two keys that name one point a line each, in key order
+  # (provisional).
+  defp by_values([], inputs, _wiring), do: {[], inputs, %{}}
+
+  defp by_values(problems, inputs, wiring) do
+    {named, problems} = Enum.split_with(problems, &match?({:by_value, _, _}, &1))
+
+    {problems ++ twice(named, inputs, wiring), renamed(named, inputs),
+     Map.new(named, fn {:by_value, key, point} -> {point, key} end)}
+  end
+
+  defp renamed([], inputs), do: inputs
+
+  defp renamed(named, inputs),
+    do:
+      Enum.reduce(named, inputs, fn {:by_value, key, point}, inputs ->
+        Map.put(Map.delete(inputs, key), point, Map.fetch!(inputs, key))
+      end)
+
+  defp twice(named, inputs, wiring),
+    do:
+      for(
+        {point, keys} <- Enum.sort(Enum.group_by(named, &elem(&1, 2), &elem(&1, 1))),
+        keys = Enum.sort(keyed_by(is_map_key(inputs, point), point, keys)),
+        length(keys) > 1,
+        do:
+          "inputs #{keyed_list(keys)} each set `#{point}`, an input point of " <>
+            "`#{hd(:binary.split(point, "["))}`, #{located_type(point, wiring)}: a " <>
+            "call sets each point once"
+      )
+
+  defp keyed_by(true, point, keys), do: [point | keys]
+  defp keyed_by(false, _point, keys), do: keys
+
+  defp located_type(point, wiring) do
+    [array | _] = :binary.split(point, "[")
+    global = Map.fetch!(wiring.globals, array)
+    Declarations.a_type(global.type) <> global_line(global)
+  end
+
   # Decision 241, as decision 229 has it for a program: one call sets a located array of
   # input points whole or by its elements, never both, a line an array, in name order,
   # looked at once every input is a point, and only where a located array is, so that a
   # configuration of none cycles in what it did.
-  defp whole_clashes(%{located: located, elements: elements, globals: globals}, inputs),
+  #
+  # Since the review of RV-10 an element a key named by numbers otherwise than as its
+  # subscripts' values (decision 384) is told by that key, as the host wrote it, `inputs
+  # \`temps\` and \`temps[03]\``, where until then it was told by its point's name.
+  defp whole_clashes(%{located: located, elements: elements, globals: globals}, inputs, written),
     do:
       for(
         {array, {"i", _first, _last}} <- Enum.sort(located),
         is_map_key(inputs, array),
         keys = for({key, {^array, _, _}} <- elements, is_map_key(inputs, key), do: key),
         keys != [],
+        keys = Enum.sort(for(key <- keys, do: Map.get(written, key, key))),
         do:
-          "inputs #{Enum.map_join([array | Enum.sort(keys)], " and ", &"`#{&1}`")} each set " <>
+          "inputs #{Enum.map_join([array | keys], " and ", &"`#{&1}`")} each set " <>
             "`#{array}`, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
             "#{global_line(Map.fetch!(globals, array))}: a call sets an array whole or by its " <>
             "elements, not both"
@@ -2820,10 +2932,11 @@ defmodule Logex.Runtime do
   defp global_line(%Configuration.Global{line: nil}), do: ""
   defp global_line(%Configuration.Global{line: line}), do: " (line #{line})"
 
-  defp imaged([], {globals, %{reals: nil, elements: nil}}, inputs), do: Map.merge(globals, inputs)
+  defp imaged([], {globals, %{reals: nil, elements: nil}, _written}, inputs),
+    do: Map.merge(globals, inputs)
 
   # M5-10 (decision 166): a real input point's value is the real's nearest value.
-  defp imaged([], {globals, %{reals: reals, elements: nil}}, inputs),
+  defp imaged([], {globals, %{reals: reals, elements: nil}, _written}, inputs),
     do: Map.merge(globals, Map.new(inputs, &as_input(&1, reals)))
 
   # M5-13 (decision 156): an element of a located array is a point of its own, set by its
@@ -2834,8 +2947,8 @@ defmodule Logex.Runtime do
   # Since decision 241 a located array of input points may be set whole, a list of its
   # shape, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
   # element stored as its point's value is.
-  defp imaged([], {globals, %{reals: reals, elements: elements} = wiring}, inputs) do
-    clashed!(whole_clashes(wiring, inputs))
+  defp imaged([], {globals, %{reals: reals, elements: elements} = wiring, written}, inputs) do
+    clashed!(whole_clashes(wiring, inputs, written))
     {placed, points} = Enum.split_with(inputs, fn {key, _value} -> is_map_key(elements, key) end)
 
     {wholes, points} =
@@ -2924,8 +3037,26 @@ defmodule Logex.Runtime do
       "input #{label(key)} is #{not_input(Configuration.location(global.at), global)}: " <>
         "only an input point is set from outside"
 
-  defp point(:error, :error, key, _value, runtime),
+  defp point(:error, :error, key, value, runtime),
+    do: by_value(Logex.Name.by_value(key), key, value, runtime)
+
+  # Decision 384: a key naming no point as written, an element named by numbers otherwise
+  # than as its subscripts' values, is the point of their values where there is one, its
+  # value judged as that point's, under the host's own key.
+  defp by_value(key, key, _value, runtime),
     do: unknown_point(String.split(key, "."), key, runtime)
+
+  defp by_value(point, key, value, runtime),
+    do: valued_point(Map.fetch(runtime.wiring.inputs, point), {point, key}, value, runtime)
+
+  defp valued_point({:ok, type}, {point, key}, value, _runtime),
+    do: fitted_point(fit(%Tag{name: key, type: type, section: :var_input}, value), point, key)
+
+  defp valued_point(:error, {_point, key}, _value, runtime),
+    do: unknown_point(String.split(key, "."), key, runtime)
+
+  defp fitted_point(nil, point, key), do: {:by_value, key, point}
+  defp fitted_point(problem, _point, _key), do: problem
 
   defp not_input({:ok, _output}, global),
     do: "an output point (at `#{global.at}`), not an input point"
@@ -2991,7 +3122,7 @@ defmodule Logex.Runtime do
        ),
        do:
          element_output(
-           output_element(runtime.wiring.element_outputs, key),
+           output_element(runtime.wiring.element_outputs, Logex.Name.by_value(key)),
            key,
            {array, runtime}
          )
@@ -3002,6 +3133,12 @@ defmodule Logex.Runtime do
   defp output_element(outputs, key), do: List.keyfind(outputs, key, 0)
 
   # An element its array does not hold, as written, of a located array of input points.
+  # Since the review of RV-10 an element of a located array of output points named by
+  # numbers otherwise than as its subscripts' values, `lamps[02]`, is told it is that
+  # output point, as `lamps[2]` is, and a name that is no point is offered the point
+  # nearest its subscripts' values, `Temps[03]` `temps[3]`, each told by the host's own
+  # key (decision 384), where until then they were told as no point and offered the
+  # nearest text.
   defp element_output(nil, key, {array, runtime}),
     do: unheld(located_array(runtime.wiring.located, array), key, {array, runtime})
 
@@ -3029,7 +3166,7 @@ defmodule Logex.Runtime do
 
     point_hint(
       "input #{label(key)} is not an input point",
-      Declarations.suggest(key, points, & &1, "names"),
+      Declarations.suggest(Logex.Name.by_value(key), points, & &1, "names"),
       listed_points(wiring.elements, points, wiring.located)
     )
   end
@@ -3089,7 +3226,7 @@ defmodule Logex.Runtime do
   # last sample as it was and the task runs on the next cycle that samples the rise, a warm
   # restart's first among them (decisions 305 and 313), where until then every sample stood
   # before any step ran. Every other sample stands at once, a fall's and a periodic run's
-  # among them (provisional for a task with an interval too, whose periodic run while its
+  # among them (decision 375 for a task with an interval too, whose periodic run while its
   # trigger samples 0 holds nothing back): holding a 0 back would lose the next rise.
   defp due(%__MODULE__{now: now, globals: globals, tasks: states, wiring: %{tasks: tasks}} = rt) do
     {due, states} =
@@ -4305,42 +4442,22 @@ defmodule Logex.Runtime do
   # where the delay left it. `.en` is 0 on every de-energised run, and `last` is stamped on
   # every run, so a `tof` a frozen block holds catches up when it next runs (decision 8).
   # Its falling edge is read from `.en`, and no first scan sees one (decisions 69 and 93):
-  # a fresh instance and a cold restart put `.en` at 0, and since decision 349 (the
-  # maintainer, 2026-11-01) a first scan reads no edge from an `.en` a warm restart, or a
-  # start from an image, kept at 1, so a retained `tof` held on at the outage comes to rest
-  # on a false rung, `.dn` 0, where until then it started its delay and ran its output on
-  # with nothing commanding it; one already in its delay at the outage, `.tt` 1, resumes it
-  # on the first scan, its `last` at the restart's `now` (decision 273). The rule is the
-  # first scan's, so a retained `tof` the first scan does not run, on a rung a jump skips
-  # or in a block whose `cal` is false, keeps its `.en` 1 and runs its delay at its first
-  # run with its rung false (provisional, `PLAN.md`'s RV-3 entry), where Logix's prescan,
-  # which clears a TOF's `.EN`, `.TT` and `.DN`, is said to reach every rung (unverified
-  # here for a jumped rung and an add-on instruction not called). Each first scan's run is
-  # a clause of its own, so a scan after the first costs what it did. Nothing may follow
-  # it on its path (decision 73).
+  # a fresh instance and a cold restart put `.en` at 0, and since decision 385 (the
+  # maintainer, 2026-11-01) a warm restart and a start from an image put every retained
+  # `tof` held on and not timing, `.en` 1 and `.tt` 0, at rest themselves, `.dn`, `.tt` and
+  # `.en` 0 and `.acc` kept, wherever it sits, on a rung a jump skips or in a block whose
+  # `cal` is false among them (`rebased_built_in/3`), so a retained `tof` held on at the
+  # outage stays off and no fan starts with nobody pressing anything, as a first scan's own
+  # clauses had it since decision 349 for the `tof`s that scan ran; one already in its delay
+  # at the outage, `.tt` 1, resumes it when it next runs, its `last` at the restart's `now`
+  # (decision 273). A scan pays nothing for it: it reads no `first`. Nothing may follow it
+  # on its path (decision 73).
   defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end
 
-  defp evaluate(
-         {:tof, _, [timer, _preset]},
-         {false, env},
-         %Scan{now: now, units: nil, first: false}
-       ) do
-    {false, write(env, timer, off_delay(as_map(read(env, timer)), now, 1))}
-  end
-
-  defp evaluate({:tof, line, [timer, _preset]}, {false, env}, %Scan{first: false} = scan) do
-    {false,
-     write(
-       env,
-       timer,
-       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
-     )}
-  end
-
   defp evaluate({:tof, _, [timer, _preset]}, {false, env}, %Scan{now: now, units: nil}) do
-    {false, write(env, timer, first_off(as_map(read(env, timer)), now, 1))}
+    {false, write(env, timer, off_delay(as_map(read(env, timer)), now, 1))}
   end
 
   defp evaluate({:tof, line, [timer, _preset]}, {false, env}, scan) do
@@ -4348,7 +4465,7 @@ defmodule Logex.Runtime do
      write(
        env,
        timer,
-       first_off(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
+       off_delay(as_map(read(env, timer)), scan.now, unit(timer, scan, {:tof, line}))
      )}
   end
 
@@ -5237,6 +5354,11 @@ defmodule Logex.Runtime do
       "last" => now
     }
 
+  # A `tof` at rest, `.en` and `.tt` 0, as every one is after a restart's rest (decision
+  # 385), is told by its match alone, so that its run reads neither member again.
+  defp off_delay(%{"en" => 0, "tt" => 0} = timer, now, _per_ms),
+    do: delayed(false, timer, now, 1)
+
   defp off_delay(timer, now, per_ms),
     do:
       delayed(
@@ -5245,11 +5367,6 @@ defmodule Logex.Runtime do
         now,
         per_ms
       )
-
-  # Decision 349: a first scan's de-energised run, its delay resumed where `.tt` is 1 and
-  # otherwise at rest, whatever `.en` holds.
-  defp first_off(timer, now, per_ms),
-    do: delayed(closed?(Map.get(timer, "tt")), timer, now, per_ms)
 
   defp delayed(true, timer, now, per_ms) do
     pre = integer(Map.get(timer, "pre"))

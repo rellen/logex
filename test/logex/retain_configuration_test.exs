@@ -1616,10 +1616,12 @@ defmodule Logex.RetainConfigurationTest do
             "m#{i}.start pb#{i}\nm#{i}.stop st#{i}\nm#{i}.run k#{i}\nm#{i}.sp sp#{i}\n"
         end)
 
-  # A function's cost in reductions, the least of three runs, each in a process of its own
+  # A function's cost in reductions, the least of nine runs, each in a process of its own
   # whose heap the collector does not visit: one run read once was 6 reductions dearer on a
-  # busy machine, where the warm restart's bound is 4 (RV-2's review).
-  defp reductions(fun), do: Enum.min(for _ <- 1..3, do: reductions_once(fun))
+  # busy machine, where the warm restart's bound is 4 (RV-2's review), and the least of
+  # three was so in one of RV-10's gates, warm 16253 against cold 16247, where both read
+  # 16246 on a quiet machine fifteen runs of fifteen.
+  defp reductions(fun), do: Enum.min(for _ <- 1..9, do: reductions_once(fun))
 
   defp reductions_once(fun) do
     parent = self()

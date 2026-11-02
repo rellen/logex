@@ -122,7 +122,13 @@ defmodule Logex.Edit do
   them. Since the review after Milestone 6 a timer timing at its last run, `.en` 1, whose
   time from that run to the switch, which it catches up at its next run (decision 82),
   already reaches the new `.pre`, a timer a jump or a false `cal` froze, is forecast no
-  drop, which cannot happen; an `rto`'s forecast so too.
+  drop, which cannot happen; an `rto`'s forecast so too. And since decision 381 (the
+  maintainer, 2026-11-01) such a timer whose `.dn` is 0 and whose `.acc` is below the new
+  `.pre` but reaches it with the time it catches up is forecast `:dn_rises`, `{acc, pre}`
+  with the state's `.acc` (provisional), its `.dn` rising at its next run with its rung
+  true, a `ton`'s and an `rto`'s alike, so that a lamp the catch-up alone lights at the
+  first scan after the test is in the forecast, where until RV-10 only a `.acc` at or past
+  the new `.pre` was.
 
   The other timers (M3-2, decisions 93 on) are timers by every rule above, each by its own
   type: a change of a timer's type, a `ton` made a `tof`, needs a restart. A `tof`'s `.dn`
@@ -141,8 +147,9 @@ defmodule Logex.Edit do
   the switch (decision 94). An `rto` keeps `.dn` across a false rung, so its `.dn` changes
   with its `.pre` at its next run with its rung true: `:dn_drops` where `.dn` is 1 and `.acc`
   below the new `.pre`, unless at least `.pre` − `.acc` ms of true rung pass by then, and
-  `:dn_rises` where `.dn` is 0 and `.acc` at or past it, its rung true at the switch or not,
-  unless that run finds its reset `r` set. Its `r` is a member as a counter's is, kept by a
+  `:dn_rises` where `.dn` is 0 and `.acc` at or past it, or reaching it with the time an
+  `rto` timing at its last run catches up (decision 381), its rung true at the switch or
+  not, unless that run finds its reset `r` set. Its `r` is a member as a counter's is, kept by a
   switch and 0 in a new instance (decision 95).
 
   **Counters** (M3-1, decisions 87 and 88). A counter's `.pv` moves by the timers' rules
