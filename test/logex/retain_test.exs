@@ -1082,6 +1082,44 @@ defmodule Logex.RetainTest do
       end
     end
 
+    # Decision 385 where the one retained `tof` held on is an element of an array of them:
+    # `instance/2` and `start/2` tell by each element's `.en` that the image kept one held
+    # on, and rest it, where no `tof` held on outside the array has them walk the env.
+    test "an element of an array of retained tofs, the only one held on, is put at rest by " <>
+           "instance/2 and start/2 (decision 385)" do
+      p =
+        c!(
+          "var_input motor bool\nvar_output k bool\nvar retain fs tof[3]\n" <>
+            "xic motor tof fs[1] 50\nxic fs[1].dn ote k"
+        )
+
+      at_rest = %{"en" => 0, "dn" => 0, "tt" => 0}
+      held = scans(p, Runtime.instance(p), [%{"motor" => 1}, %{"motor" => 1}])
+      assert Map.take(elem(held.env["fs"], 1), ~w(en dn tt)) == %{at_rest | "en" => 1, "dn" => 1}
+
+      {laid, []} = Runtime.instance(p, Runtime.retained(p, held))
+      assert Map.take(elem(laid.env["fs"], 1), ~w(en dn tt)) == at_rest
+
+      assert {%{"k" => 0}, _} =
+               Runtime.call(p, laid, %{"motor" => 0}, %Scan{now: 10, first: true})
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global m bool at panel.i.0\n" <>
+            "var_global k bool at panel.q.0\nprogram f1 m with fast\nf1.motor m\nf1.k k",
+          %{"m" => p}
+        )
+
+      rt = Runtime.start(config)
+      rt = Enum.reduce([%{"m" => 1}, %{}], rt, &elem(Runtime.cycle(&2, 10, &1), 0))
+      assert Map.take(elem(rt.instances["f1"].env["fs"], 1), ~w(en dn)) == %{"en" => 1, "dn" => 1}
+
+      {started, []} = Runtime.start(config, Runtime.retained(rt))
+      assert Map.take(elem(started.instances["f1"].env["fs"], 1), ~w(en dn tt)) == at_rest
+      assert {_, %{"k" => 0}, _} = Runtime.cycle(started, 10, %{"m" => 0})
+    end
+
     # Decision 385: the rest is the restart's, so a scan pays nothing for it: the first scan
     # after a warm restart of retained `tof`s held on at the outage, every kind, costs
     # exactly what the same scan not marked first does, its rung false and true, where

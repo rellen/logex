@@ -2759,6 +2759,27 @@ defmodule Logex.ConfigEditTest do
       assert Enum.map(outputs, &{&1["lamps[0]"], &1["lamps[1]"]}) == [{1, 0}, {1, 0}]
     end
 
+    # Decision 387 for an array var_output wired whole whose program writes some of its
+    # elements by literal subscripts: only each element it does not write is held, so
+    # `lamps[0]` follows its rung from the first cycle and `lamps[1]` keeps its 0 where
+    # `m1.o[1]`'s initial 1 would have moved it.
+    test "an array wired whole for the first time, its program writing one element, holds " <>
+           "the other" do
+      writes_one =
+        held_plant(@one_motor <> "  m1.o lamps\n", %{
+          "motor" => @spares_ld <> "xic start ote o[0]\n"
+        })
+
+      {runtime, %{"lamps[0]" => 0, "lamps[1]" => 0}, _} =
+        Runtime.cycle(Runtime.start(spares("")), 0, %{"pb" => 0})
+
+      forecast = [{:held, "lamps[1]", 0}, {:holds, "m1.o[1]", 0}]
+      {edit, ^forecast} = accepted(runtime, writes_one)
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _} = under_test(tested, 2, %{"pb" => 1})
+      assert Enum.map(outputs, &{&1["lamps[0]"], &1["lamps[1]"]}) == [{1, 0}, {1, 0}]
+    end
+
     test "assemble and cancel after a restart under the edit hold each point again" do
       original = spares("  m1.aux k2\n")
       candidate = spares("  m1.aux2 k2\n")
