@@ -13153,9 +13153,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   | m365_fragment_parsed_only | the fragment parsed and not run | 1 |
   | m363_unmarked | `wired.logex` shown but no file of the examples | 1 |
 
-  *Provisional readings, put to the maintainer* *(all eight answered on 2026-11-01,
-  decisions 402 to 408, 2 and 7 as one: 1, 5, 6 and 8 as built, 2 and 7, 3 and 4 changed,
-  to build in RV-12)*. The record is silent on each; IEC and Logix say nothing that settles
+  *Readings put to the maintainer, each now its decision's* *(all eight answered on
+  2026-11-01, decisions 402 to 408, 2 and 7 as one: 1, 5, 6 and 8 as built, decisions
+  402, 406, 407 and 408, and 2 and 7, 3 and 4 changed, decisions 403, 404 and 405, built
+  in RV-12 on 2026-11-02)*. The record is silent on each; IEC and Logix say nothing that settles
   them.
 
   1. *A label alone a jump names, used twice* (decision 367). `xic a jmp done`, `lbl done`,
@@ -13245,10 +13246,12 @@ and CI checked; each fix with a test that fails when it is reverted.
      stored again by its probe as a coil in the array (line 789), and a coil's through a
      tag subscript in that map, which its first among the coils shadows wherever it is
      read (line 1176); the fuzz found no program either changes.
-  2. *An instance that is no array's element* (decision 370). As built, provisional, and
-     put to the maintainer as question 7 above; `instance_array_test.exs` pins it ("an
-     instance that is no array's element counts nothing of its own (provisional)"), and
-     `Logex.Declarations`' moduledoc and README's "65,536 elements at every depth" say it.
+  2. *An instance that is no array's element* (decision 370). As built, put to the
+     maintainer as question 7 above, and settled by decision 403, which counts it;
+     `instance_array_test.exs` pinned it ("an instance that is no array's element counts
+     nothing of its own", since RV-12 "counts itself and what its type holds (decision
+     403)"), and `Logex.Declarations`' moduledoc and README's "65,536 elements at every
+     depth" say it.
   3. *Decision 367's two survivors* (`compile_total_test.exs`). A label a `jmp` names, last
      on a rung that writes nothing, `xic a jmp done` above `xic a lbl done`, and a second
      label so, `lbl x lbl done`, are each told both (decision 373), where widening the
@@ -13792,6 +13795,325 @@ and CI checked; each fix with a test that fails when it is reverted.
   token only it holds; a bit's literal number and a one-shot's storage bit told apart by
   decision 372. And every provisional mark RV-9 left on a reading decisions 402–408
   settle made the decision's number.
+  **RV-12 as built** (2026-11-02, branch `rv12` on `f31bf70`). Each decision that changes
+  something has a test that fails when it is reverted, judged by the full suite (the
+  mutation table below); the leave each used, a pin of the reading it changes, changed
+  there and as it says, is named with it.
+
+  - *Decision 403, a declaration counts every tag, element and instance it holds*
+    (`instance_array_test.exs`, "an instance's size at every depth (decisions 370 and
+    403)"). An elementary tag, an element of an elementary array, a timer and a counter
+    count one each, a timer's or a counter's members not counted, and an array is its
+    elements, so `int[65536]` and `ton[65536]` are taken as before; an instance of a user
+    block counts one and every tag, element and instance its type holds, its var_inputs
+    and var_outputs among them. `Logex.FbType`'s `elements` keeps what an instance holds,
+    counted once a type from its members as decision 370 has it (`Logex.Array.held_by/2`),
+    and a declaration reads it in a clause's guard (`deep_size/1`), nothing built.
+    `Logex.Declarations` refuses past 65,536 at the line, from Elixir as the pinned
+    `ArgumentError`, in words that name the count and the bound: "`c` would hold 65792
+    elements at every depth, 256 instances of `k`, `[256]`, each counting itself and the
+    256 its type holds: a declaration holds 65536 at most, counting every tag, element and
+    instance it holds at every depth". Pinned, each beside a twin within the bound:
+    `cell[256]` of a block holding `ton[256]` alone, at 65,792, in a block's file and in
+    a program; `var x two` of two `int[40000]` alone at 80,001, the instance itself
+    counted (provisional, question 1 below), though `two` compiles; `wide[65536]` of 200
+    single timers alone at 13,172,736; a chain of blocks each holding two single
+    instances of the one below, `d1` two timers, `d15` taken at 65,535, `d16` refused at
+    131,071 and `d17`'s own declaration of one at its line, the refused compile at depth
+    16 costing no more than the one at depth 1 beside it; and the edge, counted the new
+    way, an instance of a block of two bools and `int[65533]` taken at 65,536 alone and
+    as an array of one, a bool more refused at 65,537, and 32,768 instances of a block of
+    one tag taken, 32,769 refused. The leave: every test of decision 370 pinned RV-9's
+    count. RV-9's `k[256]`, 256 blocks of two bools and `ton[256]`, taken at 65,536, is
+    refused at 66,304, and so `cell` holding 256 of them is refused in its own file,
+    RV-9's `cell.ld` among them; `row[256]` of blocks of a single timer, taken, is refused
+    at 328,448, and the `grid` above it in its file; `pair[65536]` and `d4[65536]`, taken,
+    are refused; RV-9's chain of types each holding two of the one below passes the bound
+    at depth 14 where it passed it at 17, so the constant-time test reads depths 7 and 14
+    where 8 and 16; and every message's count and words. RV-9's nest is rebuilt, `k` of
+    two bools and `ton[253]` and `cell` of 255 of them, 65,283 an instance, so the tests
+    that need a type within the bound keep their shape. Docs: `Logex.Declarations`',
+    `Logex.FbType`'s moduledocs and `Logex.Array`'s head, README's "65,536 elements at
+    every depth".
+  - *Decision 404, the loader's trust a token only it makes* (`function_block_test.exs`,
+    "a list handed to the loader's compile is checked, a forged type in it refused
+    (decision 404)" and "no closure but the loader's own is the token (decision 404)").
+    The loader hands its types to `Logex.Compiler.loaded/2` through a closure it makes in
+    `Logex` during the load, `fn -> types end`, and `loaded/2` trusts only a closure of no
+    arguments local to `Logex` (`Function.info/2`'s module and type), which no host code
+    can make short of building one from the external term format: no field of a type, no
+    option and no atom a host names. A list handed to `loaded/2` is checked as decision 54
+    has it, instructionize/3's types exactly: the genuine `b1` of a chain of 12 compiled
+    again 12 times, where RV-9's trusted it, and eight forgeries, a rung or a table's rung
+    edited, a member dropped or added, a count edited in the type or in its table, the
+    source edited and a struct built with another count, each refused through `loaded/2`
+    and through `compile/2` in `types:`'s words. A host's closure, one that gives the
+    loader's own types among them, and an external function of `Logex` are refused as
+    junk in those words (provisional, question 2 below), and `compile/2` takes no
+    `loaded:` option. The loader's chain still compiles once a file, none again: the
+    trace counts are unchanged. RV-9's review held the trusted list to a type list's
+    shape; that list comes only from the loader now, and junk handed to `loaded/2` takes
+    instructionize/3's check in the same words, so the pinned junk test is unchanged, a
+    comment line added. The surface pin (`runtime_test.exs`) is unchanged. Docs:
+    `Logex.Compiler`'s moduledoc and `Logex.compile_file/1`'s doc.
+  - *Decision 405, a bit's number one more place and a storage bit judged as a write*
+    (`tag_subscript_test.exs`, "a bit's number and a storage bit told apart (decision
+    405)", three tests, each pair beside its twin that may meet, and "a write through a
+    tag subscript beside the storage bits it never meets costs linear reductions").
+    `Logex.Warnings` gives a write of a bit of an element its bit's literal number as one
+    more place, a bit a tag numbers and an element of a word array written whole a tag's
+    there, so two bits of one array whose numbers differ never meet, through tags or
+    beside a literal element's, in one, two and three dimensions, an array of one
+    dimension's bits now two places and so compared by projection where a write names it
+    through a tag subscript, at most 16 projections for a bit of three; a member's bits
+    were told apart already by their path (decision 257), pinned beside the rest. A write
+    through a tag subscript writes only the storage bits its places may meet, an element
+    written whole meeting every bit of it, each storage bit kept under every projection of
+    its places, so a write finds them in one lookup: `ote e[i,0]` beside `ons e[1,1]`,
+    either first, and `ote w[i].4` or `move 5 g[i,0]` beside a storage bit of another
+    bit or row, are not warned, and `ote e[i,1]`, `ote w[i].3`, `ote w[i].[n]` and `move
+    5 w[i]` are. The first form searched every storage bit of the array at each write,
+    2.43x the reductions at 2x where none met; the index is 2.0x, the growth test bound
+    2.2. The leave, three lines of `tag_subscript_test.exs`: `ote w[i].3` beside `ote
+    w[i].4`, warned, is not, beside `ote w[n].3` warned; `move a w[i].3` beside `ote
+    w[2].1`, warned, is not, the row now `move a w[i].1`; and `ons w[1].3` beside `ote
+    w[i].4`, warned, is not, the test now `ote w[i].3` and its name "… it may meet". A
+    differential fuzz of the parent and the tip, 6,000 programs of this item's over bit
+    arrays of one to three dimensions, bool arrays, one-shots, latches and a member's bits,
+    and RV-9's review's 4,000, finds 385 programs that differ: 442 warnings dropped, each
+    of two writes an oracle of its own says never meet, eleven now citing another write,
+    one that does meet them, later than the one cited before in eight and earlier in three
+    (RV-12's review), no line warned that was not, and nothing raised; the tip gives no
+    warning of two writes the oracle says never meet, the parent 442. Docs:
+    `Logex.Warnings`' moduledoc, README's passage on a write through a tag subscript.
+  - *The provisional marks* RV-9 left on readings decisions 402–408 settle:
+    `instance_array_test.exs`'s "(provisional)" test is "an instance that is no array's
+    element counts itself and what its type holds (decision 403)", `Logex.Declarations`'
+    moduledoc and README's "Only arrays are counted (provisional)" say decision 403's
+    count, `compile_total_test.exs`'s `lbl done ( )` comment cites decision 408, and RV-9's
+    entry above and decisions 370, 371 and 372 cite 402–408.
+
+  The cost against `f31bf70`, in reductions, the least of nine runs each in a fresh
+  process whose heap the collector never visits (`scratchpad/rv/p12/cost.exs`): every
+  program of `compile_total_test.exs`'s pin compiles within 2 of the parent's; a block's
+  own file exactly; every `.ld` and `.logex` file README shows within 15 to 97 more
+  (0.08% to 0.70%), 15 of them the loader's closure and its two `Function.info/2` reads
+  at each file's compile; a program of 200 arrays of blocks 0.57% more, each declaration
+  now counted where its type holds anything; a chain of 20 files through the loader
+  0.23% fewer, the shape check gone; 200 coils on bits of elements of one dimension with
+  literal subscripts 0.34% more, the arrays a tag writes now looked for; 100 such coils
+  beside 100 through a tag subscript 40% more, and of two dimensions 24% more, the cost
+  of telling the bits apart, linear (2.0x at 2x, 100 to 400 of each); and 100 storage bits
+  beside 100 writes through a tag subscript 54% fewer, the writes that never meet them no
+  longer warned. Every scan is exactly the parent's, 200 mixed rungs energised and not,
+  an array of blocks of timers, and an instance's first state.
+
+  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
+  Logix say nothing that settles them.
+
+  1. *The declared instance itself* (decision 403). `var x two`, `two` a block holding
+     two `int[40000]` alone, is refused, told it would hold 80,001 elements: the instance
+     `x` counts one, as each element of an array of instances does, and the 80,000 ints
+     its type holds besides, where the item's own words named 80,000; RV-9's question 7's
+     (b), which decision 403 took, counted "a block … one element". (a) As built: an
+     instance counts itself, so `var x two` and `var x two[1]` both hold 80,001, and a
+     block whose own `int[65536]` is at the bound compiles but no instance of it can be
+     declared; (b) a declaration counts what its instance holds and not the instance:
+     `var x two` at 80,000 and `var x two[1]` still 80,001, so a block holding
+     `int[65536]` alone may be declared once, though not as an array of one.
+  2. *A closure that is not the loader's* (decision 404). A program that calls logex's
+     internal `Logex.Compiler.loaded/2` with a function of its own that gives types,
+     rather than a list, is refused, told the types must be a list of function block
+     types, and the function is never called, even where the types it would give are
+     genuine. (a) As built; (b) the function called and each type it gives checked as
+     `types:` is, so genuine types compile and one edited by hand is refused in its words.
+  3. *A bit a tag numbers of a member of an element* (an observation the probes found,
+     of code this item does not touch, which RV-12's review found wider). `l1` an array
+     of counters, a bit a tag numbers of a member of an element, `l1[1].pv.[n]` or
+     `l1[i].pv.[n]`, is compared only with the writes of that member of the same literal
+     element: `ote l1[1].pv.[n]` beside `ote l1[1].pv.3` or `move 5 l1[1].pv` is warned.
+     Every other pair of them that may meet is not, in either order, in an array of one
+     dimension and of two, at the parent too: `ote l1[i].pv.3` beside `ote
+     l1[j].pv.[n]`; `ote l1[1].pv.[n]` beside `ote l1[i].pv.3` or `move 5 l1[i].pv`; and
+     `ote l1[i].pv.[n]` beside `ote l1[1].pv.[n]`, `ote l1[j].pv.[n]`, `ote l1[1].pv.3`,
+     `move 5 l1[1].pv` or `move 5 l1[j].pv`; where a word array's, `ote w[i].3` beside
+     `ote w[j].[n]` or `ote w[1].[n]` beside `ote w[i].3`, are warned. (a) As is, none of
+     these warned; (b) warned as a word array's bits are, a bit a tag numbers meeting
+     every bit of that member of every element its subscripts may name, so each pair
+     above is warned, and `ote l1[1].pv.[n]` beside `ote l1[2].pv.3`, which never meet,
+     is not.
+  4. *A token built byte by byte* (decision 404; RV-12's review). The loader's token is
+     a closure of `Logex`'s of no arguments. A host that builds one itself, byte by byte
+     in the VM's external term format, from what `Logex`'s own compiled module and its
+     checksum hold, can hand `Logex.Compiler.loaded/2` a type edited by hand, which
+     `loaded/2` cannot tell from the loader's and compiles unchecked: the review's `seal`,
+     its `xic` turned to `xio`, gives `b` 0 where the genuine gives 1. Nothing else a host
+     writes passes for the token, and a program edited by hand after it compiled runs as
+     it is (decision 190 checks its destinations and units, not its blocks against their
+     texts), so what the token keeps is a compile's word that its blocks are their texts.
+     Decision 404 says "handed in any way", and does not say whether such a term is a
+     way. (a) As built, README and the moduledocs saying so; (b) no token: the loader's
+     compile moved into private functions of the module that compiles, which no closure
+     reaches, so no term a host can build passes for the loader's.
+
+  *Mutation table* (`scratchpad/rv/p12/mt2/` on `1c5fd0e`, 31 mutants, the first three
+  rows from `mt/` on `38fbc8e`, whose code they mutate is unchanged since, and the two
+  survivors again from `mt3/` on `8f7d96a`), each judged by the full suite: the first
+  run let two through, each then pinned, and every one is red. `mt/` was stopped after
+  three rows when the storage bits' search was replaced by their index; its storage
+  mutants were made again for the index. `m403_array_rv9`'s api_contract and
+  `m403_builtin_members`' retain_image failures were the machine's load (17 to 26), each
+  red by its own file too.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | m403_array_rv9 | an array of instances counted as RV-9 counted it | 10 |
+  | m403_builtin_members | a timer's or a counter's members counted | 5 |
+  | m403_guard_gt | an instance of a type holding 65,536 taken | 2 |
+  | m403_instance_self | a single instance not counting itself | 5 |
+  | m403_instances_guard | an array of a type holding one thing not judged | 1 |
+  | m403_member_array_rv9 | a member array of blocks counted as RV-9 counted it | 5 |
+  | m403_member_block_self | a single block member not counting itself | 3 |
+  | m403_message_count | the refusal's count without the instance | 4 |
+  | m403_named_unheld | a block the table does not hold counted as holding one | survived; 1 since `8f7d96a` |
+  | m403_scalar_zero | an elementary tag counting nothing | 8 |
+  | m404_any_closure | any closure trusted | 1 |
+  | m404_any_module | a local closure of any module trusted | 1 |
+  | m404_any_type | an external function of `Logex` trusted | 1 |
+  | m404_list_trusted | a list handed to `loaded/2` trusted, as RV-9 had it | 3 |
+  | m404_loader_list | the loader handing a list, no closure | 4 |
+  | m405_bit_place_none | a bit through a tag subscript of no bit's place, RV-9's | 4 |
+  | m405_bit_number_ignored | a bit's literal number a tag's place | 3 |
+  | m405_literal_bit_target | a literal element's bit coil of no bit's place, RV-9's | 4 |
+  | m405_bit_at_place | a bit a tag numbers through a tag subscript of no bit's place | 3 |
+  | m405_bit_at_element_place | so of a literal element | 3 |
+  | m405_bit_at_whole_none | a literal element's bit a tag numbers, written but not coiled, of no bit's place | 1 |
+  | m405_whole_bitless | a literal element of a word array written whole of no bit's place | 2 |
+  | m405_whole_at_bitless | so through a tag subscript | 4 |
+  | m405_mark_bits | a coil on a bit through a tag subscript marking no array | 3 |
+  | m405_mark_bit_at | so a bit a tag numbers, of one dimension | survived; 1 since `8f7d96a` |
+  | m405_mark_bit_at_element | so of a literal element | 2 |
+  | m405_storage_all | every storage bit of the array written, as before | 3 |
+  | m405_storage_full_only | a storage bit kept under its full places alone | 3 |
+  | m405_storage_positions_all | a write's tag places looked up as literal places | 3 |
+  | m405_storage_tag_as_literal | a write's tags kept in its key | 3 |
+  | m405_storage_bit_ignored | a bit's literal number meeting every storage bit | 2 |
+  | m405_storage_bit_at_literal | a bit a tag numbers meeting bit 0 alone | 1 |
+  | m405_storage_place_bitless | a storage bit kept without its bit's number | 2 |
+  | m405_storage_scan | every storage bit searched at each write, the first form | 1, the growth test |
+
+  The two survivors: `Logex.FbType.of/1` of a held type's body, which reads no table, a
+  public function whose count no compile reads, now pinned (`instance_array_test.exs`,
+  "a body read with no table counts each instance of a block it names as the instance
+  alone"); and a coil on a bit a tag numbers of an element a tag subscripts, in an array
+  of one dimension, left unmarked, so `move 5 w[1]` beside `ote w[i].[n]`, warned at the
+  parent, went unwarned, now pinned among the writes that meet every bit.
+
+  *Gates and CI.* Each commit's gate printed GATE-OK: `d587b93` 2,733, `9dc622a` 2,735,
+  `38fbc8e` 2,738, `1c5fd0e` 2,739 and `8f7d96a` 2,740 (2,729 tests and 11 doctests),
+  `1c5fd0e`'s on its second run: its first failed on `api_contract_test.exs`'s life walk,
+  a store read `{:retain, :timeout}` at a load of 18 with other workflows' suites beside
+  it, which passed alone, three of three, and in the gate run again (RV-5's store, RV-7's
+  kind, decision 357). CI was green at once on `d587b93`, `9dc622a`, `1c5fd0e` and
+  `8f7d96a`; `38fbc8e` was red on its first run (41447159263):
+  `retain_configuration_test.exs`'s warm restart against a cold one read 16,252 against
+  16,246, 6 over its bound of 4, the cost test this record names flaky at `a59715d`, on
+  code this item does not touch; run again (attempt 2) it was green.
+
+  **RV-12's review** (2026-11-02, at `09f2f63`; its fixes `0f9cea9` and the docs commit
+  after it). Decisions 403, 404 and 405 behaved as the record says: the review's 15,414
+  programs of every pair of writes over word and bool arrays of one to three dimensions,
+  against an oracle of its own, found every warning the tip drops one of two writes that
+  never meet, none that meet unwarned and none new; 12,000 random programs of three to
+  six writes found each program's warnings the union of its pairs'; and decision 403's
+  bound held at its edge at depths 1 to 5, in arrays of one to three dimensions and
+  through the loader. It found six things, each now fixed or made true:
+
+  1. *A cost the record did not measure.* Decision 405's index of the storage bits was
+     built for every array a one-shot keeps a storage bit in, up to 16 projections a bit,
+     though only a write through a tag subscript looks it up, so a routine of one-shots
+     on elements and no such write compiled up to 16.2% dearer than at `f31bf70`: 200
+     `ons h[a,b,c].k` 16.2%, 64 `ons f[a,b,c]` 10.1%, 200 `ons w[k].b` 6.0%, 64 `ons e[k]`
+     3.8%. The index is built only for the arrays some write names through a tag
+     subscript, each storage bit named only then (`Logex.Warnings`' `storage_arrays/3`),
+     and each of the four compiles 1.5% to 1.7% below `f31bf70`, alone and beside `ote
+     z[i]`, a write through a tag subscript of another array, which with the first fix
+     alone still cost 25 reductions a rung over the parent, each storage bit named before
+     its array was looked at. Pinned (`tag_subscript_test.exs`, "one-shots on elements of
+     arrays no write names through a tag subscript cost what they did before decision
+     405"), eight programs each within 16 reductions a rung of `f31bf70`'s recorded
+     compile, reverted 357 a rung over. Storage bits beside writes through a tag
+     subscript, the shape the index is for, were quadratic at the parent, 3.3x and 3.6x
+     as the program doubled, and are linear, 2.03x and 2.05x, 58.7% fewer at 100 of each:
+     the record had said 54%, and not the growth.
+  2. *The token can be forged, and the documents said it cannot.* A closure of `Logex`'s
+     built byte by byte in the VM's external term format, the fun's index and old uniq
+     read from `Logex`'s beam and its new uniq from `Logex.module_info(:md5)`, passes for
+     the loader's, and `loaded/2` compiles a hand-edited type it gives unchecked; README's
+     "What has landed", `Logex.compile_file/1`'s doc, `Logex.Compiler`'s moduledoc and
+     the comments at the loader's closure and at `loaded/2` said no host can make one, or
+     that a type is checked however it is handed in. Each now says such a closure passes
+     for the loader's (provisional), and question 4 above puts it to the maintainer.
+  3. *A surviving mutant that changed the output.* `Enum.sort(:desc)` made `Enum.sort()`
+     in the storage bits' index passed the suite, reversing the warnings of a write that
+     meets several storage bits. Pinned (`tag_subscript_test.exs`, "a write that meets
+     several storage bits is told of each in name order"), in two dimensions, one, and a
+     word array's bits, either order of the one-shots.
+  4. *Question 3 understated its gap*: a bit a tag numbers of a member of a literal
+     element, `l1[1].pv.[n]`, is never compared with a write of that member through a tag
+     subscript either. Question 3 now names every form, each probed at the parent and the
+     tip, unwarned at both.
+  5. *Provisional readings stated as settled.* The instance counted itself at 80,001 is
+     marked provisional in README, `Logex.Declarations`' moduledoc and the test's name;
+     a host's closure refused, in the compiler's comments; and decision 405's note said
+     the eleven re-cited warnings cite "the earliest write that does meet them", this
+     entry "a later write": of the eleven, eight cite a later write than the parent's and
+     three an earlier, each one that meets, and not always the earliest that does: in
+     `osr s6 w[0].4`, `osr s9 w[0].3`, `ons w[0].3 ote p1`, `move x w[j]`, `ote w[j].3`
+     the last cites the `move`, though the pulse bit `w[0].3` two lines above meets it,
+     since a coil on a storage bit is kept as no first write. Both now say so.
+  6. *An equivalent mutant.* `bit_place/1`'s clause for a bool array's element written
+     whole, which keeps no bit's place, gives the same warnings when it gives a tag's,
+     since no write of a bool array names a bit; it keeps each such write under half the
+     projections. Pinned by its cost (`tag_subscript_test.exs`, "an element of a bool
+     array written whole keeps no bit's place, and costs what it did"), 64 writes beside a
+     coil through a tag subscript within 16 reductions a write of `f31bf70`'s, without it
+     164 a write more in three dimensions and 90 in two.
+
+  The review's cost figures for README's files, 4 to 119 more than the parent, the least
+  of seven runs in a heap of 8 MB, differ from the record's 15 to 97, the least of nine
+  in one of 50 MB, by the measure; at `0f9cea9` this measure reads 15 to 77 more (0.08%
+  to 0.77%), 15 of them the loader's closure as before. `compile_total_test.exs`'s pinned
+  programs compile within 4 of the parent's; 200 coils on bits of elements with literal
+  subscripts 0.34% more, and beside as many through a tag subscript 40.4% more in one
+  dimension and 23.9% in two, linear, as the record has it; a bool array's elements
+  written whole beside a coil through a tag subscript 0.32% more. No scan changed. The
+  fuzz of 6,000 and 4,000 programs and the review's 15,414 pairs give the same warnings
+  at `0f9cea9` as at `09f2f63`.
+
+  *Mutation table* (`scratchpad/rv/p12/mt4/` on `0f9cea9`, ten mutants of the review's
+  fixes, each judged by the full suite):
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | m_rev_index_every_array | the index built for every array, as at `09f2f63` | 1, the cost test |
+  | m_rev_place_unguarded | every storage bit kept, an element's and a bit's, whatever its array | 1, the cost test |
+  | m_rev_place_element_unguarded | so an element's alone | 1, the cost test |
+  | m_rev_place_bit_unguarded | so a bit of an element's alone | 1, the cost test |
+  | m_rev_subscripted_none | no array named through a tag subscript, no storage bit kept | 4 |
+  | m_rev_subscripted_no_element_at | an element written through a tag subscript naming no array | 3 |
+  | m_rev_subscripted_no_bit | so a bit of one | 3 |
+  | m_rev_subscripted_no_bit_at | so a bit a tag numbers of one | 1 |
+  | m_rev_sort_ascending | the storage bits kept in reverse name order | 1, the order test |
+  | m_rev_bool_bit_place | a bool array's element written whole given a tag's bit place | 1, its cost test |
+
+  *Gates and CI.* Each commit's gate printed GATE-OK, `0f9cea9` and `ede7cf1` 2,743
+  (2,732 tests and 11 doctests). CI was green at once on `0f9cea9`; `ede7cf1`, which
+  changed only documents, a moduledoc's words and a test's name, was red on its first run
+  (41488002911): `retain_period_test.exs`'s round with a store and a long period read
+  12.1 reductions a round over none, its bound 10, the scheduler-sensitive kind RV-7
+  takes up (decision 357), on runner code this item does not touch, which passed here
+  three of three; run again (attempt 2) it was green.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

@@ -234,29 +234,32 @@ defmodule Logex.InstanceArrayTest do
     end
   end
 
-  # Decision 370: a declaration's elements are counted through every array of instances it
-  # holds, at any depth, an array of instances counting each element's elements where its
-  # type holds any, and past 65,536 it is refused at its line, as one array past it is.
-  describe "an instance's size at every depth (decision 370)" do
-    @deep "a declaration holds 65536 at most, counted through every array of instances it holds"
+  # Decisions 370 and 403: a declaration counts every tag, element and instance its first
+  # state holds, at every depth, summed, an elementary tag, an element, a timer or a
+  # counter one each and an instance of a user block one and what its type holds, and past
+  # 65,536 it is refused at its line, as one array past it is.
+  describe "an instance's size at every depth (decisions 370 and 403)" do
+    @deep "a declaration holds 65536 at most, counting every tag, element and instance it " <>
+            "holds at every depth"
 
     defp block!(source, name, types \\ []) do
       {:ok, type} = Logex.compile(source, name: name, types: types)
       type
     end
 
-    # `k` holds `ton[256]`, and `cell` 256 of `k`: 65,536 timers.
+    # `k` holds two bools and `ton[253]`, 255, and `cell` two bools and 255 of `k`, 65,282:
+    # an instance of `cell` holds 65,283, within the bound, and two do not.
     defp nest do
       k =
         block!(
-          "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+          "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[253]\n" <>
             "xic x ton t[0] 10\nxic t[0].dn ote y",
           "k"
         )
 
       cell =
         block!(
-          "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[256]\ncal c[0] x y",
+          "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[255]\ncal c[0] x y",
           "cell",
           [k]
         )
@@ -264,16 +267,83 @@ defmodule Logex.InstanceArrayTest do
       {k, cell}
     end
 
+    # RV-9's `k`, two bools and `ton[256]`, 258.
+    defp k256,
+      do:
+        block!(
+          "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+            "xic x ton t[0] 10\nxic t[0].dn ote y",
+          "k"
+        )
+
     defp held(declaration), do: "var_input x bool\nvar_output y bool\n#{declaration}\n"
 
-    test "an array of blocks each holding 256 blocks of ton[256] is refused at its line" do
-      {_k, cell} = nest()
+    test "an array of blocks each holding 255 blocks of ton[253] is refused at its line" do
+      {k, cell} = nest()
+      assert {k.elements, cell.elements} == {255, 65_282}
 
       assert messages(held("var row cell[256]") <> "cal row[0] x y", [cell]) == [
                {3,
-                "`row` would hold 16777216 elements at every depth, 256 instances of `cell`, " <>
-                  "`[256]`, each holding 65536: " <> @deep}
+                "`row` would hold 16712448 elements at every depth, 256 instances of `cell`, " <>
+                  "`[256]`, each counting itself and the 65282 its type holds: " <> @deep}
              ]
+    end
+
+    # Decision 403's own: `cell[256]` of a block holding `ton[256]` alone holds 256
+    # instances and 65,536 timers, 65,792, refused in a block's file and in a program,
+    # where RV-9's count took it at 65,536.
+    test "cell[256] of a block holding ton[256] alone is refused at 65,792" do
+      k =
+        block!(
+          "function_block k\nvar t ton[256]\nxic t[1].dn ton t[0] 10\nxic t[0].dn ton t[1] 10",
+          "k"
+        )
+
+      assert k.elements == 256
+
+      assert {:error, [%Logex.Diagnostic{line: 2, message: message}]} =
+               Logex.compile("function_block cell\nvar c k[256]\ncal c[0]",
+                 name: "cell",
+                 types: [k]
+               )
+
+      assert message ==
+               "`c` would hold 65792 elements at every depth, 256 instances of `k`, `[256]`, " <>
+                 "each counting itself and the 256 its type holds: " <> @deep
+
+      assert messages(held("var cell k[256]") <> "cal cell[0]\nxic x ote y", [k]) == [
+               {3,
+                "`cell` would hold 65792 elements at every depth, 256 instances of `k`, " <>
+                  "`[256]`, each counting itself and the 256 its type holds: " <> @deep}
+             ]
+
+      assert %Logex.Program{} =
+               program(held("var cell k[255]") <> "cal cell[0]\nxic x ote y", [k])
+    end
+
+    # Decision 403's own: a single instance counts what its type holds, so a block holding
+    # two `int[40000]` alone compiles, its own declarations each within the bound, and an
+    # instance of it is refused, the instance and its 80,000 elements; the instance itself
+    # counted as an element of an array of instances is (provisional).
+    test "var x two, two holding two int[40000] alone, is refused at 80,001 (provisional)" do
+      two =
+        block!(
+          "function_block two\nvar a int[40000]\nvar b int[40000]\nxic a[0].0 ote b[0].1",
+          "two"
+        )
+
+      assert two.elements == 80_000
+
+      assert messages("var x two\nvar_input go bool\nvar_output q bool\nxic go ote q", [two]) == [
+               {1,
+                "`x` would hold 80001 elements at every depth, the instance itself and the " <>
+                  "80000 its type `two` holds: " <> @deep}
+             ]
+
+      assert_raise ArgumentError,
+                   "`x` would hold 80001 elements at every depth, the instance itself and the " <>
+                     "80000 its type `two` holds: " <> @deep,
+                   fn -> Logex.Tag.new!("x", two) end
     end
 
     test "exactly 65,536 at every depth are taken, and 65,537 refused, an array's and an instance's" do
@@ -283,10 +353,18 @@ defmodule Logex.InstanceArrayTest do
       assert %Logex.Program{} = program(held("var one cell") <> "cal one x y", [cell])
       assert %Logex.Program{} = program(held("var row k[256]") <> "cal row[0] x y", [k])
 
-      assert messages(held("var row k[257]") <> "cal row[0] x y", [k]) == [
+      # RV-9's `k[256]`, 256 blocks of two bools and `ton[256]`, taken at 65,536 by its
+      # count, is 66,304 by decision 403's.
+      assert messages(held("var row k[256]") <> "cal row[0] x y", [k256()]) == [
                {3,
-                "`row` would hold 65792 elements at every depth, 257 instances of `k`, " <>
-                  "`[257]`, each holding 256: " <> @deep}
+                "`row` would hold 66304 elements at every depth, 256 instances of `k`, " <>
+                  "`[256]`, each counting itself and the 258 its type holds: " <> @deep}
+             ]
+
+      assert messages(held("var row k[257]") <> "cal row[0] x y", [k256()]) == [
+               {3,
+                "`row` would hold 66563 elements at every depth, 257 instances of `k`, " <>
+                  "`[257]`, each counting itself and the 258 its type holds: " <> @deep}
              ]
 
       big =
@@ -298,18 +376,67 @@ defmodule Logex.InstanceArrayTest do
 
       assert messages(held("var one big") <> "cal one x y", [big]) == [
                {3,
-                "`one` would hold 65537 elements at every depth, in the arrays its type `big` " <>
-                  "holds: " <> @deep}
+                "`one` would hold 65540 elements at every depth, the instance itself and the " <>
+                  "65539 its type `big` holds: " <> @deep}
              ]
 
       assert messages(held("var row big[1]") <> "cal row[0] x y", [big]) == [
                {3,
-                "`row` would hold 65537 elements at every depth, 1 instance of `big`, `[1]`, " <>
-                  "each holding 65537: " <> @deep}
+                "`row` would hold 65540 elements at every depth, 1 instance of `big`, `[1]`, " <>
+                  "each counting itself and the 65539 its type holds: " <> @deep}
              ]
 
-      # A built-in type holds no array: an array of 65,536 timers is the single array's
-      # bound, 65,537 refused in its words.
+      # Counted decision 403's way: two bools and `int[65533]` are 65,535, an instance of
+      # them 65,536, taken alone and as an array of one; a bool more is 65,537, refused.
+      edge = fn extra ->
+        block!(
+          "function_block edge\nvar_input x bool\nvar_output y bool\nvar a int[65533]\n" <>
+            extra <> "xic x ote y",
+          "edge"
+        )
+      end
+
+      taken = edge.("")
+      over = edge.("var b bool\n")
+      assert {taken.elements, over.elements} == {65_535, 65_536}
+      assert %Logex.Program{} = program(held("var one edge") <> "cal one x y", [taken])
+      assert %Logex.Program{} = program(held("var row edge[1]") <> "cal row[0] x y", [taken])
+
+      assert messages(held("var one edge") <> "cal one x y", [over]) == [
+               {3,
+                "`one` would hold 65537 elements at every depth, the instance itself and the " <>
+                  "65536 its type `edge` holds: " <> @deep}
+             ]
+
+      assert messages(held("var row edge[1]") <> "cal row[0] x y", [over]) == [
+               {3,
+                "`row` would hold 65537 elements at every depth, 1 instance of `edge`, `[1]`, " <>
+                  "each counting itself and the 65536 its type holds: " <> @deep}
+             ]
+
+      assert_raise ArgumentError,
+                   "`one` would hold 65537 elements at every depth, the instance itself and " <>
+                     "the 65536 its type `edge` holds: " <> @deep,
+                   fn -> Logex.Tag.new!("one", over) end
+
+      assert %Logex.Tag{} = Logex.Tag.new!("one", taken)
+
+      # A block of one tag alone holds 1, so an array of 32,768 of it holds 65,536, taken,
+      # and one of 32,769, 65,538, is refused.
+      one = block!("function_block one\nvar_output q bool\nxio q ote q", "one")
+      assert one.elements == 1
+
+      assert %Logex.Program{} =
+               program(held("var row one[32768]") <> "cal row[0] y", [one])
+
+      assert messages(held("var row one[32769]") <> "cal row[0] y", [one]) == [
+               {3,
+                "`row` would hold 65538 elements at every depth, 32769 instances of `one`, " <>
+                  "`[32769]`, each counting itself and the 1 its type holds: " <> @deep}
+             ]
+
+      # A built-in type's members are not counted: an array of 65,536 timers is the single
+      # array's bound, 65,537 refused in its words.
       assert %Logex.Program{} =
                program(held("var t ton[65536]") <> "xic x ton t[0] 5\nxic t[0].dn ote y")
 
@@ -318,10 +445,11 @@ defmodule Logex.InstanceArrayTest do
              ]
     end
 
-    # The review's shape (a6-compile-scale-8): `cell` holds one timer and no array, so an
-    # array of cells counts its own elements, `row` holding 256, `grid` 256 of those, and an
-    # array of 256 grids 16,777,216, which a first scan could not build.
-    test "an array of blocks whose type holds no array counts its own elements, at any depth" do
+    # The review's shape (a6-compile-scale-8): `cell` holds two bools, a dint and one
+    # timer and no array, 4, so an array of cells counts each element and the 4 it holds,
+    # `row` holding 1,282, and 256 rows, which RV-9's count took at 65,536, hold 328,448:
+    # refused in a program and in a block's file, where RV-9's refused only 256 of those.
+    test "an array of blocks whose type holds no array counts each element and what it holds, at any depth" do
       cell =
         block!(
           "function_block cell\nvar_input x bool\nvar_output y bool\nvar retain k dint\n" <>
@@ -336,29 +464,34 @@ defmodule Logex.InstanceArrayTest do
           [cell]
         )
 
-      grid =
-        block!(
-          "function_block grid\nvar_input x bool\nvar_output y bool\nvar r row[256]\ncal r[0] x y",
-          "grid",
-          [row]
-        )
+      assert {cell.elements, row.elements} == {4, 1_282}
+      assert %Logex.Program{} = program(held("var r row[51]") <> "cal r[0] x y", [row])
 
-      assert {cell.elements, row.elements, grid.elements} == {0, 256, 65_536}
-      assert %Logex.Program{} = program(held("var r row[256]") <> "cal r[0] x y", [row])
-
-      assert messages(held("var g grid[256]") <> "cal g[0] x y", [grid]) == [
+      assert messages(held("var r row[256]") <> "cal r[0] x y", [row]) == [
                {3,
-                "`g` would hold 16777216 elements at every depth, 256 instances of `grid`, " <>
-                  "`[256]`, each holding 65536: " <> @deep}
+                "`r` would hold 328448 elements at every depth, 256 instances of `row`, " <>
+                  "`[256]`, each counting itself and the 1282 its type holds: " <> @deep}
              ]
+
+      assert {:error, [%Logex.Diagnostic{line: 4, message: message}]} =
+               Logex.compile(
+                 "function_block grid\nvar_input x bool\nvar_output y bool\nvar r row[256]\n" <>
+                   "cal r[0] x y",
+                 name: "grid",
+                 types: [row]
+               )
+
+      assert message ==
+               "`r` would hold 328448 elements at every depth, 256 instances of `row`, " <>
+                 "`[256]`, each counting itself and the 1282 its type holds: " <> @deep
     end
 
-    # RV-9's review (provisional, put to the maintainer): decision 370 counts through every
-    # array of instances, so an instance that is no array's element counts what its type's
-    # arrays hold and nothing of its own: a block of two single timers holds 0, and an
-    # array of 65,536 of them, 131,072 timers, is taken as `ton[65536]` is; a chain of
-    # blocks each holding two single instances of the one below holds 0 at any depth.
-    test "an instance that is no array's element counts nothing of its own (provisional)" do
+    # Decision 403, which settles the reading RV-9's review left (decision 370 counted
+    # only through arrays): an instance that is no array's element counts itself and what
+    # its type holds, so a block of two single timers holds 4 with its two bools, and an
+    # array of 65,536 of them is refused; a chain of blocks each holding two single
+    # instances of the one below holds 124 at depth 4, and 65,536 of it are refused.
+    test "an instance that is no array's element counts itself and what its type holds (decision 403)" do
       pair =
         block!(
           "function_block pair\nvar_input x bool\nvar_output y bool\nvar a ton\nvar b ton\n" <>
@@ -376,9 +509,139 @@ defmodule Logex.InstanceArrayTest do
           )
         end)
 
-      assert {pair.elements, chain.elements} == {0, 0}
-      assert %Logex.Program{} = program(held("var w pair[65536]") <> "cal w[0] x y", [pair])
-      assert %Logex.Program{} = program(held("var top d4[65536]") <> "cal top[0] x y", [chain])
+      assert {pair.elements, chain.elements} == {4, 124}
+      assert %Logex.Program{} = program(held("var w pair[13107]") <> "cal w[0] x y", [pair])
+      assert %Logex.Program{} = program(held("var top d4[524]") <> "cal top[0] x y", [chain])
+
+      assert messages(held("var w pair[65536]") <> "cal w[0] x y", [pair]) == [
+               {3,
+                "`w` would hold 327680 elements at every depth, 65536 instances of `pair`, " <>
+                  "`[65536]`, each counting itself and the 4 its type holds: " <> @deep}
+             ]
+
+      assert messages(held("var top d4[65536]") <> "cal top[0] x y", [chain]) == [
+               {3,
+                "`top` would hold 8192000 elements at every depth, 65536 instances of `d4`, " <>
+                  "`[65536]`, each counting itself and the 124 its type holds: " <> @deep}
+             ]
+    end
+
+    # Decision 403's own: a block of 200 single timers alone holds 200, and `wide[65536]`,
+    # 13,107,200 timers that RV-9's count took, is refused at 13,172,736, the 65,536
+    # instances among them.
+    test "a block of 200 single timers alone: wide[65536] is refused" do
+      timers = for i <- 1..200, do: "t#{i}"
+
+      wide =
+        block!(
+          "function_block wide\n" <>
+            Enum.map_join(timers, &"var #{&1} ton\n") <>
+            "xic t200.dn ton t1 10\n" <>
+            Enum.map_join(Enum.zip(timers, tl(timers)), fn {a, b} ->
+              "xic #{a}.dn ton #{b} 10\n"
+            end),
+          "wide"
+        )
+
+      assert wide.elements == 200
+
+      assert %Logex.Program{} =
+               program(held("var w wide[326]") <> "cal w[0]\nxic x ote y", [wide])
+
+      assert messages(held("var w wide[65536]") <> "cal w[0]\nxic x ote y", [wide]) == [
+               {3,
+                "`w` would hold 13172736 elements at every depth, 65536 instances of `wide`, " <>
+                  "`[65536]`, each counting itself and the 200 its type holds: " <> @deep}
+             ]
+
+      assert_raise ArgumentError,
+                   "`w` would hold 13172736 elements at every depth, 65536 instances of " <>
+                     "`wide`, `[65536]`, each counting itself and the 200 its type holds: " <>
+                     @deep,
+                   fn -> Logex.Tag.new!("w", {:array, wide, [65_536]}) end
+    end
+
+    # Decision 403's own: a chain of blocks each holding two single instances of the one
+    # below, `d1` two timers alone, holds 2^(n + 1) - 2 at depth n, so an instance of
+    # `d15` holds 65,535 and is taken, one of `d16` 131,071 and is refused, and so is
+    # `d17`'s own declaration of one, at its line. Nothing is built: the refused compile
+    # at depth 16 costs no more than the compile at depth 1 taken beside it, given the
+    # same types, the least of five runs of each, in a process of its own whose heap the
+    # collector never visits.
+    test "a chain of blocks each holding two of the one below is refused at the depth that passes 65,536" do
+      d1 =
+        block!(
+          "function_block d1\nvar l ton\nvar r ton\nxic l.dn ton r 10\nxic r.dn ton l 10",
+          "d1"
+        )
+
+      chain =
+        Enum.scan(2..16, d1, fn i, below ->
+          block!(
+            "function_block d#{i}\nvar l d#{i - 1}\nvar r d#{i - 1}\ncal l\ncal r",
+            "d#{i}",
+            [
+              below
+            ]
+          )
+        end)
+
+      [d15, d16] = Enum.take(chain, -2)
+      assert {d1.elements, d15.elements, d16.elements} == {2, 65_534, 131_070}
+      types = [d1, d15, d16]
+      source = fn type -> held("var top #{type.name}") <> "cal top\nxic x ote y" end
+      assert %Logex.Program{} = program(source.(d15), types)
+
+      assert messages(source.(d16), types) == [
+               {3,
+                "`top` would hold 131071 elements at every depth, the instance itself and the " <>
+                  "131070 its type `d16` holds: " <> @deep}
+             ]
+
+      assert {:error, diagnostics} =
+               Logex.compile("function_block d17\nvar l d16\nvar r d16\ncal l\ncal r",
+                 name: "d17",
+                 types: [d16]
+               )
+
+      assert for(
+               %Logex.Diagnostic{line: line, message: message} <- diagnostics,
+               do: {line, message}
+             ) ==
+               for(
+                 {line, tag} <- [{2, "l"}, {3, "r"}],
+                 do:
+                   {line,
+                    "`#{tag}` would hold 131071 elements at every depth, the instance itself " <>
+                      "and the 131070 its type `d16` holds: " <> @deep}
+               )
+
+      cost = fn type ->
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..5 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  result = Logex.compile(source.(type), name: "p", types: types)
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, elem(result, 0), later - before})
+                end,
+                [:monitor, min_heap_size: 4_000_000]
+              )
+
+            assert_receive {:compiled, _outcome, reductions}, 10_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+            reductions
+          end
+        )
+      end
+
+      deep = cost.(d16)
+      shallow = cost.(d1)
+      assert deep <= shallow, "#{deep} refused at depth 16, #{shallow} taken at depth 1"
     end
 
     test "in a block's file, the block declaring it is refused at its line" do
@@ -393,16 +656,16 @@ defmodule Logex.InstanceArrayTest do
                )
 
       assert message ==
-               "`r` would hold 131072 elements at every depth, 2 instances of `cell`, `[2]`, " <>
-                 "each holding 65536: " <> @deep
+               "`r` would hold 130566 elements at every depth, 2 instances of `cell`, `[2]`, " <>
+                 "each counting itself and the 65282 its type holds: " <> @deep
     end
 
     test "from Elixir, a host's mistake, in the same words" do
       {_k, cell} = nest()
 
       assert_raise ArgumentError,
-                   "`row` would hold 131072 elements at every depth, 2 instances of `cell`, " <>
-                     "`[2]`, each holding 65536: " <> @deep,
+                   "`row` would hold 130566 elements at every depth, 2 instances of `cell`, " <>
+                     "`[2]`, each counting itself and the 65282 its type holds: " <> @deep,
                    fn -> Logex.Tag.new!("row", {:array, cell, [2]}) end
 
       assert %Logex.Tag{} = Logex.Tag.new!("row", {:array, cell, [1]})
@@ -433,13 +696,13 @@ defmodule Logex.InstanceArrayTest do
     } do
       File.write!(
         Path.join(dir, "k.ld"),
-        "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+        "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[253]\n" <>
           "xic x ton t[0] 10\nxic t[0].dn ote y\n"
       )
 
       File.write!(
         Path.join(dir, "cell.ld"),
-        "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[256]\ncal c[0] x y\n"
+        "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[255]\ncal c[0] x y\n"
       )
 
       File.write!(Path.join(dir, "fine.ld"), held("var row cell[1]") <> "cal row[0] x y\n")
@@ -452,8 +715,8 @@ defmodule Logex.InstanceArrayTest do
                Logex.compile_file(deep)
 
       assert message ==
-               "`row` would hold 16777216 elements at every depth, 256 instances of `cell`, " <>
-                 "`[256]`, each holding 65536: " <> @deep
+               "`row` would hold 16712448 elements at every depth, 256 instances of `cell`, " <>
+                 "`[256]`, each counting itself and the 65282 its type holds: " <> @deep
 
       File.write!(
         Path.join(dir, "plant.logex"),
@@ -465,14 +728,38 @@ defmodule Logex.InstanceArrayTest do
 
       assert %Logex.Diagnostic{file: ^deep, line: 3, message: ^message} =
                Enum.find(diagnostics, &(&1.file == deep))
+
+      # RV-9's files, `cell.ld` holding 256 of a `k` of `ton[256]`, are refused in the
+      # block's own file now, at its line, and the program that holds it with them.
+      File.write!(
+        Path.join(dir, "k.ld"),
+        "function_block k\nvar_input x bool\nvar_output y bool\nvar t ton[256]\n" <>
+          "xic x ton t[0] 10\nxic t[0].dn ote y\n"
+      )
+
+      File.write!(
+        Path.join(dir, "cell.ld"),
+        "function_block cell\nvar_input x bool\nvar_output y bool\nvar c k[256]\ncal c[0] x y\n"
+      )
+
+      cell = Path.join(dir, "cell.ld")
+
+      assert {:error, [%Logex.Diagnostic{file: ^cell, line: 4, message: message}]} =
+               Logex.compile_file(Path.join(dir, "fine.ld"))
+
+      assert message ==
+               "`c` would hold 66304 elements at every depth, 256 instances of `k`, `[256]`, " <>
+                 "each counting itself and the 258 its type holds: " <> @deep
     end
 
     # A type's count is kept in its schema, `elements`, counted from its members as it is
     # built, each type it names read in its table, so it is counted once a type and a
     # declaration reads it in constant time: a chain of types each holding two instances of
-    # the type below holds 2^d elements, read at depth 16 in what it costs at depth 8,
-    # where counting each holder's types anew would cost 2^d. Counted in a process of its
-    # own with a heap the collector never visits, the least of five runs.
+    # the type below holds 5 x 2^d - 3, read at depth 14 in what it costs at depth 7,
+    # where counting each holder's types anew would cost 2^d. Decision 403 counts each
+    # instance too, so the chain passes the bound at depth 14 where RV-9's did at 17.
+    # Counted in a process of its own with a heap the collector never visits, the least of
+    # five runs.
     test "a type keeps its count in its schema, read at any depth in constant time" do
       chain = fn d ->
         bottom =
@@ -512,22 +799,33 @@ defmodule Logex.InstanceArrayTest do
         {Enum.min(Enum.map(runs, &elem(&1, 1))), elem(hd(runs), 0)}
       end
 
-      eight_type = chain.(8)
-      sixteen_type = chain.(16)
-      assert {eight_type.elements, sixteen_type.elements} == {256, 65_536}
+      seven_type = chain.(7)
+      fourteen_type = chain.(14)
+      assert {seven_type.elements, fourteen_type.elements} == {637, 81_917}
       assert Logex.FbType.ton().elements == 0
-      {eight, 256} = cost.(eight_type)
-      {sixteen, 65_536} = cost.(sixteen_type)
-      assert sixteen <= eight, "#{eight} at depth 8, #{sixteen} at depth 16"
+      {seven, 638} = cost.(seven_type)
+      {fourteen, 81_918} = cost.(fourteen_type)
+      assert fourteen <= seven, "#{seven} at depth 7, #{fourteen} at depth 14"
 
-      assert %Logex.Program{} = program(held("var one t16") <> "cal one x", [sixteen_type])
-      seventeen = chain.(17)
+      thirteen = chain.(13)
+      assert %Logex.Program{} = program(held("var one t13") <> "cal one x", [thirteen])
 
-      assert messages(held("var one t17") <> "cal one x", [seventeen]) == [
+      assert messages(held("var one t14") <> "cal one x", [fourteen_type]) == [
                {3,
-                "`one` would hold 131072 elements at every depth, in the arrays its type `t17` " <>
-                  "holds: " <> @deep}
+                "`one` would hold 81918 elements at every depth, the instance itself and the " <>
+                  "81917 its type `t14` holds: " <> @deep}
              ]
+    end
+
+    # `Logex.FbType.of/1` reads a body inside its own table: one with none, a held type's,
+    # counts each instance of a block it names as one that holds nothing, the instance
+    # alone, and so gives a type no check takes.
+    test "a body read with no table counts each instance of a block it names as the instance alone" do
+      {k, cell} = nest()
+      assert cell.elements == 2 + 255 * (1 + k.elements)
+      held = Logex.FbType.held(cell)
+      assert Logex.FbType.of(held.body).elements == 2 + 255
+      assert Logex.FbType.user?(Logex.FbType.of(held.body)) == false
     end
 
     # The count is part of the type a check compares (decision 54): a type handed in with
@@ -547,8 +845,8 @@ defmodule Logex.InstanceArrayTest do
       end
     end
 
-    # Nothing is built: the refused compile of 16,777,216 elements costs no more than the
-    # compile of 65,536 it is refused beside, the least of five runs of each.
+    # Nothing is built: the refused compile of 16,712,448 elements costs no more than the
+    # compile of 65,283 it is refused beside, the least of five runs of each.
     test "the refusal builds nothing: it costs what the compile of an array of one does" do
       {_k, cell} = nest()
 

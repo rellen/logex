@@ -743,9 +743,13 @@ defmodule Logex.TagSubscriptTest do
                   @later}
              ]
 
-      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[i].4") == [
+      # Decision 405: a bit's literal number is one more place, so two bits whose numbers
+      # differ never meet, through the very tag too; two of one number may.
+      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[i].4") == []
+
+      assert warnings(head <> "xic a ote w[i].3\nxic a ote w[n].3") == [
                {8,
-                "`w[i].4` is in `w`, which the `ote` on line 7 may write through a tag subscript: " <>
+                "`w[n].3` is in `w`, which the `ote` on line 7 may write through a tag subscript: " <>
                   @later}
              ]
     end
@@ -784,8 +788,8 @@ defmodule Logex.TagSubscriptTest do
             {"xic a ote w[i].1\nmove a w[2].[n]", later.("w[2].[n]", "ote", 9)},
             {"xic a ote w[2].1\nmove a w[i].[n]",
              as.("w[i].[n]", "w[2].1", "already has an `ote` on line 8", 9)},
-            {"xic a ote w[2].1\nmove a w[i].3",
-             as.("w[i].3", "w[2].1", "already has an `ote` on line 8", 9)},
+            {"xic a ote w[2].1\nmove a w[i].1",
+             as.("w[i].1", "w[2].1", "already has an `ote` on line 8", 9)},
             {"xic a osr o w[2].1\nmove x w[i]",
              as.("w[i]", "w[2].1", "is already the pulse bit of the `osr` on line 8", 9)}
           ] do
@@ -798,6 +802,14 @@ defmodule Logex.TagSubscriptTest do
       assert warnings(head <> "xic a ote w[2].1\nmove x w[3]") == [
                {2, "`i` is declared but no rung uses it"}
              ]
+
+      # Decision 405: a write of a bit through a tag subscript, beside a coil on a bit of
+      # another number, never meets it.
+      assert Enum.filter(
+               warnings(head <> "xic a ote w[2].1\nmove a w[i].3"),
+               &(elem(&1, 1) =~ "is in `w`")
+             ) ==
+               []
     end
 
     # Decision 235: a write through a tag subscript other than a coil's, any instruction's
@@ -905,15 +917,22 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    test "a coil on a bit of an element a tag subscripts is a write of each storage bit in its array" do
+    # Decision 405: of each storage bit in its array it may meet, a bit's literal number
+    # one more place, so a coil on a bit of another number writes none.
+    test "a coil on a bit of an element a tag subscripts is a write of each storage bit in its array it may meet" do
       assert warnings(
                "var w word[2]\nvar_input i int\nvar_input a bool\nvar_output p bool\n" <>
-                 "xic a ons w[1].3 ote p\nxic a ote w[i].4"
+                 "xic a ons w[1].3 ote p\nxic a ote w[i].3"
              ) == [
                {6,
                 "`ote` writes `w[1].3`, the storage bit of the `ons` on line 5: the one-shot " <>
                   "then fires on the wrong scans"}
              ]
+
+      assert warnings(
+               "var w word[2]\nvar_input i int\nvar_input a bool\nvar_output p bool\n" <>
+                 "xic a ons w[1].3 ote p\nxic a ote w[i].4"
+             ) == []
     end
 
     test "an element a tag subscripts compared with a literal at its type's limit is warned" do
@@ -1274,6 +1293,185 @@ defmodule Logex.TagSubscriptTest do
         )
 
       assert (two - one) / 200 <= 36, "one dimension #{one}, two #{two}"
+    end
+  end
+
+  # Decision 405: a bit's literal number is one more place, so two writes of bits of one
+  # word array whose literal numbers differ never meet and are not warned, in one, two and
+  # three dimensions, in either order, through tags or beside a literal element's, as a
+  # member's bits of two numbers are not (decision 257); and a one-shot's storage bit is
+  # judged as a write is, so a write whose literal places differ from it, a subscript or a
+  # bit's number, does not write it. Each beside its twin, which may meet, warned as before.
+  describe "a bit's number and a storage bit told apart (decision 405)" do
+    @later "the last one in the scan decides it"
+    @wrong "the one-shot then fires on the wrong scans"
+    @words "var_input a bool\nvar_input i int\nvar_input j int\nvar_input k int\n" <>
+             "var_input n int\nvar_input m int\nvar w word[4]\nvar e bool[2,4]\n" <>
+             "var e1 bool[4]\nvar cube bool[2,3,3]\nvar g word[2,3]\nvar g3 word[2,2,2]\n" <>
+             "var lc ctu[2,2]\nvar l1 ctu[3]\nvar_output o bool\nvar_output p bool\n" <>
+             "xic w[i].[k] xic e[i,j] xic e1[i] xic cube[i,j,k] xic g[i,j].[k] " <>
+             "xic g3[i,j,k].[n] xic lc[i,j].q xic l1[i].q ote o\n"
+
+    defp said(rungs),
+      do:
+        for(
+          {line, message} <- warnings(@words <> rungs),
+          String.ends_with?(message, @later) or String.ends_with?(message, @wrong),
+          do: {line, message}
+        )
+
+    defp array_in(write), do: hd(String.split(write, "["))
+
+    defp may_write(write, symbol \\ "ote"),
+      do: [
+        {19,
+         "`#{write}` is in `#{array_in(write)}`, which the `#{symbol}` on line 18 may write " <>
+           "through a tag subscript: " <> @later}
+      ]
+
+    defp as_had(write, other),
+      do: [
+        {19,
+         "`#{write}` is in `#{array_in(write)}`, as `#{other}` is, which already has an " <>
+           "`ote` on line 18: " <> @later}
+      ]
+
+    defp stored(line, symbol, bit, one_shot, at),
+      do: [
+        {line,
+         "`#{symbol}` writes `#{bit}`, the storage bit of the `#{one_shot}` on line #{at}: " <>
+           @wrong}
+      ]
+
+    test "two bits whose literal numbers differ never meet, in one, two and three dimensions" do
+      for {apart, twin, told} <- [
+            {"xic a ote w[i].3\nxic a ote w[j].4", "xic a ote w[i].3\nxic a ote w[j].3",
+             may_write("w[j].3")},
+            {"xic a ote w[i].3\nxic a ote w[1].4", "xic a ote w[i].3\nxic a ote w[1].3",
+             may_write("w[1].3")},
+            {"xic a ote w[1].4\nxic a ote w[i].3", "xic a ote w[1].3\nxic a ote w[i].3",
+             as_had("w[i].3", "w[1].3")},
+            {"xic a ote w[i].3\nxic a otl w[j].4", "xic a ote w[i].3\nxic a otl w[j].3",
+             may_write("w[j].3")},
+            {"xic a otl w[i].3\nxic a ote w[j].4", "xic a otl w[i].3\nxic a ote w[j].3",
+             may_write("w[j].3", "otl")},
+            {"xic a ote w[i].3\nxic a ote w[j].04", "xic a ote w[i].3\nxic a ote w[j].03",
+             may_write("w[j].03")},
+            {"xic a ote g[i,j].3\nxic a ote g[k,n].4", "xic a ote g[i,j].3\nxic a ote g[k,n].3",
+             may_write("g[k,n].3")},
+            {"xic a ote g[1,j].3\nxic a ote g[1,2].4", "xic a ote g[1,j].3\nxic a ote g[1,2].3",
+             may_write("g[1,2].3")},
+            {"xic a ote g[1,2].4\nxic a ote g[1,j].3", "xic a ote g[1,2].3\nxic a ote g[1,j].3",
+             as_had("g[1,j].3", "g[1,2].3")},
+            {"xic a ote g3[i,j,k].3\nxic a ote g3[i,j,k].4",
+             "xic a ote g3[i,j,k].3\nxic a ote g3[n,m,1].3", may_write("g3[n,m,1].3")},
+            {"xic a ote g3[1,j,k].3\nxic a ote g3[1,1,1].4",
+             "xic a ote g3[1,j,k].3\nxic a ote g3[1,1,1].3", may_write("g3[1,1,1].3")},
+            {"xic a ote g3[1,1,1].4\nxic a ote g3[1,j,k].3",
+             "xic a ote g3[1,1,1].3\nxic a ote g3[1,j,k].3",
+             as_had("g3[1,j,k].3", "g3[1,1,1].3")},
+            {"xic a ote lc[i,j].pv.3\nxic a ote lc[k,n].pv.4",
+             "xic a ote lc[i,j].pv.3\nxic a ote lc[k,n].pv.3", may_write("lc[k,n].pv.3")},
+            {"xic a ote l1[i].pv.3\nxic a ote l1[j].pv.4",
+             "xic a ote l1[i].pv.3\nxic a ote l1[j].pv.3", may_write("l1[j].pv.3")},
+            {"xic a ote lc[1,1].pv.4\nxic a ote lc[1,j].pv.3",
+             "xic a ote lc[1,1].pv.3\nxic a ote lc[1,j].pv.3",
+             as_had("lc[1,j].pv.3", "lc[1,1].pv.3")}
+          ] do
+        assert {apart, said(apart)} == {apart, []}
+        assert {twin, said(twin)} == {twin, told}
+      end
+    end
+
+    # A bit a tag numbers, and an element written whole, may be any bit of it: each meets a
+    # bit of any number, as before.
+    test "a bit a tag numbers and an element written whole meet every bit" do
+      for {rungs, told} <- [
+            {"xic a ote w[i].3\nxic a ote w[j].[n]", may_write("w[j].[n]")},
+            {"xic a ote w[i].[n]\nxic a ote w[j].3", may_write("w[j].3")},
+            {"xic a ote w[i].3\nmove 5 w[j]", may_write("w[j]")},
+            {"xic a ote w[i].3\nmove 5 w[1]", may_write("w[1]")},
+            {"xic a ote w[i].[n]\nmove 5 w[1]", may_write("w[1]")},
+            {"move 5 w[j]\nxic a ote w[i].3", may_write("w[i].3", "move")},
+            {"xic a ote g[i,j].3\nxic a ote g[k,n].[m]", may_write("g[k,n].[m]")},
+            {"xic a ote g[i,j].3\nmove 5 g[k,n]", may_write("g[k,n]")},
+            {"xic a ote g[1,j].3\nmove 5 g[1,2]", may_write("g[1,2]")}
+          ] do
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
+
+      assert said("xic a ote g[1,j].3\nmove 5 g[0,2]") == []
+    end
+
+    test "a storage bit is judged as a write is, a bit's number among its places" do
+      for {apart, twin, told} <- [
+            {"xic a ons e[1,1] ote p\nxic a ote e[i,0]",
+             "xic a ons e[1,1] ote p\nxic a ote e[i,1]", stored(19, "ote", "e[1,1]", "ons", 18)},
+            {"xic a ote e[i,0]\nxic a ons e[1,1] ote p",
+             "xic a ote e[i,1]\nxic a ons e[1,1] ote p", stored(18, "ote", "e[1,1]", "ons", 19)},
+            {"xic a ons e[1,1] ote p\nxic a ote e[0,i]",
+             "xic a ons e[1,1] ote p\nxic a ote e[1,i]", stored(19, "ote", "e[1,1]", "ons", 18)},
+            {"xic a ons e[1,1] ote p\nxic a otu e[i,0]",
+             "xic a ons e[1,1] ote p\nxic a otl e[i,1]", stored(19, "otl", "e[1,1]", "ons", 18)},
+            {"xic a osr e[1,1] p\nxic a ote e[i,0]", "xic a osf e[1,1] p\nxic a ote e[i,1]",
+             stored(19, "ote", "e[1,1]", "osf", 18)},
+            {"xic a ons cube[1,1,1] ote p\nxic a ote cube[i,1,0]",
+             "xic a ons cube[1,1,1] ote p\nxic a ote cube[i,1,1]",
+             stored(19, "ote", "cube[1,1,1]", "ons", 18)},
+            {"xic a ons cube[1,1,1] ote p\nxic a ote cube[0,j,k]",
+             "xic a ons cube[1,1,1] ote p\nxic a ote cube[i,j,k]",
+             stored(19, "ote", "cube[1,1,1]", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nxic a ote w[i].4",
+             "xic a ons w[1].3 ote p\nxic a ote w[i].3", stored(19, "ote", "w[1].3", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nxic a ote w[i].04",
+             "xic a ons w[1].3 ote p\nxic a ote w[i].[n]",
+             stored(19, "ote", "w[1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nxic a ote g[i,1].4",
+             "xic a ons g[1,1].3 ote p\nxic a ote g[i,1].3",
+             stored(19, "ote", "g[1,1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nxic a ote g[i,0].3",
+             "xic a ons g[1,1].3 ote p\nxic a ote g[i,j].3",
+             stored(19, "ote", "g[1,1].3", "ons", 18)},
+            {"xic a ons g[1,1].3 ote p\nmove 5 g[i,0]", "xic a ons g[1,1].3 ote p\nmove 5 g[i,1]",
+             stored(19, "move", "g[1,1].3", "ons", 18)},
+            {"xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,1,1].4",
+             "xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,1,1].3",
+             stored(19, "ote", "g3[1,1,1].3", "ons", 18)},
+            {"xic a ons g3[1,1,1].3 ote p\nxic a ote g3[i,0,1].3",
+             "xic a ons g3[1,1,1].3 ote p\nmove 5 g3[i,j,1]",
+             stored(19, "move", "g3[1,1,1].3", "ons", 18)}
+          ] do
+        assert {apart, said(apart)} == {apart, []}
+        assert {twin, said(twin)} == {twin, told}
+      end
+
+      # In one dimension a tag subscript meets every element, and an element written whole
+      # every bit of it, as before.
+      for {rungs, told} <- [
+            {"xic a ons e1[1] ote p\nxic a ote e1[i]", stored(19, "ote", "e1[1]", "ons", 18)},
+            {"xic a ons w[1].3 ote p\nmove 5 w[i]", stored(19, "move", "w[1].3", "ons", 18)}
+          ] do
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
+    end
+
+    # RV-12's review: a write through a tag subscript that meets several storage bits is
+    # told of each in name order, whatever order their one-shots come in, as before
+    # decision 405 (RV-2, a4-warnings-walk-3).
+    test "a write that meets several storage bits is told of each in name order" do
+      for {rungs, bits, line, at} <- [
+            {"xic a ons e[1,0] ote p\nxic a ons e[0,0]\nxic a ote e[i,0]", ["e[0,0]", "e[1,0]"],
+             20, %{"e[0,0]" => 19, "e[1,0]" => 18}},
+            {"xic a ote e[i,0]\nxic a ons e[1,0] ote p\nxic a ons e[0,0]", ["e[0,0]", "e[1,0]"],
+             18, %{"e[0,0]" => 20, "e[1,0]" => 19}},
+            {"xic a ons w[2].3 ote p\nxic a ons w[1].3\nxic a ote w[i].3", ["w[1].3", "w[2].3"],
+             20, %{"w[1].3" => 19, "w[2].3" => 18}},
+            {"xic a ons e1[3] ote p\nxic a ons e1[0]\nxic a ons e1[2]\nxic a ote e1[i]",
+             ["e1[0]", "e1[2]", "e1[3]"], 21, %{"e1[0]" => 19, "e1[2]" => 20, "e1[3]" => 18}}
+          ] do
+        told = Enum.flat_map(bits, &stored(line, "ote", &1, "ons", Map.fetch!(at, &1)))
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
     end
   end
 
@@ -1700,6 +1898,197 @@ defmodule Logex.TagSubscriptTest do
       # `ote`, on `l[2]` and on `q`.
       assert Enum.count(p.warnings, &(&1.message =~ "is in `l`")) == 400
       assert length(p.warnings) == 400 + 399 + 399
+    end
+
+    # Decision 405: each storage bit an array keeps is kept under every projection of its
+    # places, so a write through a tag subscript looks up the ones it may meet once, and
+    # the warnings stay linear in the writes and the storage bits beside them, here none
+    # meeting; searching every storage bit of the array at each write costs 2.43x at 2x.
+    # Counted in a process of its own with a heap the collector never visits, the least of
+    # three runs.
+    test "a write through a tag subscript beside the storage bits it never meets costs linear reductions" do
+      source = fn n ->
+        "var_input a bool\nvar_input i int\nvar e bool[33,32]\nvar_output q bool\n" <>
+          "xic e[0,0] ote q\n" <>
+          Enum.map_join(
+            0..(n - 1),
+            "\n",
+            &"xic a ons e[#{1 + div(&1, 32)},#{rem(&1, 32)}] xic e[0,0]"
+          ) <>
+          "\n" <> Enum.map_join(1..n, "\n", fn _ -> "xic a ote e[0,i]" end)
+      end
+
+      compile = fn n ->
+        text = source.(n)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:ok, p} = Logex.compile(text, name: "p")
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, later - before, p.warnings})
+                end,
+                [:monitor, min_heap_size: 50_000_000]
+              )
+
+            assert_receive {:compiled, reductions, warnings}, 30_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+            refute Enum.any?(warnings, &(&1.message =~ "the storage bit"))
+            reductions
+          end
+        )
+      end
+
+      small = compile.(200)
+      large = compile.(400)
+      assert large / small < 2.2, "#{small} at 200, #{large} at 400"
+    end
+
+    # RV-12's review: decision 405's index of the storage bits was built for every array a
+    # one-shot keeps one in, up to 16 projections a bit, though only a write through a tag
+    # subscript looks it up, so a routine of one-shots on elements and no such write
+    # compiled up to 16% dearer than at `f31bf70`, 357 reductions a rung for bits of a word
+    # array of three dimensions, 210 for elements of a bool array of three, 117 and 70 for
+    # one dimension's, and so beside a write through a tag subscript of another array. It
+    # is built only for the arrays a write names through a tag subscript. Each program here,
+    # alone and beside `ote z[i]`, compiles within 16 reductions a rung of what it did at
+    # `f31bf70`, whose compile and parse these are, the least of five runs there and of
+    # three here, each in a process of its own with a heap the collector never visits, on
+    # Elixir 1.20.4 and OTP 28; the parse is the same at both, so the parent's compile is
+    # restated as its ratio to the parse.
+    test "one-shots on elements of arrays no write names through a tag subscript cost what they did before decision 405" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+
+      head = fn n, array ->
+        "var_input a bool\nvar #{array}\n" <> Enum.map_join(0..(n - 1), "", &"var p#{&1} bool\n")
+      end
+
+      three = &"h[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}].#{div(&1, 64)}"
+      cube = &"f[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{div(&1, 16)}]"
+      beside = "\nvar_input i int\nvar z bool[4]"
+
+      # {label, rungs, the array, a rung's storage bit, the rung after them, the parent's
+      # compile, its parse}
+      for {label, n, array, storage, last, compiled_then, parsed_then} <- [
+            {"bits of a word array of three dimensions", 200, "h word[4,4,4]", three, "", 440_495,
+             29_554},
+            {"elements of a bool array of three dimensions", 64, "f bool[4,4,4]", cube, "",
+             131_205, 9_277},
+            {"bits of a word array of one dimension", 200, "w word[64]",
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "", 389_707, 26_100},
+            {"elements of a bool array of one dimension", 64, "e bool[64]", &"e[#{&1}]", "",
+             116_314, 8_162},
+            {"bits of a word array of three dimensions beside z[i]", 200,
+             "h word[4,4,4]" <> beside, three, "\nxic a ote z[i]", 451_746, 29_705},
+            {"elements of a bool array of three dimensions beside z[i]", 64,
+             "f bool[4,4,4]" <> beside, cube, "\nxic a ote z[i]", 136_066, 9_429},
+            {"bits of a word array of one dimension beside z[i]", 200, "w word[64]" <> beside,
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "\nxic a ote z[i]", 400_955, 26_250},
+            {"elements of a bool array of one dimension beside z[i]", 64, "e bool[64]" <> beside,
+             &"e[#{&1}]", "\nxic a ote z[i]", 121_169, 8_314}
+          ] do
+        source =
+          head.(n, array) <>
+            Enum.map_join(0..(n - 1), "\n", &"xic a ons #{storage.(&1)} ote p#{&1}") <> last
+
+        assert {:ok, %Logex.Program{warnings: []}} = Logex.compile(source, name: "p"), label
+        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+
+        parsed =
+          least.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        at_parent = div(compiled_then * parsed, parsed_then)
+
+        assert compiled - at_parent <= 16 * n,
+               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
+                 "at f31bf70, #{Float.round((compiled - at_parent) / n, 1)} a rung"
+      end
+    end
+
+    # RV-12's review: an element of a bool array written whole has no bit, so decision
+    # 405 gives it no bit's place, where a word array's element has a tag's. Given one, it
+    # would meet the same writes, a tag's place meeting every value and no write of a bool
+    # array naming a bit, so the warnings would be the same, but each such write would be
+    # kept under twice the projections: 164 reductions a write more for an array of three
+    # dimensions, 90 for one of two. Each program here, 64 such writes beside a coil
+    # through a tag subscript, compiles within 16 reductions a write of what it did at
+    # `f31bf70`, measured as the test above measures.
+    test "an element of a bool array written whole keeps no bit's place, and costs what it did" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+
+      # {label, the array, the coil through a tag subscript, a write's subscripts, the
+      # warnings, the parent's compile, its parse}
+      for {label, array, tagged, subscripts, warned, compiled_then, parsed_then} <- [
+            {"three dimensions", "f bool[4,4,4]", "f[i,0,0]",
+             &"#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}", 4, 118_610, 5_953},
+            {"two dimensions", "f bool[16,4]", "f[i,0]", &"#{rem(&1, 16)},#{rem(div(&1, 16), 4)}",
+             16, 97_608, 5_384}
+          ] do
+        source =
+          "var_input a bool\nvar_input i int\nvar #{array}\nxic a ote #{tagged}\n" <>
+            Enum.map_join(0..63, "\n", &"xic a move 1 f[#{subscripts.(&1)}]")
+
+        assert {:ok, %Logex.Program{warnings: warnings}} = Logex.compile(source, name: "p")
+        assert {label, length(warnings)} == {label, warned}
+        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+
+        parsed =
+          least.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        at_parent = div(compiled_then * parsed, parsed_then)
+
+        assert compiled - at_parent <= 16 * 64,
+               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
+                 "at f31bf70, #{Float.round((compiled - at_parent) / 64, 1)} a write"
+      end
     end
 
     test "a program's tag subscripts cost linear reductions to compile and to scan" do

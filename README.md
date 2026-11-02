@@ -338,7 +338,16 @@ the milestones newest first). What waits to land is the rest of the maintainer's
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
 items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-4 and RV-9 left, decisions 390–408, which RV-11 and RV-12 build. Its answers
+questions RV-4 left, decisions 390–401, which RV-11 builds. Its answers to the questions
+RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
+element and instance it holds, at every depth (decision 403), the loader's trust in its
+own types a token only it makes, so a type edited by hand is checked whether a host
+hands it to `Logex.compile/2` or to the loader's internal entry (decision 404), though a
+token a host builds byte by byte in the VM's external term format passes for the
+loader's (provisional), and two bits whose literal numbers differ, `w[i].3` and
+`w[j].4`, or a one-shot's storage bit beside a write whose literal places differ from
+it, no warning (decision 405), the other four as built (decisions 402, 406, 407 and
+408). Its answers
 to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
 held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
 warm restart's timers counted from the resource's `now` (decision 382), a preset no
@@ -1981,8 +1990,14 @@ line 11: `sloot` is not declared — did you mean `slot`?
   global array through its `var_external` may write any element, told by the element it
   may share with another writer, "`f2` writes `speeds[1]` through its var_external, as
   `f1` may" (decision 236), an instance writing several named on one line, "`t1` writes
-  `speeds[1]`, `speeds[2]` and `speeds[3]` …", ten and then a count (decision 239). A subscript's tag is a use of it, read, and part of its rung, so an edit
-  that changes it changes the rung.
+  `speeds[1]`, `speeds[2]` and `speeds[3]` …", ten and then a count (decision 239). Two
+  writes that never meet are not told: since decision 372 two whose literal subscripts
+  differ in any place, `ote ee[1,i]` beside `ote ee[0,i]`, and since decision 405 two
+  bits whose literal numbers differ, `ote faults[i].1` beside `ote faults[j].2`, the
+  bit's number one more place, and a write beside a storage bit whose literal places
+  differ from its own, `ote edges[i,0]` beside `ons edges[1,1]`, where `ote edges[i,1]`
+  and `ote faults[j].[n]` may meet and are told. A subscript's tag is a use of it, read,
+  and part of its rung, so an edit that changes it changes the rung.
 
 ### Two pulse coils
 
@@ -2437,14 +2452,19 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
     at 32767;
   - a user block, `var gates gate[4]`, which `Logex.compile_file/1` loads from `gate.ld`
     beside the program as it loads a block declared alone.
-- **65,536 elements at every depth.** A declaration's elements are counted through every
-  array of instances it holds, and past 65,536 it is refused at its line (decision 370):
-  an element of an array of blocks counts the elements its block holds, so `var row
-  cell[256]`, each `cell` holding 256 blocks of `ton[256]`, would hold 16,777,216 timers,
-  and an instance counts every array its block holds, at any depth, together. `var row
-  cell[1]` holds 65,536 and is taken, as `ton[256,256]` is. Only arrays are counted
-  (provisional): an instance that is no array's element counts nothing of its own, so a
-  block of two single timers holds 0, and `var w pair[65536]`, 131,072 timers, is taken.
+- **65,536 elements at every depth.** A declaration counts every tag, element and
+  instance its first state holds, at every depth, summed, and past 65,536 it is refused
+  at its line, in words that name the count (decisions 370 and 403). One element of an
+  elementary array counts one, so `int[65536]` is taken; a timer or a counter counts one,
+  its members not counted, so `ton[65536]` and `ton[256,256]` are taken too; and an
+  instance of a block counts one and every tag, element and instance its block holds,
+  its var_inputs and var_outputs among them. So `var row cell[256]`, `cell` a block
+  holding `ton[256]` alone, would hold 65,792, 256 instances and 65,536 timers, and is
+  refused; so is `var x two`, `two` a block holding two `int[40000]` alone, at 80,001,
+  the instance itself counted (provisional: the 80,000 its block holds is the other
+  reading), though `two` itself compiles; so is an array of 65,536 blocks of 200 single
+  timers; and so is a chain of blocks each holding two single instances of the one below,
+  at the depth whose count passes 65,536.
 - **Literal subscripts to run an element.** An instruction that runs an instance names
   its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
   storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each
