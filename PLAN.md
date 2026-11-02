@@ -13394,10 +13394,11 @@ and CI checked; each fix with a test that fails when it is reverted.
     differential fuzz of the parent and the tip, 6,000 programs of this item's over bit
     arrays of one to three dimensions, bool arrays, one-shots, latches and a member's bits,
     and RV-9's review's 4,000, finds 385 programs that differ: 442 warnings dropped, each
-    of two writes an oracle of its own says never meet, eleven now citing a later write
-    that does, no line warned that was not, and nothing raised; the tip gives no warning
-    of two writes the oracle says never meet, the parent 442. Docs: `Logex.Warnings`'
-    moduledoc, README's passage on a write through a tag subscript.
+    of two writes an oracle of its own says never meet, eleven now citing another write,
+    one that does meet them, later than the one cited before in eight and earlier in three
+    (RV-12's review), no line warned that was not, and nothing raised; the tip gives no
+    warning of two writes the oracle says never meet, the parent 442. Docs:
+    `Logex.Warnings`' moduledoc, README's passage on a write through a tag subscript.
   - *The provisional marks* RV-9 left on readings decisions 402–408 settle:
     `instance_array_test.exs`'s "(provisional)" test is "an instance that is no array's
     element counts itself and what its type holds (decision 403)", `Logex.Declarations`'
@@ -13439,14 +13440,34 @@ and CI checked; each fix with a test that fails when it is reverted.
      types, and the function is never called, even where the types it would give are
      genuine. (a) As built; (b) the function called and each type it gives checked as
      `types:` is, so genuine types compile and one edited by hand is refused in its words.
-  3. *A bit a tag numbers of a member through a tag subscript* (an observation the
-     probes found, of code this item does not touch). `ote l1[i].pv.3` beside `ote
-     l1[j].pv.[n]`, `l1` an array of counters, may set the same bit when `i` is `j` and
-     `n` is 3, and is not warned, at the parent too: a bit a tag numbers of a member of an
-     element a tag subscripts is compared with no other write (`Logex.Warnings` gives it
-     no coil), where `ote w[i].3` beside `ote w[j].[n]` is warned. (a) As is, no warning;
-     (b) warned as a word array's bits are, the bit a tag numbers meeting every bit of
-     that member of every element its subscript may name.
+  3. *A bit a tag numbers of a member of an element* (an observation the probes found,
+     of code this item does not touch, which RV-12's review found wider). `l1` an array
+     of counters, a bit a tag numbers of a member of an element, `l1[1].pv.[n]` or
+     `l1[i].pv.[n]`, is compared only with the writes of that member of the same literal
+     element: `ote l1[1].pv.[n]` beside `ote l1[1].pv.3` or `move 5 l1[1].pv` is warned.
+     Every other pair of them that may meet is not, in either order, in an array of one
+     dimension and of two, at the parent too: `ote l1[i].pv.3` beside `ote
+     l1[j].pv.[n]`; `ote l1[1].pv.[n]` beside `ote l1[i].pv.3` or `move 5 l1[i].pv`; and
+     `ote l1[i].pv.[n]` beside `ote l1[1].pv.[n]`, `ote l1[j].pv.[n]`, `ote l1[1].pv.3`,
+     `move 5 l1[1].pv` or `move 5 l1[j].pv`; where a word array's, `ote w[i].3` beside
+     `ote w[j].[n]` or `ote w[1].[n]` beside `ote w[i].3`, are warned. (a) As is, none of
+     these warned; (b) warned as a word array's bits are, a bit a tag numbers meeting
+     every bit of that member of every element its subscripts may name, so each pair
+     above is warned, and `ote l1[1].pv.[n]` beside `ote l1[2].pv.3`, which never meet,
+     is not.
+  4. *A token built byte by byte* (decision 404; RV-12's review). The loader's token is
+     a closure of `Logex`'s of no arguments. A host that builds one itself, byte by byte
+     in the VM's external term format, from what `Logex`'s own compiled module and its
+     checksum hold, can hand `Logex.Compiler.loaded/2` a type edited by hand, which
+     `loaded/2` cannot tell from the loader's and compiles unchecked: the review's `seal`,
+     its `xic` turned to `xio`, gives `b` 0 where the genuine gives 1. Nothing else a host
+     writes passes for the token, and a program edited by hand after it compiled runs as
+     it is (decision 190 checks its destinations and units, not its blocks against their
+     texts), so what the token keeps is a compile's word that its blocks are their texts.
+     Decision 404 says "handed in any way", and does not say whether such a term is a
+     way. (a) As built, README and the moduledocs saying so; (b) no token: the loader's
+     compile moved into private functions of the module that compiles, which no closure
+     reaches, so no term a host can build passes for the loader's.
 
   *Mutation table* (`scratchpad/rv/p12/mt2/` on `1c5fd0e`, 31 mutants, the first three
   rows from `mt/` on `38fbc8e`, whose code they mutate is unchanged since, and the two
@@ -13511,6 +13532,94 @@ and CI checked; each fix with a test that fails when it is reverted.
   `retain_configuration_test.exs`'s warm restart against a cold one read 16,252 against
   16,246, 6 over its bound of 4, the cost test this record names flaky at `a59715d`, on
   code this item does not touch; run again (attempt 2) it was green.
+
+  **RV-12's review** (2026-11-02, at `09f2f63`; its fixes `0f9cea9` and the docs commit
+  after it). Decisions 403, 404 and 405 behaved as the record says: the review's 15,414
+  programs of every pair of writes over word and bool arrays of one to three dimensions,
+  against an oracle of its own, found every warning the tip drops one of two writes that
+  never meet, none that meet unwarned and none new; 12,000 random programs of three to
+  six writes found each program's warnings the union of its pairs'; and decision 403's
+  bound held at its edge at depths 1 to 5, in arrays of one to three dimensions and
+  through the loader. It found six things, each now fixed or made true:
+
+  1. *A cost the record did not measure.* Decision 405's index of the storage bits was
+     built for every array a one-shot keeps a storage bit in, up to 16 projections a bit,
+     though only a write through a tag subscript looks it up, so a routine of one-shots
+     on elements and no such write compiled up to 16.2% dearer than at `f31bf70`: 200
+     `ons h[a,b,c].k` 16.2%, 64 `ons f[a,b,c]` 10.1%, 200 `ons w[k].b` 6.0%, 64 `ons e[k]`
+     3.8%. The index is built only for the arrays some write names through a tag
+     subscript, each storage bit named only then (`Logex.Warnings`' `storage_arrays/3`),
+     and each of the four compiles 1.5% to 1.7% below `f31bf70`, alone and beside `ote
+     z[i]`, a write through a tag subscript of another array, which with the first fix
+     alone still cost 25 reductions a rung over the parent, each storage bit named before
+     its array was looked at. Pinned (`tag_subscript_test.exs`, "one-shots on elements of
+     arrays no write names through a tag subscript cost what they did before decision
+     405"), eight programs each within 16 reductions a rung of `f31bf70`'s recorded
+     compile, reverted 357 a rung over. Storage bits beside writes through a tag
+     subscript, the shape the index is for, were quadratic at the parent, 3.3x and 3.6x
+     as the program doubled, and are linear, 2.03x and 2.05x, 58.7% fewer at 100 of each:
+     the record had said 54%, and not the growth.
+  2. *The token can be forged, and the documents said it cannot.* A closure of `Logex`'s
+     built byte by byte in the VM's external term format, the fun's index and old uniq
+     read from `Logex`'s beam and its new uniq from `Logex.module_info(:md5)`, passes for
+     the loader's, and `loaded/2` compiles a hand-edited type it gives unchecked; README's
+     "What has landed", `Logex.compile_file/1`'s doc, `Logex.Compiler`'s moduledoc and
+     the comments at the loader's closure and at `loaded/2` said no host can make one, or
+     that a type is checked however it is handed in. Each now says such a closure passes
+     for the loader's (provisional), and question 4 above puts it to the maintainer.
+  3. *A surviving mutant that changed the output.* `Enum.sort(:desc)` made `Enum.sort()`
+     in the storage bits' index passed the suite, reversing the warnings of a write that
+     meets several storage bits. Pinned (`tag_subscript_test.exs`, "a write that meets
+     several storage bits is told of each in name order"), in two dimensions, one, and a
+     word array's bits, either order of the one-shots.
+  4. *Question 3 understated its gap*: a bit a tag numbers of a member of a literal
+     element, `l1[1].pv.[n]`, is never compared with a write of that member through a tag
+     subscript either. Question 3 now names every form, each probed at the parent and the
+     tip, unwarned at both.
+  5. *Provisional readings stated as settled.* The instance counted itself at 80,001 is
+     marked provisional in README, `Logex.Declarations`' moduledoc and the test's name;
+     a host's closure refused, in the compiler's comments; and decision 405's note said
+     the eleven re-cited warnings cite "the earliest write that does meet them", this
+     entry "a later write": of the eleven, eight cite a later write than the parent's and
+     three an earlier, each one that meets, and not always the earliest that does: in
+     `osr s6 w[0].4`, `osr s9 w[0].3`, `ons w[0].3 ote p1`, `move x w[j]`, `ote w[j].3`
+     the last cites the `move`, though the pulse bit `w[0].3` two lines above meets it,
+     since a coil on a storage bit is kept as no first write. Both now say so.
+  6. *An equivalent mutant.* `bit_place/1`'s clause for a bool array's element written
+     whole, which keeps no bit's place, gives the same warnings when it gives a tag's,
+     since no write of a bool array names a bit; it keeps each such write under half the
+     projections. Pinned by its cost (`tag_subscript_test.exs`, "an element of a bool
+     array written whole keeps no bit's place, and costs what it did"), 64 writes beside a
+     coil through a tag subscript within 16 reductions a write of `f31bf70`'s, without it
+     164 a write more in three dimensions and 90 in two.
+
+  The review's cost figures for README's files, 4 to 119 more than the parent, the least
+  of seven runs in a heap of 8 MB, differ from the record's 15 to 97, the least of nine
+  in one of 50 MB, by the measure; at `0f9cea9` this measure reads 15 to 77 more (0.08%
+  to 0.77%), 15 of them the loader's closure as before. `compile_total_test.exs`'s pinned
+  programs compile within 4 of the parent's; 200 coils on bits of elements with literal
+  subscripts 0.34% more, and beside as many through a tag subscript 40.4% more in one
+  dimension and 23.9% in two, linear, as the record has it; a bool array's elements
+  written whole beside a coil through a tag subscript 0.32% more. No scan changed. The
+  fuzz of 6,000 and 4,000 programs and the review's 15,414 pairs give the same warnings
+  at `0f9cea9` as at `09f2f63`.
+
+  *Mutation table* (`scratchpad/rv/p12/mt4/` on `0f9cea9`, ten mutants of the review's
+  fixes, each judged by the full suite):
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | m_rev_index_every_array | the index built for every array, as at `09f2f63` | 1, the cost test |
+  | m_rev_place_unguarded | every storage bit kept, an element's and a bit's, whatever its array | 1, the cost test |
+  | m_rev_place_element_unguarded | so an element's alone | 1, the cost test |
+  | m_rev_place_bit_unguarded | so a bit of an element's alone | 1, the cost test |
+  | m_rev_subscripted_none | no array named through a tag subscript, no storage bit kept | 4 |
+  | m_rev_subscripted_no_element_at | an element written through a tag subscript naming no array | 3 |
+  | m_rev_subscripted_no_bit | so a bit of one | 3 |
+  | m_rev_subscripted_no_bit_at | so a bit a tag numbers of one | 1 |
+  | m_rev_sort_ascending | the storage bits kept in reverse name order | 1, the order test |
+  | m_rev_bool_bit_place | a bool array's element written whole given a tag's bit place | 1, its cost test |
+
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

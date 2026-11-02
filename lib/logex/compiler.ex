@@ -13,8 +13,10 @@ defmodule Logex.Compiler do
   order. The function block types a routine may hold are given as its third argument,
   each checked at full depth (decision 54); the loader alone gives its own through an
   internal entry, `loaded/2`, which checks none of them again (decision 371) where they
-  come through a closure of the loader's own, which no host can make, and checks every
-  type a list hands it as decision 54 has it (decision 404). Since M3-5
+  come through a closure of the loader's own, which no host code makes but by building it
+  byte by byte in the VM's external term format, a closure `loaded/2` cannot tell from the
+  loader's (provisional), and checks every type a list hands it as decision 54 has it
+  (decision 404). Since M3-5
   it checks a routine's labels and jumps too: each `lbl` first on its rung, one label to
   a rung, and each `jmp` naming a label of its own routine on a later rung, one to a rung
   (decisions 81, 104 and 105).
@@ -332,11 +334,13 @@ defmodule Logex.Compiler do
   # compiled again from its text, so a chain of files each holding the next compiles once
   # a file. One version of each name is still held (decision 53). The closure is the token,
   # and the only one: no field of a type, no option of `Logex.compile/2` and no atom marks
-  # a type the loader's, and no host can make a closure of the loader's module (short of
-  # building a term from its external format), so a list handed here is checked as decision
-  # 54 has it, each type compiled again, `instructionize/3`'s `types` exactly, a type
-  # edited by hand refused in its words, and any other closure, a host's own or an external
-  # one, `&Logex.anything/0`, is refused as junk in those words too.
+  # a type the loader's, and no host code makes a closure of the loader's module but by
+  # building it byte by byte in the external term format, a closure this cannot tell from
+  # the loader's and whose types it trusts (provisional), so a list handed here is checked
+  # as decision 54 has it, each type compiled again, `instructionize/3`'s `types` exactly,
+  # a type edited by hand refused in its words, and any other closure, a host's own or an
+  # external one, `&Logex.anything/0`, is refused as junk in those words too, never called
+  # (provisional).
   def loaded(routine, types),
     do: instructionized(Logex.Parser.well_formed!(routine), [], library_loaded(types))
 
@@ -916,8 +920,10 @@ defmodule Logex.Compiler do
       )
 
   # Decision 404 (RV-12): the loader's own types come through a closure of `Logex`'s, a
-  # local one of no arguments, which no host can make; any other value is handed to
-  # library!/1, checked as instructionize/3's types are, junk refused in its words.
+  # local one of no arguments, which no host code makes but by building it byte by byte in
+  # the external term format, which this cannot tell from the loader's (provisional); any
+  # other value is handed to library!/1, checked as instructionize/3's types are, junk, a
+  # host's closure among it, refused in its words (provisional).
   defp library_loaded(own) when is_function(own, 0),
     do: owned(Function.info(own, :module), Function.info(own, :type), own)
 

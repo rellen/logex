@@ -341,8 +341,10 @@ items RV-5 to RV-8 build ("The review after Milestone 6"), and its answers to th
 questions RV-4 left, decisions 390–401, which RV-11 builds. Its answers to the questions
 RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
 element and instance it holds, at every depth (decision 403), the loader's trust in its
-own types a token only it makes, so a type edited by hand is checked however it is
-handed in (decision 404), and two bits whose literal numbers differ, `w[i].3` and
+own types a token only it makes, so a type edited by hand is checked whether a host
+hands it to `Logex.compile/2` or to the loader's internal entry (decision 404), though a
+token a host builds byte by byte in the VM's external term format passes for the
+loader's (provisional), and two bits whose literal numbers differ, `w[i].3` and
 `w[j].4`, or a one-shot's storage bit beside a write whose literal places differ from
 it, no warning (decision 405), the other four as built (decisions 402, 406, 407 and
 408). Its answers
@@ -2453,9 +2455,10 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   its var_inputs and var_outputs among them. So `var row cell[256]`, `cell` a block
   holding `ton[256]` alone, would hold 65,792, 256 instances and 65,536 timers, and is
   refused; so is `var x two`, `two` a block holding two `int[40000]` alone, at 80,001,
-  though `two` itself compiles; so is an array of 65,536 blocks of 200 single timers;
-  and so is a chain of blocks each holding two single instances of the one below, at the
-  depth whose count passes 65,536.
+  the instance itself counted (provisional: the 80,000 its block holds is the other
+  reading), though `two` itself compiles; so is an array of 65,536 blocks of 200 single
+  timers; and so is a chain of blocks each holding two single instances of the one below,
+  at the depth whose count passes 65,536.
 - **Literal subscripts to run an element.** An instruction that runs an instance names
   its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
   storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each

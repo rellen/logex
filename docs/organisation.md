@@ -12796,7 +12796,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      compiled again, and one edited by hand refused in `types:`'s words, as through
      `compile/2`; any other closure, a host's or an external function of `Logex`, is
      refused as junk in those words (provisional, put to the maintainer). A chain of
-     files still compiles once a file, none again.)*
+     files still compiles once a file, none again. RV-12's review built such a closure
+     byte by byte, from `Logex`'s beam and its checksum, and `loaded/2` compiled the
+     hand-edited type it gave unchecked; whether such a term is a way of handing a type
+     in is put to the maintainer (provisional).)*
 
 405. **What decision 372 tells apart (the review after Milestone 6),** RV-9's question 4:
      `ote w[i].3` beside `ote w[j].4`, two bit numbers, and `ons e[1,1]` beside `ote
@@ -12813,11 +12816,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      their path (decision 257). A write through a tag subscript writes only the storage
      bits its places may meet, an element written whole meeting every bit of it, each
      storage bit kept under every projection of its places so that a write finds them in
-     one lookup, linear in the writes; so `ote e[i,0]` beside `ons e[1,1]` and `ote w[i].4`
-     beside `ons w[1].3` are not warned, and `ote e[i,1]` and `ote w[i].3` are. A
-     differential fuzz of 10,000 programs against the parent finds every warning dropped
-     one that never meets by an oracle of its own, and no line warned that was not, eleven
-     now citing the earliest write that does meet them.)*
+     one lookup, linear in the writes, and since RV-12's review only in the arrays some
+     write names through a tag subscript, so that a routine whose one-shots keep their
+     storage bits in elements of arrays none names costs no more than before; so `ote
+     e[i,0]` beside `ons e[1,1]` and `ote w[i].4` beside `ons w[1].3` are not warned, and
+     `ote e[i,1]` and `ote w[i].3` are. A differential fuzz of 10,000 programs against
+     the parent finds every warning dropped one that never meets by an oracle of its own,
+     and no line warned that was not, eleven now citing another write, one that does meet
+     them, later than the one cited before in eight and earlier in three, not always the
+     earliest that does, since a coil on a storage bit is kept as no first write.)*
 
 406. **The fragment's setup (the review after Milestone 6),** RV-9's question 5: decision
      365's setup is the test's own packing line, allowing 1 to 4 advances where 1 happens.

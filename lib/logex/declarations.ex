@@ -33,16 +33,17 @@ defmodule Logex.Declarations do
   them, so an array of instances counts each element so. So `var row k[256]`, `k` holding
   `ton[256]` alone, would hold 65,792, 256 instances each counting itself and 256 timers;
   `var x two`, `two` holding two `int[40000]` alone, 80,001, the instance and its 80,000
-  elements; and `var w wide[65536]`, `wide` holding 200 single timers alone, 13,172,736:
-  each is refused at its line, in words that name the count and the bound, from Elixir
-  too. A chain of blocks each holding two single instances of the one below doubles at
-  each block, and is refused at the declaration whose count passes 65,536. The count is kept
-  in each type's schema, `Logex.FbType`'s `elements`, what an instance of it holds,
-  counted once a type as it is built, so a declaration reads it in constant time and
-  nothing is built; its type known and its own sizes taken first, so an array past the
-  bound by its sizes is told so alone. A block's own declarations are each bounded so,
-  not their sum: a block holding two `int[40000]` compiles, and no instance of it can be
-  declared.
+  elements, a single instance counting itself as an element of an array of instances does
+  (provisional: the 80,000 alone is the other reading); and `var w wide[65536]`, `wide`
+  holding 200 single timers alone, 13,172,736: each is refused at its line, in words that
+  name the count and the bound, from Elixir too. A chain of blocks each holding two
+  single instances of the one below doubles at each block, and is refused at the
+  declaration whose count passes 65,536. The count is kept in each type's schema,
+  `Logex.FbType`'s `elements`, what an instance of it holds, counted once a type as it is
+  built, so a declaration reads it in constant time and nothing is built; its type known
+  and its own sizes taken first, so an array past the bound by its sizes is told so
+  alone. A block's own declarations are each bounded so, not their sum: a block holding
+  two `int[40000]` compiles, and no instance of it can be declared.
 
   A qualifier (decisions 267 to 270) comes straight after the section word, `var retain
   count dint`, on a program's `var` and `var_output` and a block's three sections: never on
