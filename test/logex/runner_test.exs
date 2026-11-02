@@ -285,8 +285,8 @@ defmodule Logex.RunnerTest do
       for opts <- [:x, [1], %{configuration: nil}] do
         raises(
           "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-            "clock:, poll:, overhead:, idle:, forces:, retain:, retain_period:, start: and " <>
-            "name:, got: " <> inspect(opts),
+            "clock:, poll:, overhead:, idle:, write_limit:, forces:, retain:, retain_period:, " <>
+            "start: and name:, got: " <> inspect(opts),
           fn -> Runner.start_link(opts) end
         )
       end
@@ -296,8 +296,8 @@ defmodule Logex.RunnerTest do
       {opts, _rig} = rig()
 
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
-          "retain:, retain_period:, start: and name:, got: :pole",
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
+          "write_limit:, forces:, retain:, retain_period:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 10, period: 5]) end
       )
     end
@@ -315,8 +315,8 @@ defmodule Logex.RunnerTest do
 
       # An unknown key repeated is told as unknown.
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces:, " <>
-          "retain:, retain_period:, start: and name:, got: :pole",
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
+          "write_limit:, forces:, retain:, retain_period:, start: and name:, got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
       )
     end
@@ -487,6 +487,27 @@ defmodule Logex.RunnerTest do
       assert_receive {:EXIT, ^runner, ^reason}, 5000
     end
 
+    # Decision 400 (RV-11): the write limit, `write_limit:`, an option of its own, apart
+    # from the heartbeat, a whole number of milliseconds in an interval's range, as the
+    # idle watchdog is, 5000 unless set.
+    test "a write limit out of its range (decision 400)" do
+      {opts, _rig} = rig()
+
+      for value <- [0, -1, 2_147_483_648, 1.5, "5000", nil, :infinity] do
+        raises(
+          "the runner's write_limit: is a whole number of milliseconds, 1 to 2147483647, " <>
+            "got: " <> inspect(value),
+          fn -> Runner.start_link(Keyword.put(opts, :write_limit, value)) end
+        )
+      end
+
+      for value <- [1, 2_147_483_647] do
+        {opts, _rig} = rig()
+        assert {:ok, runner} = Runner.start_link(Keyword.put(opts, :write_limit, value))
+        assert %{status: :running} = Runner.status(runner)
+      end
+    end
+
     test "a poll period, a share or an idle watchdog out of its range" do
       {opts, _rig} = rig()
 
@@ -516,10 +537,20 @@ defmodule Logex.RunnerTest do
     end
 
     # The checks come in order: the list, each key, the two it needs, the configuration,
-    # the clock, the poll period, the share, the idle watchdog, and then the bindings.
+    # the clock, the poll period, the share, the idle watchdog, since decision 400 the
+    # write limit, and then the bindings.
     test "in their order, the first mistake raised" do
       {opts, _rig} = rig()
-      bad = [configuration: :plant, io: :io, clock: :c, poll: 0, overhead: 0, idle: 0]
+
+      bad = [
+        configuration: :plant,
+        io: :io,
+        clock: :c,
+        poll: 0,
+        overhead: 0,
+        idle: 0,
+        write_limit: 0
+      ]
 
       orders = [
         {[:configuration], "expected a %Logex.Configuration{}"},
@@ -527,6 +558,7 @@ defmodule Logex.RunnerTest do
         {[:poll], "the runner's poll:"},
         {[:overhead], "the runner's overhead:"},
         {[:idle], "the runner's idle:"},
+        {[:write_limit], "the runner's write_limit:"},
         {[:io], "io binds each device"}
       ]
 

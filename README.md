@@ -3465,9 +3465,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
   file is, so that a crash at any moment leaves the old store or the new; each write's
   `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
-  is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
-  the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
-  leaves the runner answering (decision 353); a runner killed while it writes takes its
+  is limited to the runner's write limit of real time, `write_limit:`, 5000 ms unless set,
+  a limit of its own apart from the heartbeat (decision 400), one the disk has not
+  finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
+  runner answering (decision 353), while a healthy disk's slow sync on a machine whose
+  cores are all busy, which took over the idle watchdog and a poll period now and then,
+  lands; a runner killed while it writes takes its
   write down with it, which does nothing after the call of the file system it was in, so
   that the next runner's write on the file is never overwritten by it. A write that fails
   leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
@@ -3479,8 +3482,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   due time, with untimed programs in the share's slot ("Running a plant on the clock",
   below) and otherwise at a wake of its own, and a writer process of its own writes them,
   so that a slow disk delays no round; a write still in progress makes the next wait, the
-  newest replacing any that waited. One the disk has not finished within the idle
-  watchdog and a poll period of real time is reported, `{:retain, {:error, :timeout}}`
+  newest replacing any that waited. One the disk has not finished within the write limit
+  of real time is reported, `{:retain, {:error, :timeout}}`
   and `failed: :timeout`, and left to finish, its answer taken when it comes, a write made
   clearing the failure (decision 353). `status/1`'s `written_at` follows each write made,
   the store's age; one that fails is reported as above and the plant runs on. While
@@ -3503,9 +3506,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   from a store leaves the store byte for byte, while a cold start, `start: :cold`, and a
   start that finds no store have written the initial values before they open a device
   (decisions 271 and 291), and that write stays. Its child spec gives the
-  shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
-  supervisor waits for every device's close and the store's write before it kills the
-  runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
+  shutdown `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000, so that a
+  supervisor waits for every device's close, the period's write in progress and the
+  store's write before it kills the runner (decisions 326 and 400); a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
   count the time the runner takes to make the store's text, in proportion to the
   retained values, some seconds for a hundred thousand retained timers, so a plant that
   retains that many gives its own, or a supervisor's shutdown kills the runner in its
@@ -3535,8 +3538,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
   not started (decision 285); `start: :cold` reads none of it and writes a new store at
   once, so a store refused as cut short whose readable part is wanted is copied aside
-  first, as its refusal says. The read is limited to the idle watchdog and a poll period
-  of real time, as every write is, and so is the look at the store and the forces file
+  first, as its refusal says. The read is limited to the write limit of real time, as
+  every write is, and so is the look at the store and the forces file
   for a link before either is read, so that a store on a stalled disk, or a FIFO in its
   place, refuses the start as a store that cannot be read.
 - A fresh start that drops anything from its store, a value retyped, resized or no
@@ -3891,8 +3894,10 @@ closed: true
   among them, so a host's mistake is an `ArgumentError` there; it opens each device,
   reads it once and runs the first round at once. Optional: `clock:` (the monotonic one
   unless set), `poll:` (each device's poll period, 10 ms), `overhead:` (the share kept
-  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `forces:` (the file its
-  forces are kept in, below) and `name:`.
+  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `write_limit:` (how long
+  each write or read of its files may take in real time, 5000 ms, a limit of its own
+  apart from the heartbeat, decision 400), `forces:` (the file its forces are kept in,
+  below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -4221,8 +4226,13 @@ stage: nil
 - Each force and unforce writes the whole set to the file before it returns, `name
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
   the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
-  one the disk has not finished within the idle watchdog and a poll period of real time
-  `{:error, {:forces, :timeout}}` (decision 353). A start reads the file raw, off the
+  one the disk has not finished within the write limit of real time `{:error, {:forces,
+  :timeout}}` (decisions 353 and 400). While it waits on its disk the runner keeps the
+  heartbeat, renewing every device's deadline each poll period, as it does while it
+  waits on a slow device's write, and leaves the wait out of the time the idle watchdog
+  reads, so a force on a slow disk latches no device and trips nothing; no round runs
+  meanwhile, every output held, and a periodic task's missed periods are reported as
+  overlaps (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls: one the disk has not answered within that time refuses the
   start, the file told as one that cannot be read. A
@@ -5093,7 +5103,7 @@ in every cycle's outputs at the value it holds.
   Each write is synced and renamed over the store, the rename not itself made durable,
   so on some file systems a power failure just after a write may bring back the write
   before it ("The store on disk", above); and each write the runner makes at an event, a
-  force's among them, is given the idle watchdog and a poll period of real time, so a
+  force's among them, is given the write limit of real time, 5000 ms unless set, so a
   disk slower than that fails every one of them, and has every period's write reported
   late, the plant running on with its store behind, and one the disk finishes after the
   runner gave up on it may still land. Two

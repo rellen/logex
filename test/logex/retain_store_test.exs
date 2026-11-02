@@ -525,14 +525,16 @@ defmodule Logex.RetainStoreTest do
       {:ok, clock} = Manual.start_link(now: @wall)
       store = Path.join(dir, "plant.retain")
 
-      # An idle watchdog that covers a loaded machine's disk, each start and stop writing
-      # the store (RV-4's question 12), none of these tests reading the write's limit.
+      # A write limit that covers a loaded machine's disk, each start and stop writing the
+      # store (RV-4's question 12), none of these tests reading the write's limit: since
+      # decision 400 (RV-11) the limit's own option, where an idle watchdog of 5000 stood
+      # for it.
       opts = [
         configuration: config,
         io: %{},
         clock: {Manual, clock},
         poll: 10,
-        idle: 5000,
+        write_limit: 5000,
         retain: store
       ]
 
@@ -827,8 +829,9 @@ defmodule Logex.RetainStoreTest do
   # quotes (b3-store-image-11); a store that is a symbolic link refused (b3-store-image-5);
   # and decision 284's hand edit made with the runner stopped (a7-docs-2).
   # The tests below that start and stop a runner, each of whose writes is limited to the
-  # idle watchdog and a poll period, give it an idle watchdog of 5,000 ms that covers a
-  # loaded machine's disk, none reading the limit (RV-4's question 12).
+  # write limit, give it a write limit of 5,000 ms that covers a loaded machine's disk,
+  # none reading the limit (RV-4's question 12; since decision 400, RV-11, `write_limit:`,
+  # where an idle watchdog of 5,000 stood for it).
   describe "a hand edit's store (RV-5)" do
     @head "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\n"
 
@@ -844,7 +847,7 @@ defmodule Logex.RetainStoreTest do
     # configuration file's readers read CRLF as LF, since the forces file's tests pin a
     # carriage return after a value as no force).
     test "a store saved with CRLF or a lone CR is refused in plain words", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0, 1])
       assert Runner.stop(runner) == :ok
@@ -1134,7 +1137,7 @@ defmodule Logex.RetainStoreTest do
         s1.go go
       """
 
-      rig(dir, configuration: configured(source, %{"scale" => scale}), idle: 5000)
+      rig(dir, configuration: configured(source, %{"scale" => scale}), write_limit: 5000)
     end
 
     defp edited(store),
@@ -1187,7 +1190,10 @@ defmodule Logex.RetainStoreTest do
   # its first write over it, kept until the next such start, so that a mistaken deploy's
   # drops can be taken back after the next write has made the store the new
   # configuration's; the copy a time-limited write (decision 353), its failure reported
-  # as a failed write's, the start going on; and `status/1` names it.
+  # as a failed write's, the start going on; and `status/1` names it. Each runner here is
+  # given a write limit of 5,000 ms, which covers a loaded machine's disk, none reading
+  # the limit: since decision 400 (RV-11) `write_limit:`, where an idle watchdog of 5,000
+  # stood for it (RV-4's question 12).
   describe "a store a fresh start drops from (decision 360)" do
     defp retyped,
       do:
@@ -1222,7 +1228,7 @@ defmodule Logex.RetainStoreTest do
 
     test "a start that drops copies the store before any device is read, and names the copy",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0, 1])
       assert Runner.stop(runner) == :ok
@@ -1259,7 +1265,7 @@ defmodule Logex.RetainStoreTest do
     # store, makes none and leaves the copy where it is, and status/1 names none; the next
     # that drops replaces it with the store it read.
     test "the copy kept until the next start that drops", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0, 1])
       assert Runner.stop(runner) == :ok
@@ -1307,7 +1313,7 @@ defmodule Logex.RetainStoreTest do
     # configuration no longer has, and a global it no longer retains, beside the retyped
     # counter above.
     test "every kind of drop copies the store", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1342,7 +1348,7 @@ defmodule Logex.RetainStoreTest do
     # cleared and the copy named.
     test "a copy that fails is owed, and no write replaces the store until it is made",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1390,7 +1396,7 @@ defmodule Logex.RetainStoreTest do
     # the link, to another directory, and `Path.expand/1` by the words alone.
     test "the copy written where the store is read, and named as the host spelled it",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1413,7 +1419,7 @@ defmodule Logex.RetainStoreTest do
     # spelling, never the store written again from what it holds: a hand edit's spelling
     # of a number, and a store of version 1, which the runner never writes now.
     test "the copy is the bytes the start read", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1442,7 +1448,7 @@ defmodule Logex.RetainStoreTest do
     # copied for as every drop is, the drop report itself the copy's trigger, with no
     # change to the copy.
     test "a dropped trigger sample copies the store", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1463,7 +1469,7 @@ defmodule Logex.RetainStoreTest do
     # runner with a store paid a reduction more for the host's spellings of its files
     # kept, which only a cost bound saw.
     test "what only the start reads is not kept", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -1490,7 +1496,7 @@ defmodule Logex.RetainStoreTest do
     # written. A stop that could not make it left the store as the start read it, so the
     # next start drops from it again and copies it.
     test "every event's write makes the owed copy first", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
@@ -2084,10 +2090,12 @@ defmodule Logex.RetainStoreTest do
 
     # M6-6's review: a supervisor kills a child that has not ended by its spec's
     # `shutdown:`, which a GenServer's is 5000 ms; a runner's shutdown waits up to the idle
-    # watchdog and a poll period on each device's close and on its writer before it writes,
-    # so its spec gives it `(devices + 2) * (idle + poll)`, never less than 5000
-    # (decision 326, confirmed). Here a close that hangs with `idle: 5000` holds the shutdown 5010 ms,
-    # past 5000, and the store is written all the same.
+    # watchdog and a poll period on each device's close, and on its writer before it
+    # writes, so its spec gives it `(devices + 2) * (idle + poll)`, never less than 5000
+    # (decision 326, confirmed), and since decision 400 (RV-11) the writer's write and its
+    # own each the write limit, `devices * (idle + poll) + 2 * write_limit`. Here a close
+    # that hangs with `idle: 5000` holds the shutdown 5010 ms, past 5000, and the store is
+    # written all the same.
     @tag timeout: 60_000
     test "a supervisor waits for a shutdown whose close hangs to write the store",
          %{tmp_dir: dir} do
@@ -2111,16 +2119,25 @@ defmodule Logex.RetainStoreTest do
       base = [configuration: configured(), clock: {Manual, clock}, retain: "x.retain"]
       spec = &Runner.child_spec(Keyword.merge(base, &1))
 
-      assert %{id: Runner, restart: :temporary, shutdown: 5000} = spec.(io: io.(1))
+      # Decision 400 (RV-11), the leave for a write limited to idle + poll: the writer's
+      # write and the store's own each the write limit, 5000 ms unless set, where each was
+      # the idle watchdog and a poll period, so that each figure below, but the floor's and
+      # a host's own, counts two write limits where it counted two idle watchdogs and poll
+      # periods (5000, 5100, 5610, 15_060, 8040, 5610 and 6020 before).
+      assert %{id: Runner, restart: :temporary, shutdown: 10_510} = spec.(io: io.(1))
       assert spec.(io: io.(1)).start == {Runner, :start_link, [Keyword.merge(base, io: io.(1))]}
-      assert spec.(io: io.(8)).shutdown == 5100
-      assert spec.(io: io.(9)).shutdown == 5610
-      assert spec.(io: io.(1), idle: 5000, poll: 20).shutdown == 15_060
-      assert spec.(io: io.(2), idle: 2000).shutdown == 8040
+      assert spec.(io: io.(8)).shutdown == 14_080
+      assert spec.(io: io.(9)).shutdown == 14_590
+      assert spec.(io: io.(1), idle: 5000, poll: 20).shutdown == 15_020
+      assert spec.(io: io.(2), idle: 2000).shutdown == 14_020
+      assert spec.(io: io.(2), write_limit: 400).shutdown == 5000
+      assert spec.(io: io.(8), write_limit: 400).shutdown == 5000
+      assert spec.(io: io.(9), write_limit: 400).shutdown == 5390
       # An option start_link/1 refuses counts as its default; opts that are no keyword
       # list give a GenServer's 5000.
-      assert spec.(io: io.(9), idle: 0, poll: :fast).shutdown == 5610
-      assert spec.(io: :none, idle: 3000).shutdown == 6020
+      assert spec.(io: io.(9), idle: 0, poll: :fast).shutdown == 14_590
+      assert spec.(io: io.(9), write_limit: 0).shutdown == 14_590
+      assert spec.(io: :none, idle: 3000).shutdown == 10_000
       assert Runner.child_spec(:nonsense).shutdown == 5000
       assert Runner.child_spec([{"io", 1}]).shutdown == 5000
       assert Supervisor.child_spec({Runner, base}, shutdown: 900).shutdown == 900
@@ -2129,7 +2146,8 @@ defmodule Logex.RetainStoreTest do
       # which a supervisor refuses at its shutdown.
       longest = [io: io.(1), idle: 2_147_483_647, poll: 2_147_483_647]
       assert spec.(longest).shutdown == 4_294_967_295
-      assert spec.(io: io.(2), idle: 1_073_741_823, poll: 1).shutdown == 4_294_967_295
+      assert spec.(io: io.(4), idle: 1_073_741_823, poll: 1).shutdown == 4_294_967_295
+      assert spec.(io: io.(1), write_limit: 2_147_483_647).shutdown == 4_294_967_295
     end
 
     # c1-runner-rounds-5, c2-runner-persist-2 (RV-4): a stop whose clock went down before
@@ -2637,13 +2655,14 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
     end
 
-    # A trip's write that fails is reported and the store left as it was. An idle watchdog
+    # A trip's write that fails is reported and the store left as it was. A write limit
     # of 5000: since decision 353 the fresh start's, the trip's and the stop's writes each
-    # have the idle watchdog and a poll period of real time, and at the runner's 510 ms a
-    # loaded machine's sync outran the stop's now and then (scripts/load.sh, RV-4). The
-    # test reads no limit.
+    # have the write limit of real time, and at the runner's 510 ms, the idle watchdog and
+    # a poll period before decision 400 (RV-11) gave the limit an option of its own, which
+    # an idle watchdog of 5000 stood for here, a loaded machine's sync outran the stop's
+    # now and then (scripts/load.sh, RV-4). The test reads no limit.
     test "a trip's write that fails is reported", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       written = File.read!(rig.store)
