@@ -2909,7 +2909,8 @@ its initial value, and runs the first round at once, on what the devices read, t
 not counting the stopped time. `:warm` is `:cold` until `retain` lands. *(Since M6-2,
 2026-10-27, `:warm` keeps what each program marks `retain`, in memory, decision 271, each
 retained timer's `last` its instance's `now`, so the time it stood tripped is not counted
-(decision 273); tested since M6-2's review.)* A
+(decision 273); tested since M6-2's review; since decision 382, RV-10, the resource's
+`now`, so the time since an instance's last scan is not counted either.)* A
 trip's reason is
 one of:
 - `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run;
@@ -4544,7 +4545,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   `now` too, so the time the runner stood tripped is not counted either: decision 57's
   resume and decision 113's anchor rule. The lube timer reads 62 hours and adds only motor
   running after 14:20; a retained `tof` resumes its run-on, so the fan runs for the rest
-  of its delay after the first round, the program's choice; a retained `ton` whose rung is
+  of its delay after the first round, the program's choice, and one held on at the outage,
+  not timing, is put at rest by the restart or the start itself, so no run-on starts by
+  itself (decisions 349 and 385, RV-10); a retained `ton` whose rung is
   still true goes on from its time, one whose rung is false resets. The conventional
   family's TON loses its time to the prescan (RM018A p.134) and only its RTO keeps it
   (p.113), whose `ACC = ACC + (current_time − last_time_scanned)` (p.112); whether its
@@ -12130,7 +12133,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      after the first costing what it did.)* *(RV-3's review found the rule a first scan's
      alone, as worded: a retained `tof` the first scan does not run, on a jumped rung or in
      a block whose `cal` is false, runs its delay at its first run with its rung false,
-     pinned as built and put to the maintainer in `PLAN.md`'s RV-3 entry.)*
+     pinned as built and put to the maintainer in `PLAN.md`'s RV-3 entry.)* *(Superseded
+     in its means by decision 385, landed with RV-10, 2026-11-02: the restart or the start
+     itself puts every retained `tof` held on and not timing at rest, at any depth and
+     wherever it sits, and the first scan's clauses are gone, a scan reading no `first`
+     for a `tof`; the rule, a held-on `tof` comes to rest and one in its run-on resumes,
+     stands.)*
 
 350. **A trigger's sample whose task a trip cut off (the review after Milestone 6),**
      question 4: a cycle records every task's trigger sample before any step runs, so a
@@ -12438,13 +12446,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: the edit refused (a)** (the maintainer, 2026-11-01), as built: accept refuses
      the connection, so the edit is taken only with a restart and the belt never jumps; a
      kept instance's own connection that both configurations make is the one exception.
+     *(RV-10, 2026-11-02: the provisional marks made this number, and the refusal reaches
+     decisions 386's and 387's holds too, told as the one "the candidate holds" or "an
+     untest holds".)*
 
 375. **A falling sample in a cut round (the review after Milestone 6),** RV-3's question 2:
      a task with an interval and a trigger whose round is cut off while its trigger reads
      0.
 
      **Taken: the 0 recorded at once (a)** (the maintainer, 2026-11-01), as built, so the
-     next rise is counted; only a rise waits for its step (decision 350).
+     next rise is counted; only a rise waits for its step (decision 350). *(RV-10: the
+     runtime's provisional mark made this number.)*
 
 376. **A value a line writes two ways (the review after Milestone 6),** RV-3's question 3:
      a refusal quotes a value as its own line writes it, and a line that writes 10 both as
@@ -12468,14 +12480,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: the 25 kept (c)** (the maintainer, 2026-11-01): a start from the store keeps
      a stored preset that no instruction of the program gives, as a warm restart does and
-     as Logix's tag memory would, and reports no change of it. To build in RV-10.
+     as Logix's tag memory would, and reports no change of it. To build in RV-10. *(Landed
+     with RV-10, 2026-11-02: `Logex.Image` tells a preset an instruction gives by the
+     initial value the compiler took from it, the tag's, an element's and each member's,
+     so a preset of a timer or counter declared and run by no instruction, at any depth,
+     is kept as any member and reported as nothing, and one an instruction gives follows
+     the program as decision 308 has it; restated in the `iw_` walk, which draws a changed
+     program that runs no timer, `iw_preset_unrun`.)*
 
 379. **How a retained block is listed (the review after Milestone 6),** RV-3's question 6
      (a5-data-model-6): `Program.retained` lists a block's members where its type's lines
      mark each, `b1.c1.a`, and the block where its instance's line marks it, `b1.c1`.
 
      **Taken: as built (a)** (the maintainer, 2026-11-01): the list follows where `retain`
-     is written.
+     is written. *(RV-10: `Logex.Program.retained/2`'s doc cites this number.)*
 
 380. **-0.0 from Elixir (the review after Milestone 6),** RV-3's question 7
      (a5-data-model-8): a host's initial value of -0.0 for a real, which a source line's
@@ -12490,7 +12508,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      forecast.
 
      **Taken: forecast (b)** (the maintainer, 2026-11-01): the forecast names a done bit
-     a frozen timer's catch-up will set at test. To build in RV-10.
+     a frozen timer's catch-up will set at test. To build in RV-10. *(Landed with RV-10,
+     2026-11-02: a `ton` or an `rto` timing at its last run, `.dn` 0, whose `.acc` and the
+     time it catches up together reach the new `.pre`, is forecast `:dn_rises`, `{acc,
+     pre}` with the state's `.acc`, the existing kind, by `Logex.Edit` and
+     `Logex.Configuration.Edit` alike; pinned against the first scan and the first test
+     cycle, and restated in the edit and timer walks, which draw no frozen `ton` or `rto`.)*
 
 382. **A slow task's timer across a warm restart (the review after Milestone 6),** RV-3's
      question 9 (b2-resource-2): a warm `restart/2` counts a timer's time from its last
@@ -12499,7 +12522,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: counted from the restart (b)** (the maintainer, 2026-11-01): a warm restart
      sets each timer's last time to the resource's now, as `start/2` does. To build in
-     RV-10.
+     RV-10. *(Landed with RV-10, 2026-11-02: `restart/2` restarts every instance at the
+     resource's `now`, which becomes the instance's own, a timer's `last` never later than
+     its instance's (decision 188), so every retained timer at any depth counts from the
+     restart, and a slow task's run-on runs on cycle by cycle exactly as after `start/2`;
+     restated in the `rr_` walk, `rr_rebased_later`, and the scheduler walk's model.)*
 
 383. **`program retain motor` (the review after Milestone 6),** RV-3's question 10: the
      line is an instance named by a keyword (decision 298), and `program retain m1 motor`
@@ -12513,7 +12540,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: read by its value everywhere (b)** (the maintainer, 2026-11-01): `temps[03]`
      names `temps[3]` wherever a host or the forces file names an element. To build in
-     RV-10.
+     RV-10. *(Landed with RV-10, 2026-11-02: `Logex.Name.by_value/1`, the one rule, read by
+     a cycle's input keys, `Logex.Runner.force/3`, `unforce/2` and the forces file where a
+     name is no point as written, the point kept and shown under its own name, and by
+     `put_inputs/3`, `call/4` and `get/2` as they did; two keys naming one point refused.)*
 
 385. **A retained `tof` the first scan skips (the review after Milestone 6),** RV-3's
      question 12: decision 349's rest is a first scan's, so a `tof` on a rung a jump
@@ -12522,7 +12552,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: at rest as the restart sets up the state (b)** (the maintainer, 2026-11-01):
      every retained `tof` with `.en` 1 and `.tt` 0 is put at rest by the restart or start
-     itself, wherever it sits, and a scan pays nothing for it. To build in RV-10.
+     itself, wherever it sits, and a scan pays nothing for it. To build in RV-10. *(Landed
+     with RV-10, 2026-11-02: the warm restart's rebase of each retained timer rests such a
+     `tof`, a `tof_ltime` among them, at any depth, and `instance/2` and `start/2` run the
+     same walk over the env the image laid where it kept a `tof` held on, so `restart/2`
+     and the runner's fresh start from the store too; decision 349's first-scan clauses are
+     gone, the first scan costing exactly a later one's and a `tof` at rest fewer
+     reductions than the parent's; restated in the `rw_`, `iw_` and `rr_` walks.)*
 
 386. **A point rewired between two unwritten var_outputs (the review after Milestone 6),**
      RV-3's question 13: a lone point moves at the first cycle with an empty forecast,
@@ -12530,14 +12566,23 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: held (b)** (the maintainer, 2026-11-01): the point keeps its value until a
      rung writes the new var_output, and the forecast and every report say it is held, as
-     decision 347 holds one. To build in RV-10.
+     decision 347 holds one. To build in RV-10. *(Landed with RV-10, 2026-11-02, with
+     decision 387: a point the configuration a switch starts copies out frozen through a
+     connection the one it stops does not make, of an instance both run as one type, is
+     held, `{:held, ...}`, its var_output started at its value, a scalar, an element and
+     each unwritten element of an array wired whole, both ways, given back, and held again
+     by assemble and cancel after a restart; decision 374's refusal reaches it; restated
+     in the configuration-edit walk, `:held_rewired`.)*
 
 387. **A point newly wired from an unwritten var_output (the review after Milestone 6),**
      RV-3's question 14: a point no connection drove moves to the var_output's value with
      an empty forecast.
 
      **Taken: held (b)** (the maintainer, 2026-11-01): the point keeps its value until a
-     rung writes the var_output, reported as held. To build in RV-10.
+     rung writes the var_output, reported as held. To build in RV-10. *(Landed with RV-10,
+     2026-11-02, by decision 386's rule; an untest holds the running configuration's own
+     newly wired points so, which changed two of RV-3's pins of an untest's report;
+     restated in the configuration-edit walk, `:held_newly_wired`.)*
 
 388. **A held var_output a rung reads (the review after Milestone 6),** RV-3's question 15:
      with `xic aux ote lamp`, the hold sets `aux` to its point's value and the lamp moves,
@@ -12545,7 +12590,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: the edit refused (c)** (the maintainer, 2026-11-01): accept refuses an edit
      that would hold a var_output a rung of its program reads, naming it, so the edit is
-     taken only with a restart. To build in RV-10.
+     taken only with a restart. To build in RV-10. *(Landed with RV-10, 2026-11-02: in the
+     refusal's form decision 374's has, naming the var_output and the line of the first
+     rung that reads it, a scalar, an element read by its name or a tag subscript, and a
+     word's bit, both ways; a kept instance's own connection both configurations make is
+     excepted, as for decision 374 (provisional); restated in the configuration-edit
+     walk's prediction of accept's refusals, `:read_held`.)*
 
 389. **A stored sample of a task the configuration drops (the review after Milestone 6),**
      RV-3's question 16: a start from a store that holds a task's own trigger sample,
@@ -12554,6 +12604,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: dropped and started (b)** (the maintainer, 2026-11-01): the sample is
      dropped and reported as a dropped value is (decision 277), the store copied first to
      `<store>.dropped` as decision 360 has it, and the resource starts. To build in RV-10.
+     *(Landed with RV-10, 2026-11-02: a sample by a name the configuration declares as no
+     global and as no task with a single is dropped, `{task, :undeclared}`, beside every
+     other drop, so `status/1` reports it; only one by a global's name the image does not
+     hold is still refused (provisional). RV-5's `<store>.dropped` copy, decision 360,
+     follows `start/2`'s dropped list, so it covers this drop as any; RV-5 had not landed
+     on `main` when RV-10 closed.)*
 
 ---
 
