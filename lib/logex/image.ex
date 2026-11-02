@@ -235,7 +235,7 @@ defmodule Logex.Image do
       configuration_line(name, config.name) ++
         map_lines(globals, "globals", &global_lines/2) ++
         map_lines(instances, "instances", &instance_lines/2) ++
-        map_lines(triggers, "triggers", &trigger_lines(&1, &2, {globals, tasks(config)}))
+        map_lines(triggers, "triggers", &trigger_lines(&1, &2, {globals, declared(config)}))
 
     raised(lines)
   end
@@ -250,16 +250,38 @@ defmodule Logex.Image do
 
   # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
   # of a global the image holds; and since RV-3's review a task's own, by the name of a
-  # task the configuration declares with a single, which no global can have.
-  defp trigger_lines(name, sample, {globals, tasks}),
+  # task, which no global can have. Since decision 389 (the maintainer, 2026-11-01) one of a
+  # task the configuration no longer declares with a single is the start's to drop and
+  # report, as a changed configuration's (`dropped_triggers/3`), so only a name the
+  # configuration declares as a global, which the image does not hold, is the image's own
+  # mistake: a global's sample kept without its global.
+  defp trigger_lines(name, sample, {globals, declared}),
     do:
       name_lines(name, "triggers") ++
         sample_lines(sample, name) ++
-        held_lines(held_global?(globals, name) or is_map_key(tasks, name), name)
+        held_lines(held_global?(globals, name) or not is_map_key(declared, name), name)
 
-  defp tasks(%{tasks: tasks}) when is_list(tasks),
-    do:
+  defp declared(%{globals: globals}) when is_list(globals),
+    do: for(%{name: name} <- globals, into: %{}, do: {name, true})
+
+  defp declared(_config), do: %{}
+
+  # Decision 389 (the maintainer, 2026-11-01), RV-3's question 16: a sample the image holds
+  # by a task's name, which a round cut short leaves (decision 350), where the
+  # configuration declares no task of that name with a single, the task taken out or its
+  # trigger, is dropped and reported as a dropped value is (decision 277), `{task,
+  # :undeclared}`, and the resource starts, where until RV-10 the start was refused; so a
+  # store that held it is copied to `<store>.dropped` before the runner's first write over
+  # it, as decision 360 has every store a fresh start drops from.
+  def dropped_triggers(%{triggers: triggers, globals: globals}, %{tasks: tasks}) do
+    singles =
       for(%{name: name, single: single} <- tasks, is_binary(single), into: %{}, do: {name, true})
+
+    for {name, _sample} <- Enum.sort(triggers),
+        not is_map_key(globals, name),
+        not is_map_key(singles, name),
+        do: {name, :undeclared}
+  end
 
   defp sample_lines(sample, _name) when is_fitting(:bool, sample), do: []
 

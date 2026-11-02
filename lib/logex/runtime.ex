@@ -914,7 +914,9 @@ defmodule Logex.Runtime do
   for an array's or an array of instances' sizes; `:unretained` where the qualifier went;
   `:misfit` for a value of the right type that does not fit it; and `{:preset, stored,
   now}` for a timer's or counter's stored preset the program's replaced, the number on
-  the instruction that runs it (decisions 308 and 378).
+  the instruction that runs it (decisions 308 and 378); and since decision 389 `{task,
+  :undeclared}` for a task's own trigger sample (decision 350) of a task `config`
+  declares with no single or not at all, which a store written at a cut round keeps.
   Every entry is a stored value the start did not keep, so the list keeps its name. A
   member every element of an array of instances drops for one reason is one entry,
   `"m1.gates[*].j"`, decision 259's path form, at any depth, `hs[*].ws[*].x`; elements
@@ -923,10 +925,11 @@ defmodule Logex.Runtime do
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
   instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
   One that is not, or whose parts are not, a sample that is no bool's value or of a
-  global `globals` does not hold among them, a task's sample being of a task `config`
-  declares with a single, or one of another configuration, which a line naming both
-  tells, is the host's mistake: one `ArgumentError`, a line each, after `config`'s own
-  check.
+  global `config` declares that `globals` does not hold among them, or one of another
+  configuration, which a line naming both tells, is the host's mistake: one
+  `ArgumentError`, a line each, after `config`'s own check. A sample by any other name is
+  a task's (decision 350), dropped where `config` declares no such task with a single
+  (decision 389).
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -949,7 +952,7 @@ defmodule Logex.Runtime do
       )
 
     {%{runtime | globals: globals, instances: instances, tasks: tasks},
-     Image.ordered(dropped_globals ++ dropped_instances)}
+     Image.ordered(dropped_globals ++ dropped_instances ++ Image.dropped_triggers(image, config))}
   end
 
   # Each image instance's type by its name in the wiring, a map, where until the review

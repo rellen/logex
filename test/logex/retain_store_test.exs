@@ -808,15 +808,18 @@ defmodule Logex.RetainStoreTest do
 
       raises(~r/line 3: `bad` is no line of a store/, fn -> Runner.start_link(rig.opts) end)
 
-      # What its image holds the start judges as any image, each line naming the store.
+      # What its image holds the start judges as any image, each line naming the store: a
+      # sample of `shown`, a global the store does not hold. (Until RV-10 this was `trigger
+      # arm 1`, of no global of the configuration, which decision 389 makes a task's sample
+      # the start drops, below.)
       File.write!(
         rig.store,
-        "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\ntrigger arm 1\n"
+        "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\ntrigger shown 1\n"
       )
 
       raises(
-        "#{rig.store}: `triggers` holds \"arm\", which `globals` does not hold: a trigger's " <>
-          "last sample is kept only with its retained global",
+        "#{rig.store}: `triggers` holds \"shown\", which `globals` does not hold: a " <>
+          "trigger's last sample is kept only with its retained global",
         fn -> Runner.start_link(rig.opts) end
       )
 
@@ -829,7 +832,7 @@ defmodule Logex.RetainStoreTest do
 
       # No device was opened or read, and the store is as it was.
       assert Sim.reads(rig.panel) == 0
-      assert File.read!(rig.store) =~ "trigger arm 1"
+      assert File.read!(rig.store) =~ "trigger shown 1"
     end
 
     # `start: :cold` reads no store, a broken one or another configuration's among them,
@@ -1802,7 +1805,12 @@ defmodule Logex.RetainStoreTest do
       end
     end
 
-    test "an image's sample of a task is a task's of the configuration, or a pinned line" do
+    # Since decision 389 a sample of a name the configuration declares with no single, a
+    # task made periodic or taken out, is dropped and reported, and the resource starts,
+    # where until RV-10 it was refused, "`triggers` holds \"fast\", which `globals` does not
+    # hold".
+    test "an image's sample of a task is a task's of the configuration, or dropped " <>
+           "(decision 389)" do
       programs =
         for {name, text} <- [counting: @counting, tallying: @tallying], into: %{} do
           {:ok, program} = Logex.compile(text, name: Atom.to_string(name))
@@ -1823,12 +1831,52 @@ defmodule Logex.RetainStoreTest do
       {started, []} = Runtime.start(config, %{image | triggers: %{"arm" => 1, "early" => 0}})
       assert {started.tasks["ev"].last, started.tasks["early"].last} == {1, 0}
 
-      assert_raise ArgumentError,
-                   "`triggers` holds \"fast\", which `globals` does not hold: a trigger's " <>
-                     "last sample is kept only with its retained global",
-                   fn ->
-                     Runtime.start(config, %{image | triggers: %{"arm" => 1, "fast" => 0}})
-                   end
+      assert {started, [{"fast", :undeclared}]} =
+               Runtime.start(config, %{image | triggers: %{"arm" => 1, "fast" => 0}})
+
+      assert {started.tasks["ev"].last, started.tasks["early"].last} == {1, 1}
+    end
+  end
+
+  # Decision 389 (the maintainer, 2026-11-01), RV-3's question 16: a store written at a
+  # round cut between two tasks on one trigger holds the cut task's own sample (decision
+  # 350); a fresh start of a configuration that no longer declares that task drops the
+  # sample, reports it in `status/1` as any dropped value, and starts, where until RV-10 it
+  # started nothing. RV-5's copy of a store a fresh start drops from, decision 360, follows
+  # the same `dropped`.
+  describe "a stored sample of a task the configuration drops (decision 389)" do
+    test "a fresh start drops it, reports it and starts", %{tmp_dir: dir} do
+      rig = armed(dir, :last)
+      runner = cut_off(rig)
+      assert File.read!(rig.store) =~ "\ntrigger early 1\n"
+      killed(runner)
+      opener_down(rig.panel)
+
+      programs =
+        for {name, text} <- [arming: @arming, counting: @counting, faulting: @faulting],
+            into: %{} do
+          {:ok, program} = Logex.compile(text, name: Atom.to_string(name))
+          {Atom.to_string(name), program}
+        end
+
+      config =
+        configured(
+          "task fast interval 1 priority 1\ntask ev single arm priority 5\n" <>
+            "var_global eye_1 bool at panel.i.0\nvar_global retain arm bool\n" <>
+            "var_global retain hits dint\nvar_global retain early_hits dint\n" <>
+            "program f1 faulting with fast\nprogram a1 arming with fast\n  a1.eye eye_1\n" <>
+            "program c1 counting with ev\n",
+          programs
+        )
+
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, config))
+      assert %{dropped: [{"early", :undeclared}]} = Runner.status(runner).retain
+      Manual.advance(rig.clock, 20)
+
+      # The cut task gone, `ev` runs on the sample its trigger's entry held, as before.
+      assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {0, 1}
+      assert Runner.get!(runner, "early_hits") == 1
+      assert Runner.stop(runner) == :ok
     end
   end
 

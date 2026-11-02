@@ -1291,6 +1291,11 @@ defmodule Logex.RetainImageTest do
 
     # Decision 313: the image's `triggers`, each retained single's last sample by its
     # global's name, a bool's value, of a global the image holds; any other a pinned line.
+    # Since decision 389 a name the configuration declares as no global is a task's own
+    # sample (decision 350), of a task the configuration no longer declares with a single,
+    # which the start drops and reports, `total2` among them, where until RV-10 it was
+    # refused as `a.b`'s second line was; one it declares as a global the image does not
+    # hold, `shown`, is still the image's mistake.
     test "an image's triggers that are none, or that hold no sample of a retained global" do
       config = plant()
       image = Runtime.retained(Runtime.start(config))
@@ -1305,18 +1310,22 @@ defmodule Logex.RetainImageTest do
         Enum.join(
           [
             "`triggers` holds \"a.b\", which names no global",
-            "`triggers` holds \"a.b\", which `globals` does not hold: a trigger's last " <>
-              "sample is kept only with its retained global",
             "`triggers` holds \"arm\" at 2, which is no last sample of a trigger, a bool's value",
-            "`triggers` holds \"total2\", which `globals` does not hold: a trigger's last " <>
+            "`triggers` holds \"shown\", which `globals` does not hold: a trigger's last " <>
               "sample is kept only with its retained global"
           ],
           "\n"
         ),
         fn ->
-          Runtime.start(config, %{image | triggers: %{"arm" => 2, "a.b" => 0, "total2" => 1}})
+          Runtime.start(config, %{
+            image
+            | triggers: %{"arm" => 2, "a.b" => 0, "total2" => 1, "shown" => 0}
+          })
         end
       )
+
+      assert {_started, [{"total2", :undeclared}]} =
+               Runtime.start(config, %{image | triggers: %{"arm" => 0, "total2" => 1}})
 
       raises(
         "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>

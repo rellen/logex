@@ -3212,7 +3212,9 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   was, in the resource and in the store, and the task runs on the next cycle that samples
   the rise, a warm restart's or a fresh start's, each task by its own sample, so that of
   two event tasks on one trigger with the round cut between their steps only the one cut
-  off runs, once (decision 350). A cold
+  off runs, once (decision 350); a store that holds such a task's own sample, started with
+  a configuration that no longer has that task, drops it, reported in `status/1` as any
+  dropped value, `{"early", :undeclared}`, and starts (decision 389). A cold
   restart puts it back with its trigger, and an input point's trigger already 1 still
   runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and
