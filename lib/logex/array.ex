@@ -8,9 +8,9 @@ defmodule Logex.Array do
   # Its type is `{:array, type, dims}`, `type` an elementary type of
   # `Logex.Declarations.table/0` and `dims` a list of one to three counts, each 1 or more,
   # `[8]`, `[4, 8]` or `[2, 3, 4]`, with no more than `max_elements/0` elements in all, a
-  # bound that since RV-9 (decision 370) holds a declaration at every depth, counted through
-  # every array of instances it holds (`deep_size/1`). Its
-  # elements have one order, the rightmost subscript varying fastest (PM004L p.35), which an
+  # bound that since RV-9 (decision 370) holds a declaration at every depth, and since
+  # RV-12 (decision 403) counts every tag, element and instance it holds (`deep_size/1`).
+  # Its elements have one order, the rightmost subscript varying fastest (PM004L p.35), which an
   # initial list follows. Its value in a state is a tuple, and for more dimensions a tuple
   # of tuples, `{{0, 0}, {0, 0}}` for an `int[2,2]` (§4.12's routine choice, the spike's
   # measure): read in constant time and copied on a write, a write copying the tuple of
@@ -54,39 +54,43 @@ defmodule Logex.Array do
   def size(dims), do: Enum.reduce(dims, 1, &(&1 * &2))
 
   @doc false
-  # Decision 370 (RV-9): the elements a declaration of `type` holds at every depth, counted
-  # through every array of instances, which `max_elements/0` bounds as it bounds a single
-  # array (`Logex.Declarations.check/1`). An elementary array holds its own elements; an
-  # array of instances holds each element's elements where its type holds any, so that
-  # `cell[256]` of a type holding `ton[256]` holds 65,536, as `ton[256,256]` does, and its
-  # own where the type holds none, so that `ton[65536]` holds 65,536 still; an instance
-  # holds what its type holds, its `elements`, kept in its schema (`held_by/2`); and any
-  # other declaration holds none. Read in constant time: no type is walked and no element
-  # built.
+  # Decisions 370 and 403 (RV-9, RV-12): the elements a declaration of `type` holds at
+  # every depth, every tag, element and instance its first state holds, summed, which
+  # `max_elements/0` bounds as it bounds a single array (`Logex.Declarations.check/1`). An
+  # elementary tag is one; an elementary array is its elements, one each, and no more, so
+  # `int[65536]` holds 65,536 still; a timer or a counter is one, its members not counted;
+  # an instance of a user block is one and every tag, element and instance its type holds,
+  # its `elements`, kept in its schema (`held_by/2`); and an array of instances is its
+  # elements, each such an instance, so `cell[256]` of a type holding `ton[256]` holds
+  # 256 x 257, 65,792, and `ton[65536]` 65,536. Read in constant time: no type is walked
+  # and no element built.
   def deep_size({:array, %Logex.FbType{elements: elements}, dims}),
-    do: size(dims) * max(1, elements)
+    do: size(dims) * (1 + elements)
 
   def deep_size({:array, _elementary, dims}), do: size(dims)
-  def deep_size(%Logex.FbType{elements: elements}), do: elements
-  def deep_size(_scalar), do: 0
+  def deep_size(%Logex.FbType{elements: elements}), do: 1 + elements
+  def deep_size(_scalar), do: 1
 
   @doc false
-  # Decision 370 (RV-9): the elements a block type's `members` hold at every depth, summed,
-  # each as `deep_size/1` counts a declaration of its type, a member holding a user block's
-  # instance, `{:block, name}`, read as its type in `blocks`, the table it is read inside
-  # (decision 53), whose `elements` were counted when it was built: once a type, each count
-  # linear in the type's own members. A built-in holds none, so its `elements` are 0.
+  # Decisions 370 and 403 (RV-9, RV-12): what an instance of a block type whose members
+  # are `members` holds at every depth, each member counted as `deep_size/1` counts a
+  # declaration of its type, summed: a member holding a user block's instance, `{:block,
+  # name}`, read as its type in `blocks`, the table it is read inside (decision 53), whose
+  # `elements` were counted when it was built: once a type, each count linear in the
+  # type's own members. A built-in's members are not counted, so its `elements` are 0.
   def held_by(members, blocks),
     do: Enum.reduce(members, 0, fn %{type: type}, sum -> sum + member_size(type, blocks) end)
 
   defp member_size({:array, {:block, name}, dims}, blocks),
-    do: size(dims) * max(1, named_size(name, blocks))
+    do: size(dims) * (1 + named_size(name, blocks))
 
-  defp member_size({:block, name}, blocks), do: named_size(name, blocks)
+  defp member_size({:block, name}, blocks), do: 1 + named_size(name, blocks)
   defp member_size(type, _blocks), do: deep_size(type)
 
+  # A type the table does not hold counts as one that holds nothing: no compile gives
+  # such a member, and a check compiles none again with a table that lacks one.
   defp named_size(name, blocks) when is_map_key(blocks, name),
-    do: deep_size(Map.fetch!(blocks, name))
+    do: Map.fetch!(blocks, name).elements
 
   defp named_size(_name, _blocks), do: 0
 

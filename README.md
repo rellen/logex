@@ -2431,14 +2431,18 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
     at 32767;
   - a user block, `var gates gate[4]`, which `Logex.compile_file/1` loads from `gate.ld`
     beside the program as it loads a block declared alone.
-- **65,536 elements at every depth.** A declaration's elements are counted through every
-  array of instances it holds, and past 65,536 it is refused at its line (decision 370):
-  an element of an array of blocks counts the elements its block holds, so `var row
-  cell[256]`, each `cell` holding 256 blocks of `ton[256]`, would hold 16,777,216 timers,
-  and an instance counts every array its block holds, at any depth, together. `var row
-  cell[1]` holds 65,536 and is taken, as `ton[256,256]` is. Only arrays are counted
-  (provisional): an instance that is no array's element counts nothing of its own, so a
-  block of two single timers holds 0, and `var w pair[65536]`, 131,072 timers, is taken.
+- **65,536 elements at every depth.** A declaration counts every tag, element and
+  instance its first state holds, at every depth, summed, and past 65,536 it is refused
+  at its line, in words that name the count (decisions 370 and 403). One element of an
+  elementary array counts one, so `int[65536]` is taken; a timer or a counter counts one,
+  its members not counted, so `ton[65536]` and `ton[256,256]` are taken too; and an
+  instance of a block counts one and every tag, element and instance its block holds,
+  its var_inputs and var_outputs among them. So `var row cell[256]`, `cell` a block
+  holding `ton[256]` alone, would hold 65,792, 256 instances and 65,536 timers, and is
+  refused; so is `var x two`, `two` a block holding two `int[40000]` alone, at 80,001,
+  though `two` itself compiles; so is an array of 65,536 blocks of 200 single timers;
+  and so is a chain of blocks each holding two single instances of the one below, at the
+  depth whose count passes 65,536.
 - **Literal subscripts to run an element.** An instruction that runs an instance names
   its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
   storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each
