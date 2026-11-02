@@ -337,7 +337,8 @@ review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](do
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
 items RV-4 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
 RV-1 and RV-2 left, decisions 361–373, which RV-9 builds, among them a rung that is a
-label alone accepted where a jump names it (decision 367). RV-3's three have landed, a
+label alone accepted where a jump names it (decision 367), and to those RV-3 left,
+decisions 374–389, which RV-10 builds. RV-3's three have landed, a
 held output held through a var_output no rung writes (decision 347), a retained `tof`
 at rest on a first scan (decision 349) and a trigger's rise a trip cut off taken in the
 next cycle (decision 350). The one of decisions 347–360 that changes the source language
