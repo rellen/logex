@@ -12442,7 +12442,13 @@ and CI checked; each fix with a test that fails when it is reverted.
   (0.01% to 0.10%), the loader's guard on a loaded block among them; nothing else in
   `lib/` changed, so every scan and every compile through `compile/2` is the parent's.
   The gate at `0fe64dd`: GATE-OK, 2,638 (2,627 tests and 11 doctests), CI green; at the
-  merge with `main` at `b67de5f`, `de82d3d`, GATE-OK on its second run, 2,638.
+  merge with `main` at `b67de5f`, `de82d3d`, GATE-OK on its second run, 2,638, CI green.
+  `438226e`, these notes, was red in CI on its first run (41381018180):
+  `retain_period_test.exs`'s "a round with a store and a long period costs within a few
+  reductions of none" read 10.8 reductions a round more against a bound of 10, the
+  least of nine runs, the scheduler-sensitive cost RV-3's review raised to nine runs after
+  CI read 10.3 (RV-4's file, and RV-7's kind, decision 357); run again (attempt 2) it was
+  green. That commit changed only `PLAN.md` and `docs/organisation.md`.
 
 - **RV-10 — the answers to RV-3's questions** (decisions 378, 381, 382, 384, 385, 386, 387,
   388 and 389). A preset no instruction gives kept from the store; a done bit a frozen
