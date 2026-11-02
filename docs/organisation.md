@@ -12555,6 +12555,153 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      dropped and reported as a dropped value is (decision 277), the store copied first to
      `<store>.dropped` as decision 360 has it, and the resource starts. To build in RV-10.
 
+390. **A stalled disk at a restart or a start (the review after Milestone 6),** RV-4's
+     question 1: a restart's read of the forces file is limited as decision 353 limits a
+     write, so on a stalled card a warm restart answers `{:error, {:forces, :timeout}}`
+     and the line stays tripped, and a fresh start is refused as the forces file cannot be
+     read. Logix keeps forces in controller memory.
+
+     **Taken: carry on and say so (b)** (the maintainer, 2026-11-01): a restart whose
+     read of the forces file fails keeps the forces the runner holds, and a fresh start
+     starts with none, each reporting the file it could not read in `status/1`. To build
+     in RV-11.
+
+391. **A write that timed out may land (the review after Milestone 6),** RV-4's question
+     2: a write cut off at its limit may still be finished by the system once the disk
+     wakes, so a stop told `{:error, {:retain, :timeout}}` may leave that very write as
+     the store.
+
+     **Taken: unknown until a later write (b)** (the maintainer, 2026-11-01): `status/1`
+     reports the last write as unknown, neither failed nor written, until a later write
+     lands. To build in RV-11.
+
+392. **One `.tmp` name (the review after Milestone 6),** RV-4's question 4: each write's
+     temporary file is one name beside the store, made new and exclusively each write,
+     whatever stands there deleted first.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): at most one `.tmp` beside a
+     store, and nothing piles up.
+
+393. **A card whose first read fails (the review after Milestone 6),** RV-4's question 5:
+     an adapter opened whose first read fails is written 0 once and closed.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01), as Logix's default fault state
+     is off.
+
+394. **A clock that goes wrong (the review after Milestone 6),** RV-4's question 6: a
+     host's clock that answers no integer once the runner runs stops the runner as a
+     shutdown naming the clock, its outputs 0.
+
+     **Taken: a trip (b)** (the maintainer, 2026-11-01): the runner trips, naming the
+     clock, its outputs 0, so a restart brings the line back once the clock is mended. To
+     build in RV-11.
+
+395. **A runner killed while a card hangs (the review after Milestone 6),** RV-4's
+     question 7: the hung device is killed idle + poll after the runner, which gives a
+     device not hung the time to latch and write its own 0.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01).
+
+396. **A busy HMI with no continuous task (the review after Milestone 6),** RV-4's
+     question 8 (c1-runner-rounds-2): the share a host's requests are held to applies
+     against the continuous task alone, so with none a tight loop of `status/1` makes a
+     10 ms periodic task late. Logix's communications, with no continuous task, take only
+     the time no periodic task needs.
+
+     **Taken: the share against periodic tasks too (b)** (the maintainer, 2026-11-01): a
+     host's requests are held to their share against a due periodic round as against the
+     continuous task. To build in RV-11.
+
+397. **A device's report backlog (the review after Milestone 6),** RV-4's question 9
+     (c2-runner-persist-5): thousands of reports in one poll period drain in time
+     quadratic in their number.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): decision 142's order stands.
+
+398. **A slow card's open (the review after Milestone 6),** RV-4's question 10
+     (c3-io-contract-6): every device call, an adapter's `init/3` among them, is limited
+     to idle + poll, so a drive whose connect takes 600 ms cannot start without the whole
+     plant's heartbeat loosened. Logix gives a module's open its own timeout.
+
+     **Taken: an `open:` limit of its own (b)** (the maintainer, 2026-11-01): a device's
+     opening is limited by a limit of its own, the heartbeat by idle + poll. To build in
+     RV-11.
+
+399. **An address shown as text (the review after Milestone 6),** RV-4's question 11
+     (c3-io-contract-7): a trip for a misread address names it as the adapter's list,
+     `{:unknown_address, ~c"\a"}`.
+
+     **Taken: as the configuration writes it (b)** (the maintainer, 2026-11-01): the
+     address is shown as `panel.i.7`. To build in RV-11.
+
+400. **A busy machine's sync (the review after Milestone 6),** RV-4's question 12: a
+     healthy disk's sync can take longer than idle + poll on a machine whose cores are
+     busy, so a force or a stop times out with nothing wrong. Logix does not tie storing
+     to nonvolatile memory to the I/O heartbeat.
+
+     **Taken: a `write_limit:` of its own (b)** (the maintainer, 2026-11-01): every file
+     write and read decision 353 limits is limited by a `write_limit:` option, its
+     default a few seconds, apart from the heartbeat; decision 353 stands with that limit
+     in place of idle + poll. To build in RV-11.
+
+401. **A period's write on a stalled disk (the review after Milestone 6),** RV-4's
+     question 13: the write past its limit is reported `:timeout` once and left to
+     finish, the newest image written when it answers.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01), as decision 275's period and
+     the life walk have it.
+
+402. **A label used twice that a jump names (the review after Milestone 6),** RV-9's
+     question 1: `lbl done` on two rungs after `jmp done` tells the second only that
+     `done` already labels a rung.
+
+     **Taken: told once (a)** (the maintainer, 2026-11-01), as built.
+
+403. **What a declaration counts (the review after Milestone 6),** RV-9's questions 2 and
+     7: decision 370 counts the elements of arrays through every array of instances,
+     summed, and no single instance, so a block of 200 single timers holds 0 and `var x
+     wide[65536]`, 13.1 million timers, compiles, as does a chain of blocks each holding
+     two of the one below.
+
+     **Taken: everything (b)** (the maintainer, 2026-11-01): a declaration counts every
+     tag, element and instance its first state holds, at every depth, summed, and past
+     65,536 is refused at its line, so `var x two` of two `int[40000]`, `cell[256]` of a
+     block holding `ton[256]` (65,792), `wide[65536]` and the chain are refused. Decision
+     370 stands with this count. To build in RV-12.
+
+404. **The loader's trust (the review after Milestone 6),** RV-9's question 3: a host that
+     calls the internal `Logex.Compiler.loaded/2` with a hand-edited block type gets it
+     compiled unchecked.
+
+     **Taken: a token only the loader holds (b)** (the maintainer, 2026-11-01): a type is
+     trusted as the loader's own only through what the loader alone makes during its
+     load, so a hand-edited type handed in any way is checked as decision 54 has it. To
+     build in RV-12.
+
+405. **What decision 372 tells apart (the review after Milestone 6),** RV-9's question 4:
+     `ote w[i].3` beside `ote w[j].4`, two bit numbers, and `ons e[1,1]` beside `ote
+     e[i,0]`, a storage bit beside a write that differ in a literal place, are still
+     warned as may share.
+
+     **Taken: both told apart (b and c)** (the maintainer, 2026-11-01): a bit's literal
+     number is one more place, and a one-shot's storage bit is judged as a write is. To
+     build in RV-12.
+
+406. **The fragment's setup (the review after Milestone 6),** RV-9's question 5: decision
+     365's setup is the test's own packing line, allowing 1 to 4 advances where 1 happens.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01).
+
+407. **`wired.logex`'s first line (the review after Milestone 6),** RV-9's question 6: the
+     file has no comment line, so README's warning cites its line 7.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01).
+
+408. **A label followed by empty groups (the review after Milestone 6),** RV-9's question
+     8: `lbl done ( )` is refused as a rung that writes nothing though a jump names it.
+
+     **Taken: refused (a)** (the maintainer, 2026-11-01), as built.
+
 ---
 
 ## 8. Sources, and what is unverified
