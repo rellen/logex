@@ -337,7 +337,7 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-5 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
+items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
 RV-3 left, decisions 374–389, which RV-10 builds, and to those RV-4 and RV-9 left,
 decisions 390–408, which RV-11 and RV-12 build. The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
@@ -352,7 +352,10 @@ next cycle (decision 350). RV-4's, the runner's, have landed too: each device's 
 given its own time (decision 348), every file write the runner makes limited (decision
 353), a restart judged as it arrives (decision 354) and two runners of one VM refused one
 store or forces file (decision 356), each in "Running a plant on the clock" and "The
-store on disk", below. The one of decisions 347–360 that changes the source language
+store on disk", below. RV-5's, the store's, have landed: a store's last line its count of
+lines, `logex retain 2`, so that a store cut short is refused, never read short (decision
+355), and a copy of the store a fresh start drops from, `<store>.dropped` (decision 360),
+each in "The store on disk". The one of decisions 347–360 that changes the source language
 has landed with RV-2: a rung that writes nothing and jumps nowhere, such as the first half
 of a rung wrapped onto two lines, `xic start xio stop` above `ote motor`, is refused at
 its line, told that a newline ends a rung (decision 351).
