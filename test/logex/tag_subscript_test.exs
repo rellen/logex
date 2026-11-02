@@ -1454,6 +1454,25 @@ defmodule Logex.TagSubscriptTest do
         assert {rungs, said(rungs)} == {rungs, told}
       end
     end
+
+    # RV-12's review: a write through a tag subscript that meets several storage bits is
+    # told of each in name order, whatever order their one-shots come in, as before
+    # decision 405 (RV-2, a4-warnings-walk-3).
+    test "a write that meets several storage bits is told of each in name order" do
+      for {rungs, bits, line, at} <- [
+            {"xic a ons e[1,0] ote p\nxic a ons e[0,0]\nxic a ote e[i,0]", ["e[0,0]", "e[1,0]"],
+             20, %{"e[0,0]" => 19, "e[1,0]" => 18}},
+            {"xic a ote e[i,0]\nxic a ons e[1,0] ote p\nxic a ons e[0,0]", ["e[0,0]", "e[1,0]"],
+             18, %{"e[0,0]" => 20, "e[1,0]" => 19}},
+            {"xic a ons w[2].3 ote p\nxic a ons w[1].3\nxic a ote w[i].3", ["w[1].3", "w[2].3"],
+             20, %{"w[1].3" => 19, "w[2].3" => 18}},
+            {"xic a ons e1[3] ote p\nxic a ons e1[0]\nxic a ons e1[2]\nxic a ote e1[i]",
+             ["e1[0]", "e1[2]", "e1[3]"], 21, %{"e1[0]" => 19, "e1[2]" => 20, "e1[3]" => 18}}
+          ] do
+        told = Enum.flat_map(bits, &stored(line, "ote", &1, "ons", Map.fetch!(at, &1)))
+        assert {rungs, said(rungs)} == {rungs, told}
+      end
+    end
   end
 
   describe "an online edit" do
@@ -1927,6 +1946,149 @@ defmodule Logex.TagSubscriptTest do
       small = compile.(200)
       large = compile.(400)
       assert large / small < 2.2, "#{small} at 200, #{large} at 400"
+    end
+
+    # RV-12's review: decision 405's index of the storage bits was built for every array a
+    # one-shot keeps one in, up to 16 projections a bit, though only a write through a tag
+    # subscript looks it up, so a routine of one-shots on elements and no such write
+    # compiled up to 16% dearer than at `f31bf70`, 357 reductions a rung for bits of a word
+    # array of three dimensions, 210 for elements of a bool array of three, 117 and 70 for
+    # one dimension's, and so beside a write through a tag subscript of another array. It
+    # is built only for the arrays a write names through a tag subscript. Each program here,
+    # alone and beside `ote z[i]`, compiles within 16 reductions a rung of what it did at
+    # `f31bf70`, whose compile and parse these are, the least of five runs there and of
+    # three here, each in a process of its own with a heap the collector never visits, on
+    # Elixir 1.20.4 and OTP 28; the parse is the same at both, so the parent's compile is
+    # restated as its ratio to the parse.
+    test "one-shots on elements of arrays no write names through a tag subscript cost what they did before decision 405" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+
+      head = fn n, array ->
+        "var_input a bool\nvar #{array}\n" <> Enum.map_join(0..(n - 1), "", &"var p#{&1} bool\n")
+      end
+
+      three = &"h[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}].#{div(&1, 64)}"
+      cube = &"f[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{div(&1, 16)}]"
+      beside = "\nvar_input i int\nvar z bool[4]"
+
+      # {label, rungs, the array, a rung's storage bit, the rung after them, the parent's
+      # compile, its parse}
+      for {label, n, array, storage, last, compiled_then, parsed_then} <- [
+            {"bits of a word array of three dimensions", 200, "h word[4,4,4]", three, "", 440_495,
+             29_554},
+            {"elements of a bool array of three dimensions", 64, "f bool[4,4,4]", cube, "",
+             131_205, 9_277},
+            {"bits of a word array of one dimension", 200, "w word[64]",
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "", 389_707, 26_100},
+            {"elements of a bool array of one dimension", 64, "e bool[64]", &"e[#{&1}]", "",
+             116_314, 8_162},
+            {"bits of a word array of three dimensions beside z[i]", 200,
+             "h word[4,4,4]" <> beside, three, "\nxic a ote z[i]", 451_746, 29_705},
+            {"elements of a bool array of three dimensions beside z[i]", 64,
+             "f bool[4,4,4]" <> beside, cube, "\nxic a ote z[i]", 136_066, 9_429},
+            {"bits of a word array of one dimension beside z[i]", 200, "w word[64]" <> beside,
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "\nxic a ote z[i]", 400_955, 26_250},
+            {"elements of a bool array of one dimension beside z[i]", 64, "e bool[64]" <> beside,
+             &"e[#{&1}]", "\nxic a ote z[i]", 121_169, 8_314}
+          ] do
+        source =
+          head.(n, array) <>
+            Enum.map_join(0..(n - 1), "\n", &"xic a ons #{storage.(&1)} ote p#{&1}") <> last
+
+        assert {:ok, %Logex.Program{warnings: []}} = Logex.compile(source, name: "p"), label
+        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+
+        parsed =
+          least.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        at_parent = div(compiled_then * parsed, parsed_then)
+
+        assert compiled - at_parent <= 16 * n,
+               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
+                 "at f31bf70, #{Float.round((compiled - at_parent) / n, 1)} a rung"
+      end
+    end
+
+    # RV-12's review: an element of a bool array written whole has no bit, so decision
+    # 405 gives it no bit's place, where a word array's element has a tag's. Given one, it
+    # would meet the same writes, a tag's place meeting every value and no write of a bool
+    # array naming a bit, so the warnings would be the same, but each such write would be
+    # kept under twice the projections: 164 reductions a write more for an array of three
+    # dimensions, 90 for one of two. Each program here, 64 such writes beside a coil
+    # through a tag subscript, compiles within 16 reductions a write of what it did at
+    # `f31bf70`, measured as the test above measures.
+    test "an element of a bool array written whole keeps no bit's place, and costs what it did" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+
+      # {label, the array, the coil through a tag subscript, a write's subscripts, the
+      # warnings, the parent's compile, its parse}
+      for {label, array, tagged, subscripts, warned, compiled_then, parsed_then} <- [
+            {"three dimensions", "f bool[4,4,4]", "f[i,0,0]",
+             &"#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}", 4, 118_610, 5_953},
+            {"two dimensions", "f bool[16,4]", "f[i,0]", &"#{rem(&1, 16)},#{rem(div(&1, 16), 4)}",
+             16, 97_608, 5_384}
+          ] do
+        source =
+          "var_input a bool\nvar_input i int\nvar #{array}\nxic a ote #{tagged}\n" <>
+            Enum.map_join(0..63, "\n", &"xic a move 1 f[#{subscripts.(&1)}]")
+
+        assert {:ok, %Logex.Program{warnings: warnings}} = Logex.compile(source, name: "p")
+        assert {label, length(warnings)} == {label, warned}
+        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+
+        parsed =
+          least.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        at_parent = div(compiled_then * parsed, parsed_then)
+
+        assert compiled - at_parent <= 16 * 64,
+               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
+                 "at f31bf70, #{Float.round((compiled - at_parent) / 64, 1)} a write"
+      end
     end
 
     test "a program's tag subscripts cost linear reductions to compile and to scan" do

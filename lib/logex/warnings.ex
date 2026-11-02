@@ -1043,7 +1043,9 @@ defmodule Logex.Warnings do
   defp whole_places(id, _words), do: subscripts(id) ++ [:tag]
 
   # The bit's place of an element written whole: none for a bool array's, which has no
-  # bits, and a tag's, which meets every bit, for a word array's.
+  # bits, and a tag's, which meets every bit, for a word array's. A tag's for a bool
+  # array's would meet the same writes, since no write of a bool array names a bit, but
+  # keep each under twice the projections (RV-12's review).
   defp bit_place(%Tag{type: {:array, :bool, _dims}}), do: []
   defp bit_place(_words), do: [:tag]
 
@@ -1637,23 +1639,10 @@ defmodule Logex.Warnings do
       |> Enum.filter(&String.contains?(&1, "."))
       |> Enum.group_by(&container_of/1)
 
-    # RV-2 (the review after Milestone 6, a4-warnings-walk-3): the storage bits kept in
-    # each array, in name order, gathered once, where each write through a tag subscript
-    # sorted and searched every one-shot of the routine; since decision 405 by every
-    # projection of its places, its subscripts' values and a bit's number, so that a
-    # write looks up the one its literal places make (storage_meeting/3).
-    placed = storage_places(instructions)
+    uses = Enum.flat_map(instructions, &others(&1, written(&1, tags)))
+    arrays = storage_arrays(subscripted(uses), instructions, owners)
 
-    arrays =
-      owners
-      |> Enum.sort(:desc)
-      |> Enum.filter(fn {name, _owner} -> String.contains?(name, "[") end)
-      |> Enum.reduce(%{}, fn {name, owner}, arrays ->
-        kept(arrays, word_of(name), Map.fetch!(placed, name), {name, own_shown(owner, name)})
-      end)
-
-    for instruction <- instructions,
-        {operand, line, symbol} <- others(instruction, written(instruction, tags)),
+    for {operand, line, symbol} <- uses,
         {name, shown} <- storage_names(operand, {words, arrays}),
         {:ok, first} <- [Map.fetch(owners, name)],
         from_source?(tags, word_of(name)),
@@ -1764,25 +1753,65 @@ defmodule Logex.Warnings do
   defp subscript_place({:name, _, _tag}), do: :tag
   defp subscript_place(value), do: value
 
-  # Decision 405: each storage bit an element or a bit of one keeps, by its name, at its
-  # places, its subscripts' values and a bit's number.
-  defp storage_places(instructions),
+  # RV-2 (the review after Milestone 6, a4-warnings-walk-3): the storage bits kept in each
+  # array, in name order, gathered once, where each write through a tag subscript sorted
+  # and searched every one-shot of the routine; since decision 405 by every projection of
+  # its places, its subscripts' values and a bit's number, so that a write looks up the
+  # one its literal places make (storage_meeting/3). RV-12's review: only those in the
+  # arrays some write names through a tag subscript, the only writes that look them up,
+  # each named only then, so a routine whose one-shots keep their storage bits in elements
+  # of arrays no write names so keeps none, and costs no more than it did before decision
+  # 405.
+  defp storage_arrays(subscripted, instructions, owners) do
+    instructions
+    |> storage_places(subscripted)
+    |> Enum.sort(:desc)
+    |> Enum.reduce(%{}, fn {name, {array, places}}, arrays ->
+      kept(arrays, array, places, {name, own_shown(Map.fetch!(owners, name), name)})
+    end)
+  end
+
+  # The arrays some write names through a tag subscript, an element's or a bit of one's.
+  defp subscripted(uses),
+    do:
+      for(
+        {operand, _line, _symbol} <- uses,
+        array = subscripted_in(operand),
+        array != nil,
+        into: %{},
+        do: {array, true}
+      )
+
+  defp subscripted_in({:element_at, _, array, _index, _dims, _shown}), do: array
+  defp subscripted_in({:bit, _, {:element_at, _, array, _, _, _}, _n, _mask, _shown}), do: array
+  defp subscripted_in({:bit_at, _, {:element_at, _, array, _, _, _}, _, _, _}), do: array
+  defp subscripted_in(_operand), do: nil
+
+  # Decision 405: each storage bit an element or a bit of one keeps in an array a write
+  # names through a tag subscript, by its name, its array and its places, its subscripts'
+  # values and a bit's number.
+  defp storage_places(instructions, subscripted),
     do:
       for(
         {symbol, _line, [storage | _]} <- instructions,
         symbol in @one_shots,
-        {name, places} <- storage_place(storage),
+        {name, array, places} <- storage_place(storage, subscripted),
         into: %{},
-        do: {name, places}
+        do: {name, {array, places}}
       )
 
-  defp storage_place({:element, _, _array, index, _name} = element),
-    do: [{Walk.bit_name(element), index}]
+  defp storage_place({:element, _, array, index, _name} = element, subscripted)
+       when is_map_key(subscripted, array),
+       do: [{Walk.bit_name(element), array, index}]
 
-  defp storage_place({:bit, _, {:element, _, _array, index, _}, n, _mask, _name} = bit),
-    do: [{Walk.bit_name(bit), index ++ [n]}]
+  defp storage_place(
+         {:bit, _, {:element, _, array, index, _}, n, _mask, _name} = bit,
+         subscripted
+       )
+       when is_map_key(subscripted, array),
+       do: [{Walk.bit_name(bit), array, index ++ [n]}]
 
-  defp storage_place(_tag_or_bit), do: []
+  defp storage_place(_tag_bit_or_unsubscripted, _subscripted), do: []
 
   # Each quoted as its one-shot writes it, an element's by its subscripts' values, `e[2]`,
   # a bit of one as written (written_bits/2).
