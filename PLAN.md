@@ -16,8 +16,9 @@ has to happen, or the next reader inherits a plan that disagrees with the code. 
 2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
 milestone decided having landed, and a paragraph naming what waits: the review after
 Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
-questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, and to
-RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12.)*
+questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, to
+RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
+RV-12's, decisions 409–432, for RV-13 to RV-15.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -12721,7 +12722,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     as they are, every other byte no line holds escaped; the copy's `status/1` key,
     present only where the start dropped; the forces file on the copy refused; the
     store's read at start limited; a store or forces file that is a link refused.
-  - *Questions for the maintainer*, by what an operator sees:
+  - *Questions for the maintainer*, by what an operator sees *(all eleven answered on
+    2026-11-02, decisions 409 to 419: 1, 3, 5, 7, 8 and 11 as built, 2, 4, 6, 9 and 10
+    changed, to build in RV-13)*:
     1. *A store's end line.* A store now ends `end 13 lines`; one cut short by a full disk
        or a lost tail is refused at start, naming the file and its last line, and the
        operator starts cold or restores a copy. A hand edit that adds or takes away a line
@@ -12962,7 +12965,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   the copy, its drop report the trigger, which `retain_store_test.exs`'s "a dropped
   trigger sample copies the store" pins at the merge.
 
-  *Questions for the maintainer*, continued, by what an operator sees:
+  *Questions for the maintainer*, continued, by what an operator sees *(answered on
+  2026-11-02 with 1 to 7, decisions 416 to 419)*:
   8. *A copy that cannot be made.* A changed configuration that drops a counter starts on
      a full disk, or with a directory where `plant.retain.dropped` goes: the copy fails,
      `status/1` shows `failed: :enospc` and `copy: nil`, and the plant runs; until the
@@ -13006,10 +13010,25 @@ and CI checked; each fix with a test that fails when it is reverted.
   its change is heard at each poll meanwhile, on the real clock, short" (idle 50 ms), red in
   a full suite at `e365fa4` (RV-2's review), twice in fifty of RV-4's load runs and once in
   RV-4's landing gate at `142e4d6`, green thirty of thirty alone on a quiet machine at both
-  `142e4d6` and `b67de5f`; `retain_period_test.exs`'s bound (CI read 10.35 and 10.8
-  against 10); `retain_image_test.exs`'s growth bound (4.79x against 4.6 under load,
-  RV-9); and a device's first read timing out at start under load (`{:io_init, _,
-  :timeout}`, RV-3's review).
+  `142e4d6` and `b67de5f`; `retain_period_test.exs`'s bound at its line 922, a round
+  with a store and a long period (CI read 10.35 and 10.8 against 10, then 12.3 on RV-5's
+  `4f371d4`, 11.7 on RV-10's `5c80545`, 12.8 on RV-5's `a569ecf`, 12.1 on RV-12's
+  `ede7cf1`, and on the session branch at `57260e1`, run 41396777588, each green run
+  again; locally 7.5 to 9.1); `retain_image_test.exs`'s growth bound (4.79x against 4.6
+  under load, RV-9; 4.72 at RV-5's base); `located_array_test.exs`'s restart growth at
+  its line 1583, held to 38.45 within 0.5 a group of four globals (38.97 at RV-5's base,
+  CI 39.09 on `main` at `f31bf70`, run 41438951599; 38.2 to 38.84 in 45 fresh VMs both
+  at `57260e1` and at `ed817b1`, so RV-10 did not move it); `retain_configuration_test.exs`'s
+  warm restart against a cold one at its line 1327 (16,252 against 16,246, 6 over a
+  bound of 4, CI on RV-12's `38fbc8e`, green run again); a device's first read timing out
+  at start under load (`{:io_init, _, :timeout}`, RV-3's review, RV-5's walks); a runner
+  call's or a forces or store write's timeout under load (`{:forces, :timeout}` and a
+  runner-death test past its 5 s wait on RV-10's `399d7f6` in CI, green run again;
+  `retain_store_test.exs`'s fresh-start write at idle 500, RV-5; seven of
+  `{:forces, :timeout}` and `{:retain, :timeout}` in one landing gate of `ed817b1` run
+  seven minutes after the container started at a load of 1.7, all green minutes later),
+  which decision 400's `write_limit:` (RV-11) is to take apart from the heartbeat; what
+  RV-11 leaves of them is RV-7's.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
@@ -13567,8 +13586,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   runner call's timeout, `{:retain, :timeout}`, `{:forces, :timeout}` and `{:io_init,
   "panel", :timeout}`, and two growth bounds, under a load average of 9 to 16.
 
-  *Provisional readings, put to the maintainer.* Each is pinned as built; 1 to 7 are
-  marked provisional where the code states them (`399d7f6`), and 8 is the decision's own
+  *Provisional readings, put to the maintainer* *(all nine answered on 2026-11-02,
+  decisions 420 to 428, each as built; RV-14 makes each mark the decision's number)*.
+  Each is pinned as built; 1 to 7 are marked provisional where the code states them
+  (`399d7f6`), and 8 is the decision's own
   consequence, noted because a host sees it. RV-10's review (below) changed 4 to 7 as
   each now says and added 9, each marked provisional where the code states it.
 
@@ -13908,8 +13929,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   longer warned. Every scan is exactly the parent's, 200 mixed rungs energised and not,
   an array of blocks of timers, and an instance's first state.
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
-  Logix say nothing that settles them.
+  *Provisional readings, put to the maintainer* *(all four answered on 2026-11-02,
+  decisions 429 to 432: 1 and 2 as built, 3 and 4 changed, to build in RV-15)*. The
+  record is silent on each; IEC and Logix say nothing that settles them.
 
   1. *The declared instance itself* (decision 403). `var x two`, `two` a block holding
      two `int[40000]` alone, is refused, told it would hold 80,001 elements: the instance
@@ -14114,6 +14136,24 @@ and CI checked; each fix with a test that fails when it is reverted.
   12.1 reductions a round over none, its bound 10, the scheduler-sensitive kind RV-7
   takes up (decision 357), on runner code this item does not touch, which passed here
   three of three; run again (attempt 2) it was green.
+- **RV-13 — the answers to RV-5's questions** (decisions 410, 412, 414, 417 and 418). The
+  store and the forces file reading CRLF and a lone CR as LF, as B8's readers do;
+  `status/1`'s `copy` always there; the child spec's shutdown deadline following
+  `write_limit:`; a cold start over a store a fresh start would refuse copying it first;
+  each copy numbered, `<store>.dropped.1` and on, none replaced. And every provisional
+  mark RV-5 left on a reading decisions 409–419 settle made the decision's number, with
+  RV-10's in the runner's files (decisions 420–428). It runs after RV-11, whose
+  `write_limit:` decision 414 reads, and before RV-6, whose runner code it touches.
+- **RV-14 — the answers to RV-10's questions** (decisions 420–428). Each as built: every
+  provisional mark RV-10 left on a reading they settle made the decision's number, in
+  `lib/`, `test/` names and comments, README and PLAN's RV-10 entry, save those in the
+  runner's files, which RV-13 makes. It runs with RV-15.
+- **RV-15 — the answers to RV-12's questions** (decisions 431 and 432). A member's bit
+  written through a tag subscript or numbered by a tag warned "may share" where the pair
+  may meet, as a word array's bit is; the loader's trusted compile private code no closure
+  or term a host hands in reaches, no token at all, decision 371's cost kept. And every
+  provisional mark RV-12 left on a reading decisions 429–432 settle made the decision's
+  number.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

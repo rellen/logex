@@ -337,8 +337,12 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-4 left, decisions 390–401, which RV-11 builds. Its answers to the questions
+items RV-6 to RV-8 build ("The review after Milestone 6"), its answers to the
+questions RV-4 left, decisions 390–401, which RV-11 builds, and its answers to the
+questions RV-5, RV-10 and RV-12 left, decisions 409–432, which RV-13 to RV-15 build:
+the store and the forces file reading CRLF as LF, a copy of the store numbered, none
+replaced, and a cold start over a store it cannot read copying it first, among them.
+Its answers to the questions
 RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
 element and instance it holds, at every depth (decision 403), the loader's trust in its
 own types a token only it makes, so a type edited by hand is checked whether a host
