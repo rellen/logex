@@ -1221,6 +1221,34 @@ defmodule Logex.ConfigEditTest do
       assert outputs["oil_q"] == 1
     end
 
+    # Decision 381 (the maintainer, 2026-11-01): the lube `rto`, timing at its last run at
+    # 10 and held by its event task from counting the 30 ms since, its preset raised from
+    # 30 to 35: the 10 ms it holds and the 30 it catches up reach the new 35, so its next
+    # run, the first test cycle that runs it, sets `.dn`, the oiler's lamp on, and the
+    # forecast says so; raised to 50 they do not, and it says nothing of `.dn`. Until RV-10
+    # neither forecast spoke of it.
+    test "a done bit the lube timer's catch-up sets at the first test cycle is forecast" do
+      for {preset, forecast, oiled} <- [
+            {35, [{:dn_rises, "c1.lube", {10, 35}}, {:preset, "c1.lube", {30, 35}}], 1},
+            {50, [{:preset, "c1.lube", {30, 50}}], 0}
+          ] do
+        runtime = Runtime.start(line_with(@conveyor))
+        {runtime, _, _} = Runtime.cycle(runtime, 0, %{"run" => 1, "tick" => 1})
+        {runtime, _} = ticked(runtime, 10)
+        {runtime, _, []} = Runtime.cycle(runtime, 30, %{})
+        assert %{"acc" => 10, "en" => 1, "dn" => 0, "last" => 10} = lube_of(runtime)
+
+        candidate = line_with(String.replace(@conveyor, "rto lube 30", "rto lube #{preset}"))
+        {edit, ^forecast} = accepted(runtime, candidate)
+        {_edit, runtime, ^forecast} = Edit.test(edit, runtime)
+
+        # The first test cycle that runs `c1`, at 40.
+        {runtime, outputs} = ticked(runtime, 0)
+        assert lube_of(runtime)["last"] == 40
+        assert outputs["oil_q"] == oiled, inspect(preset)
+      end
+    end
+
     test "a test and an untest at once, the clock having moved since the last with no " <>
            "scan, take nothing the original held, so its time is caught up" do
       # `m2`, on the 50 ms task, last scanned at 50 with `t1` timing; tested at 60 by a

@@ -1615,7 +1615,10 @@ defmodule Logex.Edit.Plan do
   # switch, which a jump, a block whose `cal` was false or a task not yet due held it from
   # counting, `caught`, in its `.acc`'s units: a drop is forecast only where `.acc` and that
   # time together are below the new `.pre`, so that one the catch-up makes impossible is
-  # not, where until then it was. The report's `.acc` is the state's.
+  # not, where until then it was. Since decision 381 (the maintainer, 2026-11-01) a rise is
+  # forecast where they together reach it, `.acc` below it but the catch-up setting `.dn`
+  # at that run, a `ton`'s and an `rto`'s, where until RV-10 only an `.acc` already at or
+  # past it was. The report's `.acc` is the state's.
   defp done(nil, _value, _name, _rules, _caught), do: []
 
   defp done(
@@ -1690,7 +1693,7 @@ defmodule Logex.Edit.Plan do
   defp retentive(1, acc, pre, {name, caught}) when acc + caught < pre,
     do: [{:dn_drops, name, {acc, pre}}]
 
-  defp retentive(0, acc, pre, {name, _caught}) when acc >= pre,
+  defp retentive(0, acc, pre, {name, caught}) when acc + caught >= pre,
     do: [{:dn_rises, name, {acc, pre}}]
 
   defp retentive(_dn, _acc, _pre, _named), do: []
@@ -1705,7 +1708,7 @@ defmodule Logex.Edit.Plan do
   defp on_delay(1, _en, acc, pre, {name, caught}) when acc + caught < pre,
     do: [{:dn_drops, name, {acc, pre}}]
 
-  defp on_delay(0, 1, acc, pre, {name, _caught}) when acc >= pre,
+  defp on_delay(0, 1, acc, pre, {name, caught}) when acc + caught >= pre,
     do: [{:dn_rises, name, {acc, pre}}]
 
   defp on_delay(_dn, _en, _acc, _pre, _named), do: []

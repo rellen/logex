@@ -2081,7 +2081,8 @@ defmodule Logex.ApiContractTest do
     assert later.env[tag] == last_put(moved, last)
 
     entries =
-      preset_entries(tag, pre, target, to, was) ++ last_entries(tag, found, last)
+      preset_entries(tag, pre, target, to, {was, caught_up(was, last, now)}) ++
+        last_entries(tag, found, last)
 
     edit_reach(how, target != pre or how == :pre_frozen)
     {entries ++ expected, Map.put(next, tag, {target, pre, last_moved(found, last)})}
@@ -2137,13 +2138,22 @@ defmodule Logex.ApiContractTest do
   defp preset_entries(tag, pre, target, _to, was),
     do: [{:preset, tag, {pre, target}} | dn_forecast(tag, was, target)]
 
-  defp dn_forecast(tag, %{"dn" => 1, "acc" => acc}, pre) when max(acc, 0) < pre,
-    do: [{:dn_drops, tag, {max(acc, 0), pre}}]
+  # F6's forecast, with the time a timer timing at its last run catches up at its next,
+  # from that run to the switch (the review after Milestone 6, b4-edit-3, and decision 381):
+  # a drop only where `.acc` and that time stay below the new `.pre`, a rise where they
+  # reach it.
+  defp dn_forecast(tag, {%{"dn" => 1, "acc" => acc}, caught}, pre)
+       when max(acc, 0) + caught < pre,
+       do: [{:dn_drops, tag, {max(acc, 0), pre}}]
 
-  defp dn_forecast(tag, %{"dn" => 0, "en" => 1, "acc" => acc}, pre) when max(acc, 0) >= pre,
-    do: [{:dn_rises, tag, {max(acc, 0), pre}}]
+  defp dn_forecast(tag, {%{"dn" => 0, "en" => 1, "acc" => acc}, caught}, pre)
+       when max(acc, 0) + caught >= pre,
+       do: [{:dn_rises, tag, {max(acc, 0), pre}}]
 
   defp dn_forecast(_tag, _was, _pre), do: []
+
+  defp caught_up(%{"en" => 1}, last, now) when is_integer(last) and now > last, do: now - last
+  defp caught_up(_was, _last, _now), do: 0
 
   # The timers a program declares, and the preset of the `ton` that runs one, from its text.
   defp timers_of(program),
@@ -7716,10 +7726,13 @@ defmodule Logex.ApiContractTest do
 
     # Exactly the forecasts each type's rule gives, from the state the switch leaves, for
     # each timer whose `.pre` it moved (decisions 93 to 95).
+    scales = tm_scales(to)
+
     expected =
       for {:preset, name, {_from, _to}} <- report,
           {type, _p} = kinds[name],
-          kind <- tm_expected(type, tm_at(s.env, name)),
+          timer = tm_at(s.env, name),
+          kind <- tm_expected(type, timer, tm_caught(timer, s.now, Map.get(scales, name, 1))),
           do: {kind, name, type}
 
     assert Enum.sort(forecast) == Enum.sort(expected)
@@ -7807,30 +7820,40 @@ defmodule Logex.ApiContractTest do
 
   defp tm_last(last, _name, _texts), do: last
 
-  defp tm_expected("tof", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
+  defp tm_expected("tof", %{"tt" => 1, "acc" => acc, "pre" => pre}, _caught) when acc >= pre,
     do: [:dn_drops]
 
   # A tof whose rung was true, its `.pre` moved to 0: its delay ends on the falling edge's
   # own scan (decision 93).
-  defp tm_expected("tof", %{"en" => 1, "pre" => pre}) when pre <= 0, do: [:dn_drops]
+  defp tm_expected("tof", %{"en" => 1, "pre" => pre}, _caught) when pre <= 0, do: [:dn_drops]
 
-  defp tm_expected("tp", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
+  defp tm_expected("tp", %{"tt" => 1, "acc" => acc, "pre" => pre}, _caught) when acc >= pre,
     do: [:dn_rises]
 
-  defp tm_expected("rto", %{"dn" => 1, "acc" => acc, "pre" => pre}) when acc < pre,
-    do: [:dn_drops]
+  # A `ton` and an `rto` with the time each catches up at its next run, timing at its last
+  # (the review after Milestone 6, b4-edit-3, and decision 381).
+  defp tm_expected("rto", %{"dn" => 1, "acc" => acc, "pre" => pre}, caught)
+       when acc + caught < pre,
+       do: [:dn_drops]
 
-  defp tm_expected("rto", %{"dn" => 0, "acc" => acc, "pre" => pre}) when acc >= pre,
-    do: [:dn_rises]
-
-  defp tm_expected("ton", %{"dn" => 1, "acc" => acc, "pre" => pre}) when acc < pre,
-    do: [:dn_drops]
-
-  defp tm_expected("ton", %{"dn" => 0, "en" => 1, "acc" => acc, "pre" => pre})
-       when acc >= pre,
+  defp tm_expected("rto", %{"dn" => 0, "acc" => acc, "pre" => pre}, caught)
+       when acc + caught >= pre,
        do: [:dn_rises]
 
-  defp tm_expected(_type, _timer), do: []
+  defp tm_expected("ton", %{"dn" => 1, "acc" => acc, "pre" => pre}, caught)
+       when acc + caught < pre,
+       do: [:dn_drops]
+
+  defp tm_expected("ton", %{"dn" => 0, "en" => 1, "acc" => acc, "pre" => pre}, caught)
+       when acc + caught >= pre,
+       do: [:dn_rises]
+
+  defp tm_expected(_type, _timer, _caught), do: []
+
+  defp tm_caught(%{"en" => 1, "last" => last}, now, scale) when now > last,
+    do: (now - last) * scale
+
+  defp tm_caught(_timer, _now, _scale), do: 0
 
   # A tof's drop holds where its next run finds its rung false; a pulse's end at its next run
   # whatever, `.dn` the rung's; an rto's at its next run with its rung true and `r` 0, a drop
