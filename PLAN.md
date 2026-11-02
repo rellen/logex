@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code. 
 2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
 milestone decided having landed, and a paragraph naming what waits: the review after
 Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
-questions, decisions 361–373, for RV-9.)*
+questions, decisions 361–373, for RV-9, and to RV-3's, decisions 374–389, for RV-10.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -12045,7 +12045,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   | S21 | a hold the switch adds is not recorded | 1, a var_output the switch adds is given back |
   | S30 | a scan with a key its struct lacks taken | 1 (and one load failure) |
 
-  *Provisional readings, put to the maintainer.* (1) Decision 347's held value a
+  *Provisional readings, put to the maintainer* *(all sixteen answered on 2026-11-01,
+  decisions 374 to 389: 1, 2, 3, 4, 6, 7 and 10 as built, 5, 8, 9, 11, 12, 13, 14, 15 and
+  16 changed, to build in RV-10)*. (1) Decision 347's held value a
   var_output's type does not hold, `speed` held at 70000 and wired from an `int`
   var_output no rung writes: since RV-3's review the connection is refused at accept, the
   edit taken only with a restart, but a kept instance's own connection that both
@@ -12128,7 +12130,6 @@ and CI checked; each fix with a test that fails when it is reverted.
   instances, refused past 65,536; a type the loader compiled itself in the same load not
   checked again; two writes of one array whose literal subscripts differ not warned. It
   runs as the next of two at a time, before RV-8.
-
   **RV-9 as built** (2026-11-01, branch `rv9` on `d7a1290`). Each change has a test that
   fails when it is reverted, judged by the full suite (the mutation table below).
 
@@ -12309,6 +12310,16 @@ and CI checked; each fix with a test that fails when it is reverted.
   another workflow's suite running on the same machine (load 13); alone it reads 4.00 to
   4.06 at the tip and 4.09 at `d7a1290`, and each gate run again passed. Both are the
   kind of scheduler-sensitive check RV-7 takes up (decision 357).
+
+- **RV-10 — the answers to RV-3's questions** (decisions 378, 381, 382, 384, 385, 386, 387,
+  388 and 389). A preset no instruction gives kept from the store; a done bit a frozen
+  timer's catch-up sets forecast; a warm restart's timers counted from the restart; an
+  element named with a leading zero read by its value everywhere; a retained `tof` held on
+  and not timing put at rest by the restart itself; a point rewired between, or newly
+  wired from, unwritten var_outputs held; an edit that would hold a var_output a rung
+  reads refused; a stored sample of a task the configuration drops dropped. And every
+  provisional mark RV-3 left on a reading decisions 374–389 settle made the decision's
+  number. It runs after RV-4, whose runner and store code three of them touch.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

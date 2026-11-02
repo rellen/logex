@@ -337,7 +337,8 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-4 to RV-8 build ("The review after Milestone 6"). The maintainer's answers to the
+items RV-4 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
+RV-3 left, decisions 374–389, which RV-10 builds. The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
 taken where a jump names it (decision 367), a declaration's elements counted through
 every array of instances it holds (decision 370), the loader trusting the types it
