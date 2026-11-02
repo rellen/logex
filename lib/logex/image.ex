@@ -34,6 +34,12 @@ defmodule Logex.Image do
                   |> Enum.map(&Logex.FbType.rules(&1).preset)
                   |> Enum.uniq()
 
+  # Decision 385: the built-in kinds a restart puts at rest where held on, `tof` and
+  # `tof_ltime` (Logex.FbType.rules/1, their family).
+  @tofs for {word, type} <- Logex.FbType.builtins(),
+            Logex.FbType.rules(type).family == "tof",
+            do: word
+
   # ---- taken out ----------------------------------------------------------------------
 
   # A lone instance's image, from its env: one walk of the program's retained paths, so
@@ -229,7 +235,7 @@ defmodule Logex.Image do
       configuration_line(name, config.name) ++
         map_lines(globals, "globals", &global_lines/2) ++
         map_lines(instances, "instances", &instance_lines/2) ++
-        map_lines(triggers, "triggers", &trigger_lines(&1, &2, {globals, tasks(config)}))
+        map_lines(triggers, "triggers", &trigger_lines/2)
 
     raised(lines)
   end
@@ -244,16 +250,74 @@ defmodule Logex.Image do
 
   # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
   # of a global the image holds; and since RV-3's review a task's own, by the name of a
-  # task the configuration declares with a single, which no global can have.
-  defp trigger_lines(name, sample, {globals, tasks}),
-    do:
-      name_lines(name, "triggers") ++
-        sample_lines(sample, name) ++
-        held_lines(held_global?(globals, name) or is_map_key(tasks, name), name)
+  # task, which no global can have. Since decision 389 (the maintainer, 2026-11-01) a
+  # sample the start lays back on no task of the configuration is the start's to drop and
+  # report, as a changed configuration's (`dropped_triggers/3`), and since the review of
+  # RV-10 a name the image holds no global of is a task's sample whatever the
+  # configuration now declares by it, a global of that name among them, since the image
+  # keeps a global's sample only with its retained global: only a sample that is no bool's
+  # value, or a name that is none, is the image's own mistake, where until the review a
+  # name the configuration declares as a global was refused (provisional).
+  defp trigger_lines(name, sample),
+    do: name_lines(name, "triggers") ++ sample_lines(sample, name)
 
-  defp tasks(%{tasks: tasks}) when is_list(tasks),
-    do:
-      for(%{name: name, single: single} <- tasks, is_binary(single), into: %{}, do: {name, true})
+  # Decision 389 (the maintainer, 2026-11-01), RV-3's question 16: a sample the image holds
+  # that the start lays back on no task of the configuration is dropped and reported as a
+  # dropped value is (decision 277), `{name, :undeclared}`, a dropped global's reason
+  # (provisional), and the resource starts, where until RV-10 the start was refused; so the
+  # runner's fresh start reports it in `status/1`, and decision 360's copy of the store to
+  # `<store>.dropped`, RV-5's, made from that start's dropped list, needs nothing of its own
+  # for it. Since the review of RV-10 that is every such sample (`laid_samples/3`): a
+  # task's own, a round cut short's (decision 350), where the configuration declares no
+  # such task with a single, the task taken out, its trigger or a global named as it was,
+  # or where the image holds its single's no sample apart from it, which a task's own
+  # always has beside it, so that it is of another trigger, the task's single changed; and
+  # a global's, where the start keeps that global and no task of the configuration takes
+  # its sample, every task on it taken out. A global's sample whose global the start drops
+  # goes with the global, reported once by its name.
+  def dropped_triggers(%{triggers: triggers}, _config, _kept) when map_size(triggers) == 0,
+    do: []
+
+  def dropped_triggers(%{triggers: triggers, globals: globals}, %{tasks: tasks}, kept) do
+    kept = MapSet.new(kept)
+    laid = MapSet.new(for task <- tasks, name <- laid_samples(triggers, task, kept), do: name)
+
+    for {name, _sample} <- Enum.sort(triggers),
+        not MapSet.member?(laid, name),
+        not is_map_key(globals, name) or MapSet.member?(kept, name),
+        do: {name, :undeclared}
+  end
+
+  # The sample a task of the configuration takes from the image, by its name in
+  # `triggers`, where its single is a global the start keeps: its own where the image holds
+  # its single's sample too and the two differ, as `Logex.Runtime.retained/1` keeps a
+  # task's own only beside its trigger's, and otherwise its single's; none where the image
+  # holds neither (decision 319).
+  defp laid_samples(triggers, %{name: name, single: single}, kept) when is_binary(single),
+    do: laid_of(MapSet.member?(kept, single), triggers, {name, single})
+
+  defp laid_samples(_triggers, _task, _kept), do: []
+
+  defp laid_of(false, _triggers, _names), do: []
+
+  defp laid_of(true, triggers, {name, single}),
+    do: laid_name(Map.fetch(triggers, name), Map.fetch(triggers, single), {name, single})
+
+  defp laid_name({:ok, own}, {:ok, sample}, {name, _single}) when own !== sample, do: [name]
+  defp laid_name(_own, {:ok, _sample}, {_name, single}), do: [single]
+  defp laid_name(_own, :error, _names), do: []
+
+  @doc false
+  # The last sample a task with a single the start keeps starts at (decisions 305, 313 and
+  # 350, and since the review of RV-10 `laid_samples/3`'s rule): the image's own of the
+  # task where it holds its single's too and the two differ, else its single's, else the
+  # value the start put back, so that nothing fires (decision 319).
+  def laid_sample(triggers, {name, single}, globals),
+    do: sample_laid(Map.fetch(triggers, name), Map.fetch(triggers, single), {globals, single})
+
+  defp sample_laid({:ok, own}, {:ok, sample}, _value) when own !== sample, do: own
+  defp sample_laid(_own, {:ok, sample}, _value), do: sample
+  defp sample_laid(_own, :error, {globals, single}), do: Map.fetch!(globals, single)
 
   defp sample_lines(sample, _name) when is_fitting(:bool, sample), do: []
 
@@ -261,17 +325,6 @@ defmodule Logex.Image do
     do: [
       "`triggers` holds #{inspect(name)} at #{inspect(sample)}, which is no last sample of " <>
         "a trigger, a bool's value"
-    ]
-
-  defp held_global?(globals, name) when is_map(globals), do: Map.has_key?(globals, name)
-  defp held_global?(_globals, _name), do: true
-
-  defp held_lines(true, _name), do: []
-
-  defp held_lines(false, name),
-    do: [
-      "`triggers` holds #{inspect(name)}, which `globals` does not hold: a trigger's last " <>
-        "sample is kept only with its retained global"
     ]
 
   # A lone instance's image.
@@ -587,10 +640,12 @@ defmodule Logex.Image do
 
   # ---- the matching (decision 277) --------------------------------------------------------
 
-  # A lone instance's image laid over `env`, its fresh env: `{env, dropped}`, each kept
-  # value where the program declares its path retained, of exactly its type, the value
+  # A lone instance's image laid over `env`, its fresh env: `{env, dropped, held_on}`, each
+  # kept value where the program declares its path retained, of exactly its type, the value
   # fitting it, under instances of the kinds the image holds, and the rest dropped, each
-  # once by its path, `prefix` before it, with its reason.
+  # once by its path, `prefix` before it, with its reason; and since decision 385 whether a
+  # `tof` it kept holds `.en` at 1, so that `Logex.Runtime` walks the instance to put it at
+  # rest only then.
   def matched(%Program{} = program, env, %{kinds: kinds, values: values}, prefix) do
     wanted = wanted(program, env)
     kinds = Map.new(kinds, &parsed_kind/1)
@@ -613,8 +668,20 @@ defmodule Logex.Image do
       end)
 
     {laid(program, env, kept),
-     dropped |> collapsed(kinds) |> ordered() |> Enum.map(&prefixed(&1, prefix))}
+     dropped |> collapsed(kinds) |> ordered() |> Enum.map(&prefixed(&1, prefix)),
+     Enum.any?(kinds, &held_on?(&1, kept))}
   end
+
+  # A kept `tof`, or an element of a kept array of them, whose `.en` is 1: one pass of the
+  # kinds, one an instance, so that a start pays a look-up an instance and no more where
+  # it keeps none.
+  defp held_on?({key, {_segments, kind}}, kept) when kind in @tofs,
+    do: Map.get(kept, key <> ".en") == 1
+
+  defp held_on?({key, {_segments, {:array, kind, dims}}}, kept) when kind in @tofs,
+    do: Enum.any?(Array.indexes(dims), &(Map.get(kept, Array.name(key, &1) <> ".en") == 1))
+
+  defp held_on?(_kind, _kept), do: false
 
   defp prefixed({path, reason}, prefix), do: {prefix <> path, reason}
 
@@ -763,7 +830,7 @@ defmodule Logex.Image do
     valued_as(
       judged(type, now, {path, segments, program}, dropped),
       {path, type, value},
-      {preset?(segments, kinds), fresh},
+      {preset?(segments, kinds) and given?(segments, program), fresh},
       {kept, dropped}
     )
   end
@@ -780,7 +847,8 @@ defmodule Logex.Image do
   # program, not the image, as an edit's switch moves it: the fresh instance's, the
   # number on the instruction that runs it, is kept, and a stored one that differs is
   # reported, `{"lube.pre", {:preset, 360000000, 180000000}}`; its `.acc` or `.cv`, its
-  # done bits and its edge memory are kept as any member is.
+  # done bits and its edge memory are kept as any member is. Since decision 378 only where
+  # an instruction gives it (`given?/2`).
   defp fitted({:ok, fresh}, _path, {true, fresh}, acc), do: acc
 
   defp fitted({:ok, stored}, path, {true, fresh}, {kept, dropped}),
@@ -805,6 +873,34 @@ defmodule Logex.Image do
 
   defp preset_member(%{preset: member}), do: member
   defp preset_member(nil), do: nil
+
+  # Decision 378 (the maintainer, 2026-11-01): whether an instruction of the program gives
+  # the preset at `segments`, a built-in's preset member by now: the number the compiler
+  # took from the instruction that runs the instance into its initial value, the tag's, an
+  # element's by its index and each member's on the way, as `Logex.Program.initial_env/1`
+  # starts it. A preset no instruction gives, a retained `ton t` the program declares and
+  # runs no `ton` on, `t.pre` written by logic or by no one, is kept from the image as any
+  # member is and reported as nothing, as a warm restart keeps it and as Logix's tag memory
+  # would; one an instruction gives follows the program (decision 308).
+  defp given?([{name, index} | rest], %Program{tags: tags, blocks: blocks}) do
+    %Logex.Tag{type: type, initial: initial} = Map.fetch!(tags, name)
+    given_at(element(typed(type, blocks), index), at_index(initial, index), rest)
+  end
+
+  defp given_at(%FbType{body: nil}, initial, [{member, nil}]),
+    do: is_map(initial) and is_map_key(initial, member)
+
+  defp given_at(%FbType{} = type, _initial, [{name, index} | rest]) do
+    %Member{initial: initial} = member = member!(type, name)
+    given_at(element(FbType.type_of(type, member), index), at_index(initial, index), rest)
+  end
+
+  defp element({:array, type, _dims}, index) when is_list(index), do: type
+  defp element(type, nil), do: type
+
+  defp at_index(initial, nil), do: initial
+  defp at_index(initial, index) when is_map(initial), do: Map.get(initial, index)
+  defp at_index(_none, _index), do: nil
 
   # A stored value taken as a state's is (decisions 171 to 188), an integer or a bool of
   # its type's range, a real of its type's values, an array a host's list of its shape:

@@ -135,7 +135,8 @@ defmodule Logex.Program do
   stored kinds, an integer for a real at its nearest real (decision 311), and otherwise
   starts by this rule, a retained timer's `last` at the start's `now`; and since decision
   308 a timer's or counter's preset starts by this rule whatever the image holds, the
-  number on the instruction that runs it, as an edit's switch moves it. An online edit's switch writes no value for a qualifier (decision
+  number on the instruction that runs it, as an edit's switch moves it, but since decision
+  378 one no instruction gives keeps the image's value, as any member does. An online edit's switch writes no value for a qualifier (decision
   278, M6-7).
   """
   def initial_env(%__MODULE__{} = program),
@@ -509,7 +510,8 @@ defmodule Logex.Program do
   line is marked `retain` is `s1`, the same leaves listed two ways. Every reader of
   `retained` takes either, a warm restart, the image and an edit's report comparing the
   leaves under them (decision 331); the review after Milestone 6 found the two spellings
-  (a5-data-model-6), kept as built, `PLAN.md` RV-3.
+  (a5-data-model-6), kept as built by decision 379: the list follows where `retain` is
+  written.
   """
   def retained(tags, blocks \\ %{}) when is_map(tags), do: elem(settled(tags, blocks), 3)
 

@@ -51,7 +51,11 @@ defmodule Logex.Configuration.Edit do
   such instance in the candidate, each in that type's own `file` (fix F15). A candidate's
   warnings stop nothing. Since RV-3's review it refuses too a connection that would hold a
   point from a var_output of another type than the point's (decision 347's hold, below,
-  provisional): a candidate's at its line, among the others, and one of the running
+  decision 374), and since decision 388 one that would hold a var_output a rung of its
+  program reads, naming that rung's line, since the hold would change what the rung
+  gives, and since the review of RV-10 one whose var_output the configuration started
+  wires to another point too, naming that point, since the hold would move it
+  (provisional): a candidate's at its line, among the others, and one of the running
   configuration that an untest would hold after them, its line there named.
 
   **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
@@ -167,12 +171,48 @@ defmodule Logex.Configuration.Edit do
   "m1.o[2]", 0}`, where until then one element written drove the whole array; in the
   configuration a switch stops it drives the array whole, as decision 232 has it, but an
   element a kept instance copies out frozen through that same connection in both is held
-  by neither, since nothing of it changes. A var_output that holds the value already is
-  not written. One of another type than its point's cannot hold every value the point
-  may, so accept refuses its connection (provisional), but a kept instance's own
-  connection that both configurations make, which copied the point's value out and so
-  holds it from the instance's first run on; before that run, one whose type does not
-  hold the point's value is left as it is (provisional). The next switch of the same edit
+  by neither, since nothing of it changes. Since decisions 386 and 387 (the maintainer,
+  2026-11-01) a point the configuration a switch starts copies out frozen through a
+  connection the one it stops does not make, or makes of an instance it runs as another
+  type, holds too, and is reported `{:held, global, value}` as one decision 347 holds: a
+  point rewired from one var_output no rung writes to another, `m1.aux k2` made `m1.aux2
+  k2`, a point no connection drove that is newly wired from one, and a point an instance
+  the edit retypes copies out through the same connection in both, whose new type's
+  var_output is another (provisional), a scalar, an element and each element of an array
+  wired whole its program does not write, both ways, an untest's among them
+  (provisional), so that the point keeps its value until a rung writes the var_output,
+  where until RV-10 it moved at the first cycle with an empty forecast. A var_output that
+  holds the value already is not written. One of another type than its point's cannot
+  hold every value the point may, so accept refuses its connection (decision 374), one
+  decisions 386 and 387 hold among them, told as the one the candidate holds or an untest
+  holds, but a kept instance's own connection that both configurations make, which copied
+  the point's value out and so holds it from the instance's first run on; before that
+  run, one whose type does not hold the point's value is left as it is (decision 374).
+  And since decision 388 accept refuses a connection that would hold a var_output a rung
+  of its program reads, `xic aux ote lamp`, its element `o[1]` or `o[i]`, any element
+  through a tag subscript, or a bit of it, `w.3` (provisional), and since the review of
+  RV-10 a read in any slot that reads, a compare's, an add's or a move's value among
+  them, and of the var_output as a tag subscript or a bit number in any slot, a write's
+  among them, `xic a[idx]`, `ote o[idx]` or `xic w.[n]`, and of any element of an array
+  var_output held whole, since the hold would turn the lamp off while the report said only
+  that `aux` holds: `` `m1.aux` is a var_output no rung of `motor` writes and line 9 of
+  `motor` reads, wired to `k2`, a global the candidate holds: ... ``. A kept instance's own
+  connection both configurations make is excepted, since it holds the point's value from
+  the instance's first run on; since the review of RV-10 accept refuses it where the
+  var_output a rung reads holds another value than its point now, as only a start or a
+  restart before that first run leaves it, `` ... and holds 0 where `k2` holds 1 until `m1`
+  first runs after a start or a restart: ... ``, takes it once the instance has run, and
+  no switch starts such a var_output at its point's value, so a restart after accept
+  leaves it as it is, as decision 374 leaves its own (provisional). And since the review of
+  RV-10 accept refuses a connection whose var_output, or an element of one, the
+  configuration started wires to another point too, `m1.aux` held at `k3`'s 0 and wired
+  to `k2` at 1 as well, since the hold would move that other point while every report
+  said only that the first held: `` `m1.aux` is a var_output no rung of `motor` writes,
+  wired to `k3`, a global the candidate holds, and to `k2`: holding it would move `k2`, so
+  a held point is wired to a var_output that drives another point only with a restart
+  ``, an element wired alone and in its array wired whole among them, both ways, a kept
+  instance's own connections both configurations make, which hold one value, the
+  var_output's, excepted (provisional). The next switch of the same edit
   first gives back each such write in an instance both configurations run as one type,
   where the var_output still holds what it wrote and no restart came since, `{:hold_undone,
   "m1.aux", 1}`, as fix F11 gives back a resume, so that a test and an untest with no
@@ -268,7 +308,18 @@ defmodule Logex.Configuration.Edit do
   outside the contract, as is an edit built or changed by hand.
   """
 
-  alias Logex.{Configuration, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
+  alias Logex.{
+    Compiler,
+    Configuration,
+    Declarations,
+    Diagnostic,
+    FbType,
+    Instance,
+    Program,
+    Runtime,
+    Tag
+  }
+
   alias Logex.Walk
   alias Logex.Edit.Plan
 
@@ -310,14 +361,21 @@ defmodule Logex.Configuration.Edit do
     at = at!(runtime, elapsed_ms)
     candidate!(candidate)
     named!(original, candidate)
-    held = %{test: held(original, candidate), untest: held(candidate, original)}
+    stopped = %{test: drives(original, :stopped), untest: drives(candidate, :stopped)}
+
+    held = %{
+      test: held({original, stopped.test}, candidate),
+      untest: held({candidate, stopped.untest}, original)
+    }
+
     wires = %{test: held_wires(candidate, held.test), untest: held_wires(original, held.untest)}
+    reads = %{test: type_reads(candidate, wires.test), untest: type_reads(original, wires.untest)}
 
     accepted(
-      refused(original, candidate, misheld(original, candidate, wires)) ++
+      refused(original, candidate, misheld(original, candidate, {wires, stopped, reads}, runtime)) ++
         retyped(original, candidate),
       {runtime, at},
-      {candidate, held, wires}
+      {candidate, held, unread(original, candidate, {wires, reads})}
     )
   end
 
@@ -802,12 +860,19 @@ defmodule Logex.Configuration.Edit do
   # frozen through one whole connection in both, neither version of its program writing
   # it, is not held: the stopped configuration's whole reading counts it driven, but the
   # same frozen value goes on being copied out, and the edit changes nothing of it.
-  defp held(from, to) do
+  #
+  # Since decisions 386 and 387 (the maintainer, 2026-11-01) a global the configuration
+  # started copies out frozen through a connection the stopped one does not make, from a
+  # var_output no rung writes, holds too, an element by its name: one rewired from one
+  # unwritten var_output to another, and one no connection drove that is newly wired from
+  # one, each held at its value until a rung writes the var_output, as decision 347 holds
+  # one, where until RV-10 such a point moved at the first cycle with an empty forecast.
+  defp held({from, stopped}, to) do
     driven = drives(to, :started)
     keep = by_name(to.globals)
 
     held =
-      for name <- Enum.sort(Map.keys(drives(from, :stopped))),
+      for name <- Enum.sort(Map.keys(stopped)),
           [array | _] = :binary.split(name, "["),
           is_map_key(keep, array),
           not is_map_key(driven, name),
@@ -815,8 +880,86 @@ defmodule Logex.Configuration.Edit do
           held <- undriven(Map.fetch!(keep, array), name, driven),
           do: held
 
+    held = joined(held, newly_frozen(from, to, {driven, keep}))
     unfrozen(Enum.any?(held, &element?/1), held, {from, to})
   end
+
+  # The names held, each once: an element whose array is held whole is held with it. An
+  # edit that holds nothing newly, nearly every one, pays one clause.
+  defp joined(held, []), do: held
+
+  defp joined(held, more) do
+    whole = MapSet.new(held)
+
+    Enum.sort(
+      held ++
+        for(
+          name <- Enum.uniq(more),
+          [array | _] = :binary.split(name, "["),
+          not MapSet.member?(whole, name),
+          not MapSet.member?(whole, array),
+          do: name
+        )
+    )
+  end
+
+  # Decisions 386 and 387: what each connection of the configuration started copies out
+  # frozen, a var_output's no rung of its program writes, a scalar's or an element's global
+  # and, for an array wired whole, each element of its global the program does not write,
+  # or the global whole where it writes none, but where the stopped configuration makes the
+  # same connection of an instance both run as one type, whose frozen value goes on being
+  # copied out, nothing of it changing, and but what another connection or a var_external
+  # drives. One pass over the connections, each program type's writes read once.
+  defp newly_frozen(from, to, {driven, keep}) do
+    types = Map.new(to.instances, &{&1.name, &1.type})
+    stopped = Map.new(from.instances, &{&1.name, &1.type})
+    made = MapSet.new(from.connections, &{&1.instance, &1.member, &1.to})
+
+    writes =
+      Map.new(Enum.uniq(Map.values(types)), &{&1, type_writes(Map.fetch!(to.programs, &1))})
+
+    for %Configuration.Connection{instance: instance, member: member, to: global} <-
+          to.connections,
+        is_binary(global),
+        type = Map.fetch!(types, instance),
+        not (MapSet.member?(made, {instance, member, global}) and
+               Map.get(stopped, instance) == type),
+        output?(connected(Map.fetch!(to.programs, type), member)),
+        name <- frozen_names(member, global, Map.fetch!(writes, type), keep),
+        [array | _] = :binary.split(name, "["),
+        not is_map_key(driven, name),
+        not is_map_key(driven, array),
+        do: name
+  end
+
+  # The names a connection copies out frozen: none where its var_output is written, its
+  # global's, an element's by its subscripts' values, where it is not; for an array wired
+  # whole, the elements of its global the program does not write by literal subscripts,
+  # every one where it writes none, which is the global whole, and none where a tag
+  # subscript writes it.
+  defp frozen_names(member, global, {_written, elements, arrays} = writes, keep) do
+    whole = Logex.Name.element(member) == nil and is_map_key(arrays, member)
+    frozen_of(whole, {member, global}, writes, {elements, keep})
+  end
+
+  defp frozen_of(true, {member, global}, {_written, elements, arrays}, {_elements, keep})
+       when not is_map_key(elements, member) do
+    %Configuration.Global{type: {:array, _type, dims}} = Map.fetch!(keep, global)
+    written = MapSet.new(Map.fetch!(arrays, member))
+
+    for index <- Logex.Array.indexes(dims),
+        rest = after_word(Logex.Array.name(global, index), global),
+        not MapSet.member?(written, rest),
+        do: global <> rest
+  end
+
+  defp frozen_of(true, _wire, _writes, _keep), do: []
+
+  defp frozen_of(false, {member, global}, writes, _keep),
+    do: unwritten_name(member_written?(writes, member), global)
+
+  defp unwritten_name(true, _global), do: []
+  defp unwritten_name(false, global), do: [driven_name(global)]
 
   defp element?(name), do: Logex.Name.element(name) != nil
 
@@ -1011,7 +1154,7 @@ defmodule Logex.Configuration.Edit do
   defp holders(wires),
     do: for({connection, member, name} <- wires, do: {connection.instance, member, name})
 
-  # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a held point is held by starting
+  # RV-3's review, decision 374 (the maintainer, 2026-11-01): a held point is held by starting
   # the var_output wired to it at its value, which one of another type than the point's
   # cannot hold for every value, `small int` wired to `level dint` held at 100000, so that
   # the point would move at the first cycle while every report said it held. Such a
@@ -1022,22 +1165,332 @@ defmodule Logex.Configuration.Edit do
   # configurations make is the point's own source, which copied it out, so it holds the
   # point's value already and is not refused; before the instance's first run since a
   # start or a restart it may hold another, and one its type does not hold is then left as
-  # it is (provisional, the same question).
-  defp misheld(original, candidate, wires),
+  # it is (decision 374).
+  #
+  # Since decisions 386 and 387 a point held because the configuration a direction starts
+  # wires it anew from a var_output no rung writes, which the other drove from none or from
+  # another such, is refused so too (decision 374), told as the one the direction holds.
+  #
+  # Decision 388 (the maintainer, 2026-11-01), RV-3's question 15: a hold sets the
+  # var_output to its point's value, so one a rung of its program reads, `xic aux ote lamp`
+  # with `aux` a var_output no rung writes, would change what that rung gives, the lamp
+  # turning off while the report said only that `aux` holds; such a connection is refused
+  # so too, naming the var_output and the line of the first rung that reads it, an element
+  # by its own reads, `o[1]` and `o[i]`, a word's by its bits', `w.3`, where until RV-10 the
+  # hold was taken. A kept instance's own connection that both configurations make is the
+  # one exception, as for decision 374: it holds the point's value from its first run on, so
+  # the rung reads what it read (provisional). Since the review of RV-10 a read is any read
+  # of the var_output's tag, a `:value` slot's and a tag subscript's or a bit number's in any
+  # slot among them (`program_reads/1`), each program type read once; a kept instance's own
+  # connection is refused where the var_output a rung reads holds another value than its
+  # point at accept (`own_misread/4`); and a connection whose var_output another
+  # connection of the configuration started wires to another point too is refused,
+  # naming that point (`fanned_out/3`), each provisional.
+  defp misheld(original, candidate, {wires, driven, reads}, runtime),
     do:
       {for(
-         {connection, _member, _name} = wire <- wires.test,
-         not own_source?(connection, original, candidate),
-         message <- mistyped(candidate, wire, {"", "the candidate stops driving"}),
+         {connection, message} <-
+           misheld_in(
+             {candidate, original},
+             wires.test,
+             {driven.test, :test},
+             {reads.test, runtime}
+           ),
          do: {connection.line, message}
        ),
        for(
-         {connection, _member, _name} = wire <- wires.untest,
-         not own_source?(connection, candidate, original),
-         message <-
-           mistyped(original, wire, {running_line(connection.line), "only the candidate drives"}),
+         {_connection, message} <-
+           misheld_in(
+             {original, candidate},
+             wires.untest,
+             {driven.untest, :untest},
+             {reads.untest, runtime}
+           ),
          do: message
        )}
+
+  # Each refusal of the wires of `config`, the configuration a direction starts, `other`
+  # the one it stops, in the wires' order, with its connection; a direction that holds
+  # nothing, nearly every one, paying one clause.
+  defp misheld_in(_configs, [], _how, _context), do: []
+
+  defp misheld_in({config, other}, wires, {driven, direction}, {reads, runtime}) do
+    fans =
+      Enum.group_by(
+        for(%Configuration.Connection{to: to} = c <- config.connections, is_binary(to), do: c),
+        & &1.instance
+      )
+
+    for {connection, _member, name} = wire <- wires,
+        how = {wire_line(direction, connection.line), held_by(driven, name, direction)},
+        message <-
+          wire_refusals(
+            own_source?(connection, other, config),
+            config,
+            wire,
+            {how, reads, fans, runtime}
+          ),
+        do: {connection, message}
+  end
+
+  defp wire_line(:test, _line), do: ""
+  defp wire_line(:untest, line), do: running_line(line)
+
+  defp wire_refusals(false, config, wire, {how, reads, fans, _runtime}),
+    do:
+      mistyped(config, wire, how) ++
+        misread(wire, how, reads) ++ fanned_out(wire, how, {fans, reads})
+
+  defp wire_refusals(true, config, wire, {how, reads, _fans, runtime}),
+    do: own_misread(config, wire, {how, reads}, runtime)
+
+  # Decision 388: the first rung of the instance's program that reads the var_output a
+  # wire holds, or the element it holds, refused.
+  defp misread({connection, member, name}, {line, held}, reads) do
+    {type, read} = Map.fetch!(reads, connection.instance)
+
+    read_at(read_line(read, member), %{
+      wire: "`#{connection.instance}.#{member}`#{line}",
+      type: type,
+      name: name,
+      held: held
+    })
+  end
+
+  defp read_at(nil, _wire), do: []
+
+  defp read_at(line, wire),
+    do: [
+      "#{wire.wire} is a var_output no rung of `#{wire.type}` writes and line #{line} of " <>
+        "`#{wire.type}` reads, wired to `#{wire.name}`, a global #{wire.held}: holding it " <>
+        "would change what that rung gives, so a held point is wired to a var_output a rung " <>
+        "reads only with a restart"
+    ]
+
+  # A kept instance's own connection both configurations make holds its point's value from
+  # the instance's first run since a start or a restart on, which copied it out; before
+  # that run the var_output may hold another, and where a rung reads it the hold would
+  # change what that rung gives, so accept refuses it then, naming both values (the review
+  # of RV-10, provisional), and takes it once the instance has run.
+  defp own_misread(config, {connection, member, name}, {{line, held}, reads}, runtime) do
+    {type, read} = Map.fetch!(reads, connection.instance)
+
+    own_read(read_line(read, member), {connection, member, name}, %{
+      wire: "`#{connection.instance}.#{member}`#{line}",
+      type: type,
+      held: held,
+      program: Map.fetch!(config.programs, type),
+      runtime: runtime
+    })
+  end
+
+  defp own_read(nil, _wire, _context), do: []
+
+  defp own_read(line, {connection, member, name}, context) do
+    %Instance{env: env} = Map.fetch!(context.runtime.instances, connection.instance)
+    was = slot_value(connected(context.program, member), env)
+    value = held_value(Logex.Name.element(name), name, context.runtime.globals)
+    unequal(was === value, {line, connection.instance, name, was, value}, context)
+  end
+
+  defp unequal(true, _read, _context), do: []
+
+  defp unequal(false, {line, instance, name, was, value}, context),
+    do: [
+      "#{context.wire} is a var_output no rung of `#{context.type}` writes and line #{line} " <>
+        "of `#{context.type}` reads, wired to `#{name}`, a global #{context.held}, and holds " <>
+        "#{inspect(host(was))} where `#{name}` holds #{inspect(host(value))} until `#{instance}` " <>
+        "first runs after a start or a restart: holding it now would change what that rung " <>
+        "gives, so the edit is accepted only once `#{instance}` has run, or with a restart"
+    ]
+
+  # The fan-out (the review of RV-10, provisional): a var_output, or an element of one, that
+  # a held point's connection starts at the point's value and that the configuration
+  # started wires to another point too copies that value out to the other point as well,
+  # `m1.aux` wired to `k3`, held at 0, and to `k2` at 1, so that `k2` would go off while
+  # every report said only that `k3` holds; and two held points wired from it cannot both
+  # hold. Such a connection is refused as decision 374 refuses one, naming the first other
+  # point, where until then the hold was taken and the other point moved.
+  defp fanned_out({connection, member, name}, {line, held}, {fans, reads}) do
+    {type, _read} = Map.fetch!(reads, connection.instance)
+
+    others =
+      for other <- Map.fetch!(fans, connection.instance),
+          other != connection,
+          point <- fanned(member, other),
+          do: point
+
+    fan_at(others, %{
+      wire: "`#{connection.instance}.#{member}`#{line}",
+      type: type,
+      name: name,
+      held: held
+    })
+  end
+
+  defp fan_at([], _wire), do: []
+
+  defp fan_at([point | _], wire),
+    do: [
+      "#{wire.wire} is a var_output no rung of `#{wire.type}` writes, wired to `#{wire.name}`, " <>
+        "a global #{wire.held}, and to `#{point}`: holding it would move `#{point}`, so a " <>
+        "held point is wired to a var_output that drives another point only with a restart"
+    ]
+
+  # The point another connection of the instance drives from the holder's storage: the
+  # holder's own var_output, scalar or whole, wired again; an element of the holder whole;
+  # the holder's element of an array the other wires whole, that element of its global;
+  # or the same element by its subscripts' values.
+  defp fanned(holder, %Configuration.Connection{member: member, to: global}),
+    do: fan(Logex.Name.element(holder), Logex.Name.element(member), {holder, member, global})
+
+  defp fan(nil, nil, {same, same, global}), do: [driven_name(global)]
+  defp fan(nil, {same, _subscripts}, {same, _member, global}), do: [driven_name(global)]
+
+  defp fan({same, _subscripts}, nil, {holder, same, global}),
+    do: [global <> after_word(driven_name(holder), same)]
+
+  defp fan({same, _}, {same, _}, {holder, member, global}),
+    do: one_element(driven_name(holder) == driven_name(member), global)
+
+  defp fan(_holder, _other, _wire), do: []
+
+  defp one_element(true, global), do: [driven_name(global)]
+  defp one_element(false, _global), do: []
+
+  # Decision 388: what each program type a held wire's instance runs reads, by instance,
+  # `{type, reads}`, each type read once however many wires its instances hold, where
+  # until the review of RV-10 each wire walked its program again; nothing is read where a
+  # direction holds nothing.
+  defp type_reads(_config, []), do: %{}
+
+  defp type_reads(config, wires) do
+    types = Map.new(config.instances, &{&1.name, &1.type})
+    instances = Enum.uniq(for {connection, _member, _name} <- wires, do: connection.instance)
+
+    read =
+      Map.new(
+        Enum.uniq(for instance <- instances, do: Map.fetch!(types, instance)),
+        &{&1, program_reads(Map.fetch!(config.programs, &1))}
+      )
+
+    Map.new(instances, &{&1, {Map.fetch!(types, &1), Map.fetch!(read, Map.fetch!(types, &1))}})
+  end
+
+  # Every read of a program's rungs, each key with the line of the first rung that reads
+  # it: `{:tag, name}`, each tag a `:read` or `:value` slot names, an array's for an
+  # element of it and a word's for a bit of it, and, since the review of RV-10, each tag a
+  # subscript or a bit number names in any slot, a write's among them, `ote o[idx]` reading
+  # `idx` (`Logex.Walk.uses_of/2`); `{:named, name}`, a tag a read names whole;
+  # `{:element, name}`, an element a read names by literal subscripts, by their values,
+  # itself or a bit of it; and `{:any_element, array}`, an element a read names through a
+  # tag subscript, which may be any.
+  defp program_reads(%Program{rungs: rungs} = program) do
+    tags = Program.typed_tags(program)
+
+    rungs
+    |> Walk.instructions()
+    |> Enum.reduce(%{}, fn {_symbol, line, operands} = instruction, reads ->
+      reads = Enum.reduce(Walk.uses_of(instruction, tags), reads, &use_read(&1, line, &2))
+
+      instruction
+      |> Compiler.signature(tags)
+      |> Enum.zip(operands)
+      |> Enum.reduce(reads, fn {{access, _type}, operand}, reads ->
+        operand_read(access, operand, line, reads)
+      end)
+    end)
+  end
+
+  defp use_read({access, name, _line, _symbol}, line, reads) when access in [:read, :value],
+    do: first_line({:tag, name}, line, reads)
+
+  defp use_read(_use, _line, reads), do: reads
+
+  defp operand_read(access, operand, line, reads) when access in [:read, :value],
+    do: Enum.reduce(operand_keys(operand), reads, &first_line(&1, line, &2))
+
+  defp operand_read(_access, _operand, _line, reads), do: reads
+
+  defp first_line(key, line, reads), do: Map.update(reads, key, line, &min(&1, line))
+
+  defp operand_keys({:name, _, name}), do: [{:named, name}]
+
+  defp operand_keys({:element, _, array, index, _name}),
+    do: [{:element, Logex.Array.name(array, index)}]
+
+  defp operand_keys({:element_at, _, array, _index, _dims, _name}), do: [{:any_element, array}]
+
+  defp operand_keys({:bit, _, inner, _n, _mask, _name}) when is_tuple(inner),
+    do: operand_keys(inner)
+
+  defp operand_keys({:bit_at, _, inner, _index, _width, _name}) when is_tuple(inner),
+    do: operand_keys(inner)
+
+  defp operand_keys(_operand), do: []
+
+  # The line of the first rung that reads a holder's member: a scalar or a whole array by
+  # any read of its tag; an element by its own name, any element a tag subscript names, or
+  # its array named whole.
+  defp read_line(reads, member), do: wanted_line(Logex.Name.element(member), member, reads)
+
+  defp wanted_line(nil, member, reads), do: Map.get(reads, {:tag, member})
+
+  defp wanted_line({array, _subscripts}, member, reads),
+    do:
+      earliest([
+        Map.get(reads, {:element, driven_name(member)}),
+        Map.get(reads, {:any_element, array}),
+        Map.get(reads, {:named, array})
+      ])
+
+  defp earliest(lines), do: Enum.min(for(line <- lines, line != nil, do: line), fn -> nil end)
+
+  # A kept instance's own connection whose var_output a rung reads is never started at its
+  # point's value (the review of RV-10, provisional): from the instance's first run since a
+  # start or a restart on it holds that value, and before that run accept refuses it, so
+  # only a restart after accept leaves it another, which a switch then leaves as it is, as
+  # decision 374 leaves its own, the rung reading what the instance holds.
+  defp unread(original, candidate, {wires, reads}),
+    do: %{
+      test: unread_in(wires.test, {candidate, original}, reads.test),
+      untest: unread_in(wires.untest, {original, candidate}, reads.untest)
+    }
+
+  defp unread_in(wires, {config, other}, reads),
+    do:
+      for(
+        {connection, member, _name} = wire <- wires,
+        not own_read?(
+          own_source?(connection, other, config),
+          member,
+          Map.fetch!(reads, connection.instance)
+        ),
+        do: wire
+      )
+
+  defp own_read?(false, _member, _reads), do: false
+  defp own_read?(true, member, {_type, reads}), do: read_line(reads, member) != nil
+
+  # How a refusal tells the hold: one the other configuration drove, decision 347's, by
+  # who drives it, and one a frozen var_output's new connection holds by the step.
+  defp held_by(driven, name, :test) when is_map_key(driven, name),
+    do: "the candidate stops driving"
+
+  defp held_by(driven, name, :untest) when is_map_key(driven, name),
+    do: "only the candidate drives"
+
+  defp held_by(driven, name, direction), do: held_whole(driven, name, direction)
+
+  defp held_whole(driven, name, direction) do
+    [array | _] = :binary.split(name, "[")
+    held_array(is_map_key(driven, array), direction)
+  end
+
+  defp held_array(true, :test), do: "the candidate stops driving"
+  defp held_array(true, :untest), do: "only the candidate drives"
+  defp held_array(false, :test), do: "the candidate holds"
+  defp held_array(false, :untest), do: "an untest holds"
 
   # A connection of `config` that `other` makes too, of an instance both run as one type.
   defp own_source?(%{instance: instance, member: member, to: global}, other, config),
@@ -1172,7 +1625,7 @@ defmodule Logex.Configuration.Edit do
   # this direction in the instance started at its global's value, where the var_output
   # holds another and its type holds that value exactly, `{:holds, path, value}`: accept
   # refuses a var_output of another type than its point's but a kept instance's own
-  # source, which holds the point's value from its first run on (provisional). A kept
+  # source, which holds the point's value from its first run on (decision 374). A kept
   # instance's are written before its plan's switch where
   # its state holds the var_output, so that what the switch reports of it, its retention
   # among it, is of the value it holds after, and after the switch where only the program
@@ -1814,22 +2267,14 @@ defmodule Logex.Configuration.Edit do
   # switched to it, by path; every instance set aside pruned whole; and every global the
   # configuration kept does not declare pruned. Nothing is switched, so no one-shot is
   # blocked and no `.pre` moves.
+  #
+  # Each holder is started again before the instances are pruned, so that what a prune
+  # reports of its var_output, `{:held, "m1.aux", 0}`, is of the value the hold leaves, as
+  # a switch reports it, where until the review of RV-10 assemble and cancel reported the
+  # value a restart had left beside the `:holds` that moved it.
   defp prune(edit, %Runtime{} = runtime, direction) do
     {from, to} = sides(edit, direction)
     froms = Map.new(from.instances, &{&1.name, &1.type})
-
-    {instances, reports} =
-      Enum.reduce(to.instances, {runtime.instances, []}, fn instance, acc ->
-        pruned(instance, Map.get(froms, instance.name), {edit, direction}, acc)
-      end)
-
-    {instances, reports} =
-      Enum.reduce(
-        to.instances,
-        {instances, reports},
-        &undeclared(&1, Map.get(froms, &1.name), to.programs, &2)
-      )
-
     keep = by_name(to.globals)
 
     {globals, gone} =
@@ -1840,7 +2285,19 @@ defmodule Logex.Configuration.Edit do
         Map.fetch!(edit.holders, direction),
         to,
         {globals, runtime},
-        {instances, reports}
+        {runtime.instances, []}
+      )
+
+    {instances, reports} =
+      Enum.reduce(to.instances, {instances, reports}, fn instance, acc ->
+        pruned(instance, Map.get(froms, instance.name), {edit, direction}, acc)
+      end)
+
+    {instances, reports} =
+      Enum.reduce(
+        to.instances,
+        {instances, reports},
+        &undeclared(&1, Map.get(froms, &1.name), to.programs, &2)
       )
 
     report =

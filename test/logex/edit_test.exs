@@ -1175,6 +1175,36 @@ defmodule Logex.EditTest do
       end
     end
 
+    # Decision 381 (the maintainer, 2026-11-01), RV-3's question 8: a timer timing at its
+    # last run, `.dn` 0, whose `.acc` is below the raised `.pre` but reaches it with the
+    # time its own jump held it from counting, sets `.dn` at its next run with its rung
+    # true, the first scan after the test, and the forecast says so, `:dn_rises` with the
+    # state's `.acc`, a `ton`'s and an `rto`'s; one the catch-up does not bring there is
+    # forecast nothing. Until RV-10 neither was forecast.
+    test "a rise the catch-up alone makes is forecast, and borne out at the first scan" do
+      for kind <- ["ton", "rto"],
+          {held, forecast, q} <- [
+            {100, [{:dn_rises, "t", {10, 50}}, {:preset, "t", {40, 50}}], 1},
+            {20, [{:preset, "t", {40, 50}}], 0}
+          ] do
+        frozen = fn preset ->
+          c!(
+            "var_input j bool\nvar_input a bool\nvar_output q bool\nvar t #{kind}\n" <>
+              "xic j jmp over\nxic a #{kind} t #{preset}\nlbl over xic t.dn ote q"
+          )
+        end
+
+        {_, state} = run(frozen.(40), [{0, %{"a" => 1}}, {10, %{}}, {held, %{"j" => 1}}])
+        assert %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10} = state.env["t"]
+
+        {:ok, edit, ^forecast} = Edit.accept(frozen.(40), frozen.(50), state)
+        {_edit, tested, ^forecast} = Edit.test(edit, state)
+
+        {%{"q" => ^q}, _} =
+          Runtime.scan(frozen.(50), Runtime.put_inputs(frozen.(50), tested, %{"j" => 0}), 1)
+      end
+    end
+
     # RV-3's review: only a timer timing at its last run, `.en` 1, catches up; an rto
     # stopped done, `.en` 0, counts none of the time it was frozen, so a preset raised past
     # its `.acc` still drops its `.dn`, and the forecast says so.

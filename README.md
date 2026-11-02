@@ -337,9 +337,19 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
-RV-3 left, decisions 374–389, which RV-10 builds, and to those RV-4 and RV-9 left,
-decisions 390–408, which RV-11 and RV-12 build. The maintainer's answers to the
+items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
+questions RV-4 and RV-9 left, decisions 390–408, which RV-11 and RV-12 build. Its answers
+to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
+held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
+warm restart's timers counted from the resource's `now` (decision 382), a preset no
+instruction gives kept from the store (decision 378), a done bit a frozen timer's catch-up
+sets forecast (decision 381), a point rewired between, or newly wired from, var_outputs no
+rung writes held (decisions 386 and 387), an edit that would hold a var_output a rung
+reads refused (decision 388), and since RV-10's review one that would hold a var_output
+wired to another point too, a stored sample of a task the configuration drops dropped
+and reported (decision 389), every stored sample a start lays on no task among them since
+the review, and an element named with a leading zero, `temps[03]`, read as `temps[3]`
+everywhere a host names one (decision 384). The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
 taken where a jump names it (decision 367), a declaration's elements counted through
 every array of instances it holds (decision 370), the loader trusting the types it
@@ -347,7 +357,7 @@ compiled itself (decision 371), two writes whose literal subscripts differ no wa
 (decision 372), and `wired.logex` and the one fragment of "Running a plant on the clock"
 shown and run (decisions 363 and 365). RV-3's three have landed, a
 held output held through a var_output no rung writes (decision 347), a retained `tof`
-at rest on a first scan (decision 349) and a trigger's rise a trip cut off taken in the
+at rest after a restart (decisions 349 and 385) and a trigger's rise a trip cut off taken in the
 next cycle (decision 350). RV-4's, the runner's, have landed too: each device's write
 given its own time (decision 348), every file write the runner makes limited (decision
 353), a restart judged as it arrives (decision 354) and two runners of one VM refused one
@@ -847,7 +857,10 @@ true; `grease_due` lights at its 50 ms, and its reset input `r`, written by the
 `greased` rung above it, clears it, the time counting again from the last scan that saw
 the reset. A restart, warm or cold, starts it at 0 too, since this program marks nothing:
 declared `var retain lube rto`, a warm restart keeps its time, resuming from its
-instance's `now`, its last scan's, and a cold one starts it at 0 (decisions 266 and 273).
+instance's `now`, its last scan's, and a cold one starts it at 0 (decisions 266 and 273);
+in a resource, a warm `restart/2` resumes it from the resource's `now`, the restart's, as
+a start from the store does, so the time since the instance's task last ran is not counted
+either (decision 382).
 
 Each is a timer by every rule a `ton` keeps: one instruction runs it, nothing may follow
 it on its path, logic may move into `.pre` and `.acc`, and a `ton` made a `tof` is a
@@ -2613,7 +2626,9 @@ total made a lint   boxes=3 total=0 lube=70 last=0
   back each value it dropped once, with its reason: the total made a `lint` is dropped,
   `{"total", {:retyped, :dint, :lint}}`, and starts at 0, while the count and the
   timer are kept by name and type (decision 277). A timer's or counter's preset is the
-  program's, whatever the image holds (decision 308).
+  program's, whatever the image holds (decision 308), where an instruction gives it; one
+  the program declares and runs no instruction on keeps the stored preset, unreported, as
+  a warm restart keeps it (decision 378).
 - In the core this is memory only. A configuration's globals are retained the same way
   ("A retained global", below), and a runner given a store keeps the image on the host's
   disk across a crash and a fresh start ("The store on disk", below); "What logex is
@@ -3161,12 +3176,12 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   [`docs/organisation.md`](docs/organisation.md) §7).
 - The first scan after any start counts no edge: the box under the eye as the plant
   restarts is not counted, as on a first start (decision 274); and a retained `tof` held
-  on at the outage, its rung false at that scan, sees no falling edge and comes to rest,
-  `.dn` 0, so a fan's run-on does not start by itself, while one already in its run-on at
-  the outage resumes it (decision 349). The rule is that scan's: a retained `tof` it does
-  not run, on a rung a jump skips or in a block whose `cal` is false, keeps `.en` 1 and
-  runs its delay when it first runs with its rung false (provisional, `PLAN.md`'s RV-3
-  entry).
+  on at the outage is put at rest by the warm restart or the start itself, `.dn` 0, so a
+  fan's run-on does not start by itself when its rung is first false, while one already in
+  its run-on at the outage resumes it (decision 349). The rest is the restart's, not a
+  scan's, so it reaches a `tof` wherever it sits, on a rung a jump skips or in a block whose
+  `cal` is false at the first scan, an element of an array of them or a block's member at
+  any depth, and a scan pays nothing for it (decision 385).
 - `Logex.Runtime.retained/1` takes every retained value of the resource out as plain
   data, the retained image, `%{configuration: "tally", globals: %{"total_boxes" =>
   {:dint, 5}}, instances: %{"t1" => %{program: "tally", kinds: %{"boxes" => "ctu"},
@@ -3182,7 +3197,9 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   [`docs/organisation.md`](docs/organisation.md) §7). A timer's or counter's preset is
   the program's, the number on its instruction, whatever the image holds, so `ctu boxes
   3` made `ctu boxes 6` counts on to 6 from the kept count, the stored 3 reported,
-  `{"t1.boxes.pv", {:preset, 3, 6}}` (decision 308); a member every element of an array of
+  `{"t1.boxes.pv", {:preset, 3, 6}}` (decision 308), while a counter or timer the program
+  declares and runs no instruction on keeps its stored preset, unreported (decision 378); a
+  member every element of an array of
   instances drops alike is reported once, `gates[*].j` (decision 310); an integer stored
   for a real is taken at its nearest real, as a host's input is (decision 311); and an
   element named with leading zeros, `tl[01]`, is the element of its value (decision 312).
@@ -3212,7 +3229,9 @@ broken.logex: line 6: `retain` is a keyword and cannot name an instance
   was, in the resource and in the store, and the task runs on the next cycle that samples
   the rise, a warm restart's or a fresh start's, each task by its own sample, so that of
   two event tasks on one trigger with the round cut between their steps only the one cut
-  off runs, once (decision 350). A cold
+  off runs, once (decision 350); a store that holds such a task's own sample, started with
+  a configuration that no longer has that task, drops it, reported in `status/1` as any
+  dropped value, `{"early", :undeclared}`, and starts (decision 389). A cold
   restart puts it back with its trigger, and an input point's trigger already 1 still
   runs its task in the first cycle (decision 51).
 - A located global takes no `retain`: an input point is read again at every start, and
@@ -4522,7 +4541,10 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
   anything opens; a test's `Logex.IO.Sim.set/3` past its inputs is refused too.
 - A force of `zone_t[3]` is held against the card while its neighbours go on reading
   it, kept in the forces file as `zone_t[3] 150.0`, read back by a fresh runner after a
-  crash; an unforce puts back the card's last value of that element. A restart reads the
+  crash; an unforce puts back the card's last value of that element. An element is named
+  by its subscripts' values however a host or the forces file writes them, so
+  `zone_t[03]`, in a cycle's inputs, a force or a file's line, is `zone_t[3]`, and is kept
+  and shown under that name (decision 384). A restart reads the
   card whole again, and a value one element cannot hold trips the plant at that
   element's address, the others kept (decision 143).
 - An online edit that moves a located array, grows or shrinks it, or takes its location

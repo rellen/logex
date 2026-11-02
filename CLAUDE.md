@@ -238,8 +238,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   one file refused, each path resolved once, and a refused start writing nothing.
 - `test/logex/runner_edit_test.exs` — an online edit stepped through the runner.
 - `test/logex/api_contract_test.exs` — the seeded contract walks over the host contract,
-  the edits, the resource, the runner, the cross-type reach and the store's life, each
-  against oracles restated from the programs' text, each asserting its reach.
+  the edits, the resource, the runner, the cross-type reach, the store's life and a
+  configuration edit's holds, each against oracles restated from the programs' text, each
+  asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
   trees of the walks, the end-to-end tests and the README harness.
 - `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
