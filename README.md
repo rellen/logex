@@ -345,13 +345,13 @@ replaced, and a cold start over a store it cannot read copying it first, among t
 Its answers to the questions
 RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
 element and instance it holds, at every depth (decision 403), the loader's trust in its
-own types a token only it makes, so a type edited by hand is checked whether a host
-hands it to `Logex.compile/2` or to the loader's internal entry (decision 404), though a
-token a host builds byte by byte in the VM's external term format passes for the
-loader's (provisional), and two bits whose literal numbers differ, `w[i].3` and
-`w[j].4`, or a one-shot's storage bit beside a write whose literal places differ from
-it, no warning (decision 405), the other four as built (decisions 402, 406, 407 and
-408). Its answers
+own types one no host can borrow, so a type edited by hand is checked whether a host
+hands it to `Logex.compile/2` or to the compiler's internal entry (decision 404), which
+since RV-15 is no token at all but the loader's own compile, private code that no
+closure or term a host hands in reaches (decision 432), and two bits whose literal
+numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a write
+whose literal places differ from it, no warning (decision 405), the other four as built
+(decisions 402, 406, 407 and 408). Its answers
 to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
 held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
 warm restart's timers counted from the resource's `now` (decision 382), a preset no

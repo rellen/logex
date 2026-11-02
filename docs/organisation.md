@@ -12875,19 +12875,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a token only the loader holds (b)** (the maintainer, 2026-11-01): a type is
      trusted as the loader's own only through what the loader alone makes during its
      load, so a hand-edited type handed in any way is checked as decision 54 has it. To
-     build in RV-12. *(Landed with RV-12, 2026-11-02: the loader hands its own types to
-     `Logex.Compiler.loaded/2` through a closure it makes in `Logex` during the load, `fn
-     -> types end`, and `loaded/2` trusts only a closure of no arguments local to
-     `Logex`, which no host code can make, short of building one from the external term
-     format; no field of a type, no option and no atom marks a type the loader's. A list
-     handed to `loaded/2` is checked as decision 54 has it, each type its table holds
-     compiled again, and one edited by hand refused in `types:`'s words, as through
-     `compile/2`; any other closure, a host's or an external function of `Logex`, is
-     refused as junk in those words (provisional, put to the maintainer). A chain of
-     files still compiles once a file, none again. RV-12's review built such a closure
-     byte by byte, from `Logex`'s beam and its checksum, and `loaded/2` compiled the
-     hand-edited type it gave unchecked; whether such a term is a way of handing a type
-     in is put to the maintainer (provisional).)*
+     build in RV-12. *(Landed with RV-12, 2026-11-02: the loader handed its own types to
+     `Logex.Compiler.loaded/2` through a closure it made in `Logex` during the load, and
+     `loaded/2` trusted only a closure of no arguments local to `Logex`; no field of a
+     type, no option and no atom marks a type the loader's. A list handed to `loaded/2`
+     is checked as decision 54 has it, each type its table holds compiled again, and one
+     edited by hand refused in `types:`'s words, as through `compile/2`; any other
+     closure, a host's or an external function of `Logex`, is refused as junk in those
+     words (decision 430). A chain of files still compiles once a file, none again.)*
+     *(RV-15, 2026-11-02: decision 432 takes the token out. The loader is
+     `Logex.Compiler`'s private code, `Logex.compile_file/1` and `compile_files/1`
+     delegated to it, and its own compile of a file over the blocks it compiled itself
+     is reached only from those two, which take paths, through private functions and no
+     closure, so nothing a host builds or hands in passes for the loader's own; every
+     closure handed to `loaded/2`, which the loader no longer calls, is refused.)*
 
 405. **What decision 372 tells apart (the review after Milestone 6),** RV-9's question 4:
      `ote w[i].3` beside `ote w[j].4`, two bit numbers, and `ons e[1,1]` beside `ote

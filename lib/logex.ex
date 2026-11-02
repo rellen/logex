@@ -36,7 +36,9 @@ defmodule Logex do
       "line 2: unknown instruction `xyz`"
   """
 
-  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Program, SourceFile}
+  # Decision 432 (RV-15): the three are Logex.Compiler's, delegated, so that the loader and
+  # its own compile of a file over the blocks it compiled itself are private code of the
+  # module that compiles, which nothing a host hands in reaches.
 
   @doc """
   Compiles `source` into a program named `name`: `{:ok, %Logex.Program{}}`, or
@@ -62,35 +64,7 @@ defmodule Logex do
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises
   `ArgumentError`; nothing in the source does.
   """
-  def compile(source, options)
-
-  def compile(source, _options) when not is_binary(source),
-    do:
-      raise(
-        ArgumentError,
-        "Logex.compile/2 takes source text as a binary, got: #{inspect(source)}"
-      )
-
-  def compile(source, name: name), do: compile(source, name: name, types: [])
-  def compile(source, types: types, name: name), do: compile(source, name: name, types: types)
-
-  def compile(source, name: name, types: types) when is_binary(name),
-    do: named(name_problem(name), name, source, types)
-
-  def compile(_source, name: name, types: _types),
-    do: raise(ArgumentError, "a program's name is a string, got: #{inspect(name)}")
-
-  def compile(_source, options),
-    do:
-      raise(
-        ArgumentError,
-        "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
-          ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
-          "got: #{inspect(options)}"
-      )
-
-  defp named(nil, name, source, types), do: compiled(source, name, types)
-  defp named(problem, _name, _source, _types), do: raise(ArgumentError, problem)
+  defdelegate compile(source, options), to: Logex.Compiler
 
   @doc """
   Reads and compiles the file at `path`, naming the program after the file:
@@ -104,14 +78,15 @@ defmodule Logex do
   compiled so is not compiled again from its text when the file that names it compiles,
   as a type `compile/2` is given is (decision 371): the loader trusts its own, within its
   own call, so a chain of files each holding the next compiles once a file. The trust is
-  a token the loader makes during its load, a closure of its own, no field of a type, no
-  option and no name (decision 404), so a type it gave and a host hands in, to `compile/2`
-  or in a list to the compiler's internal entry, is checked as any other, and one edited
-  by hand is refused; a closure of the host's is refused there (provisional). A closure a
-  host builds byte by byte in the VM's external term format can pass for the loader's,
-  and the types it gives are then trusted (provisional). It is read by its place on the
+  no token and no mark (decision 432): the loader and its own compile are private code of
+  `Logex.Compiler`, the types it compiled handed on along private functions alone, which
+  no closure, struct or term a host hands in reaches, and no field of a type, option or
+  name marks a type the loader's. So a type it gave and a host hands in, to `compile/2`
+  or in a list to the compiler's internal entry, is checked as any other (decision 54),
+  and one edited by hand is refused, and a closure handed there is refused and never
+  called, however it was made (decision 430). A type word is read by its place on the
   line, after a qualifier, `var retain s1 seal`, and with an array's sizes,
-  `var gates gate[4]` loading `gate.ld` (decision 154). A mistake in it
+  `var gates gate[4]` loading `gate.ld` (decision 154). A mistake in a block's file
   is reported with its own file, and the file that names it is compiled no further, as
   after a lex or parse error. So are a chain of files that holds itself, reported at the
   line in the file that closes it, and a program's file named as a type, at the line that
@@ -135,14 +110,7 @@ defmodule Logex do
   diagnostic, not an exception. After a refused name the source is still compiled, with
   the blocks beside it, so its own mistakes are listed too.
   """
-  def compile_file(path) when is_binary(path) do
-    {result, _call} = of_kind(Path.extname(path), Path.basename(path), path, {%{}, MapSet.new()})
-    result
-  end
-
-  def compile_file(path),
-    do:
-      raise(ArgumentError, "Logex.compile_file/1 takes a path as a binary, got: #{inspect(path)}")
+  defdelegate compile_file(path), to: Logex.Compiler
 
   @doc """
   Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
@@ -158,358 +126,5 @@ defmodule Logex do
   `paths` that is not a proper list of binaries is the host's mistake, raised as
   `ArgumentError` before any file is read.
   """
-  def compile_files(paths) do
-    paths!(paths, paths)
-    {results, _acc} = Enum.map_reduce(paths, {%{}, {%{}, MapSet.new()}}, &compiled_once/2)
-    results
-  end
-
-  defp paths!([], _paths), do: :ok
-  defp paths!([path | rest], paths) when is_binary(path), do: paths!(rest, paths)
-
-  defp paths!(_not_paths, paths),
-    do:
-      raise(
-        ArgumentError,
-        "Logex.compile_files/1 takes a list of paths as binaries, got: #{inspect(paths)}"
-      )
-
-  # `done` is each path's result, as given back; `call` is the call's memo and the paths
-  # of the blocks whose warnings a program has handed back, kept apart.
-  defp compiled_once(path, {done, call}), do: once(Map.fetch(done, path), path, {done, call})
-
-  defp once({:ok, result}, _path, acc), do: {result, acc}
-
-  defp once(:error, path, {done, call}) do
-    {result, call} = of_kind(Path.extname(path), Path.basename(path), path, call)
-    {result, {Map.put(done, path, result), call}}
-  end
-
-  # The gate in front of the loader: the extension says what a file is, so only a `.ld`
-  # file is read. A file named only `.ld` has no extension to Elixir, and is a `.ld` file
-  # whose name names nothing, which the loader says.
-  # RV-2 (the review after Milestone 6, a6-compile-scale-12): a path that ends in a `/`
-  # names a directory, whatever comes before it, where it was told `x.ld` is no `.ld` file.
-  defp of_kind(_extension, _basename, path, call)
-       when binary_part(path, byte_size(path) - 1, 1) == "/",
-       do:
-         {not_ld(
-            path,
-            "`#{path}` names a directory, not a `.ld` file: Logex.compile_file/1 compiles a " <>
-              "program or a function block from its `.ld` file"
-          ), call}
-
-  defp of_kind(".ld", _basename, path, call), do: loaded(path, call)
-  defp of_kind("", ".ld", path, call), do: loaded(path, call)
-
-  defp of_kind(".logex", basename, path, call),
-    do:
-      {not_ld(
-         path,
-         "`#{basename}` is a configuration file (`.logex`), which " <>
-           "Logex.Configuration.compile_file/1 loads"
-       ), call}
-
-  defp of_kind(_extension, basename, path, call),
-    do:
-      {not_ld(
-         path,
-         "`#{basename}` is not a `.ld` file: Logex.compile_file/1 compiles a program " <>
-           "or a function block from its `.ld` file"
-       ), call}
-
-  defp not_ld(path, message), do: {:error, [%{file_problem(message) | file: path}]}
-
-  # One path of the call: its result, and the call's memo and handed-back paths after it.
-  # The memo keeps each file's result with the blocks it reaches, so a program whose blocks
-  # an earlier path compiled still finds them; a result a cycle gave is not kept past this
-  # path, since what it cites depends on the files loaded above it.
-  defp loaded(path, {memo, handed}) do
-    {{result, reached, _cyclic}, {memo, cyclic}} = load(path, {%{}, []}, {memo, []})
-    {result, handed} = handed_back(result, reached, memo, handed)
-    {result, {Map.drop(memo, cyclic), handed}}
-  end
-
-  # `held` are the names of the files being loaded, as a set and as a list, innermost
-  # first, so a cycle is found in one lookup and named only when there is one. The memo
-  # is each file compiled so far, by path, so none is compiled twice, as `{result,
-  # reached, cyclic}`: `reached` the paths of the blocks it holds, at any depth, each once,
-  # a block after those it holds, and `cyclic` whether a cycle gave it. Beside it, the
-  # paths this load gave a cyclic result.
-  # RV-2 (the review after Milestone 6, a6-compile-scale-14): the memo is keyed by each
-  # path expanded, so a block reached as `./seal.ld` and as `sub/../seal.ld` is one file,
-  # compiled once and its warnings handed back once; a file is still cited as its first
-  # path spells it. A directory reached through a link is another path (provisional).
-  defp load(path, held, {memo, _cyclic} = state),
-    do: loading(Map.fetch(memo, Path.expand(path)), path, held, state)
-
-  defp loading({:ok, entry}, _path, _held, state), do: {entry, state}
-
-  defp loading(:error, path, held, state) do
-    {{result, reached, cyclic}, {memo, cyclics}} = read(SourceFile.read(path), path, held, state)
-    entry = {in_file(result, path), reached, cyclic}
-    key = Path.expand(path)
-    {entry, {Map.put(memo, key, entry), cyclics(cyclic, key, cyclics)}}
-  end
-
-  defp cyclics(true, path, cyclics), do: [path | cyclics]
-  defp cyclics(false, _path, cyclics), do: cyclics
-
-  # The program's own warnings, then those of every block it reaches that no program of
-  # the call has handed back, a block's after those of the blocks it holds. Every block a
-  # program that compiles reaches compiled too. A block's type, or a mistake, hands back
-  # nothing, and counts no block as handed back.
-  defp handed_back({:ok, %Program{warnings: own} = program}, reached, memo, handed) do
-    fresh = Enum.reject(reached, &MapSet.member?(handed, &1))
-
-    blocks =
-      for path <- fresh,
-          {{:ok, %FbType{body: body}}, _reached, _cyclic} = Map.fetch!(memo, path),
-          do: body.warnings
-
-    {{:ok, %{program | warnings: own ++ Enum.concat(blocks)}},
-     MapSet.union(handed, MapSet.new(fresh))}
-  end
-
-  defp handed_back(result, _reached, _memo, handed), do: {result, handed}
-
-  defp read({:error, reason}, _path, _held, state),
-    do: {{{:error, [file_problem(SourceFile.unreadable(reason))]}, [], false}, state}
-
-  defp read({:ok, source}, path, held, state) do
-    name = Path.rootname(Path.basename(path))
-    from_file(name_problem(name), {name, path}, source, {held, state})
-  end
-
-  defp from_file(nil, {name, path}, source, context),
-    do: parsed_file(parse(source), {name, path, name}, source, context)
-
-  # A refused name still finds the blocks beside the file, so only the source's own
-  # mistakes follow the name's: its blocks are no unknown types, nor their uses undeclared.
-  # It is compiled under no name, as `compile/2` would not take this one.
-  defp from_file(problem, {name, path}, source, context) do
-    {{result, reached, cyclic}, state} =
-      parsed_file(parse(source), {name, path, nil}, source, context)
-
-    {{{:error, [file_problem(problem <> " (rename the file)") | mistakes_in(result)]}, reached,
-      cyclic}, state}
-  end
-
-  defp parsed_file({:ok, ast}, {name, path, as}, source, {{set, list}, state}) do
-    held = {Map.put(set, name, true), [name | list]}
-
-    {types, problems, {reached, cyclic}, state} =
-      ast
-      |> needed(name)
-      |> Enum.reduce({[], [], {[], false}, state}, &dependency(&1, &2, {path, held}))
-
-    {{built(problems, ast, {as, source}, types), Enum.uniq(Enum.reverse(reached)), cyclic}, state}
-  end
-
-  defp parsed_file(front_end, _file, _source, {_held, state}), do: {{front_end, [], false}, state}
-
-  # Decisions 371 and 404 (RV-9, RV-12): the types are the blocks this load compiled
-  # itself, so they are trusted, not compiled again from their texts
-  # (`Logex.Compiler.loaded/2`), handed in by a closure made here, during the load, which
-  # is the token: no host code makes one of this module but by building it byte by byte in
-  # the external term format, which passes for it (provisional), so a type a host hands in
-  # otherwise is checked as decision 54 has it.
-  defp built([], ast, {name, source}, types),
-    do: named_as(Compiler.loaded(ast, fn -> types end), header(ast), source, name)
-
-  defp built(problems, _ast, _file, _types), do: {:error, Enum.uniq(Enum.reverse(problems))}
-
-  # The type words of the declaration lines that could name a function block, and are not
-  # the file's own name, which the compiler refuses as recursion: each once, at its first
-  # line, in line order. A word no block can be named, a dotted one among them, is no
-  # file's, and the compiler reports it where it is written.
-  # Since M5-14 an array of a block's instances names the block by its type word's base,
-  # `gate` of `gate[4]` (decision 154).
-  # RV-2 (the review after Milestone 6, a6-compile-scale-12): a program's file that names
-  # its own name as a type word is looked for too, and so told it is a program, where it
-  # was told its own name is an unknown type, with every type word logex has.
-  defp needed({:routine, {:rungs, rungs}} = ast, own) do
-    program? = kind({:ok, ast}) == :program
-
-    words =
-      for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, typed} | _]} <-
-            Enum.map(rungs, &Declarations.unqualified/1),
-          Declarations.reserved(section) == :section,
-          word = unsized(typed),
-          Declarations.block_name?(word),
-          program? or word != own,
-          do: {word, line}
-
-    Enum.uniq_by(words, &elem(&1, 0))
-  end
-
-  defp unsized(word), do: Logex.Name.base(word)
-
-  defp dependency({word, line}, acc, {path, held}) do
-    file = Path.join(Path.dirname(path), word <> ".ld")
-    found(SourceFile.present?(file), {word, line, file}, acc, held)
-  end
-
-  # Nothing of that name: the compiler reports the type as unknown. Something that is no
-  # file, a directory, is loaded, to be reported as one that cannot be read, with its path.
-  defp found(false, _word, acc, _held), do: acc
-
-  # A program's file is no type, whatever names it: said so before any cycle is looked for,
-  # since a program may hold the block that names it, and its file is not compiled here.
-  defp found(true, {_word, _line, file} = named, acc, held),
-    do: kind_of(peek(file), named, acc, held)
-
-  defp kind_of(:program, {word, line, file}, {types, problems, reach, state}, _held) do
-    message =
-      "`#{word}` is a program (#{Path.basename(file)}), not a function block: " <>
-        "only a function block's file gives a type for `var`"
-
-    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems], reach,
-     state}
-  end
-
-  defp kind_of(_block_or_unread, {word, _line, _file} = named, acc, {set, _list} = held),
-    do: cycle(is_map_key(set, word), named, acc, held)
-
-  # A file's kind, from the first word of its first rung, in any case, as the compiler
-  # reads a block's header: `:unknown` for a file that cannot be read or parsed, which is
-  # loaded to report why.
-  defp peek(file), do: peeked(SourceFile.read(file))
-
-  defp peeked({:ok, source}), do: kind(parse(source))
-  defp peeked({:error, _reason}), do: :unknown
-
-  defp kind({:ok, {:routine, {:rungs, [{:rung, [{:name, _, word} | _]} | _]}}}),
-    do: headed(String.downcase(word) in Declarations.kinds())
-
-  defp kind({:ok, _ast}), do: :program
-  defp kind({:error, _diagnostics}), do: :unknown
-
-  defp headed(true), do: :block
-  defp headed(false), do: :program
-
-  # A cycle's message names the chain of files loaded above it, so the result it gives,
-  # and every result above it, is cyclic.
-  defp cycle(true, {word, line, _file}, {types, problems, {reached, _cyclic}, state}, held) do
-    {_set, [own | _] = list} = held
-    chain = [own | Enum.drop_while(Enum.reverse(list), &(&1 != word))]
-
-    message =
-      "`#{own}` cannot hold an instance of `#{word}` (#{Enum.join(chain, " → ")}): " <>
-        "a function block never holds an instance of itself, at any depth"
-
-    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems],
-     {reached, true}, state}
-  end
-
-  defp cycle(false, {_word, _line, file} = named, {types, problems, reach, state}, held) do
-    {{result, below, cyclic}, state} = load(file, held, state)
-    dependent(result, named, {types, problems, reached(reach, below, file, cyclic), state})
-  end
-
-  # The blocks a file reaches, newest first: those its block reaches, then the block.
-  defp reached({reached, cyclic}, below, file, below_cyclic),
-    do: {[Path.expand(file) | Enum.reverse(below, reached)], cyclic or below_cyclic}
-
-  defp dependent({:ok, %FbType{} = type}, _named, {types, problems, reach, state}),
-    do: {[type | types], problems, reach, state}
-
-  # RV-2 (the review after Milestone 6, a6-compile-scale-2): a file peeked as a block and
-  # compiled as a program, saved again between the two reads, is told it is a program, as
-  # one peeked so is, where it raised.
-  defp dependent({:ok, %Program{}}, named, {types, problems, reach, state}),
-    do: kind_of(:program, named, {types, problems, reach, state}, nil)
-
-  defp dependent({:error, diagnostics}, _named, {types, problems, reach, state}),
-    do: {types, Enum.reverse(diagnostics, problems), reach, state}
-
-  defp mistakes_in({:ok, _program}), do: []
-  defp mistakes_in({:error, diagnostics}), do: diagnostics
-
-  defp file_problem(message), do: %Diagnostic{stage: :file, line: nil, message: message}
-
-  defp in_file({:ok, %Program{} = program}, path), do: {:ok, filed(program, path)}
-
-  defp in_file({:ok, %FbType{body: body}}, path), do: {:ok, FbType.of(filed(body, path))}
-
-  # Each diagnostic is stamped with the file it was found in, so one from a block's file
-  # that this file names carries that file already.
-  defp in_file({:error, diagnostics}, path),
-    do: {:error, Enum.map(diagnostics, &%{&1 | file: &1.file || path})}
-
-  # Shape only. Reserved words are scoped by file kind (docs/organisation.md decision 10),
-  # and a program type's name is never spelled inside a `.ld` body.
-  defp name_problem(name), do: shaped(Declarations.name?(name), name)
-
-  defp shaped(true, _name), do: nil
-
-  defp shaped(false, name),
-    do:
-      "#{inspect(name)} cannot name a program: a name is a letter or `_`, " <>
-        "then letters, digits or `_`"
-
-  defp filed(%Program{warnings: warnings} = program, path),
-    do: %{program | file: path, warnings: Enum.map(warnings, &%{&1 | file: path})}
-
-  defp compiled(source, name, types), do: built_from(parse(source), source, name, types)
-
-  defp built_from({:ok, ast}, source, name, types), do: lowered(ast, source, name, types)
-  defp built_from(front_end, _source, _name, _types), do: front_end
-
-  # `{:ok, ast}`, or a lex or parse error as the one diagnostic, with its column.
-  defp parse(source), do: lexed(Compiler.tokenize(source))
-
-  defp lexed({:ok, tokens, _end_line}), do: parsed(Compiler.parse(tokens))
-
-  defp lexed({:error, {{line, column}, module, reason}, _line}),
-    do: {:error, [front_end(:lex, line, column, module.format_error(reason))]}
-
-  defp parsed({:ok, ast}), do: {:ok, ast}
-
-  defp parsed({:error, {{line, column}, module, reason}}),
-    do: {:error, [front_end(:parse, line, column, module.format_error(reason))]}
-
-  defp lowered(ast, source, name, types),
-    do: named_as(Compiler.instructionize(ast, [], types), header(ast), source, name)
-
-  defp named_as({:ok, %Program{} = program}, _header, source, name),
-    do: {:ok, %{program | name: name, source: source}}
-
-  # M2-5: a block is named by its first rung, which must be the name it is compiled under.
-  defp named_as({:ok, %FbType{name: name, body: body}}, _header, source, name),
-    do: {:ok, FbType.of(%{body | source: source})}
-
-  # Compiled with no name, after the file's name was refused: only its own mistakes count.
-  defp named_as({:ok, %FbType{}} = block, _header, _source, nil), do: block
-
-  defp named_as({:ok, %FbType{name: block}}, {line, _block}, _source, name),
-    do: {:error, [misnamed(line, block, name)]}
-
-  defp named_as({:error, diagnostics}, {line, block}, _source, name)
-       when is_binary(block) and is_binary(name) and block != name,
-       do: {:error, Enum.sort_by([misnamed(line, block, name) | diagnostics], & &1.line)}
-
-  defp named_as({:error, diagnostics}, _header, _source, _name), do: {:error, diagnostics}
-
-  defp misnamed(line, block, name),
-    do: %Diagnostic{
-      stage: :validate,
-      line: line,
-      message:
-        "this function block is `#{block}`, but it is compiled as `#{name}`: " <>
-          "a block is named after its file"
-    }
-
-  # The block's line and name, from a first rung `function_block <name>` in any case, or
-  # nil for anything else, a program's first rung among them.
-  defp header({:routine, {:rungs, [{:rung, [{:name, line, word}, {:name, _, block}]} | _]}}),
-    do: heading(String.downcase(word), line, block)
-
-  defp header(_ast), do: nil
-
-  defp heading("function_block", line, block), do: {line, block}
-  defp heading(_word, _line, _block), do: nil
-
-  defp front_end(stage, line, column, message),
-    do: %Diagnostic{stage: stage, line: line, column: column, message: message}
+  defdelegate compile_files(paths), to: Logex.Compiler
 end
