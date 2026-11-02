@@ -6,10 +6,12 @@ defmodule Logex.Runner.Paths do
   # expanded once at its start.
   #
   # - A runner's files are its store and its forces file, each with the `.tmp` beside it
-  #   it is written through (`Logex.Retain.written/2`), each `{path, role}`, the role
-  #   `:retain`, `:forces`, `{:tmp, :retain}` or `{:tmp, :forces}`; claimed all or none
-  #   in its own process once its name is registered, before anything is written, and
-  #   given up as it terminates, after its last write.
+  #   it is written through (`Logex.Retain.written/2`), and since decision 360 (RV-5) the
+  #   copy a fresh start keeps of a store it dropped from, `<store>.dropped`, with its own
+  #   `.tmp`, each `{path, role}`, the role `:retain`, `:forces`, `:dropped`, `{:tmp,
+  #   :retain}`, `{:tmp, :forces}` or `{:tmp, :dropped}`; claimed all or none in its own
+  #   process once its name is registered, before anything is written, and given up as it
+  #   terminates, after its last write.
   # - A file is held by a runner whose process is alive: one that crashed or was killed,
   #   whose terminate/2 never ran, holds nothing, its claims taken over by the next runner
   #   that claims the file. So a path is free again once its holder stops, crashes or is

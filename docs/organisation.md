@@ -4639,7 +4639,17 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   type changed (even widened), an array resized, an instance retyped and a qualifier
   removed among it, each reported once at the start, `dropped: [{path, reason}]` in
   `status/1`'s `retain` and the first round's event; a tag newly retained starts at its
-  initial value. The matching forgives a changed program, never a broken file.
+  initial value. The matching forgives a changed program, never a broken file. *(Since
+  decision 360, RV-5, 2026-11-02: a fresh start that drops anything, whatever the drop,
+  the drop report itself the trigger, copies the store as it read it to
+  `<store>.dropped` before its first write over it, in the runner's init once its files
+  are claimed and before any device is opened, so that a mistaken deploy's drops outlive
+  the next write; the copy a write as every other, through its own `.tmp` and limited by
+  decision 353, its failure `failed` in `status/1` as any failed write's and the start
+  going on; kept until the next start that drops, a start that drops nothing leaving it
+  where it is; and named in `status/1`'s `retain`, `copy`, where the start dropped
+  anything. The runner holds the copy and its `.tmp` as its own files (decision 356), and
+  a forces file naming either is refused at start, decision 325's rule (provisional).)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in

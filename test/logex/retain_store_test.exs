@@ -732,6 +732,180 @@ defmodule Logex.RetainStoreTest do
     end
   end
 
+  # Decision 360 (the review after Milestone 6, c6-pmi-2): a fresh start that drops
+  # anything from its store copies the store, as it read it, to `<store>.dropped` before
+  # its first write over it, kept until the next such start, so that a mistaken deploy's
+  # drops can be taken back after the next write has made the store the new
+  # configuration's; the copy a time-limited write (decision 353), its failure reported
+  # as a failed write's, the start going on; and `status/1` names it.
+  describe "a store a fresh start drops from (decision 360)" do
+    defp retyped,
+      do:
+        configured(
+          @plant,
+          programs(String.replace(@tally, "var retain boxes ctu", "var retain boxes ctu_int"))
+        )
+
+    # The period's writer, among the runner's links, through its mailbox and the runner
+    # through its own, twice, so that the period's write handed it is made and taken.
+    defp period_written(runner) do
+      {:links, links} = Process.info(runner, :links)
+
+      for pid <- links,
+          {:dictionary, dictionary} <- [Process.info(pid, :dictionary)],
+          dictionary[:"$initial_call"] == {Logex.Runner.Writer, :init, 1},
+          _ <- 1..2 do
+        _ = :sys.get_state(pid)
+        _ = :sys.get_state(runner)
+      end
+    end
+
+    # The panel a Watching device, which tells the test the copy's text at each read, so
+    # that its first read, the start's own, sees whether the copy was made before it.
+    defp watched(rig, config),
+      do:
+        rig.opts
+        |> Keyword.put(:configuration, config)
+        |> Keyword.put(:io, %{
+          "panel" => {Watching, sim: rig.panel, store: rig.store <> ".dropped", test: self()}
+        })
+
+    test "a start that drops copies the store before any device is read, and names the copy",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+
+      {:ok, runner} = Runner.start_link(watched(rig, retyped()))
+      assert_receive {:read, {:ok, ^read}}, 5000
+      copy = rig.store <> ".dropped"
+
+      assert Runner.status(runner).retain == %{
+               path: rig.store,
+               written_at: ~U[2026-10-30 14:00:00Z],
+               failed: nil,
+               dropped: [{"t1.boxes", {:retyped, "ctu", "ctu_int"}}],
+               copy: copy
+             }
+
+      # The store itself as it was until the first write over it, the period's, which
+      # writes the new configuration's; the copy as the start read it, the drop's value
+      # in it.
+      assert File.read!(rig.store) == read
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      refute File.read!(rig.store) == read
+      assert File.read!(rig.store) =~ "\nt1.boxes ctu_int\n"
+      assert File.read!(copy) == read
+      assert read =~ "\nt1.boxes ctu\nt1.boxes.cu bool 1\nt1.boxes.cv dint 2\n"
+      refute File.exists?(copy <> ".tmp")
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Kept until the next start that drops: one that drops nothing, warm, cold or with no
+    # store, makes none and leaves the copy where it is, and status/1 names none; the next
+    # that drops replaces it with the store it read.
+    test "the copy kept until the next start that drops", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      first = File.read!(rig.store)
+      copy = rig.store <> ".dropped"
+
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      pressed(rig, [0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      assert File.read!(copy) == first
+      second = File.read!(rig.store)
+
+      for extra <- [[], [start: :cold]] do
+        {:ok, runner} =
+          Runner.start_link(Keyword.merge(rig.opts, [configuration: retyped()] ++ extra))
+
+        assert %{dropped: []} = retain = Runner.status(runner).retain
+        refute Map.has_key?(retain, :copy)
+        assert File.read!(copy) == first
+        assert Runner.stop(runner) == :ok
+        opener_down(rig.panel)
+      end
+
+      File.rm!(rig.store)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      refute Map.has_key?(Runner.status(runner).retain, :copy)
+      assert File.read!(copy) == first
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+
+      # The store the retyped plant wrote, met by the original: dropped, and copied.
+      File.write!(rig.store, second)
+      {:ok, runner} = Runner.start_link(rig.opts)
+
+      assert %{dropped: [{"t1.boxes", {:retyped, "ctu_int", "ctu"}}], copy: ^copy} =
+               Runner.status(runner).retain
+
+      assert File.read!(copy) == second
+      assert Runner.stop(runner) == :ok
+    end
+
+    # A drop of any kind is copied for, the report itself the trigger: an instance the
+    # configuration no longer has, and a global it no longer retains, beside the retyped
+    # counter above.
+    test "every kind of drop copies the store", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      copy = rig.store <> ".dropped"
+
+      for {source, dropped} <- [
+            {String.replace(@plant, "t1", "t2"), [{"t1", :undeclared}]},
+            {String.replace(@plant, "var_global retain total_boxes", "var_global total_boxes"),
+             [{"total_boxes", :unretained}]}
+          ] do
+        File.rm(copy)
+        File.write!(rig.store, read)
+        changed = configured(source, programs())
+
+        {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, changed))
+        assert %{dropped: ^dropped, copy: ^copy} = Runner.status(runner).retain
+        assert File.read!(copy) == read
+        assert Runner.stop(runner) == :ok
+        opener_down(rig.panel)
+      end
+    end
+
+    # The copy a write as every other (decision 353): one that fails is reported as a
+    # failed write is, `failed` in status/1, and names no copy, the start going on, the
+    # next write made clearing the failure.
+    test "a copy that fails is reported, and the start goes on", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      File.mkdir!(rig.store <> ".dropped.tmp")
+
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+
+      assert %{status: :running, retain: %{failed: :eisdir, copy: nil, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      refute File.exists?(rig.store <> ".dropped")
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      assert %{retain: %{failed: nil, copy: nil}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
   describe "the runner's retain: and start: (decisions 271, 275 and 285)" do
     test "each checked in the caller, a pinned message each", %{tmp_dir: dir} do
       rig = rig(dir)
@@ -782,6 +956,17 @@ defmodule Logex.RetainStoreTest do
           "other's `.tmp`",
         fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> ".tmp")) end
       )
+
+      # Decision 360 (RV-5): nor the store's copy, which a start that drops writes over.
+      for copy <- [rig.store <> ".dropped", rig.store <> ".dropped.tmp"] do
+        raises(
+          "the runner's forces: #{inspect(copy)} is the copy its retain: " <>
+            "#{inspect(rig.store)} is copied to by a fresh start that drops from it, " <>
+            "`.dropped`, or the `.tmp` the copy is written through: the store's copy and the " <>
+            "forces file are two files",
+          fn -> Runner.start_link(Keyword.put(rig.opts, :forces, copy)) end
+        )
+      end
 
       for bad <- [:hot, nil, "warm"] do
         raises(

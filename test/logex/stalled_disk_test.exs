@@ -509,6 +509,76 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # RV-5: the store's read at a fresh start raw and limited as the forces file's is
+  # (provisional), and decision 360's copy of a store the start dropped from a write as
+  # every other, limited the same, its failure reported and the start going on.
+  describe "a fresh start's store on a stalled disk (RV-5, decision 360)" do
+    test "a start whose store's read does not end within its limit is refused, naming the " <>
+           "file, and every other file call answers meanwhile",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {_, 0} = System.cmd("mkfifo", [rig.store])
+      on_exit(fn -> let_go(rig.store) end)
+
+      start = Task.async(fn -> timed(fn -> start_refused(rig.opts) end) end)
+      reading_raw()
+      other = Path.join(dir, "other")
+
+      call =
+        Task.async(fn ->
+          File.write!(other, "answered\n")
+          File.read!(other)
+        end)
+
+      assert Task.yield(call, @answers) == {:ok, "answered\n"}
+      assert Task.yield(start, 0) == nil
+      {took, refused} = Task.await(start, 2 * @answers)
+
+      assert refused ==
+               "#{rig.store}: the store cannot be read: the disk did not answer within the " <>
+                 "idle watchdog and a poll period"
+
+      assert took >= @idle + @poll and took < @answers
+      assert Sim.reads(rig.panel) == 0
+
+      let_go(rig.store)
+      File.rm!(rig.store)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a start's copy of a store it dropped from that does not end within its limit is " <>
+           "reported :timeout, and the start goes on",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+
+      # The store read raw, off the held server; the copy's rename through it held.
+      server = held()
+      {took, {:ok, runner}} = timed(fn -> Runner.start_link(next.opts) end)
+      assert took >= @idle + @poll and took < @answers
+
+      assert %{status: :running, retain: %{failed: :timeout, copy: nil, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      # The killed copy's rename may land once the disk answers, the copy whole; the store
+      # is as the start read it until its first write.
+      :sys.resume(server)
+      assert File.read!(rig.store) == read
+      assert File.read(rig.store <> ".dropped") in [{:ok, read}, {:error, :enoent}]
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
   describe "each write's `.tmp` its own (M10)" do
     # A write killed inside a call of the file system runs that call on after the kill;
     # here the test's own open of a file at the store's `.tmp` stands in for such a

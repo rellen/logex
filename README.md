@@ -3445,24 +3445,38 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
-  `.tmp` the other is written through, is refused at start, a pinned line. And one
-  runner's: a start naming a store, a forces file or a `.tmp` of either that another
-  runner of the same VM holds is refused, naming it and that runner, until the holder
-  stops, crashes or is killed, when the file is free again (decision 356), the VM's
-  table of them kept by a process of logex's own that no application's stop takes down;
-  two VMs on one file are the host's to avoid, as are two paths to one file through a
-  link. Each path is
-  resolved once, at the start, so a `File.cd` after it moves neither file. A start under
-  a name another process holds is `{:error, {:already_started, pid}}` and writes nothing,
-  `start: :cold` among it, its write made once the name is registered (M11).
+  `.tmp` the other is written through, or the forces file naming the store's copy,
+  `tally.retain.dropped` (below), or its `.tmp`, is refused at start, a pinned line. And
+  one runner's: a start naming a store, a forces file, a store's copy or a `.tmp` of any
+  that another runner of the same VM holds is refused, naming it and that runner, until
+  the holder stops, crashes or is killed, when the file is free again (decision 356), the
+  VM's table of them kept by a process of logex's own that no application's stop takes
+  down; two VMs on one file are the host's to avoid, as are two paths to one file through
+  a link. Each path is resolved once, at the start, so a `File.cd` after it moves neither
+  file. A start under a name another process holds is `{:error, {:already_started,
+  pid}}` and writes nothing, `start: :cold` among it, its write made once the name is
+  registered (M11).
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
   store's path, the time its header names and what the start dropped. A store of another
   configuration, a line of no store's shape, a store cut short (decision 355), or a store
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
-  not started (decision 285);
-  `start: :cold` reads none of it and writes a new store at once.
+  not started (decision 285); `start: :cold` reads none of it and writes a new store at
+  once. The read is limited to the idle watchdog and a poll period of real time, as every
+  write is, so that a store on a stalled disk, or a FIFO in its place, refuses the start
+  as a store that cannot be read.
+- A fresh start that drops anything from its store, a value retyped, resized or no
+  longer retained, or an instance the configuration no longer has, as a mistaken deploy
+  drops them, first copies the store as it read it to `tally.retain.dropped` (decision
+  360), before its first write over the store, so that what it dropped outlives the next
+  write: to take the deploy back, stop the runner, put the copy in the store's place and
+  start the configuration it was written for. The copy is written as every other write
+  is, through its own `.tmp` and within the same limit, one that fails reported as a
+  failed write is, `failed` in `status/1`'s `retain`, and the start goes on; it stands
+  until the next start that drops anything, a start that drops nothing leaving it where
+  it is; and `status/1`'s `retain` names it, `copy: "tally.retain.dropped"`, beside
+  `dropped`, nil where its write failed, and has no `copy` where nothing was dropped.
 
 ### An event task
 

@@ -13905,7 +13905,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :original_after_crash,
     :store_unretained,
     # Decision 350: the trigger `g`'s rise standing once `l`'s step has run.
-    :rise_stood_at_step
+    :rise_stood_at_step,
+    # Decision 360 (RV-5): a fresh start that dropped from its store copied it.
+    :store_copied
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14166,6 +14168,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     File.rm(file || Path.join(dir, "none"))
     store = store_beside(file, dir, seed)
     File.rm(Path.join(dir, "retain-#{seed}"))
+    File.rm(Path.join(dir, "retain-#{seed}.dropped"))
     period = period_beside(store, seed)
 
     w = %{
@@ -14178,6 +14181,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       file: file,
       store: store,
       stored: nil,
+      copied: nil,
       period: period,
       due: nil,
       origin: nil,
@@ -14326,6 +14330,42 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:store_unretained, dropped != [])
     {rt, stored, image}
   end
+
+  # Decision 360, restated (RV-5): a warm fresh start whose matching drops anything copies
+  # the store it read, byte for byte, to `<store>.dropped` before its first write; any other
+  # start, cold, from no store or dropping nothing, makes none and leaves an earlier copy
+  # as it was. The drops are the model's own, restated from the draws (`life_dropped/1`,
+  # `unretained/2`), and the copy's file read at the start's return, before any write.
+  defp copied_at(%{store: nil} = w, _text), do: w
+
+  defp copied_at(w, text) do
+    drops = drops_restated(w)
+    copied = copy_kept(drops, text, w.copied)
+    assert File.read(w.store <> ".dropped") == copy_read(copied)
+    assert Map.get(Runner.status(w.runner).retain, :copy) == copy_named(drops, w.store)
+    reach(:store_copied, drops != [])
+    reach(:store_copy_kept, drops == [] and w.copied != nil)
+    reach(:life_copied_changed, drops != [] and w.change != nil)
+    %{w | copied: copied}
+  end
+
+  defp drops_restated(%{start: :cold}), do: []
+  defp drops_restated(%{stored: nil}), do: []
+
+  defp drops_restated(%{change: change, stored: {_kt, _k}} = w) when change != nil,
+    do: life_dropped(w)
+
+  defp drops_restated(%{stored: {_kt, k}} = w), do: unretained(k, w.draws.running.keep)
+
+  defp copy_kept([], _text, copied), do: copied
+  defp copy_kept(_drops, text, _copied), do: text
+
+  defp copy_read(nil), do: {:error, :enoent}
+  defp copy_read(text), do: {:ok, text}
+
+  # status/1's `retain` names the copy where the start dropped anything, and none otherwise.
+  defp copy_named([], _store), do: nil
+  defp copy_named(_drops, store), do: store <> ".dropped"
 
   # The image a warm fresh start lays over the configuration: the runner walk's, the
   # retained global and the count; the life walk's, the last write as the model restated
@@ -14543,6 +14583,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
+    w = copied_at(w, text)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
     # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
@@ -15235,6 +15276,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_latest_wins,
     :life_leaf_kept,
     :life_changed_store,
+    # Decision 360 (RV-5): a changed configuration's start copied the store it dropped
+    # from, and a later start that dropped nothing left the copy where it was.
+    :life_copied_changed,
+    :store_copy_kept,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
