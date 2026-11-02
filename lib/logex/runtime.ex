@@ -901,11 +901,12 @@ defmodule Logex.Runtime do
   timing is put at rest by the start itself, as `restart/3` puts it (decision 385); every
   scan's first is marked first (decision 274); and a task's `single` that the image put back starts its trigger's last
   sample at the sample the image holds for it, the task's own by its name where it holds
-  one and otherwise its trigger's, as a warm `restart/2` keeps it (decisions 305, 313 and
-  350), so a trigger sampled at 1 fires on no rising edge and a rise logic wrote
-  after the sample fires once, every other at 0 as `start/1` has it; one the image holds
-  no sample for, which only a host's own image lacks, at the value put back, so nothing
-  fires (decision 319). So a resource started from another's image cycles as that one does
+  one beside a different one of its trigger, as `retained/1` keeps a task's own (since
+  the review of RV-10, provisional), and otherwise its trigger's, as a warm `restart/2`
+  keeps it (decisions 305, 313 and 350), so a trigger sampled at 1 fires on no rising
+  edge and a rise logic wrote after the sample fires once, every other at 0 as `start/1`
+  has it; one the image holds no sample of its trigger for, which a host's own image or
+  a single changed leaves, at the value put back, so nothing fires (decision 319). So a resource started from another's image cycles as that one does
   after a warm `restart/2`, given the same inputs, where the program writes no preset.
 
   `dropped` lists each value not kept once, in path order, `{path, reason}`, a path
@@ -916,9 +917,13 @@ defmodule Logex.Runtime do
   for an array's or an array of instances' sizes; `:unretained` where the qualifier went;
   `:misfit` for a value of the right type that does not fit it; and `{:preset, stored,
   now}` for a timer's or counter's stored preset the program's replaced, the number on
-  the instruction that runs it (decisions 308 and 378); and since decision 389 `{task,
-  :undeclared}` for a task's own trigger sample (decision 350) of a task `config`
-  declares with no single or not at all, which a store written at a cut round keeps.
+  the instruction that runs it (decisions 308 and 378); and since decision 389 `{name,
+  :undeclared}` for a stored trigger sample the start lays on no task: a task's own
+  (decision 350), which a store written at a cut round keeps, of a task `config` declares
+  with no single or not at all, a global of that name among them, or, since the review of
+  RV-10, whose single's sample the image does not hold apart from it, so that it is of
+  another trigger; and a global's sample whose global the start keeps and no task of
+  `config` takes, every task on it taken out (provisional).
   Every entry is a stored value the start did not keep, so the list keeps its name. A
   member every element of an array of instances drops for one reason is one entry,
   `"m1.gates[*].j"`, decision 259's path form, at any depth, `hs[*].ws[*].x`; elements
@@ -926,12 +931,13 @@ defmodule Logex.Runtime do
 
   `image` is what `retained/1` gives, `%{configuration: name, globals: globals,
   instances: instances, triggers: triggers}`, each instance's a lone image (`retained/2`).
-  One that is not, or whose parts are not, a sample that is no bool's value or of a
-  global `config` declares that `globals` does not hold among them, or one of another
-  configuration, which a line naming both tells, is the host's mistake: one
-  `ArgumentError`, a line each, after `config`'s own check. A sample by any other name is
-  a task's (decision 350), dropped where `config` declares no such task with a single
-  (decision 389).
+  One that is not, or whose parts are not, a sample that is no bool's value among them,
+  or one of another configuration, which a line naming both tells, is the host's mistake:
+  one `ArgumentError`, a line each, after `config`'s own check. A sample by a name
+  `globals` does not hold is a task's (decision 350), since the image keeps a global's
+  sample only with its global, whatever `config` declares by that name, and is dropped
+  where no task of `config` takes it (decision 389), where until the review of RV-10 one
+  by the name of a global `config` declares was refused.
   The matching forgives a changed program, never a broken image.
   """
   def start(config, image) do
@@ -954,7 +960,9 @@ defmodule Logex.Runtime do
       )
 
     {%{runtime | globals: globals, instances: instances, tasks: tasks},
-     Image.ordered(dropped_globals ++ dropped_instances ++ Image.dropped_triggers(image, config))}
+     Image.ordered(
+       dropped_globals ++ dropped_instances ++ Image.dropped_triggers(image, config, kept)
+     )}
   end
 
   # Each image instance's type by its name in the wiring, a map, where until the review
@@ -986,20 +994,16 @@ defmodule Logex.Runtime do
   # which only a host's own image lacks, at the value put back, so nothing fires
   # (decision 319, confirmed by the maintainer, 2026-10-30). Since RV-3's review a task the
   # image holds a sample of by its own name, which a round cut short before its step
-  # leaves (decision 350), starts at that one.
+  # leaves (decision 350), starts at that one, and since the review of RV-10 only where the
+  # image holds its single's sample apart from it, as a task's own of that trigger always
+  # has beside it (`Logex.Image.laid_sample/3`, provisional).
   defp put_back(
          %{last: _} = state,
          %Configuration.Task{single: single, name: name},
          {kept, globals, triggers}
        ),
        do:
-         kept_sample(
-           single in kept,
-           state,
-           Map.get_lazy(triggers, name, fn ->
-             Map.get_lazy(triggers, single, fn -> Map.fetch!(globals, single) end)
-           end)
-         )
+         kept_sample(single in kept, state, Image.laid_sample(triggers, {name, single}, globals))
 
   defp put_back(state, _task, _kept), do: state
 
@@ -2844,8 +2848,8 @@ defmodule Logex.Runtime do
           problem = point_problem(key, value, runtime),
           do: problem
 
-    {problems, inputs} = by_values(problems, inputs, runtime.wiring)
-    imaged(problems, {globals, runtime.wiring}, inputs)
+    {problems, inputs, written} = by_values(problems, inputs, runtime.wiring)
+    imaged(problems, {globals, runtime.wiring, written}, inputs)
   end
 
   defp image!(_runtime, inputs),
@@ -2864,11 +2868,13 @@ defmodule Logex.Runtime do
   # cycle of points named as their values pays one clause for it, and is set under the
   # point's own name, two keys that name one point a line each, in key order
   # (provisional).
-  defp by_values([], inputs, _wiring), do: {[], inputs}
+  defp by_values([], inputs, _wiring), do: {[], inputs, %{}}
 
   defp by_values(problems, inputs, wiring) do
     {named, problems} = Enum.split_with(problems, &match?({:by_value, _, _}, &1))
-    {problems ++ twice(named, inputs, wiring), renamed(named, inputs)}
+
+    {problems ++ twice(named, inputs, wiring), renamed(named, inputs),
+     Map.new(named, fn {:by_value, key, point} -> {point, key} end)}
   end
 
   defp renamed([], inputs), do: inputs
@@ -2904,15 +2910,20 @@ defmodule Logex.Runtime do
   # input points whole or by its elements, never both, a line an array, in name order,
   # looked at once every input is a point, and only where a located array is, so that a
   # configuration of none cycles in what it did.
-  defp whole_clashes(%{located: located, elements: elements, globals: globals}, inputs),
+  #
+  # Since the review of RV-10 an element a key named by numbers otherwise than as its
+  # subscripts' values (decision 384) is told by that key, as the host wrote it, `inputs
+  # \`temps\` and \`temps[03]\``, where until then it was told by its point's name.
+  defp whole_clashes(%{located: located, elements: elements, globals: globals}, inputs, written),
     do:
       for(
         {array, {"i", _first, _last}} <- Enum.sort(located),
         is_map_key(inputs, array),
         keys = for({key, {^array, _, _}} <- elements, is_map_key(inputs, key), do: key),
         keys != [],
+        keys = Enum.sort(for(key <- keys, do: Map.get(written, key, key))),
         do:
-          "inputs #{Enum.map_join([array | Enum.sort(keys)], " and ", &"`#{&1}`")} each set " <>
+          "inputs #{Enum.map_join([array | keys], " and ", &"`#{&1}`")} each set " <>
             "`#{array}`, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
             "#{global_line(Map.fetch!(globals, array))}: a call sets an array whole or by its " <>
             "elements, not both"
@@ -2921,10 +2932,11 @@ defmodule Logex.Runtime do
   defp global_line(%Configuration.Global{line: nil}), do: ""
   defp global_line(%Configuration.Global{line: line}), do: " (line #{line})"
 
-  defp imaged([], {globals, %{reals: nil, elements: nil}}, inputs), do: Map.merge(globals, inputs)
+  defp imaged([], {globals, %{reals: nil, elements: nil}, _written}, inputs),
+    do: Map.merge(globals, inputs)
 
   # M5-10 (decision 166): a real input point's value is the real's nearest value.
-  defp imaged([], {globals, %{reals: reals, elements: nil}}, inputs),
+  defp imaged([], {globals, %{reals: reals, elements: nil}, _written}, inputs),
     do: Map.merge(globals, Map.new(inputs, &as_input(&1, reals)))
 
   # M5-13 (decision 156): an element of a located array is a point of its own, set by its
@@ -2935,8 +2947,8 @@ defmodule Logex.Runtime do
   # Since decision 241 a located array of input points may be set whole, a list of its
   # shape, `%{"zone_t" => [...]}`, as a host's array var_input is (decision 222), each
   # element stored as its point's value is.
-  defp imaged([], {globals, %{reals: reals, elements: elements} = wiring}, inputs) do
-    clashed!(whole_clashes(wiring, inputs))
+  defp imaged([], {globals, %{reals: reals, elements: elements} = wiring, written}, inputs) do
+    clashed!(whole_clashes(wiring, inputs, written))
     {placed, points} = Enum.split_with(inputs, fn {key, _value} -> is_map_key(elements, key) end)
 
     {wholes, points} =
@@ -3110,7 +3122,7 @@ defmodule Logex.Runtime do
        ),
        do:
          element_output(
-           output_element(runtime.wiring.element_outputs, key),
+           output_element(runtime.wiring.element_outputs, Logex.Name.by_value(key)),
            key,
            {array, runtime}
          )
@@ -3121,6 +3133,12 @@ defmodule Logex.Runtime do
   defp output_element(outputs, key), do: List.keyfind(outputs, key, 0)
 
   # An element its array does not hold, as written, of a located array of input points.
+  # Since the review of RV-10 an element of a located array of output points named by
+  # numbers otherwise than as its subscripts' values, `lamps[02]`, is told it is that
+  # output point, as `lamps[2]` is, and a name that is no point is offered the point
+  # nearest its subscripts' values, `Temps[03]` `temps[3]`, each told by the host's own
+  # key (decision 384), where until then they were told as no point and offered the
+  # nearest text.
   defp element_output(nil, key, {array, runtime}),
     do: unheld(located_array(runtime.wiring.located, array), key, {array, runtime})
 
@@ -3148,7 +3166,7 @@ defmodule Logex.Runtime do
 
     point_hint(
       "input #{label(key)} is not an input point",
-      Declarations.suggest(key, points, & &1, "names"),
+      Declarations.suggest(Logex.Name.by_value(key), points, & &1, "names"),
       listed_points(wiring.elements, points, wiring.located)
     )
   end

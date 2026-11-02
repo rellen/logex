@@ -80,12 +80,27 @@ defmodule Logex.Name do
   # (provisional), and `w[01,2]` `w[1,2]`, as `put_inputs/3`
   # and `get/2` read a subscript (decisions 222 and 312): the name by its values, or the
   # text as it is where it is no element named by numbers, `temps[i]`, `temps` or `x.y`.
+  # Since the review of RV-10 each subscript is the literal and nothing else, as the lexer
+  # cuts a name, so that `temps[3 ]` and `temps[3//x]`, which `get/2` and the forces file
+  # take as no name, are none here either, where until the review the lexer's skipping of
+  # a space or a comment after the number read them as `temps[3]`.
   def by_value(name) when is_binary(name), do: valued(element(name), name)
 
   defp valued({word, subscripts}, name),
-    do: literals(Enum.map(subscripts, &subscript/1), word, name)
+    do: literals(Enum.map(subscripts, &exact/1), word, name)
 
   defp valued(nil, name), do: name
+
+  defp exact(text), do: exact_literal(Logex.Lexer.tokenize(text), text)
+
+  defp exact_literal({:ok, [{:int_lit, _, value}], _line}, text),
+    do: plain_literal(Integer.to_string(value) == text, value)
+
+  defp exact_literal({:ok, [{:int_lit, _, value, text}], _line}, text), do: {:literal, value}
+  defp exact_literal(_other, text), do: {:tag, text}
+
+  defp plain_literal(true, value), do: {:literal, value}
+  defp plain_literal(false, value), do: {:tag, value}
 
   defp literals(subscripts, word, name),
     do: literal_name(Enum.all?(subscripts, &match?({:literal, _}, &1)), {word, subscripts}, name)

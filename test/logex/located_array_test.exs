@@ -723,6 +723,36 @@ defmodule Logex.LocatedArrayTest do
       assert Runtime.get!(runtime, "temps[03]") == 2.5
     end
 
+    # Decision 384 since the review of RV-10: every door reads one name alike. A subscript
+    # is its literal and nothing else, so `temps[3 ]` and `temps[3//x]`, which `get/2`
+    # takes as no name, are no point, where the lexer's skipping of a space or a comment
+    # read them as `temps[3]`; a name that is no input point is told by its subscripts'
+    # values, `lamps[02]` the output point `lamps[2]` is and `Temps[03]` offered `temps[3]`,
+    # where until the review they were told as no point and offered `temps[0]`; and a key
+    # named otherwise than as its point is told as the host wrote it, `temps[03]` in decision
+    # 241's line, where until then it was told as `temps[3]`.
+    test "a cycle's keys are told by their subscripts' values and named as written" do
+      runtime = Runtime.start(oven())
+
+      for {inputs, message} <- [
+            {%{"temps[3 ]" => 1.0},
+             ~s|input "temps[3 ]" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
+            {%{"temps[3//x]" => 1.0},
+             ~s|input "temps[3//x]" is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
+            {%{"lamps[02]" => 1},
+             "input `lamps[02]` is an output point (at `card.q.2`), not an input point: only an input point is set from outside"},
+            {%{"Temps[03]" => 1.0},
+             "input `Temps[03]` is not an input point — did you mean `temps[3]`? (names are case-sensitive)"},
+            {%{"temps" => List.duplicate(1.0, 8), "temps[03]" => 2.0, "temps[1]" => 2.0},
+             "inputs `temps` and `temps[03]` and `temps[1]` each set `temps`, an array of 8 reals (line 3): a call sets an array whole or by its elements, not both"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Runtime.cycle(runtime, 0, inputs) end
+      end
+
+      for name <- ["temps[3 ]", "temps[3//x]"],
+          do: assert({:error, _} = Runtime.get(runtime, name))
+    end
+
     test "refuses the array named whole, an output element, an element its array lacks and a misfit" do
       runtime = Runtime.start(oven())
 
@@ -951,7 +981,8 @@ defmodule Logex.LocatedArrayTest do
     # Decision 384: a force, an unforce and the forces file name an element by numbers
     # otherwise than as its subscripts' values, `temps[03]`, as the point of their values,
     # `temps[3]`, kept, written and shown under that name, two lines naming it either way
-    # one point forced twice.
+    # one point forced twice, told since the review of RV-10 by the name the later line
+    # writes, `temps[003]`, where until then by the point's, `temps[3]`.
     test "an element forced as `temps[03]` is `temps[3]`, by the host and in the file",
          %{tmp_dir: dir} do
       %{runner: runner, clock: clock, file: file} = running(dir)
@@ -974,7 +1005,7 @@ defmodule Logex.LocatedArrayTest do
       {:ok, card} = Sim.start_link(clock: clock)
 
       raises(
-        "#{file}: line 2: `temps[3]` is forced on line 1 already",
+        "#{file}: line 2: `temps[003]` is forced on line 1 already",
         fn ->
           Runner.start_link(
             configuration: oven(),
@@ -984,6 +1015,28 @@ defmodule Logex.LocatedArrayTest do
           )
         end
       )
+    end
+
+    # Decision 384 since the review of RV-10: a force reads a name as a cycle does, the
+    # point by its subscripts' values and the name told as the host wrote it.
+    test "a force is told by a name's subscripts' values and names it as written",
+         %{tmp_dir: dir} do
+      %{runner: runner} = running(dir)
+
+      for {name, message} <- [
+            {"temps[3 ]",
+             "`temps[3 ]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `temps[0]` to `temps[7]`"},
+            {"lamps[02]",
+             "`lamps[02]` is an output point, at `card.q.2`: only an input point is forced"},
+            {"Temps[03]",
+             "`Temps[03]` is no input point of `oven` — did you mean `temps[3]`? (names are case-sensitive)"}
+          ] do
+        raises(message, fn -> Runner.force(runner, name, 1.0) end)
+        raises(message, fn -> Runner.unforce(runner, name) end)
+      end
+
+      assert Runner.status(runner).forces == %{}
+      Runner.stop(runner)
     end
 
     test "the forces file names an element, read at every start; the array whole is refused",

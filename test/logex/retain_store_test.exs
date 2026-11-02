@@ -809,17 +809,19 @@ defmodule Logex.RetainStoreTest do
       raises(~r/line 3: `bad` is no line of a store/, fn -> Runner.start_link(rig.opts) end)
 
       # What its image holds the start judges as any image, each line naming the store: a
-      # sample of `shown`, a global the store does not hold. (Until RV-10 this was `trigger
-      # arm 1`, of no global of the configuration, which decision 389 makes a task's sample
-      # the start drops, below.)
+      # sample that is no bool's value. (Until RV-10 this was `trigger arm 1`, of no global
+      # of the configuration, which decision 389 makes a task's sample the start drops,
+      # below, and until the review of RV-10 `trigger shown 1`, of a global the store does
+      # not hold, which the review makes one too, "`triggers` holds \"shown\", which
+      # `globals` does not hold".)
       File.write!(
         rig.store,
-        "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\ntrigger shown 1\n"
+        "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\ntrigger arm 2\n"
       )
 
       raises(
-        "#{rig.store}: `triggers` holds \"shown\", which `globals` does not hold: a " <>
-          "trigger's last sample is kept only with its retained global",
+        "#{rig.store}: `triggers` holds \"arm\" at 2, which is no last sample of a trigger, " <>
+          "a bool's value",
         fn -> Runner.start_link(rig.opts) end
       )
 
@@ -832,7 +834,7 @@ defmodule Logex.RetainStoreTest do
 
       # No device was opened or read, and the store is as it was.
       assert Sim.reads(rig.panel) == 0
-      assert File.read!(rig.store) =~ "trigger shown 1"
+      assert File.read!(rig.store) =~ "trigger arm 2"
     end
 
     # `start: :cold` reads no store, a broken one or another configuration's among them,

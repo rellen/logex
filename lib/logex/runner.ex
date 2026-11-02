@@ -1423,8 +1423,11 @@ defmodule Logex.Runner do
   # elements' type and sizes and each element's name in the elements' order.
   defp whole_input({:ok, array}, _name, _state), do: {:array, array}
 
+  # Since the review of RV-10 a name that is no input point is looked up by its
+  # subscripts' values (decision 384), `lamps[02]` told it is the output point `lamps[2]`
+  # and `Temps[03]` offered `temps[3]`, each by the name as written.
   defp whole_input(:error, name, state),
-    do: {:error, not_input(Map.fetch(state.located, name), name, state)}
+    do: {:error, not_input(Map.fetch(state.located, Logex.Name.by_value(name)), name, state)}
 
   defp not_input({:ok, {:point, at}}, name, _state),
     do: "`#{name}` is an output point, at `#{at}`: only an input point is forced"
@@ -1458,7 +1461,7 @@ defmodule Logex.Runner do
   defp no_input(names, name, configuration),
     do:
       "`#{name}` is no input point of `#{configuration.name}`" <>
-        Declarations.suggest(name, Enum.sort(names), & &1, "names")
+        Declarations.suggest(Logex.Name.by_value(name), Enum.sort(names), & &1, "names")
 
   # Every located global's point by its name, an element of a located array by its own,
   # `temps[3]`, at its own location, and a located array whole by its name with the range
@@ -1659,10 +1662,12 @@ defmodule Logex.Runner do
   defp read_point({:ok, _type}, {_name, {:list, _}, text}, line, {forces, lines, problems}),
     do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
 
+  # Since the review of RV-10 a point forced twice is told by its name as the later line
+  # writes it, `temps[003]`, where until then by its point's (decision 384).
   defp read_point({:ok, _type} = point, {name, value, text}, line, acc),
     do:
       once(
-        first_line([name], acc),
+        as_written(first_line([name], acc), text),
         [name],
         line,
         acc,
@@ -1694,6 +1699,9 @@ defmodule Logex.Runner do
 
   defp forced_on(name, {:ok, line}), do: {name, line}
   defp forced_on(_name, :error), do: nil
+
+  defp as_written(nil, _text), do: nil
+  defp as_written({_name, first}, text), do: {hd(String.split(text, " ")), first}
 
   defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
     do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
