@@ -62,11 +62,15 @@ defmodule Logex.RunnerPathsTest do
     table_gone(:ets.info(Logex.Runner.Paths, :owner))
   end
 
-  # The claims the VM's table holds for a store and its `.tmp`: a runner that stops, or
-  # whose start is refused after it claimed them, gives them up as it ends, not merely by
-  # being gone.
+  # The claims the VM's table holds for a store and its `.tmp`, and since decision 360 its
+  # copy and the copy's `.tmp`: a runner that stops, or whose start is refused after it
+  # claimed them, gives them up as it ends, not merely by being gone.
   defp claims(store),
-    do: :ets.lookup(Logex.Runner.Paths, store) ++ :ets.lookup(Logex.Runner.Paths, store <> ".tmp")
+    do:
+      Enum.flat_map(
+        [store, store <> ".tmp", store <> ".dropped", store <> ".dropped.tmp"],
+        &:ets.lookup(Logex.Runner.Paths, &1)
+      )
 
   # A start from a task, the runner unlinked so that the task's end leaves it running, or
   # refused for a file another runner holds.
@@ -157,6 +161,41 @@ defmodule Logex.RunnerPathsTest do
 
       assert Runner.stop(other) == :ok
       assert Runner.stop(first) == :ok
+    end
+
+    # Decision 360 (RV-5): the copy a fresh start keeps of a store it dropped from,
+    # `<store>.dropped`, and the `.tmp` it is written through, are the runner's too.
+    test "a store another runner copies its store to, and the copy's `.tmp`, are refused",
+         %{tmp_dir: dir} do
+      store = Path.join(dir, "plant.retain")
+      {:ok, first} = Runner.start_link(opts(retain: store, idle: 5000))
+      copy = store <> ".dropped"
+
+      raises(held(:retain, copy, "names the store's copy, `.dropped`,", first), fn ->
+        Runner.start_link(opts(retain: copy))
+      end)
+
+      raises(
+        "the runner's retain: #{inspect(copy <> ".tmp")} names the `.tmp` another runner of " <>
+          "this VM, #{inspect(first)}, writes its store's copy, `.dropped`, through, which it " <>
+          "holds until it stops: two runners on one file write each over the other's",
+        fn -> Runner.start_link(opts(retain: copy <> ".tmp")) end
+      )
+
+      # A store whose copy is another's store.
+      {:ok, other} = Runner.start_link(opts(retain: Path.join(dir, "x.dropped"), idle: 5000))
+
+      raises(
+        "the runner's retain: #{inspect(Path.join(dir, "x"))} is copied to " <>
+          "#{inspect(Path.join(dir, "x.dropped"))}, the store of another runner of this VM, " <>
+          "#{inspect(other)}, which holds it until it stops: two runners on one file write " <>
+          "each over the other's",
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "x"))) end
+      )
+
+      assert Runner.stop(other) == :ok
+      assert Runner.stop(first) == :ok
+      assert claims(store) == []
     end
 
     # The caller's check sees no holder for either of two starts made at once; the claim in

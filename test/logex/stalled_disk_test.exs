@@ -509,6 +509,147 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # RV-5: the store's read at a fresh start raw and limited as the forces file's is
+  # (provisional), and decision 360's copy of a store the start dropped from a write as
+  # every other, limited the same, its failure reported and the start going on.
+  describe "a fresh start's store on a stalled disk (RV-5, decision 360)" do
+    test "a start whose store's read does not end within its limit is refused, naming the " <>
+           "file, and every other file call answers meanwhile",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {_, 0} = System.cmd("mkfifo", [rig.store])
+      on_exit(fn -> let_go(rig.store) end)
+
+      start = Task.async(fn -> timed(fn -> start_refused(rig.opts) end) end)
+      reading_raw()
+      other = Path.join(dir, "other")
+
+      call =
+        Task.async(fn ->
+          File.write!(other, "answered\n")
+          File.read!(other)
+        end)
+
+      assert Task.yield(call, @answers) == {:ok, "answered\n"}
+      assert Task.yield(start, 0) == nil
+      {took, refused} = Task.await(start, 2 * @answers)
+
+      assert refused ==
+               "#{rig.store}: the store cannot be read: the disk did not answer within the " <>
+                 "idle watchdog and a poll period"
+
+      assert took >= @idle + @poll and took < @answers
+      assert Sim.reads(rig.panel) == 0
+
+      let_go(rig.store)
+      File.rm!(rig.store)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a start's copy of a store it dropped from that does not end within its limit is " <>
+           "reported :timeout, and the start goes on",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+
+      # The store read raw, off the held server; the copy's rename through it held.
+      server = held()
+      {took, {:ok, runner}} = timed(fn -> Runner.start_link(next.opts) end)
+      assert took >= @idle + @poll and took < @answers
+
+      assert %{status: :running, retain: %{failed: :timeout, copy: nil, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      # The killed copy's rename may land once the disk answers, the copy whole; the store
+      # is as the start read it until its first write, which since RV-5's review makes the
+      # copy owed first, the stop's here.
+      :sys.resume(server)
+      assert File.read!(rig.store) == read
+      assert File.read(rig.store <> ".dropped") in [{:ok, read}, {:error, :enoent}]
+      assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store <> ".dropped") == read
+      refute File.read!(rig.store) == read
+    end
+
+    # RV-5's review: the look at each file for a symbolic link, made raw in the start's
+    # caller with no limit, held the caller as long as a stalled disk held it, the store's
+    # and the forces file's reads limited after it. Every call a fresh start makes on its
+    # files is now made in a process of its own, limited, none in the caller: a raw call
+    # goes past the file server, so the caller's own calls are traced, every function of
+    # `:file`, through a start that reads a forces file and a store and copies it, each
+    # named by an absolute path, which `Path.expand/1` resolves without the directory the
+    # start is made in.
+    test "no file call of a fresh start is made in its caller", %{tmp_dir: dir} do
+      # An idle watchdog of 5,000 ms, which covers a loaded machine's disk: the test reads
+      # no limit (RV-4's question 12).
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.stop(runner) == :ok
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, configuration: config, idle: 5000)
+      assert :erlang.trace_pattern({:file, :_, :_}, true, [:local]) > 0
+      {caller, started} = traced_start(next.opts)
+      :erlang.trace_pattern({:file, :_, :_}, false, [:local])
+      assert {:ok, runner} = started
+
+      assert %{forces: %{"level" => 7}, retain: %{copy: copy, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      assert File.exists?(copy)
+      assert traced_calls(caller) == []
+      assert Runner.stop(runner) == :ok
+      send(caller, :done)
+    end
+  end
+
+  # A start made in a process of its own that this one traces, a process cannot trace its
+  # own calls, kept alive, the runner's parent, until the test is done with it.
+  defp traced_start(opts) do
+    parent = self()
+    ref = make_ref()
+
+    caller =
+      spawn(fn ->
+        receive do
+          :go -> send(parent, {ref, Runner.start_link(opts)})
+        end
+
+        receive do
+          :done -> :ok
+        end
+      end)
+
+    :erlang.trace(caller, true, [:call])
+    send(caller, :go)
+    assert_receive {^ref, started}, 5000
+    :erlang.trace(caller, false, [:call])
+    {caller, started}
+  end
+
+  defp traced_calls(caller) do
+    receive do
+      {:trace, ^caller, :call, mfa} -> [mfa | traced_calls(caller)]
+    after
+      0 -> []
+    end
+  end
+
   describe "each write's `.tmp` its own (M10)" do
     # A write killed inside a call of the file system runs that call on after the kill;
     # here the test's own open of a file at the store's `.tmp` stands in for such a
@@ -560,7 +701,7 @@ defmodule Logex.StalledDiskTest do
         :ok = :file.close(late)
 
         text = File.read!(rig.store)
-        assert text =~ ~r/\Alogex retain 1\nconfiguration plant written /
+        assert text =~ ~r/\Alogex retain 2\nconfiguration plant written /
         assert text =~ "t1.boxes.cv dint 2\n"
         refute text =~ "junk"
         refute File.exists?(rig.store <> ".tmp")

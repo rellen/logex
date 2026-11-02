@@ -19,7 +19,8 @@ defmodule Logex.Runner.Writer do
   # stalled disk leaves the runner answering, and one gone down without an answer is
   # `{:error, {:down, reason}}`. A write killed inside a call of the file system runs that
   # call on to its end in the kernel and then does nothing more, so its file may yet be
-  # the old or the new, never a mix (`Logex.Retain.written/2`).
+  # the old or the new, never a mix (`Logex.Retain.written/2`). Since RV-5's review a copy a
+  # fresh start owes is made before any write over the store (stored/4).
   #
   # Since RV-4's review the one write's process is linked to the runner as the period's
   # writer is, so that a runner killed, or crashed, while it waits on a write takes the
@@ -33,11 +34,29 @@ defmodule Logex.Runner.Writer do
 
   def start_link(path), do: GenServer.start_link(__MODULE__, {path, self()})
 
-  # One image to write, sent only once the last write has been answered.
-  def write(pid, at, image), do: GenServer.cast(pid, {:write, at, image})
+  # One image to write, sent only once the last write has been answered, with the copy a
+  # fresh start owes, nil for none (stored/4).
+  def write(pid, at, image, owed), do: GenServer.cast(pid, {:write, at, image, owed})
 
   # One write, waited on for `ms` of real time.
   def written(path, text, ms), do: within(fn -> Logex.Retain.written(path, text) end, ms)
+
+  # Decision 360 (RV-5's review): the store's write, an event's, waited on for `ms` of real
+  # time as one, and the period's, by the writer, each made where a fresh start's copy of
+  # the store it dropped from is owed, its own write having failed, only once that copy
+  # is made: the copy first, `<store>.dropped`, and the store only where the copy was
+  # made, `{:copied, result}`, the store's result; a copy that fails writes no store,
+  # `{:uncopied, reason}`; and with no copy owed the store's write alone, an event's
+  # written/3's.
+  def stored(path, text, owed, ms), do: within(fn -> copied_first(path, text, owed) end, ms)
+
+  defp copied_first(path, text, nil), do: Logex.Retain.written(path, text)
+
+  defp copied_first(path, text, owed),
+    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text)
+
+  defp copy_then(:ok, path, text), do: {:copied, Logex.Retain.written(path, text)}
+  defp copy_then({:error, reason}, _path, _text), do: {:uncopied, reason}
 
   # One call of the file system, a write's or the forces file's read at a restart, in a
   # process of its own linked to the caller, a runner, which traps exits, waited on for
@@ -88,8 +107,8 @@ defmodule Logex.Runner.Writer do
   def init(state), do: {:ok, state}
 
   @impl GenServer
-  def handle_cast({:write, at, image}, {path, runner} = state) do
-    result = Logex.Retain.written(path, Logex.Retain.encode(image, at))
+  def handle_cast({:write, at, image, owed}, {path, runner} = state) do
+    result = copied_first(path, Logex.Retain.encode(image, at), owed)
     send(runner, {__MODULE__, self(), at, result})
     {:noreply, state}
   end

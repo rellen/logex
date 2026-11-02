@@ -562,6 +562,85 @@ defmodule Logex.ForceTest do
       assert Sim.outputs(drive) == %{[0] => 1}
     end
 
+    # RV-5 (b3-store-image-11, a7-docs-1): a refusal names its first 50 problems and counts
+    # the rest, each text of the file it quotes at most 60 bytes, a byte past ASCII or a
+    # control byte shown as its escape, never written raw. Since RV-5's review a point's
+    # name and a value's spelling are quoted so too, where a name the configuration has no
+    # point of was told whole up to the line's 1,000 bytes; and the file's path, the
+    # host's, is shown printable and counts nothing of a line's 1,000 bytes, so that a
+    # line names the line and the problem whatever the path (`Logex.Refusal`).
+    test "a refusal is bounded and printable, whatever the file holds", %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      start = fn ->
+        Runner.start_link(
+          configuration: plant(),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: file
+        )
+      end
+
+      File.write!(file, "x 1\xFF\n\xC3\xA9 1\nx\x00 1\n#{String.duplicate("z", 100_000)} 1\n")
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 1: `x 1\\xFF` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 2: `\\xC3\\xA9 1` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`",
+            "#{file}: line 3: `x\\x00 1` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 4: `#{String.duplicate("z", 60)}…` is no input point of `plant`"
+          ],
+          "\n"
+        ),
+        start
+      )
+
+      long = String.duplicate("z", 70)
+      digits = String.duplicate("7", 70)
+      based = "16#" <> String.duplicate("f", 70)
+      read = Integer.to_string(String.to_integer(String.duplicate("f", 70), 16))
+
+      File.write!(file, "#{long} 1\n#{long} 1\nlevel #{digits}\nlevel 1\nx #{based}\n")
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 1: `#{String.duplicate("z", 60)}…` is no input point of `plant`",
+            "#{file}: line 2: `#{String.duplicate("z", 60)}…` is forced on line 1 already",
+            "#{file}: line 3: `level` is a dint, forced to an integer from -2147483648 to " <>
+              "2147483647, got: #{String.duplicate("7", 60)}…",
+            "#{file}: line 4: `level` is forced on line 3 already",
+            "#{file}: line 5: `x` is a bool, forced to 0 or 1, got: " <>
+              "#{binary_part(based, 0, 60)}…, which is #{binary_part(read, 0, 60)}…"
+          ],
+          "\n"
+        ),
+        start
+      )
+
+      File.write!(file, String.duplicate("x 1\n", 10_000))
+
+      message =
+        try do
+          start.()
+        rescue
+          error in ArgumentError -> error.message
+        end
+
+      lines = String.split(message, "\n")
+      assert length(lines) == 51
+      assert hd(lines) == "#{file}: line 2: `x` is forced on line 1 already"
+      assert List.last(lines) == "#{file}: and 9949 more problems, not listed"
+      assert {Sim.reads(panel), Sim.writes(panel), Sim.writes(drive)} == {0, [], []}
+    end
+
     test "a last line with no newline is a line", %{tmp_dir: dir} do
       File.write!(Path.join(dir, "forces"), "level 4\nx 1")
       %{runner: runner} = started(dir)

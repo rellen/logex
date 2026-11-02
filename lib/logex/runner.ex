@@ -38,16 +38,19 @@ defmodule Logex.Runner do
   4294967295, the longest a supervisor waits (c1-runner-rounds-6).
 
   **Its files** (RV-4). A runner holds its store and its forces file, each with the `.tmp`
-  beside it that it is written through, from its start until it stops, crashes or is
+  beside it that it is written through, and since decision 360 its store's copy,
+  `<store>.dropped`, with its own `.tmp`, from its start until it stops, crashes or is
   killed (decision 356): a start that names a file another runner of this VM holds, as
-  its store, its forces file or the `.tmp` of either, is the host's mistake, one
+  its store, its forces file, the store's copy or the `.tmp` of any, is the host's
+  mistake, one
   `ArgumentError` naming the option, the path as the host spelled it, what the file is to
   the other runner and that runner's pid, told before either file is read and nothing
   written or opened; once the holder is gone, stopped, crashed or killed, the file is free
   again, and the next start takes it. A start under a name already registered is
   `{:error, {:already_started, pid}}` first, OTP's, and claims nothing. Two VMs on one
   file are the host's to avoid: nothing in one VM sees another, nor one file reached by
-  two paths through a link. Each path is resolved once, at the start, against the working
+  two paths through a linked directory, a store or forces file that is itself a link
+  being refused (RV-5). Each path is resolved once, at the start, against the working
   directory then (c2-runner-persist-9), every read and write of the file made through it,
   so that a `File.cd` after the start moves neither file and `./plant.retain`,
   `plant.retain` and its absolute path are one file to the check; `status/1` and every
@@ -202,16 +205,29 @@ defmodule Logex.Runner do
   resource's retained image (`Logex.Runtime.retained/1`), in a file on the host's disk,
   which stands in for battery-backed memory:
   - *Its text* is a person's to read, and to edit by hand where a retained value tripped
-    the plant (decision 284): `logex retain 1`; `configuration <name> written <time>`,
+    the plant (decision 284): `logex retain 2`; `configuration <name> written <time>`,
     the time of the write on the host's wall clock, in UTC to the second, read through
     the clock's `wall_ms/1` (`Logex.Runner.Clock`), for a person and for `status/1`, never
     for a timer; each retained global, `global total_boxes dint 41`; each retained
-    `single`'s last sample, `trigger arm 0` (decision 313); and each instance whose program
+    `single`'s last sample, `trigger arm 0` (decision 313); each instance whose program
     retains anything, `instance m1 motor`, then its lines in path order, each instance on
     the way to a value with its kind, `m1.boxes ctu`, and each value with its type,
     `m1.boxes.cv dint 41`, an array's elements in the elements' order, `m1.weights int[8]
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
-    `last` never.
+    `last` never; and since decision 355 its end line, `end 9 lines`, its count of lines,
+    the header and the end line among them (the words provisional), so that a store cut
+    short anywhere, at a line's end or inside a number, is refused at a fresh start, never
+    read short. A store of `logex retain 1`, which has no end line, is read as before.
+    Since RV-5 a store holding a carriage return, as one saved with CRLF line ends does,
+    is refused in those words at its first line holding one (provisional); a comment, a
+    tab and a byte no store holds are each told as what they are; and a
+    refusal, the forces file's as the store's, names at most its first 50 problems and
+    counts the rest, each text of the file it quotes at most 60 bytes and printable. A
+    hand edit is made with the runner stopped (decision 284): a runner still running
+    holds every retained value in memory, a warm restart starts from what it holds and a
+    stop writes it over the edit. A store or a forces file that is a symbolic link is the
+    host's mistake at start, every write being a new file renamed over the old, which
+    would put a file in the link's place (provisional).
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
     is 0; at every `stop/2`, and since decisions 316 and 328 at every orderly exit, a
     parent's shutdown or `:normal`, after every output is 0 and every device closed; at every cold restart, of the
@@ -288,20 +304,39 @@ defmodule Logex.Runner do
     while they fail, a full disk's among them, and, while tripped, what an edit stepped
     then changed, which no write takes until a restart.
   - *A fresh start* reads the store in the caller, after the forces file, warm unless
-    `start: :cold`: a store laid over the resource by decision 277's matching
-    (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
-    path, of exactly its type, and it fits, the rest dropped and reported in `status/1`'s
-    `retain`; a file that does not exist none, written at once; and one that cannot be
+    `start: :cold`, since RV-5 raw and limited to the idle watchdog and a poll period of
+    real time, as the forces file's read is, so that a FIFO or a stalled disk in its place
+    refuses the start as a store that cannot be read (provisional), and since RV-5's
+    review so is the look at each file for a symbolic link before either is read, neither
+    file looked at nor read in the caller itself: a store laid over the
+    resource by decision 277's matching (`Logex.Runtime.start/2`), each value kept only
+    where the configuration retains its path, of exactly its type, and it fits, the rest
+    dropped and reported in `status/1`'s `retain`, and since decision 360 the store, as
+    the start read it, copied to `<store>.dropped` before its first write over it, in the
+    runner's own process once its files are claimed and before any device is opened, so
+    that a mistaken deploy's drops can be taken back from the copy once the next write has
+    made the store the new configuration's: the copy is written as every other write is,
+    through its own `.tmp`, limited the same, its failure reported as a failed write's,
+    `failed` in `status/1`, and the start goes on, the copy then owed: since RV-5's
+    review every write over the store, the period's, a trip's, a stop's, a shutdown's
+    and a cold restart's, makes it first and writes the store only once it is made, each
+    while it cannot be made a write that fails, so that no write replaces the store before
+    its copy is made (provisional); it stands until the next start that drops anything, a
+    start that drops nothing leaving it where it is, and `status/1`'s `retain` names it,
+    `copy`; a file that does not exist none, written at once; and one
+    that cannot be
     read, that is no store, a line of no store's shape, an image `Logex.Runtime.start/2`
-    refuses, or a store of another configuration, which a renamed configuration's is, the
-    host's mistake, one `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner
-    not started and no device opened. `start: :cold` reads none, a broken one among them,
-    and writes a new store at once.
+    refuses, a store of another configuration, which a renamed configuration's is, or
+    since decision 355 one of `logex retain 2` cut short, its last line no end line or its
+    end line's count not its lines', the host's mistake, one `ArgumentError`, a line each,
+    `<path>: line <n>: ...`, the runner not started and no device opened. `start: :cold`
+    reads none, a broken one among them, and writes a new store at once.
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
     keeps retained values in memory, and `status/1`'s `retain` is nil. `start:` without
     `retain:` is the host's mistake (decision 323), as are `retain:` naming the forces
     file, after `Path.expand/1`, or the `.tmp` either is written through (decision 325),
-    and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
+    since decision 360 `forces:` naming the store's copy or the `.tmp` the copy is written
+    through (provisional), and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
     news, the store's age and its drops, reaches no subscriber, since none can exist
     before `start_link/1` returns: `status/1`'s `retain` carries both (decision 324).
 
@@ -581,7 +616,13 @@ defmodule Logex.Runner do
   than the 5000 ms of any GenServer's spec, so a plant of a few devices keeps that
   (decision 326). `devices` is the number of devices `io:` binds; an option that is not
   yet the runner's, which `start_link/1` refuses, counts as its default. A host that
-  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own.
+  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own. The time does
+  not count the runner's own work before the store's write, the retained image taken out
+  and made the store's text, in proportion to the retained values (b3-store-image-4,
+  kept for decision 352's bound on the runner's own work): a shutdown of two arrays of
+  16,384 retained timers took 2.7 s here, and of 65,536 more than its 5000 ms, so that
+  the supervisor killed the runner in its write and the store kept its last write; a
+  host whose plant retains tens of thousands of values gives its own `shutdown:`.
   """
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
@@ -627,6 +668,35 @@ defmodule Logex.Runner do
     do: %{start | retain: %{retain | written_at: at}}
 
   defp first_written(start), do: start
+
+  # Decision 360 (RV-5): a fresh start that dropped anything from its store (decision
+  # 277's matching, `status/1`'s `dropped`) copies the store, as it read it, to
+  # `<store>.dropped` before its first write over it, here in its init/1, before any device
+  # is opened, so that a mistaken deploy's drops can be taken back from the copy after the
+  # next write has made the store the new configuration's. The copy is a write as every
+  # other, `<store>.dropped.tmp` synced and renamed over it, limited to the idle watchdog
+  # and a poll period of real time (decision 353); it stands until the next start that
+  # drops anything, and a start that drops nothing leaves it where it is. `status/1`'s
+  # `retain` names it, `copy`, where the start dropped anything: the copy's path as the host
+  # spelled the store, or nil where its write failed, the failure then `failed` as any
+  # failed write's, and the start goes on (provisional: the copy's own key, beside the
+  # drops it keeps). Since RV-5's review a copy that fails is owed, its text kept under
+  # `retain`'s `owed`, and every write over the store, the period's, a trip's, a stop's, a
+  # shutdown's and a cold restart's, makes the copy first and writes the store only once
+  # it is made (`Writer.stored/4`, noted/3), so that no write replaces the store before
+  # its copy is made, as decision 360 has it, where one did and the drops were lost; the
+  # start still goes on, decision 275's rule for a failed write (provisional).
+  defp dropped_copy(%{copy: text, retain: retain} = start) when is_binary(text) do
+    copied = Writer.written(retain.at <> ".dropped", text, start.idle + start.poll)
+    %{start | copy: nil, retain: copy_made(copied, text, retain)}
+  end
+
+  defp dropped_copy(start), do: start
+
+  defp copy_made(:ok, _text, retain), do: Map.put(retain, :copy, retain.path <> ".dropped")
+
+  defp copy_made({:error, reason}, text, retain),
+    do: Map.merge(retain, %{copy: nil, failed: reason, owed: text})
 
   @doc "The value at an access path, as `Logex.Runtime.get/2` gives it: `{:ok, value}` or `{:error, reason}`."
   def get(runner, path), do: call(runner, {:get, path})
@@ -721,7 +791,11 @@ defmodule Logex.Runner do
   UTC `DateTime` to the second, the store's age; `failed` the reason
   the last write failed, nil where it did not; and `dropped` what the fresh start's
   matching dropped, `{path, reason}` in path order, as `Logex.Runtime.start/2` gives it
-  (decisions 275 and 277).
+  (decisions 275 and 277); and since decision 360, where the fresh start dropped anything,
+  `copy`, the copy of the store it made before its first write, `<store>.dropped` as the
+  host spelled the store, or nil while it is owed, its write having failed, its reason
+  then `failed` as any failed write's, until a write over the store makes it first; a
+  start that dropped nothing has no `copy`.
   """
   def status(runner), do: call(runner, :status)
 
@@ -936,7 +1010,8 @@ defmodule Logex.Runner do
   defp held({:held, path, holder, role}, start),
     do: {:error, {:held, held_told(List.keyfind(start.named, path, 0), holder, role)}}
 
-  defp held(:ok, start), do: given_up(first_begun(first_write(start), start), start)
+  defp held(:ok, start),
+    do: given_up(first_begun(first_write(start), dropped_copy(start)), start)
 
   defp first_begun(:ok, start), do: opening(start.devices, [], [], first_written(start))
   defp first_begun({:error, reason}, _start), do: {:error, {:retain, reason}}
@@ -1404,11 +1479,15 @@ defmodule Logex.Runner do
   defp known_point(point, _name, types) when is_map_key(types, point), do: point
   defp known_point(_point, name, _types), do: name
 
-  # An input point, by its name: `{:ok, type}`, or what the name is instead, told.
-  defp input(name, %{types: types} = state) when is_binary(name),
-    do: input_of(Map.fetch(types, name), name, state)
+  # An input point, by its name: `{:ok, type}`, or what the name is instead, told, the name
+  # as `force/3` gives it; since RV-5's review a forces file's line's name told as the
+  # file's text is (`Logex.Refusal.shown/1`, at most 60 bytes), `shown`.
+  defp input(name, state), do: input(name, name, state)
 
-  defp input(other, _state),
+  defp input(name, shown, %{types: types} = state) when is_binary(name),
+    do: input_of(Map.fetch(types, name), {name, shown}, state)
+
+  defp input(other, _shown, _state),
     do:
       {:error,
        "a force names an input point by its name, a string, as in \"eye_1\", got: " <>
@@ -1416,8 +1495,8 @@ defmodule Logex.Runner do
 
   defp input_of({:ok, type}, _name, _state), do: {:ok, type}
 
-  defp input_of(:error, name, state),
-    do: whole_input(Map.fetch(state.arrays, name), name, state)
+  defp input_of(:error, {name, _shown} = named, state),
+    do: whole_input(Map.fetch(state.arrays, name), named, state)
 
   # Decision 241: a located array of input points, named whole, `{type, dims, names}`, its
   # elements' type and sizes and each element's name in the elements' order.
@@ -1426,41 +1505,46 @@ defmodule Logex.Runner do
   # Since the review of RV-10 a name that is no input point is looked up by its
   # subscripts' values (decision 384), `lamps[02]` told it is the output point `lamps[2]`
   # and `Temps[03]` offered `temps[3]`, each by the name as written.
-  defp whole_input(:error, name, state),
-    do: {:error, not_input(Map.fetch(state.located, Logex.Name.by_value(name)), name, state)}
+  defp whole_input(:error, {name, _shown} = named, state),
+    do: {:error, not_input(Map.fetch(state.located, Logex.Name.by_value(name)), named, state)}
 
-  defp not_input({:ok, {:point, at}}, name, _state),
-    do: "`#{name}` is an output point, at `#{at}`: only an input point is forced"
+  defp not_input({:ok, {:point, at}}, {_name, shown}, _state),
+    do: "`#{shown}` is an output point, at `#{at}`: only an input point is forced"
 
-  defp not_input({:ok, {:array, :output, {_first, from}, {_last, to}}}, name, _state),
+  defp not_input({:ok, {:array, :output, {_first, from}, {_last, to}}}, {_name, shown}, _state),
     do:
-      "`#{name}` is an array of output points, `#{from}` to `#{to}`: only an input point " <>
+      "`#{shown}` is an array of output points, `#{from}` to `#{to}`: only an input point " <>
         "is forced"
 
-  defp not_input(:error, name, %{configuration: configuration, types: types} = state),
-    do: unheld(element_of(Logex.Name.element(name), state.located), name, {types, configuration})
+  defp not_input(:error, {name, _shown} = named, %{configuration: configuration} = state),
+    do:
+      unheld(
+        element_of(Logex.Name.element(name), state.located),
+        named,
+        {state.types, configuration}
+      )
 
   defp element_of({array, _subscripts}, located), do: Map.get(located, array)
   defp element_of(nil, _located), do: nil
 
   # M5-13: an element a located array of input points does not hold, as written.
-  defp unheld({:array, :input, {first, _from}, {last, _to}}, name, {_types, configuration}),
+  defp unheld({:array, :input, {first, _from}, {last, _to}}, {_name, shown}, {_, configuration}),
     do:
-      "`#{name}` is no input point of `#{configuration.name}`: its array is one of input " <>
+      "`#{shown}` is no input point of `#{configuration.name}`: its array is one of input " <>
         "points, each element forced by its name as its subscripts' values, `#{first}` to " <>
         "`#{last}`"
 
   defp unheld(_other, name, {types, configuration}),
     do: no_input(Map.keys(types), name, configuration)
 
-  defp no_input([], name, configuration),
+  defp no_input([], {_name, shown}, configuration),
     do:
-      "`#{name}` is no input point of `#{configuration.name}`, which has none: only an " <>
+      "`#{shown}` is no input point of `#{configuration.name}`, which has none: only an " <>
         "input point is forced"
 
-  defp no_input(names, name, configuration),
+  defp no_input(names, {name, shown}, configuration),
     do:
-      "`#{name}` is no input point of `#{configuration.name}`" <>
+      "`#{shown}` is no input point of `#{configuration.name}`" <>
         Declarations.suggest(Logex.Name.by_value(name), Enum.sort(names), & &1, "names")
 
   # Every located global's point by its name, an element of a located array by its own,
@@ -1589,7 +1673,8 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "#{path}: the forces file cannot be read: the disk did not answer within the idle " <>
+        "#{Logex.Refusal.path(path)}: the forces file cannot be read: the disk did not " <>
+          "answer within the idle " <>
           "watchdog and a poll period"
       )
 
@@ -1597,9 +1682,13 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "#{path}: the forces file cannot be read: #{:file.format_error(reason)}"
+        "#{Logex.Refusal.path(path)}: the forces file cannot be read: " <>
+          "#{:file.format_error(reason)}"
       )
 
+  # Since RV-5 the refusal bounded and printable as the store's is (`Logex.Refusal`,
+  # b3-store-image-11): its first 50 problems and then their count, each text of the file
+  # it quotes at most 60 bytes and printable.
   defp forces_read({:ok, text}, path, points) do
     {forces, _lines, problems} =
       text
@@ -1616,8 +1705,17 @@ defmodule Logex.Runner do
   defp unended("", lines), do: Enum.drop(lines, -1)
   defp unended(_last, lines), do: lines
 
+  # A line holding a byte no forces file holds, a tab, a carriage return, any other
+  # control byte or one past ASCII, is no force (RV-5), told before its name is read, so
+  # that a refusal quotes no such byte raw; a tab and a carriage return after a value were
+  # no force before (M5-11's review), quoted as they are.
   defp force_line({text, line}, acc, points),
+    do: force_text(Logex.Refusal.unprintable(text), {text, line}, acc, points)
+
+  defp force_text(:nomatch, {text, line}, acc, points),
     do: force_read(parsed(String.split(text, " ")), text, line, acc, points)
+
+  defp force_text(_byte, {text, line}, acc, _points), do: force_read(:error, text, line, acc, nil)
 
   # M5-10 (decision 156): a value is one number, and since decision 218 any number the
   # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
@@ -1644,23 +1742,23 @@ defmodule Logex.Runner do
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"
 
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
-    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+    do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   # A line of several values naming no located array is no force, as before decision 241,
   # and an array of output points is told what it is.
   defp force_read({:ok, name, {:list, _}}, text, line, {forces, lines, problems}, points)
        when not is_map_key(points.located, name),
-       do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+       do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   defp force_read({:ok, name, value}, text, line, acc, points) do
     name = by_value(name, points)
-    read_point(input(name, points), {name, value, text}, line, acc)
+    read_point(input(name, Logex.Refusal.shown(name), points), {name, value, text}, line, acc)
   end
 
   # A line's point: an input point's, or, since decision 241, each element of a located
   # array of input points named whole; a line with more than one value names such an array.
   defp read_point({:ok, _type}, {_name, {:list, _}, text}, line, {forces, lines, problems}),
-    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+    do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   # Since the review of RV-10 a point forced twice is told by its name as the later line
   # writes it, `temps[003]`, where until then by its point's (decision 384).
@@ -1704,7 +1802,9 @@ defmodule Logex.Runner do
   defp as_written({_name, first}, text), do: {hd(String.split(text, " ")), first}
 
   defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
-    do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
+    do:
+      {forces, lines,
+       [{line, "`#{Logex.Refusal.shown(name)}` is forced on line #{first} already"} | problems]}
 
   defp once(nil, names, line, {forces, lines, problems}, problem),
     do:
@@ -1735,14 +1835,15 @@ defmodule Logex.Runner do
       |> Enum.zip()
       |> Enum.reject(fn {_element, v, _spelling} -> Declarations.fits?(type, v) end)
       |> Enum.map(fn {element, v, spelling} -> misfit_read(element, type, {v, spelling}) end)
-      |> Logex.Array.capped(&more_misfits(name, {:array, type, dims}, &1))
+      |> Logex.Array.capped(&more_misfits(Logex.Refusal.shown(name), {:array, type, dims}, &1))
 
     whole_force(misfits, names, Enum.map(values, &forced(type, &1)))
   end
 
   defp force_problem({:array, {type, dims, names}}, name, value, _spellings),
     do: [
-      "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced whole on one line, " <>
+      "`#{Logex.Refusal.shown(name)}` is #{Declarations.a_type({:array, type, dims})}, " <>
+        "forced whole on one line, " <>
         "its name and then #{length(names)} values in the elements' order: the line holds " <>
         "#{count_of(value)}"
     ]
@@ -1763,11 +1864,20 @@ defmodule Logex.Runner do
   # Decision 255: a forces file's misfit quoted as its line writes it and as it is read,
   # "got: 16#ffffffff, which is 4294967295", once where the two are one text, `37.5` at an
   # int point, as a line that holds no number is quoted as written, "is no force".
+  # Since RV-5's review the name, the spelling and the value read each told as the file's
+  # text is, at most 60 bytes (`Logex.Refusal.shown/1`), where a long one was told whole.
   defp misfit_read(name, type, {value, spelling}),
-    do: misfit_written(name, type, written_and_read(spelling, inspect(value)))
+    do:
+      misfit_written(
+        Logex.Refusal.shown(name),
+        type,
+        written_and_read(spelling, inspect(value))
+      )
 
-  defp written_and_read(same, same), do: same
-  defp written_and_read(spelling, read), do: "#{spelling}, which is #{read}"
+  defp written_and_read(same, same), do: Logex.Refusal.shown(same)
+
+  defp written_and_read(spelling, read),
+    do: "#{Logex.Refusal.shown(spelling)}, which is #{Logex.Refusal.shown(read)}"
 
   defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
     do: {Enum.into(taken, forces), lines, problems}
@@ -1778,13 +1888,7 @@ defmodule Logex.Runner do
   defp forces_taken([], _path, forces), do: forces
 
   defp forces_taken(problems, path, _forces),
-    do:
-      raise(
-        ArgumentError,
-        Enum.map_join(problems, "\n", fn {line, problem} ->
-          "#{path}: line #{line}: #{problem}"
-        end)
-      )
+    do: raise(ArgumentError, Logex.Refusal.of(problems, path))
 
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
@@ -1905,12 +2009,15 @@ defmodule Logex.Runner do
     {:error, {:io_init, device, cause}}
   end
 
-  # The runner's state, once its devices are open: the anchor its clock counts from and
-  # `logical`, the resource's `now`, the sum of the elapsed_ms it has passed (§4.11); each
-  # device with its points, an input point by its device and address and each device's
-  # output points by address; the trigger every event task samples that is an input point,
-  # whose change a device makes its own round; the next round's inputs, `pending`; what
-  # each device was last written; and each task's watchdog.
+  # The runner's state, once its devices are open, without what only the start reads: the
+  # copy's text (decision 360) and the files' names as the host spelled them, which only a
+  # claim's refusal reads (decision 356), where a round of a runner with a store paid a
+  # reduction more for the copy's two names among them (RV-5); the anchor its clock counts
+  # from and `logical`, the resource's `now`, the sum of the elapsed_ms it has passed
+  # (§4.11); each device with its points, an input point by its device and address and
+  # each device's output points by address; the trigger every event task samples that is
+  # an input point, whose change a device makes its own round; the next round's inputs,
+  # `pending`; what each device was last written; and each task's watchdog.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -1923,7 +2030,7 @@ defmodule Logex.Runner do
             do: single
       )
 
-    Map.merge(Map.drop(start, [:retain_period, :taker]), %{
+    Map.merge(Map.drop(start, [:retain_period, :taker, :copy, :named]), %{
       bindings:
         Map.new(start.devices, fn {name, module, opts, _points} -> {name, {module, opts}} end),
       devices: devices,
@@ -2534,13 +2641,27 @@ defmodule Logex.Runner do
 
   defp stamped({:ok, at}, retain, runtime, state) do
     text = Logex.Retain.encode(Runtime.retained(runtime), at)
-    noted(Writer.written(retain.at, text, state.idle + state.poll), at, state)
+    noted(store_written(retain, text, state.idle + state.poll), at, state)
   end
 
   defp stamped(failed, _retain, _runtime, state), do: noted(failed, nil, state)
 
+  # An event's write of the store, the owed copy first where one is (decision 360).
+  defp store_written(%{owed: nil, at: path}, text, ms), do: Writer.written(path, text, ms)
+  defp store_written(%{owed: owed, at: path}, text, ms), do: Writer.stored(path, text, owed, ms)
+
   defp noted(:ok, at, %{retain: retain} = state),
     do: {:ok, %{state | retain: %{retain | written_at: at, failed: nil}}}
+
+  # Decision 360 (RV-5's review): a copy owed and made by a write over the store, before
+  # it, named in `status/1` from then on and owed no more, the store's own write then
+  # noted as any; and one that failed again a failed write, the store not written and the
+  # copy still owed.
+  defp noted({:copied, result}, at, %{retain: retain} = state),
+    do:
+      noted(result, at, %{state | retain: %{retain | owed: nil, copy: retain.path <> ".dropped"}})
+
+  defp noted({:uncopied, reason}, _at, state), do: noted({:error, reason}, nil, state)
 
   defp noted({:error, reason}, _at, %{retain: retain} = state) do
     published(state, [{:retain, {:error, reason}}])
@@ -2575,7 +2696,7 @@ defmodule Logex.Runner do
     do: %{state | retain: %{retain | period: period}}
 
   defp shown_store(nil), do: nil
-  defp shown_store(retain), do: Map.drop(retain, [:period, :at])
+  defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed])
 
   # The next due time after `at`, on the grid.
   defp next_due(%{every: every, from: from}, at), do: from + every * (div(at - from, every) + 1)
@@ -2643,7 +2764,7 @@ defmodule Logex.Runner do
 
   defp handed(%{retain: %{period: periodic}} = state, {at, image}) do
     pid = writer(periodic.writer, periodic.path)
-    Writer.write(pid, at, image)
+    Writer.write(pid, at, image, state.retain.owed)
     token = make_ref()
     late = {Process.send_after(self(), {Writer, :late, token}, state.idle + state.poll), token}
     put_period(state, %{periodic | writer: pid, busy: true, late: late})
@@ -3173,13 +3294,18 @@ defmodule Logex.Runner do
     named = held_files(store, store_at, file, forces_at)
     files = Enum.map(named, fn {at, role, _option, _given} -> {at, role} end)
     unheld!(registered?(name!(Keyword.get(opts, :name))), Paths.held(files), named)
+    unlinked!(file, forces_at, :forces, idle + poll)
+    unlinked!(store, store_at, :retain, idle + poll)
     forces = read_forces(file, forces_at, points, idle + poll)
-    {runtime, retain, at} = store_read!({store, store_at}, mode, configuration, runtime, clock)
+
+    {runtime, retain, at, copy} =
+      store_read!({store, store_at}, mode, configuration, runtime, clock, idle + poll)
 
     {%{
        forces: forces,
        retain: retain,
        at: at,
+       copy: copy,
        types: points.types,
        located: points.located,
        arrays: points.arrays,
@@ -3368,13 +3494,24 @@ defmodule Logex.Runner do
 
   # Decision 356: the files a runner holds, each `{path, role, option, given}`, its store
   # and its forces file and then the `.tmp` beside each, so that a file another runner
-  # holds is named before a `.tmp` that meets one.
+  # holds is named before a `.tmp` that meets one; and since decision 360 (RV-5) the copy
+  # a fresh start keeps of a store it dropped from, `<store>.dropped`, and the `.tmp` it is
+  # written through.
   defp held_files(store, store_at, forces, forces_at) do
     files = held_file(store, store_at, :retain) ++ held_file(forces, forces_at, :forces)
 
     files ++
-      for({at, role, option, given} <- files, do: {at <> ".tmp", {:tmp, role}, option, given})
+      for({at, role, option, given} <- files, do: {at <> ".tmp", {:tmp, role}, option, given}) ++
+      held_copy(store, store_at)
   end
+
+  defp held_copy(nil, nil), do: []
+
+  defp held_copy(given, at),
+    do: [
+      {at <> ".dropped", :dropped, :retain, given},
+      {at <> ".dropped.tmp", {:tmp, :dropped}, :retain, given}
+    ]
 
   defp held_file(nil, nil, _role), do: []
   defp held_file(given, at, role), do: [{at, role, role, given}]
@@ -3426,6 +3563,11 @@ defmodule Logex.Runner do
       "the runner's #{option}: #{inspect(given)} #{meets(ours, given)}" <>
         "#{theirs(theirs, holder)}: two runners on one file write each over the other's"
 
+  defp meets(:dropped, given), do: "is copied to #{inspect(given <> ".dropped")}, "
+
+  defp meets({:tmp, :dropped}, given),
+    do: "is copied through #{inspect(given <> ".dropped.tmp")}, "
+
   defp meets({:tmp, _role}, given), do: "is written through #{inspect(given <> ".tmp")}, "
   defp meets(_role, _given), do: "names "
 
@@ -3439,8 +3581,49 @@ defmodule Logex.Runner do
       "the #{file_of(role)} of another runner of this VM, #{inspect(holder)}, which holds " <>
         "it until it stops"
 
+  # RV-5 (b3-store-image-5): a store or forces file that is a symbolic link is the host's
+  # mistake at start, told before either file is read: every write of either is a new file
+  # renamed over it (`Logex.Retain.written/2`), which would put a file in the link's place
+  # and leave the file it names as it was, so the next start from the place the link
+  # pointed meets an old store. Looked at raw, off the VM's file server, as the files are
+  # read (provisional: refused, where the review found the link replaced at the first
+  # write; one put there after the start is replaced so, as the documents say). A link at
+  # either's `.tmp` or at the store's copy is logex's own name, and replaced. Since RV-5's
+  # review the look is made as each file's read is, in a process of its own limited to
+  # the idle watchdog and a poll period of real time (`Writer.read/2`), where it was made
+  # in the caller with no limit, so that a stalled disk refuses the start as a file that
+  # cannot be read before either is read, as the reads do, and neither file is looked at
+  # or read in the caller. (A relative path's expansion, once, at the start, reads the
+  # directory the start is made in through the VM's file server, in the caller, RV-4's
+  # c2-runner-persist-9; RV-5's review left it, PLAN.md.)
+  defp unlinked!(nil, nil, _option, _ms), do: :ok
+
+  defp unlinked!(given, at, option, ms),
+    do: link!(Writer.read(fn -> :file.read_link_info(at, [:raw]) end, ms), given, option)
+
+  defp link!({:error, :timeout}, given, option),
+    do:
+      raise(
+        ArgumentError,
+        "#{Logex.Refusal.path(given)}: the #{file_of(option)} cannot be read: the disk did " <>
+          "not answer within the " <>
+          "idle watchdog and a poll period"
+      )
+
+  defp link!({:ok, info}, given, option) when elem(info, 2) == :symlink,
+    do:
+      raise(
+        ArgumentError,
+        "the runner's #{option}: #{inspect(given)} is a symbolic link: the #{file_of(option)} " <>
+          "is written whole beside it and renamed over it, which would put a file in the " <>
+          "link's place and leave the file it names as it was: name that file itself"
+      )
+
+  defp link!(_info, _given, _option), do: :ok
+
   defp file_of(:retain), do: "store"
   defp file_of(:forces), do: "forces file"
+  defp file_of(:dropped), do: "store's copy, `.dropped`,"
 
   # The store and the forces file are two files however each is named, `./plant.retain`
   # and `plant.retain` one file, and neither is the `.tmp` the other is written through
@@ -3449,12 +3632,25 @@ defmodule Logex.Runner do
   defp expanded(forces), do: Path.expand(forces)
 
   defp met(nil, _path), do: :apart
-  defp met(forces, path), do: meeting(forces, path, forces <> ".tmp", path <> ".tmp")
+
+  defp met(forces, path),
+    do: copied_over(meeting(forces, path, forces <> ".tmp", path <> ".tmp"), forces, path)
 
   defp meeting(same, same, _forces_tmp, _path_tmp), do: {:one, same}
   defp meeting(_forces, path, path, _path_tmp), do: :store_through
   defp meeting(forces, _path, _forces_tmp, forces), do: :forces_through
   defp meeting(_forces, _path, _forces_tmp, _path_tmp), do: :apart
+
+  # Decision 360 (RV-5): nor is the forces file the store's copy, `<store>.dropped`, or the
+  # `.tmp` the copy is written through, which a fresh start that drops would write over
+  # with the store's text (provisional, decision 325's rule for the copy).
+  defp copied_over(:apart, forces, path),
+    do: copy_met(forces in [path <> ".dropped", path <> ".dropped.tmp"])
+
+  defp copied_over(met, _forces, _path), do: met
+
+  defp copy_met(true), do: :forces_copied
+  defp copy_met(false), do: :apart
 
   defp apart!(:apart, _path, _forces), do: :ok
 
@@ -3473,6 +3669,15 @@ defmodule Logex.Runner do
         "the runner's retain: #{inspect(path)} is the file its forces: #{inspect(forces)} " <>
           "is written through, each written whole to the `.tmp` beside it and renamed over " <>
           "it: the store and the forces file are two files, neither the other's `.tmp`"
+      )
+
+  defp apart!(:forces_copied, path, forces),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's forces: #{inspect(forces)} is the copy its retain: #{inspect(path)} " <>
+          "is copied to by a fresh start that drops from it, `.dropped`, or the `.tmp` the " <>
+          "copy is written through: the store's copy and the forces file are two files"
       )
 
   defp apart!(:forces_through, path, forces),
@@ -3552,48 +3757,82 @@ defmodule Logex.Runner do
   # the forces file: none, nothing; `start: :cold`, not read, the store written at once;
   # warm, a file that does not exist the same; one that cannot be read, that is no store,
   # or of another configuration, the host's mistake, every problem a line; and a store,
-  # laid over the resource by decision 277's matching, what it drops reported.
-  defp store_read!({nil, nil}, _mode, _configuration, runtime, _clock), do: {runtime, nil, nil}
+  # laid over the resource by decision 277's matching, what it drops reported. Since RV-5
+  # the read is raw and limited to the idle watchdog and a poll period of real time, as
+  # the forces file's is since RV-4's review, so that a FIFO or a stalled disk in the
+  # store's place refuses the start as a file that cannot be read where it hung the
+  # caller for good (provisional). Decision 360: a store it dropped anything from is kept
+  # as it was read, the text the start copies to `<store>.dropped` (dropped_copy/1).
+  defp store_read!({nil, nil}, _mode, _configuration, runtime, _clock, _ms),
+    do: {runtime, nil, nil, nil}
 
-  defp store_read!(path, :cold, _configuration, runtime, clock),
-    do: {runtime, retained(path, nil, []), wall!(clock)}
+  defp store_read!(path, :cold, _configuration, runtime, clock, _ms),
+    do: {runtime, retained(path, nil, []), wall!(clock), nil}
 
-  defp store_read!({_given, at} = path, :warm, configuration, runtime, clock),
-    do: store_text!(File.read(at), path, configuration, runtime, clock)
+  defp store_read!({_given, at} = path, :warm, configuration, runtime, clock, ms),
+    do:
+      store_text!(
+        Writer.read(fn -> :file.read_file(at, [:raw]) end, ms),
+        path,
+        configuration,
+        runtime,
+        clock
+      )
 
   defp store_text!({:error, :enoent}, path, _configuration, runtime, clock),
-    do: {runtime, retained(path, nil, []), wall!(clock)}
+    do: {runtime, retained(path, nil, []), wall!(clock), nil}
+
+  defp store_text!({:error, :timeout}, {path, _at}, _configuration, _runtime, _clock),
+    do:
+      raise(
+        ArgumentError,
+        "#{Logex.Refusal.path(path)}: the store cannot be read: the disk did not answer " <>
+          "within the idle " <>
+          "watchdog and a poll period"
+      )
 
   defp store_text!({:error, reason}, {path, _at}, _configuration, _runtime, _clock),
     do:
       raise(
         ArgumentError,
-        "#{path}: the store cannot be read: #{:file.format_error(reason)}"
+        "#{Logex.Refusal.path(path)}: the store cannot be read: #{:file.format_error(reason)}"
       )
 
   defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
     {image, written_at} = Logex.Retain.decode!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
-    {runtime, retained(path, written_at, dropped), nil}
+    {runtime, retained(path, written_at, dropped), nil, copied(dropped, text)}
   end
+
+  # Decision 360: the store's text kept for its copy where the start dropped anything,
+  # whatever decision 277's matching dropped, the drop report itself the copy's trigger,
+  # so that a drop of any kind is covered, one a later matching adds among them.
+  defp copied([], _text), do: nil
+  defp copied(_dropped, text), do: text
 
   # The image a store holds judged as `Logex.Runtime.start/2` judges any, each of its
   # refusals a line naming the store.
+  # Since RV-5 bounded as the store's own refusal is, its first 50 lines and then their
+  # count, each at most 1,000 bytes (b3-store-image-11).
   defp started!(configuration, image, path) do
     Runtime.start(configuration, image)
   rescue
     error in ArgumentError ->
       reraise ArgumentError,
-              error.message |> String.split("\n") |> Enum.map_join("\n", &"#{path}: #{&1}"),
+              error.message
+              |> String.split("\n")
+              |> Logex.Refusal.told(path),
               __STACKTRACE__
   end
 
   # `status/1`'s `retain` (decisions 275 and 277): the store's path, the time its last
   # write was made at, nil before the first, the reason the last write failed, nil where
   # it did not, and what the fresh start dropped; and, kept from status/1, the path every
-  # read and write of the store is made through, resolved once at the start.
+  # read and write of the store is made through, resolved once at the start, and since
+  # RV-5's review the copy of the store a fresh start owes, its text, where its own write
+  # failed, nil otherwise (decision 360, dropped_copy/1).
   defp retained({path, at}, written_at, dropped),
-    do: %{path: path, at: at, written_at: written_at, failed: nil, dropped: dropped}
+    do: %{path: path, at: at, written_at: written_at, failed: nil, dropped: dropped, owed: nil}
 
   # The host's wall clock, to the second, for a store's header, `{:ok, at}`; since RV-4
   # (c2-runner-persist-6) an answer that is no whole number of milliseconds since the Unix

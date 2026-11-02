@@ -114,8 +114,11 @@ own documentation holds:
   through, plain data.
 - `lib/logex/image.ex` — `Logex.Image`, internal: the retained image, taken out of an
   instance or a resource, checked, and laid over a new one by name and type.
-- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, encoded and decoded,
-  and the atomic write it shares with the forces file.
+- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 2` to
+  its end line, encoded and decoded, and the atomic write it shares with the forces file.
+- `lib/logex/refusal.ex` — `Logex.Refusal`, internal: a refusal of the store or the forces
+  file, its problems capped and counted, each line and each text it quotes bounded and
+  printable.
 - `lib/logex/configuration.ex` — `Logex.Configuration` with `Task`, `Global`, `Instance`
   and `Connection`: a configuration as data, `check/1`, the one validator, `new!/1`,
   `compile/3` and `compile_file/1` from text, and its warnings.
@@ -135,8 +138,8 @@ own documentation holds:
   devices, watchdogs and the trip, forcing, an edit's steps, the store and its period.
 - `lib/logex/runner/device.ex` — `Logex.Runner.Device`, internal: one bound device's
   process, its reads, writes again at every poll, latch and close.
-- `lib/logex/runner/paths.ex` — `Logex.Runner.Paths`, internal: the store and forces files
-  each runner of the VM holds, claimed at its start and given up as it ends.
+- `lib/logex/runner/paths.ex` — `Logex.Runner.Paths`, internal: the store, its copy and the
+  forces file each runner of the VM holds, claimed at its start and given up as it ends.
 - `lib/logex/runner/writer.ex` — `Logex.Runner.Writer`, internal: the process that writes
   the store every period, and every other file call of the runner's, each in a process of
   its own limited to the idle watchdog and a poll period of real time.
@@ -224,7 +227,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/retain_period_test.exs` — the store's periodic writer.
 - `test/logex/retain_edit_test.exs` — an online edit of a qualifier.
 - `test/logex/stalled_disk_test.exs` — every file write the runner makes on a stalled
-  disk, the file server held, and each write's `.tmp` its own.
+  disk, the file server held, a fresh start's store read and copy, and each write's `.tmp`
+  its own.
 - `test/logex/clock_test.exs` — the two clocks.
 - `test/logex/io_test.exs` — `Logex.IO.Sim`, `Logex.IO.points/1` and `bind!/2`.
 - `test/logex/runner_test.exs` — the runner on the manual clock.
