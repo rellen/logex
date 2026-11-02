@@ -1066,6 +1066,126 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
+    defp may_by(line, write, symbol, first),
+      do:
+        {line,
+         "`#{write}` is in `#{array_of(write)}`, which the `#{symbol}` on line #{first} may " <>
+           "write through a tag subscript: " <> @later}
+
+    defp as_written(line, write, other, {symbol, first}, writes),
+      do:
+        {line,
+         "`#{write}` is in `#{array_of(write)}`, as `#{other}` is, which the `#{symbol}` on " <>
+           "line #{first} #{writes}: " <> @later}
+
+    # RV-9's review: each kind of write looks up, under its projections, each earlier kind
+    # that may meet it, and each lookup is held here, by the pair that reaches it: a later
+    # write that may meet the first is told it, and its twin, one literal place apart, is
+    # not. Each look-up by its plain key in place of its projections loses the first.
+    test "each kind of write after each that may meet it, and its twin that never can" do
+      for {met, twin, told} <- [
+            # a literal element's coil after a latch through a tag subscript
+            {"xic a otl ee[j,0]\nxic a ote ee[1,0]", "xic a otl ee[j,0]\nxic a ote ee[1,1]",
+             [may_by(14, "ee[1,0]", "otl", 13)]},
+            # a literal element's bit after a whole write through a tag subscript
+            {"move 5 g[0,j]\nxic a ote g[0,0].0", "move 5 g[1,j]\nxic a ote g[0,0].0",
+             [may_by(14, "g[0,0].0", "move", 13)]},
+            # a bit a tag numbers, of a literal element, after a whole write through one
+            {"move 5 g[i,j]\nxic a ote g[0,1].[k]", "move 5 g[i,1]\nxic a ote g[0,2].[k]",
+             [may_by(14, "g[0,1].[k]", "move", 13)]},
+            # a literal element's member after a coil, and after a latch, through one
+            {"xic a ote lc[i,0].r\nxic a ote lc[1,0].r",
+             "xic a ote lc[i,0].r\nxic a ote lc[1,1].r", [may_by(14, "lc[1,0].r", "ote", 13)]},
+            {"xic a otl lc[i,1].r\nxic a ote lc[1,1].r",
+             "xic a otl lc[i,1].r\nxic a ote lc[1,0].r", [may_by(14, "lc[1,1].r", "otl", 13)]},
+            # a bit of a literal element's member after a coil on one through a tag subscript
+            {"xic a ote lc[i,j].pv.0\nxic a ote lc[1,0].pv.0",
+             "xic a ote lc[i,0].pv.0\nxic a ote lc[1,1].pv.0",
+             [may_by(14, "lc[1,0].pv.0", "ote", 13)]},
+            # a member through a tag subscript after a latch of a literal element's
+            {"xic a otl lc[1,1].r\nxic a ote lc[j,1].r",
+             "xic a otl lc[1,1].r\nxic a ote lc[j,0].r",
+             [as_written(14, "lc[j,1].r", "lc[1,1].r", {"otl", 13}, "writes")]},
+            # a bit of a member through a tag subscript after a literal element's member
+            # written whole
+            {"move 5 lc[0,0].pv\nxic a ote lc[j,0].pv.0",
+             "move 5 lc[0,1].pv\nxic a ote lc[j,0].pv.0",
+             [as_written(14, "lc[j,0].pv.0", "lc[0,0].pv", {"move", 13}, "writes whole")]},
+            # a latch of a literal element's member after a coil through a tag subscript
+            {"xic a ote lc[i,j].r\nxic a otl lc[1,0].r",
+             "xic a ote lc[i,0].r\nxic a otl lc[1,1].r", [may_by(14, "lc[1,0].r", "ote", 13)]},
+            # a coil through a tag subscript after a latch of a literal element
+            {"xic a otl ee[0,0]\nxic a ote ee[i,0]", "xic a otl ee[0,0]\nxic a ote ee[i,1]",
+             [as_written(14, "ee[i,0]", "ee[0,0]", {"otl", 13}, "writes")]},
+            # and after a latch through a tag subscript
+            {"xic a otl ee[i,0]\nxic a ote ee[0,i]", "xic a otl ee[i,0]\nxic a ote ee[j,1]",
+             [may_by(14, "ee[0,i]", "otl", 13)]},
+            # a bit through a tag subscript after a coil on a literal element's bit, and
+            # after one on a bit a tag numbers of a literal element
+            {"xic a ote g[0,1].1\nxic a otu g[i,1].[k]",
+             "xic a ote g[0,1].1\nxic a otu g[i,2].[k]",
+             [as_in(14, "g[i,1].[k]", "g[0,1].1", 13)]},
+            {"xic a ote g[1,0].[k]\nxic a otl g[i,j].1",
+             "xic a ote g[1,0].[k]\nxic a otl g[i,1].1",
+             [as_in(14, "g[i,j].1", "g[1,0].[k]", 13)]},
+            # a member through a tag subscript after an unlatch through another
+            {"xic a otu lc[j,1].r\nxic a ote lc[1,j].r",
+             "xic a otu lc[j,1].r\nxic a ote lc[i,0].r", [may_by(14, "lc[1,j].r", "otu", 13)]},
+            # a bit of a literal element's member after an unlatch of it through a tag
+            # subscript, and one through a tag subscript after a latch of a literal one's
+            {"xic a otu lc[i,0].pv.0\nxic a ote lc[1,0].pv.0",
+             "xic a otu lc[i,0].pv.0\nxic a ote lc[1,1].pv.0",
+             [may_by(14, "lc[1,0].pv.0", "otu", 13)]},
+            {"xic a otl lc[0,0].pv.1\nxic a ote lc[i,0].pv.1",
+             "xic a otl lc[0,0].pv.1\nxic a ote lc[i,1].pv.1",
+             [as_written(14, "lc[i,0].pv.1", "lc[0,0].pv.1", {"otl", 13}, "writes")]},
+            # a bit of a member through a tag subscript after an unlatch of it through
+            # another, after a coil on it through another, and after the member written
+            # whole through another
+            {"xic a otu lc[0,j].pv.0\nxic a ote lc[j,0].pv.0",
+             "xic a otu lc[0,j].pv.0\nxic a ote lc[1,i].pv.0",
+             [may_by(14, "lc[j,0].pv.0", "otu", 13)]},
+            {"xic a ote lc[i,1].pv.1\nxic a ote lc[1,i].pv.1",
+             "xic a ote lc[i,1].pv.1\nxic a ote lc[j,0].pv.1",
+             [may_by(14, "lc[1,i].pv.1", "ote", 13)]},
+            {"move 5 lc[0,i].pv\nxic a ote lc[j,j].pv.1",
+             "move 5 lc[0,i].pv\nxic a ote lc[1,j].pv.1",
+             [may_by(14, "lc[j,j].pv.1", "move", 13)]}
+          ] do
+        assert {met, told(met)} == {met, told}
+        assert {twin, told(twin)} == {twin, []}
+      end
+    end
+
+    # The review's own programs, a write of another array between, `ee`, `g` or `cube`.
+    test "the review's programs, each a write between" do
+      assert told("move 5 g[0,j]\nxic a otl ee[0,i]\nxic a ote g[0,0].0") == [
+               may_by(15, "g[0,0].0", "move", 13)
+             ]
+
+      assert told("move 5 g[i,j]\nxic a ote cube[j,j,i]\nxic a ote g[0,1].[k]\nxic a ote e[1]") ==
+               [may_by(15, "g[0,1].[k]", "move", 13)]
+
+      assert told("xic a ote g[0,1].1\nxic a otl lc[i,1].r\nxic a ote lc[1,1].r") == [
+               may_by(15, "lc[1,1].r", "otl", 14)
+             ]
+
+      assert told("xic a ote g[j,1].[k]\nxic a otl lc[1,1].r\nxic a ote lc[j,1].r") == [
+               as_written(15, "lc[j,1].r", "lc[1,1].r", {"otl", 14}, "writes")
+             ]
+
+      assert told(
+               "xic a ote g[i,1].[k]\nmove 5 g[i,1]\nmove 5 lc[0,0].pv\nxic a ote lc[j,0].pv.0"
+             ) == [
+               may_by(14, "g[i,1]", "ote", 13),
+               as_written(16, "lc[j,0].pv.0", "lc[0,0].pv", {"move", 15}, "writes whole")
+             ]
+
+      assert told("xic a otl ee[0,0]\nxic a ote g[i,i].1\nxic a ote ee[i,0]") == [
+               as_written(15, "ee[i,0]", "ee[0,0]", {"otl", 13}, "writes")
+             ]
+    end
+
     # Each first an array keeps is kept under its projections, at most 8, and each write
     # looks up those that may meet it, so the warnings stay linear in the writes: rows of
     # 2x the writes cost 2x, where comparing each write with every earlier one would cost 4x.

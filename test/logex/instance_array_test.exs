@@ -353,6 +353,34 @@ defmodule Logex.InstanceArrayTest do
              ]
     end
 
+    # RV-9's review (provisional, put to the maintainer): decision 370 counts through every
+    # array of instances, so an instance that is no array's element counts what its type's
+    # arrays hold and nothing of its own: a block of two single timers holds 0, and an
+    # array of 65,536 of them, 131,072 timers, is taken as `ton[65536]` is; a chain of
+    # blocks each holding two single instances of the one below holds 0 at any depth.
+    test "an instance that is no array's element counts nothing of its own (provisional)" do
+      pair =
+        block!(
+          "function_block pair\nvar_input x bool\nvar_output y bool\nvar a ton\nvar b ton\n" <>
+            "xic x ton a 10\nxic x ton b 10\nxic a.dn xic b.dn ote y",
+          "pair"
+        )
+
+      chain =
+        Enum.reduce(1..4, pair, fn i, below ->
+          block!(
+            "function_block d#{i}\nvar_input x bool\nvar_output y bool\n" <>
+              "var l #{below.name}\nvar r #{below.name}\ncal l x y\ncal r x y",
+            "d#{i}",
+            [below]
+          )
+        end)
+
+      assert {pair.elements, chain.elements} == {0, 0}
+      assert %Logex.Program{} = program(held("var w pair[65536]") <> "cal w[0] x y", [pair])
+      assert %Logex.Program{} = program(held("var top d4[65536]") <> "cal top[0] x y", [chain])
+    end
+
     test "in a block's file, the block declaring it is refused at its line" do
       {_k, cell} = nest()
 
@@ -378,6 +406,25 @@ defmodule Logex.InstanceArrayTest do
                    fn -> Logex.Tag.new!("row", {:array, cell, [2]}) end
 
       assert %Logex.Tag{} = Logex.Tag.new!("row", {:array, cell, [1]})
+
+      # RV-9's review: an array of a block that holds an array, counted at every depth,
+      # still takes no initial values, from Elixir as in the source, whatever its count.
+      for {dims, initial, instances} <- [
+            {[1], [0], "1 instance"},
+            {[2], [0, 0], "2 instances"},
+            {[2], %{[0] => %{}}, "2 instances"}
+          ] do
+        assert_raise ArgumentError,
+                     "`row` is an array of #{instances} of `cell`, which takes no initial " <>
+                       "values: each element's members start where its type says",
+                     fn -> Logex.Tag.new!("row", {:array, cell, dims}, :var, initial) end
+      end
+
+      assert messages(held("var row cell[1] 0") <> "cal row[0] x y", [cell]) == [
+               {3,
+                "`row` is an array of 1 instance of `cell`, which takes no initial values: " <>
+                  "each element's members start where its type says"}
+             ]
     end
 
     @tag :tmp_dir

@@ -909,9 +909,25 @@ defmodule Logex.Compiler do
       )
 
   # Decision 371: the loader's own types, the library and the one version of each name as
-  # listed!/2 builds them, with no check of any against its text, and nothing checked.
-  defp library_loaded(types) do
-    library = Map.new(types, fn %FbType{name: name} = type -> {name, type} end)
+  # listed!/2 builds them, with no check of any against its text, and nothing checked. The
+  # list is still held to the shape of what this walks (RV-9's review): a proper list of
+  # user block types of distinct names, each of a body whose table holds user block types,
+  # refused otherwise in listed!/2's and given!/3's words, so that junk handed to loaded/2
+  # from outside the loader is a host mistake's ArgumentError; what a type's members and
+  # rungs hold is trusted as the loader's own, unchecked (PLAN.md, RV-9's question 3).
+  defp library_loaded(types) when is_list(types),
+    do: loaded_list!(proper?(types, &any?/1), types)
+
+  defp library_loaded(types), do: listed!(false, types)
+
+  defp loaded_list!(false, types), do: listed!(false, types)
+
+  defp loaded_list!(true, types) do
+    {library, _checked} =
+      Enum.reduce(types, {%{}, %{}}, fn type, {library, checked} ->
+        given!(loaded_shape(type, checked), type, library)
+      end)
+
     seen = Map.new(library, fn {name, type} -> {name, FbType.held(type)} end)
 
     {held, _walked, :types} =
@@ -919,6 +935,22 @@ defmodule Logex.Compiler do
 
     {library, held, %{}}
   end
+
+  defp loaded_shape(
+         %FbType{name: name, members: members, body: %Program{tags: tags, blocks: blocks}},
+         checked
+       )
+       when is_binary(name) and is_list(members) and is_map(tags) and not is_struct(tags) and
+              is_map(blocks) and not is_struct(blocks),
+       do: tabled(Enum.all?(Map.values(blocks), &table_type?/1), checked)
+
+  defp loaded_shape(_type, _checked), do: :error
+
+  defp tabled(true, checked), do: {:ok, checked}
+  defp tabled(false, _checked), do: :error
+
+  defp table_type?(%FbType{name: name, body: %Program{}}) when is_binary(name), do: true
+  defp table_type?(_other), do: false
 
   # Since M5-14 an array of instances' elements' type too.
   defp blocks(tags),

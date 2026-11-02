@@ -4407,6 +4407,41 @@ defmodule Logex.FunctionBlockTest do
                    fn -> Logex.compile(held, name: "m", types: [%{b1 | members: []}]) end
     end
 
+    # RV-9's review: `Logex.Compiler.loaded/2` is the loader's and no host's way in, but
+    # junk handed to it is a host mistake in the words a compile's `types:` is refused in,
+    # each pinned, where it raised FunctionClauseError or Protocol.UndefinedError: not a
+    # list, an improper one, an element no type, a built-in, two of one name, and a type
+    # whose table holds what is no type or is no map.
+    test "junk handed to the loader's compile is refused in the words of types:'s", %{
+      tmp_dir: dir
+    } do
+      chain_files(dir, 2)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+
+      {:ok, tokens, _lines} =
+        Logex.Lexer.tokenize("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y")
+
+      {:ok, routine} = Logex.Parser.parse(tokens)
+      assert {:ok, %Logex.Program{}} = Logex.Compiler.loaded(routine, [b1])
+      list = "types must be a list of function block types from Logex.compile/2, got: "
+      type = "types must be function block types from Logex.compile/2, got: "
+      tabled = put_in(b1.body.blocks, %{"b2" => :junk})
+      untabled = put_in(b1.body.blocks, [])
+
+      for {types, message} <- [
+            {:junk, list <> ":junk"},
+            {[b1 | :junk], list <> inspect([b1 | :junk])},
+            {[:junk], type <> ":junk"},
+            {[Logex.FbType.ton()], type <> inspect(Logex.FbType.ton())},
+            {[%{b1 | name: :b1}], type <> inspect(%{b1 | name: :b1})},
+            {[tabled], type <> inspect(tabled)},
+            {[untabled], type <> inspect(untabled)},
+            {[b1, b1], "types holds two function blocks named `b1`: one name, one type"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, types) end
+      end
+    end
+
     # In reductions: each file compiled once, its cost what its own compile reads, the
     # table of the types below it among it, one version of each name and the recursion
     # check, so 2x a chain of 20 files costs about 2.4x and 2x one of 40 about 2.7x,

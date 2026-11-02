@@ -33,7 +33,10 @@ defmodule Logex.Declarations do
   count is kept in each type's schema, `Logex.FbType`'s `elements`, counted once a type as
   it is built, so a declaration reads it in constant time and nothing is built; its type
   known and its own sizes taken first, so an array past the bound by its sizes is told so
-  alone.
+  alone. An instance that is no array's element counts nothing of its own, only the arrays
+  its type holds (provisional, RV-9's review): a block of two single timers holds 0, so
+  `var w pair[65536]`, 131,072 timers, is taken as `ton[65536]` is, and so is a chain of
+  blocks each holding two single instances of the one below, at any depth.
 
   A qualifier (decisions 267 to 270) comes straight after the section word, `var retain
   count dint`, on a program's `var` and `var_output` and a block's three sections: never on

@@ -2417,7 +2417,9 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   an element of an array of blocks counts the elements its block holds, so `var row
   cell[256]`, each `cell` holding 256 blocks of `ton[256]`, would hold 16,777,216 timers,
   and an instance counts every array its block holds, at any depth, together. `var row
-  cell[1]` holds 65,536 and is taken, as `ton[256,256]` is.
+  cell[1]` holds 65,536 and is taken, as `ton[256,256]` is. Only arrays are counted
+  (provisional): an instance that is no array's element counts nothing of its own, so a
+  block of two single timers holds 0, and `var w pair[65536]`, 131,072 timers, is taken.
 - **Literal subscripts to run an element.** An instruction that runs an instance names
   its element by literal subscripts: a timer, a counter's side, a `cal`, and a one-shot's
   storage bit or a pulse coil's pulse bit. The rules for an instance then hold for each

@@ -102,6 +102,13 @@ defmodule Logex.ReadmeTest.Examples do
   # run's" (decision 364: no figure is held to a range).
   @varies %{"on_the_real_clock.exs" => "this run's figures: "}
 
+  # An example on the machine's clock runs alone, after every async module of the suite,
+  # so that no other example's VM and no other test runs beside its rounds (RV-9's
+  # review: CI's red run of `on_the_real_clock.exs` beside the fragment's VM); every other
+  # example runs beside the rest.
+  def async?("on_the_real_clock.exs"), do: false
+  def async?(_name), do: true
+
   def readme, do: File.read!(@readme)
   def derived, do: @derived
   def continues, do: @continues
@@ -236,7 +243,9 @@ defmodule Logex.ReadmeTest do
   prints on standard output must be README's text exactly, but for the lines README says
   are this run's alone, compared by their beginning, and it must exit 0. Each example is a
   test module of its own, `Logex.ReadmeTest.Scan` for `scan.exs`, so that the examples
-  run side by side and a failure is named by its example.
+  run side by side and a failure is named by its example, and shows what the script
+  printed beside what README shows; the one on the machine's clock, `on_the_real_clock.exs`,
+  runs alone, after the suite's async modules (`Examples.async?/1`).
   """
   import ExUnit.Assertions
   alias Logex.ReadmeTest.Examples
@@ -265,18 +274,21 @@ defmodule Logex.ReadmeTest do
     {output, status} =
       System.cmd(@elixir, ["-pa", Mix.Project.compile_path(), example.name], cd: dir)
 
-    assert status == 0, "README.md line #{example.line}: #{example.name} exited #{status}"
+    at = "README.md line #{example.line}: #{example.name}"
+    assert status == 0, "#{at} exited #{status}, printing:\n#{output}"
 
-    assert Examples.comparable(output, example.name) ==
-             Examples.comparable(example.expected, example.name),
-           "README.md line #{example.line}: #{example.name} printed otherwise"
+    # Held as a pair with its place, so that a failure shows what the script printed beside
+    # what README shows, and where they differ, which a message of the test's own hid
+    # (RV-9's review, CI's run 41358731876).
+    assert {at, Examples.comparable(output, example.name)} ==
+             {at, Examples.comparable(example.expected, example.name)}
   end
 end
 
 for example <- Logex.ReadmeTest.Examples.all() do
   defmodule Module.concat(Logex.ReadmeTest, Macro.camelize(Path.rootname(example.name))) do
     @moduledoc false
-    use ExUnit.Case, async: true
+    use ExUnit.Case, async: Logex.ReadmeTest.Examples.async?(example.name)
     @example example
 
     test "README's #{@example.name} prints what README shows" do

@@ -579,7 +579,13 @@ defmodule Logex.CompileTotalTest do
             {"var a bool\nxic a jmp done\nlbl done\nlbl done\nxic a ote a",
              [{4, "`done` already labels the rung on line 3"}]},
             {"var a bool\nlbl done\nlbl done\nxic a ote a",
-             [{2, @idle}, {3, @idle}, {3, "`done` already labels the rung on line 2"}]}
+             [{2, @idle}, {3, @idle}, {3, "`done` already labels the rung on line 2"}]},
+            # RV-9's review: a label a `jmp` names, last on a rung that writes nothing, is
+            # no label alone, and is told both; so is a second label so.
+            {"var a bool\nxic a jmp done\nxic a lbl done\nxic a ote a",
+             [{3, @idle}, {3, "`lbl done` is not first"}]},
+            {"var a bool\nxic a jmp done\nlbl x lbl done\nxic a ote a",
+             [{3, @idle}, {3, "`lbl done` is not first"}]}
           ] do
         assert {:error, diagnostics} = Logex.compile(source, name: "m"), source
         assert length(diagnostics) == length(lines), source
@@ -645,8 +651,54 @@ defmodule Logex.CompileTotalTest do
                 ]}
     end
 
+    # RV-9's review: a compiled body holds a label alone only where a `jmp` of its rungs
+    # names it, so a block's body with its `jmp` rung cut out by hand, its label alone and
+    # the warning a label no `jmp` names carries kept, is no compiled body, and a compile
+    # given it is refused as a host's mistake.
+    test "a body whose label alone no jmp names is no compiled body" do
+      {:ok, fb} =
+        block(
+          "function_block fb\nvar_input a bool\nvar_output q bool\nxic a jmp done\n" <>
+            "xic a ote q\nlbl done",
+          "fb"
+        )
+
+      assert Logex.Compiler.lowered?(fb.body)
+      [{:rung, [{:xic, 4, _}, {:jmp, 4, _}]} | rest] = fb.body.rungs
+
+      unnamed = %Diagnostic{
+        stage: :validate,
+        line: 6,
+        message: "`done` labels this rung, but no `jmp` names it: nothing jumps here",
+        severity: :warning
+      }
+
+      for warnings <- [[], [unnamed]] do
+        edited = %{fb | body: %{fb.body | rungs: rest, warnings: warnings}}
+        refute Logex.Compiler.lowered?(edited.body), inspect(warnings)
+
+        assert_raise ArgumentError,
+                     "types must be function block types from Logex.compile/2, got: " <>
+                       inspect(edited),
+                     fn ->
+                       Logex.compile("var_input a bool\nvar_output q bool\nvar f fb\ncal f a q",
+                         name: "m",
+                         types: [edited]
+                       )
+                     end
+      end
+    end
+
+    # RV-9's review (provisional): a label and empty groups, `lbl done ( )`, are no label
+    # alone, and write nothing, as a label and a contact do.
     test "a label and a contact still write nothing, a jmp naming the label or not" do
-      for rung <- ["lbl done xic start", "lbl done ( xic start | xio stop )", "lbl done eq d 5"] do
+      for rung <- [
+            "lbl done xic start",
+            "lbl done ( xic start | xio stop )",
+            "lbl done eq d 5",
+            "lbl done ( )",
+            "lbl done ( | )"
+          ] do
         assert compiled(@io <> "xic start jmp done\n" <> rung) ==
                  {:error, ["line 12: " <> @idle]},
                rung
