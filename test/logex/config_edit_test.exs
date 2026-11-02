@@ -2255,7 +2255,7 @@ defmodule Logex.ConfigEditTest do
       assert {_edit, _, [{:held, "k2", 0}]} = Edit.untest(edit, restarted)
     end
 
-    # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a var_output of another type than
+    # RV-3's review, decision 374 (the maintainer, 2026-11-01): a var_output of another type than
     # the held point's cannot start at every value the point holds, so the point would move
     # at the first cycle while every report said it held; such a connection is refused at
     # accept, a change only a restart makes, where until the review it was left as it was.
@@ -2264,7 +2264,7 @@ defmodule Logex.ConfigEditTest do
                   "  m1.level level\n"
 
     test "a var_output of another type than the held global's is refused at accept, the " <>
-           "point unmoved (provisional)" do
+           "point unmoved (decision 374)" do
       for {global, value, output, value_word} <- [
             {"dint", "100000", "int", "an int"},
             {"lreal", "0.1", "real", "a real"},
@@ -2307,7 +2307,7 @@ defmodule Logex.ConfigEditTest do
     end
 
     test "one the running configuration wires to a global only the candidate drives is " <>
-           "refused too, its line there named, after every other refusal (provisional)" do
+           "refused too, its line there named, after every other refusal (decision 374)" do
       text = String.replace(@level_text, "TYPE", "dint")
       big = "var_input start bool\nvar_output level dint\nxic start move 100000 level\n"
       small = "var_input start bool\nvar_output small int\nvar x bool\nxic start ote x\n"
@@ -2390,7 +2390,7 @@ defmodule Logex.ConfigEditTest do
     end
 
     test "a kept instance's own connection to a wider global is no refusal: its var_output " <>
-           "holds the point already, and before its first run is left as it is (provisional)" do
+           "holds the point already, and before its first run is left as it is (decision 374)" do
       text =
         "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
           "var_global level dint 100000\nprogram m1 p with fast\n  m1.start pb\n" <>
@@ -2408,7 +2408,7 @@ defmodule Logex.ConfigEditTest do
       assert Runtime.get!(tested, "level") == 5
 
       # Before the instance's first run the point holds its own initial value, which the
-      # int cannot: nothing is written, and the point moves at that run (provisional).
+      # int cannot: nothing is written, and the point moves at that run (decision 374).
       fresh = Runtime.start(original)
       {edit, forecast} = accepted(fresh, candidate)
       assert forecast == [{:added, "m1.x", 0}, {:held, "level", 100_000}, {:held, "m1.small", 0}]

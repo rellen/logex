@@ -337,8 +337,16 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-5 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
-RV-3 left, decisions 374–389, which RV-10 builds. The maintainer's answers to the
+items RV-5 to RV-8 build ("The review after Milestone 6"). Its answers to the questions
+RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof` held on put at rest
+by the restart or the start itself, wherever it sits (decision 385), a warm restart's
+timers counted from the resource's `now` (decision 382), a preset no instruction gives
+kept from the store (decision 378), a done bit a frozen timer's catch-up sets forecast
+(decision 381), a point rewired between, or newly wired from, var_outputs no rung writes
+held (decisions 386 and 387), an edit that would hold a var_output a rung reads refused
+(decision 388), a stored sample of a task the configuration drops dropped and reported
+(decision 389), and an element named with a leading zero, `temps[03]`, read as
+`temps[3]` everywhere a host names one (decision 384). The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
 taken where a jump names it (decision 367), a declaration's elements counted through
 every array of instances it holds (decision 370), the loader trusting the types it

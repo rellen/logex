@@ -510,7 +510,8 @@ defmodule Logex.Program do
   line is marked `retain` is `s1`, the same leaves listed two ways. Every reader of
   `retained` takes either, a warm restart, the image and an edit's report comparing the
   leaves under them (decision 331); the review after Milestone 6 found the two spellings
-  (a5-data-model-6), kept as built, `PLAN.md` RV-3.
+  (a5-data-model-6), kept as built by decision 379: the list follows where `retain` is
+  written.
   """
   def retained(tags, blocks \\ %{}) when is_map(tags), do: elem(settled(tags, blocks), 3)
 

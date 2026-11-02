@@ -3207,7 +3207,7 @@ defmodule Logex.Runtime do
   # last sample as it was and the task runs on the next cycle that samples the rise, a warm
   # restart's first among them (decisions 305 and 313), where until then every sample stood
   # before any step ran. Every other sample stands at once, a fall's and a periodic run's
-  # among them (provisional for a task with an interval too, whose periodic run while its
+  # among them (decision 375 for a task with an interval too, whose periodic run while its
   # trigger samples 0 holds nothing back): holding a 0 back would lose the next rise.
   defp due(%__MODULE__{now: now, globals: globals, tasks: states, wiring: %{tasks: tasks}} = rt) do
     {due, states} =

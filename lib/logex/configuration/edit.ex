@@ -1130,7 +1130,7 @@ defmodule Logex.Configuration.Edit do
   defp holders(wires),
     do: for({connection, member, name} <- wires, do: {connection.instance, member, name})
 
-  # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a held point is held by starting
+  # RV-3's review, decision 374 (the maintainer, 2026-11-01): a held point is held by starting
   # the var_output wired to it at its value, which one of another type than the point's
   # cannot hold for every value, `small int` wired to `level dint` held at 100000, so that
   # the point would move at the first cycle while every report said it held. Such a
@@ -1141,7 +1141,7 @@ defmodule Logex.Configuration.Edit do
   # configurations make is the point's own source, which copied it out, so it holds the
   # point's value already and is not refused; before the instance's first run since a
   # start or a restart it may hold another, and one its type does not hold is then left as
-  # it is (provisional, the same question).
+  # it is (decision 374).
   #
   # Since decisions 386 and 387 a point held because the configuration a direction starts
   # wires it anew from a var_output no rung writes, which the other drove from none or from
@@ -1409,7 +1409,7 @@ defmodule Logex.Configuration.Edit do
   # this direction in the instance started at its global's value, where the var_output
   # holds another and its type holds that value exactly, `{:holds, path, value}`: accept
   # refuses a var_output of another type than its point's but a kept instance's own
-  # source, which holds the point's value from its first run on (provisional). A kept
+  # source, which holds the point's value from its first run on (decision 374). A kept
   # instance's are written before its plan's switch where
   # its state holds the var_output, so that what the switch reports of it, its retention
   # among it, is of the value it holds after, and after the switch where only the program
