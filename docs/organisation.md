@@ -12094,7 +12094,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      writes, so each element it copies out frozen is held too; a restart since the last
      switch is read from the resource's restart count, which `restart/2` moves on; and
      assemble and cancel start each holder again where a restart left it another value,
-     so that every point a step reports held holds.)*
+     so that every point a step reports held holds.)* *(RV-10's review, 2026-11-02: a held
+     point whose var_output the configuration started wires to another point too, the
+     candidate's `m1.aux k3` beside `m1.aux k2`, is refused at accept, since the hold
+     would move that other point, provisional; and assemble and cancel start each holder
+     again before they prune, so that a prune's report of the var_output is of the value
+     the hold leaves.)*
 
 348. **One write's time limit (the review after Milestone 6),** question 2: a round
      writes its devices in name order against the one deadline the refresh before the
@@ -12514,6 +12519,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      pre}` with the state's `.acc`, the existing kind, by `Logex.Edit` and
      `Logex.Configuration.Edit` alike; pinned against the first scan and the first test
      cycle, and restated in the edit and timer walks, which draw no frozen `ton` or `rto`.)*
+     *(RV-10's review, 2026-11-02: the timer walk draws a `ton` and an `rto` on rungs a jump
+     skips, and reaches a rise each one's catch-up alone makes, forecast and borne out at
+     its next run.)*
 
 382. **A slow task's timer across a warm restart (the review after Milestone 6),** RV-3's
      question 9 (b2-resource-2): a warm `restart/2` counts a timer's time from its last
@@ -12544,6 +12552,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      a cycle's input keys, `Logex.Runner.force/3`, `unforce/2` and the forces file where a
      name is no point as written, the point kept and shown under its own name, and by
      `put_inputs/3`, `call/4` and `get/2` as they did; two keys naming one point refused.)*
+     *(RV-10's review, 2026-11-02: each door reads a name alike: a subscript is its literal
+     and nothing else, so `temps[3 ]` is no point at a cycle or a force, as `get/2` has it;
+     a name that is no input point is told by its subscripts' values, `lamps[02]` the
+     output point `lamps[2]` is and `Temps[03]` offered `temps[3]`; and decision 241's line
+     and a forces file's duplicate name the key as the host or the line wrote it.)*
 
 385. **A retained `tof` the first scan skips (the review after Milestone 6),** RV-3's
      question 12: decision 349's rest is a first scan's, so a `tof` on a rung a jump
@@ -12572,7 +12585,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      held, `{:held, ...}`, its var_output started at its value, a scalar, an element and
      each unwritten element of an array wired whole, both ways, given back, and held again
      by assemble and cancel after a restart; decision 374's refusal reaches it; restated
-     in the configuration-edit walk, `:held_rewired`.)*
+     in the configuration-edit walk, `:held_rewired`.)* *(RV-10's review, 2026-11-02: a
+     point an instance the edit retypes copies out through the same connection in both is
+     held so too, as the code had it and the moduledoc and RV-10's question 4 had not said;
+     a held point whose var_output drives another point too is refused (decision 347's
+     note); restated besides in the hold walk, `Logex.ApiContractTest.HoldWalk`.)*
 
 387. **A point newly wired from an unwritten var_output (the review after Milestone 6),**
      RV-3's question 14: a point no connection drove moves to the var_output's value with
@@ -12595,7 +12612,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      rung that reads it, a scalar, an element read by its name or a tag subscript, and a
      word's bit, both ways; a kept instance's own connection both configurations make is
      excepted, as for decision 374 (provisional); restated in the configuration-edit
-     walk's prediction of accept's refusals, `:read_held`.)*
+     walk's prediction of accept's refusals, `:read_held`.)* *(RV-10's review, 2026-11-02:
+     a read is every read of the var_output's tag, a `:value` slot's and a tag subscript's
+     or a bit number's in any slot, a write's among them, `xic a[idx]`, `ote o[idx]` and
+     `xic w.[n]`, and any element of an array var_output held whole, where until then only
+     a `:read` slot's operand itself was looked at; each program type is read once; and the
+     kept instance's own connection is refused where its var_output holds another value
+     than its point at accept, as only a start or a restart before the instance's first run
+     leaves it, and never started at a switch, so that a restart after accept leaves it as
+     it is, as decision 374 leaves its own (provisional); restated in the
+     configuration-edit walk, `:read_held_unrun`, and the hold walk.)*
 
 389. **A stored sample of a task the configuration drops (the review after Milestone 6),**
      RV-3's question 16: a start from a store that holds a task's own trigger sample,
@@ -12609,7 +12635,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      other drop, so `status/1` reports it; only one by a global's name the image does not
      hold is still refused (provisional). RV-5's `<store>.dropped` copy, decision 360,
      follows `start/2`'s dropped list, so it covers this drop as any; RV-5 had not landed
-     on `main` when RV-10 closed.)*
+     on `main` when RV-10 closed.)* *(RV-10's review, 2026-11-02: every stored sample the
+     start lays on no task is dropped and reported: a sample by a name the image holds no
+     global of is a task's whatever the configuration now declares by it, since the image
+     keeps a global's sample only with its global, so one a global of the configuration
+     now has is dropped where it was refused; a global's sample no task takes, its global
+     kept; and a task's own laid only where the image holds its single's apart from it, so
+     one of a trigger its single no longer names is dropped, the task starting at its new
+     trigger's value (decision 319), each `{name, :undeclared}` (provisional).)*
 
 390. **A stalled disk at a restart or a start (the review after Milestone 6),** RV-4's
      question 1: a restart's read of the forces file is limited as decision 353 limits a

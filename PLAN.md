@@ -13079,7 +13079,8 @@ and CI checked; each fix with a test that fails when it is reverted.
 
   *Provisional readings, put to the maintainer.* Each is pinned as built; 1 to 7 are
   marked provisional where the code states them (`399d7f6`), and 8 is the decision's own
-  consequence, noted because a host sees it.
+  consequence, noted because a host sees it. RV-10's review (below) changed 4 to 7 as
+  each now says and added 9, each marked provisional where the code states it.
 
   1. *The instance's own `now` at a warm `restart/2`* (decision 382). The decision moves a
      timer's `last` to the resource's `now`; a timer's `last` is never later than its
@@ -13095,32 +13096,202 @@ and CI checked; each fix with a test that fails when it is reverted.
      unwired (`k2`), which RV-3's pins had started at its var_output's initial value, and
      a point the untest rewires back to the original's unwritten var_output. (a) As
      built; (b) a test's switch only, an untest starting the original's points as before.
-  4. *An instance whose type changes* (decisions 386 and 387). A point is held only where
-     both configurations run its instance as one type; one whose type the edit changes
-     starts its var_output by the edit's rules for a new type, as before. (a) As built;
-     (b) held too where the var_output is the same name and type in both.
+  4. *An instance whose type changes* (decisions 386 and 387). A point is held where the
+     configuration a switch starts copies it out frozen through a connection the one it
+     stops does not make, or makes of an instance it runs as another type, so that a
+     point an instance the edit retypes wires through the same connection in both, `m1.aux
+     k2` with `aux` written in neither type, is held too: the new type's var_output is
+     another, which starts at its own initial value, as decision 347 holds one in an
+     instance it retypes. Until RV-10's review this question said that such a point started
+     by the edit's rules for a new type, as before; the code held it, and RV-10's review
+     found the question asking about what was not built. (a) As built; (b) not held, the
+     point moving to the new type's initial value at the first cycle, as before RV-10.
   5. *Decision 388's exception and reach.* A kept instance's own connection both
      configurations make is excepted, as decision 374 excepts it, since it holds the
      point's value from its first run on; "a rung reads" covers the var_output named, an
      element by its name or through a tag subscript (any element), and a word's bit,
      which is how the decision's "members" was read, a program's var_output holding no
-     block. (a) As built; (b) no exception; (c) a tag subscript reading only where its
-     range can reach the element.
-  6. *Decision 389's reason and its one refusal kept.* A dropped task sample is reported
-     `{task, :undeclared}`, the reason a dropped global's is given. A sample by the name
-     of a global the configuration declares and the image does not hold is still refused,
-     since a global's sample the image does not hold is the image's own mistake. (a) As
-     built; (b) a reason of its own, `:no_task`; (c) every sample the configuration has
-     no task for dropped, a global's name too.
+     block, and since RV-10's review every read of its tag, a `:value` slot's and a tag
+     subscript's or a bit number's in any slot, a write's among them. Since the review the
+     exception holds only where the var_output holds its point's value at accept: before
+     the instance's first run since a start or a restart, a warm restart keeping a
+     retained point at 1 and putting the var_output at its initial 0, accept refuses it,
+     naming both values, and takes it once the instance has run; and no switch starts
+     such a var_output, so a restart between accept and the switch leaves it as it is,
+     the point taking the var_output's value at its first copy-out while every report
+     says held, as decision 374 leaves its own. (a) As built; (b) no exception, every such
+     connection refused; (c) a tag subscript reading only where its range can reach the
+     element; (d) after a restart since accept, the var_output started at the point's
+     value, the point holding and the rung reading the hold.
+  6. *Decision 389's reason, and what it drops.* Every stored sample the start lays on no
+     task is dropped and reported `{name, :undeclared}`, a dropped global's reason: a
+     task's own whose task the configuration declares with no single or not at all, a
+     global of that name among them since RV-10's review, where it was refused as the
+     image's own mistake, the image holding a global's sample only with its global; a
+     global's sample no task of the configuration takes, its global kept (since the
+     review, where it was dropped unreported, so no `.dropped` copy kept it); and a task's
+     own of a trigger its single no longer names, which the image tells by holding no
+     different sample of the task's single (since the review, where it was laid on the new
+     trigger). A sample that is no bool's value, or a name that is none, is still the
+     image's mistake, refused. (a) As built; (b) a reason of its own, `:no_task`, and
+     another for a global's sample no task takes; (c) a global's sample no task takes
+     dropped unreported, since the configuration reads it nowhere.
   7. *What decision 384 takes as a value* (decision 384). Every integer literal reads by
      its value, a based one among them, so `temps[16#3]` and `temps[2#11]` are
      `temps[3]`; a name whose subscripts are no literals is read as written. Two keys of a
-     cycle naming one point are refused, where taking the last was the other way.
-     (a) As built; (b) decimal digits alone, leading zeros dropped, `16#3` refused.
+     cycle naming one point are refused, where taking the last was the other way. Since
+     RV-10's review a subscript is the literal and nothing else, as the lexer cuts a name,
+     so `temps[3 ]` is no point, as `get/2` has it. (a) As built; (b) decimal digits
+     alone, leading zeros dropped, `16#3` refused.
   8. *A held-on `tof`'s done bit before the first scan* (decision 385). Rested by the
      restart, it reads `.dn` 0 at once: a host's `get/2` between the restart and the
      first cycle reads the run-on off, where until RV-10 it read 1 until the first scan.
      (a) As built, as the decision has it; noted because a host sees it.
+  9. *A held point's var_output wired to another point too* (decisions 347, 386 and 387;
+     RV-10's review). The candidate adds `m1.aux k3` where `m1.aux k2` stands, `aux` no rung
+     writes at 1 and `k3` at 0: holding `k3` starts `aux` at 0, which `k2` then copies
+     out, so `k2` would go off while every report said only that `k3` holds; two points
+     held from one var_output cannot both hold. Accept refuses such a connection, naming
+     the other point, as decision 374 refuses a hold the var_output cannot keep, so the
+     edit is taken only with a restart; an element wired alone and in its array wired whole
+     among them, both ways; a kept instance's own connections both configurations make,
+     which hold one value, the var_output's, excepted (provisional). (a) As built; (b) held,
+     and the other point's move reported, a report kind of its own; (c) not held, the new
+     point moving to the var_output's value at the first cycle, reported.
+  **RV-10's review** (2026-11-02, of `a77acf5`: nine findings; its probes under the
+  review's scratchpad, `rev10work/`). Each closed with a test that fails when its fix is
+  reverted, the mutants run through `scripts/mutate.sh` judged by the full suite (below),
+  or with a document made true; fixed in `37722f8` and `ce59970`.
+  - *1, decision 388's reach* (`config_edit_test.exs`, "decision 388's reads (the review
+    of RV-10)"): a read is every read of the held var_output's tag, each tag a subscript or
+    a bit number names in any slot, a write's among them (`Logex.Walk.uses_of/2`), so
+    `xic a[idx]`, `ote o[idx]` and `xic w.[n]` each refuse a hold of `idx` or `n`, where
+    the lamp moved; the review's repro and fuzzer (`hfuzz.exs`, 900 walks, some 70
+    failures before) clean.
+  - *2, a var_output wired to two points* (`config_edit_test.exs`, "a held point whose
+    var_output drives another point too (the review of RV-10)", five tests): accept
+    refuses a held wire whose var_output, or an element of it, the configuration started
+    wires to another point too, naming that point, decision 374's form, both ways, the
+    pure decision 347 form, two points held from one var_output, and an element wired
+    alone and in its array wired whole, either newly; a kept instance's own connections
+    both configurations make, which hold one value, are excepted. The record is silent:
+    the refusal is decision 374's and 388's answer to a hold that cannot keep its
+    promise, provisional, question 9.
+  - *3, the two rules no test held* (the same describe): a `:value` slot's read, a
+    compare's, an add's and a move's, and an array var_output held whole read through one
+    element, `o[1]` and `o[n]`, each refused, the review's R10 and R11.
+  - *4, decision 389 for a valid older store* (`retain_image_test.exs`, "a stored sample
+    laid on no task (decision 389, the review of RV-10)", three tests): a sample by a name
+    the image holds no global of is a task's whatever the configuration now declares by
+    it, since `Logex.Runtime.retained/1` keeps a global's sample only with its global, so
+    the review's cases b and c, a task `early` taken out and a global `early` declared,
+    plain or retained, start and drop `{"early", :undeclared}`; case d, a global's sample
+    no task takes, its global kept, is dropped and reported, so decision 360's copy keeps
+    it; and case f, a task's own sample of a trigger its single no longer names, which the
+    image tells by holding no different sample of the task's single, is dropped and
+    reported, the task starting at its new trigger's value (decision 319), where it was
+    laid on the new trigger. The leave: RV-10's own pins of the refusal "`triggers` holds
+    \"shown\", which `globals` does not hold", in `retain_image_test.exs`, now a drop,
+    and in `retain_store_test.exs`, now a sample that is no bool's value, `trigger arm 2`,
+    which the store test refuses in its stead. Question 6 says what is put to the
+    maintainer.
+  - *5, the own source before the instance's first run* (`config_edit_test.exs`, "a kept
+    instance's own source a rung reads, before the instance's first run (the review of
+    RV-10)", two tests): accept refuses a kept instance's own connection whose var_output
+    a rung reads where the var_output holds another value than its point at accept, after
+    the review's warm restart `aux` 0 against `k2` 1, naming both values, and takes it once
+    the instance has run, the lamp following its own rung; and no switch starts such a
+    var_output, so a restart after accept leaves it as it is, as decision 374 leaves its
+    own (provisional, question 5).
+  - *6, question 4 and the moduledoc* (`config_edit_test.exs`, "a retyped instance's
+    frozen connection (decisions 386 and 387)"): the code held a point an instance the
+    edit retypes wires through the same connection in both, the new type's var_output
+    another; that is now pinned, and the moduledoc and question 4 say it.
+  - *7, decision 384's doors* (`located_array_test.exs`, "a cycle's keys are told by
+    their subscripts' values and named as written", "a force is told by a name's
+    subscripts' values and names it as written"): `Logex.Name.by_value/1` takes a
+    subscript only where it is its literal and nothing else, so `temps[3 ]` and
+    `temps[3//x]` are no point at a cycle or a force, as `get/2` takes them; a name that is
+    no input point is looked up by its subscripts' values, `lamps[02]` told the output
+    point `lamps[2]` is and `Temps[03]` offered `temps[3]`, at a cycle and a force; and
+    decision 241's line and a forces file's duplicate name a key as written. The leave:
+    RV-10's own pin of the duplicate, `temps[3]`, is `temps[003]`.
+  - *8, decision 388's cost* (`config_edit_test.exs`, "accept reads a program type once
+    however many of its instances hold a wire"): each program type is read once
+    (`program_reads/1`), so the review's 40 instances of a 400-rung type, each newly
+    wiring a spare, cost 121,805 reductions more than the same accept wiring none, where `a77acf5` took 1,194,566 more (`c10/r2_cost388.txt`, the review's `cost388.exs`, 400 rungs); the growth test reads what 300 rungs more add to one
+    held wire and to forty, 52,574 and 50,423, bound 2x, where a walk a wire gave some 40x.
+  - *9, decision 381's reach* (`api_contract_test.exs`, the timer walk): then 60 plants
+    drawn with `f` an on-delay timer and `f` and `l` on rungs a jump on `e3` skips, each
+    candidate raising a preset, so that a `ton` and an `rto` held from counting while
+    timing catch up at their next run; the model runs the jump exactly (`:jumped`), and
+    reaches a rise each one's catch-up alone makes (`:caught_up_rise_ton`,
+    `:caught_up_rise_rto`), forecast and borne out, a `ton`'s rise now checked at its next
+    run with its rung true as an `rto`'s was.
+  - *Found beside them*, by the hold walk below: assemble and cancel started each holder
+    again after the prune, so a prune's report of a var_output no longer written, `{:held,
+    "m1.aux", 1}`, gave the value a restart left beside the `{:holds, "m1.aux", 0}` that
+    moved it; they hold before they prune (`config_edit_test.exs`, "assemble's and
+    cancel's report of a held var_output after a restart").
+  - *The walks.* The configuration-edit walk restates finding 5 (`ce_read_held/3`, the
+    resource's values at accept) and reaches it in 20 plants drawn after the others, a
+    retained `out` wired to a point, accepted straight after a warm restart
+    (`:read_held_unrun`). A new walk, `Logex.ApiContractTest.HoldWalk`, restates
+    decisions 347, 386, 387 and 388 and the review's rules over 300 plants of spare
+    var_outputs read every way a rung reads and wired now and then to two points: every
+    point a step reports held reads its value after a cycle but one left as it is, no
+    step starts a var_output a rung reads, every point copied out frozen and not reported
+    keeps its value, a forecast is the test's report, and every refusal's claim is borne
+    out by the configurations and the resource; it asserts its reach, each way a rung
+    reads refused, the fan-out of a scalar and of an element, the own source unrun, each
+    kind of hold, a give-back, a point left as it is, assemble and cancel.
+
+  *Mutation table* (`scratchpad/rv/c10/m3/` on `ce59970`, each judged by the full suite):
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | B01 | a scalar or an array whole read only where a read names it whole, no subscript, bit number or element of it | 4: 3 unit tests and the hold walk |
+  | B02 | a `:value` slot read no read (the review's R10) | 2: the compare's, add's and move's test and the hold walk |
+  | B03 | an array var_output's element read no read of the array held whole (R11) | 2: its test and the hold walk |
+  | B04 | no fan-out refused | 5: four unit tests and the hold walk |
+  | B05 | an element and its array wired whole not one storage | 2: its test and the hold walk |
+  | B06 | the own source not refused before the instance's first run | 3: its test, the hold walk and the configuration-edit walk |
+  | B07 | the own source a rung reads started at a switch after a restart | 2: its test and the hold walk |
+  | B08 | each instance reading its program again | 1: the growth test |
+  | B09 | assemble and cancel holding after they prune | 2: its test and the hold walk |
+  | B10 | a retyped instance's same connection not held | 3: its test, the hold walk and the configuration-edit walk (and 1 load) |
+  | B11 | a task's own sample laid whatever its single's | 1 |
+  | B12 | a global's sample no task takes dropped unreported | 1 |
+  | B13 | the refusal of a sample by a declared global's name restored | 2 |
+  | B14 | a subscript read through the lexer, a space or a comment after it skipped | 2 |
+  | B15 | a cycle's output element looked up as written | 1 |
+  | B16 | a cycle's suggestion made from the key as written | 1 (and 1 load) |
+  | B17 | decision 241's line naming the point's name | 1 (and 1 load) |
+  | B18 | a force's output element looked up as written | 1 (and 1 load) |
+  | B19 | a force's suggestion made from the name as written | 1 |
+  | B20 | a forces file's duplicate told by its point's name | 1 |
+  | B21 | RV-10's A07, a `ton`'s rise judged without its catch-up | 2: its unit test and now the timer walk |
+  | B22 | RV-10's A08, an `rto`'s so | 3: two unit tests and now the timer walk |
+
+  Every mutant is killed by the full suite. Where a row says "load", that many more
+  failures were a runner call's timeout under the load of other suites (a load average of
+  15 to 22 on four cores), `{:io_init, "drive", :timeout}` and `{:forces, :timeout}`, and
+  one growth bound, RV-7's kind, each passing at the gate.
+
+  *Cost* against `a77acf5` and `f29458b`, the cost script of RV-10 (`c10/cost.exs`), the
+  least of eleven runs each, three VMs each: against `a77acf5`, every scan and cycle exactly its reductions, `restart/3` within
+  4, `restart/2` within 2 an instance, `start/1` and `start/2` of the plant within the
+  spread between VMs, the switches 8 and 2 more, a configuration edit's accept over the
+  plant 64 more, a lone instance's accept and test within 7, and `start/2` of the 20
+  retained instances 15,196 more (0.25%), the start reading which task takes each stored
+  sample. Against `f29458b` the figures are RV-10's above, changed only by those
+  (`c10/r2cost_*.txt`).
+
+  *Load runs, gates and CI.* The new runner test, `located_array_test.exs`'s force told by a name's subscripts'
+  values, with the two runner tests whose pins changed, ran together under
+  `scripts/load.sh -n 50`, four busy loops: 0 of 50 runs failed. `37722f8` gated GATE-OK,
+  2,724 (its tree without the second commit's files), `ce59970` GATE-OK, 2,729; CI green
+  at once on both (41424310438, 41424812913).
 - **RV-11 — the answers to RV-4's questions** (decisions 390, 391, 394, 396, 398, 399 and
   400). A restart or start whose forces file cannot be read carrying on, saying so; a
   write that timed out reported unknown until a later one lands; a clock gone wrong a

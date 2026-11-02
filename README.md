@@ -345,9 +345,11 @@ warm restart's timers counted from the resource's `now` (decision 382), a preset
 instruction gives kept from the store (decision 378), a done bit a frozen timer's catch-up
 sets forecast (decision 381), a point rewired between, or newly wired from, var_outputs no
 rung writes held (decisions 386 and 387), an edit that would hold a var_output a rung
-reads refused (decision 388), a stored sample of a task the configuration drops dropped
-and reported (decision 389), and an element named with a leading zero, `temps[03]`, read
-as `temps[3]` everywhere a host names one (decision 384). The maintainer's answers to the
+reads refused (decision 388), and since RV-10's review one that would hold a var_output
+wired to another point too, a stored sample of a task the configuration drops dropped
+and reported (decision 389), every stored sample a start lays on no task among them since
+the review, and an element named with a leading zero, `temps[03]`, read as `temps[3]`
+everywhere a host names one (decision 384). The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
 taken where a jump names it (decision 367), a declaration's elements counted through
 every array of instances it holds (decision 370), the loader trusting the types it
