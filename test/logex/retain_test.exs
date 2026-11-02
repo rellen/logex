@@ -1082,6 +1082,30 @@ defmodule Logex.RetainTest do
       end
     end
 
+    # Decision 385: the rest is the restart's, so a scan pays nothing for it: the first scan
+    # after a warm restart of retained `tof`s held on at the outage, every kind, costs
+    # exactly what the same scan not marked first does, its rung false and true, where
+    # decision 349's first-scan clauses read `first` and ran a rule of their own.
+    test "a scan reads no first for a tof: the first after a restart costs as any other" do
+      p = c!(@run_on, [block!(@run_on_block)])
+      on = scans(p, Runtime.instance(p), List.duplicate(%{"motor" => 1}, 3))
+      warm = Runtime.restart(p, on, :warm)
+      later = %{warm | first: false}
+
+      for motor <- [0, 1] do
+        scan = fn state, first ->
+          fn ->
+            Runtime.call(p, state, %{"motor" => motor}, %Scan{now: warm.now + 10, first: first})
+          end
+        end
+
+        {out, first} = scan.(warm, true).()
+        {^out, again} = scan.(later, false).()
+        assert first.env == again.env
+        assert reductions(scan.(warm, true)) == reductions(scan.(later, false)), inspect(motor)
+      end
+    end
+
     # Decision 385 in a resource: a warm `restart/2` and `start/2` from the resource's
     # image put a retained `tof` held on at rest, a member of a block whose `cal` was false
     # at the last scan, frozen held on, among them, so the first cycle's run of the block
