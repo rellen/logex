@@ -14221,7 +14221,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       start: nil,
       change: nil,
       store_failing: false,
-      failed_seen: false
+      failed_seen: false,
+      # Decision 360 since RV-5's review: whether the changed start meets a directory at
+      # the copy's `.tmp`, and the store's text while its copy is owed.
+      owing: false,
+      owed: nil
     }
 
     reach(:untimed, untimed?(config))
@@ -14363,13 +14367,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp copied_at(w, text) do
     drops = drops_restated(w)
-    copied = copy_told(drops, Runner.status(w.runner).retain, text, w)
+    {copied, owed} = copy_told(drops, Runner.status(w.runner).retain, text, w)
     assert File.read(w.store <> ".dropped") in Enum.map(copied, &copy_read/1)
     reach(:store_copied, drops != [])
     reach(:store_copy_kept, drops == [] and w.copied != [nil])
     reach(:life_copied_changed, drops != [] and w.change != nil)
-    %{w | copied: copied}
+    owing(%{w | copied: copied, owed: owed})
   end
+
+  # While the copy is owed every write over the store fails, the first round's trip's
+  # among them, and leaves the store as the start read it (`copy_owed/1`).
+  defp owing(%{owed: nil} = w), do: w
+  defp owing(w), do: %{w | store_failing: true, failed_seen: false}
 
   defp drops_restated(%{start: :cold}), do: []
   defp drops_restated(%{stored: nil}), do: []
@@ -14379,19 +14388,28 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp drops_restated(%{stored: {_kt, k}} = w), do: unretained(k, w.draws.running.keep)
 
-  # What the file may hold after the start, by what status/1 names: no copy where nothing
-  # was dropped, the copy where it was made, and the copy or the one before it where its
-  # write ran past its limit.
+  # What the file may hold after the start, by what status/1 names, and the copy owed: no
+  # copy where nothing was dropped, the copy where it was made, and the copy or the one
+  # before it where its write ran past its limit; and since RV-5's review, where the
+  # start met a directory at the copy's `.tmp`, the one before it, the copy owed, the
+  # store's text as read (`copy_owed/1`). A copy past its limit is owed too, and the
+  # next write over the store makes it; the walk's ends read it only as one of the two.
   defp copy_told([], retain, _text, w) do
     refute Map.has_key?(retain, :copy)
-    w.copied
+    {w.copied, nil}
   end
 
-  defp copy_told(_drops, %{copy: nil, failed: :timeout}, text, w), do: [text | w.copied]
+  defp copy_told(_drops, retain, text, %{owing: true} = w) do
+    assert %{copy: nil, failed: failed} = retain
+    assert failed in [:eisdir, :timeout], inspect(failed)
+    {w.copied, text}
+  end
+
+  defp copy_told(_drops, %{copy: nil, failed: :timeout}, text, w), do: {[text | w.copied], nil}
 
   defp copy_told(_drops, retain, text, w) do
     assert retain.copy == w.store <> ".dropped"
-    [text]
+    {[text], nil}
   end
 
   defp copy_read(nil), do: {:error, :enoent}
@@ -15311,6 +15329,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # from, and a later start that dropped nothing left the copy where it was.
     :life_copied_changed,
     :store_copy_kept,
+    # And since RV-5's review a copy that failed, owed: the period's writes replacing no
+    # store while it is, and the end's write making it.
+    :life_copy_owed,
+    :life_copy_made_late,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -15408,9 +15430,20 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_end_cold, mode == :cold)
     w = stored_at(w, w.rt)
     life_store!(w)
+    w = owed_made!(w)
     w = started(%{w | start: mode, change: nil, edit: nil}, config)
     reach(:"life_#{kind}_fresh", true)
     w
+  end
+
+  # Decision 360 since RV-5's review: a copy owed is made by the end's write, which wrote
+  # the store after it, of the store as the start read it.
+  defp owed_made!(%{owed: nil} = w), do: w
+
+  defp owed_made!(w) do
+    assert File.read(w.store <> ".dropped") == {:ok, w.owed}
+    reach(:life_copy_made_late, true)
+    %{w | copied: [w.owed], owed: nil}
   end
 
   defp life_end(:stop, runner), do: assert(Runner.stop(runner) == :ok)
@@ -15511,8 +15544,45 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = %{killed(w) | edit: nil}
     misfit_store(change.k1, w)
     w = misfit_shelved(change.k1, w)
-    w = started(%{w | change: change}, life_configured(w.draws.running, change, w.programs))
-    life_ended(:stop, w, :cold, configured(w.draws.running, w.programs))
+    owing = copy_blocked(rem(:erlang.phash2({File.read!(w.store), :owed}), 2), w)
+    config = life_configured(w.draws.running, change, w.programs)
+    w = copy_owed(started(%{w | change: change, owing: owing}, config))
+    life_ended(:stop, %{w | owing: false}, :cold, configured(w.draws.running, w.programs))
+  end
+
+  # Decision 360 since RV-5's review, restated: the changed start, one in two by the
+  # store's own text, so that no draw is taken, meets a directory at the copy's `.tmp`,
+  # its copy then failing and owed.
+  defp copy_blocked(0, w) do
+    File.mkdir!(w.store <> ".dropped.tmp")
+    true
+  end
+
+  defp copy_blocked(_other, _w), do: false
+
+  # While the copy is owed no write replaces the store: a period's write, a period or more
+  # of them, or a trip's, each made to fail by the copy before it, the store as the start
+  # read it and the copy the one before; then the directory taken away, and the next
+  # write, the end's or a period's before it, makes the copy first (`owed_made!/1`).
+  defp copy_owed(%{owing: false} = w), do: w
+  defp copy_owed(%{owed: nil} = w), do: unblocked(w)
+
+  defp copy_owed(w) do
+    w = writer_settled(settled(w))
+    ms = w.period + rem(:erlang.phash2(w.owed), w.period)
+    w = writer_settled(settled(wait(w, ms)))
+    retain = Runner.status(w.runner).retain
+    life_failed!(w.failed_seen, retain.failed)
+    assert retain.copy == nil
+    assert File.read!(w.store) == w.owed
+    assert File.read(w.store <> ".dropped") in Enum.map(w.copied, &copy_read/1)
+    reach(:life_copy_owed, w.failed_seen)
+    unblocked(%{w | store_failing: false})
+  end
+
+  defp unblocked(w) do
+    File.rmdir!(w.store <> ".dropped.tmp")
+    w
   end
 
   defp life_some(%{kt: nil, k1: nil, s1: nil} = change), do: %{change | s1: :resized}

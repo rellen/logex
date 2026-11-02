@@ -634,7 +634,8 @@ defmodule Logex.RetainStoreTest do
         "s: line #{n}: `#{last}` is the store's last line, and no end line: a store of " <>
           "`logex retain 2` ends with `end <count> lines`, its count of lines, so this one " <>
           "was cut short, and a store cut short is not read: start it with start: :cold to " <>
-          "start over it"
+          "start over it, which writes a new store over it at once, so copy it aside first " <>
+          "to keep what it holds"
       end
 
       # At a line's end, the lines after it lost.
@@ -728,10 +729,11 @@ defmodule Logex.RetainStoreTest do
       )
 
       # A store of version 1 has no end line: one a hand edit gave it is a line of no
-      # store's shape there, as any other.
+      # store's shape there, told since RV-5's review as an end line its header does not
+      # take, where it was told, though last, as one before the store's last.
       raises(
-        "s: line 3: `end 3 lines` comes before the store's last line: a store's end line is " <>
-          "its last line",
+        "s: line 3: `end 3 lines` is an end line, which a store whose first line is " <>
+          "`logex retain 2` ends with, and this store's first line is not",
         fn ->
           Retain.decode!(
             "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\nend 3 lines\n",
@@ -740,6 +742,83 @@ defmodule Logex.RetainStoreTest do
         end
       )
     end
+
+    # RV-5's review: a store whose first line is not exactly `logex retain 2`, a version
+    # past it, a word's case, a space after it or a byte-order mark before it, is told so
+    # at its first line, and its end line, its last, never told as one before the store's
+    # last; a byte-order mark is told in plain words and the rest read as if it were not
+    # there, the end line judged as version 2's.
+    test "a header that is not `logex retain 2` never tells its end line false" do
+      body = "configuration plant written 2026-10-30T14:00:00Z\nglobal total dint 0\n"
+      end_told = "`end 4 lines` is an end line, which a store whose first line is"
+
+      for {header, first} <- [
+            {"logex retain 3",
+             "the store is of version 3, which this logex does not read: it reads `logex " <>
+               "retain 2` and `logex retain 1`"},
+            {"Logex retain 2",
+             "`Logex retain 2` is no store's header: a store's first line is `logex retain 2`"},
+            {"logex retain 2 ",
+             "`logex retain 2 ` is no store's header: a store's first line is `logex retain 2`"}
+          ] do
+        raises(
+          "s: line 1: #{first}\ns: line 4: #{end_told} `logex retain 2` ends with, and this " <>
+            "store's first line is not",
+          fn -> Retain.decode!(header <> "\n" <> body <> "end 4 lines\n", {"s", "plant"}) end
+        )
+      end
+
+      bom =
+        "the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor that " <>
+          "saves UTF-8 with one writes it: a store is ASCII and begins `logex retain 2`, so " <>
+          "save it without one"
+
+      raises("s: line 1: #{bom}", fn ->
+        Retain.decode!("\xEF\xBB\xBFlogex retain 2\n" <> body <> "end 4 lines\n", {"s", "plant"})
+      end)
+
+      # Beside it the rest judged as it is: a count that is not its lines', told.
+      raises(
+        "s: line 1: #{bom}\ns: line 4: the store's end line counts 5 lines, and the store " <>
+          "has 4: a line was lost or doubled, or a hand edit added or removed one without " <>
+          "changing the count, which counts every line, the end line among them, and the " <>
+          "store is not read",
+        fn ->
+          Retain.decode!(
+            "\xEF\xBB\xBFlogex retain 2\n" <> body <> "end 5 lines\n",
+            {"s", "plant"}
+          )
+        end
+      )
+    end
+
+    # RV-5's review: a store cut after its header, at its end or inside the line naming its
+    # configuration, is told once at the line the cut left last, as the store's last line,
+    # where a cut inside the second line told it twice and a cut after the first told the
+    # second, which the cut took, before the first. (A cut inside the header leaves no
+    # header, and is told so.)
+    test "a store cut inside its first two lines is told once, at its last line" do
+      head = "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\n"
+      text = head <> "global total dint 0\nend 4 lines\n"
+
+      told = fn n, last ->
+        "s: line #{n}: `#{last}` is the store's last line, and no end line: a store of " <>
+          "`logex retain 2` ends with `end <count> lines`, its count of lines, so this one " <>
+          "was cut short, and a store cut short is not read: start it with start: :cold to " <>
+          "start over it, which writes a new store over it at once, so copy it aside first " <>
+          "to keep what it holds"
+      end
+
+      for at <- byte_size("logex retain 2")..(byte_size(head) - 1) do
+        kept = binary_part(text, 0, at)
+        {last, n} = kept |> String.split("\n") |> Enum.with_index(1) |> last_line()
+        raises(told.(n, last), fn -> Retain.decode!(kept, {"s", "plant"}) end)
+      end
+    end
+
+    defp last_line(lines), do: last_kept(Enum.reverse(lines))
+    defp last_kept([{"", _n} | rest]), do: hd(rest)
+    defp last_kept([last | _rest]), do: last
   end
 
   # RV-5, the review's store and file lows: a hand edit's line ends read as LF (a7-docs-1,
@@ -838,6 +917,87 @@ defmodule Logex.RetainStoreTest do
       refute message =~ <<0xFF>>
     end
 
+    # RV-5's review: DEL is a control byte, told as one; and every text of the header a
+    # problem quotes, its version and its time among them, shown printable, never raw.
+    test "DEL, and the header's version and time, shown as their escapes" do
+      raises(
+        "s: line 3: `global total_boxes dint 3\\x7F` holds the byte \\x7F, which no store " <>
+          "holds: a store's text is printable ASCII, its words each one space apart",
+        fn -> Retain.decode!(counted_store(["global total_boxes dint 3\x7F"]), {"s", "plant"}) end
+      )
+
+      raises(
+        "s: line 1: the store is of version \\xFF\\x01, which this logex does not read: it " <>
+          "reads `logex retain 2` and `logex retain 1`",
+        fn ->
+          Retain.decode!(
+            "logex retain \xFF\x01\nconfiguration plant written 2026-10-30T14:00:00Z\n",
+            {"s", "plant"}
+          )
+        end
+      )
+
+      raises(
+        "s: line 2: `2026\\xFF\\x01` is no time a store is written at, in UTC, as " <>
+          "2026-10-27T14:00:00Z",
+        fn ->
+          Retain.decode!(
+            "logex retain 1\nconfiguration plant written 2026\xFF\x01\n",
+            {"s", "plant"}
+          )
+        end
+      )
+    end
+
+    # RV-5's review: the store's path, the host's, as each line of a refusal names it,
+    # printable whatever bytes it holds, a control byte, DEL and a byte of no UTF-8
+    # character shown as its escape and a character past ASCII as it is; and a line's
+    # 1,000 bytes counted after it, so that every line names the line and the problem
+    # whatever its length, where a 1,115-byte path filled the line; one past 4,096 bytes,
+    # the most a path Linux opens holds, shown as `…` and its last 4,096, the file's name
+    # among them, cut at a character's boundary.
+    test "the store's path in a refusal printable, and every line naming its line" do
+      cut = @head <> "global total_boxes dint 3\n"
+
+      told =
+        "line 3: `global total_boxes dint 3` is the store's last line, and no end line: a " <>
+          "store of `logex retain 2` ends with `end <count> lines`, its count of lines, so " <>
+          "this one was cut short, and a store cut short is not read: start it with start: " <>
+          ":cold to start over it, which writes a new store over it at once, so copy it " <>
+          "aside first to keep what it holds"
+
+      deep = "/" <> Enum.map_join(1..20, "/", fn _ -> String.duplicate("d", 60) end)
+      wide = "/" <> String.duplicate("é", 3000)
+      kept = String.duplicate("é", div(4096 - byte_size("/plant.retain"), 2))
+
+      for {path, shown} <- [
+            {"/x/pl\xFFa\x01n\x7Ft\x00.retain", "/x/pl\\xFFa\\x01n\\x7Ft\\x00.retain"},
+            {"/données/plant.retain", "/données/plant.retain"},
+            {deep <> "/plant.retain", deep <> "/plant.retain"},
+            {wide <> "/plant.retain", "…" <> kept <> "/plant.retain"}
+          ] do
+        message = refused(fn -> Retain.decode!(cut, {path, "plant"}) end)
+        assert message == "#{shown}: #{told}"
+        assert String.printable?(message)
+      end
+    end
+
+    # RV-5's review: one problem past the 50 told, counted as one.
+    test "a refusal of 51 problems counts the last as one" do
+      text = counted_store(List.duplicate("global x dint 1", 52))
+      lines = String.split(refused(fn -> Retain.decode!(text, {"s", "plant"}) end), "\n")
+      assert length(lines) == 51
+      assert List.last(lines) == "s: and 1 more problem, not listed"
+    end
+
+    # A line cut at its 1,000 bytes after its path ends at a character's boundary, a
+    # character the cut would split dropped whole, whatever a line holds; `Logex.Refusal`
+    # alone, the store's and the forces file's lines being printable ASCII but for its `…`.
+    test "a line cut at a character's boundary" do
+      line = String.duplicate("a", 999) <> "é" <> "tail"
+      assert Logex.Refusal.told([line], "s") == "s: " <> String.duplicate("a", 999) <> "…"
+    end
+
     # An empty line after the end line, which an editor may leave, told as what it is, the
     # line before it judged as the end line, where it was told as a store cut short.
     test "an empty line after the end line is told as one" do
@@ -857,8 +1017,9 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `global total_boxes dint 3` is the store's last line, and no end line: a " <>
           "store of `logex retain 2` ends with `end <count> lines`, its count of lines, so " <>
           "this one was cut short, and a store cut short is not read: start it with start: " <>
-          ":cold to start over it\ns: line 4: an empty line, which a store never holds: its " <>
-          "end line is last",
+          ":cold to start over it, which writes a new store over it at once, so copy it aside " <>
+          "first to keep what it holds\ns: line 4: an empty line, which a store never holds: " <>
+          "its end line is last",
         fn -> Retain.decode!(@head <> "global total_boxes dint 3\n\n", {"s", "plant"}) end
       )
     end
@@ -1172,25 +1333,202 @@ defmodule Logex.RetainStoreTest do
     end
 
     # The copy a write as every other (decision 353): one that fails is reported as a
-    # failed write is, `failed` in status/1, and names no copy, the start going on, the
-    # next write made clearing the failure.
-    test "a copy that fails is reported, and the start goes on", %{tmp_dir: dir} do
+    # failed write is, `failed` in status/1, and names no copy, the start going on. Since
+    # RV-5's review the copy is then owed: no write replaces the store before it is made,
+    # as decision 360 has it, where the period's write replaced the store and the drops
+    # were lost for good. Each period's write makes the copy first and, while it fails,
+    # writes no store, reported as a failed write; once the copy can be made the period's
+    # makes it, of the store as the start read it, and then writes the store, the failure
+    # cleared and the copy named.
+    test "a copy that fails is owed, and no write replaces the store until it is made",
+         %{tmp_dir: dir} do
       rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
-      File.mkdir!(rig.store <> ".dropped.tmp")
+      read = File.read!(rig.store)
+      copy = rig.store <> ".dropped"
+      File.mkdir!(copy <> ".tmp")
 
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      :ok = Runner.subscribe(runner)
 
       assert %{status: :running, retain: %{failed: :eisdir, copy: nil, dropped: [_drop]}} =
                Runner.status(runner)
 
-      refute File.exists?(rig.store <> ".dropped")
+      refute File.exists?(copy)
+
+      for _period <- 1..2 do
+        Manual.advance(rig.clock, 1000)
+        period_written(runner)
+        assert_receive {Runner, ^runner, {:retain, {:error, :eisdir}}}, 5000
+        assert %{retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
+        assert File.read!(rig.store) == read
+        refute File.exists?(copy)
+      end
+
+      File.rmdir!(copy <> ".tmp")
       Manual.advance(rig.clock, 1000)
       period_written(runner)
-      assert %{retain: %{failed: nil, copy: nil}} = Runner.status(runner)
+      assert %{retain: %{failed: nil, copy: ^copy}} = Runner.status(runner)
+      assert File.read!(copy) == read
+      assert File.read!(rig.store) =~ "\nt1.boxes ctu_int\n"
+      refute_received {Runner, ^runner, {:retain, _}}
+
+      # Made, the copy is owed no more: the next write leaves it as it is.
+      File.write!(copy, "kept")
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      assert Runner.stop(runner) == :ok
+      assert File.read!(copy) == "kept"
+    end
+
+    # RV-5's review: the copy written at the store's path as the start resolved it, once,
+    # as every read and write of it is (c2-runner-persist-9), and named in status/1 as the
+    # host spelled the store: here through a link and `..`, which the kernel resolves past
+    # the link, to another directory, and `Path.expand/1` by the words alone.
+    test "the copy written where the store is read, and named as the host spelled it",
+         %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      File.mkdir_p!(Path.join([dir, "a", "b"]))
+      File.ln_s!(Path.join([dir, "a", "b"]), Path.join(dir, "hop"))
+      spelled = Path.join([dir, "hop", "..", "plant.retain"])
+      opts = Keyword.merge(rig.opts, configuration: retyped(), retain: spelled)
+
+      {:ok, runner} = Runner.start_link(opts)
+      assert %{path: ^spelled, copy: copy, dropped: [_drop]} = Runner.status(runner).retain
+      assert copy == spelled <> ".dropped"
+      assert File.read!(rig.store <> ".dropped") == read
+      refute File.exists?(Path.join([dir, "a", "plant.retain.dropped"]))
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-5's review: the copy is the store's bytes as the start read them, whatever their
+    # spelling, never the store written again from what it holds: a hand edit's spelling
+    # of a number, and a store of version 1, which the runner never writes now.
+    test "the copy is the bytes the start read", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      written = File.read!(rig.store)
+      assert written =~ "\nt1.boxes.cv dint 1\n"
+      spelled = String.replace(written, "\nt1.boxes.cv dint 1\n", "\nt1.boxes.cv dint 16#01\n")
+
+      v1 =
+        written
+        |> String.replace("logex retain 2", "logex retain 1")
+        |> String.replace(~r/end \d+ lines\n\z/, "")
+
+      for text <- [spelled, v1] do
+        File.write!(rig.store, text)
+        {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+        assert %{copy: copy, dropped: [_drop]} = Runner.status(runner).retain
+        assert File.read!(copy) == text
+        assert Runner.stop(runner) == :ok
+        opener_down(rig.panel)
+      end
+    end
+
+    # RV-5's review: what only the start reads leaves the runner's state once its devices
+    # are open, the copy's text among it, which a copy made is owed no more; a round of a
+    # runner with a store paid a reduction more for the host's spellings of its files
+    # kept, which only a cost bound saw.
+    test "what only the start reads is not kept", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      File.mkdir!(rig.store <> ".dropped.tmp")
+
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      state = :sys.get_state(runner)
+      assert Enum.filter([:copy, :named, :retain_period, :taker], &Map.has_key?(state, &1)) == []
+      assert state.retain.owed == read
+      File.rmdir!(rig.store <> ".dropped.tmp")
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      assert %{retain: %{copy: _copy}} = Runner.status(runner)
+      assert :sys.get_state(runner).retain.owed == nil
+      assert Runner.stop(runner) == :ok
+    end
+
+    # The same at every event's write: a trip's, a cold restart's and a stop's, each
+    # making the owed copy first and writing no store while it fails, the trip standing,
+    # the cold restart leaving the runner tripped as it was (decision 291) and the stop
+    # told the failure; the copy made by the first that can make it, the store then
+    # written. A stop that could not make it left the store as the start read it, so the
+    # next start drops from it again and copies it.
+    test "every event's write makes the owed copy first", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      copy = rig.store <> ".dropped"
+      File.mkdir!(copy <> ".tmp")
+      opts = Keyword.put(rig.opts, :configuration, retyped())
+
+      {:ok, runner} = Runner.start_link(opts)
+      assert %{retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
+      tripped(rig, runner)
+      assert %{status: :tripped, retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
+      assert File.read!(rig.store) == read
+      assert Runner.restart(runner, :cold) == {:error, {:retain, :eisdir}}
+      assert %{status: :tripped, retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
+      assert File.read!(rig.store) == read
+      assert Runner.stop(runner) == {:error, {:retain, :eisdir}}
+      assert File.read!(rig.store) == read
+      refute File.exists?(copy)
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(opts)
+      assert %{retain: %{failed: :eisdir, copy: nil, dropped: [_drop]}} = Runner.status(runner)
+      File.rmdir!(copy <> ".tmp")
+      tripped(rig, runner)
+      assert %{status: :tripped, retain: %{failed: nil, copy: ^copy}} = Runner.status(runner)
+      assert File.read!(copy) == read
+      assert File.read!(rig.store) =~ "\nt1.boxes ctu_int\n"
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+
+      # A cold restart's write, and a stop's, make it in their turn, the cold restart's
+      # after a trip that could not.
+      for ended <- [:cold, :stop] do
+        File.write!(rig.store, read)
+        File.rm!(copy)
+        File.mkdir!(copy <> ".tmp")
+        {:ok, runner} = Runner.start_link(opts)
+        assert %{retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
+        made_copy(ended, rig, runner, read)
+        assert File.read!(copy) == read
+        refute File.read!(rig.store) == read
+        opener_down(rig.panel)
+      end
+    end
+
+    defp made_copy(:cold, rig, runner, read) do
+      tripped(rig, runner)
+      assert File.read!(rig.store) == read
+      File.rmdir!(rig.store <> ".dropped.tmp")
+      assert Runner.restart(runner, :cold) == :ok
+      assert %{status: :running, retain: %{failed: nil, copy: _copy}} = Runner.status(runner)
+      assert File.read!(rig.store) =~ "\nt1.boxes.cv int 0\n"
+      assert Runner.stop(runner) == :ok
+    end
+
+    defp made_copy(:stop, rig, runner, _read) do
+      File.rmdir!(rig.store <> ".dropped.tmp")
       assert Runner.stop(runner) == :ok
     end
   end

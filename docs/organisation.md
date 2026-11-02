@@ -4626,7 +4626,15 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   lines it has, or the word after it: every cut but the last newline's alone is refused,
   and that one keeps every line whole and is read, as `retain_store_test.exs`'s cut at
   every byte offset of a store a runner wrote shows. A store of `logex retain 1` is read
-  as before, a cut one among it, and every write since is of version 2.)*
+  as before, a cut one among it, and every write since is of version 2.)* *(RV-5's
+  review, 2026-11-02: a store cut after its header and before its third line told once,
+  at its last line; an end line in a store whose header is not `logex retain 2` told as
+  one its header does not take, where its true last line was told as one before the
+  store's last; a byte-order mark before the header told in plain words, the rest read
+  as if it were not there; the cut store's message saying that `start: :cold` writes over
+  it at once; and every refusal's path printable, a line's 1,000 bytes counted after it,
+  and a forces file's point names and spellings quoted in 60 bytes as every text of the
+  file is.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -4650,6 +4658,11 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   where it is; and named in `status/1`'s `retain`, `copy`, where the start dropped
   anything. The runner holds the copy and its `.tmp` as its own files (decision 356), and
   a forces file naming either is refused at start, decision 325's rule (provisional).)*
+  *(RV-5's review, 2026-11-02: a copy that fails is owed, every write over the store, the
+  period's and every event's, making it first and writing the store only once it is made,
+  so that no write replaces the store before its copy is made, where the period's write
+  replaced it and the drops were lost for good; the start still goes on, decision 275's
+  rule for a failed write (provisional).)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
@@ -12349,7 +12362,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      way: the store's read at a fresh start made raw and limited as the forces file's is
      since RV-4's review, a FIFO or a stalled disk in its place refusing the start
      (provisional). The runner and life walks restate the copy, its file and `status/1`,
-     at every start.)*
+     at every start.)* *(RV-5's review, 2026-11-02: a copy that failed and a start that
+     went on lost the drops at the next write, the period's, a trip's or a stop's, which
+     replaced the store, the copy never tried again; the copy is now owed, every write
+     over the store making it first and writing the store only once it is made, each
+     while it cannot be made a failed write, `status/1`'s `copy` nil until it is made, so
+     that "before its first write over a store" holds whatever the copy meets; the start
+     still goes on, decision 275's rule for a failed write, where decision 291's would
+     refuse it, put to the maintainer (provisional). The look at the store and the forces
+     file for a link, made in the caller with no limit, is made as the reads are, in a
+     process of its own within the limit; and the life walk restates the copy owed, a
+     changed start in two meeting a directory at the copy's `.tmp`.)*
 
 361. **CLAUDE.md's cap (the review after Milestone 6),** RV-1's provisional reading 1:
      `claude_md_test.exs` caps CLAUDE.md at 40,000 characters, the figure of Claude Code's

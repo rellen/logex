@@ -571,11 +571,78 @@ defmodule Logex.StalledDiskTest do
                Runner.status(runner)
 
       # The killed copy's rename may land once the disk answers, the copy whole; the store
-      # is as the start read it until its first write.
+      # is as the start read it until its first write, which since RV-5's review makes the
+      # copy owed first, the stop's here.
       :sys.resume(server)
       assert File.read!(rig.store) == read
       assert File.read(rig.store <> ".dropped") in [{:ok, read}, {:error, :enoent}]
       assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store <> ".dropped") == read
+      refute File.read!(rig.store) == read
+    end
+
+    # RV-5's review: the look at each file for a symbolic link, made raw in the start's
+    # caller with no limit, held the caller as long as a stalled disk held it, the store's
+    # and the forces file's reads limited after it. Every file call a fresh start makes is
+    # now made in a process of its own, limited, none in the caller: a raw call goes past
+    # the file server, so the caller's own calls are traced, every function of `:file` and
+    # `:prim_file`, through a start that reads a forces file and a store and copies it.
+    test "no file call of a fresh start is made in its caller", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.stop(runner) == :ok
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, configuration: config)
+      assert :erlang.trace_pattern({:file, :_, :_}, true, [:local]) > 0
+      {caller, started} = traced_start(next.opts)
+      :erlang.trace_pattern({:file, :_, :_}, false, [:local])
+      assert {:ok, runner} = started
+
+      assert %{forces: %{"level" => 7}, retain: %{copy: copy, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      assert File.exists?(copy)
+      assert traced_calls(caller) == []
+      assert Runner.stop(runner) == :ok
+      send(caller, :done)
+    end
+  end
+
+  # A start made in a process of its own that this one traces, a process cannot trace its
+  # own calls, kept alive, the runner's parent, until the test is done with it.
+  defp traced_start(opts) do
+    parent = self()
+    ref = make_ref()
+
+    caller =
+      spawn(fn ->
+        receive do
+          :go -> send(parent, {ref, Runner.start_link(opts)})
+        end
+
+        receive do
+          :done -> :ok
+        end
+      end)
+
+    :erlang.trace(caller, true, [:call])
+    send(caller, :go)
+    assert_receive {^ref, started}, 5000
+    :erlang.trace(caller, false, [:call])
+    {caller, started}
+  end
+
+  defp traced_calls(caller) do
+    receive do
+      {:trace, ^caller, :call, mfa} -> [mfa | traced_calls(caller)]
+    after
+      0 -> []
     end
   end
 

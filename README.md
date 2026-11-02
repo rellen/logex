@@ -3398,9 +3398,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
   before, and the next write makes it `logex retain 2`. A store an editor saved with CRLF
   line ends, or a lone CR's, is refused at its first line holding a carriage return,
-  told so in those words; a comment, a tab and a byte past ASCII are each refused, told
-  as what they are; and a refusal names at most the first 50 problems and then counts
-  the rest, each text of the store it quotes at most 60 bytes and printable.
+  told so in those words, and one saved with a byte-order mark before its header is told
+  so too, the rest of it read as if the mark were not there; a comment, a tab and a byte
+  past ASCII are each refused, told as what they are; and a refusal names at most the
+  first 50 problems and then counts the rest, each text of the store it quotes at most 60
+  bytes and printable, and the store's path printable too, each line's 1,000 bytes
+  counted after it, so that every line names the line and the problem whatever the path.
 - A hand edit is made with the runner stopped (decision 284): a retained value that
   tripped the plant, `slot` at 8 in an `int[8]`'s subscript, trips it again at a warm
   restart and at a warm fresh start, the trip naming the instance, the file, the line and
@@ -3492,20 +3495,31 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   configuration, a line of no store's shape, a store cut short (decision 355), or a store
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
   not started (decision 285); `start: :cold` reads none of it and writes a new store at
-  once. The read is limited to the idle watchdog and a poll period of real time, as every
-  write is, so that a store on a stalled disk, or a FIFO in its place, refuses the start
-  as a store that cannot be read.
+  once, so a store refused as cut short whose readable part is wanted is copied aside
+  first, as its refusal says. The read is limited to the idle watchdog and a poll period
+  of real time, as every write is, and so is the look at the store and the forces file
+  for a link before either is read, so that a store on a stalled disk, or a FIFO in its
+  place, refuses the start as a store that cannot be read.
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to `tally.retain.dropped` (decision
   360), before its first write over the store, so that what it dropped outlives the next
   write: to take the deploy back, stop the runner, put the copy in the store's place and
-  start the configuration it was written for. The copy is written as every other write
-  is, through its own `.tmp` and within the same limit, one that fails reported as a
-  failed write is, `failed` in `status/1`'s `retain`, and the start goes on; it stands
-  until the next start that drops anything, a start that drops nothing leaving it where
-  it is; and `status/1`'s `retain` names it, `copy: "tally.retain.dropped"`, beside
-  `dropped`, nil where its write failed, and has no `copy` where nothing was dropped.
+  start the configuration it was written for, in that order: the copy stands until the
+  next start that drops anything, so starting the configuration it was written for over
+  the store the mistaken deploy wrote, which it drops from too, copies that store over
+  the copy, and the values the copy held are gone. A start that drops nothing leaves the
+  copy where it is. The copy is written as every other write is, through its own `.tmp`
+  and within the same limit, one that fails reported as a failed write is, `failed` in
+  `status/1`'s `retain`, and the start goes on with the copy owed: every write over the
+  store, the period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the
+  copy first and writes the store only once the copy is made, so that while it cannot be
+  made, a full disk or a directory in its place, the store stays as the start read it,
+  every write fails as above, and a crash or a stop meanwhile loses what changed since
+  the start, the next start dropping from the same store and copying it again
+  (provisional). `status/1`'s `retain` names the copy once made, `copy:
+  "tally.retain.dropped"`, beside `dropped`, nil while it is owed, and has no `copy` where
+  nothing was dropped.
 
 ### An event task
 
@@ -4181,8 +4195,9 @@ stage: nil
   one literal and the point's type holds (decisions 218 and 226), and an unforce of a
   point not forced is accepted (decision 140); with no runner, deleting the file clears
   every force. Since RV-5 a refusal names at most the first 50 problems and then counts
-  the rest, each text of the file it quotes at most 60 bytes, a control byte or one past
-  ASCII but a tab or a carriage return shown as `\xFF`; a carriage return after a value,
+  the rest, each text of the file it quotes at most 60 bytes, a point's name and a
+  value's spelling among them, a control byte or one past ASCII but a tab or a carriage
+  return shown as `\xFF`, and the file's path printable; a carriage return after a value,
   as a file saved with CRLF line ends holds, is still no force.
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes

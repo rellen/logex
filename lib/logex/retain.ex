@@ -59,7 +59,14 @@ defmodule Logex.Retain do
   # too (b3-store-image-11); and a comment, a tab and a byte no store holds are each told
   # as what it is (b3-store-image-10), where a line holding one was told as a line of no
   # shape, or one before any instance's lines, and an empty line after the end line as
-  # one, where it would be told as a store cut short.
+  # one, where it would be told as a store cut short. Since RV-5's review a store that
+  # begins with a byte-order mark, as an editor that saves UTF-8 with one writes it, is
+  # told so in plain words and the rest read as if it were not there; a store cut after
+  # its header, inside its second line or at its end, is told once, at the line the cut
+  # left last; an end line in a store whose header is not `logex retain 2`, which only
+  # version 2's rule reads, is told as one that header does not take, never as one before
+  # the store's last; and the message for a store cut short says that `start: :cold`
+  # writes over it at once.
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -228,16 +235,17 @@ defmodule Logex.Retain do
       )
 
   defp returned(:nomatch, text, {path, name}) do
-    lines = text |> String.split("\n") |> unended() |> Enum.with_index(1)
+    {marked, lines} = text |> String.split("\n") |> unended() |> Enum.with_index(1) |> marked()
     {written_at, problems} = headed(lines, name)
-    {body, ending} = ended(lines)
+    {body, ending, last} = ended(lines)
 
     acc = %{
       image: empty(name),
       instance: nil,
       seen: %{},
-      problems: Enum.reverse(problems),
-      unprintable: Refusal.pattern()
+      problems: Enum.reverse(marked ++ before_end(problems, last)),
+      unprintable: Refusal.pattern(),
+      ended: last != nil
     }
 
     acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
@@ -245,17 +253,41 @@ defmodule Logex.Retain do
     {acc.image, written_at}
   end
 
+  # RV-5's review: a store that begins with a byte-order mark, as an editor that saves
+  # UTF-8 with one writes it, told so in plain words at its first line, and the rest of
+  # the store read as if the mark were not there, so that its header and its end line are
+  # each judged as they are, where the header was told as no store's and its true end
+  # line as one before the store's last.
+  defp marked([{<<0xEF, 0xBB, 0xBF, first::binary>>, 1} | rest]),
+    do:
+      {[
+         {1,
+          "the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor that saves " <>
+            "UTF-8 with one writes it: a store is ASCII and begins `#{@header}`, so save it " <>
+            "without one"}
+       ], [{first, 1} | rest]}
+
+  defp marked(lines), do: {[], lines}
+
+  # RV-5's review: the header's problems at the line judged as the store's end line, or
+  # after it, which only a store cut inside its first two lines has, not told, that line
+  # told once as the store's last and every problem in line order, where a cut inside the
+  # second line told it twice and a cut after the first told the second before it.
+  defp before_end(problems, nil), do: problems
+  defp before_end(problems, last), do: for({n, _} = problem <- problems, n < last, do: problem)
+
   # Decision 355: a store of version 2 ends with its end line, `end <count> lines`, the
   # count every line it has, the header and the end line among them; its lines before it
   # are the store's, and a last line that is no end line, or whose count is not the
   # store's, is a problem of its line, the store refused whole, so that a store cut short
   # anywhere is never read short (see the head of this module). The last line of such a
-  # store is judged as its end line alone, so that a line a cut left half is told once. A
-  # store of version 1 has no end line and is read as it was.
+  # store is judged as its end line alone, so that a line a cut left half is told once,
+  # its number given back, nil for a store judged by version 1's rule. A store of version
+  # 1 has no end line and is read as it was.
   defp ended([{"logex retain 2", 1} | _rest] = lines),
     do: trailing(Enum.reverse(lines), [])
 
-  defp ended(lines), do: {lines, []}
+  defp ended(lines), do: {lines, [], nil}
 
   # RV-5 (b3-store-image-10): an empty line after the last a store holds, which a hand
   # edit's editor may leave, told as what it is, the line before it judged as the end
@@ -265,7 +297,7 @@ defmodule Logex.Retain do
 
   defp end_line(lines, empty) do
     {text, n} = List.last(lines)
-    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n) ++ after_end(empty)}
+    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n) ++ after_end(empty), n}
   end
 
   defp after_end(empty),
@@ -279,7 +311,8 @@ defmodule Logex.Retain do
        "#{quoted(text)} is the store's last line, and no end line: a store of " <>
          "`#{@header}` ends with `end <count> lines`, its count of lines, so this one was " <>
          "cut short, and a store cut short is not read: start it with start: :cold to " <>
-         "start over it"}
+         "start over it, which writes a new store over it at once, so copy it aside first " <>
+         "to keep what it holds"}
     ]
 
   defp counted({:ok, n}, _text, n), do: []
@@ -423,14 +456,25 @@ defmodule Logex.Retain do
 
   defp line(["instance", name, program], at, acc), do: instance(name, program, at, acc)
 
-  # Decision 355: an end line anywhere but last, which no path is, having no `.`.
-  defp line(["end", _count, "lines"], {text, n}, acc),
+  # Decision 355: an end line anywhere but last, which no path is, having no `.`; and since
+  # RV-5's review one in a store not judged by version 2's rule, its header not `logex
+  # retain 2`, told so, where its last line was told as one before the store's last.
+  defp line(["end", _count, "lines"], {text, n}, %{ended: true} = acc),
     do:
       problem(
         acc,
         n,
         "#{quoted(text)} comes before the store's last line: a store's end line is its last " <>
           "line"
+      )
+
+  defp line(["end", _count, "lines"], {text, n}, acc),
+    do:
+      problem(
+        acc,
+        n,
+        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` " <>
+          "ends with, and this store's first line is not"
       )
 
   defp line([path, kind], at, acc), do: under(acc.instance, path, {:kind, kind}, at, acc)
