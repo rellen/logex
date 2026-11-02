@@ -12387,6 +12387,131 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: both at once (a)** (the maintainer, 2026-11-01), as built.
 
+374. **A held value the var_output cannot hold (the review after Milestone 6),** RV-3's
+     question 1: a configuration edit wires a held global, `speed dint` at 70000, from an
+     `int` var_output no rung writes, which cannot start at the global's value as decision
+     347 has it.
+
+     **Taken: the edit refused (a)** (the maintainer, 2026-11-01), as built: accept refuses
+     the connection, so the edit is taken only with a restart and the belt never jumps; a
+     kept instance's own connection that both configurations make is the one exception.
+
+375. **A falling sample in a cut round (the review after Milestone 6),** RV-3's question 2:
+     a task with an interval and a trigger whose round is cut off while its trigger reads
+     0.
+
+     **Taken: the 0 recorded at once (a)** (the maintainer, 2026-11-01), as built, so the
+     next rise is counted; only a rise waits for its step (decision 350).
+
+376. **A value a line writes two ways (the review after Milestone 6),** RV-3's question 3:
+     a refusal quotes a value as its own line writes it, and a line that writes 10 both as
+     `16#a` and as `10` has no one spelling.
+
+     **Taken: the plain value (a)** (the maintainer, 2026-11-01), as built: such a value is
+     quoted as `10`.
+
+377. **A one-shot after a cold restart between test and untest (the review after Milestone
+     6),** RV-3's question 4 (b4-edit-4): an `osr` in a block whose `cal` is false on the
+     first scan stays blocked after a lone instance's test, a cold `restart/3` and its
+     untest, so one press is not counted.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01), as Logix's prescan sets a
+     one-shot's storage bit; the edit's record of the last switch stands.
+
+378. **A retained timer's preset no instruction gives (the review after Milestone 6),**
+     RV-3's question 5 (b5-config-edit-3): a retained `ton t 25` whose candidate declares
+     `t` and runs no `ton` on it keeps `.pre` 25 through a warm restart, and a start from
+     the store gives 0 and reports `{:preset, 25, 0}`.
+
+     **Taken: the 25 kept (c)** (the maintainer, 2026-11-01): a start from the store keeps
+     a stored preset that no instruction of the program gives, as a warm restart does and
+     as Logix's tag memory would, and reports no change of it. To build in RV-10.
+
+379. **How a retained block is listed (the review after Milestone 6),** RV-3's question 6
+     (a5-data-model-6): `Program.retained` lists a block's members where its type's lines
+     mark each, `b1.c1.a`, and the block where its instance's line marks it, `b1.c1`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): the list follows where `retain`
+     is written.
+
+380. **-0.0 from Elixir (the review after Milestone 6),** RV-3's question 7
+     (a5-data-model-8): a host's initial value of -0.0 for a real, which a source line's
+     `-0.0` reads as 0.0 (decision 150).
+
+     **Taken: refused (a)** (the maintainer, 2026-11-01), as built, with its pinned
+     `ArgumentError`.
+
+381. **A done bit a catch-up alone sets (the review after Milestone 6),** RV-3's question 8
+     (b4-edit-3): a timer frozen under an edit whose preset is raised catches up at test
+     when it was timing at its last run, and a done bit that catch-up alone sets is not
+     forecast.
+
+     **Taken: forecast (b)** (the maintainer, 2026-11-01): the forecast names a done bit
+     a frozen timer's catch-up will set at test. To build in RV-10.
+
+382. **A slow task's timer across a warm restart (the review after Milestone 6),** RV-3's
+     question 9 (b2-resource-2): a warm `restart/2` counts a timer's time from its last
+     scan to the restart, so a fan in a slow task stops up to one interval sooner than
+     after a start from the store.
+
+     **Taken: counted from the restart (b)** (the maintainer, 2026-11-01): a warm restart
+     sets each timer's last time to the resource's now, as `start/2` does. To build in
+     RV-10.
+
+383. **`program retain motor` (the review after Milestone 6),** RV-3's question 10: the
+     line is an instance named by a keyword (decision 298), and `program retain m1 motor`
+     the deferred `PROGRAM RETAIN`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-01): decision 298 stands.
+
+384. **`temps[03]` (the review after Milestone 6),** RV-3's question 11 (b2-resource-8): an
+     element named with a leading zero is read by its value by `get/2` and
+     `put_inputs/3`, and refused as no point by a cycle's inputs and the forces file.
+
+     **Taken: read by its value everywhere (b)** (the maintainer, 2026-11-01): `temps[03]`
+     names `temps[3]` wherever a host or the forces file names an element. To build in
+     RV-10.
+
+385. **A retained `tof` the first scan skips (the review after Milestone 6),** RV-3's
+     question 12: decision 349's rest is a first scan's, so a `tof` on a rung a jump
+     skips, or in a block whose `cal` is false then, runs its delay by itself when it
+     first runs.
+
+     **Taken: at rest as the restart sets up the state (b)** (the maintainer, 2026-11-01):
+     every retained `tof` with `.en` 1 and `.tt` 0 is put at rest by the restart or start
+     itself, wherever it sits, and a scan pays nothing for it. To build in RV-10.
+
+386. **A point rewired between two unwritten var_outputs (the review after Milestone 6),**
+     RV-3's question 13: a lone point moves at the first cycle with an empty forecast,
+     where an element of an array wired whole is held.
+
+     **Taken: held (b)** (the maintainer, 2026-11-01): the point keeps its value until a
+     rung writes the new var_output, and the forecast and every report say it is held, as
+     decision 347 holds one. To build in RV-10.
+
+387. **A point newly wired from an unwritten var_output (the review after Milestone 6),**
+     RV-3's question 14: a point no connection drove moves to the var_output's value with
+     an empty forecast.
+
+     **Taken: held (b)** (the maintainer, 2026-11-01): the point keeps its value until a
+     rung writes the var_output, reported as held. To build in RV-10.
+
+388. **A held var_output a rung reads (the review after Milestone 6),** RV-3's question 15:
+     with `xic aux ote lamp`, the hold sets `aux` to its point's value and the lamp moves,
+     reported only as a hold.
+
+     **Taken: the edit refused (c)** (the maintainer, 2026-11-01): accept refuses an edit
+     that would hold a var_output a rung of its program reads, naming it, so the edit is
+     taken only with a restart. To build in RV-10.
+
+389. **A stored sample of a task the configuration drops (the review after Milestone 6),**
+     RV-3's question 16: a start from a store that holds a task's own trigger sample,
+     where the new configuration has no such task, is refused.
+
+     **Taken: dropped and started (b)** (the maintainer, 2026-11-01): the sample is
+     dropped and reported as a dropped value is (decision 277), the store copied first to
+     `<store>.dropped` as decision 360 has it, and the resource starts. To build in RV-10.
+
 ---
 
 ## 8. Sources, and what is unverified
