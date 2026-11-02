@@ -14183,7 +14183,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       file: file,
       store: store,
       stored: nil,
-      copied: nil,
+      copied: [nil],
       period: period,
       due: nil,
       origin: nil,
@@ -14354,15 +14354,19 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # start, cold, from no store or dropping nothing, makes none and leaves an earlier copy
   # as it was. The drops are the model's own, restated from the draws (`life_dropped/1`,
   # `unretained/2`), and the copy's file read at the start's return, before any write.
+  # The copy is a write limited by decision 353 to the idle watchdog and a poll period of
+  # real time, the walk's 400 or 500 ms: on a loaded machine one past it is reported as a
+  # write that fails, `failed: :timeout`, no copy named, and may land after (a load run
+  # met it once in fourteen), so the model then holds both the copy and the one before
+  # it as what the file may be, until a later copy is made in time.
   defp copied_at(%{store: nil} = w, _text), do: w
 
   defp copied_at(w, text) do
     drops = drops_restated(w)
-    copied = copy_kept(drops, text, w.copied)
-    assert File.read(w.store <> ".dropped") == copy_read(copied)
-    assert Map.get(Runner.status(w.runner).retain, :copy) == copy_named(drops, w.store)
+    copied = copy_told(drops, Runner.status(w.runner).retain, text, w)
+    assert File.read(w.store <> ".dropped") in Enum.map(copied, &copy_read/1)
     reach(:store_copied, drops != [])
-    reach(:store_copy_kept, drops == [] and w.copied != nil)
+    reach(:store_copy_kept, drops == [] and w.copied != [nil])
     reach(:life_copied_changed, drops != [] and w.change != nil)
     %{w | copied: copied}
   end
@@ -14375,15 +14379,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp drops_restated(%{stored: {_kt, k}} = w), do: unretained(k, w.draws.running.keep)
 
-  defp copy_kept([], _text, copied), do: copied
-  defp copy_kept(_drops, text, _copied), do: text
+  # What the file may hold after the start, by what status/1 names: no copy where nothing
+  # was dropped, the copy where it was made, and the copy or the one before it where its
+  # write ran past its limit.
+  defp copy_told([], retain, _text, w) do
+    refute Map.has_key?(retain, :copy)
+    w.copied
+  end
+
+  defp copy_told(_drops, %{copy: nil, failed: :timeout}, text, w), do: [text | w.copied]
+
+  defp copy_told(_drops, retain, text, w) do
+    assert retain.copy == w.store <> ".dropped"
+    [text]
+  end
 
   defp copy_read(nil), do: {:error, :enoent}
   defp copy_read(text), do: {:ok, text}
-
-  # status/1's `retain` names the copy where the start dropped anything, and none otherwise.
-  defp copy_named([], _store), do: nil
-  defp copy_named(_drops, store), do: store <> ".dropped"
 
   # The image a warm fresh start lays over the configuration: the runner walk's, the
   # retained global and the count; the life walk's, the last write as the model restated
