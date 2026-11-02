@@ -19,7 +19,8 @@ defmodule Logex.IO.Sim do
     answer. Since M5-13 `inputs:` and `outputs:` are how many points of each direction it
     has, `[0]` to `[n - 1]`, nil for as many as it is given, so that a located array
     past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind;
-    since M5-13's review each option is taken once, a key given twice refused.
+    since M5-13's review each option is taken once, a key given twice refused; and since
+    RV-4 `writes:` is how many writes it keeps, its newest, 100,000 unless set.
   - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
     values, each any number, an integer or a float, which the runner checks against its
     point's type, a real point's taking either (`Logex.IO`), unset inputs reading 0;
@@ -31,7 +32,9 @@ defmodule Logex.IO.Sim do
     while it handles the report, with whatever reason, `:timeout` among them, is passed
     over; one still alive that does not answer within `wait:` is the test's mistake.
   - `outputs/1` gives the last value written to each output, `writes/1` every write in
-    order, so that "zeroed once" can be asserted, `reads/1` the number of reads made,
+    order, so that "zeroed once" can be asserted, since RV-4 its newest 100,000, or as
+    many as `writes:` says, so that a sim written again every poll period for hours holds a
+    bounded record (c6-pmi-7, provisional), `reads/1` the number of reads made,
     failed ones among them, and `closed?/1` whether the device was closed since it was
     last opened.
   - `fail/3` acts out one failure on the next call of the callback it names, `:init`,
@@ -69,17 +72,21 @@ defmodule Logex.IO.Sim do
   alias Logex.IO.Point
   alias Logex.Runner.Clock.Manual
 
-  @options [:reports, :clock, :wait, :inputs, :outputs]
+  @options [:reports, :clock, :wait, :inputs, :outputs, :writes]
   @callbacks [:init, :read, :write, :report, :close]
 
   # The longest a process waits for an answer, 2^32 - 1 ms: a call refuses a longer one.
   @longest 4_294_967_295
 
+  # The writes a sim keeps unless `writes:` says otherwise (c6-pmi-7).
+  @kept 100_000
+
   @doc """
   Starts a simulated device linked to the caller: `reports:` true or false, false unless
   set; `clock:` a manual clock for its delays, or nil; `wait:` ms, 5000 unless set, 1 to
   4294967295; `inputs:` and `outputs:` how many points of each direction it has, 1 or
-  more, or nil, unless set, for as many as it is given.
+  more, or nil, unless set, for as many as it is given; `writes:` how many writes it keeps,
+  its newest, 1 or more, 100,000 unless set.
   """
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
 
@@ -253,6 +260,7 @@ defmodule Logex.IO.Sim do
        inputs: %{},
        outputs: %{},
        writes: [],
+       count: 0,
        reads: 0,
        closed: false,
        reporter: nil,
@@ -271,7 +279,10 @@ defmodule Logex.IO.Sim do
       )
 
   def handle_call(:outputs, _from, state), do: {:reply, state.outputs, state}
-  def handle_call(:writes, _from, state), do: {:reply, Enum.reverse(state.writes), state}
+
+  def handle_call(:writes, _from, state),
+    do: {:reply, Enum.reverse(Enum.take(state.writes, state.kept)), state}
+
   def handle_call(:reads, _from, state), do: {:reply, state.reads, state}
   def handle_call(:closed, _from, state), do: {:reply, state.closed, state}
 
@@ -299,9 +310,22 @@ defmodule Logex.IO.Sim do
   def handle_call({:written, values}, _from, state),
     do:
       {:reply, :ok,
-       %{state | outputs: Map.merge(state.outputs, values), writes: [values | state.writes]}}
+       recorded(%{
+         state
+         | outputs: Map.merge(state.outputs, values),
+           writes: [values | state.writes],
+           count: state.count + 1
+       })}
 
   def handle_call(:close, _from, state), do: {:reply, :ok, %{state | closed: true}}
+
+  # The newest `kept` of the writes made, newest first, `count` of them held; the list cut
+  # back to them only once it holds twice as many, so that a write costs a constant on the
+  # whole.
+  defp recorded(%{count: count, kept: kept} = state) when count > 2 * kept,
+    do: %{state | writes: Enum.take(state.writes, kept), count: kept}
+
+  defp recorded(state), do: state
 
   defp next([]), do: {:none, []}
   defp next([how | rest]), do: {how, rest}
@@ -363,9 +387,22 @@ defmodule Logex.IO.Sim do
       sizes: %{
         input: size!(Keyword.get(opts, :inputs), :inputs),
         output: size!(Keyword.get(opts, :outputs), :outputs)
-      }
+      },
+      kept: kept!(Keyword.get(opts, :writes, @kept))
     }
   end
+
+  # c6-pmi-7 (RV-4): the writes a sim keeps, its newest, 100,000 unless set, so that one
+  # written again every poll period for hours holds a bounded record (provisional).
+  defp kept!(n) when is_integer(n) and n >= 1, do: n
+
+  defp kept!(other),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim's writes: is how many writes it keeps, its newest, 1 or more, got: " <>
+          inspect(other)
+      )
 
   # M5-13: how many points of a direction the sim has, nil for as many as it is given.
   defp size!(nil, _key), do: nil
@@ -381,8 +418,8 @@ defmodule Logex.IO.Sim do
 
   defp takes(opts),
     do:
-      "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs: and " <>
-        "outputs:, got: " <> inspect(opts)
+      "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs:, " <>
+        "outputs: and writes:, got: " <> inspect(opts)
 
   defp known!([]), do: :ok
 
@@ -390,7 +427,8 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "Logex.IO.Sim takes reports:, clock:, wait:, inputs: and outputs:, got: #{inspect(key)}"
+        "Logex.IO.Sim takes reports:, clock:, wait:, inputs:, outputs: and writes:, got: " <>
+          inspect(key)
       )
 
   # A key given twice, as `Logex.Runner.start_link/1` tells one (M5-13's review): which of
@@ -461,6 +499,7 @@ defmodule Logex.IO.Sim do
     sim = Keyword.fetch!(opts, :sim)
 
     simulated(unsimulated(sim), sim, device) ++
+      twice(length(Keyword.get_values(opts, :sim))) ++
       for key <- Enum.uniq(Keyword.keys(opts)) -- [:sim],
           do: "Logex.IO.Sim is bound with sim: alone, got: #{inspect(key)}"
   end
@@ -470,6 +509,11 @@ defmodule Logex.IO.Sim do
       "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
         inspect(opts)
     ]
+
+  # c3-io-contract-8 (RV-4): `sim:` once, as each option of start_link/1 is, the first of
+  # two no longer taken silently.
+  defp twice(1), do: []
+  defp twice(n), do: ["Logex.IO.Sim is bound with sim: once, got it #{n} times"]
 
   defp simulated([], sim, device),
     do: free(GenServer.call(sim, :holder), sim) ++ past(GenServer.call(sim, :sizes), device)

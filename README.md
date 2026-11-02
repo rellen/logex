@@ -337,7 +337,7 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-4 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
+items RV-5 to RV-8 build ("The review after Milestone 6"), and its answers to the questions
 RV-3 left, decisions 374–389, which RV-10 builds. The maintainer's answers to the
 questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
 taken where a jump names it (decision 367), a declaration's elements counted through
@@ -347,7 +347,11 @@ compiled itself (decision 371), two writes whose literal subscripts differ no wa
 shown and run (decisions 363 and 365). RV-3's three have landed, a
 held output held through a var_output no rung writes (decision 347), a retained `tof`
 at rest on a first scan (decision 349) and a trigger's rise a trip cut off taken in the
-next cycle (decision 350). The one of decisions 347–360 that changes the source language
+next cycle (decision 350). RV-4's, the runner's, have landed too: each device's write
+given its own time (decision 348), every file write the runner makes limited (decision
+353), a restart judged as it arrives (decision 354) and two runners of one VM refused one
+store or forces file (decision 356), each in "Running a plant on the clock" and "The
+store on disk", below. The one of decisions 347–360 that changes the source language
 has landed with RV-2: a rung that writes nothing and jumps nowhere, such as the first half
 of a rung wrapped onto two lines, `xic start xio stop` above `ote motor`, is refused at
 its line, told that a newline ends a rung (decision 351).
@@ -3386,8 +3390,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   (decisions 316 and 328); and at a fresh start with `start: :cold`, or
   with no store file, before any device is opened (decisions 271 and 291). Each write goes
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
-  file is, so that a crash at any moment leaves the old store or the new. A write that
-  fails leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
+  file is, so that a crash at any moment leaves the old store or the new; each write's
+  `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
+  is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
+  the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
+  leaves the runner answering (decision 353); a runner killed while it writes takes its
+  write down with it, which does nothing after the call of the file system it was in, so
+  that the next runner's write on the file is never overwritten by it. A write that fails
+  leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
@@ -3396,7 +3406,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   due time, with untimed programs in the share's slot ("Running a plant on the clock",
   below) and otherwise at a wake of its own, and a writer process of its own writes them,
   so that a slow disk delays no round; a write still in progress makes the next wait, the
-  newest replacing any that waited. `status/1`'s `written_at` follows each write made,
+  newest replacing any that waited. One the disk has not finished within the idle
+  watchdog and a poll period of real time is reported, `{:retain, {:error, :timeout}}`
+  and `failed: :timeout`, and left to finish, its answer taken when it comes, a write made
+  clearing the failure (decision 353). `status/1`'s `written_at` follows each write made,
   the store's age; one that fails is reported as above and the plant runs on. While
   tripped nothing is written but the trip's own write. Each write at an event waits for
   the period's in progress and drops the one waiting, so the event's is the last.
@@ -3422,7 +3435,16 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
-  `.tmp` the other is written through, is refused at start, a pinned line.
+  `.tmp` the other is written through, is refused at start, a pinned line. And one
+  runner's: a start naming a store, a forces file or a `.tmp` of either that another
+  runner of the same VM holds is refused, naming it and that runner, until the holder
+  stops, crashes or is killed, when the file is free again (decision 356), the VM's
+  table of them kept by a process of logex's own that no application's stop takes down;
+  two VMs on one file are the host's to avoid, as are two paths to one file through a
+  link. Each path is
+  resolved once, at the start, so a `File.cd` after it moves neither file. A start under
+  a name another process holds is `{:error, {:already_started, pid}}` and writes nothing,
+  `start: :cold` among it, its write made once the name is registered (M11).
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
@@ -3894,7 +3916,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that
   answers at 0 within 50 ms and a poll period, whatever the fan's watchdog, and the
-  runner trips when it next runs.
+  runner trips when it next runs. A round's write gives each device the idle watchdog
+  and a poll period from the start of its own write (decision 348): a device written
+  after a slow one that answered in time is never cut short by it, only a device slow
+  itself is killed and named, and every device that answers takes the trip's 0.
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
   release killed, reads every device once, as a start does, opening again each device
   that went down, those among them (decision 142), restarts the resource, which keeps its
@@ -3909,10 +3934,14 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   {:io_init, device, cause}}`, every device latched again and written 0 once more
   (decision 136): nothing switches on, and the card at fault is named. A runner
   that is running, not tripped, refuses a restart as the host's mistake, "the runner is
-  running" (decision 133). A runner that crashes or is killed is gone, its devices writing
-  every output 0 once and closing as it goes (decision 115), a device waiting on it for
-  its own change among them; its child spec is `restart: :temporary`, so the host starts a
-  new one.
+  running" (decision 133), judged as the restart arrives: one asked while it runs is
+  refused even where a trip comes before it is served, a restart that reaches the runner
+  while a round is under way or behind a device's change among them, the trip refusing
+  every restart already waiting, so that a trip stands until a restart asked after it
+  (decision 354). A runner that crashes or is killed is gone, its
+  devices writing every output 0 once and closing as it goes (decision 115), a device
+  waiting on it for its own change among them; its child spec is `restart: :temporary`, so
+  the host starts a new one.
 
 `a_warm_trip.exs` runs the same plant from `warm/packing.logex`, beside `warm/boxes.ld`,
 which is `boxes.ld` with its counter declared `var retain boxes ctu`: it starts the
@@ -4084,7 +4113,12 @@ stage: nil
   the runner keeps for each input point.
 - Each force and unforce writes the whole set to the file before it returns, `name
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
-  the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`. A
+  the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
+  one the disk has not finished within the idle watchdog and a poll period of real time
+  `{:error, {:forces, :timeout}}` (decision 353). A start reads the file raw, off the
+  VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
+  other process's file calls: one the disk has not answered within that time refuses the
+  start, the file told as one that cannot be read. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
@@ -4942,9 +4976,17 @@ in every cycle's outputs at the value it holds.
   the last good write while they fail, and what an edit stepped while tripped changed.
   Each write is synced and renamed over the store, the rename not itself made durable,
   so on some file systems a power failure just after a write may bring back the write
-  before it ("The store on disk", above). A retained value is no safety memory: a
-  burner's lockout, a latch a guard's opening set or a count of trips must not be kept in
-  logex, whose store a person can edit, a cold start discards and a crash may set back.
+  before it ("The store on disk", above); and each write the runner makes at an event, a
+  force's among them, is given the idle watchdog and a poll period of real time, so a
+  disk slower than that fails every one of them, and has every period's write reported
+  late, the plant running on with its store behind, and one the disk finishes after the
+  runner gave up on it may still land. Two
+  runners of one VM are refused one file, but nothing sees a runner of another VM, or one
+  file reached by a second path through a link: two such runners on one store write over
+  each other's, and a crash then brings one runner back with the other's values. A
+  retained value is no safety memory: a burner's lockout, a latch a guard's opening set or
+  a count of trips must not be kept in logex, whose store a person can edit, a cold start
+  discards and a crash may set back.
 - **Not a guard against what a warm start switches on.** No output is kept: every output
   point is 0 until the first round after a start writes it. But logic that reads a
   retained bit, count or timer writes its outputs from it in that first round, so a warm

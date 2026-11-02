@@ -82,6 +82,30 @@ defmodule Logex.RunnerTest do
 
   # A clock whose cancel/2 stops nothing, as a real clock's cannot stop a message already
   # sent: every wake the runner set comes, the ones it superseded among them.
+  # A manual clock whose now_ms/1 and wall_ms/1 give, once the test puts one in this
+  # module's table under the clock, what it says instead of their time: so that a clock's
+  # answer that is no whole number of milliseconds can come at start or later.
+  defmodule OddClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock),
+      do: odd(:ets.lookup(Logex.RunnerTest, {clock, :now_ms}), Manual.now_ms(clock))
+
+    @impl true
+    def wall_ms(clock),
+      do: odd(:ets.lookup(Logex.RunnerTest, {clock, :wall_ms}), Manual.wall_ms(clock))
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+
+    defp odd([{_key, answer}], _time), do: answer
+    defp odd([], time), do: time
+  end
+
   defmodule NoCancelClock do
     @behaviour Logex.Runner.Clock
 
@@ -111,6 +135,11 @@ defmodule Logex.RunnerTest do
     def send({key, _messages}, message), do: :global.send(key, message)
   end
 
+  setup_all do
+    :ets.new(__MODULE__, [:named_table, :public, :set])
+    :ok
+  end
+
   # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth"):
   # the devices' since M4-4, whose writes are each timed against their deadline, and both
   # together's and the devices' again since the runner checks, as each round begins, that
@@ -118,6 +147,11 @@ defmodule Logex.RunnerTest do
   @both_bound 4.38
   @instances_bound 4.24
   @devices_bound 1.40
+
+  # Decision 348's renewal's growth, a fifth above the highest ratio of 64 devices' rounds
+  # to 16's in six runs, 3.669, where a refresh sent to every device at every write took
+  # 9.19 (see "growth").
+  @renewal_bound 4.40
 
   # One var_input copied to one var_output.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
@@ -159,6 +193,14 @@ defmodule Logex.RunnerTest do
   end
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
+
+  # A stop's answer from a task of its own, or the host's mistake it raised, so that a stop
+  # of a runner gone does not take the test down; an exit is let through, to fail it.
+  defp stop_answer(runner, reason) do
+    Runner.stop(runner, reason)
+  rescue
+    error in ArgumentError -> {:raised, error.message}
+  end
 
   # The relay on the 10 ms task, and an event task on the panel's `e` counting its rises
   # into `hits`, the drive's one output: a trigger at a device that reports.
@@ -350,6 +392,101 @@ defmodule Logex.RunnerTest do
       )
     end
 
+    # c3-io-contract-9, c2-runner-persist-6 (RV-4): a clock's answers checked at start, a
+    # time that is no whole number of milliseconds, and a wall clock's that no store's
+    # header can hold, each the host's mistake, where one became a device that could not be
+    # opened and the other a FunctionClauseError.
+    test "a clock whose now_ms/1 or wall_ms/1 gives no time a runner can take" do
+      {opts, _rig} = rig()
+      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      for answer <- [1.5, nil, "10"] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :now_ms}, answer})
+
+        raises(
+          "the runner's clock `Logex.RunnerTest.OddClock` gave #{inspect(answer)} from " <>
+            "now_ms/1: a clock's time is a whole number of milliseconds",
+          fn -> Runner.start_link(Keyword.put(opts, :clock, {OddClock, clock})) end
+        )
+      end
+
+      # Past 9999-12-31T23:59:59.999Z, before 0000-01-01T00:00:00Z (year -1, which a
+      # DateTime holds and a header would spell -0001-12-31T23:59:59Z), and before year
+      # -9999, which none holds.
+      for answer <- [1.5, :now, 253_402_300_800_000, -62_167_219_200_001, -377_705_116_800_001] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :wall_ms}, answer})
+
+        raises(
+          "the runner's clock `Logex.RunnerTest.OddClock` gave #{inspect(answer)} from " <>
+            "wall_ms/1: a store's header is written at the wall clock's time, a whole " <>
+            "number of milliseconds since the Unix epoch from year 0 to year 9999",
+          fn ->
+            Runner.start_link(
+              opts
+              |> Keyword.put(:clock, {OddClock, clock})
+              |> Keyword.put(:retain, Path.join(dir, "#{System.unique_integer([:positive])}"))
+            )
+          end
+        )
+      end
+    end
+
+    # The range's ends, and a time before 1970, a negative number of milliseconds, each a
+    # wall time a store's header holds, spelled to the second.
+    test "a wall clock's time from year 0 to year 9999 is taken, one before 1970 among it" do
+      {opts, _rig} = rig()
+      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      for {answer, header} <- [
+            {-62_167_219_200_000, "0000-01-01T00:00:00Z"},
+            {-1, "1969-12-31T23:59:59Z"},
+            {0, "1970-01-01T00:00:00Z"},
+            {253_402_300_799_999, "9999-12-31T23:59:59Z"}
+          ] do
+        {:ok, clock} = Manual.start_link()
+        :ets.insert(__MODULE__, {{clock, :wall_ms}, answer})
+        store = Path.join(dir, "#{System.unique_integer([:positive])}")
+
+        {:ok, runner} =
+          Runner.start_link(
+            opts
+            |> Keyword.put(:clock, {OddClock, clock})
+            |> Keyword.put(:retain, store)
+          )
+
+        assert File.read!(store) =~ "\nconfiguration plant written #{header}\n"
+        assert Runner.stop(runner) == :ok
+      end
+    end
+
+    # And later: a time that is no whole number of milliseconds is a clock that fails,
+    # never a crash: a device that reads it goes down as one whose clock fails does, which
+    # trips the runner naming it, and the runner that reads it stops as a shutdown naming
+    # it, as at a clock gone down.
+    @tag :capture_log
+    test "a clock whose now_ms/1 gives no time later trips or stops the runner, naming it" do
+      {opts, _rig} = rig()
+      {:ok, clock} = Manual.start_link()
+      Process.flag(:trap_exit, true)
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {OddClock, clock}))
+      :ok = Runner.subscribe(runner)
+      :ets.insert(__MODULE__, {{clock, :now_ms}, 2.5})
+
+      # The panel's poll at 10 comes before the runner's round, and the panel goes down.
+      Manual.advance(clock, 10)
+      reason = {:shutdown, {:clock, {:now_ms, 2.5}}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:down, ^reason}}}}, 5000
+
+      # The runner reads its clock as it serves the next request.
+      raises("the runner #{inspect(runner)} is not running", fn -> Runner.status(runner) end)
+      assert_receive {:EXIT, ^runner, ^reason}, 5000
+    end
+
     test "a poll period, a share or an idle watchdog out of its range" do
       {opts, _rig} = rig()
 
@@ -412,6 +549,26 @@ defmodule Logex.RunnerTest do
       assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
       {opts, _rig} = rig()
       assert {:error, {:already_started, ^runner}} = Runner.start_link(opts ++ [name: name])
+
+      # c4-api-fuzz-9: a via name whose module is no registry, one not loaded and one
+      # without a registry's functions, is told in the runner's words, where the first
+      # escaped as an UndefinedFunctionError; a registry's is taken.
+      for module <- [:no_such_registry, Enum] do
+        raises(
+          "the runner's name: {:via, #{inspect(module)}, :plant} names #{inspect(module)}, " <>
+            "which is no registry: a via name's module exports register_name/2, " <>
+            "unregister_name/1, whereis_name/1 and send/2",
+          fn -> Runner.start_link(opts ++ [name: {:via, module, :plant}]) end
+        )
+      end
+
+      registry = :"registry_#{System.unique_integer([:positive])}"
+      start_supervised!({Registry, keys: :unique, name: registry})
+      name = {:via, Registry, {registry, :plant}}
+      assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
+      assert %{status: :running} = Runner.status(name)
+      assert Runner.stop(name) == :ok
+      refute Process.alive?(runner)
     end
   end
 
@@ -681,6 +838,33 @@ defmodule Logex.RunnerTest do
       assert Sim.writes(panel) == [%{[0] => 1}]
       assert Sim.writes(drive) == [%{[0] => 0}]
       assert Runner.get!(runner, "r.out") == 1
+    end
+
+    # c5-tests-1 (RV-4): a poll that comes late, its device busy past its grid, reads once
+    # and takes up the grid at its next time after now, never making up the reads it
+    # missed; a device that made them up passed every suite.
+    test "a poll that comes late skips the reads it missed, its grid kept" do
+      {opts, %{panel: panel, clock: clock}} = rig(relayed(), poll: 10, idle: 1_000)
+      {:ok, runner} = Runner.start_link(opts)
+      reads = Sim.reads(panel)
+
+      # Time passes with nothing delivered, as in a device busy past its polls: the one due
+      # at 10 comes at 25, reads once, and takes up the grid at 30, the read at 20 skipped;
+      # the advance to 35 delivers the one at 30, and the next is at 40.
+      Manual.pass(clock, 25)
+      Manual.advance(clock, 10)
+      assert Sim.reads(panel) == reads + 2
+      device = devices(runner)["panel"]
+
+      assert [40] ==
+               for(
+                 {at, ^device, {Logex.Runner.Device, :poll, _}} <- Manual.pending(clock),
+                 do: at
+               )
+
+      Manual.advance(clock, 5)
+      assert Sim.reads(panel) == reads + 3
+      Runner.stop(runner)
     end
 
     test "a device that cannot be opened is {:error, {:io_init, device, reason}}, every " <>
@@ -1132,8 +1316,9 @@ defmodule Logex.RunnerTest do
           %{"toggle" => @toggle, "count" => @count}
         )
 
-      # 15% and 40% round C, 5.67 to 6 and 1.5 to 2.
-      for {share, c} <- [{10, 9}, {15, 6}, {20, 4}, {40, 2}, {50, 1}, {90, 1}] do
+      # 15% and 40% round C, 5.67 to 6 and 1.5 to 2; and since RV-4 (c5-tests-3) 30% and
+      # 45%, where round and ceil differ, 2.33 to 2 and 1.22 to 1.
+      for {share, c} <- [{10, 9}, {15, 6}, {20, 4}, {30, 2}, {40, 2}, {45, 1}, {50, 1}, {90, 1}] do
         {:ok, clock} = Manual.start_link()
 
         {:ok, runner} =
@@ -1165,7 +1350,13 @@ defmodule Logex.RunnerTest do
       # Each request takes 3 ms on this clock: the slot's reading before it and, since
       # M4-4, two that time it against the idle watchdog (decision 128); so a slot of 9 ms
       # serves three.
-      for {share, slots} <- [{50, List.duplicate(1, 40)}, {90, List.duplicate(3, 13) ++ [1]}] do
+      # Since RV-4 (c5-tests-3) also 86%, S = round(6.14) = 6, where ceil gives 7 and a slot
+      # of three requests: two a slot.
+      for {share, slots} <- [
+            {50, List.duplicate(1, 40)},
+            {86, List.duplicate(2, 20)},
+            {90, List.duplicate(3, 13) ++ [1]}
+          ] do
         {:ok, clock} = Manual.start_link()
         {:ok, panel} = Sim.start_link(clock: clock)
 
@@ -1736,6 +1927,7 @@ defmodule Logex.RunnerTest do
           runner: self(),
           clock: {Manual, clock},
           poll: 10,
+          idle: 500,
           restarts: 0
         })
 
@@ -1768,6 +1960,7 @@ defmodule Logex.RunnerTest do
           runner: self(),
           clock: {Manual, clock},
           poll: 10,
+          idle: 500,
           restarts: 0
         })
 
@@ -1928,6 +2121,28 @@ defmodule Logex.RunnerTest do
   end
 
   describe "stop/2, status/1 and subscriptions" do
+    # c1-runner-rounds-10 (RV-4): stops made at once, with their own reasons, each answer,
+    # where the second exited with the first's reason; one that finds the runner stopped
+    # already raises that it is not running, as a stop of a stopped runner does.
+    test "stops made at once each answer, the runner stopped by the first" do
+      not_running = fn runner -> "the runner #{inspect(runner)} is not running" end
+
+      for _ <- 1..10 do
+        {opts, _rig} = plant_rig()
+        {:ok, runner} = Runner.start_link(opts)
+        Process.unlink(runner)
+
+        answers =
+          [:normal, :shutdown, {:shutdown, :end_of_shift}, :normal, :shutdown]
+          |> Enum.map(fn reason -> Task.async(fn -> stop_answer(runner, reason) end) end)
+          |> Enum.map(&Task.await/1)
+
+        assert Enum.all?(answers, &(&1 in [:ok, {:raised, not_running.(runner)}]))
+        assert :ok in answers
+        refute Process.alive?(runner)
+      end
+    end
+
     test "stop/2 writes every output 0 once and closes every device before it returns " <>
            "(decision 116)" do
       {opts, %{panel: panel, drive: drive, clock: clock}} = plant_rig()
@@ -2242,6 +2457,103 @@ defmodule Logex.RunnerTest do
       {:reductions, later} = Process.info(runner, :reductions)
       Runner.stop(runner)
       later - before
+    end
+
+    # M9 (RV-4): a device's change checked against its input points, each by address, in
+    # time linear in them, where each was appended to the list of those checked before it,
+    # quadratic: a change of every point of a device of 4096 against one of 1024, the least
+    # of three runs of the runner's own reductions while it takes the change, 4x the points
+    # at most 4.146x in 8 runs, its bound a fifth above, 4.98, where the append took 5.94x.
+    defp change_cost(n) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      text =
+        "task fast interval 10 priority 1\nvar_global big bool[#{n}] at panel.i.0\n" <>
+          "var_global x bool at panel.i.#{n}\nvar_global y bool at panel.q.0\n" <>
+          "program r relay with fast\n  r.in x\n  r.out y\n"
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      {:reductions, before} = Process.info(runner, :reductions)
+      Sim.set(panel, Map.new(0..(n - 1), &{[&1], 1}))
+      {:reductions, later} = Process.info(runner, :reductions)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "big[#{n - 1}]") == 1
+      Runner.stop(runner)
+      later - before
+    end
+
+    # Decision 348's renewal (RV-4's review): where each device's write takes time, 1 ms on
+    # the manual clock as any write does on the real one, every write renews every device's
+    # deadline, by one shared write since the review, where a refresh sent to every device
+    # at every write cost a round the square of its devices. The runner's and the devices'
+    # reductions a round of 64 devices against 16, each written every round, the least of
+    # three runs.
+    defp renewal_cost(n) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, src} = Sim.start_link(clock: clock, reports: true)
+      devices = for i <- 1..n, do: "d#{String.pad_leading("#{i}", 3, "0")}"
+      sims = Map.new(devices, fn d -> {d, elem(Sim.start_link(clock: clock), 1)} end)
+
+      text =
+        "task fast interval 1000 priority 1\nvar_global x bool at src.i.0\n" <>
+          Enum.map_join(devices, fn d ->
+            "var_global y#{d} bool at #{d}.q.0\nprogram r#{d} relay with fast\n" <>
+              "  r#{d}.in x\n  r#{d}.out y#{d}\n"
+          end)
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+      io = Map.new(sims, fn {d, sim} -> {d, {Sim, sim: sim}} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: Map.put(io, "src", {Sim, sim: src}),
+          clock: {Manual, clock},
+          poll: 100_000,
+          idle: 100_000
+        )
+
+      Manual.advance(clock, 1000)
+      pids = for {_name, pid, _points} <- :sys.get_state(runner).devices, do: pid
+
+      cost = fn ->
+        Enum.sum(for pid <- [runner | pids], do: elem(Process.info(pid, :reductions), 1))
+      end
+
+      before = cost.()
+
+      for i <- 1..4 do
+        Sim.set(src, [0], rem(i, 2))
+        for {_name, sim} <- sims, do: Sim.fail(sim, :write, {:delay, 1})
+        Manual.advance(clock, 1000)
+      end
+
+      later = cost.()
+      Runner.stop(runner)
+      (later - before) / 4
+    end
+
+    test "a round whose writes take time renews its devices in time linear in them " <>
+           "(decision 348)" do
+      [small, large] = for n <- [16, 64], do: Enum.min(for(_ <- 1..3, do: renewal_cost(n)))
+      ratio = large / small
+      assert ratio < @renewal_bound, "4x the devices took #{Float.round(ratio, 2)}x"
+    end
+
+    test "a device's change is checked in time linear in its points (M9)" do
+      [small, large] = for n <- [1024, 4096], do: Enum.min(for(_ <- 1..3, do: change_cost(n)))
+      ratio = large / small
+      assert ratio < 4.98, "4x the points took #{Float.round(ratio, 2)}x"
     end
 
     test "a round's work is linear in the instances and the devices" do

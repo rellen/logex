@@ -135,8 +135,11 @@ own documentation holds:
   devices, watchdogs and the trip, forcing, an edit's steps, the store and its period.
 - `lib/logex/runner/device.ex` — `Logex.Runner.Device`, internal: one bound device's
   process, its reads, writes again at every poll, latch and close.
+- `lib/logex/runner/paths.ex` — `Logex.Runner.Paths`, internal: the store and forces files
+  each runner of the VM holds, claimed at its start and given up as it ends.
 - `lib/logex/runner/writer.ex` — `Logex.Runner.Writer`, internal: the process that writes
-  the store every period.
+  the store every period, and every other file call of the runner's, each in a process of
+  its own limited to the idle watchdog and a poll period of real time.
 - `lib/logex/runner/clock.ex` — `Logex.Runner.Clock`, the clock behaviour the runner reads
   time through.
 - `lib/logex/runner/clock/monotonic.ex` — `Logex.Runner.Clock.Monotonic`, the machine's
@@ -220,11 +223,15 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   start.
 - `test/logex/retain_period_test.exs` — the store's periodic writer.
 - `test/logex/retain_edit_test.exs` — an online edit of a qualifier.
+- `test/logex/stalled_disk_test.exs` — every file write the runner makes on a stalled
+  disk, the file server held, and each write's `.tmp` its own.
 - `test/logex/clock_test.exs` — the two clocks.
 - `test/logex/io_test.exs` — `Logex.IO.Sim`, `Logex.IO.points/1` and `bind!/2`.
 - `test/logex/runner_test.exs` — the runner on the manual clock.
 - `test/logex/trip_test.exs` — the watchdogs, the trip and `restart/2`.
 - `test/logex/force_test.exs` — forcing and the forces file.
+- `test/logex/runner_paths_test.exs` — the files a runner holds: two runners of one VM on
+  one file refused, each path resolved once, and a refused start writing nothing.
 - `test/logex/runner_edit_test.exs` — an online edit stepped through the runner.
 - `test/logex/api_contract_test.exs` — the seeded contract walks over the host contract,
   the edits, the resource, the runner, the cross-type reach and the store's life, each

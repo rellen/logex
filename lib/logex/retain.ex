@@ -95,10 +95,54 @@ defmodule Logex.Retain do
   # the text written whole to `<path>.tmp` beside the file, flushed to the disk, closed and
   # renamed over it, so that a crash at any moment leaves the old file or the new; a write
   # that fails leaves the file as it was, `{:error, reason}`, its `.tmp` deleted.
+  #
+  # Each write's `.tmp` is its own (M10, RV-4), a new file made under the one name,
+  # exclusively: where something stands at `<path>.tmp` it is deleted and the file made
+  # then, so that a write killed inside a call of the file system, by the runner past its
+  # limit or with the runner as it is killed, the write linked to it
+  # (`Logex.Runner.Writer`), which runs on to its end in the kernel after the kill, a
+  # process killed in a file's call being down at once, and then does nothing more, never
+  # reaches this write's file:
+  # - a killed write's open, write, sync or close, raw, reaches its own file, which this
+  #   write's delete unlinks; an open of its that ends after this one finds this file there
+  #   and makes none;
+  # - a killed write's rename, which the VM's file server holds in the order asked, has its
+  #   file whole and synced at `<path>.tmp`, so this write's open finds it there and its
+  #   delete, which goes through that server too, waits for the rename, the store then that
+  #   write, whole, and the `.tmp` free.
+  # So the store is the old or the new, never a mix, and a write killed in its rename
+  # may still land once the disk answers. A FIFO, a link or a leftover at `<path>.tmp` is
+  # removed, never written through; a directory there cannot be, and the write fails,
+  # `:eisdir`. Only the rename, and a delete where something stands, go through the file
+  # server, whose queue every other process's file calls share; the rest is raw.
+  # (Provisional: one name, its file new each write, where the review suggested a unique
+  # name a write, which would leave each killed write's file beside the store and change
+  # the name decision 325 and the documents give.)
   def written(path, text) do
     beside = path <> ".tmp"
-    renamed(written_out(:file.open(beside, [:write, :raw, :binary]), text), beside, path)
+    renamed(written_out(made(beside), text), beside, path)
   end
+
+  defp made(beside), do: made_again(made_new(beside), beside)
+
+  defp made_new(beside), do: :file.open(beside, [:write, :exclusive, :raw, :binary])
+
+  defp made_again({:error, :eexist}, beside) do
+    _ = :file.delete(beside)
+    standing(made_new(beside), beside)
+  end
+
+  defp made_again(opened, _beside), do: opened
+
+  # What stands at the `.tmp` and cannot be deleted: a directory, `:eisdir`, as an open
+  # of it says, or anything else, `:eexist`.
+  defp standing({:error, :eexist}, beside),
+    do: {:error, kind_of(:file.read_link_info(beside, [:raw]))}
+
+  defp standing(opened, _beside), do: opened
+
+  defp kind_of({:ok, info}) when elem(info, 2) == :directory, do: :eisdir
+  defp kind_of(_other), do: :eexist
 
   defp written_out({:ok, io}, text), do: synced(:file.write(io, text), io)
   defp written_out(error, _text), do: error

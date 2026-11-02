@@ -181,6 +181,34 @@ defmodule Logex.RetainPeriodTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # What stands at the store's `.tmp` before the period's write: a leftover, so that the
+  # write's first call through the file server is its delete of it, or nothing, so that
+  # it is the rename.
+  defp leftover(:delete, beside), do: File.write!(beside, "left over\n")
+  defp leftover(:rename, _beside), do: :ok
+
+  # The store after a write killed in its delete, the old whole, or in its rename, the
+  # new whole.
+  defp stored(:delete, text, before), do: text == before
+  defp stored(:rename, text, before), do: text != before and total_in(text) == "2"
+
+  defp total_in(text),
+    do: hd(Regex.run(~r/global total_boxes dint (\d+)\n/, text, capture: :all_but_first))
+
+  # The process whose call of `kind` waits in the held file server's mailbox, once one does.
+  defp waiting_call(server, kind), do: caller(Process.info(server, :messages), server, kind)
+
+  defp caller({:messages, messages}, server, kind),
+    do:
+      caller_found(
+        for({:"$gen_call", {pid, _}, request} <- messages, elem(request, 0) == kind, do: pid),
+        server,
+        kind
+      )
+
+  defp caller_found([pid | _], _server, _kind), do: pid
+  defp caller_found([], server, kind), do: waiting_call(server, kind)
+
   # Every message the seam sent, in order, from the mailbox.
   defp seen(acc \\ []) do
     receive do
@@ -283,41 +311,51 @@ defmodule Logex.RetainPeriodTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # M6-6's review: a runner killed in the middle of a period's write, its writer
-    # writing the store's `.tmp`, which here is a pipe the test reads a little of, so that
-    # the writer is held inside its write; the writer goes down with its runner, the store
-    # is the last whole write, and a fresh start restores that.
+    # M6-6's review: a runner killed in the middle of a period's write, its writer held
+    # inside its write; the writer goes down with its runner, the store is the last whole
+    # write, and a fresh start restores that. The writer was held by a pipe at the store's
+    # `.tmp`, which since M10 (RV-4) its write deletes first, each write's `.tmp` its own;
+    # since RV-4's review it is held inside Logex.Retain.written/2 by the VM's file server
+    # held, `:sys.suspend/1`, which its write's delete of what stands at the `.tmp` and its
+    # rename go through, its other calls raw. Killed in the delete, before its file is
+    # made, the store is the write before it; killed in the rename, its file whole and
+    # synced, the rename the server holds lands once the server answers and the store is
+    # that write: the old or the new, whole, never a mix.
     test "a runner killed in the middle of a period's write restores the write before it",
          %{tmp_dir: dir} do
       text = String.replace(@tally, "var e bool\n", "var e bool\nvar retain big dint[20000]\n")
       {:ok, tally} = Logex.compile(text, name: "tally")
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
-      rig = rig(dir, configuration: config)
-      {:ok, runner} = Runner.start_link(rig.opts)
-      eye(rig, 1, 100)
-      synced(runner)
-      before = File.read!(rig.store)
-      assert total(rig.store) == "1"
-      beside = rig.store <> ".tmp"
-      {_, 0} = System.cmd("mkfifo", [beside])
-      eye(rig, 0, 50)
-      eye(rig, 1, 50)
-      assert values(runner) == [2, 2, 1, 2]
-      writer = writer(runner)
-      ref = Process.monitor(writer)
-      {:ok, pipe} = :file.open(beside, [:read, :raw, :binary])
-      assert {:ok, "logex retain 1\n" <> _} = :file.read(pipe, 4096)
-      killed(runner)
-      :ok = :file.close(pipe)
-      assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
-      assert File.read!(rig.store) == before
-      # The writer may meet the pipe closed before its kill and drop the `.tmp` itself.
-      _ = File.rm(beside)
-      opener_down(rig.panel)
 
-      {:ok, runner} = Runner.start_link(rig.opts)
-      assert values(runner) == [1, 1, 1, 1]
-      assert Runner.stop(runner) == :ok
+      for {held_in, restored} <- [delete: [1, 1, 1, 1], rename: [2, 2, 1, 2]] do
+        rig = rig(Path.join(dir, "#{held_in}"), configuration: config)
+        File.mkdir_p!(Path.dirname(rig.store))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        eye(rig, 1, 100)
+        synced(runner)
+        before = File.read!(rig.store)
+        assert total(rig.store) == "1"
+        writer = writer(runner)
+        ref = Process.monitor(writer)
+        leftover(held_in, rig.store <> ".tmp")
+        server = Process.whereis(:file_server_2)
+        :sys.suspend(server)
+        on_exit(fn -> :sys.resume(server) end)
+        eye(rig, 0, 50)
+        eye(rig, 1, 50)
+        assert values(runner) == [2, 2, 1, 2]
+        assert waiting_call(server, held_in) == writer
+        killed(runner)
+        assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, 5000
+        :sys.resume(server)
+        assert stored(held_in, File.read!(rig.store), before)
+        refute File.exists?(rig.store <> ".tmp")
+        opener_down(rig.panel)
+
+        {:ok, runner} = Runner.start_link(rig.opts)
+        assert values(runner) == restored
+        assert Runner.stop(runner) == :ok
+      end
     end
 
     # Decision 316's shutdown and decision 292's crash measured against the period's: a
@@ -490,7 +528,13 @@ defmodule Logex.RetainPeriodTest do
     # drops the one pending and writes last, after its zeros and closes.
     test "a stop waits for the write in progress, drops the pending one and writes last",
          %{tmp_dir: dir} do
-      rig = rig(dir)
+      # An idle watchdog of 5000: the test holds the writer in real time while the stop
+      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
+      # review), and since decision 353 the stop's own write has that time too; at the
+      # runner's 510 ms a loaded machine's syncs outran the hold now and then
+      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the stop's write
+      # `:timeout`). The test reads no limit.
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -503,6 +547,8 @@ defmodule Logex.RetainPeriodTest do
       assert values(runner) == [3, 3, 1, 3]
       Code.ensure_loaded!(Logex.Retain)
       assert :erlang.trace_pattern({Logex.Retain, :written, 2}, true, [:global]) == 1
+      # Decision 353: the runner's own write is Writer.written/3's, in a process of its own.
+      assert :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, true, [:global]) == 1
       :erlang.trace(writer, true, [:call])
       :erlang.trace(runner, true, [:call])
       stopping = Task.async(fn -> Runner.stop(runner) end)
@@ -512,6 +558,7 @@ defmodule Logex.RetainPeriodTest do
       :sys.resume(writer)
       assert Task.await(stopping) == :ok
       :erlang.trace_pattern({Logex.Retain, :written, 2}, false, [:global])
+      :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, false, [:global])
       assert writes_by() == [writer, runner]
       assert total(rig.store) == "3"
       refute Process.alive?(writer)
@@ -520,7 +567,13 @@ defmodule Logex.RetainPeriodTest do
     # PLAN M6-6's Done-when: a stop whose final write fails still stops and says so, the
     # write in progress waited for first.
     test "a stop whose final write fails still stops and returns its reason", %{tmp_dir: dir} do
-      rig = rig(dir)
+      # An idle watchdog of 5000: the test holds the writer in real time while the stop
+      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
+      # review), and since decision 353 the stop's own write has that time too; at the
+      # runner's 510 ms a loaded machine's syncs outran the hold now and then
+      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the stop's write
+      # `:timeout`). The test reads no limit.
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -539,9 +592,10 @@ defmodule Logex.RetainPeriodTest do
 
     # A writer that does not answer by the idle watchdog and a poll period, in real time,
     # is killed, its write reported failed, `:timeout`, and the stop's write made all the
-    # same (provisional).
+    # same (provisional). Since decision 353 the stop's own write has that time too, so
+    # the idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
     test "a hung writer is killed at its deadline and the stop writes", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 60)
+      rig = rig(dir, idle: 400)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -551,7 +605,7 @@ defmodule Logex.RetainPeriodTest do
       eye(rig, 0, 100)
       began = System.monotonic_time(:millisecond)
       assert Runner.stop(runner) == :ok
-      assert System.monotonic_time(:millisecond) - began >= 70
+      assert System.monotonic_time(:millisecond) - began >= 410
       refute Process.alive?(writer)
       assert_received {Runner, ^runner, {:retain, {:error, :timeout}}}
       assert File.read!(rig.store) =~ "global total_boxes dint 1\n"
@@ -637,7 +691,13 @@ defmodule Logex.RetainPeriodTest do
     # one pending, so that the trip's is the last on disk.
     test "a trip waits for the write in progress, drops the pending one and writes last",
          %{tmp_dir: dir} do
-      rig = rig(dir)
+      # An idle watchdog of 5000: the test holds the writer in real time while the trip
+      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
+      # review), and since decision 353 the trip's own write has that time too; at the
+      # runner's 510 ms a loaded machine's syncs outran the hold now and then
+      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the trip's write
+      # `:timeout`). The test reads no limit.
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -650,6 +710,8 @@ defmodule Logex.RetainPeriodTest do
       assert values(runner) == [3, 3, 1, 3]
       Code.ensure_loaded!(Logex.Retain)
       assert :erlang.trace_pattern({Logex.Retain, :written, 2}, true, [:global]) == 1
+      # Decision 353: the runner's own write is Writer.written/3's, in a process of its own.
+      assert :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, true, [:global]) == 1
       :erlang.trace(writer, true, [:call])
       :erlang.trace(runner, true, [:call])
 
@@ -664,6 +726,7 @@ defmodule Logex.RetainPeriodTest do
       _ = :sys.get_state(writer)
       _ = :sys.get_state(runner)
       :erlang.trace_pattern({Logex.Retain, :written, 2}, false, [:global])
+      :erlang.trace_pattern({Logex.Runner.Writer, :written, 3}, false, [:global])
       assert writes_by() == [writer, runner]
       assert total(rig.store) == "3"
       assert Runner.stop(runner) == :ok
@@ -672,7 +735,13 @@ defmodule Logex.RetainPeriodTest do
     # M6-6's review: the period's write a trip waits for is reported as every write is, so
     # that one that fails is said, the trip's own after it.
     test "a trip reports the failure of the period's write it waited for", %{tmp_dir: dir} do
-      rig = rig(dir)
+      # An idle watchdog of 5000: the test holds the writer in real time while the trip
+      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
+      # review), and since decision 353 the trip's own write has that time too; at the
+      # runner's 510 ms a loaded machine's syncs outran the hold now and then
+      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the trip's write
+      # `:timeout`). The test reads no limit.
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -697,10 +766,12 @@ defmodule Logex.RetainPeriodTest do
     end
 
     # M6-6's review: a writer that does not answer a trip's wait by its deadline is killed,
-    # so that it cannot wake later and write an older image over the trip's.
+    # so that it cannot wake later and write an older image over the trip's. Since
+    # decision 353 the trip's own write has the idle watchdog and a poll period too, so the
+    # idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
     test "a hung writer is killed at a trip's deadline and never writes after it",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 60)
+      rig = rig(dir, idle: 400)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -749,10 +820,13 @@ defmodule Logex.RetainPeriodTest do
     end
   end
 
-  # The writes the trace saw, by the process that made each.
+  # The writes the trace saw, by the process that made each: the writer's through
+  # Logex.Retain.written/2, and since decision 353 the runner's own through
+  # Logex.Runner.Writer.written/3, which makes it in a process of its own.
   defp writes_by(acc \\ []) do
     receive do
       {:trace, pid, :call, {Logex.Retain, :written, _args}} -> writes_by([pid | acc])
+      {:trace, pid, :call, {Logex.Runner.Writer, :written, _args}} -> writes_by([pid | acc])
     after
       100 -> Enum.reverse(acc)
     end

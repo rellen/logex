@@ -288,8 +288,12 @@ defmodule Logex.ForceTest do
       assert Runner.get!(runner, "y") == 1
     end
 
+    # An idle watchdog of 5000: since decision 353 the force's write of the forces file and
+    # the restart's read of it each have the idle watchdog and a poll period of real time,
+    # and at the runner's 510 ms a loaded machine's sync outran the force's now and then
+    # (scripts/load.sh, RV-4). The test reads no limit.
     test "is taken while tripped, and the restart's first round reads it", %{tmp_dir: dir} do
-      %{runner: runner, clock: clock, panel: panel} = started(dir)
+      %{runner: runner, clock: clock, panel: panel} = started(dir, idle: 5000)
       Manual.advance(clock, 10)
       Sim.set(panel, [1], 5)
       assert Runner.status(runner).status == :tripped
@@ -435,6 +439,40 @@ defmodule Logex.ForceTest do
       %File.Stat{inode: second} = File.stat!(file)
       assert first != second
       assert File.read!(file) == "level 2\nx 1\n"
+    end
+
+    # c5-tests-4 (RV-4): a map past 32 keys is in no order of its names, so the input
+    # points a name that is none is matched against are sorted, and of forty a misspelling
+    # is equally near, the first by name is the one suggested.
+    test "the input point a name that is none is told it may mean is the first by name " <>
+           "past 32 of them",
+         %{tmp_dir: dir} do
+      names = for i <- 0..39, do: "pump_#{String.pad_leading("#{i}", 2, "0")}"
+
+      text =
+        "task fast interval 10 priority 1\n" <>
+          Enum.map_join(Enum.with_index(names), "", fn {name, i} ->
+            "var_global #{name} bool at panel.i.#{i}\n"
+          end) <>
+          "var_global y bool at panel.q.0\nprogram r relay with fast\n  r.in pump_00\n  r.out y\n"
+
+      {:ok, config} = Configuration.compile("plant", text, programs())
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      raises("`pump_` is no input point of `plant` — did you mean `pump_00`?", fn ->
+        Runner.force(runner, "pump_", 1)
+      end)
+
+      Runner.stop(runner)
     end
 
     test "a write that fails changes nothing and gives {:error, {:forces, reason}}",

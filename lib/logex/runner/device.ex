@@ -29,8 +29,9 @@ defmodule Logex.Runner.Device do
   #   requests to it, so that neither waits on the other.
   # - `write/2` writes the outputs a round gave, answered once the adapter has written them;
   #   `refresh/2` tells it the deadline by which it will hear from the runner again, without
-  #   a wait (decision 125); `close/1` writes 0 to every output once, closes the adapter,
-  #   and stops (decision 116).
+  #   a wait (decision 125), and so does the runner's renewal while it writes a round's
+  #   devices, one shared write every device reads (decision 348, beat/1); `close/1`
+  #   writes 0 to every output once, closes the adapter, and stops (decision 116).
   # - `zero/1` is a trip's (M4-4, decision 113): every output written 0 once, and the device
   #   latched, writing nothing more, a round's write and a poll's write again among it,
   #   until `release/2`, a restart's, which forgets what it last wrote, so that nothing is
@@ -112,7 +113,12 @@ defmodule Logex.Runner.Device do
   # - Its runner's death (decision 115): it traps exits, so that its runner going down, a
   #   crash or a kill, stops it through terminate/2, which writes every output 0 once,
   #   where it is not latched already, and closes the adapter, as a close does; one closed
-  #   already does neither again.
+  #   already does neither again. Since M14 (RV-4) an exit from any other process linked
+  #   to it, a helper its adapter linked, stops it as a link would, `:normal` passed over,
+  #   and a first read that fails after init/3 succeeded closes the adapter, its outputs 0;
+  #   and a process of its own kills it where it has not stopped within the idle watchdog
+  #   and a poll period of its runner's death, hung inside its adapter (minded/3).
+  # - A read's or a report's values are a map and no struct (M6).
 
   use GenServer
 
@@ -140,6 +146,7 @@ defmodule Logex.Runner.Device do
   @impl GenServer
   def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args) do
     Process.flag(:trap_exit, true)
+    minded(runner, self(), args.idle + args.poll)
 
     {:ok,
      %{
@@ -150,6 +157,7 @@ defmodule Logex.Runner.Device do
        runner: runner,
        clock: args.clock,
        poll: args.poll,
+       beat: Map.get(args, :beat),
        restarts: args.restarts,
        adapter: nil,
        image: %{},
@@ -265,6 +273,17 @@ defmodule Logex.Runner.Device do
   # that restart is over, its hold ended by a `taken/2` or a zero.
   def handle_info({__MODULE__, :unheld}, state), do: waited(fn -> holding(state) end)
 
+  # M14 (RV-4): the device traps exits, so that its runner's death stops it through
+  # terminate/2 (decision 115), its runner's exit taken by GenServer itself; an exit from
+  # any other process linked to it, a helper its adapter linked, is the device's own as a
+  # link has it, `:normal` passed over and any other stopping the device with its reason,
+  # every output written 0 once and the adapter closed, so that its runner sees the device
+  # gone down, `{:io, device, {:down, reason}}`, and opens it again at a restart. An
+  # adapter that would outlive a helper monitors it: the monitor's `:DOWN` is a message
+  # as any other, given to report/2.
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
+
   def handle_info(message, %{module: module} = state),
     do: waited(fn -> reported(function_exported?(module, :report, 2), message, state) end)
 
@@ -281,8 +300,14 @@ defmodule Logex.Runner.Device do
     do: adapted(:init, [name, points, opts], state)
 
   # Opened, the adapter is read once, all it gives taken as changed, and its first poll is
-  # one period on; an init/3 or a first read that fails stops the device.
-  defp opened({:ok, adapter}, state), do: first_read(adapted(:read, [adapter], state), state)
+  # one period on; an init/3 or a first read that fails stops the device. Since M14 (RV-4)
+  # a first read that fails after an init/3 that succeeded closes what init/3 opened, every
+  # output written 0 once and the adapter's close/1 called, as a device opened is closed,
+  # with the adapter's state the read gave back or, where it gave none, init/3's.
+  defp opened({:ok, adapter}, state) do
+    state = %{state | adapter: adapter}
+    first_read(adapted(:read, [adapter], state), state)
+  end
 
   defp opened({:fault, {:init, reason}, _adapter}, state),
     do: {:stop, :normal, {:error, reason}, state}
@@ -298,11 +323,12 @@ defmodule Logex.Runner.Device do
        | adapter: adapter,
          open: true,
          image: values,
-         next: clocked(fn -> mod.now_ms(clock) end)
+         next: whole(clocked(fn -> mod.now_ms(clock) end))
      })}
   end
 
-  defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
+  defp first_read({:fault, cause, adapter}, state),
+    do: {:stop, :normal, {:error, cause}, closed(last_zero(%{state | adapter: adapter}))}
 
   # A restart's read answered: merged over every reading the device holds that the runner
   # has not taken, where an adapter's read gives some of its points and reports the rest
@@ -351,8 +377,11 @@ defmodule Logex.Runner.Device do
   defp shaped(:init, {:ok, adapter}, _module, _old), do: {:ok, adapter}
   defp shaped(:init, {:error, reason}, _module, old), do: {:fault, {:init, reason}, old}
 
+  # M6 (RV-4): a read's or a report's values are a map and no struct, as Logex.IO.Sim's
+  # values!/1 and Logex.IO's io!/1 take one: a MapSet, a URI or any struct is no result of
+  # Logex.IO's, on a first read as on any.
   defp shaped(callback, {:ok, values, adapter}, _module, _old)
-       when callback in [:read, :report] and is_map(values),
+       when callback in [:read, :report] and is_map(values) and not is_struct(values),
        do: {:ok, values, adapter}
 
   defp shaped(:write, {:ok, adapter}, _module, _old), do: {:ok, adapter}
@@ -381,7 +410,7 @@ defmodule Logex.Runner.Device do
   defp faulted(cause, %{runner: runner, name: name, clock: {mod, clock}} = state) do
     send(
       runner,
-      {__MODULE__, self(), state.restarts, clocked(fn -> mod.now_ms(clock) end),
+      {__MODULE__, self(), state.restarts, whole(clocked(fn -> mod.now_ms(clock) end)),
        {:fault, name, cause}}
     )
 
@@ -396,7 +425,7 @@ defmodule Logex.Runner.Device do
   # The next poll, a period on from the last on its grid, past now: a poll that came late
   # skips the reads it missed rather than make up for them.
   defp polled(%{clock: {mod, clock}, next: last, poll: poll} = state) do
-    now = clocked(fn -> mod.now_ms(clock) end)
+    now = whole(clocked(fn -> mod.now_ms(clock) end))
     next = last + poll * (div(max(now - last, 0), poll) + 1)
     clocked(fn -> mod.wake_at(clock, self(), {__MODULE__, :poll, next}, next) end)
     %{state | next: next}
@@ -415,7 +444,7 @@ defmodule Logex.Runner.Device do
   defp told_back(%{clock: {mod, clock}, runner: runner, name: name} = state) do
     send(
       runner,
-      {__MODULE__, self(), state.restarts, clocked(fn -> mod.now_ms(clock) end),
+      {__MODULE__, self(), state.restarts, whole(clocked(fn -> mod.now_ms(clock) end)),
        {:back, name, nil}}
     )
 
@@ -444,8 +473,10 @@ defmodule Logex.Runner.Device do
   defp rewritten(%{written: nil} = state), do: state
   defp rewritten(%{deadline: nil} = state), do: state
 
-  defp rewritten(%{clock: {mod, clock}, deadline: deadline} = state),
-    do: rewrite(clocked(fn -> mod.now_ms(clock) end) < deadline, state)
+  defp rewritten(%{clock: {mod, clock}} = state) do
+    %{deadline: deadline} = state = beat(state)
+    rewrite(whole(clocked(fn -> mod.now_ms(clock) end)) < deadline, state)
+  end
 
   defp rewrite(true, state), do: again(wrote(state.written, state))
   defp rewrite(false, state), do: state
@@ -453,7 +484,7 @@ defmodule Logex.Runner.Device do
   defp zero_retried({:ok, adapter}, %{clock: {mod, clock}} = state) do
     send(
       state.runner,
-      {__MODULE__, self(), state.restarts, clocked(fn -> mod.now_ms(clock) end),
+      {__MODULE__, self(), state.restarts, whole(clocked(fn -> mod.now_ms(clock) end)),
        {:zeroed, state.name, nil}}
     )
 
@@ -600,10 +631,36 @@ defmodule Logex.Runner.Device do
 
   # The wake came: a deadline later than now moves it on; one reached, with no refresh
   # since that brought a later one, latches the device, which tells the runner.
-  defp expired(%{clock: {mod, clock}, deadline: deadline} = state) do
-    now = clocked(fn -> mod.now_ms(clock) end)
+  defp expired(%{clock: {mod, clock}} = state) do
+    %{deadline: deadline} = state = beat(state)
+    now = whole(clocked(fn -> mod.now_ms(clock) end))
     expire(now >= deadline, now, state)
   end
+
+  # Decision 348's renewal (RV-4's review): while a round writes its devices, the runner
+  # renews every device's deadline by one shared write, `beat`, two slots of an
+  # `:atomics`, the deadline and the time on its clock it renewed at, where a refresh sent
+  # to every device at every write cost the devices and the runner the square of their
+  # number a round. A device takes the renewal at its wake and at its poll, the two places
+  # it reads its deadline, where it was made after the refresh it last heard, as that
+  # refresh sent would have been taken, and so never one from before the refresh a
+  # release's restart sends first. A refresh sent before a renewal it took and handled
+  # after it sets the older deadline again until the next wake or poll takes the renewal
+  # once more, so every deadline the device acts on is the newest. The runner writes the
+  # deadline first and the time after, and a device reads the time first, so that a
+  # renewal it takes is never older than the time it reads with it. A device started
+  # without a beat, a test's alone, hears none, and one never refreshed none either.
+  defp beat(%{beat: nil} = state), do: state
+
+  defp beat(%{heard: heard, beat: beat} = state) when is_integer(heard),
+    do: renewal(:atomics.get(beat, 2), beat, state)
+
+  defp beat(state), do: state
+
+  defp renewal(at, beat, %{heard: heard} = state) when at > heard,
+    do: %{state | deadline: :atomics.get(beat, 1), heard: at}
+
+  defp renewal(_at, _beat, state), do: state
 
   defp expire(false, _now, state), do: armed(state)
 
@@ -655,6 +712,32 @@ defmodule Logex.Runner.Device do
     %{state | closed: true}
   end
 
+  # c2-runner-persist-3, c7-premortem-plant-3 (RV-4): a process of the device's own, linked
+  # to nothing, that watches its runner and the device: once the runner is gone, the
+  # device, which takes its runner's exit and writes its 0 and closes as it stops, is given
+  # the idle watchdog and a poll period of real time to do so, and killed where it has
+  # not, hung inside its adapter, its outputs then left to what the device does on losing
+  # its master, and what it held free for the next start. One that ends first ends it.
+  defp minded(runner, device, ms) do
+    spawn(fn ->
+      runner_ref = Process.monitor(runner)
+      device_ref = Process.monitor(device)
+
+      receive do
+        {:DOWN, ^device_ref, :process, ^device, _reason} -> :ok
+        {:DOWN, ^runner_ref, :process, ^runner, _reason} -> outlived(device, device_ref, ms)
+      end
+    end)
+  end
+
+  defp outlived(device, ref, ms) do
+    receive do
+      {:DOWN, ^ref, :process, ^device, _reason} -> :ok
+    after
+      ms -> Process.exit(device, :kill)
+    end
+  end
+
   # Its runner gone down, or any stop: every output 0 once and the adapter closed, where a
   # close has not done both already (decision 115).
   @impl GenServer
@@ -676,6 +759,11 @@ defmodule Logex.Runner.Device do
   end
 
   defp closing(false, _state), do: :ok
+
+  # c3-io-contract-9 (RV-4): a time that is no whole number of milliseconds is a clock that
+  # fails, as the runner takes one.
+  defp whole(ms) when is_integer(ms), do: ms
+  defp whole(other), do: exit({:shutdown, {:clock, {:now_ms, other}}})
 
   # The runner's clock gone down, or failing, stops the device, a shutdown, as it stops
   # the runner.

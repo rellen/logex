@@ -686,6 +686,23 @@ defmodule Logex.RetainStoreTest do
     def close({state, _before}), do: Sim.close(state)
   end
 
+  # The manual clock, its wall_ms/1 giving what the test put under its clock, once put.
+  defmodule OddWall do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock), do: Manual.now_ms(clock)
+
+    @impl true
+    def wall_ms(clock), do: :persistent_term.get({__MODULE__, clock}, Manual.wall_ms(clock))
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+  end
+
   defmodule NoWall do
     @behaviour Logex.Runner.Clock
 
@@ -1029,6 +1046,87 @@ defmodule Logex.RetainStoreTest do
       assert Runner.child_spec(:nonsense).shutdown == 5000
       assert Runner.child_spec([{"io", 1}]).shutdown == 5000
       assert Supervisor.child_spec({Runner, base}, shutdown: 900).shutdown == 900
+
+      # c1-runner-rounds-6 (RV-4): never past the longest a supervisor waits, 2^32 - 1 ms,
+      # which a supervisor refuses at its shutdown.
+      longest = [io: io.(1), idle: 2_147_483_647, poll: 2_147_483_647]
+      assert spec.(longest).shutdown == 4_294_967_295
+      assert spec.(io: io.(2), idle: 1_073_741_823, poll: 1).shutdown == 4_294_967_295
+    end
+
+    # c1-runner-rounds-5, c2-runner-persist-2 (RV-4): a stop whose clock went down before
+    # its store's write, which names the time, answers that the write failed, the runner
+    # stopped by the stop's reason, where the clock's exit escaped to the caller and ended
+    # the runner abnormally.
+    test "a stop whose clock is gone answers that its write failed", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      pressed(rig, [1])
+      written = File.read!(rig.store)
+      ref = Process.monitor(runner)
+      Process.unlink(rig.clock)
+      Process.exit(rig.clock, :kill)
+
+      assert {:error, {:retain, {:clock, gone}}} = Runner.stop(runner)
+      assert gone == "the manual clock #{inspect(rig.clock)} is not running"
+      assert_receive {:DOWN, ^ref, :process, ^runner, :normal}
+      assert Sim.closed?(rig.panel)
+      assert File.read!(rig.store) == written
+    end
+
+    # c5-tests-4 (RV-4): a map past 32 keys is in no order of its names, so the store's
+    # global lines are sorted by name, as its instances' are: forty of them, in name order.
+    test "a store's global lines are in name order past 32 of them", %{tmp_dir: dir} do
+      names = for i <- 1..40, do: "g#{String.pad_leading("#{i}", 2, "0")}"
+
+      text =
+        "task fast interval 10 priority 1\nvar_global eye_1 bool at panel.i.0\n" <>
+          Enum.map_join(Enum.shuffle(names), "", &"var_global retain #{&1} dint 7\n") <>
+          "program c count with fast\n  c.eye eye_1\n"
+
+      {:ok, count} =
+        Logex.compile("var_input eye bool\nvar n dint\nxic eye add n 1 n", name: "count")
+
+      {:ok, config} = Configuration.compile("plant", text, %{"count" => count})
+      {:ok, clock} = Manual.start_link(now: @wall)
+      {:ok, panel} = Sim.start_link(clock: clock)
+      store = Path.join(dir, "plant.retain")
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          retain: store
+        )
+
+      lines = for "global " <> rest <- String.split(File.read!(store), "\n"), do: rest
+      assert lines == Enum.map(names, &"#{&1} dint 7")
+      assert Runner.stop(runner) == :ok
+    end
+
+    # c2-runner-persist-6 (RV-4): a wall clock that gives no time a header holds makes the
+    # trip's write fail, reported as any failed write, the trip standing, where it crashed
+    # the runner in the trip.
+    test "a wall clock that gives no time later fails the write it was asked for",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :clock, {OddWall, rig.clock}))
+      :ok = Runner.subscribe(runner)
+      written = File.read!(rig.store)
+      :persistent_term.put({OddWall, rig.clock}, 1.5)
+      on_exit(fn -> :persistent_term.erase({OddWall, rig.clock}) end)
+      tripped(rig, runner)
+
+      assert_receive {Runner, ^runner, {:retain, {:error, {:clock, {:wall_ms, 1.5}}}}}
+
+      assert %{status: :tripped, retain: %{failed: {:clock, {:wall_ms, 1.5}}}} =
+               Runner.status(runner)
+
+      assert File.read!(rig.store) == written
+      :persistent_term.erase({OddWall, rig.clock})
+      assert Runner.stop(runner) == :ok
     end
 
     # Decision 316: a shutdown's write that fails is reported as any failed write, the
@@ -1428,7 +1526,13 @@ defmodule Logex.RetainStoreTest do
     # `status/1`'s `retain` and `{:retain, {:error, reason}}` to the subscribers, the
     # runner tripped all the same; the store then holds the cold restart's own write.
     test "a cold restart's write-back that fails is reported", %{tmp_dir: dir} do
-      rig = rig(dir)
+      # The restart's read of the panel makes the store's `.tmp` a directory in the
+      # device's own process, through the VM's file server, within its real-time limit,
+      # the idle watchdog and a poll period; beside a full suite and a mutation run's
+      # (RV-4) that took over 510 ms in four runs of ten, the device killed before its
+      # directory was made and the write-back did not fail, so the limit is 5000 ms here,
+      # which nothing else in the test reads.
+      rig = rig(dir, idle: 5_000)
       {:ok, agent} = Agent.start_link(fn -> fn -> :ok end end)
 
       opts =
@@ -1455,9 +1559,13 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) =~ "global total_boxes dint 2\n"
     end
 
-    # A trip's write that fails is reported and the store left as it was.
+    # A trip's write that fails is reported and the store left as it was. An idle watchdog
+    # of 5000: since decision 353 the fresh start's, the trip's and the stop's writes each
+    # have the idle watchdog and a poll period of real time, and at the runner's 510 ms a
+    # loaded machine's sync outran the stop's now and then (scripts/load.sh, RV-4). The
+    # test reads no limit.
     test "a trip's write that fails is reported", %{tmp_dir: dir} do
-      rig = rig(dir)
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       written = File.read!(rig.store)
@@ -1753,15 +1861,17 @@ defmodule Logex.RetainStoreTest do
   end
 
   describe "the atomic write (decision 275)" do
-    # Traced in the runner's process: the store is written to its `.tmp`, synced to the
+    # Traced from the runner's process: the store is written to its `.tmp`, synced to the
     # disk and closed before it is renamed over the store, the forces file's rule.
     test "a write is synced before its rename", %{tmp_dir: dir} do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
       assert :erlang.trace_pattern({:file, :_, :_}, true, [:global]) > 0
-      :erlang.trace(runner, true, [:call])
+      # Since decision 353 the write is made in a process the runner starts for it, which
+      # the trace follows.
+      :erlang.trace(runner, true, [:call, :set_on_spawn])
       tripped(rig, runner)
-      :erlang.trace(runner, false, [:call])
+      :erlang.trace(runner, false, [:call, :set_on_spawn])
       :erlang.trace_pattern({:file, :_, :_}, false, [:global])
       assert files([]) == [:open, :write, :sync, :close, :rename]
       assert Runner.stop(runner) == :ok

@@ -34,9 +34,14 @@ defmodule Logex.Runner.Clock.Manual do
 
   A receiver is an OTP process, a GenServer as the runner's and each device's are, which
   answers `:sys` once it has handled what it was sent; one that does not answer within
-  `wait:` is the host's mistake, an `ArgumentError`, and one that is down, or goes down
-  while it handles its message, with whatever reason, `:timeout` among them, is passed
-  over, as a real timer's message to a dead process is lost. The process that advances may be a receiver too: its message is then
+  `wait:`, still busy with its message or no OTP process, is the host's mistake, an
+  `ArgumentError`, and one that is down, or goes down while it handles its message, with
+  whatever reason, `:timeout` among them, is passed over, as a real timer's message to a
+  dead process is lost. A receiver suspended by `:sys.suspend/1` answers `:sys` with its
+  messages still waiting, so `advance/2` goes on before it has handled its timer, which it
+  handles once resumed (c3-io-contract-10). A clock that goes down in the middle of an
+  advance, a receiver killing it, is the `ArgumentError` of a clock that is not running,
+  never an exit. The process that advances may be a receiver too: its message is then
   in its own mailbox when `advance/2` goes on. One process advances a clock at a time, but
   for one case: a receiver may advance it while it handles a message an advance delivered,
   time passing inside a step with the timers on the way delivered, where `pass/2` delivers
@@ -73,7 +78,7 @@ defmodule Logex.Runner.Clock.Manual do
   """
   def advance(clock, ms) do
     clock = clock!(clock)
-    {target, wait} = GenServer.call(clock, {:span, span!(ms, "advance/2")})
+    {target, wait} = called(clock, {:span, span!(ms, "advance/2")})
     delivered(clock, target, wait)
   end
 
@@ -105,7 +110,7 @@ defmodule Logex.Runner.Clock.Manual do
   # Each timer due by `target`, taken from the clock one at a time, so that one a receiver
   # sets while it handles its own is taken in its order.
   defp delivered(clock, target, wait),
-    do: deliver(GenServer.call(clock, {:take, target}), clock, target, wait)
+    do: deliver(called(clock, {:take, target}), clock, target, wait)
 
   defp deliver({:timer, pid, message}, clock, target, wait) do
     send(pid, message)
@@ -113,7 +118,21 @@ defmodule Logex.Runner.Clock.Manual do
     delivered(clock, target, wait)
   end
 
-  defp deliver(:none, clock, target, _wait), do: GenServer.call(clock, {:reach, target})
+  defp deliver(:none, clock, target, _wait), do: called(clock, {:reach, target})
+
+  # c3-io-contract-10 (RV-4): a clock that goes down in the middle of an advance, a
+  # receiver killing it, is one that is not running, as one down before it is, its exit
+  # never let out to the caller; every other call checks the clock first (clock!/1).
+  defp called(clock, request) do
+    GenServer.call(clock, request)
+  catch
+    :exit, reason -> gone!(Process.alive?(clock), clock, reason)
+  end
+
+  defp gone!(false, clock, _reason),
+    do: raise(ArgumentError, "the manual clock #{inspect(clock)} is not running")
+
+  defp gone!(true, _clock, reason), do: exit(reason)
 
   # The caller sent the message, so a call from it through `:sys` is answered only once the
   # receiver has handled it. A receiver that is down, or the caller itself, needs no wait.
@@ -132,11 +151,14 @@ defmodule Logex.Runner.Clock.Manual do
 
   defp unanswered!(false, _pid, _message, _wait), do: :ok
 
+  # c3-io-contract-10 (RV-4): one that did not answer within wait: is a receiver still busy
+  # with its message, or one that is no OTP process, never only the second.
   defp unanswered(pid, message, wait),
     do:
       "the manual clock waited #{wait} ms for #{inspect(pid)} to handle #{inspect(message)}: " <>
-        "a receiver of its timers is an OTP process, as a GenServer is, which answers " <>
-        ":sys once it has handled what it was sent"
+        "a receiver of its timers answers :sys once it has handled what it was sent, as a " <>
+        "GenServer does, and this one did not within wait:, still busy with it or no OTP " <>
+        "process"
 
   @impl GenServer
   def init({now, wait}),
