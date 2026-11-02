@@ -1880,6 +1880,54 @@ defmodule Logex.TagSubscriptTest do
       assert length(p.warnings) == 400 + 399 + 399
     end
 
+    # Decision 405: each storage bit an array keeps is kept under every projection of its
+    # places, so a write through a tag subscript looks up the ones it may meet once, and
+    # the warnings stay linear in the writes and the storage bits beside them, here none
+    # meeting; searching every storage bit of the array at each write costs 2.43x at 2x.
+    # Counted in a process of its own with a heap the collector never visits, the least of
+    # three runs.
+    test "a write through a tag subscript beside the storage bits it never meets costs linear reductions" do
+      source = fn n ->
+        "var_input a bool\nvar_input i int\nvar e bool[33,32]\nvar_output q bool\n" <>
+          "xic e[0,0] ote q\n" <>
+          Enum.map_join(
+            0..(n - 1),
+            "\n",
+            &"xic a ons e[#{1 + div(&1, 32)},#{rem(&1, 32)}] xic e[0,0]"
+          ) <>
+          "\n" <> Enum.map_join(1..n, "\n", fn _ -> "xic a ote e[0,i]" end)
+      end
+
+      compile = fn n ->
+        text = source.(n)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:ok, p} = Logex.compile(text, name: "p")
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, later - before, p.warnings})
+                end,
+                [:monitor, min_heap_size: 50_000_000]
+              )
+
+            assert_receive {:compiled, reductions, warnings}, 30_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+            refute Enum.any?(warnings, &(&1.message =~ "the storage bit"))
+            reductions
+          end
+        )
+      end
+
+      small = compile.(200)
+      large = compile.(400)
+      assert large / small < 2.2, "#{small} at 200, #{large} at 400"
+    end
+
     test "a program's tag subscripts cost linear reductions to compile and to scan" do
       source = fn n ->
         "var_input i int\nvar_input j int\nvar g int[4,8]\nvar_output q int\n" <>

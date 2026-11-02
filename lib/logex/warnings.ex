@@ -1639,16 +1639,17 @@ defmodule Logex.Warnings do
 
     # RV-2 (the review after Milestone 6, a4-warnings-walk-3): the storage bits kept in
     # each array, in name order, gathered once, where each write through a tag subscript
-    # sorted and searched every one-shot of the routine; since decision 405 each with its
-    # places, its subscripts' values and a bit's number.
+    # sorted and searched every one-shot of the routine; since decision 405 by every
+    # projection of its places, its subscripts' values and a bit's number, so that a
+    # write looks up the one its literal places make (storage_meeting/3).
     placed = storage_places(instructions)
 
     arrays =
       owners
-      |> Enum.sort()
+      |> Enum.sort(:desc)
       |> Enum.filter(fn {name, _owner} -> String.contains?(name, "[") end)
-      |> Enum.group_by(fn {name, _owner} -> word_of(name) end, fn {name, owner} ->
-        {name, own_shown(owner, name), Map.fetch!(placed, name)}
+      |> Enum.reduce(%{}, fn {name, owner}, arrays ->
+        kept(arrays, word_of(name), Map.fetch!(placed, name), {name, own_shown(owner, name)})
       end)
 
     for instruction <- instructions,
@@ -1729,32 +1730,36 @@ defmodule Logex.Warnings do
   # `ons e[1,1]` and `ote w[i].4` no `ons w[1].3`, and an element written whole meets
   # every bit of it.
   defp storage_names({:element_at, _, array, index, _, _}, {_words, arrays}),
-    do: meeting_storage(Map.get(arrays, array, []), Enum.map(index, &subscript_place/1))
+    do: storage_meeting(arrays, array, Enum.map(index, &subscript_place/1))
 
   defp storage_names({:bit, _, {:element_at, _, array, index, _, _}, n, _, _}, {_words, arrays}),
-    do: meeting_storage(Map.get(arrays, array, []), Enum.map(index, &subscript_place/1) ++ [n])
+    do: storage_meeting(arrays, array, Enum.map(index, &subscript_place/1) ++ [n])
 
   defp storage_names(
          {:bit_at, _, {:element_at, _, array, index, _, _}, _, _, _},
          {_words, arrays}
        ),
-       do:
-         meeting_storage(
-           Map.get(arrays, array, []),
-           Enum.map(index, &subscript_place/1) ++ [:tag]
-         )
+       do: storage_meeting(arrays, array, Enum.map(index, &subscript_place/1) ++ [:tag])
 
   defp storage_names(_member, _known), do: []
 
-  defp meeting_storage(bits, places),
-    do: for({name, shown, kept} <- bits, meets_storage?(places, kept), do: {name, shown})
+  # A storage bit kept under every projection of its places, `{array, positions, places
+  # there}`, at most 16, in name order; a write meets those its literal places' projection
+  # holds, a tag's place meeting every value, and an element written whole, which has no
+  # bit's place, every bit of it: one lookup, so the warnings stay linear in the writes.
+  defp kept(arrays, array, places, bit),
+    do:
+      Enum.reduce(projections(Enum.with_index(places)), arrays, fn {positions, there}, arrays ->
+        Map.update(arrays, {array, positions, there}, [bit], &[bit | &1])
+      end)
 
-  # A write's places against a storage bit's, place by place, as far as both go: an
-  # element written whole has no bit's place, and meets every bit of the element.
-  defp meets_storage?([:tag | places], [_kept | bit]), do: meets_storage?(places, bit)
-  defp meets_storage?([place | places], [place | bit]), do: meets_storage?(places, bit)
-  defp meets_storage?([], _bit), do: true
-  defp meets_storage?(_places, _bit), do: false
+  defp storage_meeting(arrays, array, places),
+    do: Map.get(arrays, {array, literal_positions(places), literal_places(places)}, [])
+
+  defp literal_positions(places),
+    do: for({place, at} <- Enum.with_index(places), place != :tag, do: at)
+
+  defp literal_places(places), do: for(place <- places, place != :tag, do: place)
 
   defp subscript_place({:name, _, _tag}), do: :tag
   defp subscript_place(value), do: value
