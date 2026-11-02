@@ -74,6 +74,29 @@ defmodule Logex.Name do
   def bracketed(part) when is_binary(part), do: nil
 
   @doc false
+  # Decision 384 (the maintainer, 2026-11-01): an element a host or the forces file names
+  # by numbers, each subscript one integer literal, is the element of their values, so
+  # `temps[03]` and `temps[16#3]` name `temps[3]` and `w[01,2]` `w[1,2]`, as `put_inputs/3`
+  # and `get/2` read a subscript (decisions 222 and 312): the name by its values, or the
+  # text as it is where it is no element named by numbers, `temps[i]`, `temps` or `x.y`.
+  def by_value(name) when is_binary(name), do: valued(element(name), name)
+
+  defp valued({word, subscripts}, name),
+    do: literals(Enum.map(subscripts, &subscript/1), word, name)
+
+  defp valued(nil, name), do: name
+
+  defp literals(subscripts, word, name),
+    do: literal_name(Enum.all?(subscripts, &match?({:literal, _}, &1)), {word, subscripts}, name)
+
+  defp literal_name(true, {word, subscripts}, _name),
+    do:
+      word <>
+        "[" <> Enum.map_join(subscripts, ",", fn {:literal, n} -> Integer.to_string(n) end) <> "]"
+
+  defp literal_name(false, _element, name), do: name
+
+  @doc false
   # The word before a text's first bracket, however its brackets are written, `temps` of
   # `temps[2` or `temps[1, 2]`, or nil where it has none: how a host's key that names no
   # element is told which array it reached for.

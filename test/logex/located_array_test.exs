@@ -690,6 +690,39 @@ defmodule Logex.LocatedArrayTest do
       end)
     end
 
+    # Decision 384 (the maintainer, 2026-11-01), RV-3's question 11 (b2-resource-8): an
+    # element a host names by numbers otherwise than as its subscripts' values, `temps[03]`
+    # or `temps[16#3]`, is the input point of their values, `temps[3]`, as `put_inputs/3`
+    # and `get/2` read one, where until RV-10 a cycle refused it as no input point.
+    test "an element named with a leading zero is the point of its value" do
+      runtime = Runtime.start(oven())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"temps[03]" => 37.5, "temps[16#4]" => 1.0})
+      assert Runtime.get!(runtime, "temps[3]") == 37.5
+      assert Runtime.get!(runtime, "temps[04]") == 1.0
+      assert Runtime.get!(runtime, "temps") == [0.0, 0.0, 0.0, 37.5, 1.0, 0.0, 0.0, 0.0]
+    end
+
+    # Decision 384 at every door a host names an element by: a lone instance's
+    # `put_inputs/3` and `call/4`, and a resource's `get/2`, each reading `[03]` as `[3]`,
+    # as they did (decisions 222 and 312), beside the cycle's input keys above.
+    test "every door a host names an element by reads a leading zero by its value" do
+      {:ok, p} =
+        Logex.compile("var_input steps int[4]\nvar_output o int\nmove steps[3] o", name: "m")
+
+      state = Runtime.put_inputs(p, Runtime.instance(p), %{"steps[03]" => 5})
+      assert elem(state.env["steps"], 3) == 5
+
+      {%{"o" => 7}, _} =
+        Runtime.call(p, Runtime.instance(p), %{"steps[003]" => 7}, %Logex.Scan{
+          now: 0,
+          first: true
+        })
+
+      runtime = Runtime.start(oven())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"temps[3]" => 2.5})
+      assert Runtime.get!(runtime, "temps[03]") == 2.5
+    end
+
     test "refuses the array named whole, an output element, an element its array lacks and a misfit" do
       runtime = Runtime.start(oven())
 
@@ -711,8 +744,12 @@ defmodule Logex.LocatedArrayTest do
              ~s|input `lamps[2]` is an output point (at `card.q.2`), not an input point: only an input point is set from outside|},
             {%{"temps[8]" => 1.0},
              ~s|input `temps[8]` is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
-            {%{"temps[03]" => 1.0},
-             ~s|input `temps[03]` is not an input point: `temps` is an array of input points, each element set by its name as its subscripts' values, `temps[0]` to `temps[7]`|},
+            # Decision 384: `temps[03]`, until RV-10 refused here as no input point, is
+            # `temps[3]` (the test after this one); two keys that name one point are not.
+            {%{"temps[03]" => 1.0, "temps[3]" => 2.0, "temps[16#3]" => 3.0},
+             ~s|inputs `temps[03]` and `temps[16#3]` and `temps[3]` each set `temps[3]`, an input point of `temps`, an array of 8 reals (line 3): a call sets each point once|},
+            {%{"temps[03]" => true},
+             "input `temps[03]` is a real: its value must be a number, found true"},
             {%{"temps[1]" => true},
              "input `temps[1]` is a real: its value must be a number, found true"},
             {%{"temps[1]" => 1.0e39},
@@ -911,10 +948,48 @@ defmodule Logex.LocatedArrayTest do
       Runner.stop(runner)
     end
 
+    # Decision 384: a force, an unforce and the forces file name an element by numbers
+    # otherwise than as its subscripts' values, `temps[03]`, as the point of their values,
+    # `temps[3]`, kept, written and shown under that name, two lines naming it either way
+    # one point forced twice.
+    test "an element forced as `temps[03]` is `temps[3]`, by the host and in the file",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, file: file} = running(dir)
+      assert Runner.force(runner, "temps[03]", 150.0) == :ok
+      assert Runner.status(runner).forces == %{"temps[3]" => 150.0}
+      assert File.read!(file) == "temps[3] 150.0\n"
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "temps[3]") == 150.0
+      assert Runner.unforce(runner, "temps[16#3]") == :ok
+      assert Runner.status(runner).forces == %{}
+      Runner.stop(runner)
+
+      File.write!(file, "temps[03] 1\n")
+      %{runner: runner} = running(dir)
+      assert Runner.status(runner).forces == %{"temps[3]" => 1.0}
+      Runner.stop(runner)
+
+      File.write!(file, "temps[3] 1\ntemps[003] 2\n")
+      {:ok, clock} = Manual.start_link()
+      {:ok, card} = Sim.start_link(clock: clock)
+
+      raises(
+        "#{file}: line 2: `temps[3]` is forced on line 1 already",
+        fn ->
+          Runner.start_link(
+            configuration: oven(),
+            io: %{"card" => {Sim, sim: card}},
+            clock: {Manual, clock},
+            forces: file
+          )
+        end
+      )
+    end
+
     test "the forces file names an element, read at every start; the array whole is refused",
          %{tmp_dir: dir} do
       file = Path.join(dir, "forces")
-      File.write!(file, "temps[03] 1\n")
+      File.write!(file, "temps[08] 1\n")
       {:ok, clock} = Manual.start_link()
       {:ok, card} = Sim.start_link(clock: clock)
 
@@ -927,8 +1002,11 @@ defmodule Logex.LocatedArrayTest do
         )
       end
 
+      # Decision 384: `temps[08]` is `temps[8]`, which the array lacks, told as written;
+      # until RV-10 this line was `temps[03] 1`, refused, which now forces `temps[3]` (the
+      # test after this one).
       raises(
-        "#{file}: line 1: `temps[03]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `temps[0]` to `temps[7]`",
+        "#{file}: line 1: `temps[08]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `temps[0]` to `temps[7]`",
         start
       )
 

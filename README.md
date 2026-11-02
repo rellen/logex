@@ -4458,7 +4458,10 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
   anything opens; a test's `Logex.IO.Sim.set/3` past its inputs is refused too.
 - A force of `zone_t[3]` is held against the card while its neighbours go on reading
   it, kept in the forces file as `zone_t[3] 150.0`, read back by a fresh runner after a
-  crash; an unforce puts back the card's last value of that element. A restart reads the
+  crash; an unforce puts back the card's last value of that element. An element is named
+  by its subscripts' values however a host or the forces file writes them, so
+  `zone_t[03]`, in a cycle's inputs, a force or a file's line, is `zone_t[3]`, and is kept
+  and shown under that name (decision 384). A restart reads the
   card whole again, and a value one element cannot hold trips the plant at that
   element's address, the others kept (decision 143).
 - An online edit that moves a located array, grows or shrinks it, or takes its location

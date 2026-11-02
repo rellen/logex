@@ -318,7 +318,9 @@ defmodule Logex.Runner do
   order, as a device's changes are; one that changes nothing makes none, and a device's
   change of a forced trigger makes none. Since M5-13 an element of a located array is an
   input point of its own, forced, unforced and written in the forces file by its name,
-  `temps[3] 37.5` (decision 156); and since decision 241 an array of input points named
+  `temps[3] 37.5` (decision 156), and since decision 384 by its subscripts' values however
+  a host or the file writes them, `temps[03]` and `temps[16#3]` naming `temps[3]`, under
+  which it is kept, written and shown in `status/1`; and since decision 241 an array of input points named
   whole is forced to a list of its shape, each element then forced, every misfit told, ten
   and then a count, and unforced whole, each element reading its device's last value
   again; a forces file's line for it is its name and one value an element in the
@@ -1168,11 +1170,13 @@ defmodule Logex.Runner do
   # file before it returns, a write that fails changing nothing.
   defp serve({:force, name, value}, state) do
     filed!(state)
+    name = by_value(name, state)
     forcing(input(name, state), name, value, state)
   end
 
   defp serve({:unforce, name}, state) do
     filed!(state)
+    name = by_value(name, state)
     unforcing(input(name, state), name, state)
   end
 
@@ -1386,6 +1390,19 @@ defmodule Logex.Runner do
       )
 
   defp filed!(_state), do: :ok
+
+  # Decision 384 (the maintainer, 2026-11-01): an element of a located array of input points
+  # named by numbers otherwise than as its subscripts' values, `temps[03]`, is the point of
+  # their values, `temps[3]` (`Logex.Name.by_value/1`), forced, unforced, kept and shown in
+  # `status/1` under that name, where until RV-10 it was no input point; a name that is
+  # none either way is told as the host wrote it.
+  defp by_value(name, %{types: types}) when is_binary(name) and not is_map_key(types, name),
+    do: known_point(Logex.Name.by_value(name), name, types)
+
+  defp by_value(name, _state), do: name
+
+  defp known_point(point, _name, types) when is_map_key(types, point), do: point
+  defp known_point(_point, name, _types), do: name
 
   # An input point, by its name: `{:ok, type}`, or what the name is instead, told.
   defp input(name, %{types: types} = state) when is_binary(name),
@@ -1632,8 +1649,10 @@ defmodule Logex.Runner do
        when not is_map_key(points.located, name),
        do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
 
-  defp force_read({:ok, name, value}, text, line, acc, points),
-    do: read_point(input(name, points), {name, value, text}, line, acc)
+  defp force_read({:ok, name, value}, text, line, acc, points) do
+    name = by_value(name, points)
+    read_point(input(name, points), {name, value, text}, line, acc)
+  end
 
   # A line's point: an input point's, or, since decision 241, each element of a located
   # array of input points named whole; a line with more than one value names such an array.

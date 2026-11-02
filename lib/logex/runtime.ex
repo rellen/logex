@@ -35,7 +35,9 @@ defmodule Logex.Runtime do
      values between cycles: a host sends only what changed, and every scan of the cycle
      sees the one sample. Since M5-13 an element of a located array is an input point of
      its own, keyed by its element's name, `%{"temps[3]" => 37.5}`, the rest of its array
-     kept, and since decision 241 an array of input points named whole is a list of its
+     kept, since decision 384 by its subscripts' values however a host writes them,
+     `%{"temps[03]" => 37.5}` setting `temps[3]`, two keys that name one point refused, and
+     since decision 241 an array of input points named whole is a list of its
      shape, `%{"temps" => [...]}`, as a program's array var_input is (decision 222), set
      whole or by its elements in one call, never both; the outputs give each element of a
      located array of output points by its name, `"lamps[2]"` (decision 156).
@@ -2842,6 +2844,7 @@ defmodule Logex.Runtime do
           problem = point_problem(key, value, runtime),
           do: problem
 
+    {problems, inputs} = by_values(problems, inputs, runtime.wiring)
     imaged(problems, {globals, runtime.wiring}, inputs)
   end
 
@@ -2852,6 +2855,49 @@ defmodule Logex.Runtime do
         ~s|inputs must be a map of input-point names to values, as in %{"pb_start_1" => 1}, | <>
           "got: #{inspect(inputs)}"
       )
+
+  # Decision 384 (the maintainer, 2026-11-01): an element of a located array of input
+  # points a host names by numbers otherwise than as its subscripts' values, `temps[03]`,
+  # is the point of their values, `temps[3]` (`Logex.Name.by_value/1`), as `put_inputs/3`
+  # reads an array var_input's element, where until RV-10 it was no input point; each such
+  # key is told by `point_problem/3` only where it names no point as written, so that a
+  # cycle of points named as their values pays one clause for it, and is set under the
+  # point's own name, two keys that name one point a line each, in key order.
+  defp by_values([], inputs, _wiring), do: {[], inputs}
+
+  defp by_values(problems, inputs, wiring) do
+    {named, problems} = Enum.split_with(problems, &match?({:by_value, _, _}, &1))
+    {problems ++ twice(named, inputs, wiring), renamed(named, inputs)}
+  end
+
+  defp renamed([], inputs), do: inputs
+
+  defp renamed(named, inputs),
+    do:
+      Enum.reduce(named, inputs, fn {:by_value, key, point}, inputs ->
+        Map.put(Map.delete(inputs, key), point, Map.fetch!(inputs, key))
+      end)
+
+  defp twice(named, inputs, wiring),
+    do:
+      for(
+        {point, keys} <- Enum.sort(Enum.group_by(named, &elem(&1, 2), &elem(&1, 1))),
+        keys = Enum.sort(keyed_by(is_map_key(inputs, point), point, keys)),
+        length(keys) > 1,
+        do:
+          "inputs #{keyed_list(keys)} each set `#{point}`, an input point of " <>
+            "`#{hd(:binary.split(point, "["))}`, #{located_type(point, wiring)}: a " <>
+            "call sets each point once"
+      )
+
+  defp keyed_by(true, point, keys), do: [point | keys]
+  defp keyed_by(false, _point, keys), do: keys
+
+  defp located_type(point, wiring) do
+    [array | _] = :binary.split(point, "[")
+    global = Map.fetch!(wiring.globals, array)
+    Declarations.a_type(global.type) <> global_line(global)
+  end
 
   # Decision 241, as decision 229 has it for a program: one call sets a located array of
   # input points whole or by its elements, never both, a line an array, in name order,
@@ -2978,8 +3024,26 @@ defmodule Logex.Runtime do
       "input #{label(key)} is #{not_input(Configuration.location(global.at), global)}: " <>
         "only an input point is set from outside"
 
-  defp point(:error, :error, key, _value, runtime),
+  defp point(:error, :error, key, value, runtime),
+    do: by_value(Logex.Name.by_value(key), key, value, runtime)
+
+  # Decision 384: a key naming no point as written, an element named by numbers otherwise
+  # than as its subscripts' values, is the point of their values where there is one, its
+  # value judged as that point's, under the host's own key.
+  defp by_value(key, key, _value, runtime),
     do: unknown_point(String.split(key, "."), key, runtime)
+
+  defp by_value(point, key, value, runtime),
+    do: valued_point(Map.fetch(runtime.wiring.inputs, point), {point, key}, value, runtime)
+
+  defp valued_point({:ok, type}, {point, key}, value, _runtime),
+    do: fitted_point(fit(%Tag{name: key, type: type, section: :var_input}, value), point, key)
+
+  defp valued_point(:error, {_point, key}, _value, runtime),
+    do: unknown_point(String.split(key, "."), key, runtime)
+
+  defp fitted_point(nil, point, key), do: {:by_value, key, point}
+  defp fitted_point(problem, _point, _key), do: problem
 
   defp not_input({:ok, _output}, global),
     do: "an output point (at `#{global.at}`), not an input point"
