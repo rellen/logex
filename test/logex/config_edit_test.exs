@@ -2242,12 +2242,17 @@ defmodule Logex.ConfigEditTest do
       {runtime, %{"k1" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
       {edit, [{:held, "k1", 0}, {:holds, "m1.aux", 0}]} = accepted(runtime, candidate)
       {edit, tested, _} = Edit.test(edit, runtime)
-      assert {_edit, _, [{:hold_undone, "m1.aux", 1}]} = Edit.untest(edit, tested)
+
+      # Since decision 387 the untest holds `k2` too, which the candidate leaves unwired and
+      # the original wires from the spare no rung writes (until RV-10 `[{:hold_undone, ...}]`
+      # here and `[]` below).
+      assert {_edit, _, [{:held, "k2", 1}, {:hold_undone, "m1.aux", 1}]} =
+               Edit.untest(edit, tested)
 
       # A warm restart keeps the retained spare at the hold's 0, now the restart's.
       restarted = Runtime.restart(tested, :warm)
       assert restarted.instances["m1"].env["aux"] == 0
-      assert {_edit, _, []} = Edit.untest(edit, restarted)
+      assert {_edit, _, [{:held, "k2", 0}]} = Edit.untest(edit, restarted)
     end
 
     # RV-3's review (provisional, `PLAN.md`'s RV-3 entry): a var_output of another type than
@@ -2620,21 +2625,326 @@ defmodule Logex.ConfigEditTest do
 
       {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
 
-      for start <- [runtime, Runtime.start(original)] do
+      # Since decision 387 each untest holds `k2` too, which the candidate leaves unwired and
+      # the original wires from the spare no rung writes: at the spare's 1 where the original
+      # had cycled, and at 0 where it had not, the spare given back and then held at it
+      # (until RV-10 `[{:hold_undone, "m1.aux", 1}]` and `[]`).
+      for {start, untest} <- [
+            {runtime, [{:held, "k2", 1}, {:hold_undone, "m1.aux", 1}]},
+            {Runtime.start(original),
+             [{:held, "k2", 0}, {:hold_undone, "m1.aux", 1}, {:holds, "m1.aux", 0}]}
+          ] do
         {edit, [{:held, "k1", 0}, {:holds, "m1.aux", 0}]} = accepted(start, candidate)
         {edit, tested, _} = Edit.test(edit, start)
         {cycled, _, _} = Runtime.cycle(tested, 10, %{"pb" => 0})
-        assert {_edit, _, [{:hold_undone, "m1.aux", 1}]} = Edit.untest(edit, cycled)
+        assert {_edit, _, ^untest} = Edit.untest(edit, cycled)
 
         restarted = Runtime.restart(tested, :warm)
         {cycled, _, _} = Runtime.cycle(restarted, 10, %{"pb" => 0})
         assert cycled.instances["m1"].env["aux"] == 0
 
         for after_restart <- [restarted, cycled] do
-          assert {_edit, untested, []} = Edit.untest(edit, after_restart)
+          assert {_edit, untested, [{:held, "k2", 0}]} = Edit.untest(edit, after_restart)
           assert untested.instances["m1"].env["aux"] == 0
         end
       end
+    end
+  end
+
+  # Decisions 386 and 387 (the maintainer, 2026-11-01), RV-3's questions 13 and 14: a point
+  # rewired from one var_output no rung writes to another, and a point no connection drove
+  # that is newly wired from one, is held at its value until a rung writes the var_output,
+  # and the forecast and every report say held, as decision 347 holds one: a scalar and an
+  # element, both ways, given back by an untest, held again by assemble and cancel after a
+  # restart, and refused where the var_output's type cannot hold the point's value
+  # (decision 374). Until RV-10 each such point moved at the first cycle with an empty
+  # forecast.
+  describe "a point rewired between, or newly wired from, unwritten var_outputs (decisions " <>
+             "386 and 387)" do
+    @spares_ld "var_input start bool\nvar_output run bool\nvar_output aux bool 1\n" <>
+                 "var_output aux2 bool\nvar_output lv dint 9\nvar_output o bool[2] 1 1\n" <>
+                 "xic start ote run\n"
+
+    @one_motor """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at panel.q.0
+    var_global k2 bool at panel.q.1
+    var_global level dint 5
+    var_global lamps bool[2] at panel.q.2
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+    """
+
+    defp spares(connections),
+      do: held_plant(@one_motor <> connections, %{"motor" => @spares_ld})
+
+    test "a scalar rewired from one unwritten var_output to another holds, both ways" do
+      original = spares("  m1.aux k2\n")
+      candidate = spares("  m1.aux2 k2\n")
+      {runtime, %{"k2" => 1}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+
+      forecast = [{:held, "k2", 1}, {:holds, "m1.aux2", 1}]
+      {edit, ^forecast} = accepted(runtime, candidate)
+      {edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, tested} = under_test(tested, 3, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [1, 1, 1]
+
+      # The untest gives the spare back and holds k2 through the original's own spare,
+      # which the candidate did not wire, at 1 already; assemble after it all again.
+      {edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:held, "k2", 1}, {:hold_undone, "m1.aux2", 0}]
+      {outputs, untested} = under_test(untested, 2, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [1, 1]
+      {edit, tested, _} = Edit.test(edit, untested)
+      {_config, assembled, report} = Edit.assemble(edit, tested)
+      assert {:held, "k2", 1} in report
+      {outputs, _} = under_test(assembled, 2, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [1, 1]
+    end
+
+    test "a scalar newly wired from an unwritten var_output holds, a bool and a dint, and " <>
+           "the untest and cancel hold nothing they need not" do
+      original = spares("")
+      candidate = spares("  m1.aux k2\n  m1.lv level\n")
+      {runtime, %{"k2" => 0}, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+
+      forecast = [
+        {:held, "k2", 0},
+        {:held, "level", 5},
+        {:holds, "m1.aux", 0},
+        {:holds, "m1.lv", 5}
+      ]
+
+      {edit, ^forecast} = accepted(runtime, candidate)
+      {edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, tested} = under_test(tested, 3, %{"pb" => 1})
+      assert Enum.map(outputs, & &1["k2"]) == [0, 0, 0]
+      assert Runtime.get!(tested, "level") == 5
+
+      # Untested, the original wires neither: each is given back, and nothing drives the
+      # points, which keep their values.
+      {edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:hold_undone, "m1.aux", 1}, {:hold_undone, "m1.lv", 9}]
+      {_config, cancelled, []} = Edit.cancel(edit, untested)
+      assert {Runtime.get!(cancelled, "k2"), Runtime.get!(cancelled, "level")} == {0, 5}
+    end
+
+    test "an element rewired, and an element of an array wired whole for the first time, hold" do
+      original = spares("  m1.aux lamps[0]\n")
+      candidate = spares("  m1.aux2 lamps[0]\n  m1.o[1] lamps[1]\n")
+
+      {runtime, %{"lamps[0]" => 1, "lamps[1]" => 0}, _} =
+        Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+
+      forecast = [
+        {:held, "lamps[0]", 1},
+        {:held, "lamps[1]", 0},
+        {:holds, "m1.aux2", 1},
+        {:holds, "m1.o[1]", 0}
+      ]
+
+      {edit, ^forecast} = accepted(runtime, candidate)
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _} = under_test(tested, 2, %{"pb" => 1})
+      assert Enum.map(outputs, &{&1["lamps[0]"], &1["lamps[1]"]}) == [{1, 0}, {1, 0}]
+
+      # An array var_output newly wired whole: each element its program does not write.
+      whole = spares("  m1.o lamps\n")
+      {edit, forecast} = accepted(runtime, whole)
+      assert forecast == [{:held, "lamps", [1, 0]}, {:holds, "m1.o", [1, 0]}]
+      {_edit, tested, ^forecast} = Edit.test(edit, runtime)
+      {outputs, _} = under_test(tested, 2, %{"pb" => 1})
+      assert Enum.map(outputs, &{&1["lamps[0]"], &1["lamps[1]"]}) == [{1, 0}, {1, 0}]
+    end
+
+    test "assemble and cancel after a restart under the edit hold each point again" do
+      original = spares("  m1.aux k2\n")
+      candidate = spares("  m1.aux2 k2\n")
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, _} = accepted(runtime, candidate)
+      {edit, tested, _} = Edit.test(edit, runtime)
+
+      # A cold restart puts k2 at 0 and the candidate's spare at its 0: held at 0, no write.
+      restarted = Runtime.restart(tested, :cold)
+      {_config, assembled, report} = Edit.assemble(edit, restarted)
+      assert {:held, "k2", 0} in report
+      refute Enum.any?(report, &match?({:holds, _, _}, &1))
+      {outputs, _} = under_test(assembled, 2, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [0, 0]
+
+      # A warm restart of a retained spare keeps the hold's 1 while k2 goes to 0: assemble
+      # starts the spare at 0 again, so k2 stays where every report says.
+      retained = String.replace(@spares_ld, "var_output aux2", "var_output retain aux2")
+      original = held_plant(@one_motor <> "  m1.aux k2\n", %{"motor" => retained})
+      candidate = held_plant(@one_motor <> "  m1.aux2 k2\n", %{"motor" => retained})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 0})
+      {edit, _} = accepted(runtime, candidate)
+      {edit, tested, _} = Edit.test(edit, runtime)
+      restarted = Runtime.restart(tested, :warm)
+      assert {restarted.instances["m1"].env["aux2"], Runtime.get!(restarted, "k2")} == {1, 0}
+      {_config, assembled, report} = Edit.assemble(edit, restarted)
+      assert {:holds, "m1.aux2", 0} in report and {:held, "k2", 0} in report
+      {outputs, _} = under_test(assembled, 2, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [0, 0]
+
+      {edit, untested, _} = Edit.untest(edit, tested)
+      restarted = Runtime.restart(untested, :warm)
+      {_config, cancelled, report} = Edit.cancel(edit, restarted)
+      assert {:held, "k2", 0} in report
+      {outputs, _} = under_test(cancelled, 2, %{"pb" => 0})
+      assert Enum.map(outputs, & &1["k2"]) == [0, 0]
+    end
+
+    test "a newly wired or rewired var_output of another type than its point's is refused, " <>
+           "both ways (decision 374)" do
+      narrow = String.replace(@spares_ld, "xic start", "var_output small int 9\nxic start")
+      plain = held_plant(@one_motor, %{"motor" => narrow})
+      wired = held_plant(@one_motor <> "  m1.small level\n", %{"motor" => narrow})
+      {runtime, _, _} = Runtime.cycle(Runtime.start(plain), 0, %{"pb" => 0})
+
+      assert {:error, [%Logex.Diagnostic{line: 10, message: message}]} =
+               Edit.accept(runtime, wired)
+
+      assert message ==
+               "`m1.small` is an int var_output no rung of `motor` writes, wired to `level`, " <>
+                 "a dint global the candidate holds: a held point is wired to a var_output of " <>
+                 "another type only with a restart"
+
+      # The running configuration's own such wire, which an untest would hold anew.
+      {runtime, _, _} = Runtime.cycle(Runtime.start(wired), 0, %{"pb" => 0})
+
+      assert {:error, [%Logex.Diagnostic{line: nil, message: message}]} =
+               Edit.accept(runtime, plain)
+
+      assert message ==
+               "`m1.small` (line 10 of the running configuration) is an int var_output no rung " <>
+                 "of `motor` writes, wired to `level`, a dint global an untest holds: a held " <>
+                 "point is wired to a var_output of another type only with a restart"
+    end
+  end
+
+  # Decision 388 (the maintainer, 2026-11-01), RV-3's question 15: a hold starts the
+  # var_output at its point's value, so where a rung of its program reads that
+  # var_output, `xic aux ote lamp`, the hold would change what the rung gives, reported
+  # only as `{:holds, "m1.aux", 0}`; accept refuses the edit instead, naming the
+  # var_output and the line that reads it, so it is taken only with a restart: a scalar,
+  # an element read by its name or through a tag subscript, and a bit of a word, both
+  # ways, a decision 347 hold and a decision 387 one alike. An element the rung does not
+  # read is held as before, and a kept instance's own connection both configurations make
+  # is not refused. Until RV-10 the hold was taken and the lamp moved.
+  describe "a held var_output a rung reads (decision 388)" do
+    @reader_ld "var_input start bool\nvar_output run bool\nvar_output aux bool 1\n" <>
+                 "var_output o bool[2] 1 1\nvar_output w word 8\nvar_output lamp bool\n" <>
+                 "var i dint\nxic start ote run\nREAD ote lamp\n"
+
+    @reader_plant """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at panel.q.0
+    var_global k2 bool at panel.q.1
+    var_global ws word
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+    """
+
+    defp reader(read, connections),
+      do:
+        held_plant(@reader_plant <> connections, %{
+          "motor" => String.replace(@reader_ld, "READ", read)
+        })
+
+    defp refusal(runtime, candidate) do
+      assert {:error, diagnostics} = Edit.accept(runtime, candidate)
+      for %Logex.Diagnostic{line: line, message: message} <- diagnostics, do: {line, message}
+    end
+
+    test "a scalar, an element and a word's bit a rung reads are refused, newly wired" do
+      for {read, wire, held} <- [
+            {"xic aux", "m1.aux k2", "k2"},
+            {"xic o[1]", "m1.o[1] k2", "k2"},
+            {"xic o[i]", "m1.o[1] k2", "k2"},
+            {"xic w.3", "m1.w ws", "ws"}
+          ] do
+        member = wire |> String.split(" ") |> hd()
+        {runtime, _, _} = Runtime.cycle(Runtime.start(reader(read, "")), 0, %{"pb" => 0})
+
+        assert refusal(runtime, reader(read, "  #{wire}\n")) == [
+                 {9,
+                  "`#{member}` is a var_output no rung of `motor` writes and line 9 of " <>
+                    "`motor` reads, wired to `#{held}`, a global the candidate holds: holding " <>
+                    "it would change what that rung gives, so a held point is wired to a " <>
+                    "var_output a rung reads only with a restart"}
+               ],
+               read
+      end
+    end
+
+    test "an element the rung does not read is held as before" do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(reader("xic o[0]", "")), 0, %{"pb" => 0})
+
+      assert {:ok, _edit, [{:held, "k2", 0}, {:holds, "m1.o[1]", 0}]} =
+               Edit.accept(runtime, reader("xic o[0]", "  m1.o[1] k2\n"))
+    end
+
+    test "a decision 347 hold a rung reads is refused, both ways, and a kept instance's own " <>
+           "source is not" do
+      # The original drives k2 from m2, the candidate from m1's `aux` that line 9 reads.
+      driven = @reader_plant <> "program m2 relay with fast\n  m2.start pb\n  m2.run k2\n"
+
+      relay =
+        "var_input start bool\nvar_output run bool\nxic start ote run\n"
+
+      sources = fn connections ->
+        held_plant(driven <> connections, %{
+          "motor" => String.replace(@reader_ld, "READ", "xic aux"),
+          "relay" => relay
+        })
+      end
+
+      original = sources.("")
+
+      candidate =
+        held_plant(String.replace(driven, "  m2.run k2\n", "") <> "  m1.aux k2\n", %{
+          "motor" => String.replace(@reader_ld, "READ", "xic aux"),
+          "relay" => relay
+        })
+
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{"pb" => 1})
+
+      assert refusal(runtime, candidate) == [
+               {11,
+                "`m1.aux` is a var_output no rung of `motor` writes and line 9 of `motor` " <>
+                  "reads, wired to `k2`, a global the candidate stops driving: holding it " <>
+                  "would change what that rung gives, so a held point is wired to a " <>
+                  "var_output a rung reads only with a restart"}
+             ]
+
+      # The other way: the running configuration's own reading wire, which an untest holds.
+      {runtime, _, _} = Runtime.cycle(Runtime.start(candidate), 0, %{"pb" => 1})
+
+      assert refusal(runtime, original) == [
+               {nil,
+                "`m1.aux` (line 11 of the running configuration) is a var_output no rung of " <>
+                  "`motor` writes and line 9 of `motor` reads, wired to `k2`, a global only " <>
+                  "the candidate drives: holding it would change what that rung gives, so a " <>
+                  "held point is wired to a var_output a rung reads only with a restart"}
+             ]
+
+      # A kept instance's own connection, the candidate's version reading `aux` it no longer
+      # writes: it holds the point's value from its first run on, so the rung reads what it
+      # read.
+      writer = String.replace(@reader_ld, "READ ote lamp", "xic start ote aux")
+      reads = String.replace(@reader_ld, "READ", "xic aux")
+      own = @reader_plant <> "  m1.aux k2\n"
+
+      {runtime, _, _} =
+        Runtime.cycle(Runtime.start(held_plant(own, %{"motor" => writer})), 0, %{"pb" => 1})
+
+      assert {:ok, _edit, forecast} = Edit.accept(runtime, held_plant(own, %{"motor" => reads}))
+      assert {:held, "k2", 1} in forecast
     end
   end
 

@@ -657,6 +657,60 @@ defmodule Logex.RunnerEditTest do
     end
   end
 
+  # Decisions 386 and 387 through the runner: a contactor rewired from one var_output no
+  # rung writes to another, and one no connection drove newly wired from one, stays where
+  # the forecast says on the sim's own outputs, both ways.
+  describe "a rewired or newly wired point through the runner (decisions 386 and 387)" do
+    @spare_motors """
+    task fast interval 10 priority 1
+    var_global pb bool at panel.i.0
+    var_global k1 bool at drive.q.0
+    var_global k2 bool at drive.q.1
+    program m1 motor with fast
+      m1.start pb
+      m1.run k1
+    """
+
+    defp spare_motors(connections) do
+      {:ok, config} =
+        Configuration.compile("plant", @spare_motors <> connections, %{
+          "motor" =>
+            program(
+              "var_input start bool\nvar_output run bool\nvar_output aux bool 1\n" <>
+                "var_output aux2 bool\nxic start ote run\n",
+              "motor"
+            )
+        })
+
+      config
+    end
+
+    test "the forecast's held point keeps its value on the device under test, and back" do
+      for {from, to, held} <- [
+            {"  m1.aux k2\n", "  m1.aux2 k2\n", 1},
+            {"", "  m1.aux k2\n", 0}
+          ] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} =
+          started(spare_motors(from))
+
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 30)
+        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+
+        assert {:ok, forecast} = Runner.accept(runner, spare_motors(to))
+        assert {:held, "k2", held} in forecast
+        assert Runner.test(runner) == {:ok, forecast}
+        Manual.advance(clock, 30)
+        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+
+        assert {:ok, _report} = Runner.untest(runner)
+        Manual.advance(clock, 30)
+        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+        Runner.stop(runner)
+      end
+    end
+  end
+
   describe "accept's work, in the caller's process (decision 119)" do
     test "Logex.Configuration.Edit.accept/2 runs in the caller, the steps in the runner" do
       %{runner: runner} = started()

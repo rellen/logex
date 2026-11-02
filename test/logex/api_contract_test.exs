@@ -4137,7 +4137,9 @@ defmodule Logex.ApiContractTest do
     :located,
     :located_new,
     :located_removed,
-    :tag_type
+    :tag_type,
+    # Decision 388: a var_output a rung reads, which a hold would set.
+    :read_held
   ]
 
   @ce_reach [
@@ -4186,7 +4188,11 @@ defmodule Logex.ApiContractTest do
     :retain_undeclared,
     # Decision 347: a held global kept at its reported value through a cycle while a
     # connection of the configuration running still names it.
-    :held_kept
+    :held_kept,
+    # Decisions 386 and 387: a point rewired from one var_output no rung writes to
+    # another, and a point no connection drove newly wired from one, held.
+    :held_rewired,
+    :held_newly_wired
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -4403,7 +4409,7 @@ defmodule Logex.ApiContractTest do
         ce_x(v.x) ++
         ["var_output #{q["out"]}out bool", "var_output q bool", "var_output r bool"] ++
         ["var #{q["t1"]}t1 #{v.timer}", "var sp dint 40", "var s bool", "var c bool"] ++
-        ["var w bool"] ++
+        ["var w bool", "var rd bool"] ++
         ce_n(v.n, q["n"]) ++ ["var k #{v.k}"] ++ ce_g(v.g) ++ ce_blk(v.blk, q["b1"])
 
     rungs =
@@ -4413,10 +4419,16 @@ defmodule Logex.ApiContractTest do
         ce_ons(v.ons) ++
         [if(v.k == :bool, do: "xic in ote k", else: "xic in move 1 k")] ++
         if(v.x == :none, do: [], else: ["xic x ote r"]) ++
-        ce_g_rungs(v.g, v.gw) ++ if(v.blk, do: ["cal b1 in w"], else: [])
+        ce_g_rungs(v.g, v.gw) ++
+        if(v.blk, do: ["cal b1 in w"], else: []) ++ ce_reader(v.n)
 
     Enum.join(decls, "\n") <> "\n\n" <> Enum.join(rungs, "\n") <> "\n"
   end
+
+  # Decision 388: a version whose `n` is 2 reads `out`, on no draw of its own, so that a
+  # hold of `out`, unwritten where its timer's rung is not drawn, is refused.
+  defp ce_reader(2), do: ["xic out ote rd"]
+  defp ce_reader(_n), do: []
 
   defp ce_x(:input), do: ["var_input x bool"]
   defp ce_x(:var), do: ["var x bool"]
@@ -5029,7 +5041,73 @@ defmodule Logex.ApiContractTest do
             {:tag_type, now.line,
              "`k` is a #{was} in the running program and a #{now.type} in the candidate: a tag's type changes only with a restart"}
 
-    Enum.sort_by(own, &elem(&1, 1)) ++ gone ++ typed
+    {read_test, read_untest} = ce_read_held(o, c)
+    Enum.sort_by(own ++ read_test, &elem(&1, 1)) ++ gone ++ read_untest ++ typed
+  end
+
+  # Decision 388, restated from the two configurations' text: each connection of the
+  # configuration a direction starts from a var_output no rung writes and a rung reads, to a
+  # global the direction holds, but a kept instance's own that both make, refused, by the
+  # line of the first rung that reads it in its program's text; the candidate's at its own
+  # line, the running configuration's, which an untest would hold, after the others.
+  defp ce_read_held(o, c) do
+    {for(
+       {conn, line, how} <- ce_held_readers(o, c),
+       do: {:read_held, conn.line, ce_read_message(conn, c, {"", line, ce_how(how, :test)})}
+     ),
+     for(
+       {conn, line, how} <- ce_held_readers(c, o),
+       do:
+         {:read_held, nil,
+          ce_read_message(
+            conn,
+            o,
+            {" (line #{conn.line} of the running configuration)", line, ce_how(how, :untest)}
+          )}
+     )}
+  end
+
+  defp ce_held_readers(from, to) do
+    driven = ce_drives(from)
+    held = MapSet.new(for {:held, g, _} <- ce_held(from, to, %{globals: %{}}), do: g)
+    types = Map.new(to.instances, &{&1.name, &1.type})
+    stopped = Map.new(from.instances, &{&1.name, &1.type})
+    made = MapSet.new(from.connections, &{&1.instance, &1.member, &1.to})
+
+    for conn <- to.connections,
+        conn.to in held,
+        conn.member in ~w(out q r),
+        program = to.programs[types[conn.instance]],
+        not ce_writes?(program, conn.member),
+        not (MapSet.member?(made, {conn.instance, conn.member, conn.to}) and
+               stopped[conn.instance] == types[conn.instance]),
+        line = ce_read_line(program, conn.member),
+        line != nil,
+        do: {conn, line, conn.to in driven}
+  end
+
+  defp ce_read_line(program, member),
+    do:
+      program.source
+      |> String.split("\n")
+      |> Enum.find_index(&(&1 =~ ~r/\bxi[co] #{member}\b/))
+      |> ce_line_of()
+
+  defp ce_line_of(nil), do: nil
+  defp ce_line_of(index), do: index + 1
+
+  defp ce_how(true, :test), do: "the candidate stops driving"
+  defp ce_how(true, :untest), do: "only the candidate drives"
+  defp ce_how(false, :test), do: "the candidate holds"
+  defp ce_how(false, :untest), do: "an untest holds"
+
+  defp ce_read_message(conn, config, {at, line, how}) do
+    type = Enum.find(config.instances, &(&1.name == conn.instance)).type
+
+    "`#{conn.instance}.#{conn.member}`#{at} is a var_output no rung of `#{type}` writes and " <>
+      "line #{line} of `#{type}` reads, wired to `#{conn.to}`, a global #{how}: holding it " <>
+      "would change what that rung gives, so a held point is wired to a var_output a rung " <>
+      "reads only with a restart"
   end
 
   defp ce_task(nil, t),
@@ -5855,6 +5933,7 @@ defmodule Logex.ApiContractTest do
           do: entry
 
     assert given == restated
+    ce_newly_reach(from, to)
 
     for {_kind, path, _value} <- retains,
         do: ce_reach(ce_retain_reach(tl(String.split(path, "."))))
@@ -6112,10 +6191,45 @@ defmodule Logex.ApiContractTest do
 
   defp ce_held(from, to, later) do
     declared = MapSet.new(to.globals, & &1.name)
+    driven = ce_drives(to)
 
-    for g <- Enum.sort(MapSet.difference(ce_drives(from), ce_drives(to))),
-        g in declared,
-        do: {:held, g, later.globals[g]}
+    held =
+      MapSet.union(MapSet.difference(ce_drives(from), driven), ce_newly_frozen(from, to, driven))
+
+    for g <- Enum.sort(held), g in declared, do: {:held, g, later.globals[g]}
+  end
+
+  # Decisions 386 and 387, restated from the two configurations' text: a global a
+  # connection of the configuration started copies out from a var_output no rung of its
+  # program writes, where the stopped one makes no such connection of an instance of the
+  # same type and nothing in the started one drives it, holds: rewired from another such
+  # var_output, or newly wired where no connection drove it.
+  defp ce_newly_frozen(from, to, driven) do
+    types = Map.new(to.instances, &{&1.name, &1.type})
+    stopped = Map.new(from.instances, &{&1.name, &1.type})
+    made = MapSet.new(from.connections, &{&1.instance, &1.member, &1.to})
+
+    MapSet.new(
+      for c <- to.connections,
+          is_binary(c.to),
+          c.member in ~w(out q r),
+          not ce_writes?(to.programs[types[c.instance]], c.member),
+          not (MapSet.member?(made, {c.instance, c.member, c.to}) and
+                 stopped[c.instance] == types[c.instance]),
+          c.to not in driven,
+          do: c.to
+    )
+  end
+
+  # Their reach, read off a switch whose report the walk has checked: a point it holds
+  # that the stopped configuration copied out from another unwritten var_output, and one
+  # no connection of it drove.
+  defp ce_newly_reach(from, to) do
+    for g <- ce_newly_frozen(from, to, ce_drives(to)) do
+      wired_before = Enum.any?(from.connections, &(&1.to == g))
+      ce_reach(:held_rewired, wired_before and g not in ce_drives(from))
+      ce_reach(:held_newly_wired, not wired_before)
+    end
   end
 
   # Decision 62, restated: the names both have on a task, or of the tasks, in another order.
@@ -6365,12 +6479,20 @@ defmodule Logex.ApiContractTest do
 
     # Each instance set aside before the test and still aside after the untest: one the
     # candidate runs as its type came back at the test, its `now` the resource's and each
-    # timer that was timing resumed from it (decision 57), and was set aside again as it
-    # then was; any other is untouched. Found from the states alone.
+    # timer that was timing resumed from it (decision 57), each var_output the test held
+    # started at its point's value (decisions 347, 386 and 387, the test's `:holds`, which
+    # the untest that sets it aside again does not give back), and was set aside again as
+    # it then was; any other is untouched. Found from the states alone.
     for {name, state} <- Map.drop(aside, started) do
       back? = Enum.any?(candidate.instances, &(&1.name == name and &1.type == state.type))
       ce_reach(:round_trip_aside, back?)
-      assert later.aside[name] == ce_back_again(back?, state, {later.now, set_aside[name]})
+
+      assert later.aside[name] ==
+               ce_held_into(
+                 ce_back_again(back?, state, {later.now, set_aside[name]}),
+                 name,
+                 ce_back_holds(back?, test_report)
+               )
     end
 
     # Each task as the test found it but for decision 40: a changed interval's next due
@@ -6416,6 +6538,9 @@ defmodule Logex.ApiContractTest do
 
     %{state | env: env, now: now}
   end
+
+  defp ce_back_holds(true, report), do: report
+  defp ce_back_holds(false, _report), do: []
 
   # Decision 340: by the time set aside alone.
   defp ce_timing_resumed(timer, times, {env, path, now, aside})

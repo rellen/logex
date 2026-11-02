@@ -34,6 +34,12 @@ defmodule Logex.Image do
                   |> Enum.map(&Logex.FbType.rules(&1).preset)
                   |> Enum.uniq()
 
+  # Decision 385: the built-in kinds a restart puts at rest where held on, `tof` and
+  # `tof_ltime` (Logex.FbType.rules/1, their family).
+  @tofs for {word, type} <- Logex.FbType.builtins(),
+            Logex.FbType.rules(type).family == "tof",
+            do: word
+
   # ---- taken out ----------------------------------------------------------------------
 
   # A lone instance's image, from its env: one walk of the program's retained paths, so
@@ -587,10 +593,12 @@ defmodule Logex.Image do
 
   # ---- the matching (decision 277) --------------------------------------------------------
 
-  # A lone instance's image laid over `env`, its fresh env: `{env, dropped}`, each kept
-  # value where the program declares its path retained, of exactly its type, the value
+  # A lone instance's image laid over `env`, its fresh env: `{env, dropped, held_on}`, each
+  # kept value where the program declares its path retained, of exactly its type, the value
   # fitting it, under instances of the kinds the image holds, and the rest dropped, each
-  # once by its path, `prefix` before it, with its reason.
+  # once by its path, `prefix` before it, with its reason; and since decision 385 whether a
+  # `tof` it kept holds `.en` at 1, so that `Logex.Runtime` walks the instance to put it at
+  # rest only then.
   def matched(%Program{} = program, env, %{kinds: kinds, values: values}, prefix) do
     wanted = wanted(program, env)
     kinds = Map.new(kinds, &parsed_kind/1)
@@ -613,8 +621,20 @@ defmodule Logex.Image do
       end)
 
     {laid(program, env, kept),
-     dropped |> collapsed(kinds) |> ordered() |> Enum.map(&prefixed(&1, prefix))}
+     dropped |> collapsed(kinds) |> ordered() |> Enum.map(&prefixed(&1, prefix)),
+     Enum.any?(kinds, &held_on?(&1, kept))}
   end
+
+  # A kept `tof`, or an element of a kept array of them, whose `.en` is 1: one pass of the
+  # kinds, one an instance, so that a start pays a look-up an instance and no more where
+  # it keeps none.
+  defp held_on?({key, {_segments, kind}}, kept) when kind in @tofs,
+    do: Map.get(kept, key <> ".en") == 1
+
+  defp held_on?({key, {_segments, {:array, kind, dims}}}, kept) when kind in @tofs,
+    do: Enum.any?(Array.indexes(dims), &(Map.get(kept, Array.name(key, &1) <> ".en") == 1))
+
+  defp held_on?(_kind, _kept), do: false
 
   defp prefixed({path, reason}, prefix), do: {prefix <> path, reason}
 

@@ -536,18 +536,22 @@ defmodule Logex.Runtime do
     checked!(program)
     Image.lone!(image, program)
     %Instance{env: env} = state = fresh(program)
-    {env, dropped} = Image.matched(program, env, image, "")
-    {%{state | env: rested(program, env)}, dropped}
+    {env, dropped, held_on} = Image.matched(program, env, image, "")
+    {%{state | env: rested(held_on, program, env)}, dropped}
   end
 
   # Decision 385 (the maintainer, 2026-11-01): a start from an image puts each retained
   # `tof` held on and not timing at rest itself, as a warm restart does, by the warm
   # restart's own walk of the retained paths over the env the image laid, so that the rule
   # is one (`rebased_built_in/3`); each retained timer's `last` is the start's `now`, 0, as
-  # the fresh instance had it. A program that retains nothing pays one clause.
-  defp rested(%Program{retained: nil}, env), do: env
+  # the fresh instance had it. It walks only an instance where the image kept a `tof` held
+  # on, `held_on` (`Logex.Image.matched/4`), so that a start of one that holds none pays
+  # one clause.
+  defp rested(false, _program, env), do: env
 
-  defp rested(%Program{retained: retained} = program, env),
+  # The guard tells the compiler the env is a map, as the warm restart's cold env is, so
+  # that the walk's own writes cost what they did before it had a second caller.
+  defp rested(true, %Program{retained: retained} = program, env) when is_map(env),
     do: warm(retained, env, env, {Program.typed_tags(program), 0})
 
   @doc """
@@ -964,8 +968,10 @@ defmodule Logex.Runtime do
   defp restored_as(type, {name, image}, config, {instances, dropped}) do
     %Instance{env: env} = state = Map.fetch!(instances, name)
     program = Map.fetch!(config.programs, type)
-    {env, more} = Image.matched(program, env, image, name <> ".")
-    {Map.put(instances, name, %{state | env: rested(program, env)}), Enum.reverse(more, dropped)}
+    {env, more, held_on} = Image.matched(program, env, image, name <> ".")
+
+    {Map.put(instances, name, %{state | env: rested(held_on, program, env)}),
+     Enum.reverse(more, dropped)}
   end
 
   # Decision 313's rule at a start from an image (the maintainer, 2026-10-30, restating
@@ -5261,6 +5267,11 @@ defmodule Logex.Runtime do
       "en" => 1,
       "last" => now
     }
+
+  # A `tof` at rest, `.en` and `.tt` 0, as every one is after a restart's rest (decision
+  # 385), is told by its match alone, so that its run reads neither member again.
+  defp off_delay(%{"en" => 0, "tt" => 0} = timer, now, _per_ms),
+    do: delayed(false, timer, now, 1)
 
   defp off_delay(timer, now, per_ms),
     do:
