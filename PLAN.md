@@ -12480,7 +12480,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     ends).
   - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at
     `29e2aa3`, eighteen patches): sixteen red, each by the test named above. Two survived:
-    the review's B, killed since by the one-process race test; and the renewal not read at
+    the review's B, killed since by the one-process race test (remade on `Paths`'s new
+    shape and run through the full suite at `ba81f68`: red, two tests of
+    `runner_paths_test.exs`); and the renewal not read at
     a device's poll, kept: a poll past the deadline the device holds comes, in every case
     a test makes, after its wake at that deadline, set before the poll's timer and so
     delivered first on the manual clock, which takes the renewal; the read is kept for the
@@ -12491,12 +12493,19 @@ and CI checked; each fix with a test that fails when it is reverted.
     than a renewal passed over, a release's deadline forgotten and a latched device taking
     none, were found unobservable before the table, every decision of the device's going
     through its wake or its poll, and were removed rather than kept untested.
-  - *The cost* of a round of three devices on the manual clock, writes taking no time, is
+  - *The cost* of a round of three devices on the manual clock, writes taking no time, the
+    least of seven runs: 2036.5 reductions with its outputs changing and 1736.5 with none
+    at `ba81f68`, where `5208e60` cost 2038.0 and 1735.6 and `d7a1290` 2014.5 and 1725.4,
     as before the review; with writes that take time, as the review's probe above.
   - *Load runs* of every new or changed real-clock and runner test under
-    `scripts/load.sh`, 30 tests a run: a first run stopped at 21 runs, one failed, the
-    dead-holder race test's 100 ms wait for a claimer's answer, given 5,000 ms since; the
-    final run of 50 is recorded with the mutation table.
+    `scripts/load.sh`, four busy loops on four cores beside other suites, a load average
+    of 9 to 12: a first run stopped at 21 runs, one failed, the dead-holder race test's
+    100 ms wait for a claimer's answer, given 5,000 ms since; at `ba81f68`, 32 tests a run
+    (`stalled_disk_test.exs` and `runner_paths_test.exs` whole, the six new or changed
+    tests of `trip_test.exs`, the mid-write kill of `retain_period_test.exs` and the three
+    of `runner_test.exs`), 0 of 50 runs failed.
+  - *Merged*: `origin/main`'s `b67de5f`, decisions 374–389 recorded for RV-10, which runs
+    after this item; no conflict, nothing of it this item's to build.
 - **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
   `.dropped` copy; the report's store and file lows.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,
