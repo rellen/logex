@@ -13620,6 +13620,13 @@ and CI checked; each fix with a test that fails when it is reverted.
   | m_rev_sort_ascending | the storage bits kept in reverse name order | 1, the order test |
   | m_rev_bool_bit_place | a bool array's element written whole given a tag's bit place | 1, its cost test |
 
+  *Gates and CI.* Each commit's gate printed GATE-OK, `0f9cea9` and `ede7cf1` 2,743
+  (2,732 tests and 11 doctests). CI was green at once on `0f9cea9`; `ede7cf1`, which
+  changed only documents, a moduledoc's words and a test's name, was red on its first run
+  (41488002911): `retain_period_test.exs`'s round with a store and a long period read
+  12.1 reductions a round over none, its bound 10, the scheduler-sensitive kind RV-7
+  takes up (decision 357), on runner code this item does not touch, which passed here
+  three of three; run again (attempt 2) it was green.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
