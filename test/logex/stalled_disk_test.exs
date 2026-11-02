@@ -583,12 +583,16 @@ defmodule Logex.StalledDiskTest do
 
     # RV-5's review: the look at each file for a symbolic link, made raw in the start's
     # caller with no limit, held the caller as long as a stalled disk held it, the store's
-    # and the forces file's reads limited after it. Every file call a fresh start makes is
-    # now made in a process of its own, limited, none in the caller: a raw call goes past
-    # the file server, so the caller's own calls are traced, every function of `:file` and
-    # `:prim_file`, through a start that reads a forces file and a store and copies it.
+    # and the forces file's reads limited after it. Every call a fresh start makes on its
+    # files is now made in a process of its own, limited, none in the caller: a raw call
+    # goes past the file server, so the caller's own calls are traced, every function of
+    # `:file`, through a start that reads a forces file and a store and copies it, each
+    # named by an absolute path, which `Path.expand/1` resolves without the directory the
+    # start is made in.
     test "no file call of a fresh start is made in its caller", %{tmp_dir: dir} do
-      rig = rig(dir)
+      # An idle watchdog of 5,000 ms, which covers a loaded machine's disk: the test reads
+      # no limit (RV-4's question 12).
+      rig = rig(dir, idle: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1)
       assert Runner.force(runner, "level", 7) == :ok
@@ -598,7 +602,7 @@ defmodule Logex.StalledDiskTest do
         Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
 
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
-      next = rig(dir, configuration: config)
+      next = rig(dir, configuration: config, idle: 5000)
       assert :erlang.trace_pattern({:file, :_, :_}, true, [:local]) > 0
       {caller, started} = traced_start(next.opts)
       :erlang.trace_pattern({:file, :_, :_}, false, [:local])

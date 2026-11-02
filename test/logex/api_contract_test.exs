@@ -15563,7 +15563,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # While the copy is owed no write replaces the store: a period's write, a period or more
   # of them, or a trip's, each made to fail by the copy before it, the store as the start
   # read it and the copy the one before; then the directory taken away, and the next
-  # write, the end's or a period's before it, makes the copy first (`owed_made!/1`).
+  # write, a period's, or the end's where the runner is tripped and takes none, makes the
+  # copy first (`owed_made!/1`), the end's write then its own alone where a period's made
+  # it, as every end's in the walk is, within the walk's limit.
   defp copy_owed(%{owing: false} = w), do: w
   defp copy_owed(%{owed: nil} = w), do: unblocked(w)
 
@@ -15577,7 +15579,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert File.read!(w.store) == w.owed
     assert File.read(w.store <> ".dropped") in Enum.map(w.copied, &copy_read/1)
     reach(:life_copy_owed, w.failed_seen)
-    unblocked(%{w | store_failing: false})
+    w = unblocked(%{w | store_failing: false})
+    writer_settled(settled(wait(w, ms)))
   end
 
   defp unblocked(w) do

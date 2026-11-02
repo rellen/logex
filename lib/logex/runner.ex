@@ -307,8 +307,8 @@ defmodule Logex.Runner do
     `start: :cold`, since RV-5 raw and limited to the idle watchdog and a poll period of
     real time, as the forces file's read is, so that a FIFO or a stalled disk in its place
     refuses the start as a store that cannot be read (provisional), and since RV-5's
-    review so is the look at each file for a symbolic link before either is read, no file
-    call of the start made in the caller itself: a store laid over the
+    review so is the look at each file for a symbolic link before either is read, neither
+    file looked at nor read in the caller itself: a store laid over the
     resource by decision 277's matching (`Logex.Runtime.start/2`), each value kept only
     where the configuration retains its path, of exactly its type, and it fits, the rest
     dropped and reported in `status/1`'s `retain`, and since decision 360 the store, as
@@ -3565,8 +3565,10 @@ defmodule Logex.Runner do
   # review the look is made as each file's read is, in a process of its own limited to
   # the idle watchdog and a poll period of real time (`Writer.read/2`), where it was made
   # in the caller with no limit, so that a stalled disk refuses the start as a file that
-  # cannot be read before either is read, as the reads do, and no file call of the start
-  # is made in its caller.
+  # cannot be read before either is read, as the reads do, and neither file is looked at
+  # or read in the caller. (A relative path's expansion, once, at the start, reads the
+  # directory the start is made in through the VM's file server, in the caller, RV-4's
+  # c2-runner-persist-9; RV-5's review left it, PLAN.md.)
   defp unlinked!(nil, nil, _option, _ms), do: :ok
 
   defp unlinked!(given, at, option, ms),
