@@ -16,7 +16,8 @@ has to happen, or the next reader inherits a plan that disagrees with the code. 
 2026-11-01, RV-1: the README's section is "What has landed", a bullet a milestone, every
 milestone decided having landed, and a paragraph naming what waits: the review after
 Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
-questions, decisions 361–373, for RV-9, and to RV-3's, decisions 374–389, for RV-10.)*
+questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, and to
+RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -12326,7 +12327,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     period (question 7); `Logex.IO.Sim`'s 100,000 writes. A restart's arrival, which was
     the runner's taking it from its mailbox (question 3), is decision 354's exactly since
     RV-4's review.
-  - *Questions for the maintainer*, by what an operator sees:
+  - *Questions for the maintainer*, by what an operator sees *(the twelve open answered on
+    2026-11-01, decisions 390 to 401: 4, 5, 7, 9 and 13 as built, 1, 2, 6, 8, 10, 11 and 12
+    changed, to build in RV-11)*:
     1. *A restart on a stalled disk.* The plant trips, the disk stalls, the operator asks
        a warm restart: it answers `{:error, {:forces, :timeout}}` after 510 ms and the
        plant stays tripped, every output 0; and since RV-4's review a fresh start whose
@@ -12511,7 +12514,15 @@ and CI checked; each fix with a test that fails when it is reverted.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,
   the period's take-out and an edit's switch made cheaper, the bound measured and
   documented, a trip during the runner's own work naming it (M7).
-- **RV-7 — same-run cost bounds** (decision 357).
+- **RV-7 — same-run cost bounds** (decision 357). And the tests a loaded machine fails,
+  each root-caused, never given time: `trip_test.exs`'s "a device waiting on the runner for
+  its change is heard at each poll meanwhile, on the real clock, short" (idle 50 ms), red in
+  a full suite at `e365fa4` (RV-2's review), twice in fifty of RV-4's load runs and once in
+  RV-4's landing gate at `142e4d6`, green thirty of thirty alone on a quiet machine at both
+  `142e4d6` and `b67de5f`; `retain_period_test.exs`'s bound (CI read 10.35 and 10.8
+  against 10); `retain_image_test.exs`'s growth bound (4.79x against 4.6 under load,
+  RV-9); and a device's first read timing out at start under load (`{:io_init, _,
+  :timeout}`, RV-3's review).
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
@@ -12655,8 +12666,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   | m365_fragment_parsed_only | the fragment parsed and not run | 1 |
   | m363_unmarked | `wired.logex` shown but no file of the examples | 1 |
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; IEC and
-  Logix say nothing that settles them.
+  *Provisional readings, put to the maintainer* *(all eight answered on 2026-11-01,
+  decisions 402 to 408, 2 and 7 as one: 1, 5, 6 and 8 as built, 2 and 7, 3 and 4 changed,
+  to build in RV-12)*. The record is silent on each; IEC and Logix say nothing that settles
+  them.
 
   1. *A label alone a jump names, used twice* (decision 367). `xic a jmp done`, `lbl done`,
      `lbl done`: the second label alone is told only that `done` already labels the rung
@@ -12851,6 +12864,19 @@ and CI checked; each fix with a test that fails when it is reverted.
   reads refused; a stored sample of a task the configuration drops dropped. And every
   provisional mark RV-3 left on a reading decisions 374–389 settle made the decision's
   number. It runs after RV-4, whose runner and store code three of them touch.
+- **RV-11 — the answers to RV-4's questions** (decisions 390, 391, 394, 396, 398, 399 and
+  400). A restart or start whose forces file cannot be read carrying on, saying so; a
+  write that timed out reported unknown until a later one lands; a clock gone wrong a
+  trip; a host's requests held to their share against periodic tasks too; a device's
+  open limited by an `open:` of its own; a misread address shown as the configuration
+  writes it; every file write and read limited by a `write_limit:` of its own. And every
+  provisional mark RV-4 left on a reading decisions 390–401 settle made the decision's
+  number. It runs after RV-5 and before RV-6, whose runner code it touches.
+- **RV-12 — the answers to RV-9's questions** (decisions 403, 404 and 405). A declaration
+  counting every tag, element and instance its first state holds; the loader's trust a
+  token only it holds; a bit's literal number and a one-shot's storage bit told apart by
+  decision 372. And every provisional mark RV-9 left on a reading decisions 402–408
+  settle made the decision's number.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
