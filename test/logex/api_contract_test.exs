@@ -4138,8 +4138,10 @@ defmodule Logex.ApiContractTest do
     :located_new,
     :located_removed,
     :tag_type,
-    # Decision 388: a var_output a rung reads, which a hold would set.
-    :read_held
+    # Decision 388: a var_output a rung reads, which a hold would set; since the review of
+    # RV-10 a kept instance's own such connection before the instance's first run too.
+    :read_held,
+    :read_held_unrun
   ]
 
   @ce_reach [
@@ -4231,6 +4233,13 @@ defmodule Logex.ApiContractTest do
     # untest with no cycle before either, the round trip giving back every timer exactly.
     for _ <- 1..20, do: ce_configuration(:held)
 
+    # The review of RV-10: then 20 drawn toward a kept instance's own connection whose
+    # var_output a rung reads, accepted straight after a warm restart before the
+    # instance's first run (`:read_held_unrun`): every version runs `t1` on `in`, held at 1,
+    # copies its `.dn` out through a retained `out` wired to a point, which the restart puts
+    # at 0, and the candidate's versions stop writing `out` and read it.
+    for _ <- 1..20, do: ce_configuration(:unrun)
+
     assert Process.get(:ce_refused, MapSet.new()) == MapSet.new(Keyword.keys(@ce_refusals))
     assert Process.get(:ce_diagnosed, MapSet.new()) == MapSet.new(@ce_diagnostics)
     assert Process.get(:ce_kinds, MapSet.new()) == MapSet.new(@report_kinds)
@@ -4300,6 +4309,13 @@ defmodule Logex.ApiContractTest do
     |> ce_scripted(:cancel)
   end
 
+  defp ce_script(:unrun, w) do
+    w
+    |> ce_cycled(3)
+    |> ce_warm_restart()
+    |> ce_forced(&ce_out_read/1)
+  end
+
   defp ce_script(:scripted, w) do
     w
     |> ce_accept()
@@ -4329,7 +4345,41 @@ defmodule Logex.ApiContractTest do
         wiring: Map.new(spec.wiring, fn {name, wires} -> {name, %{wires | "in" => 1}} end)
     }
 
+  # Toward `:read_held_unrun`: every version runs `t1` on `in`, held at 1, its `.dn` copied
+  # out through a retained `out`, each instance's wired to a point of its own.
+  defp ce_spec_for(:unrun, spec) do
+    points = Enum.zip(Enum.map(spec.instances, & &1.name), ~w(o0 o1 o2 o3))
+
+    ce_wire(
+      %{
+        spec
+        | versions:
+            Map.new(spec.versions, fn {type, v} ->
+              {type, %{v | ton: 15, out: true, pre: false, q: %{v.q | "out" => :retain}}}
+            end),
+          wiring:
+            Map.new(points, fn {name, point} ->
+              {name, Map.merge(Map.get(spec.wiring, name, %{}), %{"in" => 1, "out" => point})}
+            end)
+      },
+      true
+    )
+  end
+
   defp ce_spec_for(_bias, spec), do: spec
+
+  # A candidate whose every version stops writing `out` and reads it (decision 388).
+  defp ce_out_read(spec),
+    do: %{
+      spec
+      | versions: Map.new(spec.versions, fn {type, v} -> {type, %{v | out: false, n: 2}} end)
+    }
+
+  # A warm restart, before any edit: the retained `out` keeps its 1, its point goes to 0.
+  defp ce_warm_restart(w) do
+    {:ok, rt} = ce_attempt(fn -> Runtime.restart(w.rt, :warm) end)
+    %{w | rt: rt, model: ce_seed(rt), round: nil}
+  end
 
   # A candidate whose every version runs no instruction on `t1`.
   defp ce_timer_dropped(spec),
@@ -4990,7 +5040,7 @@ defmodule Logex.ApiContractTest do
 
   # ---- what accept refuses, restated from the two configurations -------------------------
 
-  defp ce_predicted(o, c) do
+  defp ce_predicted(o, c, rt) do
     tasks = Map.new(o.tasks, &{&1.name, &1})
     globals = Map.new(o.globals, &{&1.name, &1})
     instances = Map.new(o.instances, &{&1.name, &1})
@@ -5041,7 +5091,7 @@ defmodule Logex.ApiContractTest do
             {:tag_type, now.line,
              "`k` is a #{was} in the running program and a #{now.type} in the candidate: a tag's type changes only with a restart"}
 
-    {read_test, read_untest} = ce_read_held(o, c)
+    {read_test, read_untest} = ce_read_held(o, c, rt)
     Enum.sort_by(own ++ read_test, &elem(&1, 1)) ++ gone ++ read_untest ++ typed
   end
 
@@ -5049,25 +5099,31 @@ defmodule Logex.ApiContractTest do
   # configuration a direction starts from a var_output no rung writes and a rung reads, to a
   # global the direction holds, but a kept instance's own that both make, refused, by the
   # line of the first rung that reads it in its program's text; the candidate's at its own
-  # line, the running configuration's, which an untest would hold, after the others.
-  defp ce_read_held(o, c) do
+  # line, the running configuration's, which an untest would hold, after the others. Since
+  # the review of RV-10 a kept instance's own is refused too where its var_output holds
+  # another value than its point in the resource at accept, as only a start or a restart
+  # before the instance's first run leaves it (`:read_held_unrun`).
+  defp ce_read_held(o, c, rt) do
     {for(
-       {conn, line, how} <- ce_held_readers(o, c),
-       do: {:read_held, conn.line, ce_read_message(conn, c, {"", line, ce_how(how, :test)})}
+       {conn, line, how, own} <- ce_held_readers(o, c, rt),
+       do:
+         {ce_read_kind(own), conn.line,
+          ce_read_message(conn, c, {"", line, ce_how(how, :test)}, own)}
      ),
      for(
-       {conn, line, how} <- ce_held_readers(c, o),
+       {conn, line, how, own} <- ce_held_readers(c, o, rt),
        do:
-         {:read_held, nil,
+         {ce_read_kind(own), nil,
           ce_read_message(
             conn,
             o,
-            {" (line #{conn.line} of the running configuration)", line, ce_how(how, :untest)}
+            {" (line #{conn.line} of the running configuration)", line, ce_how(how, :untest)},
+            own
           )}
      )}
   end
 
-  defp ce_held_readers(from, to) do
+  defp ce_held_readers(from, to, rt) do
     driven = ce_drives(from)
     held = MapSet.new(for {:held, g, _} <- ce_held(from, to, %{globals: %{}}), do: g)
     types = Map.new(to.instances, &{&1.name, &1.type})
@@ -5079,12 +5135,29 @@ defmodule Logex.ApiContractTest do
         conn.member in ~w(out q r),
         program = to.programs[types[conn.instance]],
         not ce_writes?(program, conn.member),
-        not (MapSet.member?(made, {conn.instance, conn.member, conn.to}) and
-               stopped[conn.instance] == types[conn.instance]),
         line = ce_read_line(program, conn.member),
         line != nil,
-        do: {conn, line, conn.to in driven}
+        own <- [
+          MapSet.member?(made, {conn.instance, conn.member, conn.to}) and
+            stopped[conn.instance] == types[conn.instance]
+        ],
+        values <- [ce_own_values(own, conn, rt)],
+        ce_own_refused?(values),
+        do: {conn, line, conn.to in driven, values}
   end
+
+  # A kept instance's own connection: the var_output's value and its point's in the
+  # resource at accept; any other: nil, refused as before.
+  defp ce_own_values(false, _conn, _rt), do: nil
+
+  defp ce_own_values(true, conn, rt),
+    do: {rt.instances[conn.instance].env[conn.member], Runtime.get!(rt, conn.to)}
+
+  defp ce_own_refused?(nil), do: true
+  defp ce_own_refused?({was, value}), do: was !== value
+
+  defp ce_read_kind(nil), do: :read_held
+  defp ce_read_kind({_was, _value}), do: :read_held_unrun
 
   defp ce_read_line(program, member),
     do:
@@ -5101,13 +5174,23 @@ defmodule Logex.ApiContractTest do
   defp ce_how(false, :test), do: "the candidate holds"
   defp ce_how(false, :untest), do: "an untest holds"
 
-  defp ce_read_message(conn, config, {at, line, how}) do
+  defp ce_read_message(conn, config, {at, line, how}, nil) do
     type = Enum.find(config.instances, &(&1.name == conn.instance)).type
 
     "`#{conn.instance}.#{conn.member}`#{at} is a var_output no rung of `#{type}` writes and " <>
       "line #{line} of `#{type}` reads, wired to `#{conn.to}`, a global #{how}: holding it " <>
       "would change what that rung gives, so a held point is wired to a var_output a rung " <>
       "reads only with a restart"
+  end
+
+  defp ce_read_message(conn, config, {at, line, how}, {was, value}) do
+    type = Enum.find(config.instances, &(&1.name == conn.instance)).type
+
+    "`#{conn.instance}.#{conn.member}`#{at} is a var_output no rung of `#{type}` writes and " <>
+      "line #{line} of `#{type}` reads, wired to `#{conn.to}`, a global #{how}, and holds " <>
+      "#{inspect(was)} where `#{conn.to}` holds #{inspect(value)} until `#{conn.instance}` " <>
+      "first runs after a start or a restart: holding it now would change what that rung " <>
+      "gives, so the edit is accepted only once `#{conn.instance}` has run, or with a restart"
   end
 
   defp ce_task(nil, t),
@@ -5412,7 +5495,7 @@ defmodule Logex.ApiContractTest do
   defp ce_spec_running(_stage, _candidate, original), do: original
 
   defp ce_accepted(candidate, spec, w) do
-    predicted = ce_predicted(w.rt.config, candidate)
+    predicted = ce_predicted(w.rt.config, candidate, w.rt)
 
     ce_accept_answered(
       ce_attempt(fn -> ConfigEdit.accept(w.rt, candidate) end),
@@ -7517,7 +7600,13 @@ defmodule Logex.ApiContractTest do
     :retype_refused,
     :restarted,
     :long_timed,
-    :unit_refused
+    :unit_refused,
+    # The review of RV-10, decision 381: a `ton` and an `rto` a jump held from counting,
+    # timing at their last run, whose raised `.pre` their catch-up alone reaches, forecast
+    # to rise and borne out at their next run.
+    :jumped,
+    :caught_up_rise_ton,
+    :caught_up_rise_rto
   ]
 
   @tm_inputs ~w(e1 e2 e3 rs on)
@@ -7534,6 +7623,31 @@ defmodule Logex.ApiContractTest do
 
     for _ <- 1..300 do
       spec = tm_spec()
+      program = tm_program(spec)
+      clean = Map.new(tm_texts(spec), fn {key, _text} -> {key, true} end)
+
+      w = %{
+        spec: spec,
+        p: program,
+        s: Runtime.instance(program),
+        e: nil,
+        c: nil,
+        clean: clean,
+        last: tm_texts(spec),
+        forecast: [],
+        round: nil,
+        blocked: [],
+        restarted: false
+      }
+
+      tm_walk(w, 60)
+    end
+
+    # The review of RV-10: then 60 drawn toward a frozen `ton` and `rto` (decision 381):
+    # `f` an on-delay timer, and `f` and `l` on rungs a jump on `e3` skips, so that each is
+    # held from counting while time runs and catches up at its next run.
+    for _ <- 1..60 do
+      spec = Map.put(%{tm_spec() | kind_f: "ton"}, :jump, "e3")
       program = tm_program(spec)
       clean = Map.new(tm_texts(spec), fn {key, _text} -> {key, true} end)
 
@@ -7585,9 +7699,17 @@ defmodule Logex.ApiContractTest do
 
   # The candidate: one or two of the changes an edit may make, or now and then a change of
   # `f`'s kind, which accept refuses.
+  # The review of RV-10: a candidate of the plants drawn toward a frozen timer raises `f`'s
+  # preset by 20 ms or, more often, `l`'s by 30.
+  defp tm_candidate(%{jump: _} = spec), do: tm_raised(pick([:f, :l, :l]), spec)
+
   defp tm_candidate(spec),
     do:
       Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> tm_change(:rand.uniform(12), spec) end)
+
+  defp tm_raised(:f, %{f: %{} = f} = spec), do: %{spec | f: %{f | p: f.p + 20}}
+  defp tm_raised(:l, %{l: %{} = l} = spec), do: %{spec | l: %{l | p: l.p + 30}}
+  defp tm_raised(_timer, spec), do: tm_change(pick([1, 5]), spec)
 
   defp tm_change(1, %{f: %{} = f} = spec), do: %{spec | f: %{f | p: pick([0, 10, 20, 40])}}
   defp tm_change(2, %{f: %{} = f} = spec), do: %{spec | f: %{f | chain: tm_chain()}}
@@ -7658,9 +7780,32 @@ defmodule Logex.ApiContractTest do
   # A long timer's preset is in ns (M5-6).
   defp tm_rungs(spec),
     do:
-      if(spec.f, do: [{:timer, "f", spec.kind_f, spec.f.chain, tm_p(spec.f)}], else: []) ++
-        if(spec.h, do: [{:timer, "h", "tp", spec.h.chain, tm_p(spec.h)}], else: []) ++
-        tm_l(spec.l) ++ if(spec.s, do: [{:cal, spec.s}], else: [])
+      tm_jump(
+        Map.get(spec, :jump),
+        if(spec.f, do: [{:timer, "f", spec.kind_f, spec.f.chain, tm_p(spec.f)}], else: []) ++
+          if(spec.h, do: [{:timer, "h", "tp", spec.h.chain, tm_p(spec.h)}], else: []) ++
+          tm_l(spec.l) ++ if(spec.s, do: [{:cal, spec.s}], else: [])
+      )
+
+  # The review of RV-10: `f`'s and `l`'s rungs on rungs a jump skips while `input` is 1,
+  # `{:jumped, input, rungs}`, the rest after its label.
+  defp tm_jump(nil, rungs), do: rungs
+
+  defp tm_jump(input, rungs) do
+    {jumped, rest} = Enum.split_with(rungs, &tm_skipped?/1)
+    [{:jumped, input, jumped} | rest]
+  end
+
+  defp tm_skipped?({:timer, name, _kind, _chain, _p}), do: name in ["f", "l"]
+  defp tm_skipped?({:set, "l", _member, _input}), do: true
+  defp tm_skipped?(_rung), do: false
+
+  # The rungs, a jumped group's among them in its place.
+  defp tm_flat(spec),
+    do: Enum.flat_map(tm_rungs(spec), &tm_unjumped/1)
+
+  defp tm_unjumped({:jumped, _input, rungs}), do: rungs
+  defp tm_unjumped(rung), do: [rung]
 
   defp tm_p(%{p: p, ns: true}), do: p * @tm_ns
   defp tm_p(%{p: p}), do: p
@@ -7703,6 +7848,9 @@ defmodule Logex.ApiContractTest do
   defp tm_text({:set, name, member, input}), do: "xic #{input} ote #{name}.#{member}"
   defp tm_text({:cal, _version}), do: "xic on cal s1 e1 rs y"
 
+  defp tm_text({:jumped, input, rungs}),
+    do: Enum.join(["xic #{input} jmp over" | Enum.map(rungs, &tm_text/1)] ++ ["lbl over"], "\n")
+
   defp tm_chain_text(chain), do: Enum.map_join(chain, " ", fn {c, input} -> "#{c} #{input}" end)
 
   # Each pulse's rung text, its preset left out, the block's by its body's rung: what decides
@@ -7710,9 +7858,9 @@ defmodule Logex.ApiContractTest do
   defp tm_texts(spec),
     do:
       Map.new(
-        for({:timer, "h", _kind, chain, _p} <- tm_rungs(spec), do: {"h", tm_chain_text(chain)}) ++
+        for({:timer, "h", _kind, chain, _p} <- tm_flat(spec), do: {"h", tm_chain_text(chain)}) ++
           for(
-            {:cal, version} <- tm_rungs(spec),
+            {:cal, version} <- tm_flat(spec),
             do: {"s1.t", String.replace(@tm_bodies[version], ~r/ \d+$/, "")}
           )
       )
@@ -7721,8 +7869,8 @@ defmodule Logex.ApiContractTest do
   defp tm_kinds(spec),
     do:
       Map.new(
-        for({:timer, name, kind, _chain, p} <- tm_rungs(spec), do: {name, {kind, p}}) ++
-          for({:cal, version} <- tm_rungs(spec), do: {"s1.t", {"tp", tm_body_preset(version)}})
+        for({:timer, name, kind, _chain, p} <- tm_flat(spec), do: {name, {kind, p}}) ++
+          for({:cal, version} <- tm_flat(spec), do: {"s1.t", {"tp", tm_body_preset(version)}})
       )
 
   defp tm_body_preset(2), do: 40
@@ -7858,7 +8006,7 @@ defmodule Logex.ApiContractTest do
           {type, _p} = kinds[name],
           timer = tm_at(s.env, name),
           kind <- tm_expected(type, timer, tm_caught(timer, s.now, Map.get(scales, name, 1))),
-          do: {kind, name, type}
+          do: tm_caught_up_rise(kind, type, timer, name)
 
     assert Enum.sort(forecast) == Enum.sort(expected)
 
@@ -7980,6 +8128,16 @@ defmodule Logex.ApiContractTest do
 
   defp tm_caught(_timer, _now, _scale), do: 0
 
+  # Decision 381's reach: a rise of a `ton` or an `rto` whose `.acc` is short of its new
+  # `.pre`, which its catch-up alone reaches.
+  defp tm_caught_up_rise(:dn_rises, type, %{"acc" => acc, "pre" => pre}, name)
+       when type in ["ton", "rto"] and acc < pre do
+    tm_reached(:"caught_up_rise_#{type}")
+    {:dn_rises, name, type}
+  end
+
+  defp tm_caught_up_rise(kind, type, _timer, name), do: {kind, name, type}
+
   # A tof's drop holds where its next run finds its rung false; a pulse's end at its next run
   # whatever, `.dn` the rung's; an rto's at its next run with its rung true and `r` 0, a drop
   # where enough time has not passed.
@@ -7999,6 +8157,12 @@ defmodule Logex.ApiContractTest do
   end
 
   defp tm_forecast(:dn_rises, "rto", timer, {true, 0}) do
+    assert timer["dn"] == 1
+    tm_reached(:forecast_rises)
+  end
+
+  # Decision 381: an on-delay timer's rise, at its next run with its rung true.
+  defp tm_forecast(:dn_rises, "ton", timer, {true, _r}) do
     assert timer["dn"] == 1
     tm_reached(:forecast_rises)
   end
@@ -8039,6 +8203,18 @@ defmodule Logex.ApiContractTest do
     tm_reached(:frozen)
     {possible, ran}
   end
+
+  # A jump taken skips its rungs, each timer on them frozen, its `last` where it was; one
+  # not taken runs them.
+  defp tm_run({:jumped, input, rungs}, acc, ctx),
+    do: tm_jumped(ctx.image[input] == 1, rungs, acc, ctx)
+
+  defp tm_jumped(true, _rungs, acc, _ctx) do
+    tm_reached(:jumped)
+    acc
+  end
+
+  defp tm_jumped(false, rungs, acc, ctx), do: Enum.reduce(rungs, acc, &tm_run(&1, &2, ctx))
 
   # The timers that ran, each with its rung and, for an rto, the reset it saw.
   defp tm_ran(ran, name, cond, [{timers, _} | _]),
@@ -19048,4 +19224,656 @@ defmodule Logex.ApiContractTest.CrossTypeWalk do
         {name, v}
     end)
   end
+end
+
+defmodule Logex.ApiContractTest.HoldWalk do
+  @moduledoc """
+  The review of RV-10: the hold walk, a module of its own beside the other walks, so that
+  it runs beside them. Over 300 seeded plants of one to three instances of six program
+  types, each drawn from one vocabulary of spare var_outputs, two bools, two dints and an
+  array of three bools, retained now and then, written or not, read by their rungs in
+  every way a rung reads, a contact's, a compare's and an add's value, a tag subscript in
+  a read and in a write, a bit number, an element by its number and through a tag, each
+  wired to points and globals and now and then to two at once, it takes 30 steps: cycles,
+  accepts of a candidate that retypes an instance, changes a type's program, adds, drops or
+  rewires a connection or adds an instance, its test, untest, assemble and cancel, and
+  warm and cold restarts. Its oracles restate decisions 347, 386, 387 and 388 and the
+  review's fan-out and own-source rules from the configurations' text alone, knowing
+  nothing of logex:
+
+  - every point a step reports held reads its value after the next cycle, but a point a
+    kept instance's own source a rung reads drives, after a restart since accept, which
+    no switch starts and which is left as it is;
+  - no step starts a var_output a rung of its program reads at its point's value;
+  - every point a connection of the configuration a step starts copies out frozen, which
+    the step does not report, holds its value across the step and a cycle, where its
+    instance has run since the last start or restart;
+  - a forecast is the report a test taken at once gives;
+  - every refusal of accept is one of the three the review restates, and the
+    configurations bear out its claim: the connection, its var_output unwritten, the
+    global held as it says, the candidate's or the running configuration's line, and the
+    first rung that reads the var_output on the line it names, another point it drives,
+    or, for a kept instance's own source, the two values the resource holds.
+
+  It asserts its reach: each way a rung reads refused, the fan-out of a scalar and of an
+  element beside its array, the own source before its instance's first run, each kind of
+  hold, a give-back, a point left as it is, assemble and cancel.
+  """
+  use ExUnit.Case, async: true
+
+  # Decision 264: the draws, which alone may hold a conditional (`clauses_test.exs`).
+  @draws ~w(version spec target once candidate change step pick)a
+
+  @doc false
+  def draws, do: @draws
+
+  alias Logex.{Configuration, Runtime}
+  alias Logex.Configuration.Edit, as: ConfigEdit
+
+  # Each rung: its text, the var_outputs it writes and those it reads, an element by its
+  # name, `o[*]` any element, as a tag subscript reaches.
+  @rungs [
+    {"xic in ote q", ~w(q), []},
+    {"xic in ote a", ~w(a), []},
+    {"xic a ote q", ~w(q), ~w(a)},
+    {"xic b ote z", [], ~w(b)},
+    {"gt n 5 ote z", [], ~w(n)},
+    {"xic in add n 1 y", [], ~w(n)},
+    {"xic in move 4 n", ~w(n), []},
+    {"xic x[i] ote z", [], ~w(i)},
+    {"xic in ote x[i]", [], ~w(i)},
+    {"xic w.[i] ote z", [], ~w(i)},
+    {"xic o[1] ote z", [], ~w(o[1])},
+    {"xic o[i] ote z", [], ~w(o[*] i)},
+    {"xic in ote o[0]", ~w(o[0]), []},
+    {"xic in ote o[i]", ~w(o[*]), ~w(i)}
+  ]
+
+  # How each rung reads, for the reach.
+  @read_kinds %{
+    "xic a ote q" => :read_contact,
+    "xic b ote z" => :read_contact,
+    "gt n 5 ote z" => :read_compare,
+    "xic in add n 1 y" => :read_add,
+    "xic x[i] ote z" => :read_subscript,
+    "xic in ote x[i]" => :read_write_subscript,
+    "xic w.[i] ote z" => :read_bit_number,
+    "xic o[1] ote z" => :read_element,
+    "xic o[i] ote z" => :read_any_element,
+    "xic in ote o[i]" => :read_write_subscript
+  }
+
+  @members [
+    {"q", :bool},
+    {"a", :bool},
+    {"b", :bool},
+    {"n", :dint},
+    {"i", :dint},
+    {"o", :array},
+    {"o[0]", :bool},
+    {"o[1]", :bool},
+    {"o[2]", :bool}
+  ]
+
+  @reach [
+    :read_contact,
+    :read_compare,
+    :read_add,
+    :read_subscript,
+    :read_write_subscript,
+    :read_bit_number,
+    :read_element,
+    :read_any_element,
+    :read_whole,
+    :read_untest,
+    :fan,
+    :fan_element,
+    :fan_untest,
+    :unrun,
+    :held_347,
+    :held_rewired,
+    :held_newly_wired,
+    :holds,
+    :hold_undone,
+    :left_as_is,
+    :frozen_kept,
+    :assembled,
+    :cancelled,
+    :restart_in_edit
+  ]
+
+  @tag timeout: 300_000
+  test "a configuration's edit holds every point it reports held, starts no var_output a " <>
+         "rung reads, moves no frozen point unreported, and refuses only what it must" do
+    :rand.seed(:exsss, {2026, 11, 2})
+    for _ <- 1..300, do: walk(spec(), 30)
+    assert Process.get(:hw_reach, MapSet.new()) == MapSet.new(@reach)
+  end
+
+  # ---- the draws -------------------------------------------------------------------------
+
+  defp pick(list), do: Enum.at(list, :rand.uniform(length(list)) - 1)
+
+  # A program type's version: every var_output declared, a bool's and a dint's initial
+  # drawn, `a` and `b` retained now and then, and one to four rungs of the vocabulary.
+  defp version do
+    rungs = Enum.take_random(@rungs, 1 + :rand.uniform(3))
+    q = fn -> pick(["", "", "retain "]) end
+
+    decls = [
+      "var_input in bool",
+      "var_output q bool",
+      "var_output #{q.()}a bool #{pick([0, 1])}",
+      "var_output #{q.()}b bool #{pick([0, 1])}",
+      "var_output n dint #{pick([3, 7])}",
+      "var_output i dint #{pick([0, 1, 2])}",
+      "var_output o bool[3] #{pick([0, 1])} #{pick([0, 1])} #{pick([0, 1])}",
+      "var x bool[3] 0 1 0",
+      "var w word 2",
+      "var y dint",
+      "var z bool"
+    ]
+
+    lines = Enum.with_index(rungs, length(decls) + 1)
+
+    %{
+      source: Enum.join(decls ++ Enum.map(rungs, &elem(&1, 0)), "\n") <> "\n",
+      writes: MapSet.new(for {{_text, writes, _reads}, _line} <- lines, key <- writes, do: key),
+      reads:
+        Enum.reduce(Enum.reverse(lines), %{}, fn {{text, _writes, reads}, line}, acc ->
+          Enum.reduce(reads, acc, &Map.put(&2, &1, {line, text}))
+        end)
+    }
+  end
+
+  defp spec do
+    types = Map.new(0..5, &{"s#{&1}", version()})
+    names = Enum.take_random(~w(m1 m2 m3), :rand.uniform(3))
+    instances = for name <- names, do: %{name: name, type: pick(Map.keys(types))}
+
+    conns =
+      for i <- instances,
+          {member, kind} <- @members,
+          :rand.uniform(100) <= 30,
+          do: {i.name, member, target(kind)}
+
+    retained = for g <- ~w(w1 w2), :rand.uniform(3) == 1, do: g
+    %{types: types, instances: instances, conns: once(conns), retained: retained}
+  end
+
+  defp target(:bool), do: pick(~w(k0 k1 k2 k3 la[0] la[1] la[2]))
+  defp target(:dint), do: pick(~w(w1 w2))
+  defp target(:array), do: "la"
+
+  # Each global driven by one connection, `la` whole or by its elements, not both.
+  defp once(conns) do
+    {kept, _claimed} =
+      Enum.reduce(conns, {[], MapSet.new()}, fn {_i, _m, t} = conn, {kept, claimed} ->
+        claims = if t == "la", do: ~w(la la[0] la[1] la[2]), else: [t, "la*" <> t]
+        whole = if String.starts_with?(t, "la["), do: ["la"], else: []
+
+        if Enum.any?(claims ++ whole, &MapSet.member?(claimed, &1)),
+          do: {kept, claimed},
+          else: {[conn | kept], Enum.reduce([t | whole], claimed, &MapSet.put(&2, &1))}
+      end)
+
+    Enum.reverse(kept)
+  end
+
+  # A candidate: one to three changes, each kept where the configuration compiles.
+  defp candidate(spec) do
+    changed = Enum.reduce(1..:rand.uniform(3), spec, fn _, s -> change(:rand.uniform(6), s) end)
+    names = MapSet.new(changed.instances, & &1.name)
+    %{changed | conns: once(for {i, _, _} = c <- changed.conns, i in names, do: c)}
+  end
+
+  defp change(1, s) do
+    i = pick(s.instances)
+
+    %{
+      s
+      | instances:
+          for(x <- s.instances, do: if(x == i, do: %{x | type: pick(Map.keys(s.types))}, else: x))
+    }
+  end
+
+  defp change(2, s), do: %{s | types: Map.put(s.types, pick(Map.keys(s.types)), version())}
+  defp change(3, s), do: %{s | conns: Enum.drop(Enum.shuffle(s.conns), 1)}
+
+  defp change(4, s) do
+    {member, kind} = pick(@members)
+    %{s | conns: s.conns ++ [{pick(s.instances).name, member, target(kind)}]}
+  end
+
+  defp change(5, %{conns: [_ | _]} = s) do
+    {i, m, _t} = conn = pick(s.conns)
+    kind = Enum.find_value(@members, fn {member, kind} -> member == m && kind end)
+    %{s | conns: List.delete(s.conns, conn) ++ [{i, m, target(kind)}]}
+  end
+
+  defp change(5, s), do: change(4, s)
+
+  defp change(6, s) do
+    case ~w(m1 m2 m3) -- Enum.map(s.instances, & &1.name) do
+      [] ->
+        change(2, s)
+
+      free ->
+        %{s | instances: s.instances ++ [%{name: pick(free), type: pick(Map.keys(s.types))}]}
+    end
+  end
+
+  # The next step, by the edit's stage.
+  defp step(%{edit: nil}), do: pick([:cycle, :cycle, :accept, :accept, :warm, :cold])
+  defp step(%{stage: :accepted}), do: pick([:test, :test, :cancel, :cycle, :warm, :accept])
+  defp step(%{stage: :testing}), do: pick([:cycle, :untest, :assemble, :warm, :cold, :accept])
+  defp step(%{stage: :untested}), do: pick([:cycle, :test, :cancel, :warm])
+
+  # ---- the plant, as text ----------------------------------------------------------------
+
+  defp text(spec) do
+    "task fast interval 10 priority 1\nvar_global pb bool at panel.i.0\n" <>
+      Enum.map_join(0..3, &"var_global k#{&1} bool at panel.q.#{&1}\n") <>
+      "var_global la bool[3] at panel.q.4\n" <>
+      "var_global #{retain("w1", spec.retained)}w1 dint 5\n" <>
+      "var_global #{retain("w2", spec.retained)}w2 dint 0\n" <>
+      Enum.map_join(spec.instances, fn i ->
+        "program #{i.name} #{i.type} with fast\n  #{i.name}.in pb\n" <>
+          Enum.map_join(for({n, m, t} <- spec.conns, n == i.name, do: {m, t}), fn {m, t} ->
+            "  #{i.name}.#{m} #{t}\n"
+          end)
+      end)
+  end
+
+  defp retain(name, retained), do: retained_word(name in retained)
+  defp retained_word(true), do: "retain "
+  defp retained_word(false), do: ""
+
+  defp config(spec) do
+    types = Enum.uniq(for i <- spec.instances, do: i.type)
+
+    programs =
+      Map.new(types, fn type ->
+        {:ok, program} = Logex.compile(spec.types[type].source, name: type)
+        {type, program}
+      end)
+
+    Configuration.compile("plant", text(spec), programs)
+  end
+
+  # ---- the walk --------------------------------------------------------------------------
+
+  defp walk(spec, steps) do
+    {:ok, config} = config(spec)
+
+    w = %{
+      rt: Runtime.start(config),
+      spec: spec,
+      config: config,
+      edit: nil,
+      stage: nil,
+      candidate: nil,
+      original: nil,
+      scanned: false,
+      restarted: false
+    }
+
+    Enum.reduce(1..steps, w, fn _, w -> act(step(w), w) end)
+  end
+
+  defp act(:cycle, w) do
+    {rt, _outputs, _events} = Runtime.cycle(w.rt, 10, %{"pb" => pick([0, 1])})
+    %{w | rt: rt, scanned: true}
+  end
+
+  defp act(mode, w) when mode in [:warm, :cold] do
+    reach(:restart_in_edit, w.edit != nil)
+    %{w | rt: Runtime.restart(w.rt, mode), scanned: false, restarted: w.edit != nil}
+  end
+
+  defp act(:accept, w) do
+    running = running(w)
+    spec = candidate(running.spec)
+    accepted(config(spec), spec, %{w | spec: running.spec, config: running.config})
+  end
+
+  defp act(:test, w), do: switched(ConfigEdit.test(w.edit, w.rt), :testing, w.candidate, w)
+  defp act(:untest, w), do: switched(ConfigEdit.untest(w.edit, w.rt), :untested, w.original, w)
+
+  defp act(:assemble, w) do
+    {_config, rt, report} = ConfigEdit.assemble(w.edit, w.rt)
+    reach(:assembled, true)
+    ended({checked(report, w.candidate, {w, rt}), true}, w.candidate, w)
+  end
+
+  defp act(:cancel, w) do
+    {_config, rt, report} = ConfigEdit.cancel(w.edit, w.rt)
+    reach(:cancelled, w.stage == :untested)
+    ended(checked_cancel(w.stage, report, {w, rt}), w.original, w)
+  end
+
+  # The configuration the resource runs: the candidate under test, the original otherwise.
+  defp running(%{stage: :testing} = w), do: w.candidate
+  defp running(%{original: nil} = w), do: %{spec: w.spec, config: w.config}
+  defp running(w), do: w.original
+
+  defp accepted({:error, _diagnostics}, _spec, w), do: w
+
+  defp accepted({:ok, candidate}, spec, w),
+    do: answered(ConfigEdit.accept(w.rt, candidate), {spec, candidate}, w)
+
+  defp answered({:error, diagnostics}, {spec, candidate}, w) do
+    for %Logex.Diagnostic{line: line, message: message} <- diagnostics,
+        do:
+          claimed(
+            line,
+            message,
+            %{spec: w.spec, config: w.config},
+            %{spec: spec, config: candidate},
+            w.rt
+          )
+
+    w
+  end
+
+  defp answered({:ok, edit, forecast}, {spec, candidate}, w) do
+    {_edit, _rt, report} = ConfigEdit.test(edit, w.rt)
+    assert report == forecast
+
+    for {:held, global, _value} <- forecast,
+        do: reach(held_kind(global, {w.spec, w.config}), true)
+
+    %{
+      w
+      | edit: edit,
+        stage: :accepted,
+        candidate: %{spec: spec, config: candidate},
+        original: %{spec: w.spec, config: w.config},
+        restarted: false
+    }
+  end
+
+  defp switched({edit, rt, report}, stage, started, w) do
+    for {:hold_undone, _path, _value} <- report, do: reach(:hold_undone, true)
+    rt = checked(report, started, {w, rt})
+    %{w | edit: edit, stage: stage, rt: rt, scanned: true}
+  end
+
+  defp checked_cancel(:accepted, [], {w, rt}), do: {rt, w.scanned}
+  defp checked_cancel(_stage, report, {w, rt}), do: {checked(report, w.original, {w, rt}), true}
+
+  defp ended({rt, scanned}, kept, w),
+    do: %{
+      w
+      | rt: rt,
+        edit: nil,
+        stage: nil,
+        spec: kept.spec,
+        config: kept.config,
+        candidate: nil,
+        original: nil,
+        scanned: scanned,
+        restarted: false
+    }
+
+  # ---- the oracles -----------------------------------------------------------------------
+
+  # After a step that starts `started`: each held point reads its value after a cycle, but
+  # one left as it is; no var_output a rung reads is started at its point's value; and
+  # each point copied out frozen and not reported keeps its value.
+  defp checked(report, started, {w, rt}) do
+    {after_cycle, _outputs, _events} = Runtime.cycle(rt, 10, %{"pb" => 1})
+    held = for {:held, global, value} <- report, into: %{}, do: {global, value}
+    left = left_as_is(w.restarted, started, w)
+
+    for {global, value} <- held, global not in left do
+      assert Runtime.get!(after_cycle, global) == value, "#{global} held: #{inspect(report)}"
+    end
+
+    reach(:left_as_is, Enum.any?(Map.keys(held), &(&1 in left)))
+
+    for {:holds, path, _value} <- report do
+      reach(:holds, true)
+      [instance, member] = String.split(path, ".", parts: 2)
+      version = version_of(started.spec, instance)
+      assert read_line(version.reads, member) == nil, "#{path} is read: #{inspect(report)}"
+    end
+
+    added = for {:added, global, _value} <- report, do: global
+
+    for point <- frozen_points(started.spec),
+        not held?(held, point),
+        point not in added,
+        w.scanned do
+      reach(:frozen_kept, true)
+
+      assert Runtime.get!(after_cycle, point) == Runtime.get!(w.rt, point),
+             "#{point} moved unreported: #{inspect(report)}"
+    end
+
+    after_cycle
+  end
+
+  # The points a kept instance's own source a rung reads drives, after a restart since
+  # accept: no switch starts its var_output, and it is left as it is.
+  defp left_as_is(false, _started, _w), do: []
+
+  defp left_as_is(true, %{spec: spec}, w) do
+    other = other_side(spec, w)
+
+    for {instance, member, global} <- spec.conns,
+        {instance, member, global} in other.conns,
+        type_of(other, instance) == type_of(spec, instance),
+        read_line(version_of(spec, instance).reads, member) != nil,
+        point <- [global | frozen(member, global, MapSet.new())],
+        do: point
+  end
+
+  defp other_side(spec, %{original: %{spec: spec}} = w), do: w.candidate.spec
+  defp other_side(_spec, w), do: w.original.spec
+
+  defp type_of(spec, instance),
+    do: Enum.find_value(spec.instances, fn i -> i.name == instance && i.type end)
+
+  defp held?(held, point),
+    do: is_map_key(held, point) or is_map_key(held, hd(String.split(point, "[")))
+
+  # Each point a connection copies out frozen: its global, an element's by its name, where
+  # its var_output is unwritten; for `o` wired whole, each element of `la` whose element is.
+  defp frozen_points(spec),
+    do:
+      for(
+        {instance, member, global} <- spec.conns,
+        point <- frozen(member, global, version_of(spec, instance).writes),
+        do: point
+      )
+
+  defp frozen("o", "la", writes),
+    do: for(k <- 0..2, not written?(writes, "o[#{k}]"), do: "la[#{k}]")
+
+  defp frozen(member, global, writes), do: unwritten(written?(writes, member), global)
+
+  defp unwritten(true, _global), do: []
+  defp unwritten(false, global), do: [global]
+
+  defp written?(writes, "o"), do: Enum.any?(writes, &String.starts_with?(&1, "o["))
+
+  defp written?(writes, "o[" <> _ = element),
+    do: MapSet.member?(writes, element) or MapSet.member?(writes, "o[*]")
+
+  defp written?(writes, member), do: MapSet.member?(writes, member)
+
+  # The line of the first rung that reads a var_output: a scalar by its own reads, an
+  # element by its own or any element's, `o` whole by any of its elements'.
+  defp read_line(reads, "o"),
+    do: first(for {"o[" <> _, {line, _text}} <- reads, do: line)
+
+  defp read_line(reads, "o[" <> _ = element),
+    do: first(for key <- [element, "o[*]"], {line, _text} <- [Map.get(reads, key)], do: line)
+
+  defp read_line(reads, member),
+    do: first(for {line, _text} <- [Map.get(reads, member)], do: line)
+
+  defp first([]), do: nil
+  defp first(lines), do: Enum.min(lines)
+
+  defp rung_at(reads, line),
+    do: Enum.find_value(reads, fn {_key, {l, text}} -> l == line && text end)
+
+  defp version_of(spec, instance),
+    do: spec.types[Enum.find(spec.instances, &(&1.name == instance)).type]
+
+  # What a forecast's held global was in the configuration running: driven, copied out
+  # frozen through a connection, or wired from none.
+  defp held_kind(global, {spec, _config}) do
+    array = hd(String.split(global, "["))
+    wires = for {i, m, t} <- spec.conns, t in [global, array], do: {i, m, t}
+    held_from(Enum.any?(wires, &drives?(spec, &1)), wires)
+  end
+
+  defp held_from(true, _wires), do: :held_347
+  defp held_from(false, []), do: :held_newly_wired
+  defp held_from(false, _wires), do: :held_rewired
+
+  # A connection of the configuration stopped drives `global`: its var_output written, an
+  # array's whole where any element is.
+  defp drives?(spec, {instance, member, _target}),
+    do: written?(version_of(spec, instance).writes, member)
+
+  # ---- a refusal's claim ------------------------------------------------------------------
+
+  @read ~r/\A`(\w+)\.([\w\[\]]+)`(?: \(line (\d+) of the running configuration\))? is a var_output no rung of `(\w+)` writes and line (\d+) of `\w+` reads, wired to `([\w\[\]]+)`, a global (the candidate holds|the candidate stops driving|an untest holds|only the candidate drives): holding it would change what that rung gives, so a held point is wired to a var_output a rung reads only with a restart\z/
+  @unrun ~r/\A`(\w+)\.([\w\[\]]+)`(?: \(line (\d+) of the running configuration\))? is a var_output no rung of `(\w+)` writes and line (\d+) of `\w+` reads, wired to `([\w\[\]]+)`, a global (the candidate holds|the candidate stops driving|an untest holds|only the candidate drives), and holds (\d+|\[[\d, ]+\]) where `[\w\[\]]+` holds (\d+|\[[\d, ]+\]) until `\w+` first runs after a start or a restart: holding it now would change what that rung gives, so the edit is accepted only once `\w+` has run, or with a restart\z/
+  @fan ~r/\A`(\w+)\.([\w\[\]]+)`(?: \(line (\d+) of the running configuration\))? is a var_output no rung of `(\w+)` writes, wired to `([\w\[\]]+)`, a global (the candidate holds|the candidate stops driving|an untest holds|only the candidate drives), and to `([\w\[\]]+)`: holding it would move `[\w\[\]]+`, so a held point is wired to a var_output that drives another point only with a restart\z/
+
+  defp claimed(line, message, original, candidate, rt),
+    do:
+      claim(
+        {Regex.run(@read, message), Regex.run(@unrun, message), Regex.run(@fan, message)},
+        {line, message},
+        {original, candidate},
+        rt
+      )
+
+  defp claim({[_ | parts], nil, nil}, at, configs, _rt) do
+    [instance, member, running, type, read, global, how] = padded(parts, 7)
+    {started, stopped} = sides(running, configs)
+    wire!({instance, member, global}, {running, at}, {started, stopped}, how)
+    version = version_of(started.spec, instance)
+    assert started.spec.instances |> Enum.find(&(&1.name == instance)) |> Map.get(:type) == type
+    assert read_line(version.reads, member) == String.to_integer(read), elem(at, 1)
+    reach(read_kind(member, rung_at(version.reads, String.to_integer(read))), true)
+    reach(:read_untest, running != "")
+  end
+
+  defp claim({nil, [_ | parts], nil}, at, configs, rt) do
+    [instance, member, running, _type, read, global, how, was, value] = padded(parts, 9)
+    {started, stopped} = sides(running, configs)
+    wire!({instance, member, global}, {running, at}, {started, stopped}, how)
+    version = version_of(started.spec, instance)
+    assert read_line(version.reads, member) == String.to_integer(read), elem(at, 1)
+    # A kept instance's own connection, both configurations making it.
+    assert {instance, member, global} in stopped.spec.conns, elem(at, 1)
+
+    assert Enum.find(stopped.spec.instances, &(&1.name == instance)).type ==
+             Enum.find(started.spec.instances, &(&1.name == instance)).type
+
+    assert inspect(host(env_value(rt.instances[instance].env, member))) == was, elem(at, 1)
+    assert inspect(Runtime.get!(rt, global)) == value, elem(at, 1)
+    assert was != value
+    reach(:unrun, true)
+  end
+
+  defp claim({nil, nil, [_ | parts]}, at, configs, _rt) do
+    [instance, member, running, _type, global, how, other] = padded(parts, 7)
+    {started, stopped} = sides(running, configs)
+    wire!({instance, member, global}, {running, at}, {started, stopped}, how)
+
+    own = connection(started.spec, {instance, member, global})
+
+    others =
+      for {i, m, t} <- started.spec.conns,
+          i == instance,
+          {i, m, t} != own,
+          point <- fanned(member, {m, t}),
+          do: point
+
+    assert other in others, elem(at, 1)
+    reach(:fan, true)
+    reach(:fan_element, String.contains?(member <> other, "["))
+    reach(:fan_untest, running != "")
+  end
+
+  defp claim(_none, {_line, message}, _configs, _rt), do: flunk("an unknown refusal: #{message}")
+
+  defp padded(parts, n), do: parts ++ List.duplicate("", n - length(parts))
+
+  # The candidate's refusal names its line; the running configuration's, which an untest
+  # holds, its line in the running configuration.
+  defp sides("", {original, candidate}), do: {candidate, original}
+  defp sides(_line, {original, candidate}), do: {original, candidate}
+
+  # The connection the refusal names is the configuration started's, of a var_output its
+  # program does not write, its global held as the refusal says.
+  defp wire!({instance, member, global}, {running, {line, message}}, {started, stopped}, how) do
+    conn = connection(started.spec, {instance, member, global})
+    assert conn != nil, message
+    assert configured_line(started.config, conn) == line_of(running, line), message
+    refute written?(version_of(started.spec, instance).writes, member), message
+    assert held_how(stopped.spec, global, how), message
+  end
+
+  defp line_of("", line), do: line
+  defp line_of(running, _line), do: String.to_integer(running)
+
+  defp configured_line(config, {instance, member, global}),
+    do:
+      Enum.find_value(config.connections, fn c ->
+        {c.instance, c.member, c.to} == {instance, member, global} && c.line
+      end)
+
+  # The connection of `member`, or of its array wired whole for an element `la[k]`.
+  defp connection(spec, {instance, member, global}),
+    do:
+      Enum.find(spec.conns, fn {i, m, t} ->
+        {i, m, t} == {instance, member, global} or
+          ({i, m, t} == {instance, "o", "la"} and member =~ ~r/\Ao\[\d\]\z/ and
+             global == "la" <> String.trim_leading(member, "o"))
+      end)
+
+  defp held_how(stopped, global, how)
+       when how in ["the candidate stops driving", "only the candidate drives"],
+       do: stopped_drives?(stopped, global)
+
+  defp held_how(stopped, global, _how), do: not stopped_drives?(stopped, global)
+
+  defp stopped_drives?(spec, global) do
+    array = hd(String.split(global, "["))
+
+    Enum.any?(spec.conns, fn {i, m, t} ->
+      t in [global, array] and written?(version_of(spec, i).writes, m)
+    end)
+  end
+
+  # The point another connection of the instance drives from the holder's storage.
+  defp fanned(member, {member, t}), do: [t]
+  defp fanned("o", {"o[" <> _, t}), do: [t]
+  defp fanned("o[" <> k, {"o", "la"}), do: ["la[" <> k]
+  defp fanned(_member, _other), do: []
+
+  defp env_value(env, "o[" <> k),
+    do: elem(env["o"], String.to_integer(String.trim_trailing(k, "]")))
+
+  defp env_value(env, member), do: env[member]
+
+  defp host(value) when is_tuple(value), do: Tuple.to_list(value)
+  defp host(value), do: value
+
+  defp read_kind("o", _text), do: :read_whole
+  defp read_kind(_member, text), do: Map.fetch!(@read_kinds, text)
+
+  defp reach(name, true),
+    do: Process.put(:hw_reach, MapSet.put(Process.get(:hw_reach, MapSet.new()), name))
+
+  defp reach(_name, _false), do: :ok
 end
