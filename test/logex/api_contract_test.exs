@@ -2621,8 +2621,9 @@ defmodule Logex.ApiContractTest do
     }
 
   # A restart, from the rules alone: the clock and the input points kept, every other
-  # global at its initial value, each instance through restart/3, and every task anchored
-  # at the kept clock, with nothing run or missed since.
+  # global at its initial value, each instance through restart/3 at the kept clock, its
+  # timers counted from it (decision 382), and every task anchored at the kept clock, with
+  # nothing run or missed since.
   defp model_restart(config, model, mode),
     do: %{
       model
@@ -2632,7 +2633,7 @@ defmodule Logex.ApiContractTest do
           end),
         states:
           Map.new(model.states, fn {name, state} ->
-            {name, Runtime.restart(config.programs[state.type], state, mode)}
+            {name, Runtime.restart(config.programs[state.type], %{state | now: model.now}, mode)}
           end),
         anchor: Map.new(config.tasks, &{&1.name, model.now}),
         next: Map.new(config.tasks, &{&1.name, &1.interval && model.now}),
@@ -11682,10 +11683,13 @@ defmodule Logex.ApiContractTest do
   # 2-D array, a typed counter and a long timer too, each kept moved, `rw_types_kept`.
   #
   # Since decision 349 the first scan after each restart that scans runs `fan`'s rung false
-  # too, its `tof` restated: at rest where `.tt` was 0 whatever `.en` held, a retained one
-  # held on at the outage among them (`rw_tof_at_rest`), its delay resumed where `.tt` was 1.
+  # too, its `tof` restated. Since decision 385 the warm restart itself puts a retained
+  # `tof` held on and not timing at rest, `.dn`, `.tt` and `.en` 0, `fan` and `cell`'s own
+  # `f`, which a `cal` that may be false holds, on `t`'s qualifier so that its draw is no
+  # draw more (`rw_tof_at_rest`, `rw_tof_member_at_rest`), and the first scan runs `fan` by
+  # the plain rule, which reads no `first`, its delay resumed where `.tt` was 1.
   @rw_reach ~w(rw_kept rw_reset_warm rw_reset_cold rw_member_out rw_element_kept rw_rebased
-               rw_no_edge rw_unblocked rw_types_kept rw_tof_at_rest)a
+               rw_no_edge rw_unblocked rw_types_kept rw_tof_at_rest rw_tof_member_at_rest)a
 
   test "a warm restart keeps exactly what the nearest mark retains, and a cold one nothing, " <>
          "each timer rebased and no edge on the first scan" do
@@ -11732,26 +11736,40 @@ defmodule Logex.ApiContractTest do
     assert s.env["boxes"]["cv"] == restarted.env["boxes"]["cv"]
     rw_reach(:rw_no_edge, rw_kept?(w, ["boxes"]) and w.s.env["boxes"]["cu"] == 0)
     fan = restarted.env["fan"]
-    assert s.env["fan"] == tof_first(fan, restarted.now + 10), inspect(fan)
-    rw_reach(:rw_tof_at_rest, {fan["en"], fan["tt"]} == {1, 0})
+    assert s.env["fan"] == tof_off(fan, restarted.now + 10), inspect(fan)
   end
 
   defp rw_first_scan(0, _restarted, _w), do: :ok
 
-  # Decision 349, restated: a first scan's de-energised `tof`, from its value before the
-  # scan and the scan's time, resumes its delay where `.tt` is 1, adding the time since its
-  # `last`, and is at rest otherwise, `.dn` and `.tt` 0, whatever `.en` held.
-  defp tof_first(%{"tt" => 1, "acc" => acc, "pre" => pre, "last" => last} = tof, now) do
+  # M3-2's de-energised `tof`, restated from its value before the run and the run's time,
+  # whatever scan it is: the run after an energised one, `.en` 1, starts the delay, adding
+  # nothing, and a run in the delay, `.tt` 1, adds the time since its `last`, `.dn` and
+  # `.tt` dropping at the preset; otherwise it is at rest, `.dn` and `.tt` 0. Since decision
+  # 385 no first scan is told apart: a restart and a start put a retained one held on at
+  # rest themselves (`tof_rested/2`), where decision 349's first scan did.
+  defp tof_off(%{"en" => en, "tt" => tt, "acc" => acc, "pre" => pre, "last" => last} = tof, now)
+       when en == 1 or tt == 1 do
     limit = max(pre, 0)
-    acc = min(max(acc, 0) + now - last, limit)
+    acc = min(max(acc, 0) + tof_elapsed(tt, now - last), limit)
     running = tof_one(acc != limit)
     %{tof | "acc" => acc, "dn" => running, "tt" => running, "en" => 0, "last" => now}
   end
 
-  defp tof_first(tof, now), do: %{tof | "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+  defp tof_off(tof, now), do: %{tof | "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp tof_elapsed(1, elapsed), do: elapsed
+  defp tof_elapsed(_tt, _elapsed), do: 0
 
   defp tof_one(true), do: 1
   defp tof_one(false), do: 0
+
+  # Decision 385, restated: a restart or a start puts a retained `tof` held on and not
+  # timing, `.en` 1 and `.tt` 0, at rest, `.dn`, `.tt` and `.en` 0, `.acc` kept, its `last`
+  # the restart's `now`; any other is rebased alone, as every timer is (decision 273).
+  defp tof_rested(%{"en" => 1, "tt" => 0} = tof, now),
+    do: %{tof | "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+  defp tof_rested(tof, now), do: Map.put(tof, "last", now)
 
   # The rule restated: every leaf at its first value, the var_inputs as they were, and each
   # leaf the nearest mark retains, at a warm restart, as it was, a timer's `last` the
@@ -11772,6 +11790,7 @@ defmodule Logex.ApiContractTest do
   defp rw_restored({_path, false, _kind}, env, _w), do: env
 
   defp rw_rebased(:timer, timer, now), do: Map.put(timer, "last", now)
+  defp rw_rebased(:tof, tof, now), do: tof_rested(tof, now)
   defp rw_rebased(:value, value, _now), do: value
 
   # Each leaf, its path, whether the nearest mark retains it, and whether it is a timer:
@@ -11784,7 +11803,7 @@ defmodule Logex.ApiContractTest do
             {"boxes", :value},
             {"total", :value},
             {"lube", :timer},
-            {"fan", :timer},
+            {"fan", :tof},
             {"w", :value},
             {"lamp", :value},
             {"pulse", :timer},
@@ -11797,22 +11816,27 @@ defmodule Logex.ApiContractTest do
           ],
           do: {[name], rw_flag(quals[name], false), kind}
 
-    cell = for m <- ~w(go q k t), do: {m, rw_kind(m)}
+    cell = for m <- ~w(go q k t f), do: {m, rw_kind(m)}
 
     own ++
       for(
         {m, kind} <- cell,
-        do: {["c1", m], rw_flag(quals["cell." <> m], rw_flag(quals["c1"], false)), kind}
+        do: {["c1", m], rw_flag(quals[rw_line(m)], rw_flag(quals["c1"], false)), kind}
       ) ++
       for(
         i <- [0, 1],
         {m, kind} <- cell,
-        do: {["cs", i, m], rw_flag(quals["cell." <> m], rw_flag(quals["cs"], false)), kind}
+        do: {["cs", i, m], rw_flag(quals[rw_line(m)], rw_flag(quals["cs"], false)), kind}
       )
   end
 
   defp rw_kind("t"), do: :timer
+  defp rw_kind("f"), do: :tof
   defp rw_kind(_member), do: :value
+
+  # `cell`'s `f`, decision 385's, on `t`'s line's qualifier, so that its draw is no draw more.
+  defp rw_line("f"), do: "cell.t"
+  defp rw_line(member), do: "cell." <> member
 
   defp rw_flag(:retain, _held), do: true
   defp rw_flag(:non_retain, _held), do: false
@@ -11857,11 +11881,23 @@ defmodule Logex.ApiContractTest do
       :rw_rebased,
       Enum.any?(leaves, fn leaf -> rw_stale?(leaf, w) end)
     )
+
+    rested = Enum.filter(leaves, &rw_held_on?(&1, w))
+    rw_reach(:rw_tof_at_rest, Enum.any?(rested, &match?({["fan"], _, _}, &1)))
+    rw_reach(:rw_tof_member_at_rest, Enum.any?(rested, &match?({[_, _ | _], _, _}, &1)))
   end
+
+  # A retained `tof` held on and not timing, which decision 385's rest puts at rest.
+  defp rw_held_on?({path, true, :tof}, w),
+    do: Map.take(rw_get(w.s.env, path), ["en", "tt"]) == %{"en" => 1, "tt" => 0}
+
+  defp rw_held_on?(_leaf, _w), do: false
 
   defp rw_moved?({path, _flag, _kind}, w), do: rw_get(w.s.env, path) != rw_get(w.fresh, path)
 
-  defp rw_stale?({path, true, :timer}, w), do: rw_get(w.s.env, path)["last"] != w.s.now
+  defp rw_stale?({path, true, kind}, w) when kind in [:timer, :tof],
+    do: rw_get(w.s.env, path)["last"] != w.s.now
+
   defp rw_stale?(_leaf, _w), do: false
 
   defp rw_reach(atom, true),
@@ -11889,7 +11925,8 @@ defmodule Logex.ApiContractTest do
     cell =
       "function_block cell\nvar_input #{word.("cell.go")}go bool\n" <>
         "var_output #{word.("cell.q")}q bool\nvar #{word.("cell.k")}k dint\n" <>
-        "var #{word.("cell.t")}t ton\nxic go ton t 30\nxic t.dn ote q\nxic go add k 1 k"
+        "var #{word.("cell.t")}t ton\nvar #{word.("cell.t")}f tof\nxic go ton t 30\n" <>
+        "xic t.dn ote q\nxic go add k 1 k\nxic go tof f 30"
 
     program =
       "var_input eye bool\nvar_input run bool\nvar #{word.("e")}e bool\n" <>
@@ -11931,7 +11968,9 @@ defmodule Logex.ApiContractTest do
   # timer's or counter's preset, drawn and drawn again in a changed program, follows the
   # program, a stored one that differs reported (decision 308), `iw_preset`; and a member
   # every element of an array of cells drops for one reason reported once, `b[*].k`
-  # (decision 310), `iw_every`. Since M6-8's review, after the 60, 40 more from a seed of
+  # (decision 310), `iw_every`; since decision 378 one that no instruction of the changed
+  # program gives, a timer it declares and runs no instruction on, kept as any member and
+  # reported as nothing, `iw_preset_unrun`. Since M6-8's review, after the 60, 40 more from a seed of
   # their own drawn toward two rules no walk reached: reals among the tags and an array of
   # eleven or twelve cells, one to three retained values made a misfit or, at a real, an
   # integer, which is taken at its nearest real (decision 311), `iw_int_for_real`, and two
@@ -11940,12 +11979,13 @@ defmodule Logex.ApiContractTest do
   # drops' order restated by value where until then it was the text's.
   #
   # Since decision 349 each start's first scan with every rung false is run beside the
-  # walk, each `tof` of the changed program, a tag or a member of a cell, restated by
-  # `tof_first/2`: at rest where `.tt` was 0, a kept one held on among them
-  # (`iw_tof_at_rest`).
+  # walk, each `tof` of the changed program, a tag or a member of a cell, restated by the
+  # plain rule, `tof_off/2`; and since decision 385 the start itself puts each kept `tof`
+  # held on and not timing at rest, a tag, a cell's member and every element cell's,
+  # `tof_rested/2` over the env decision 277 restated lays (`iw_tof_at_rest`).
   @iw_reach ~w(iw_kept iw_undeclared iw_retyped iw_resized iw_unretained iw_misfit
                iw_member iw_added iw_rebased iw_same_scans iw_mistake iw_preset iw_every
-               iw_tof_at_rest)a
+               iw_tof_at_rest iw_preset_unrun)a
 
   @iw_toward_reach ~w(iw_int_for_real iw_past_nine)a
 
@@ -11962,7 +12002,7 @@ defmodule Logex.ApiContractTest do
 
   defp iw_round(kinds, corrupted) do
     old = iw_spec(kinds)
-    new = iw_changed(old, kinds)
+    new = old |> iw_changed(kinds) |> iw_unrun(old)
     {p, q} = {iw_compile(old), iw_compile(new)}
     s = iw_scans(p, Runtime.instance(p), :rand.uniform(12))
     image = Runtime.retained(p, s)
@@ -11970,7 +12010,7 @@ defmodule Logex.ApiContractTest do
     {started, dropped} = Runtime.instance(q, image)
 
     {expected, expected_dropped} =
-      iw_expected(old, new, {s.env, Runtime.instance(q).env}, corrupt)
+      old |> iw_expected(new, {s.env, Runtime.instance(q).env}, corrupt) |> iw_rested(new)
 
     assert dropped == expected_dropped
     assert started.env == expected
@@ -11989,13 +12029,42 @@ defmodule Logex.ApiContractTest do
 
     for at <- iw_tofs(spec) do
       tof = iw_at(started.env, at)
-      assert iw_at(scanned.env, at) == tof_first(tof, 10), inspect({at, tof})
-      iw_reach(:iw_tof_at_rest, {tof["en"], tof["tt"]} == {1, 0})
+      assert iw_at(scanned.env, at) == tof_off(tof, 10), inspect({at, tof})
     end
   end
 
+  # Decision 385 restated over the env decision 277's restatement laid: each `tof` held on
+  # and not timing at rest, every element cell's among them, its `last` the start's `now`,
+  # 0, as it was; one the program does not retain holds its first value, never held on.
+  defp iw_rested({env, dropped}, spec) do
+    rested =
+      Enum.reduce(iw_every_tof(spec), env, fn at, env ->
+        tof = iw_get(env, at)
+        iw_reach(:iw_tof_at_rest, Map.take(tof, ["en", "tt"]) == %{"en" => 1, "tt" => 0})
+        iw_put(env, at, tof_rested(tof, 0))
+      end)
+
+    {rested, dropped}
+  end
+
+  defp iw_every_tof(spec),
+    do:
+      for(
+        {name, kind, _q} <- spec.tags,
+        at <- iw_every_tof_in(name, kind, spec.cell),
+        do: at
+      )
+
+  defp iw_every_tof_in(name, {:cells, n}, cell),
+    do: for(i <- 0..(n - 1), {m, :tof, _q} <- cell, do: [name, {:el, i}, m])
+
+  defp iw_every_tof_in(name, kind, cell), do: iw_tofs_in(name, kind, cell)
+
   # Each `tof` a scan runs, by its keys into an env: a tag, a cell's member and the member of
-  # each element cell a `cal` runs, the first two.
+  # each element cell a `cal` runs, the first two; none where no instruction runs a timer
+  # (decision 378's draw).
+  defp iw_tofs(%{presets: %{timer: nil}}), do: []
+
   defp iw_tofs(spec),
     do:
       for(
@@ -12134,6 +12203,7 @@ defmodule Logex.ApiContractTest do
   defp iw_expected(old, new, {old_env, fresh}, corrupt) do
     declared = iw_declared(new)
     retained = MapSet.new(Enum.map(iw_retained_leaves(new), & &1.path))
+    given = iw_given_presets(new)
     kinds = iw_retained_kinds(new)
     stored = iw_retained_leaves(old)
     stored_kinds = stored |> Enum.flat_map(& &1.above) |> Enum.uniq() |> Enum.sort()
@@ -12147,7 +12217,7 @@ defmodule Logex.ApiContractTest do
       Enum.reduce(stored, {fresh, dropped}, fn leaf, acc ->
         iw_value(
           Enum.any?(leaf.above, fn {k, _} -> MapSet.member?(bad, k) end),
-          leaf,
+          iw_given(leaf, given),
           {declared, retained, corrupt, old_env},
           acc
         )
@@ -12259,6 +12329,26 @@ defmodule Logex.ApiContractTest do
   defp iw_value_judged(reason, leaf, _old_env, {env, dropped}),
     do: {env, [{leaf.path, reason} | dropped]}
 
+  # Decision 378 restated: the presets an instruction of the changed program gives, every
+  # counter's and, where it runs its timers, every timer's; a stored preset of a path it
+  # does not give is kept as any member is, unreported.
+  defp iw_given_presets(spec),
+    do:
+      MapSet.new(
+        for leaf <- iw_leaves(spec),
+            leaf[:preset] == true,
+            iw_gives?(leaf.path, spec.presets),
+            do: leaf.path
+      )
+
+  defp iw_gives?(path, %{timer: nil}), do: not String.ends_with?(path, ".pre")
+  defp iw_gives?(_path, _presets), do: true
+
+  defp iw_given(%{preset: true} = leaf, given),
+    do: %{leaf | preset: MapSet.member?(given, leaf.path)}
+
+  defp iw_given(leaf, _given), do: leaf
+
   # Decision 308 restated: the changed program's preset stands, a stored one that differs
   # reported.
   defp iw_preset_kept(same, same, _leaf, acc), do: acc
@@ -12298,6 +12388,11 @@ defmodule Logex.ApiContractTest do
 
     iw_reach(:iw_added, iw_added?(old, new, kept))
     iw_reach(:iw_rebased, Enum.any?(kept, &iw_rebased?(&1, s, started)))
+
+    iw_reach(
+      :iw_preset_unrun,
+      new.presets.timer == nil and Enum.any?(kept, &String.ends_with?(&1.path, ".pre"))
+    )
   end
 
   # M6-8's review: an integer kept at a real, and two drops in one array of cells whose
@@ -12451,6 +12546,15 @@ defmodule Logex.ApiContractTest do
   end
 
   defp iw_presets, do: %{timer: pick([30, 40]), counter: pick([100, 60])}
+
+  # Decision 378: one changed program in five runs no timer, every timer tag and `cell`'s
+  # timer declared and run by no instruction, so no instruction gives a preset the image
+  # holds; an unchanged one stays unchanged.
+  defp iw_unrun(same, same), do: same
+  defp iw_unrun(new, _old), do: iw_unrun_drawn(:rand.uniform(5), new)
+
+  defp iw_unrun_drawn(1, new), do: %{new | presets: %{new.presets | timer: nil}}
+  defp iw_unrun_drawn(_draw, new), do: new
 
   defp iw_tag_change({name, kind, q} = tag, kinds) do
     case :rand.uniform(10) do
@@ -12619,15 +12723,18 @@ defmodule Logex.ApiContractTest do
     decls =
       for {m, kind, q} <- cell, kind != nil, do: "var #{iw_word(q)}#{m} #{iw_type_word(kind)}"
 
-    rungs = for {m, kind, _q} <- cell, kind != nil, do: iw_cell_rung(m, kind, presets)
+    rungs =
+      for {m, kind, _q} <- cell, kind != nil, rung <- iw_cell_rung(m, kind, presets), do: rung
 
     Enum.join(["function_block cell", "var_input go bool"] ++ decls ++ rungs, "\n")
   end
 
-  defp iw_cell_rung(m, kind, presets) when kind in [:ton, :tof],
-    do: "xic go #{kind} #{m} #{presets.timer}"
+  defp iw_cell_rung(_m, kind, %{timer: nil}) when kind in [:ton, :tof], do: []
 
-  defp iw_cell_rung(m, _kind, _presets), do: "xic go add #{m} 1 #{m}"
+  defp iw_cell_rung(m, kind, presets) when kind in [:ton, :tof],
+    do: ["xic go #{kind} #{m} #{presets.timer}"]
+
+  defp iw_cell_rung(m, _kind, _presets), do: ["xic go add #{m} 1 #{m}"]
 
   defp iw_text(spec) do
     decls = for {name, kind, q} <- spec.tags, do: "var #{iw_word(q)}#{name} #{iw_type_word(kind)}"
@@ -12654,6 +12761,7 @@ defmodule Logex.ApiContractTest do
   defp iw_rungs(name, k, p) when k in [:ctu, :ctu_int],
     do: ["xic eye ctu #{name} #{p.counter}"]
 
+  defp iw_rungs(_name, k, %{timer: nil}) when k in [:ton, :tof], do: []
   defp iw_rungs(name, k, p) when k in [:ton, :tof], do: ["xic run #{k} #{name} #{p.timer}"]
   defp iw_rungs(name, :cell, _p), do: ["cal #{name} run"]
   defp iw_rungs(name, {:cells, _}, _p), do: ["cal #{name}[0] eye", "cal #{name}[1] run"]
@@ -12672,10 +12780,11 @@ defmodule Logex.ApiContractTest do
   # now and then made a misfit), the walk going on over the changed one. Decision 271's
   # table's two rows of a restart are restated here from the draw alone, without
   # `Logex.Program` or `Logex.Image`: each leaf of each instance the nearest mark retains
-  # kept warm, a timer's `last` its instance's `now`, every other leaf and every leaf cold
-  # at its first value, each var_input kept; each global retained kept warm and every other
-  # back at its initial value, the input points kept and the output point 0; the clock and
-  # each instance's `now` kept and `first` true; and a retained trigger's last sample the
+  # kept warm, a timer's `last` the resource's `now` since decision 382 (its instance's own
+  # until then), every other leaf and every leaf cold at its first value, each var_input
+  # kept; each global retained kept warm and every other back at its initial value, the
+  # input points kept and the output point 0; the clock kept, each instance's `now` the
+  # resource's (decision 382) and `first` true; and a retained trigger's last sample the
   # one the resource took last, warm, every other 0 (decisions 305 and 313), told by whether
   # the event task runs in a cycle of 0 ms after it. The image's drops are restated from the
   # two configurations' draws, decision 277's order of judging, by name: a global
@@ -12685,13 +12794,19 @@ defmodule Logex.ApiContractTest do
   # kinds of leaf and global, each trigger's case and each resource-level drop; the
   # lone instance's drops are M6-4's walk's (`iw_`), which this one does not repeat. Since
   # decision 349 `pp` holds a `tof`, `f`, on `t`'s qualifier, whose first scan after each
-  # restart and start is restated (`rr_tof_at_rest`).
+  # restart and start is restated by the plain rule; since decision 385 the warm restart
+  # and the start themselves put it at rest where it was held on and not timing, and
+  # `cell`'s own `f`, on `cell.t`'s qualifier, which `b`'s `cal` holds while `go` is 0
+  # (`rr_tof_at_rest`, `rr_tof_member_at_rest`). Since decision 382 a warm restart counts
+  # each kept timer from the resource's `now`, an instance whose last scan came before it
+  # among them (`rr_rebased_later`).
   @rr_reach ~w(rr_kept_warm rr_reset_warm rr_reset_cold rr_member_out rr_rebased
                rr_input_kept rr_clock_kept rr_global_kept rr_global_reset rr_output_reset
                rr_sample_kept rr_rise_fires rr_image_kept rr_image_global rr_image_trigger
                rr_undeclared_global rr_retyped_global rr_resized_global rr_unretained_global
                rr_misfit_global rr_retyped_instance rr_undeclared_instance
-               rr_member_unretained rr_member_retyped rr_member_misfit rr_tof_at_rest)a
+               rr_member_unretained rr_member_retyped rr_member_misfit rr_tof_at_rest
+               rr_tof_member_at_rest rr_rebased_later)a
 
   test "a resource's warm and cold restarts keep what decision 271's table says, and its " <>
          "image meets a changed configuration by decision 277" do
@@ -12725,10 +12840,11 @@ defmodule Logex.ApiContractTest do
       first = rr_first(type)
       assert fresh.instances[name].env == first
       base = Map.merge(first, Map.take(before.env, ["go"]))
-      expected = rr_restarted(mode, rr_leaves(type, w.spec), {base, before.env, before.now})
+      expected = rr_restarted(mode, rr_leaves(type, w.spec), {base, before.env, w.rt.now})
+      rr_rest_reach(rr_restart_leaves(mode, rr_leaves(type, w.spec)), before)
       restarted = rt.instances[name]
       assert restarted.env == expected, inspect({mode, name, w.spec})
-      assert {restarted.first, restarted.now} == {true, before.now}
+      assert {restarted.first, restarted.now} == {true, w.rt.now}
     end
 
     for {g, _type} <- rr_types(w.spec) do
@@ -12767,12 +12883,9 @@ defmodule Logex.ApiContractTest do
       first = rr_first(type)
       assert fresh.instances[name].env == first
 
-      expected =
-        rr_started(
-          kept,
-          rr_kept_leaves(name, type, {w.spec, spec}, misfit),
-          {first, before}
-        )
+      leaves = rr_kept_leaves(name, type, {w.spec, spec}, misfit)
+      expected = rr_started(kept, leaves, {first, before})
+      rr_rest_reach(rr_start_leaves(kept, leaves), before)
 
       assert rt.instances[name].env == expected, inspect({name, w.spec, spec})
       assert {rt.instances[name].first, rt.instances[name].now} == {true, 0}
@@ -12795,11 +12908,17 @@ defmodule Logex.ApiContractTest do
 
   # Decision 271's restart rows, restated: each leaf at its first value, the var_inputs
   # kept, and at a warm restart each leaf the nearest mark retains as it was, a timer's
-  # `last` its instance's `now`.
+  # `last` the resource's `now` (decision 382), a `tof` held on at rest (decision 385).
   defp rr_restarted(:cold, _leaves, {base, _env, _now}), do: base
 
   defp rr_restarted(:warm, leaves, {base, env, now}),
     do: Enum.reduce(leaves, base, &rr_kept_leaf(&1, &2, {env, now}))
+
+  defp rr_restart_leaves(:warm, leaves), do: leaves
+  defp rr_restart_leaves(:cold, _leaves), do: []
+
+  defp rr_start_leaves(true, leaves), do: leaves
+  defp rr_start_leaves(false, _leaves), do: []
 
   defp rr_kept_leaf({path, true, kind}, env, {before, now}),
     do: rw_put(env, path, rw_rebased(kind, rw_get(before, path), now))
@@ -12843,8 +12962,10 @@ defmodule Logex.ApiContractTest do
   end
 
   # Decision 349: the first scan of each `pp` after a restart or a start, in a cycle of 0 ms
-  # beside the walk, runs its `tof` `f` as `tof_first/2` restates it where its rung is
-  # false, at rest where `.tt` was 0 whatever `.en` held, and held on where it is true.
+  # beside the walk, runs its `tof` `f` as the plain rule, `tof_off/2`, restates it where
+  # its rung is false, and held on where it is true; since decision 385 the restart or the
+  # start has put a kept one held on at rest already, which `rr_restarted/3` and
+  # `rr_started/3` restate (`rr_rest_reach/3`).
   defp rr_tof_first!(rt) do
     {later, _outputs, events} = Runtime.cycle(rt, 0, %{})
 
@@ -12852,11 +12973,20 @@ defmodule Logex.ApiContractTest do
         %Instance{type: "pp", first: true, env: %{"f" => f}} <- [rt.instances[name]] do
       go = later.instances[name].env["go"]
       assert later.instances[name].env["f"] == rr_tof_run(go, f, now), inspect({name, f})
-      rr_reach(:rr_tof_at_rest, {go, f["en"], f["tt"]} == {0, 1, 0})
     end
   end
 
-  defp rr_tof_run(0, f, now), do: tof_first(f, now)
+  # Decision 385's reach: a kept `tof` held on and not timing before a warm restart or a
+  # start, `f` and `b.f`.
+  defp rr_rest_reach(leaves, before) do
+    for {path, true, :tof} <- leaves,
+        Map.take(rw_get(before.env, path), ["en", "tt"]) == %{"en" => 1, "tt" => 0} do
+      rr_reach(:rr_tof_at_rest, path == ["f"])
+      rr_reach(:rr_tof_member_at_rest, path == ["b", "f"])
+    end
+  end
+
+  defp rr_tof_run(0, f, now), do: tof_off(f, now)
 
   defp rr_tof_run(1, f, now),
     do: %{f | "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => now}
@@ -12875,7 +13005,7 @@ defmodule Logex.ApiContractTest do
       "f" => rr_ton(),
       "a" => {0, 0, 0},
       "k" => 0,
-      "b" => %{"go" => 0, "k" => 0, "q" => 0, "t" => rr_ton()},
+      "b" => %{"go" => 0, "k" => 0, "q" => 0, "t" => rr_ton(), "f" => rr_ton()},
       "q2" => 0
     }
 
@@ -12890,6 +13020,7 @@ defmodule Logex.ApiContractTest do
     do: [
       {["a"], :value, :int3},
       {["b"], :kind, "cell"},
+      {["b", "f"], :kind, "tof"},
       {["b", "go"], :value, :bool},
       {["b", "k"], :value, :dint},
       {["b", "q"], :value, :bool},
@@ -12944,7 +13075,7 @@ defmodule Logex.ApiContractTest do
   defp rr_kind(false, _now, _path, acc), do: acc
 
   # A kind kept keeps every leaf the walk lays whole under it, a timer's map or a counter's.
-  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["f"], ["b", "t"]],
+  defp rr_kept_under(path, kept) when path in [["c"], ["t"], ["f"], ["b", "t"], ["b", "f"]],
     do: [path | kept]
 
   defp rr_kept_under(_path, kept), do: kept
@@ -13000,11 +13131,12 @@ defmodule Logex.ApiContractTest do
           ],
           do: {[name], rw_flag(q[name], false), kind}
 
-    # Decision 349's `tof`, `f`, on `t`'s line's qualifier, so that its draw is no draw more.
+    # Decision 349's `tof`, `f`, on `t`'s line's qualifier, so that its draw is no draw more,
+    # and decision 385's `b.f` on `cell.t`'s.
     own ++
-      [{["f"], rw_flag(q["t"], false), :timer}] ++
-      for {m, kind} <- [{"go", :value}, {"q", :value}, {"k", :value}, {"t", :timer}],
-          do: {["b", m], rw_flag(q["cell." <> m], rw_flag(q["b"], false)), kind}
+      [{["f"], rw_flag(q["t"], false), :tof}] ++
+      for {m, kind} <- [{"go", :value}, {"q", :value}, {"k", :value}, {"t", :timer}, {"f", :tof}],
+          do: {["b", m], rw_flag(q[rw_line(m)], rw_flag(q["b"], false)), kind}
   end
 
   defp rr_retains?(type, spec), do: Enum.any?(rr_leaves(type, spec), &match?({_, true, _}, &1))
@@ -13104,7 +13236,17 @@ defmodule Logex.ApiContractTest do
       :rr_rebased,
       mode == :warm and
         Enum.any?(moved, fn {_, path, kept, kind, before} ->
-          kept and kind == :timer and rw_get(before.env, path)["last"] != before.now
+          kept and kind in [:timer, :tof] and rw_get(before.env, path)["last"] != w.rt.now
+        end)
+    )
+
+    # Decision 382: a kept timer of an instance whose last scan came before the restart's
+    # `now`, counted from the restart.
+    rr_reach(
+      :rr_rebased_later,
+      mode == :warm and
+        Enum.any?(moved, fn {_, _path, kept, kind, before} ->
+          kept and kind in [:timer, :tof] and before.now < w.rt.now
         end)
     )
 
@@ -13159,7 +13301,8 @@ defmodule Logex.ApiContractTest do
     do:
       "function_block cell\nvar_input #{rr_word(q["cell.go"])}go bool\n" <>
         "var_output #{rr_word(q["cell.q"])}q bool\nvar #{rr_word(q["cell.k"])}k dint\n" <>
-        "var #{rr_word(q["cell.t"])}t ton\nxic go ton t 30\nxic t.dn ote q\nxic go add k 1 k"
+        "var #{rr_word(q["cell.t"])}t ton\nvar #{rr_word(q["cell.t"])}f tof\n" <>
+        "xic go ton t 30\nxic t.dn ote q\nxic go add k 1 k\nxic go tof f 30"
 
   defp rr_pp(spec) do
     {tot, type} = spec.tot

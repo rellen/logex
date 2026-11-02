@@ -763,7 +763,7 @@ defmodule Logex.Image do
     valued_as(
       judged(type, now, {path, segments, program}, dropped),
       {path, type, value},
-      {preset?(segments, kinds), fresh},
+      {preset?(segments, kinds) and given?(segments, program), fresh},
       {kept, dropped}
     )
   end
@@ -780,7 +780,8 @@ defmodule Logex.Image do
   # program, not the image, as an edit's switch moves it: the fresh instance's, the
   # number on the instruction that runs it, is kept, and a stored one that differs is
   # reported, `{"lube.pre", {:preset, 360000000, 180000000}}`; its `.acc` or `.cv`, its
-  # done bits and its edge memory are kept as any member is.
+  # done bits and its edge memory are kept as any member is. Since decision 378 only where
+  # an instruction gives it (`given?/2`).
   defp fitted({:ok, fresh}, _path, {true, fresh}, acc), do: acc
 
   defp fitted({:ok, stored}, path, {true, fresh}, {kept, dropped}),
@@ -805,6 +806,34 @@ defmodule Logex.Image do
 
   defp preset_member(%{preset: member}), do: member
   defp preset_member(nil), do: nil
+
+  # Decision 378 (the maintainer, 2026-11-01): whether an instruction of the program gives
+  # the preset at `segments`, a built-in's preset member by now: the number the compiler
+  # took from the instruction that runs the instance into its initial value, the tag's, an
+  # element's by its index and each member's on the way, as `Logex.Program.initial_env/1`
+  # starts it. A preset no instruction gives, a retained `ton t` the program declares and
+  # runs no `ton` on, `t.pre` written by logic or by no one, is kept from the image as any
+  # member is and reported as nothing, as a warm restart keeps it and as Logix's tag memory
+  # would; one an instruction gives follows the program (decision 308).
+  defp given?([{name, index} | rest], %Program{tags: tags, blocks: blocks}) do
+    %Logex.Tag{type: type, initial: initial} = Map.fetch!(tags, name)
+    given_at(element(typed(type, blocks), index), at_index(initial, index), rest)
+  end
+
+  defp given_at(%FbType{body: nil}, initial, [{member, nil}]),
+    do: is_map(initial) and is_map_key(initial, member)
+
+  defp given_at(%FbType{} = type, _initial, [{name, index} | rest]) do
+    %Member{initial: initial} = member = member!(type, name)
+    given_at(element(FbType.type_of(type, member), index), at_index(initial, index), rest)
+  end
+
+  defp element({:array, type, _dims}, index) when is_list(index), do: type
+  defp element(type, nil), do: type
+
+  defp at_index(initial, nil), do: initial
+  defp at_index(initial, index) when is_map(initial), do: Map.get(initial, index)
+  defp at_index(_none, _index), do: nil
 
   # A stored value taken as a state's is (decisions 171 to 188), an integer or a bool of
   # its type's range, a real of its type's values, an array a host's list of its shape:

@@ -135,7 +135,8 @@ defmodule Logex.Program do
   stored kinds, an integer for a real at its nearest real (decision 311), and otherwise
   starts by this rule, a retained timer's `last` at the start's `now`; and since decision
   308 a timer's or counter's preset starts by this rule whatever the image holds, the
-  number on the instruction that runs it, as an edit's switch moves it. An online edit's switch writes no value for a qualifier (decision
+  number on the instruction that runs it, as an edit's switch moves it, but since decision
+  378 one no instruction gives keeps the image's value, as any member does. An online edit's switch writes no value for a qualifier (decision
   278, M6-7).
   """
   def initial_env(%__MODULE__{} = program),

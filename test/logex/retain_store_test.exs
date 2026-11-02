@@ -1832,6 +1832,65 @@ defmodule Logex.RetainStoreTest do
     end
   end
 
+  # Decision 385 (the maintainer, 2026-11-01): a fresh start from the store puts each
+  # retained `tof` held on at the outage at rest itself, through `Logex.Runtime.start/2`, a
+  # member of a block whose `cal` is false at the first round among them, so that no fan
+  # starts its run-on with nobody pressing anything.
+  describe "a retained tof held on at the outage (decision 385)" do
+    test "a fresh start from the store puts it at rest, in a block whose cal is false too",
+         %{tmp_dir: dir} do
+      {:ok, runon} =
+        Logex.compile(
+          "function_block runon\nvar_input go bool\nvar_output q bool\nvar t tof\n" <>
+            "xic go tof t 50\nxic t.dn ote q",
+          name: "runon"
+        )
+
+      {:ok, fans} =
+        Logex.compile(
+          "var_input motor bool\nvar_input go bool\nvar_output k bool\nvar_output l bool\n" <>
+            "var retain fan tof\nvar retain r runon\nxic motor tof fan 50\n" <>
+            "xic go cal r motor k\nxic fan.dn ote l",
+          name: "fans",
+          types: [runon]
+        )
+
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global m bool at panel.i.0\n" <>
+            "var_global g bool at panel.i.1\nvar_global k bool at panel.q.0\n" <>
+            "var_global l bool at panel.q.1\nprogram f1 fans with fast\nf1.motor m\n" <>
+            "f1.go g\nf1.k k\nf1.l l\n",
+          %{"fans" => fans}
+        )
+
+      rig = rig(dir, configuration: config)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Sim.set(rig.panel, [0], 1)
+      Sim.set(rig.panel, [1], 1)
+      Manual.advance(rig.clock, 20)
+      Sim.set(rig.panel, [1], 0)
+      Manual.advance(rig.clock, 20)
+      assert {Runner.get!(runner, "k"), Runner.get!(runner, "l")} == {1, 1}
+      killed(runner)
+      Sim.set(rig.panel, [0], 0)
+      opener_down(rig.panel)
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.get!(runner, "f1.fan.dn") == 0
+
+      seen =
+        for g <- [0, 1, 1] do
+          Sim.set(rig.panel, [1], g)
+          Manual.advance(rig.clock, 10)
+          {Runner.get!(runner, "k"), Runner.get!(runner, "l")}
+        end
+
+      assert seen == [{0, 0}, {0, 0}, {0, 0}]
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
   describe "a runner with no store costs as before" do
     # Traced: a runner given no `retain:` takes no image out at a trip, a cold restart or a
     # stop, and restarts its resource once a restart, as before M6-5; one given a store takes

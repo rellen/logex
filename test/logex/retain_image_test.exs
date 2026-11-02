@@ -1140,6 +1140,72 @@ defmodule Logex.RetainImageTest do
                Runtime.instance(wrote, Runtime.retained(wrote, s))
     end
 
+    # Decision 378 (the maintainer, 2026-11-01), RV-3's question 5 (b5-config-edit-3): a
+    # stored preset that no instruction of the program gives, a retained timer or counter
+    # the program declares and runs no instruction on, is kept as any member is and
+    # reported as nothing, as a warm restart keeps it, at the top level, in an element of
+    # an array of them, in a block's member, an element of an array of blocks' and a
+    # block's own array; one an instruction gives follows the program as decision 308 has
+    # it. Until RV-10 every stored preset followed the program, `{:preset, 25, 0}`.
+    test "a stored preset no instruction gives is kept, unreported (decision 378)" do
+      ran =
+        "function_block blk\nvar_input go bool\nvar t ton\nvar ts ton[2]\n" <>
+          "xic go ton t 30\nxic go ton ts[1] 40\n"
+
+      idle =
+        "function_block blk\nvar_input go bool\nvar_output q bool\nvar t ton\n" <>
+          "var ts ton[2]\nxic t.dn ote q\n"
+
+      src = fn rungs ->
+        "var_input run bool\nvar_output a dint\nvar retain t ton\nvar retain c ctu\n" <>
+          "var retain tl ton[3]\nvar retain b blk\nvar retain bs blk[2]\n" <>
+          "move t.acc a\n" <> rungs
+      end
+
+      runs =
+        "xic run ton t 25\nxic run ctu c 4\nxic run ton tl[1] 50\ncal b run\ncal bs[1] run\n"
+
+      p = c!(src.(runs), [block!(ran)])
+      s = scans(p, Runtime.instance(p), List.duplicate(%{"run" => 1}, 3))
+      image = Runtime.retained(p, s)
+
+      # No instruction runs any of them: every stored preset kept, nothing dropped.
+      q = c!(src.(""), [block!(idle)])
+      {started, dropped} = Runtime.instance(q, image)
+      assert dropped == []
+      assert {started.env["t"]["pre"], started.env["c"]["pv"]} == {25, 4}
+      assert started.env["t"]["acc"] == s.env["t"]["acc"]
+      assert elem(started.env["tl"], 1)["pre"] == 50
+      assert {started.env["b"]["t"]["pre"], elem(started.env["b"]["ts"], 1)["pre"]} == {30, 40}
+      assert elem(started.env["bs"], 1)["t"]["pre"] == 30
+      # As a warm restart keeps them.
+      assert Runtime.restart(q, s, :warm).env["t"]["pre"] == 25
+      # A fresh instance of it starts each at 0.
+      assert Runtime.instance(q).env["t"]["pre"] == 0
+
+      # One an instruction gives, another number, follows the program, reported; the others
+      # kept.
+      r = c!(src.("xic run ton t 60\n"), [block!(idle)])
+      {started, dropped} = Runtime.instance(r, image)
+      assert dropped == [{"t.pre", {:preset, 25, 60}}]
+      assert {started.env["t"]["pre"], started.env["c"]["pv"]} == {60, 4}
+
+      # Through a resource's start from its own image too.
+      config = fn program ->
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [program],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "run", to: 1}]
+        )
+      end
+
+      {rt, _, _} = Runtime.cycle(Runtime.start(config.(p)), 10, %{})
+      {started, []} = Runtime.start(config.(q), Runtime.retained(rt))
+      assert Runtime.get!(started, "m1.t.pre") == 25
+    end
+
     # Decision 311: a stored integer where a real is held is taken at its nearest real, as
     # a host's input is; past the real's range, a float for an integer, or no number, a
     # misfit. Until decision 311 every integer for a real was a misfit.
