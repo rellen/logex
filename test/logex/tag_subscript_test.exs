@@ -1391,6 +1391,7 @@ defmodule Logex.TagSubscriptTest do
             {"xic a ote w[i].[n]\nxic a ote w[j].3", may_write("w[j].3")},
             {"xic a ote w[i].3\nmove 5 w[j]", may_write("w[j]")},
             {"xic a ote w[i].3\nmove 5 w[1]", may_write("w[1]")},
+            {"xic a ote w[i].[n]\nmove 5 w[1]", may_write("w[1]")},
             {"move 5 w[j]\nxic a ote w[i].3", may_write("w[i].3", "move")},
             {"xic a ote g[i,j].3\nxic a ote g[k,n].[m]", may_write("g[k,n].[m]")},
             {"xic a ote g[i,j].3\nmove 5 g[k,n]", may_write("g[k,n]")},

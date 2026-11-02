@@ -87,8 +87,8 @@ defmodule Logex.Array do
   defp member_size({:block, name}, blocks), do: 1 + named_size(name, blocks)
   defp member_size(type, _blocks), do: deep_size(type)
 
-  # A type the table does not hold counts as one that holds nothing: no compile gives
-  # such a member, and a check compiles none again with a table that lacks one.
+  # A type the table does not hold counts as one that holds nothing, its instance one: a
+  # held type's body read by `Logex.FbType.of/1` with no table, which no compile does.
   defp named_size(name, blocks) when is_map_key(blocks, name),
     do: Map.fetch!(blocks, name).elements
 

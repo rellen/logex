@@ -816,6 +816,17 @@ defmodule Logex.InstanceArrayTest do
              ]
     end
 
+    # `Logex.FbType.of/1` reads a body inside its own table: one with none, a held type's,
+    # counts each instance of a block it names as one that holds nothing, the instance
+    # alone, and so gives a type no check takes.
+    test "a body read with no table counts each instance of a block it names as the instance alone" do
+      {k, cell} = nest()
+      assert cell.elements == 2 + 255 * (1 + k.elements)
+      held = Logex.FbType.held(cell)
+      assert Logex.FbType.of(held.body).elements == 2 + 255
+      assert Logex.FbType.user?(Logex.FbType.of(held.body)) == false
+    end
+
     # The count is part of the type a check compares (decision 54): a type handed in with
     # another, the outermost's or a type its table holds, is not the one its text compiles
     # to, and is refused as any type edited by hand is.
