@@ -12284,7 +12284,10 @@ and CI checked; each fix with a test that fails when it is reverted.
      the loader's own, by a token only the loader's call holds. The loader still reads a
      block's file once for each file that names it, to tell a block from a program: a
      configuration of 20 programs over one chain reads `b1.ld` 21 times, linear; reading
-     it once a call is the other.
+     it once a call is the other. Since RV-9's review `loaded/2` holds what it is handed
+     to a type list's shape, junk refused in the words a compile's `types:` is; a type
+     forged inside, an extra member or junk in its members or rungs, is trusted, and may
+     compile or raise what the compile meets, which (b) would close too.
   4. *What decision 372 tells apart* (decision 372). `ote w[i].3` beside `ote w[j].4`,
      two bits of one word array through tags, is still the "may share" warning, a bit's
      number being no subscript; and a write through a tag subscript beside a one-shot's
@@ -12299,6 +12302,21 @@ and CI checked; each fix with a test that fails when it is reverted.
   6. *`wired.logex`'s first line* (decision 363). README shows it with no comment line,
      so the connection stays on line 7 and the warning README prints is unchanged. (a) As
      built; (b) a comment line as `tally.logex` has, the warning citing line 8.
+  7. *An instance that is no array's element* (decision 370; RV-9's review). Decision 370
+     counts through arrays, so an instance outside one counts nothing of its own: a block
+     of 200 single `ton`s holds 0, and `var x wide[65536]`, 13,107,200 timers, is taken;
+     a chain of blocks each holding two single instances of the one below, `d1` a `ton`,
+     holds 0 at any depth, and `var x d20`, 524,288 timers, compiles, its first state
+     taking 1.7 s and about 322 MB in the review's measure, doubling with each block more:
+     the first scan running out of memory decision 370 refused. Logix bounds a project by
+     the controller's memory at download (unverified); IEC is silent. (a) As built,
+     arrays alone counted; (b) every instance at every depth counted, a timer, a counter, a
+     block and an elementary tag each one element, so `wide[65536]` and `d20` are refused
+     at their lines; (c) every timer, counter and block instance counted, elementary tags
+     outside an array not.
+  8. *A label and empty groups* (decision 367; RV-9's review). `lbl done ( )` is no label
+     alone, and is refused as a rung that writes nothing even where a `jmp` names `done`.
+     (a) As built; (b) empty groups dropped first, so it is a label alone, a landing.
 
   CI on each commit, and the gates. `fa04f39` was red in CI on its first run (run
   41358731876): README's real-clock example, `on_the_real_clock.exs`, printed otherwise,
@@ -12310,6 +12328,121 @@ and CI checked; each fix with a test that fails when it is reverted.
   another workflow's suite running on the same machine (load 13); alone it reads 4.00 to
   4.06 at the tip and 4.09 at `d7a1290`, and each gate run again passed. Both are the
   kind of scheduler-sensitive check RV-7 takes up (decision 357).
+
+  **RV-9's review** (2026-11-02, at `c22bd2d`; its fixes `0fe64dd`). The code behaved as
+  decisions 363 to 372 say, but 13 mutants of the new code passed the full suite, ten of
+  them dropping a "may share" warning of decision 372; and decision 370 left reachable the
+  first scan out of memory it was meant to refuse. Each finding, and what it became:
+
+  1. *Decision 372's lookups* (`tag_subscript_test.exs`, "each kind of write after each
+     that may meet it, and its twin that never can", and "the review's programs, each a
+     write between"). Each kind of write after each earlier kind that may meet it, a
+     literal element's coil, bit and member, a bit a tag numbers, a member's bit, through
+     a tag subscript or of literal subscripts, beside its twin one literal place apart,
+     which is not warned. A table of this item's own over every projection call in
+     `Logex.Warnings`, 47 mutants, each call made its plain key's (`meeting/3`,
+     `unlike_meeting/4`, `very_meeting/4`, `first_at/5`), found the review's ten and ten
+     more surviving, two of them lines the review took for equivalent, 845 and 888: an
+     unlatch or latch of a member's bit, `otu lc[i,0].pv.0` before `ote lc[1,0].pv.0`,
+     which its fuzz did not write. A differential fuzz of 4,000 programs over every write
+     form, the latch and unlatch of a member's bit among them, at the tip against each of
+     the twelve that then passed the warnings' test files, found programs each of ten
+     changes and none for two. The 45 that are not equivalent are each killed by that
+     file alone. Two stores are equivalent and stay, each the parent's
+     store in its projected form: a literal coil's first in the map of coiled bits,
+     stored again by its probe as a coil in the array (line 789), and a coil's through a
+     tag subscript in that map, which its first among the coils shadows wherever it is
+     read (line 1176); the fuzz found no program either changes.
+  2. *An instance that is no array's element* (decision 370). As built, provisional, and
+     put to the maintainer as question 7 above; `instance_array_test.exs` pins it ("an
+     instance that is no array's element counts nothing of its own (provisional)"), and
+     `Logex.Declarations`' moduledoc and README's "65,536 elements at every depth" say it.
+  3. *Decision 367's two survivors* (`compile_total_test.exs`). A label a `jmp` names, last
+     on a rung that writes nothing, `xic a jmp done` above `xic a lbl done`, and a second
+     label so, `lbl x lbl done`, are each told both (decision 373), where widening the
+     label alone's clause told only "not first"; and a body whose label alone no `jmp`
+     names, a block's `jmp` rung cut out by hand, is no compiled body, `lowered?/1` false
+     with its warning kept or not, and a compile given it refused as the pinned host
+     mistake ("a body whose label alone no jmp names is no compiled body").
+  4. *Decision 370's host contract* (`instance_array_test.exs`, "from Elixir"). An array of
+     a block that holds an array takes no initial values: `Logex.Tag.new!("row", {:array,
+     cell, [1]}, :var, [0])`, and with `[0, 0]` or a map, raise the pinned
+     `ArgumentError`, and `var row cell[1] 0` is the diagnostic, where the mutant took
+     them.
+  5. *`Logex.Compiler.loaded/2`'s junk* (`function_block_test.exs`, "junk handed to the
+     loader's compile is refused in the words of types:'s"). It now holds what it is
+     handed to the shape of what it walks, a proper list of user block types of distinct
+     names whose tables hold user block types, and refuses junk in the words of a
+     compile's `types:`, eight forms pinned, where `:junk` raised `Protocol.UndefinedError`
+     and `[:junk]` `FunctionClauseError`. A type forged inside is still trusted, question 3
+     above; the loader's own calls cost one guard a type more.
+  6. *The surface pin.* `runtime_test.exs`'s exact public surface names `loaded: 2`, one
+     test line changed outside the three leaves this item was given: `Logex` calls the
+     function from another module, so it is exported, and the pin lists every exported
+     function; the line adds an entry and removes none.
+  7. *CI's red run* (`readme_test.exs`). An example's output is compared as a pair with its
+     place, so a failure prints what the script printed beside what README shows and where
+     they differ, and an exit other than 0 prints the output, where a message of the
+     test's own showed neither; run 41358731876's cause stays unknown. The real-clock
+     example, `on_the_real_clock.exs`, now runs alone, after every async module of the
+     suite (`Examples.async?/1`), so no other example's VM, the fragment's among them,
+     runs beside its rounds: some 2 s more in the suite's sync phase.
+  8. *Observations.* `retain_image_test.exs`'s growth bound under load is RV-7's (decision
+     357). A merge with RV-4's backup conflicts in README's "What has landed", which this
+     item touches in its one sentence of RV-9; merging `main` at `b67de5f` (decisions 374
+     to 389) gave the same conflict, resolved by keeping both sentences. `lbl done ( )`
+     refused even where a `jmp` names `done` is pinned (`compile_total_test.exs`, "a label
+     and a contact still write nothing") and put to the maintainer as question 8.
+
+  *Mutation table* (`scratchpad/rv/fix9/t/` on `0fe64dd`, 30 mutants, each judged by the
+  full suite): the review's thirteen survivors, this item's ten more, the two equivalent
+  stores, the four rules `loaded/2`'s check adds, and the real-clock example run beside
+  the rest. 27 red; three survive, each for a reason given.
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | r367_itself_unnamed | a body's label alone taken whether a `jmp` names it or not | 1 |
+  | r367_last_lbl | a label last on any rung taken as a label alone | 1 |
+  | r370_instances_any_initial | an array of a block holding an array counted whatever its initial values | 1 |
+  | r372_plain_L709 | a literal element's coil after a write through a tag subscript, by its plain key | 1 |
+  | r372_plain_L743 | so a literal element's bit | 2 |
+  | r372_plain_L772 | so a bit a tag numbers, of a literal element | 2 |
+  | r372_plain_L829 | a literal element's member after a coil on it through a tag subscript | 1 |
+  | r372_plain_L830 | and after another write of it through one | 2 |
+  | r372_plain_L844 | a literal element's member's bit after a coil on it through one | 1 |
+  | r372_plain_L862 | a member through a tag subscript after a literal element's member written | 2 |
+  | r372_plain_L889 | a member's bit through one after a literal element's member written whole | 2 |
+  | r372_plain_L938 | a literal element's member written after a coil on it through one | 1 |
+  | r372_plain_L1170 | a coil through one after a literal element written | 2 |
+  | w_meet_L845 | a literal element's member's bit after a write of it through one | 1 |
+  | w_meet_L888 | a member's bit through one after a literal element's member's bit written | 1 |
+  | w_unlike_L861 | a member through one after another write of it through other tags | 1 |
+  | w_unlike_L884 | a member's bit through one after another write of it through other tags | 1 |
+  | w_unlike_L885 | and after its member written whole through other tags | 2, one a load failure |
+  | w_unlike_L1169 | a coil through one after a write of the array through other tags | 1 |
+  | w_very_L881 | a member's bit through one after a coil on it through other tags | 1 |
+  | w_firstat_L749 | a literal element's bit kept by its plain key | 1 |
+  | w_firstat_L780 | a bit a tag numbers, of a literal element, kept by its plain key | 1 |
+  | w_firstat_L921 | a member written whole through one kept by its plain key | 1 |
+  | w_firstat_L789 | a literal coil's probe kept among coiled bits by its plain key | survives: equivalent |
+  | w_firstat_L1176 | a coil through one kept among coiled bits by its plain key | survives: equivalent |
+  | m371_shape_any | anything taken as a loaded type | 1 |
+  | m371_table_any | a loaded type's table taken whatever it holds | 1 |
+  | m371_not_list | what is no list walked as one | 1 |
+  | m371_improper | an improper list walked | 1 |
+  | mreadme_real_clock_async | the real-clock example run beside the rest | survives: a scheduling choice no output shows |
+
+  w_unlike_L885's second failure, and one of the two gates of the merge with `main`, was
+  `retain_store_test.exs`'s "a cold restart's write-back that fails is reported", its
+  `assert_receive` past 5 s with another workflow's suite beside it (load 12); alone it
+  passes, three runs of three, and the gate run again passed. It is RV-4's file.
+
+  The cost against `c22bd2d`, in reductions, the least of nine runs each in a fresh
+  process: every `.ld` and `.logex` file README shows compiles within 6 of the parent's
+  (0.01% to 0.10%), the loader's guard on a loaded block among them; nothing else in
+  `lib/` changed, so every scan and every compile through `compile/2` is the parent's.
+  The gate at `0fe64dd`: GATE-OK, 2,638 (2,627 tests and 11 doctests), CI green; at the
+  merge with `main` at `b67de5f`, `de82d3d`, GATE-OK on its second run, 2,638.
 
 - **RV-10 — the answers to RV-3's questions** (decisions 378, 381, 382, 384, 385, 386, 387,
   388 and 389). A preset no instruction gives kept from the store; a done bit a frozen

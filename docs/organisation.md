@@ -12349,7 +12349,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      it holds none, so `cell[256]` of `ton[256]` holds 65,536 as `ton[256,256]` does, and
      an instance counts every array its type holds, summed (provisional). A configuration's
      program instance is not counted: a program that holds such a declaration does not
-     compile.)*
+     compile. RV-9's review, 2026-11-02: an instance that is no array's element counts
+     nothing of its own, so a block of single timers holds 0 and an array of 65,536 of
+     them is taken (provisional, put to the maintainer).)*
 
 371. **The loader's recompiles (the review after Milestone 6),** RV-2's question 5: a chain
      of 30 blocks, each holding the next, compiles 435 times, as decision 54 rechecks every
@@ -12363,7 +12365,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      holds one version of each name; `Logex.compile/2` takes no option for it and a type
      carries no mark of it. The review's chain of 30 files compiles 31 times and none again,
      where it compiled 435 more, and a configuration of 20 types over it 50 times, none
-     again, where it compiled 1,035 more.)*
+     again, where it compiled 1,035 more. RV-9's review, 2026-11-02: what `loaded/2` is
+     handed is held to a type list's shape, and junk is refused as a compile's `types:` is.)*
 
 372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
      6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
