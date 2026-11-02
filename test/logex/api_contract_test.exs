@@ -13906,8 +13906,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_unretained,
     # Decision 350: the trigger `g`'s rise standing once `l`'s step has run.
     :rise_stood_at_step,
-    # Decision 360 (RV-5): a fresh start that dropped from its store copied it.
-    :store_copied
+    # Decision 360 (RV-5): a fresh start that dropped from its store copied it; and decision
+    # 355: the store a warm start would read, cut short, refused.
+    :store_copied,
+    :store_cut_refused
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14331,6 +14333,22 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {rt, stored, image}
   end
 
+  # Decision 355, restated (RV-5): the store a warm fresh start would read, cut at a byte
+  # its own text chooses, short of its last newline, so that no draw is taken, is refused
+  # before anything starts, naming the store and a line; the store put back whole, the
+  # start is made from it. A store of version 2 ends with its count of lines, so every
+  # such cut loses or cuts its end line.
+  defp cut_refused!(%{start: :cold}, _text, _opts), do: :ok
+  defp cut_refused!(_w, nil, _opts), do: :ok
+
+  defp cut_refused!(w, text, opts) do
+    File.write!(w.store, binary_part(text, 0, rem(:erlang.phash2(text), byte_size(text) - 1)))
+    error = assert_raise(ArgumentError, fn -> Runner.start_link(opts) end)
+    assert error.message =~ ~r/\A#{Regex.escape(w.store)}: line \d+: /, error.message
+    File.write!(w.store, text)
+    reach(:store_cut_refused, true)
+  end
+
   # Decision 360, restated (RV-5): a warm fresh start whose matching drops anything copies
   # the store it read, byte for byte, to `<store>.dropped` before its first write; any other
   # start, cold, from no store or dropping nothing, makes none and leaves an earlier copy
@@ -14527,24 +14545,25 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # A runner started on the configuration, its first round run at once before it returns,
   # and the walk subscribed to every kind of event.
   defp started(w, config) do
-    late = late_open()
     text = store_text(w)
 
-    {:ok, runner} =
-      Runner.start_link(
-        [
-          configuration: config,
-          io: Map.new(w.sims, fn {name, sim} -> {name, {Sim, sim: sim}} end),
-          clock: {Lagged, {w.manual, self()}},
-          poll: w.poll,
-          idle: w.idle,
-          overhead: w.overhead,
-          forces: w.file,
-          retain: w.store,
-          retain_period: w.period,
-          steps: Walked
-        ] ++ start_option(w.start)
-      )
+    opts =
+      [
+        configuration: config,
+        io: Map.new(w.sims, fn {name, sim} -> {name, {Sim, sim: sim}} end),
+        clock: {Lagged, {w.manual, self()}},
+        poll: w.poll,
+        idle: w.idle,
+        overhead: w.overhead,
+        forces: w.file,
+        retain: w.store,
+        retain_period: w.period,
+        steps: Walked
+      ] ++ start_option(w.start)
+
+    cut_refused!(w, text, opts)
+    late = late_open()
+    {:ok, runner} = Runner.start_link(opts)
 
     assert :ets.lookup(@table, {self(), :late}) == []
     reach(:late_open, late)

@@ -4710,7 +4710,13 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   cold restart, an online edit that writes the value, or a hand edit of the store's one
   line, which README says beside the trip, and a test pins the second trip. From revision
   13 the conventional family clears an array-subscript fault met during prescan (PM014O
-  p.19); that its first scan then faults again is the record's inference.
+  p.19); that its first scan then faults again is the record's inference. *(RV-5,
+  2026-11-02, a7-docs-2: the hand edit is made with the runner stopped, then a fresh
+  start; a runner still running holds the value, a warm restart starting from what it
+  holds and tripping again, its trip writing the value back, and a stop writing it over
+  the edit. README says so beside the trip and in "The store on disk", and
+  `retain_store_test.exs` pins each; the edit of one line in place keeps decision 355's
+  count.)*
 - *A store from another configuration* (decision 285): the header names the
   configuration, and a store of another name is the host's mistake at a fresh start, a
   line naming both, `start: :cold` starting over it and writing a new store at once, so a
@@ -11276,7 +11282,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      inference. *Recommended: nothing special*, README saying so beside the trip and a test
      pinning the second trip.
 
-     **Taken: nothing special** (the maintainer, 2026-10-27), as recommended.
+     **Taken: nothing special** (the maintainer, 2026-10-27), as recommended. *(RV-5,
+     2026-11-02, the review's a7-docs-2: README gave the hand edit nowhere beside the trip,
+     and the edit is lost to a runner still running, whose warm restart starts from the
+     value it holds and trips again, writing it back, and whose stop writes it over the
+     edit; README now gives the remedies beside the trip and says the edit is made with
+     the runner stopped, then a fresh start, as `retain_store_test.exs` pins.)*
 285. **A store from another configuration (Milestone 6),** added by the design's review.
      The host copies a plant's files to a second line with the first line's store beside
      them, or restores an old backup.
@@ -12243,7 +12254,23 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: an end line (a)** (the maintainer, 2026-11-01): a store's first line is
      `logex retain 2` and its last gives its count of lines; a store without it, or whose
      count is wrong, is refused at start naming the file; a `logex retain 1` store is
-     still read. To build in RV-5.
+     still read. To build in RV-5. *(Landed with RV-5, 2026-11-02: the end line `end
+     <count> lines`, its count every line of the store, the header and the end line among
+     them, as `wc -l` counts them (the words provisional); a store of version 2 whose last
+     line is no end line, or whose end line counts other than its lines, refused at a
+     fresh start naming the file and the line, the last line of such a store judged as its
+     end line alone, so that a line a cut left half is told once, and an end line before
+     the last refused; `logex retain 1` read as before, a version past 2 told that this
+     logex reads 2 and 1. A cut keeps a file's first bytes and the end line is the last of
+     them: a cut at a line's end, or inside any earlier line, a number cut in its digits
+     among them, leaves a last line that is no end line, and a cut inside the end line
+     cuts its count, then smaller than the lines it has, or the word after it, so every
+     cut but the last newline's is refused, and that one is read whole, as
+     `retain_store_test.exs`'s cut at every byte offset of a store a runner wrote, each
+     started on, shows; the count also catches a line lost or doubled inside the file and
+     a hand edit's added or removed line. The runner and life walks of
+     `api_contract_test.exs` restate the header and the count of the store's text, and a
+     warm start from the store cut at a byte its text chooses, refused.)*
 
 356. **Two runners on one store (the review after Milestone 6),** question 10: nothing
      refuses two runners one store or forces path, so each writes over the other's.
@@ -12305,7 +12332,24 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: keep a copy (a)** (the maintainer, 2026-11-01): before its first write over
      a store it dropped anything from, a fresh start copies the store to
-     `<store>.dropped`, kept until the next such start. To build in RV-5.
+     `<store>.dropped`, kept until the next such start. To build in RV-5. *(Landed with
+     RV-5, 2026-11-02: the trigger is the drop report itself, `status/1`'s `dropped` not
+     empty, whatever decision 277's matching drops, so that a kind of drop a later
+     matching adds, as decision 389's dropped trigger sample will, is covered with no
+     change to the copy; the copy
+     is of the store as the start read it, made in the runner's init/1 once its files are
+     claimed and before any device is opened, a write as every other, through its own
+     `.tmp` and limited by decision 353, its failure `failed` in `status/1` as any failed
+     write's and the start going on; a start that drops nothing, warm, cold or from no
+     store, makes none and leaves an earlier copy where it is; `status/1`'s `retain` names
+     it, `copy`, where the start dropped anything, the copy's path as the host spelled the
+     store, nil where its write failed, and has no `copy` otherwise (provisional). The
+     runner holds the copy and its `.tmp` as its own files (decision 356), and a forces
+     file naming either is refused at start, decision 325's rule (provisional). Met on the
+     way: the store's read at a fresh start made raw and limited as the forces file's is
+     since RV-4's review, a FIFO or a stalled disk in its place refusing the start
+     (provisional). The runner and life walks restate the copy, its file and `status/1`,
+     at every start.)*
 
 361. **CLAUDE.md's cap (the review after Milestone 6),** RV-1's provisional reading 1:
      `claude_md_test.exs` caps CLAUDE.md at 40,000 characters, the figure of Claude Code's

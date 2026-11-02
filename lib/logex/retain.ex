@@ -50,8 +50,18 @@ defmodule Logex.Retain do
   # edit added or removed without changing it. A store of version 1, which has no end
   # line, is read as it was, a cut one among it; every store written since is of version
   # 2.
+  #
+  # A store's lines end with LF, as the runner writes them; since RV-5 (a7-docs-1,
+  # c2-runner-persist-10) one holding a carriage return, as a hand edit saved with CRLF
+  # line ends leaves, is refused in plain words at its first, where every line was told as
+  # the line it seemed and was not (provisional). A refusal names the file and each line,
+  # bounded and printable as `Logex.Refusal` has it, the forces file's and the image's
+  # too (b3-store-image-11); and a comment, a tab and a byte no store holds are each told
+  # as what it is (b3-store-image-10), where a line holding one was told as a line of no
+  # shape, or one before any instance's lines, and an empty line after the end line as
+  # one, where it would be told as a store cut short.
 
-  alias Logex.{Array, Declarations, Image, Real}
+  alias Logex.{Array, Declarations, Image, Real, Refusal}
 
   @header "logex retain 2"
 
@@ -197,11 +207,39 @@ defmodule Logex.Retain do
   # is not one, or is of another configuration, is the host's mistake, every problem a line
   # of one ArgumentError, `<path>: line <n>: …` (decisions 276 and 285). What its image
   # holds is judged by `Logex.Runtime.start/2`, which forgives a changed configuration.
-  def decode!(text, {path, name}) do
+  def decode!(text, at), do: returned(:binary.match(text, "\r"), text, at)
+
+  # RV-5 (a7-docs-1, c2-runner-persist-10): a store holding a carriage return, which a
+  # hand edit saved with CRLF line ends, or a lone CR's, leaves at every line's end, is
+  # refused in plain words at the first line that holds one, and nothing else of it told,
+  # where every line was told as the line it seemed and was not, `the store is of version
+  # 1\r`; the forces file, whose refusal of a carriage return after a value its tests pin
+  # (M5-11's review), tells one as no force (provisional: refused, where the source's and
+  # a configuration file's readers read CRLF as LF).
+  defp returned({at, 1}, text, {path, _name}),
+    do:
+      refused!(
+        [
+          {length(:binary.matches(binary_part(text, 0, at), "\n")) + 1,
+           "the line ends with a carriage return, as a store saved with CRLF line ends does: " <>
+             "a store's lines end with LF alone, as the runner writes them, so save it so"}
+        ],
+        path
+      )
+
+  defp returned(:nomatch, text, {path, name}) do
     lines = text |> String.split("\n") |> unended() |> Enum.with_index(1)
     {written_at, problems} = headed(lines, name)
     {body, ending} = ended(lines)
-    acc = %{image: empty(name), instance: nil, seen: %{}, problems: Enum.reverse(problems)}
+
+    acc = %{
+      image: empty(name),
+      instance: nil,
+      seen: %{},
+      problems: Enum.reverse(problems),
+      unprintable: Refusal.pattern()
+    }
+
     acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
     refused!(Enum.reverse(acc.problems) ++ ending, path)
     {acc.image, written_at}
@@ -215,21 +253,33 @@ defmodule Logex.Retain do
   # store is judged as its end line alone, so that a line a cut left half is told once. A
   # store of version 1 has no end line and is read as it was.
   defp ended([{"logex retain 2", 1} | _rest] = lines),
-    do: end_line(List.last(lines), lines)
+    do: trailing(Enum.reverse(lines), [])
 
   defp ended(lines), do: {lines, []}
 
-  defp end_line({text, n}, lines),
-    do: {Enum.drop(lines, -1), ending(String.split(text, " "), text, n)}
+  # RV-5 (b3-store-image-10): an empty line after the last a store holds, which a hand
+  # edit's editor may leave, told as what it is, the line before it judged as the end
+  # line, where it was told as a store cut short.
+  defp trailing([{"", n} | rest], empty) when rest != [], do: trailing(rest, [n | empty])
+  defp trailing(reversed, empty), do: end_line(Enum.reverse(reversed), empty)
+
+  defp end_line(lines, empty) do
+    {text, n} = List.last(lines)
+    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n) ++ after_end(empty)}
+  end
+
+  defp after_end(empty),
+    do: for(n <- empty, do: {n, "an empty line, which a store never holds: its end line is last"})
 
   defp ending(["end", count, "lines"], text, n), do: counted(number(count), text, n)
 
   defp ending(_other, text, n),
     do: [
       {n,
-       "`#{text}` is the store's last line, and no end line: a store of `#{@header}` ends " <>
-         "with `end <count> lines`, its count of lines, so this one was cut short, and a " <>
-         "store cut short is not read: start it with start: :cold to start over it"}
+       "#{quoted(text)} is the store's last line, and no end line: a store of " <>
+         "`#{@header}` ends with `end <count> lines`, its count of lines, so this one was " <>
+         "cut short, and a store cut short is not read: start it with start: :cold to " <>
+         "start over it"}
     ]
 
   defp counted({:ok, n}, _text, n), do: []
@@ -245,8 +295,8 @@ defmodule Logex.Retain do
   defp counted(_other, text, n),
     do: [
       {n,
-       "`#{text}` counts no lines: a store's end line is `end <count> lines`, its count of " <>
-         "lines a whole number"}
+       "#{quoted(text)} counts no lines: a store's end line is `end <count> lines`, its " <>
+         "count of lines a whole number"}
     ]
 
   # The text after the last newline, empty in a file the runner wrote, is no line.
@@ -257,15 +307,9 @@ defmodule Logex.Retain do
   defp empty(name), do: %{configuration: name, globals: %{}, instances: %{}, triggers: %{}}
 
   defp refused!([], _path), do: :ok
+  defp refused!(problems, path), do: raise(ArgumentError, Refusal.of(problems, path))
 
-  defp refused!(problems, path),
-    do:
-      raise(
-        ArgumentError,
-        Enum.map_join(problems, "\n", fn {line, problem} ->
-          "#{path}: line #{line}: #{problem}"
-        end)
-      )
+  defp quoted(text), do: Refusal.quoted(text)
 
   # The header, its version, and the configuration and the time, each a problem of its
   # line where it is not one.
@@ -280,12 +324,13 @@ defmodule Logex.Retain do
   defp header(["logex", "retain", version], _text),
     do: [
       {1,
-       "the store is of version #{version}, which this logex does not read: it reads " <>
-         "`#{@header}` and `logex retain 1`"}
+       "the store is of version #{Refusal.shown(version)}, which this logex does not " <>
+         "read: it " <>
+         "reads `#{@header}` and `logex retain 1`"}
     ]
 
   defp header(_other, text),
-    do: [{1, "`#{text}` is no store's header: a store's first line is `#{@header}`"}]
+    do: [{1, "#{quoted(text)} is no store's header: a store's first line is `#{@header}`"}]
 
   defp named([], _name),
     do: [
@@ -303,7 +348,8 @@ defmodule Logex.Retain do
     do:
       [
         {2,
-         "the store is of configuration `#{stored}`, and this configuration is `#{name}`: " <>
+         "the store is of configuration #{quoted(stored)}, and this configuration is " <>
+           "`#{name}`: " <>
            "a store starts only the configuration it was written for, so a renamed " <>
            "configuration starts only cold: start it with start: :cold to start over it"}
       ] ++ time_lines(time)
@@ -311,8 +357,8 @@ defmodule Logex.Retain do
   defp configuration(_other, text, _name),
     do: [
       {2,
-       "`#{text}` names no configuration: a store's second line is `configuration <name> " <>
-         "written <time>`"}
+       "#{quoted(text)} names no configuration: a store's second line is `configuration " <>
+         "<name> written <time>`"}
     ]
 
   defp time_lines(time), do: time_problem(DateTime.from_iso8601(time), time)
@@ -320,7 +366,9 @@ defmodule Logex.Retain do
   defp time_problem({:ok, _at, 0}, _time), do: []
 
   defp time_problem(_other, time),
-    do: [{2, "`#{time}` is no time a store is written at, in UTC, as 2026-10-27T14:00:00Z"}]
+    do: [
+      {2, "#{quoted(time)} is no time a store is written at, in UTC, as 2026-10-27T14:00:00Z"}
+    ]
 
   defp written_at([{text, 2} | _rest]), do: at_of(String.split(text, " "))
   defp written_at(_none), do: nil
@@ -332,8 +380,33 @@ defmodule Logex.Retain do
   defp utc(_other), do: nil
 
   # Each line after the header: a global, a trigger, an instance, or one of the instance's
-  # lines, a kind or a value.
-  defp line({text, n}, acc), do: spaced(String.split(text, " "), {text, n}, acc)
+  # lines, a kind or a value. Since RV-5 (b3-store-image-10) a comment, `//` or `#`, a tab
+  # and a byte no store holds are each told as what they are, where a line holding one
+  # was told as a line of no shape, or as one that comes before any instance's lines.
+  defp line({<<"//", _::binary>> = text, n}, acc), do: problem(acc, n, commented(text))
+  defp line({<<"#", _::binary>> = text, n}, acc), do: problem(acc, n, commented(text))
+
+  defp line({text, _n} = at, acc),
+    do: printable(Refusal.unprintable(text, acc.unprintable), at, acc)
+
+  defp printable(:nomatch, {text, _n} = at, acc), do: spaced(String.split(text, " "), at, acc)
+
+  defp printable({byte, 1}, {text, n}, acc),
+    do: problem(acc, n, unprintable(:binary.at(text, byte), text))
+
+  defp commented(text),
+    do:
+      "#{quoted(text)} is a comment, and a store holds none: the runner writes the store " <>
+        "whole at every write, so no comment outlives the next"
+
+  defp unprintable(?\t, text),
+    do: "#{quoted(text)} holds a tab, and a store's words are each one space apart"
+
+  defp unprintable(byte, text),
+    do:
+      "#{quoted(text)} holds the byte #{Refusal.escaped(byte)}, which no store holds: a " <>
+        "store's text " <>
+        "is printable ASCII, its words each one space apart"
 
   # A line's words each one space apart, with none before or after: any other spacing is
   # no line.
@@ -356,7 +429,8 @@ defmodule Logex.Retain do
       problem(
         acc,
         n,
-        "`#{text}` comes before the store's last line: a store's end line is its last line"
+        "#{quoted(text)} comes before the store's last line: a store's end line is its last " <>
+          "line"
       )
 
   defp line([path, kind], at, acc), do: under(acc.instance, path, {:kind, kind}, at, acc)
@@ -369,7 +443,7 @@ defmodule Logex.Retain do
       problem(
         acc,
         n,
-        "`#{text}` is no line of a store: a line is `global <name> <type> <value>`, " <>
+        "#{quoted(text)} is no line of a store: a line is `global <name> <type> <value>`, " <>
           "`trigger <name> <sample>`, `instance <name> <program type>`, `<path> <kind>` or " <>
           "`<path> <type> <value>`"
       )
@@ -392,14 +466,16 @@ defmodule Logex.Retain do
     do: name_problem(Declarations.name?(name), name, n, what, acc)
 
   defp name_problem(true, _name, _n, _what, acc), do: acc
-  defp name_problem(false, name, n, what, acc), do: problem(acc, n, "`#{name}` names no #{what}")
+
+  defp name_problem(false, name, n, what, acc),
+    do: problem(acc, n, "#{quoted(name)} names no #{what}")
 
   defp under(nil, _path, _line, {text, n}, acc),
     do:
       problem(
         acc,
         n,
-        "`#{text}` comes before any `instance` line: an instance's lines follow its own"
+        "#{quoted(text)} comes before any `instance` line: an instance's lines follow its own"
       )
 
   defp under(name, path, line, at, acc),
@@ -409,7 +485,12 @@ defmodule Logex.Retain do
     do: put(read_line(line), name, inner, at, acc)
 
   defp inside(_other, name, _line, {text, n}, acc),
-    do: problem(acc, n, "`#{text}` is not under the instance `#{name}` whose lines it follows")
+    do:
+      problem(
+        acc,
+        n,
+        "#{quoted(text)} is not under the instance #{quoted(name)} whose lines it follows"
+      )
 
   defp read_line({:kind, kind}), do: kind(sized_word(kind), kind)
   defp read_line({:value, type, values}), do: typed(type, values)
@@ -427,7 +508,7 @@ defmodule Logex.Retain do
 
   defp no_kind(kind),
     do:
-      "`#{kind}` is no kind of instance: a built-in's or a block's name, or an array of " <>
+      "#{quoted(kind)} is no kind of instance: a built-in's or a block's name, or an array of " <>
         "its instances, as `ton[4]`"
 
   # A word with sizes, `int[8]` or `ton[2,3]`, as a store's text spells one: a word, one
@@ -488,7 +569,7 @@ defmodule Logex.Retain do
   defp values_of(:error, _values, word),
     do:
       {:error,
-       "`#{word}` is no type of a retained value: an elementary type's word, or an array " <>
+       "#{quoted(word)} is no type of a retained value: an elementary type's word, or an array " <>
          "of one, as `int[8]`"}
 
   defp values_of({:ok, {:array, type, dims} = whole}, values, word),
@@ -497,7 +578,7 @@ defmodule Logex.Retain do
   defp values_of({:ok, type}, [value], _word), do: one(number(value), type, value)
 
   defp values_of({:ok, _type}, values, word),
-    do: {:error, "`#{word}` holds one value, and the line gives #{length(values)}"}
+    do: {:error, "#{quoted(word)} holds one value, and the line gives #{length(values)}"}
 
   defp counted(true, {:array, _type, dims} = whole, {:ok, values}, _word),
     do: {:ok, {:value, {whole, Array.to_list(Array.from_flat(values, dims), dims)}}}
@@ -507,7 +588,8 @@ defmodule Logex.Retain do
   defp counted(false, {:array, _type, dims}, _values, word),
     do:
       {:error,
-       "`#{word}` holds #{Array.size(dims)} values, one an element, in the elements' order"}
+       "#{quoted(word)} holds #{Array.size(dims)} values, one an element, in the elements' " <>
+         "order"}
 
   defp numbers(values, type),
     do: Enum.reduce_while(values, {:ok, []}, &each_number(&1, &2, type)) |> reversed()
@@ -526,7 +608,7 @@ defmodule Logex.Retain do
   defp one({:ok, n}, type, _text), do: {:ok, {:value, {type, held(type, n)}}}
   defp one(:error, _type, text), do: {:error, no_number(text)}
 
-  defp no_number(text), do: "`#{text}` is no number"
+  defp no_number(text), do: "#{quoted(text)} is no number"
 
   # A real's text read as its type's nearest value, as a forces file's is (decision 156),
   # so that the shortest text of a single reads back to the single; one past its range
@@ -573,7 +655,7 @@ defmodule Logex.Retain do
     do: once_at(Map.fetch(acc.seen, key), key, {text, n}, acc, put)
 
   defp once_at({:ok, first}, _key, {text, n}, acc, _put),
-    do: problem(acc, n, "`#{text}` names what line #{first} names already")
+    do: problem(acc, n, "#{quoted(text)} names what line #{first} names already")
 
   defp once_at(:error, key, {_text, n}, acc, put),
     do: put.(%{acc | seen: Map.put(acc.seen, key, n)})

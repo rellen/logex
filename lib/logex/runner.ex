@@ -49,7 +49,8 @@ defmodule Logex.Runner do
   again, and the next start takes it. A start under a name already registered is
   `{:error, {:already_started, pid}}` first, OTP's, and claims nothing. Two VMs on one
   file are the host's to avoid: nothing in one VM sees another, nor one file reached by
-  two paths through a link. Each path is resolved once, at the start, against the working
+  two paths through a linked directory, a store or forces file that is itself a link
+  being refused (RV-5). Each path is resolved once, at the start, against the working
   directory then (c2-runner-persist-9), every read and write of the file made through it,
   so that a `File.cd` after the start moves neither file and `./plant.retain`,
   `plant.retain` and its absolute path are one file to the check; `status/1` and every
@@ -217,6 +218,16 @@ defmodule Logex.Runner do
     the header and the end line among them (the words provisional), so that a store cut
     short anywhere, at a line's end or inside a number, is refused at a fresh start, never
     read short. A store of `logex retain 1`, which has no end line, is read as before.
+    Since RV-5 a store holding a carriage return, as one saved with CRLF line ends does,
+    is refused in those words at its first line holding one (provisional); a comment, a
+    tab and a byte no store holds are each told as what they are; and a
+    refusal, the forces file's as the store's, names at most its first 50 problems and
+    counts the rest, each text of the file it quotes at most 60 bytes and printable. A
+    hand edit is made with the runner stopped (decision 284): a runner still running
+    holds every retained value in memory, a warm restart starts from what it holds and a
+    stop writes it over the edit. A store or a forces file that is a symbolic link is the
+    host's mistake at start, every write being a new file renamed over the old, which
+    would put a file in the link's place (provisional).
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
     is 0; at every `stop/2`, and since decisions 316 and 328 at every orderly exit, a
     parent's shutdown or `:normal`, after every output is 0 and every device closed; at every cold restart, of the
@@ -597,7 +608,13 @@ defmodule Logex.Runner do
   than the 5000 ms of any GenServer's spec, so a plant of a few devices keeps that
   (decision 326). `devices` is the number of devices `io:` binds; an option that is not
   yet the runner's, which `start_link/1` refuses, counts as its default. A host that
-  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own.
+  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own. The time does
+  not count the runner's own work before the store's write, the retained image taken out
+  and made the store's text, in proportion to the retained values (b3-store-image-4,
+  kept for decision 352's bound on the runner's own work): a shutdown of two arrays of
+  16,384 retained timers took 2.7 s here, and of 65,536 more than its 5000 ms, so that
+  the supervisor killed the runner in its write and the store kept its last write; a
+  host whose plant retains tens of thousands of values gives its own `shutdown:`.
   """
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
@@ -1624,6 +1641,9 @@ defmodule Logex.Runner do
         "#{path}: the forces file cannot be read: #{:file.format_error(reason)}"
       )
 
+  # Since RV-5 the refusal bounded and printable as the store's is (`Logex.Refusal`,
+  # b3-store-image-11): its first 50 problems and then their count, each text of the file
+  # it quotes at most 60 bytes and printable.
   defp forces_read({:ok, text}, path, points) do
     {forces, _lines, problems} =
       text
@@ -1640,8 +1660,17 @@ defmodule Logex.Runner do
   defp unended("", lines), do: Enum.drop(lines, -1)
   defp unended(_last, lines), do: lines
 
+  # A line holding a byte no forces file holds, a tab, a carriage return, any other
+  # control byte or one past ASCII, is no force (RV-5), told before its name is read, so
+  # that a refusal quotes no such byte raw; a tab and a carriage return after a value were
+  # no force before (M5-11's review), quoted as they are.
   defp force_line({text, line}, acc, points),
+    do: force_text(Logex.Refusal.unprintable(text), {text, line}, acc, points)
+
+  defp force_text(:nomatch, {text, line}, acc, points),
     do: force_read(parsed(String.split(text, " ")), text, line, acc, points)
+
+  defp force_text(_byte, {text, line}, acc, _points), do: force_read(:error, text, line, acc, nil)
 
   # M5-10 (decision 156): a value is one number, and since decision 218 any number the
   # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
@@ -1668,13 +1697,13 @@ defmodule Logex.Runner do
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"
 
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
-    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+    do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   # A line of several values naming no located array is no force, as before decision 241,
   # and an array of output points is told what it is.
   defp force_read({:ok, name, {:list, _}}, text, line, {forces, lines, problems}, points)
        when not is_map_key(points.located, name),
-       do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+       do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   defp force_read({:ok, name, value}, text, line, acc, points),
     do: read_point(input(name, points), {name, value, text}, line, acc)
@@ -1682,7 +1711,7 @@ defmodule Logex.Runner do
   # A line's point: an input point's, or, since decision 241, each element of a located
   # array of input points named whole; a line with more than one value names such an array.
   defp read_point({:ok, _type}, {_name, {:list, _}, text}, line, {forces, lines, problems}),
-    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+    do: {forces, lines, [{line, Logex.Refusal.quoted(text) <> " " <> no_force()} | problems]}
 
   defp read_point({:ok, _type} = point, {name, value, text}, line, acc),
     do:
@@ -1795,13 +1824,7 @@ defmodule Logex.Runner do
   defp forces_taken([], _path, forces), do: forces
 
   defp forces_taken(problems, path, _forces),
-    do:
-      raise(
-        ArgumentError,
-        Enum.map_join(problems, "\n", fn {line, problem} ->
-          "#{path}: line #{line}: #{problem}"
-        end)
-      )
+    do: raise(ArgumentError, Logex.Refusal.of(problems, path))
 
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
@@ -3193,6 +3216,8 @@ defmodule Logex.Runner do
     named = held_files(store, store_at, file, forces_at)
     files = Enum.map(named, fn {at, role, _option, _given} -> {at, role} end)
     unheld!(registered?(name!(Keyword.get(opts, :name))), Paths.held(files), named)
+    unlinked!(file, forces_at, :forces)
+    unlinked!(store, store_at, :retain)
     forces = read_forces(file, forces_at, points, idle + poll)
 
     {runtime, retain, at, copy} =
@@ -3478,6 +3503,30 @@ defmodule Logex.Runner do
       "the #{file_of(role)} of another runner of this VM, #{inspect(holder)}, which holds " <>
         "it until it stops"
 
+  # RV-5 (b3-store-image-5): a store or forces file that is a symbolic link is the host's
+  # mistake at start, told before either file is read: every write of either is a new file
+  # renamed over it (`Logex.Retain.written/2`), which would put a file in the link's place
+  # and leave the file it names as it was, so the next start from the place the link
+  # pointed meets an old store. Looked at raw, off the VM's file server, as the files are
+  # read (provisional: refused, where the review found the link replaced at the first
+  # write; one put there after the start is replaced so, as the documents say). A link at
+  # either's `.tmp` or at the store's copy is logex's own name, and replaced.
+  defp unlinked!(nil, nil, _option), do: :ok
+
+  defp unlinked!(given, at, option),
+    do: link!(:file.read_link_info(at, [:raw]), given, option)
+
+  defp link!({:ok, info}, given, option) when elem(info, 2) == :symlink,
+    do:
+      raise(
+        ArgumentError,
+        "the runner's #{option}: #{inspect(given)} is a symbolic link: the #{file_of(option)} " <>
+          "is written whole beside it and renamed over it, which would put a file in the " <>
+          "link's place and leave the file it names as it was: name that file itself"
+      )
+
+  defp link!(_info, _given, _option), do: :ok
+
   defp file_of(:retain), do: "store"
   defp file_of(:forces), do: "forces file"
   defp file_of(:dropped), do: "store's copy, `.dropped`,"
@@ -3668,12 +3717,17 @@ defmodule Logex.Runner do
 
   # The image a store holds judged as `Logex.Runtime.start/2` judges any, each of its
   # refusals a line naming the store.
+  # Since RV-5 bounded as the store's own refusal is, its first 50 lines and then their
+  # count, each at most 1,000 bytes (b3-store-image-11).
   defp started!(configuration, image, path) do
     Runtime.start(configuration, image)
   rescue
     error in ArgumentError ->
       reraise ArgumentError,
-              error.message |> String.split("\n") |> Enum.map_join("\n", &"#{path}: #{&1}"),
+              error.message
+              |> String.split("\n")
+              |> Enum.map(&"#{path}: #{&1}")
+              |> Logex.Refusal.told(path),
               __STACKTRACE__
   end
 

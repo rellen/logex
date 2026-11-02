@@ -562,6 +562,60 @@ defmodule Logex.ForceTest do
       assert Sim.outputs(drive) == %{[0] => 1}
     end
 
+    # RV-5 (b3-store-image-11, a7-docs-1): a refusal names its first 50 problems and counts
+    # the rest, each text of the file it quotes at most 60 bytes, a byte past ASCII or a
+    # control byte shown as its escape, never written raw.
+    test "a refusal is bounded and printable, whatever the file holds", %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      start = fn ->
+        Runner.start_link(
+          configuration: plant(),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: file
+        )
+      end
+
+      File.write!(file, "x 1\xFF\n\xC3\xA9 1\nx\x00 1\n#{String.duplicate("z", 100_000)} 1\n")
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 1: `x 1\\xFF` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 2: `\\xC3\\xA9 1` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`",
+            "#{file}: line 3: `x\\x00 1` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 4: `#{String.duplicate("z", 100_000)}` is no input point of `plant`"
+            |> String.slice(0, 1000)
+            |> Kernel.<>("…")
+          ],
+          "\n"
+        ),
+        start
+      )
+
+      File.write!(file, String.duplicate("x 1\n", 10_000))
+
+      message =
+        try do
+          start.()
+        rescue
+          error in ArgumentError -> error.message
+        end
+
+      lines = String.split(message, "\n")
+      assert length(lines) == 51
+      assert hd(lines) == "#{file}: line 2: `x` is forced on line 1 already"
+      assert List.last(lines) == "#{file}: and 9949 more problems, not listed"
+      assert {Sim.reads(panel), Sim.writes(panel), Sim.writes(drive)} == {0, [], []}
+    end
+
     test "a last line with no newline is a line", %{tmp_dir: dir} do
       File.write!(Path.join(dir, "forces"), "level 4\nx 1")
       %{runner: runner} = started(dir)

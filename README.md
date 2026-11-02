@@ -1943,10 +1943,13 @@ line 11: `sloot` is not declared — did you mean `slot`?
 - `Logex.Runner` trips at the end of the step whose run met a round's first major fault,
   before it writes the round's outputs, on the trip's one path, as for a bit's number:
   every output 0 once and nothing after, the reason `{:fault, task, instance, fault}`,
-  naming the instance, the file, the line and the index. Logix raises major fault 4/20
-  "if a subscript exceeds its corresponding dimension" (1756-RM018A p.884) and halts logic
-  (1756-PM014O pp.9 and 20), where logex runs the faulting step on; the outputs are not
-  written either way.
+  naming the instance, the file, the line and the index. A retained subscript that
+  tripped the plant trips it again at a warm start; the remedy is a cold restart, an
+  online edit that writes it, or, with the runner stopped, a hand edit of its line in the
+  store and a fresh start ("The store on disk", below; decision 284). Logix raises
+  major fault 4/20 "if a subscript exceeds its corresponding dimension" (1756-RM018A
+  p.884) and halts logic (1756-PM014O pp.9 and 20), where logex runs the faulting step
+  on; the outputs are not written either way.
 - A write through a tag subscript may write any element of its array, so it is told as a
   write of the array whole (provisional): a coil on `lamps[slot]` beside one on
   `lamps[sel]` or `lamps[2]`, in either order, is told as two `ote`s on one tag are, so
@@ -3372,9 +3375,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
-  tripped the plant (decision 284): a header, `logex retain 2`; the configuration's name
-  and the time of the write on the host's wall clock, in UTC, which a clock gives through
-  its `wall_ms/1` (the manual clock's own time, read from the epoch); each retained global;
+  tripped the plant (decision 284, below): a header, `logex retain 2`; the
+  configuration's name and the time of the write on the host's wall clock, in UTC, which
+  a clock gives through its `wall_ms/1` (the manual clock's own time, read from the
+  epoch); each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
@@ -3388,7 +3392,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   number cut in its digits read as a smaller one; a hand edit that changes a line in
   place keeps the count, and one that adds or takes away a line changes it too. A store
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`.
+  before, and the next write makes it `logex retain 2`. A store an editor saved with CRLF
+  line ends, or a lone CR's, is refused at its first line holding a carriage return,
+  told so in those words; a comment, a tab and a byte past ASCII are each refused, told
+  as what they are; and a refusal names at most the first 50 problems and then counts
+  the rest, each text of the store it quotes at most 60 bytes and printable.
+- A hand edit is made with the runner stopped (decision 284): a retained value that
+  tripped the plant, `slot` at 8 in an `int[8]`'s subscript, trips it again at a warm
+  restart and at a warm fresh start, the trip naming the instance, the file, the line and
+  the index, and its remedies are a cold restart, an online edit that writes the value,
+  or a hand edit of the store's one line, `s1.slot dint 8` made `s1.slot dint 0`, which
+  keeps the store's count of lines, and then a fresh start. A runner still running,
+  tripped or not, holds the value in memory: a warm restart starts from what it holds,
+  not from the store, and trips again, its trip writing the 8 back, and a stop writes the
+  8 over the edit as it stops, so an edit made while the runner runs is lost.
 - It is written at every trip, of the resource as the trip left it, after every output is
   0; at every `stop/2`, after every output is 0 and every device closed, which then answers
   `:ok`, or `{:error, {:retain, reason}}` where the write failed, stopped all the same; at
@@ -3442,7 +3459,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   (decisions 271 and 291), and that write stays. Its child spec gives the
   shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
   supervisor waits for every device's close and the store's write before it kills the
-  runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own.
+  runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
+  count the time the runner takes to make the store's text, in proportion to the
+  retained values, some seconds for a hundred thousand retained timers, so a plant that
+  retains that many gives its own, or a supervisor's shutdown kills the runner in its
+  write and the store keeps its last write before it.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, or the forces file naming the store's copy,
@@ -3452,10 +3473,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the holder stops, crashes or is killed, when the file is free again (decision 356), the
   VM's table of them kept by a process of logex's own that no application's stop takes
   down; two VMs on one file are the host's to avoid, as are two paths to one file through
-  a link. Each path is resolved once, at the start, so a `File.cd` after it moves neither
-  file. A start under a name another process holds is `{:error, {:already_started,
-  pid}}` and writes nothing, `start: :cold` among it, its write made once the name is
-  registered (M11).
+  a linked directory. Each path is resolved once, at the start, so a `File.cd` after it
+  moves neither file. A start under a name another process holds is `{:error,
+  {:already_started, pid}}` and writes nothing, `start: :cold` among it, its write made
+  once the name is registered (M11). A store or a forces file that is a symbolic link is
+  refused at start, the host told to name the file it links to, since every write is a
+  new file renamed over the old, which would put a file in the link's place and leave the
+  file it names as it was (provisional); a link put there after the start is replaced so
+  at the next write.
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
   retains its path, of exactly its type, and it fits; `status/1`'s `retain` gives the
@@ -4150,7 +4175,11 @@ stage: nil
   such force named, and the runner does not start; the file is read exactly as the runner
   writes it, a comment or a blank line refused, a value any number the lexer reads as
   one literal and the point's type holds (decisions 218 and 226), and an unforce of a
-  point not forced is accepted (decision 140); with no runner, deleting the file clears every force.
+  point not forced is accepted (decision 140); with no runner, deleting the file clears
+  every force. Since RV-5 a refusal names at most the first 50 problems and then counts
+  the rest, each text of the file it quotes at most 60 bytes, a control byte or one past
+  ASCII but a tab or a carriage return shown as `\xFF`; a carriage return after a value,
+  as a file saved with CRLF line ends holds, is still no force.
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's
@@ -5007,8 +5036,9 @@ in every cycle's outputs at the value it holds.
   disk slower than that fails every one of them, and has every period's write reported
   late, the plant running on with its store behind, and one the disk finishes after the
   runner gave up on it may still land. Two
-  runners of one VM are refused one file, but nothing sees a runner of another VM, or one
-  file reached by a second path through a link: two such runners on one store write over
+  runners of one VM are refused one file, and so is a store or forces file that is itself
+  a link, but nothing sees a runner of another VM, or one file reached by a second path
+  through a linked directory: two such runners on one store write over
   each other's, and a crash then brings one runner back with the other's values. A
   retained value is no safety memory: a burner's lockout, a latch a guard's opening set or
   a count of trips must not be kept in logex, whose store a person can edit, a cold start

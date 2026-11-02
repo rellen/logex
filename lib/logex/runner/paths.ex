@@ -26,7 +26,8 @@ defmodule Logex.Runner.Paths do
   #   and a dead holder's is taken over by one `:ets.select_replace/2` of exactly its
   #   object, so that two runners that start at once on one file never both hold it.
   # - Two VMs on one file are the host's to avoid: nothing here sees another VM, nor a
-  #   file reached by two paths through a link, each path expanded lexically.
+  #   file reached by two paths through a linked directory, each path expanded lexically,
+  #   a store or forces file that is itself a link refused at the start (RV-5).
 
   @table __MODULE__
 
