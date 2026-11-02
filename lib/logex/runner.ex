@@ -21,7 +21,11 @@ defmodule Logex.Runner do
   since decision 400 `write_limit:`, how long in ms of real time each file write and read
   the runner makes may take, the forces file's, the store's and the store's copy's,
   1 to 2147483647, 5000 unless set, a limit of its own apart from the heartbeat (below,
-  "Its files"), `forces:`, the path of the file its forces are kept in (decision 127), none unless set,
+  "Its write limit"), since decision 398 `open:`, how long in ms of real time a device's
+  opening may take, its adapter's init/3 and its first read, 5000 unless set, a whole
+  number from 1 to 2147483647 for every device or a map of device names to one, each
+  device it names given its own and every other 5000, a device it names that `io:` binds
+  no adapter to the host's mistake (below, "Its devices"), `forces:`, the path of the file its forces are kept in (decision 127), none unless set,
   a runner without one taking no force, since M6-5 `retain:`, the path of its store, the
   file its retained values are kept in across a crash (decision 275), none unless set,
   since M6-6 `retain_period:`, how often it writes that store, 100 to 3,600,000 ms, 1000
@@ -85,7 +89,13 @@ defmodule Logex.Runner do
   of its own, linked to the runner, which holds its adapter's state and calls its
   callbacks; the runner opens them in device-name order, reads each once, and runs the
   first round at once, so a device that cannot be opened is `start_link/1`'s
-  `{:error, {:io_init, device, reason}}`, every device opened before it closed again. It
+  `{:error, {:io_init, device, reason}}`, every device opened before it closed again; one
+  that has not opened within its own `open:` limit of real time, 5000 ms unless set, is
+  killed and `:timeout`, so that a drive whose connect takes 600 ms opens beside the idle
+  watchdog's 500, the heartbeat left as it is, and a hung card refuses the start at the
+  time its limit gives (decision 398, provisional: the option, its map form and its
+  default); a device a restart opens again is given the same limit, one up read again
+  the idle watchdog and a poll period, as every other device call is (decision 128). It
   does so before it handles anything sent to it, so a call or a stop by its name that
   comes first waits until its devices are open and its first round has run.
   - Each device reads its adapter every poll period on the runner's clock, from the time
@@ -590,6 +600,7 @@ defmodule Logex.Runner do
     :overhead,
     :idle,
     :write_limit,
+    :open,
     :forces,
     :retain,
     :retain_period,
@@ -611,6 +622,9 @@ defmodule Logex.Runner do
   # A store's period, the record's range (decision 275, M6-6, provisional).
   @period 100..3_600_000
 
+  # Decision 398 (RV-11): a device's opening, its own limit's default (opens!/2).
+  @open 5000
+
   # Decision 400 (RV-11): every file write and read decision 353 limits is limited by
   # `write_limit:`, apart from the heartbeat, "a few seconds" unless set: 5000 ms, some
   # twenty times the slowest store write measured on a machine whose every core was busy
@@ -626,7 +640,8 @@ defmodule Logex.Runner do
   cannot be opened, which is the plant's state, not a host mistake, every device opened
   before it closed again and the runner gone: `reason` init/3's own, or the cause of an
   init/3 or a first read that raised, threw, exited, gave no result `Logex.IO` gives or a
-  value that does not fit, or `:timeout` for one that did not answer within the idle
+  value that does not fit, or `:timeout` for one that did not answer within its own
+  opening limit, `open:` (decision 398), where every device call was limited to the idle
   watchdog and a poll period, as an I/O fault's (M4-4); `{:error, {:retain, reason}}` for
   a fresh start's write of its store that failed, `:timeout` among it, past the write
   limit (decisions 353 and 400);
@@ -2020,11 +2035,14 @@ defmodule Logex.Runner do
 
   # Each device opened in device-name order, its process linked to the runner, and read
   # once; the first that cannot be opened closes every one opened before it.
+  # Decision 398 (RV-11): each device's opening limited by its own `open:`, where every
+  # device call was limited by the idle watchdog and a poll period (decision 128): no
+  # device's heartbeat is at stake while one opens, none having heard a deadline yet.
   defp opening([{name, module, opts, points} | rest], opened, read, start) do
     {:ok, pid} = device(name, {module, opts}, points, start, 0)
 
     device = {name, pid, points}
-    timeout = start.idle + start.poll
+    timeout = Map.fetch!(start.opens, name)
     reading(asked(pid, &Device.open/2, timeout), device, rest, opened, read, start)
   end
 
@@ -2978,9 +2996,13 @@ defmodule Logex.Runner do
   defp read_again([device | rest], state),
     do: read_device(down?(device, state), device, rest, state)
 
+  # Decision 398: a device opened again at a restart limited by its own `open:`, as at a
+  # start, every device released then hearing no deadline until the restart's first
+  # round; one up is read again within the idle watchdog and a poll period, a read and
+  # no opening (provisional).
   defp read_device(true, {name, _old, points}, rest, state) do
     {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state, state.restarts)
-    timeout = state.idle + state.poll
+    timeout = Map.fetch!(state.opens, name)
     reopen_read(asked(pid, &Device.open/2, timeout), name, pid, points, rest, state)
   end
 
@@ -3359,6 +3381,7 @@ defmodule Logex.Runner do
     mode = start!(Keyword.fetch(opts, :start), store)
     period = period!(Keyword.get(opts, :retain_period), store)
     devices = Logex.IO.bind!(configuration, io)
+    opens = opens!(Keyword.get(opts, :open, @open), devices)
     steps = steps!(Keyword.get(opts, :steps, Runtime))
 
     points = %{
@@ -3402,6 +3425,7 @@ defmodule Logex.Runner do
        overhead: overhead,
        idle: idle,
        write_limit: limit,
+       opens: opens,
        file: file,
        forces_at: forces_at,
        files: files,
@@ -3412,8 +3436,8 @@ defmodule Logex.Runner do
   defp takes(opts),
     do:
       "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-        "clock:, poll:, overhead:, idle:, write_limit:, forces:, retain:, retain_period:, " <>
-        "start: and name:, got: " <>
+        "clock:, poll:, overhead:, idle:, write_limit:, open:, forces:, retain:, " <>
+        "retain_period:, start: and name:, got: " <>
         inspect(opts)
 
   defp known!([]), do: :ok
@@ -3423,7 +3447,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
-          "write_limit:, forces:, retain:, retain_period:, start: and name:, got: " <>
+          "write_limit:, open:, forces:, retain:, retain_period:, start: and name:, got: " <>
           inspect(key)
       )
 
@@ -3537,6 +3561,47 @@ defmodule Logex.Runner do
         "the runner's #{key}: is a whole number of milliseconds, 1 to 2147483647, got: " <>
           inspect(other)
       )
+
+  # Decision 398 (RV-11): a device's opening, its adapter's init/3 and the first read, at a
+  # start and where a restart opens it again, limited by a limit of its own, `open:`, the
+  # heartbeat by the idle watchdog and a poll period as ever: a whole number of ms for
+  # every device, or a map of device names to one, each device it names given its own and
+  # every other the default, 5000 ms, "a module's open its own timeout", as Logix gives one
+  # (provisional: the option and its default, a few seconds as the write limit's, where
+  # Logix's transition to Run waits 20 s for one attempt to connect, decision 142). A
+  # device it names that `io:` binds no adapter to, by a name of no device or a key that
+  # is no string, is the host's mistake, as is a time out of an interval's range.
+  defp opens!(ms, devices) when ms in @interval,
+    do: Map.new(devices, fn {name, _module, _opts, _points} -> {name, ms} end)
+
+  defp opens!(named, devices) when is_map(named) and not is_struct(named) do
+    names = for {name, _module, _opts, _points} <- devices, do: name
+    Enum.each(named, &open_named!(&1, names, named))
+    Map.merge(opens!(@open, devices), named)
+  end
+
+  defp opens!(other, _devices), do: raise(ArgumentError, open_told(other))
+
+  defp open_named!({name, ms}, names, named) when is_binary(name) and ms in @interval,
+    do: bound_open!(name in names, name, names, named)
+
+  defp open_named!(_entry, _names, named), do: raise(ArgumentError, open_told(named))
+
+  defp bound_open!(true, _name, _names, _named), do: :ok
+
+  defp bound_open!(false, name, names, _named),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's open: names the device `#{name}`, which io: binds no adapter to" <>
+          Declarations.suggest(name, names, & &1, "devices")
+      )
+
+  defp open_told(other),
+    do:
+      "the runner's open: is how long a device's opening may take, a whole number of " <>
+        "milliseconds from 1 to 2147483647, or a map of device names to one, got: " <>
+        inspect(other)
 
   # The forces file (decision 127): a path, or none, a runner that takes no force.
   defp file!(nil), do: nil

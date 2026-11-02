@@ -14115,7 +14115,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # A device's readings, made in its own process, pass nothing; but where the walk has set
   # `{test, :late}`, the first a device makes, inside its open, sleeps that many ms in real
   # time first, once, as a loaded machine is late, which the runner's real-time wait for
-  # an open, the idle watchdog and a poll period, must cover.
+  # an open, since decision 398 the device's own opening limit, `open:`, must cover.
   defmodule Lagged do
     @behaviour Logex.Runner.Clock
     @table :logex_runner_walk
@@ -14659,6 +14659,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       poll: pick([3, 5, 8]),
       idle: pick([400, 500]),
       overhead: pick([10, 20, 50, 90]),
+      # Decision 398 (RV-11): each device's opening limited by `open:`, unless set 5000 ms,
+      # and in half the walks given, for every device or by name, each past the late open:
+      # chosen by the seed, so that no draw of the walk's moves.
+      open: Enum.at([nil, nil, 2000, %{"drive" => 2000}], rem(seed, 4)),
       hangs: pick([true, false, false]),
       forces: %{},
       timeline: Map.new(@inputs, fn {name, _} -> {name, [{0, 0}]} end),
@@ -15056,7 +15060,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         retain: w.store,
         retain_period: w.period,
         steps: Walked
-      ] ++ start_option(w.start)
+      ] ++ start_option(w.start) ++ open_option(w.open)
 
     cut_refused!(w, text, opts)
     late = late_open()
@@ -15135,11 +15139,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   # Now and then the first device opened is late, by more than an idle watchdog of 60 or
-  # 80 ms and a poll period would cover and by less than the walk's 400 or 500: a loaded
-  # machine, which must trip nothing, the runner waiting for an open in real time.
+  # 80 ms and a poll period would cover, and since decision 398 (RV-11) by more than the
+  # walk's own 400 or 500 and a poll period, which limited every device call before it,
+  # and by less than the opening limit, `open:`, 2000 ms where the walk gives it and
+  # 5000 unless set: a loaded machine, or a drive slow to connect, which must trip
+  # nothing, the runner waiting for an open in real time within the device's own limit.
   defp late_open do
     late = :rand.uniform(6) == 1
-    late && :ets.insert(@table, {{self(), :late}, 100})
+    late && :ets.insert(@table, {{self(), :late}, 700})
     late
   end
 
@@ -15851,6 +15858,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp start_option(nil), do: []
   defp start_option(mode), do: [start: mode]
+
+  defp open_option(nil), do: []
+  defp open_option(open), do: [open: open]
 
   defp life_stepped(n, w) when n >= 9, do: lived(life(11), w)
   defp life_stepped(_draw, w), do: stepped(w)

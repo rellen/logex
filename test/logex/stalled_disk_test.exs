@@ -697,6 +697,23 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(again) == :ok
     end
 
+    # Unless set, the write limit is 5000 ms, whatever the idle watchdog: a force the disk
+    # is slow over for 400 ms beside an idle watchdog of 100 lands, and one it does not
+    # finish is cut at 5000.
+    test "the write limit is 5000 ms unless set", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 100)
+      {:ok, runner} = Runner.start_link(Keyword.delete(rig.opts, :write_limit))
+      held_for(400)
+      assert Runner.force(runner, "level", 7) == :ok
+      server = held()
+      {took, answer} = timed(fn -> Runner.force(runner, "level", 8) end)
+      assert answer == {:error, {:forces, :timeout}}
+      assert took >= 5000
+      :sys.resume(server)
+      assert %{status: :running, forces: %{"level" => 7}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
     test "each write past its limit is killed at the write limit, not at the idle watchdog " <>
            "and a poll period",
          %{tmp_dir: dir} do

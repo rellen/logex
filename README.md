@@ -3896,8 +3896,11 @@ closed: true
   unless set), `poll:` (each device's poll period, 10 ms), `overhead:` (the share kept
   for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `write_limit:` (how long
   each write or read of its files may take in real time, 5000 ms, a limit of its own
-  apart from the heartbeat, decision 400), `forces:` (the file its forces are kept in,
-  below) and `name:`.
+  apart from the heartbeat, decision 400), `open:` (how long each device's opening, its
+  adapter's `init/3` and first read, may take in real time, 5000 ms, for every device or
+  by name, `open: %{"drive" => 2000}`, so a drive whose connect takes 600 ms opens with
+  the heartbeat left as it is, decision 398), `forces:` (the file its forces are kept
+  in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -4353,7 +4356,8 @@ closed: true
   "drive", :timeout}`, a device waiting on the runner for its change is heard at each
   poll meanwhile, and a bad reading of a device released at a restart trips nothing; and
   the contract walk, on the manual clock, waits in real time where the runner waits for
-  its devices, a device's open made late by 100 ms tripping nothing. Every timing rule is
+  its devices, a device's open made late by 700 ms, past the walk's idle watchdog and a
+  poll period and within its opening limit (decision 398), tripping nothing. Every timing rule is
   tested on the manual clock.
 
 ### A located array

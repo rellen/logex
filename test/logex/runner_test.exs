@@ -285,8 +285,8 @@ defmodule Logex.RunnerTest do
       for opts <- [:x, [1], %{configuration: nil}] do
         raises(
           "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-            "clock:, poll:, overhead:, idle:, write_limit:, forces:, retain:, retain_period:, " <>
-            "start: and name:, got: " <> inspect(opts),
+            "clock:, poll:, overhead:, idle:, write_limit:, open:, forces:, retain:, " <>
+            "retain_period:, start: and name:, got: " <> inspect(opts),
           fn -> Runner.start_link(opts) end
         )
       end
@@ -297,7 +297,8 @@ defmodule Logex.RunnerTest do
 
       raises(
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
-          "write_limit:, forces:, retain:, retain_period:, start: and name:, got: :pole",
+          "write_limit:, open:, forces:, retain:, retain_period:, start: and name:, got: " <>
+          ":pole",
         fn -> Runner.start_link(opts ++ [pole: 10, period: 5]) end
       )
     end
@@ -316,7 +317,8 @@ defmodule Logex.RunnerTest do
       # An unknown key repeated is told as unknown.
       raises(
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
-          "write_limit:, forces:, retain:, retain_period:, start: and name:, got: :pole",
+          "write_limit:, open:, forces:, retain:, retain_period:, start: and name:, got: " <>
+          ":pole",
         fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
       )
     end
@@ -508,6 +510,41 @@ defmodule Logex.RunnerTest do
       end
     end
 
+    # Decision 398 (RV-11): a device's opening limited by `open:`, a limit of its own, a
+    # whole number of milliseconds in an interval's range for every device, or a map of
+    # device names to one, each name a device io: binds, 5000 unless set (provisional).
+    test "an opening limit out of its range, or naming no device bound (decision 398)" do
+      {opts, _rig} = plant_rig()
+
+      for value <-
+            [0, -1, 2_147_483_648, 1.5, "5000", nil, :infinity, [{"drive", 100}]] ++
+              [%{"drive" => 0}, %{"drive" => 1.5}, %{drive: 100}, %{"drive" => nil}] do
+        raises(
+          "the runner's open: is how long a device's opening may take, a whole number of " <>
+            "milliseconds from 1 to 2147483647, or a map of device names to one, got: " <>
+            inspect(value),
+          fn -> Runner.start_link(Keyword.put(opts, :open, value)) end
+        )
+      end
+
+      raises(
+        "the runner's open: names the device `drvie`, which io: binds no adapter to — did " <>
+          "you mean `drive`?",
+        fn -> Runner.start_link(Keyword.put(opts, :open, %{"drive" => 100, "drvie" => 100})) end
+      )
+
+      raises(
+        "the runner's open: names the device `belt`, which io: binds no adapter to",
+        fn -> Runner.start_link(Keyword.put(opts, :open, %{"belt" => 100})) end
+      )
+
+      for value <- [1, 2_147_483_647, %{}, %{"drive" => 1, "panel" => 2_147_483_647}] do
+        {opts, _rig} = plant_rig()
+        assert {:ok, runner} = Runner.start_link(Keyword.put(opts, :open, value))
+        assert %{status: :running} = Runner.status(runner)
+      end
+    end
+
     test "a poll period, a share or an idle watchdog out of its range" do
       {opts, _rig} = rig()
 
@@ -538,7 +575,8 @@ defmodule Logex.RunnerTest do
 
     # The checks come in order: the list, each key, the two it needs, the configuration,
     # the clock, the poll period, the share, the idle watchdog, since decision 400 the
-    # write limit, and then the bindings.
+    # write limit, then the bindings, and since decision 398 each device's opening limit,
+    # which names the devices bound.
     test "in their order, the first mistake raised" do
       {opts, _rig} = rig()
 
@@ -549,7 +587,8 @@ defmodule Logex.RunnerTest do
         poll: 0,
         overhead: 0,
         idle: 0,
-        write_limit: 0
+        write_limit: 0,
+        open: 0
       ]
 
       orders = [
@@ -559,7 +598,8 @@ defmodule Logex.RunnerTest do
         {[:overhead], "the runner's overhead:"},
         {[:idle], "the runner's idle:"},
         {[:write_limit], "the runner's write_limit:"},
-        {[:io], "io binds each device"}
+        {[:io], "io binds each device"},
+        {[:open], "the runner's open:"}
       ]
 
       orders
@@ -897,6 +937,90 @@ defmodule Logex.RunnerTest do
       Manual.advance(clock, 5)
       assert Sim.reads(panel) == reads + 3
       Runner.stop(runner)
+    end
+
+    # Decision 398 (RV-11): a device's opening, its adapter's init/3 and its first read,
+    # limited by `open:`, a limit of its own, 5000 ms unless set, the heartbeat by the idle
+    # watchdog and a poll period as ever (c3-io-contract-6): a drive whose connect takes
+    # 600 ms of real time opens beside the default idle watchdog of 500, where every
+    # device call had the idle watchdog and a poll period, 510 ms, and none of the start's
+    # devices hears a deadline while one opens.
+    test "a drive whose connect takes 600 ms opens without the heartbeat loosened " <>
+           "(decision 398)" do
+      {opts, %{panel: panel}} = plant_rig()
+      {:ok, drive} = Sim.start_link()
+      opts = Keyword.put(opts, :io, %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}})
+      Sim.fail(drive, :init, {:delay, 600})
+
+      {us, started} = :timer.tc(fn -> Runner.start_link(opts) end)
+      assert {:ok, runner} = started
+      assert div(us, 1000) >= 600
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert {Sim.reads(panel), Sim.reads(drive)} == {1, 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Each device's own limit, by name, the rest the default: one past its own is
+    # `:timeout`, killed and refused at its own limit, well before the idle watchdog's
+    # 5010 ms here, so that a hung card's start is refused at the time its binding gives.
+    test "an opening past its own limit is :timeout, each device's limit its own " <>
+           "(decision 398)" do
+      {opts, %{panel: panel}} = plant_rig(counted(), idle: 5000)
+      {:ok, drive} = Sim.start_link()
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}}
+      Sim.fail(drive, :init, :hang)
+
+      {us, refused} =
+        :timer.tc(fn ->
+          Runner.start_link(Keyword.merge(opts, io: io, open: %{"drive" => 200}))
+        end)
+
+      assert refused == {:error, {:io_init, "drive", :timeout}}
+      assert div(us, 1000) >= 200 and div(us, 1000) < 3000
+      assert Sim.reads(panel) == 0
+
+      # The panel's open the default, the drive's its own.
+      {:ok, slow} = Sim.start_link()
+      Sim.fail(slow, :init, {:delay, 300})
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: slow}}
+
+      assert {:ok, runner} =
+               Runner.start_link(Keyword.merge(opts, io: io, open: %{"drive" => 2000}))
+
+      assert Runner.stop(runner) == :ok
+
+      # A runner-wide limit for every device.
+      {:ok, hung} = Sim.start_link()
+      Sim.fail(hung, :init, :hang)
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: hung}}
+
+      {us, refused} =
+        :timer.tc(fn -> Runner.start_link(Keyword.merge(opts, io: io, open: 200)) end)
+
+      assert refused == {:error, {:io_init, "drive", :timeout}}
+      assert div(us, 1000) >= 200 and div(us, 1000) < 3000
+    end
+
+    # A device a restart opens again, one gone down while running, is opened within its
+    # own limit too, as at a start (decision 142's reopening; decision 398).
+    test "a device a restart opens again is given its own opening limit (decision 398)" do
+      {opts, %{panel: panel}} = plant_rig()
+      {:ok, drive} = Sim.start_link()
+      opts = Keyword.put(opts, :io, %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}})
+      {:ok, runner} = Runner.start_link(opts)
+      pid = devices(runner)["drive"]
+      down = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^down, :process, _, :killed}, 5000
+      assert %{status: :tripped, trip: {:io, "drive", {:down, :killed}}} = Runner.status(runner)
+
+      Sim.fail(drive, :init, {:delay, 600})
+      {us, restarted} = :timer.tc(fn -> Runner.restart(runner, :cold) end)
+      assert restarted == :ok
+      assert div(us, 1000) >= 600
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert devices(runner)["drive"] != pid
+      assert Runner.stop(runner) == :ok
     end
 
     test "a device that cannot be opened is {:error, {:io_init, device, reason}}, every " <>
