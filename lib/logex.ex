@@ -103,8 +103,10 @@ defmodule Logex do
   compiled first, once a call however many files name it (decision 34). A type the loader
   compiled so is not compiled again from its text when the file that names it compiles,
   as a type `compile/2` is given is (decision 371): the loader trusts its own, within its
-  own call, so a chain of files each holding the next compiles once a file. A type it gave
-  and a host hands to `compile/2` is checked as any other. It is read by its
+  own call, so a chain of files each holding the next compiles once a file. The trust is
+  a token only the loader makes during its load, no field of a type, no option and no
+  name (decision 404), so a type it gave and a host hands in, to `compile/2` or any
+  other way, is checked as any other, and one edited by hand is refused. It is read by its
   place on the line, after a qualifier, `var retain s1 seal`, and with an array's sizes,
   `var gates gate[4]` loading `gate.ld` (decision 154). A mistake in it
   is reported with its own file, and the file that names it is compiled no further, as
@@ -303,10 +305,13 @@ defmodule Logex do
 
   defp parsed_file(front_end, _file, _source, {_held, state}), do: {{front_end, [], false}, state}
 
-  # Decision 371 (RV-9): the types are the blocks this load compiled itself, so they are
-  # trusted, not compiled again from their texts (`Logex.Compiler.loaded/2`).
+  # Decisions 371 and 404 (RV-9, RV-12): the types are the blocks this load compiled
+  # itself, so they are trusted, not compiled again from their texts
+  # (`Logex.Compiler.loaded/2`), handed in by a closure made here, during the load, which
+  # is the token: no host can make one of this module, so a type a host hands in any way
+  # is checked as decision 54 has it.
   defp built([], ast, {name, source}, types),
-    do: named_as(Compiler.loaded(ast, types), header(ast), source, name)
+    do: named_as(Compiler.loaded(ast, fn -> types end), header(ast), source, name)
 
   defp built(problems, _ast, _file, _types), do: {:error, Enum.uniq(Enum.reverse(problems))}
 

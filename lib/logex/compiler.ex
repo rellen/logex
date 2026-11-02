@@ -12,7 +12,9 @@ defmodule Logex.Compiler do
   <name>`, or `{:error, [%Logex.Diagnostic{}]}`, every mistake in the routine, in line
   order. The function block types a routine may hold are given as its third argument,
   each checked at full depth (decision 54); the loader alone gives its own through an
-  internal entry, `loaded/2`, which checks none of them again (decision 371). Since M3-5
+  internal entry, `loaded/2`, which checks none of them again (decision 371) where they
+  come through a closure of the loader's own, which no host can make, and checks every
+  type a list hands it as decision 54 has it (decision 404). Since M3-5
   it checks a routine's labels and jumps too: each `lbl` first on its rung, one label to
   a rung, and each `jmp` naming a label of its own routine on a later rung, one to a rung
   (decisions 81, 104 and 105).
@@ -322,14 +324,19 @@ defmodule Logex.Compiler do
     do: instructionized(Logex.Parser.well_formed!(routine), declared, library!(types))
 
   @doc false
-  # Decision 371 (RV-9): `instructionize/3` for the loader alone (`Logex.compile_file/1`,
-  # `Logex.compile_files/1` and through them a configuration's loader), whose `types` are
-  # the blocks it compiled itself from their files in this one load, each as
-  # `Logex.compile/2` gives it: trusted, none compiled again from its text, so a chain of
-  # files each holding the next compiles once a file. One version of each name is still
-  # held (decision 53). It is no host's way in: `Logex.compile/2` takes no option for it
-  # and a type carries no mark of it, so a type a host hands in, `types:`, is checked as
-  # decision 54 has it, a loaded type edited by hand among them.
+  # Decisions 371 and 404 (RV-9, RV-12): `instructionize/3` for the loader
+  # (`Logex.compile_file/1`, `Logex.compile_files/1` and through them a configuration's
+  # loader), whose `types` are the blocks it compiled itself from their files in this one
+  # load, each as `Logex.compile/2` gives it, handed in by a closure of the loader's own
+  # that gives them, `fn -> types end`, made in `Logex` during the load: trusted, none
+  # compiled again from its text, so a chain of files each holding the next compiles once
+  # a file. One version of each name is still held (decision 53). The closure is the token,
+  # and the only one: no field of a type, no option of `Logex.compile/2` and no atom marks
+  # a type the loader's, and no host can make a closure of the loader's module (short of
+  # building a term from its external format), so a list handed here is checked as decision
+  # 54 has it, each type compiled again, `instructionize/3`'s `types` exactly, a type
+  # edited by hand refused in its words, and any other closure, a host's own or an external
+  # one, `&Logex.anything/0`, is refused as junk in those words too.
   def loaded(routine, types),
     do: instructionized(Logex.Parser.well_formed!(routine), [], library_loaded(types))
 
@@ -908,26 +915,23 @@ defmodule Logex.Compiler do
         "types must be function block types from Logex.compile/2, got: #{inspect(type)}"
       )
 
+  # Decision 404 (RV-12): the loader's own types come through a closure of `Logex`'s, a
+  # local one of no arguments, which no host can make; any other value is handed to
+  # library!/1, checked as instructionize/3's types are, junk refused in its words.
+  defp library_loaded(own) when is_function(own, 0),
+    do: owned(Function.info(own, :module), Function.info(own, :type), own)
+
+  defp library_loaded(types), do: library!(types)
+
+  defp owned({:module, Logex}, {:type, :local}, own), do: loaded_list(own.())
+  defp owned(_module, _type, other), do: listed!(false, other)
+
   # Decision 371: the loader's own types, the library and the one version of each name as
-  # listed!/2 builds them, with no check of any against its text, and nothing checked. The
-  # list is still held to the shape of what this walks (RV-9's review): a proper list of
-  # user block types of distinct names, each of a body whose table holds user block types,
-  # refused otherwise in listed!/2's and given!/3's words, so that junk handed to loaded/2
-  # from outside the loader is a host mistake's ArgumentError; what a type's members and
-  # rungs hold is trusted as the loader's own, unchecked (PLAN.md, RV-9's question 3).
-  defp library_loaded(types) when is_list(types),
-    do: loaded_list!(proper?(types, &any?/1), types)
-
-  defp library_loaded(types), do: listed!(false, types)
-
-  defp loaded_list!(false, types), do: listed!(false, types)
-
-  defp loaded_list!(true, types) do
-    {library, _checked} =
-      Enum.reduce(types, {%{}, %{}}, fn type, {library, checked} ->
-        given!(loaded_shape(type, checked), type, library)
-      end)
-
+  # listed!/1 builds them, with no check of any against its text, and nothing checked:
+  # the loader's list is the blocks this load compiled, a proper list of user block types
+  # of distinct names, each as Logex.compile/2 gives it.
+  defp loaded_list(types) do
+    library = Map.new(types, &{&1.name, &1})
     seen = Map.new(library, fn {name, type} -> {name, FbType.held(type)} end)
 
     {held, _walked, :types} =
@@ -935,22 +939,6 @@ defmodule Logex.Compiler do
 
     {library, held, %{}}
   end
-
-  defp loaded_shape(
-         %FbType{name: name, members: members, body: %Program{tags: tags, blocks: blocks}},
-         checked
-       )
-       when is_binary(name) and is_list(members) and is_map(tags) and not is_struct(tags) and
-              is_map(blocks) and not is_struct(blocks),
-       do: tabled(Enum.all?(Map.values(blocks), &table_type?/1), checked)
-
-  defp loaded_shape(_type, _checked), do: :error
-
-  defp tabled(true, checked), do: {:ok, checked}
-  defp tabled(false, _checked), do: :error
-
-  defp table_type?(%FbType{name: name, body: %Program{}}) when is_binary(name), do: true
-  defp table_type?(_other), do: false
 
   # Since M5-14 an array of instances' elements' type too.
   defp blocks(tags),

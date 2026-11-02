@@ -4411,7 +4411,8 @@ defmodule Logex.FunctionBlockTest do
     # junk handed to it is a host mistake in the words a compile's `types:` is refused in,
     # each pinned, where it raised FunctionClauseError or Protocol.UndefinedError: not a
     # list, an improper one, an element no type, a built-in, two of one name, and a type
-    # whose table holds what is no type or is no map.
+    # whose table holds what is no type or is no map. Since decision 404 a list handed in
+    # takes instructionize/3's check, in the same words.
     test "junk handed to the loader's compile is refused in the words of types:'s", %{
       tmp_dir: dir
     } do
@@ -4440,6 +4441,97 @@ defmodule Logex.FunctionBlockTest do
           ] do
         assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, types) end
       end
+    end
+
+    # Decision 404: a type is trusted as the loader's own only through the closure the
+    # loader makes during its load. A list handed to the loader's compile is checked as
+    # decision 54 has it, each type its table holds compiled again once, where RV-9's
+    # trusted it, and a type in it edited by hand, or built as a struct by a host, is
+    # refused in types:'s words; the loader's own chain still compiles none again.
+    test "a list handed to the loader's compile is checked, a forged type in it refused (decision 404)",
+         %{tmp_dir: dir} do
+      prog = chain_files(dir, 12)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+
+      {:ok, tokens, _lines} =
+        Logex.Lexer.tokenize("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y")
+
+      {:ok, routine} = Logex.Parser.parse(tokens)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 1}} =
+               compiles(fn -> Logex.Compiler.loaded(routine, [b1]) end)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 0, loaded: 13}} =
+               compiles(fn -> Logex.compile_file(prog) end)
+
+      built = struct(FbType, Map.from_struct(b1))
+      assert built == b1
+      assert {:ok, %Logex.Program{}} = Logex.Compiler.loaded(routine, [built])
+
+      for forged <- [
+            put_in(b1.body.blocks["b12"].body.rungs, []),
+            put_in(b1.body.rungs, Enum.drop(b1.body.rungs, 1)),
+            %{b1 | members: []},
+            %{b1 | members: b1.members ++ [hd(b1.members)]},
+            %{b1 | elements: 0},
+            put_in(b1.body.blocks["b2"].elements, 0),
+            put_in(b1.body.source, b1.body.source <> "xic x ote y\n"),
+            struct(FbType, %{Map.from_struct(b1) | elements: b1.elements + 1})
+          ] do
+        assert_raise ArgumentError,
+                     "types must be function block types from Logex.compile/2, got: " <>
+                       inspect(forged),
+                     fn -> Logex.Compiler.loaded(routine, [forged]) end
+
+        assert_raise ArgumentError,
+                     "types must be function block types from Logex.compile/2, got: " <>
+                       inspect(forged),
+                     fn ->
+                       Logex.compile("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y",
+                         name: "m",
+                         types: [forged]
+                       )
+                     end
+      end
+    end
+
+    # Decision 404: the token is no field of a type, no option and no name a host can
+    # give: a closure the loader alone makes, of its own module, of no arguments. A
+    # closure of a host's, one that gives the loader's own types among them, and an
+    # external function of the loader's module, which any host can name, are each refused
+    # as junk in types:'s words, and nothing is compiled.
+    test "no closure but the loader's own is the token (decision 404)", %{tmp_dir: dir} do
+      chain_files(dir, 2)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+      assert Enum.sort(Map.keys(Map.from_struct(b1))) == [:body, :elements, :members, :name]
+
+      {:ok, tokens, _lines} =
+        Logex.Lexer.tokenize("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y")
+
+      {:ok, routine} = Logex.Parser.parse(tokens)
+      edited = put_in(b1.body.blocks["b2"].body.rungs, [])
+
+      for other <- [
+            fn -> [edited] end,
+            fn -> [b1] end,
+            :erlang.make_fun(Logex, :own, 0),
+            Function.capture(Logex, :compile_files, 1)
+          ] do
+        assert_raise ArgumentError,
+                     "types must be a list of function block types from Logex.compile/2, got: " <>
+                       inspect(other),
+                     fn -> Logex.Compiler.loaded(routine, other) end
+      end
+
+      assert_raise ArgumentError,
+                   ~r/^Logex.compile\/2 takes a name and, where the source uses function blocks, their types/,
+                   fn ->
+                     Logex.compile("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y",
+                       name: "m",
+                       types: [edited],
+                       loaded: true
+                     )
+                   end
     end
 
     # In reductions: each file compiled once, its cost what its own compile reads, the
