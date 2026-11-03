@@ -3476,6 +3476,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
+  A write past its limit, killed, may still land once the disk answers, so the store is
+  then the old or the new: it is reported and its caller answered as one that fails is,
+  `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
+  `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
+  and `written_at` the last write known made, until a later write lands or fails, and has
+  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"` (decision
+  391; the key and how long it stands provisional).
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
   grid from the runner's start (M6-6, decision 275): the runner takes the retained values
   out between two rounds, as its own work, never inside a round and moving no round's
@@ -3483,9 +3490,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   below) and otherwise at a wake of its own, and a writer process of its own writes them,
   so that a slow disk delays no round; a write still in progress makes the next wait, the
   newest replacing any that waited. One the disk has not finished within the write limit
-  of real time is reported, `{:retain, {:error, :timeout}}`
-  and `failed: :timeout`, and left to finish, its answer taken when it comes, a write made
-  clearing the failure (decision 353). `status/1`'s `written_at` follows each write made,
+  of real time is reported once, `{:retain, {:error, :timeout}}`, named `unknown` in
+  `status/1` meanwhile, and left to finish, its answer taken when it comes, written or
+  failed (decisions 353, 391 and 401). `status/1`'s `written_at` follows each write made,
   the store's age; one that fails is reported as above and the plant runs on. While
   tripped nothing is written but the trip's own write. Each write at an event waits for
   the period's in progress and drops the one waiting, so the event's is the last.
@@ -4230,7 +4237,10 @@ stage: nil
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
   the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
   one the disk has not finished within the write limit of real time `{:error, {:forces,
-  :timeout}}` (decisions 353 and 400). While it waits on its disk the runner keeps the
+  :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
+  land once the disk answers, so `status/1` names the set it held meanwhile,
+  `forces_unknown`, until a later write of the file lands or fails or a restart reads it
+  (decision 391, the key provisional). While it waits on its disk the runner keeps the
   heartbeat, renewing every device's deadline each poll period, as it does while it
   waits on a slow device's write, and leaves the wait out of the time the idle watchdog
   reads, so a force on a slow disk latches no device and trips nothing; no round runs

@@ -14877,17 +14877,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp copy_told(_drops, retain, text, %{owing: true} = w) do
-    assert %{copy: nil, failed: failed} = retain
-    assert failed in [:eisdir, :timeout], inspect(failed)
+    assert owed_told(retain, w.store <> ".dropped"), inspect(retain)
     {w.copied, text}
   end
 
-  defp copy_told(_drops, %{copy: nil, failed: :timeout}, text, w), do: {[text | w.copied], nil}
+  # Decision 391 (RV-11): a copy past its limit is unknown, its path named, `failed` nil,
+  # where it was `failed: :timeout`; it may land, so the walk's ends read the copy as it or
+  # the one before.
+  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w) do
+    assert copy == w.store <> ".dropped"
+    {[text | w.copied], nil}
+  end
 
   defp copy_told(_drops, retain, text, w) do
     assert retain.copy == w.store <> ".dropped"
     {[text], nil}
   end
+
+  # The copy owed: the directory at its `.tmp` refused it, `failed: :eisdir`, known; or,
+  # past its limit, it is unknown (decision 391).
+  defp owed_told(%{copy: nil, failed: :eisdir} = retain, _copy),
+    do: not Map.has_key?(retain, :unknown)
+
+  defp owed_told(%{copy: nil, failed: nil, unknown: copy}, copy), do: true
+  defp owed_told(_retain, _copy), do: false
 
   defp copy_read(nil), do: {:error, :enoent}
   defp copy_read(text), do: {:ok, text}
@@ -16039,14 +16052,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     File.mkdir!(beside)
     w = wait(%{w | store_failing: true, failed_seen: false}, w.period + life(w.period))
     w = writer_settled(settled(w))
-    life_failed!(w.failed_seen, Runner.status(w.runner).retain.failed)
+    life_failed!(w.failed_seen, Runner.status(w.runner).retain)
     reach(:life_write_failed, w.failed_seen)
     File.rmdir!(beside)
     life_after_failure(life(2), %{w | store_failing: false})
   end
 
-  defp life_failed!(true, failed), do: assert(failed != nil)
-  defp life_failed!(false, _failed), do: :ok
+  # A write reported failed is `failed` in status/1, or since decision 391 (RV-11), one
+  # past its limit, which may still land, `unknown`, `failed` nil.
+  defp life_failed!(true, %{failed: nil, unknown: path}), do: assert(is_binary(path))
+  defp life_failed!(true, retain), do: assert(retain.failed != nil)
+  defp life_failed!(false, _retain), do: :ok
 
   defp life_after_failure(1, w) do
     reach(:life_failed_kept, w.failed_seen)
@@ -16100,7 +16116,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     ms = w.period + rem(:erlang.phash2(w.owed), w.period)
     w = writer_settled(settled(wait(w, ms)))
     retain = Runner.status(w.runner).retain
-    life_failed!(w.failed_seen, retain.failed)
+    life_failed!(w.failed_seen, retain)
     assert retain.copy == nil
     assert File.read!(w.store) == w.owed
     assert File.read(w.store <> ".dropped") in Enum.map(w.copied, &copy_read/1)

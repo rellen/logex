@@ -56,7 +56,7 @@ defmodule Logex.Runner.Writer do
           :link,
           :monitor
         ]),
-        System.monotonic_time(:millisecond) + ms,
+        System.monotonic_time(:microsecond) + 1000 * ms,
         {every, acc, tick}
       )
 
@@ -97,9 +97,11 @@ defmodule Logex.Runner.Writer do
   end
 
   # The write waited on a tick at a time, the last cut to its limit: each wait that ends
-  # before the limit ticks, and the one that ends at it kills the write.
+  # before the limit ticks, and the one that ends at it kills the write. The limit's end
+  # is kept in microseconds, each wait the whole milliseconds left rounded up, so that the
+  # write is given its whole limit, as within/2's single wait gives it.
   defp ticking({pid, ref} = write, until, {every, acc, _tick} = ticks) do
-    left = max(until - System.monotonic_time(:millisecond), 0)
+    left = max(div(until - System.monotonic_time(:microsecond) + 999, 1000), 0)
 
     receive do
       {:DOWN, ^ref, :process, ^pid, reason} -> {unlinked(pid, answered(reason)), acc}
