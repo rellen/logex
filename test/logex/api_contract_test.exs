@@ -14352,6 +14352,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :get_mistake,
     :crash,
     :late_open,
+    # Decision 390 (RV-11): a fresh start and a restart whose forces file cannot be read.
+    :start_forces_unread,
+    :restart_forces_unread,
     :element_pressed,
     :element_forced,
     :element_misfit,
@@ -14696,7 +14699,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # Decision 360 since RV-5's review: whether the changed start meets a directory at
       # the copy's `.tmp`, and the store's text while its copy is owed.
       owing: false,
-      owed: nil
+      owed: nil,
+      # Decision 390 (RV-11): the forces file status/1 names as one the last start or
+      # restart could not read, nil for none.
+      unread: nil
     }
 
     reach(:untimed, untimed?(config))
@@ -15064,7 +15070,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     cut_refused!(w, text, opts)
     late = late_open()
+    unreadable = start_unreadable(w)
     {:ok, runner} = Runner.start_link(opts)
+    reach(:start_forces_unread, unreadable)
+    w = %{w | unread: unread_after(unreadable, w)}
 
     assert :ets.lookup(@table, {self(), :late}) == []
     reach(:late_open, late)
@@ -15393,7 +15402,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp forced(w) do
     text = for {name, value} <- Enum.sort(w.forces), into: "", do: "#{name} #{value}\n"
     assert File.read!(w.file) == text
-    checked(%{consumed(w) | unforcing: %{}})
+    checked(%{consumed(w) | unforcing: %{}, unread: nil})
   end
 
   # ---- an online edit --------------------------------------------------------------------
@@ -15642,7 +15651,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp restart(nil, mode, w) do
     w = period_restarted(w)
+    unreadable = restart_unreadable(w)
     assert Runner.restart(w.runner, mode) == :ok
+    reach(:restart_forces_unread, unreadable)
+    w = %{w | unread: unread_after(unreadable, w)}
     reach(:"restart_#{mode}", true)
 
     # Its first round ran before it returned.
@@ -15681,6 +15693,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     checked(%{
       w
       | zeroed: %{},
+        unread: nil,
         unzeroed: w.down,
         maybe: unzero,
         sure: true,
@@ -15858,6 +15871,42 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp start_option(nil), do: []
   defp start_option(mode), do: [start: mode]
+
+  # Decision 390 (RV-11): now and then, by the walk's own state so that no draw moves, a
+  # fresh start after a crash that holds no force meets a directory in the forces file's
+  # place, and starts with none, naming the file in status/1, until a force's write; and
+  # a restart meets one, and keeps the forces the runner holds, the restart going on,
+  # naming it until a force's write or a restart that reads it. The file is put back, the
+  # set the runner holds, once the start or the restart has read it.
+  defp start_unreadable(%{file: file, crashed: true, forces: forces, logical: now})
+       when is_binary(file) and map_size(forces) == 0 and rem(now, 2) == 0,
+       do: unreadable(file)
+
+  defp start_unreadable(_w), do: false
+
+  defp restart_unreadable(%{file: file, logical: now}) when is_binary(file) and rem(now, 3) == 0,
+    do: unreadable(file)
+
+  defp restart_unreadable(_w), do: false
+
+  defp unreadable(file) do
+    File.rm(file)
+    File.mkdir!(file)
+    true
+  end
+
+  defp unread_after(false, _w), do: nil
+
+  defp unread_after(true, w) do
+    File.rmdir!(w.file)
+
+    File.write!(
+      w.file,
+      for({name, value} <- Enum.sort(w.forces), into: "", do: "#{name} #{value}\n")
+    )
+
+    {w.file, :eisdir}
+  end
 
   defp open_option(nil), do: []
   defp open_option(open), do: [open: open]
@@ -17160,6 +17209,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     assert status.runs ==
              Map.new(w.longest, fn {task, ms} -> {task, {ms, watchdog(task, w.config)}} end)
+
+    # Decision 390: the forces file a start or a restart could not read, named until a
+    # force's write lands or a restart reads it.
+    assert Map.get(status, :forces_unread) == w.unread
 
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
     life_paths!(w)

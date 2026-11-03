@@ -356,35 +356,53 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    test "a restart whose forces file's read does not end within its limit is " <>
-           "{:error, {:forces, :timeout}}, the runner tripped as it was",
+    # Decision 390 (RV-11), the leave for a restart answered `{:error, {:forces,
+    # :timeout}}`: the read past its limit keeps the forces the runner holds and the
+    # restart goes on, the line back, the file it could not read named in status/1, where
+    # the restart answered `{:error, {:forces, :timeout}}` and left the runner tripped.
+    test "a restart whose forces file's read does not end within its limit keeps the " <>
+           "forces it holds and goes on, naming the file (decision 390)",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
       assert Runner.force(runner, "level", 7) == :ok
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
-      assert %{status: :tripped, trip: trip} = Runner.status(runner)
+      assert %{status: :tripped} = Runner.status(runner)
 
       # The forces file a FIFO, whose read waits for a writer that never comes.
       File.rm!(rig.forces)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
       {took, answer} = timed(fn -> Runner.restart(runner, :warm) end)
-      assert answer == {:error, {:forces, :timeout}}
+      assert answer == :ok
       assert took >= @limit and took < @answers
-      assert %{status: :tripped, trip: ^trip, forces: %{"level" => 7}} = Runner.status(runner)
 
-      # The killed read's call let go, and the file back, the restart restarts.
+      assert %{
+               status: :running,
+               trip: nil,
+               forces: %{"level" => 7},
+               forces_unread: {forces, :timeout}
+             } = Runner.status(runner)
+
+      assert forces == rig.forces
+      assert Runner.get!(runner, "level") == 7
+
+      # The killed read's call let go, and the file back, the next force's write lands and
+      # the file is named no more.
       {:ok, pipe} = :file.open(rig.forces, [:write, :raw])
       :ok = :file.close(pipe)
       File.rm!(rig.forces)
-      File.write!(rig.forces, "level 7\n")
-      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
       assert Runner.stop(runner) == :ok
     end
 
-    test "a start whose forces file's read does not end within its limit is refused, " <>
-           "naming the file, and every other file call answers meanwhile",
+    # Decision 390 (RV-11), the leave for a fresh start refused when the forces file cannot
+    # be read: the read past its limit starts the runner with no force, the file named in
+    # status/1, where the start was refused, an ArgumentError naming the file.
+    test "a start whose forces file's read does not end within its limit starts with no " <>
+           "force, naming the file, and every other file call answers meanwhile (decision 390)",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
@@ -392,31 +410,35 @@ defmodule Logex.StalledDiskTest do
 
       # The read raw, off the VM's file server, so that another process's file call, made
       # while the start waits on the FIFO, answers, where a read through the server held
-      # it and every other file call of the VM's for as long as the FIFO had no writer.
-      start = Task.async(fn -> timed(fn -> start_refused(rig.opts) end) end)
-      reading_raw()
+      # it and every other file call of the VM's for as long as the FIFO had no writer. The
+      # start is the test's own, so that the runner it starts is its child.
       other = Path.join(dir, "other")
 
       call =
         Task.async(fn ->
+          reading_raw()
           File.write!(other, "answered\n")
-          File.read!(other)
+          {File.read!(other), System.monotonic_time(:millisecond)}
         end)
 
-      assert Task.yield(call, @answers) == {:ok, "answered\n"}
-      assert Task.yield(start, 0) == nil
-      {took, refused} = Task.await(start, 2 * @answers)
-
-      assert refused ==
-               "#{rig.forces}: the forces file cannot be read: the disk did not answer within " <>
-                 "the write limit, 1010 ms (write_limit:)"
-
+      {took, {:ok, runner}} = timed(fn -> Runner.start_link(rig.opts) end)
+      started = System.monotonic_time(:millisecond)
+      assert {"answered\n", answered} = Task.await(call, @answers)
+      assert answered < started
       assert took >= @limit and took < @answers
 
-      # The killed read's call let go, and the file gone, the start starts.
+      assert %{status: :running, forces: forces, forces_unread: {file, :timeout}} =
+               Runner.status(runner)
+
+      assert forces == %{} and file == rig.forces
+      assert Runner.stop(runner) == :ok
+
+      # The killed read's call let go, and the file gone, the start starts with none and
+      # names no file.
       let_go(rig.forces)
       File.rm!(rig.forces)
       {:ok, runner} = Runner.start_link(rig.opts)
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
       assert Runner.stop(runner) == :ok
     end
 

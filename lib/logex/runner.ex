@@ -409,16 +409,20 @@ defmodule Logex.Runner do
   `status/1` lists (provisional). Every start reads it, `start_link/1` in the caller,
   after the configuration and the bindings, and `restart/2` before it releases anything,
   each raw, off the VM's file server, and limited to the write limit of real time
-  (decisions 353 and 400): a read the disk has not finished by then, a FIFO's among
-  them, is a file that cannot be read at a start, and `{:error, {:forces, :timeout}}` at
-  a restart (provisional),
-  so that a runner killed while an input is forced, and started again from the same file,
-  comes back with it forced and listed: a file that does not exist is no force; one that
-  cannot be read, a line that is no force, a point forced twice, and a force the
-  configuration cannot take, on a point it does not have as an input point or of a value
-  that does not fit, are the host's mistake, every one named in one `ArgumentError`, a
-  line each, `<path>: line <n>: ...`, the runner not started, or at a restart left
-  tripped: the file is read exactly as the runner writes it, a last line with no newline
+  (decisions 353 and 400), so that a runner killed while an input is forced, and started
+  again from the same file, comes back with it forced and listed: a file that does not
+  exist is no force; since decision 390 one that cannot be read, a read the disk has not
+  finished within the write limit, a FIFO's among them, or one the file system refuses,
+  a directory or a file the runner may not read in its place, starts a fresh start with
+  no force and keeps at a restart the forces the runner holds, the start or the restart
+  going on, the line coming back, and `status/1` names the file, `forces_unread: {path,
+  reason}`, the path as the host spelled it and `reason` `:timeout` or the file system's
+  own, until a force's or an unforce's write of the file lands or a restart reads it,
+  the key absent while the file reads (provisional: its name and that it stands only so
+  long); a line that is no force, a point forced twice, and a force the configuration
+  cannot take, on a point it does not have as an input point or of a value that does not
+  fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
+  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file is read exactly as the runner writes it, a last line with no newline
   read, and an unforce of a point not forced is accepted, writing the set again
   (decision 140), but for a point's value, which since decision 218 for a real point and
   decision 226 for every other is any number the lexer reads as one literal and the
@@ -832,7 +836,10 @@ defmodule Logex.Runner do
   restart; `now`, the resource's time; `rounds`, the rounds run, a round that tripped
   not among them; `trip`, the trip's reason, nil while running; `overlaps`, each task's
   (`Logex.Runtime.overlaps/1`);
-  `forces`, every force, by its point's name, with its value; `edit`, the stage of the
+  `forces`, every force, by its point's name, with its value; since decision 390, where
+  the last start or restart could not read the forces file, `forces_unread`, `{path,
+  reason}`, until a force's or an unforce's write of it lands or a restart reads it, and
+  no such key otherwise; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms;
@@ -979,9 +986,11 @@ defmodule Logex.Runner do
   every restart that reached the runner before it, waiting in its mailbox or its queue,
   and the trip stands until a restart asked after it (decision 354). It reads the forces
   file again first, as every start does (decision 127): a force it cannot take is raised
-  here, the runner left tripped, and since decision 353 a read the disk has not finished
-  within the write limit of real time (decision 400) answers `{:error, {:forces,
-  :timeout}}`, the runner tripped as it was (provisional). Since M6-5 a cold restart of a
+  here, the runner left tripped, and since decision 390 a read that fails, one the disk
+  has not finished within the write limit of real time (decisions 353 and 400) or one the
+  file system refuses, keeps the forces the runner holds and goes on, `status/1` naming
+  the file, `forces_unread`, where it answered `{:error, {:forces, :timeout}}` and left
+  the runner tripped. Since M6-5 a cold restart of a
   runner given `retain:` then writes its store, of the resource
   as it restarts it, before it releases or reads any device, so that a crash right after
   it brings back none of what it discarded (decisions 271 and 291): a write that fails
@@ -1364,11 +1373,14 @@ defmodule Logex.Runner do
   # A restart reads the forces file again, as every start does (decision 127): a force it
   # cannot take is raised in the caller, the runner left tripped; a point no longer forced
   # reads its device's last value again. Since decision 353 the read is the runner's own
-  # file call, limited as its writes are: one not made within the write limit (decision
-  # 400) or, before it, the idle watchdog and a poll
-  # period of real time answers `{:error, {:forces, :timeout}}`, the runner left tripped as
-  # it was (provisional). It is raw, so that the VM's file server, busy with every other
-  # process's calls, is not on its way.
+  # file call, limited as its writes are, since decision 400 to the write limit. It is
+  # raw, so that the VM's file server, busy with every other process's calls, is not on
+  # its way. Decision 390 (RV-11): a read that fails, one not made within the write limit
+  # or one the file system refuses, a directory or a file it may not read in the file's
+  # place, keeps the forces the runner holds, and the restart goes on, the line coming
+  # back, the file it could not read reported in `status/1`, `forces_unread`, where the
+  # restart answered `{:error, {:forces, :timeout}}`, or raised that the file cannot be
+  # read, and left the runner tripped.
   defp serve({:restart, mode, :tripped}, state),
     do: restarting_with(forces_at_restart(state), mode, state)
 
@@ -1390,7 +1402,7 @@ defmodule Logex.Runner do
   defp cold_store(:cold, state), do: kept_store(state, Runtime.restart(state.runtime, :cold))
   defp cold_store(:warm, state), do: {:ok, state}
 
-  defp forces_at_restart(%{file: nil}), do: {:ok, %{}}
+  defp forces_at_restart(%{file: nil}), do: {%{}, nil}
 
   defp forces_at_restart(%{forces_at: path} = state),
     do:
@@ -1399,22 +1411,25 @@ defmodule Logex.Runner do
         state
       )
 
-  defp forces_text({:error, :timeout}, _state), do: {:error, {:forces, :timeout}}
-  defp forces_text(read, state), do: {:ok, forces_read(read, state.file, state)}
+  # The forces a restart takes and the file it could not read, nil where it read it or
+  # found none: a read made, the file's forces; a file that does not exist, none; and a
+  # read that failed, the forces the runner holds (decision 390).
+  defp forces_text({:ok, _text} = read, state), do: {forces_read(read, state.file, state), nil}
+  defp forces_text({:error, :enoent}, _state), do: {%{}, nil}
+  defp forces_text({:error, reason}, state), do: {state.forces, {state.file, reason}}
 
-  defp restarting_with({:ok, forces}, mode, state),
-    do: restarting(cold_store(mode, state), mode, forces)
+  defp restarting_with({forces, unread}, mode, state),
+    do: restarting(cold_store(mode, state), mode, forces, unread)
 
-  defp restarting_with(failed, _mode, state), do: {failed, state}
+  defp restarting({{:error, _reason}, _state} = failed, _mode, _forces, _unread), do: failed
 
-  defp restarting({{:error, _reason}, _state} = failed, _mode, _forces), do: failed
-
-  defp restarting({:ok, state}, mode, forces) do
+  defp restarting({:ok, state}, mode, forces, unread) do
     unforced = Map.keys(state.forces) -- Map.keys(forces)
 
     restarted(mode, %{
       state
       | forces: forces,
+        forces_unread: unread,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     })
   end
@@ -1690,9 +1705,11 @@ defmodule Logex.Runner do
     before = Enum.map(names, &seen(&1, state))
     unforced = Enum.reject(names, &Map.has_key?(forces, &1))
 
+    # Decision 390: the file written whole, the runner's set, reported unread no more.
     state = %{
       state
       | forces: forces,
+        forces_unread: nil,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     }
 
@@ -1719,45 +1736,39 @@ defmodule Logex.Runner do
       end)
 
   # The forces file read at a start, `start_link/1`'s in the caller and `restart/2`'s
-  # (decision 127): a file that does not exist is no force; one that cannot be read, a
-  # line that is no force, a point forced twice, and a force the configuration cannot
-  # take are the host's mistakes, every one named, a line each, the runner not started or
-  # left tripped. Since RV-4's review the start's read is raw and limited as the
-  # restart's is (decision 353), so that a FIFO or a stalled disk in its place holds
-  # neither the caller for ever nor, through the VM's file server, every other process's
-  # file calls: one not read within the write limit of real time (decision 400) is a
-  # file that cannot be read, told so (provisional).
-  defp read_forces(nil, nil, _points, _ms), do: %{}
+  # (decision 127): a file that does not exist is no force; a line that is no force, a
+  # point forced twice, and a force the configuration cannot take are the host's
+  # mistakes, every one named, a line each, the runner not started or left tripped. Since
+  # RV-4's review the start's read is raw and limited as the restart's is (decision 353),
+  # so that a FIFO or a stalled disk in its place holds neither the caller for ever nor,
+  # through the VM's file server, every other process's file calls. Decision 390 (RV-11):
+  # a read that fails, one not made within the write limit (decision 400) or one the
+  # file system refuses, a directory or a file it may not read in the file's place,
+  # starts the runner with no force, the file it could not read reported in `status/1`,
+  # `forces_unread`, where the start was refused as the host's mistake; and so does a
+  # look at it for a link that the disk does not answer in time, its read then not made.
+  # A link it is stays the host's mistake (RV-5).
+  defp forces_looked(nil, nil, _ms), do: :ok
 
-  defp read_forces(path, at, points, ms),
-    do:
-      forces_read(
-        timed_out(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), ms),
-        path,
-        points
-      )
+  defp forces_looked(given, at, ms),
+    do: looked(Writer.read(fn -> :file.read_link_info(at, [:raw]) end, ms), given)
+
+  defp looked({:error, :timeout}, _given), do: {:unread, :timeout}
+  defp looked(info, given), do: link!(info, given, :forces)
+
+  defp read_forces(_looked, nil, nil, _points, _ms), do: {%{}, nil}
+  defp read_forces({:unread, reason}, path, _at, _points, _ms), do: {%{}, {path, reason}}
+
+  defp read_forces(:ok, path, at, points, ms),
+    do: start_forces(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, points)
+
+  defp start_forces({:ok, _text} = read, path, points), do: {forces_read(read, path, points), nil}
+  defp start_forces({:error, :enoent}, _path, _points), do: {%{}, nil}
+  defp start_forces({:error, reason}, path, _points), do: {%{}, {path, reason}}
 
   # A read past its limit told with the limit, for its refusal's words (decision 400).
   defp timed_out({:error, :timeout}, ms), do: {:error, {:timeout, ms}}
   defp timed_out(read, _ms), do: read
-
-  defp forces_read({:error, :enoent}, _path, _points), do: %{}
-
-  defp forces_read({:error, {:timeout, ms}}, path, _points),
-    do:
-      raise(
-        ArgumentError,
-        "#{Logex.Refusal.path(path)}: the forces file cannot be read: the disk did not " <>
-          "answer within " <> limit_told(ms)
-      )
-
-  defp forces_read({:error, reason}, path, _points),
-    do:
-      raise(
-        ArgumentError,
-        "#{Logex.Refusal.path(path)}: the forces file cannot be read: " <>
-          "#{:file.format_error(reason)}"
-      )
 
   # Since RV-5 the refusal bounded and printable as the store's is (`Logex.Refusal`,
   # b3-store-image-11): its first 50 problems and then their count, each text of the file
@@ -2006,20 +2017,31 @@ defmodule Logex.Runner do
   defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
 
   defp status_of(state),
-    do: %{
-      status: state.status,
-      now: state.logical,
-      rounds: state.rounds,
-      trip: state.trip,
-      overlaps: Runtime.overlaps(state.runtime),
-      forces: state.forces,
-      edit: stage(state.edit),
-      runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
-      latest_wake: state.latest_wake,
-      refresh_gap: state.refresh_gap,
-      unzeroed: Enum.sort(state.unzeroed),
-      retain: shown_store(state.retain)
-    }
+    do:
+      shown_unread(
+        %{
+          status: state.status,
+          now: state.logical,
+          rounds: state.rounds,
+          trip: state.trip,
+          overlaps: Runtime.overlaps(state.runtime),
+          forces: state.forces,
+          edit: stage(state.edit),
+          runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
+          latest_wake: state.latest_wake,
+          refresh_gap: state.refresh_gap,
+          unzeroed: Enum.sort(state.unzeroed),
+          retain: shown_store(state.retain)
+        },
+        state.forces_unread
+      )
+
+  # Decision 390 (RV-11): the forces file a start or a restart could not read, `{path,
+  # reason}`, the path as the host spelled it, shown while it stands, and no key otherwise,
+  # as decision 360's `copy` is (provisional), so that every status of a file read holds
+  # as it was.
+  defp shown_unread(status, nil), do: status
+  defp shown_unread(status, unread), do: Map.put(status, :forces_unread, unread)
 
   # Each event of a kind its subscriber named, sent, never awaited.
   defp published(%{subscribers: subscribers}, events),
@@ -2112,7 +2134,12 @@ defmodule Logex.Runner do
   # restart/2, stop and edit's step leaving it as it is; and `waited`, the time a request
   # waited on the disk, a force's write's, 0 but inside a request, which its answer reads
   # and sets to 0 again, so that a round, a trip, a restart, a stop and an edit's step,
-  # none of which waits on a force's write, each find it 0 and leave it so.
+  # none of which waits on a force's write, each find it 0 and leave it so. Decision 390
+  # (RV-11): `forces_unread`, the forces file the start could not read, or nil, set again
+  # by each restart that reads it, one a device then refuses among them, as such a restart
+  # takes the file's forces, nil where it read the file or found none, and nil once a
+  # force's or an unforce's write of the file lands; a round, a trip, a restart its cold
+  # write refuses, a stop and an edit's step leave it as it is.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -3399,15 +3426,16 @@ defmodule Logex.Runner do
     named = held_files(store, store_at, file, forces_at)
     files = Enum.map(named, fn {at, role, _option, _given} -> {at, role} end)
     unheld!(registered?(name!(Keyword.get(opts, :name))), Paths.held(files), named)
-    unlinked!(file, forces_at, :forces, limit)
+    looked = forces_looked(file, forces_at, limit)
     unlinked!(store, store_at, :retain, limit)
-    forces = read_forces(file, forces_at, points, limit)
+    {forces, unread} = read_forces(looked, file, forces_at, points, limit)
 
     {runtime, retain, at, copy} =
       store_read!({store, store_at}, mode, configuration, runtime, clock, limit)
 
     {%{
        forces: forces,
+       forces_unread: unread,
        retain: retain,
        at: at,
        copy: copy,

@@ -4237,8 +4237,13 @@ stage: nil
   meanwhile, every output held, and a periodic task's missed periods are reported as
   overlaps (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
-  other process's file calls: one the disk has not answered within that time refuses the
-  start, the file told as one that cannot be read. A
+  other process's file calls. A file that cannot be read, one the disk has not answered
+  within the write limit or one the file system refuses, a directory in its place among
+  them, starts a fresh start with no force and keeps at a restart the forces the runner
+  holds, the restart going on and the line coming back, and `status/1` names it,
+  `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
+  of it lands or a restart reads it (decision 390; the key and how long it stands
+  provisional); with no such file to name, `status/1` has no `forces_unread`. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
