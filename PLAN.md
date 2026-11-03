@@ -13035,7 +13035,17 @@ and CI checked; each fix with a test that fails when it is reverted.
   `{:forces, :timeout}` and `{:retain, :timeout}` in one landing gate of `ed817b1` run
   seven minutes after the container started at a load of 1.7, all green minutes later),
   which decision 400's `write_limit:` (RV-11) is to take apart from the heartbeat; what
-  RV-11 leaves of them is RV-7's.
+  RV-11 leaves of them is RV-7's. *(RV-11, 2026-11-03: the write timeouts are closed,
+  `{:forces, :timeout}` and `{:retain, :timeout}` on a healthy disk, the landing gate's
+  seven and `retain_store_test.exs`'s fresh-start write at idle 500 among them, each write
+  given 5 s where it had 510 ms: under a busy disk the parent's write-timeout set failed 3
+  runs of 10 and the tip none of 10, where the busy loops alone failed neither ("RV-11 as
+  built", its load runs). `{:io_init, _, :timeout}` was not met at the parent in the
+  walks' loaded runs, so decision 398's 5 s opening is not shown to close it, and it
+  stays here to watch. RV-11 leaves the rest: the cost and growth bounds, the real-clock
+  poll test, a runner call's own timeout and the runner-death test's 5 s wait. RV-11's
+  first real-clock test of decision 396 failed under the mutation run's load and a load
+  run, and was mended before it landed; none of its tests is RV-7's.)*
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
@@ -14110,8 +14120,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   short", and a runner call's own timeout and the runner-death test's 5 s wait.
 
   *CI*: green on every backup of this branch, `026e49f`, `434ada2`, `081dcdb`, `1ef194f`,
-  `ccc1366`, `2ef025c`, `d9b1036` and `1ebb4d8`, but `ee16f1b`'s first run, red as
-  decision 398's entry says and mended in `434ada2`.
+  `ccc1366`, `2ef025c`, `d9b1036`, `1ebb4d8` and `a8f5264`, but `ee16f1b`'s first run, red
+  as decision 398's entry says and mended in `434ada2`; the merge of main, `6e3b6a6`, and
+  the commit that records this are reported where the item lands.
 
   *Provisional readings, put to the maintainer.* The record is silent on each; the
   reading taken is the closest to it, IEC and Logix.

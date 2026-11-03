@@ -337,11 +337,19 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), its answers to the
-questions RV-4 left, decisions 390–401, which RV-11 builds, and its answers to the
+items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
 questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
 file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
 over a store it cannot read copying it first, among them. Its answers to the questions
+RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
+runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
+heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
+forces file a start or a restart cannot read carried on and named in `status/1`
+(decision 390), a write past its limit named unknown until a later one lands or fails
+(decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
+their share against a due periodic round (decision 396) and a misread address shown as
+the configuration writes it, `panel.i.7` (decision 399), the other five as built
+(decisions 392, 393, 395, 397 and 401). Its answers to the questions
 RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
 RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
 closure refused as built (decisions 429 and 430), a bit of a member of an element
