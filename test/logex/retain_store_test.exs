@@ -2225,6 +2225,34 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 394 (RV-11): a period's write whose wall clock gives no time a header holds
+    # fails, reported as any failed write, and trips the runner naming the clock, every
+    # output 0, where the plant ran on with every period's write failing; a restart while
+    # the wall clock answers so is refused, and taken once it is mended.
+    test "a period's write whose wall clock gives no time trips the runner, naming the " <>
+           "clock (decision 394)",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :clock, {OddWall, rig.clock}))
+      :ok = Runner.subscribe(runner)
+      pressed(rig, [1])
+      :persistent_term.put({OddWall, rig.clock}, 1.5)
+      on_exit(fn -> :persistent_term.erase({OddWall, rig.clock}) end)
+
+      Manual.advance(rig.clock, 1000)
+      assert_receive {Runner, ^runner, {:retain, {:error, {:clock, {:wall_ms, 1.5}}}}}
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:wall_ms, 1.5}}}}, 5000
+      assert %{status: :tripped, trip: {:clock, {:wall_ms, 1.5}}} = Runner.status(runner)
+      assert Sim.outputs(rig.panel) |> Map.values() |> Enum.all?(&(&1 == 0))
+      assert Runner.restart(runner, :warm) == {:error, {:clock, {:wall_ms, 1.5}}}
+      assert %{status: :tripped} = Runner.status(runner)
+
+      :persistent_term.erase({OddWall, rig.clock})
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 316: a shutdown's write that fails is reported as any failed write, the
     # runner down all the same and the store as it was.
     test "a parent's shutdown whose write fails is reported", %{tmp_dir: dir} do

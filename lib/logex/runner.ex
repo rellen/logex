@@ -543,6 +543,8 @@ defmodule Logex.Runner do
     round's write; no later step of the round runs, so `get/2` reads each later task's
     instances as the round before left them. The fault's own event, `{:fault, ...}`, is
     published with the round's, then the trip. A minor fault, a zero divisor, trips nothing;
+  - `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`: since decision 394, the
+    clock gave the runner, or a device, no time it can hold, once the runner runs (below);
   - `{:internal, message}`: an exception out of the core, which the host contract says
     cannot happen; tripping rather than crashing keeps the state for diagnosis. No host
     can cause it: a test reaches it through one hidden option of `start_link/1`, which
@@ -572,15 +574,25 @@ defmodule Logex.Runner do
   process of its own within the idle watchdog and a poll period of real time of its
   runner's death, its outputs left to what it does on losing its master and what it held
   free for the next start (c7-premortem-plant-3); its child spec is `restart: :temporary`,
-  so nothing starts it again, and the host starts a new one. A clock that goes down or
-  fails stops it as a shutdown, `{:shutdown, {:clock, reason}}`, its devices zeroed and
-  closed as at a stop, and since RV-4 a time from `now_ms/1` that is no whole number of
-  milliseconds is a clock that fails, `{:clock, {:now_ms, answer}}`, the host's mistake
-  where the start reads it, and a device that reads it goes down and trips the runner as
-  any device gone down; a `wall_ms/1` whose answer no store's header holds, no whole number
-  of milliseconds since the epoch from year 0 to year 9999, is the host's mistake at start
-  and later a store's write that fails, `{:clock, {:wall_ms, answer}}`, reported as any
-  (c2-runner-persist-6, c3-io-contract-9).
+  so nothing starts it again, and the host starts a new one. A clock that goes down, or
+  whose callback raises or exits, stops it as a shutdown, `{:shutdown, {:clock, reason}}`,
+  its devices zeroed and closed as at a stop. A clock that answers no time is the host's
+  mistake where the start reads it (c2-runner-persist-6, c3-io-contract-9): a `now_ms/1`
+  that gives no whole number of milliseconds, or since decision 394 one out of the range
+  the runner holds a time in, a signed 64-bit integer, and a `wall_ms/1` whose answer no
+  store's header holds, no whole number of milliseconds since the epoch from year 0 to
+  year 9999. Once the runner runs, since decision 394 such an answer trips it, naming the
+  clock, `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`, every output 0,
+  where a bad `now_ms/1` stopped it as a shutdown: the runner's own read of `now_ms/1`
+  tells it so, the work in hand finished with the last time it refreshed its devices at,
+  and it trips as it next takes a message; a device's read of it takes the device down,
+  every output 0 as it closes, and the runner trips naming the clock; and a period's
+  write whose `wall_ms/1` gives no time fails, reported as any failed write, and trips it
+  so, a trip's, a stop's or a cold restart's write failing so as before. A restart while
+  the clock still answers so is refused, `{:error, {:clock, cause}}`, the runner left
+  tripped, the wall clock asked where a store is named, and once it is mended a restart
+  brings the line back (provisional: the range, the round in progress finished, and the
+  restart's look at both clocks).
 
   **What logex is not.** logex is not a safety controller, and must not implement a
   safety function: an emergency stop, a guard interlock, a light curtain, two-hand
@@ -641,6 +653,9 @@ defmodule Logex.Runner do
 
   # Decision 398 (RV-11): a device's opening, its own limit's default (opens!/2).
   @open 5000
+
+  # Decision 394 (RV-11): the times a runner holds, as the renewal's `:atomics` holds them.
+  @time_range -9_223_372_036_854_775_808..9_223_372_036_854_775_807
 
   # Decision 400 (RV-11): every file write and read decision 353 limits is limited by
   # `write_limit:`, apart from the heartbeat, "a few seconds" unless set: 5000 ms, some
@@ -1005,8 +1020,9 @@ defmodule Logex.Runner do
   it was stopped, so that round's elapsed time is 0. `:ok`, or `{:error, {:io_init,
   device, reason}}` for the first device, in device-name order, that cannot be opened or
   whose read fails, the runner left tripped with its first reason and every device that
-  answers written 0 once more (decisions 136 and 142); a runner that is running is the
-  host's mistake (decision 133), judged as the restart arrives, so that one asked while
+  answers written 0 once more (decisions 136 and 142), and since decision 394 `{:error,
+  {:clock, cause}}` while its clock still answers no time, the runner left tripped; a
+  runner that is running is the host's mistake (decision 133), judged as the restart arrives, so that one asked while
   it runs is refused whatever comes before it is served, a trip among it, which refuses
   every restart that reached the runner before it, waiting in its mailbox or its queue,
   and the trip stands until a restart asked after it (decision 354). It reads the forces
@@ -1186,6 +1202,12 @@ defmodule Logex.Runner do
         %{retain: %{period: %{busy: true, late: {_timer, token}}}} = state
       ),
       do: {:noreply, late_writer(state)}
+
+  # Decision 394 (RV-11): the clock answered no time the runner can hold, the runner's own
+  # read or a device's (exited/4): a trip naming it, one tripped already keeping its first
+  # reason.
+  def handle_info({__MODULE__, :clock, cause}, state),
+    do: {:noreply, tripped(state, {:clock, cause})}
 
   # M6-5: the caller of stop/2, named before its stop, answered as the runner terminates.
   def handle_info({__MODULE__, :stopping, pid, ref}, state),
@@ -1406,8 +1428,7 @@ defmodule Logex.Runner do
   # back, the file it could not read reported in `status/1`, `forces_unread`, where the
   # restart answered `{:error, {:forces, :timeout}}`, or raised that the file cannot be
   # read, and left the runner tripped.
-  defp serve({:restart, mode, :tripped}, state),
-    do: restarting_with(forces_at_restart(state), mode, state)
+  defp serve({:restart, mode, :tripped}, state), do: mended(clock_answer(state), mode, state)
 
   defp serve(other, _state),
     do:
@@ -1418,6 +1439,14 @@ defmodule Logex.Runner do
           "unforce_all/1, accept/2, test/1, untest/1, assemble/1, cancel/1, restart/2 and " <>
           "stop/2"
       )
+
+  # Decision 394 (RV-11): a restart once its clock answers a time again.
+  defp mended(:ok, mode, state) do
+    clock_notices_dropped()
+    restarting_with(forces_at_restart(state), mode, state)
+  end
+
+  defp mended({:error, cause}, _mode, state), do: {{:error, {:clock, cause}}, state}
 
   # M6-5 (decisions 271 and 291): a cold restart writes the store, of the resource as the
   # restart will start it, before it releases or reads any device; a write that fails
@@ -2704,6 +2733,13 @@ defmodule Logex.Runner do
 
   defp exited(nil, _pid, _reason, state), do: state
 
+  # Decision 394 (RV-11): a device gone down as its clock gave no time, the device's own read
+  # of it, trips the runner naming the clock, as the runner's own read does, the device
+  # opened again at the restart.
+  defp exited(name, _pid, {:shutdown, {:clock, {kind, _answer} = cause}}, state)
+       when kind in [:now_ms, :wall_ms],
+       do: tripped(went_down(name, state), {:clock, cause})
+
   defp exited(name, _pid, reason, state),
     do: tripped(went_down(name, state), {:io, name, {:down, reason}})
 
@@ -2944,8 +2980,12 @@ defmodule Logex.Runner do
   # A period whose wall clock gives no time is a write that fails, reported as one.
   defp period_stamped({:ok, at}, image, state), do: handed(state, {at, image})
 
-  defp period_stamped(failed, _image, state) do
+  # Decision 394 (RV-11): a wall clock no store's header holds, once the runner runs, a
+  # write that fails reported as one, and a trip naming the clock, taken as the runner next
+  # handles a message, where the plant ran on with every period's write failing.
+  defp period_stamped({:error, {:clock, cause}} = failed, _image, state) do
     {_failed, state} = noted(failed, nil, state)
+    send(self(), {__MODULE__, :clock, cause})
     state
   end
 
@@ -3423,7 +3463,7 @@ defmodule Logex.Runner do
   defp in_time({:error, cause}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, cause}, state}}
 
-  defp now(%{clock: {module, clock}}), do: whole(time(module, clock))
+  defp now(%{clock: {module, clock}} = state), do: whole(time(module, clock), state)
 
   # The clock read as clocked/1 reads it, its failure a shutdown, without the closure, so
   # that the check of its answer costs a round nothing more than the closure did.
@@ -3436,9 +3476,46 @@ defmodule Logex.Runner do
   end
 
   # c3-io-contract-9 (RV-4): a time that is no whole number of milliseconds is a clock that
-  # fails, which stops the runner as one gone down does, the answer named.
-  defp whole(ms) when is_integer(ms), do: ms
-  defp whole(other), do: exit({:shutdown, {:clock, {:now_ms, other}}})
+  # fails. Decision 394 (RV-11): it, and one out of the range a time is held in, a signed
+  # 64-bit integer as the renewal's `:atomics` and the timers take, trips the runner,
+  # naming the clock, `{:clock, {:now_ms, answer}}`, where it stopped it as a shutdown: the
+  # runner tells itself, a message it takes as it next handles one, and the work in hand
+  # goes on with the last time it refreshed its devices at, a round in progress run with
+  # no time passed, so that no read of the clock halfway through a step ends the runner;
+  # the trip zeroes every output, and a restart brings the line back once the clock is
+  # mended (clock_answer/1, provisional: the range, and the round in progress finished).
+  defp whole(ms, _state) when is_integer(ms) and ms in @time_range, do: ms
+  defp whole(other, state), do: wrong_clock({:now_ms, other}, Map.get(state, :refreshed, 0))
+
+  defp wrong_clock(cause, fallback) do
+    send(self(), {__MODULE__, :clock, cause})
+    fallback
+  end
+
+  # A restart's look at the clock first (decision 394): one that still answers no time is
+  # the restart's answer, `{:error, {:clock, cause}}`, the runner left tripped, and so is a
+  # wall clock no store's header holds where a store is named; a mended one restarts, the
+  # clock's notices from before it, sent while the runner stood tripped, taken as nothing.
+  defp clock_answer(%{clock: {module, clock}} = state),
+    do: walled_answer(time_answer(time(module, clock)), state)
+
+  defp time_answer(ms) when is_integer(ms) and ms in @time_range, do: :ok
+  defp time_answer(other), do: {:error, {:now_ms, other}}
+
+  defp walled_answer(:ok, %{retain: nil}), do: :ok
+  defp walled_answer(:ok, state), do: wall_answer(wall(state.clock))
+  defp walled_answer(failed, _state), do: failed
+
+  defp wall_answer({:ok, _at}), do: :ok
+  defp wall_answer({:error, {:clock, cause}}), do: {:error, cause}
+
+  defp clock_notices_dropped do
+    receive do
+      {__MODULE__, :clock, _cause} -> clock_notices_dropped()
+    after
+      0 -> :ok
+    end
+  end
 
   # A clock that has gone down, or fails, stops the runner, a shutdown, every device zeroed
   # and closed as at a stop: a runner cannot run without its clock, and a test's manual
@@ -3603,7 +3680,16 @@ defmodule Logex.Runner do
 
   # c3-io-contract-9 (RV-4): a clock's time is a whole number of milliseconds, its first
   # answer checked here, in the caller; one later that is not stops the runner (whole/1).
-  defp timed!(ms, _module) when is_integer(ms), do: :ok
+  defp timed!(ms, _module) when is_integer(ms) and ms in @time_range, do: :ok
+
+  # Decision 394 (RV-11): one out of the range a time is held in, at start too.
+  defp timed!(ms, module) when is_integer(ms),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's clock `#{inspect(module)}` gave #{ms} from now_ms/1: a clock's time is " <>
+          "a whole number of milliseconds from -9223372036854775808 to 9223372036854775807"
+      )
 
   defp timed!(other, module),
     do:

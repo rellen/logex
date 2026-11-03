@@ -106,6 +106,30 @@ defmodule Logex.RunnerTest do
     defp odd([], time), do: time
   end
 
+  # Decision 394 (RV-11): the manual clock, whose answer to the runner's own process alone
+  # is the test's where it has set one, so that the runner reads a bad time before any
+  # device does.
+  defmodule RunnerOddClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock), do: odd(Process.get(:"$initial_call"), clock)
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+
+    defp odd({Logex.Runner, :init, 1}, clock),
+      do: answer(:ets.lookup(Logex.RunnerTest, {clock, :runner_now_ms}), clock)
+
+    defp odd(_other, clock), do: Manual.now_ms(clock)
+
+    defp answer([{_key, answer}], _clock), do: answer
+    defp answer([], clock), do: Manual.now_ms(clock)
+  end
+
   defmodule NoCancelClock do
     @behaviour Logex.Runner.Clock
 
@@ -467,11 +491,14 @@ defmodule Logex.RunnerTest do
     end
 
     # And later: a time that is no whole number of milliseconds is a clock that fails,
-    # never a crash: a device that reads it goes down as one whose clock fails does, which
-    # trips the runner naming it, and the runner that reads it stops as a shutdown naming
-    # it, as at a clock gone down.
+    # never a crash. Decision 394 (RV-11), the leave for a clock gone wrong a shutdown: a
+    # device that reads it goes down, and the runner trips naming the clock, `{:clock,
+    # {:now_ms, answer}}`, where the trip named the device gone down and the runner, reading
+    # it as it served the next request, stopped as a shutdown; the runner answers on,
+    # tripped, a restart refused while the clock answers so and taken once it is mended.
     @tag :capture_log
-    test "a clock whose now_ms/1 gives no time later trips or stops the runner, naming it" do
+    test "a clock whose now_ms/1 gives no time later trips the runner, naming the clock " <>
+           "(decision 394)" do
       {opts, _rig} = rig()
       {:ok, clock} = Manual.start_link()
       Process.flag(:trap_exit, true)
@@ -481,12 +508,69 @@ defmodule Logex.RunnerTest do
 
       # The panel's poll at 10 comes before the runner's round, and the panel goes down.
       Manual.advance(clock, 10)
-      reason = {:shutdown, {:clock, {:now_ms, 2.5}}}
-      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:down, ^reason}}}}, 5000
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, 2.5}}}}, 5000
 
-      # The runner reads its clock as it serves the next request.
-      raises("the runner #{inspect(runner)} is not running", fn -> Runner.status(runner) end)
-      assert_receive {:EXIT, ^runner, ^reason}, 5000
+      # The runner answers on, tripped, and a restart while the clock answers so is refused.
+      assert %{status: :tripped, trip: {:clock, {:now_ms, 2.5}}} = Runner.status(runner)
+      assert Runner.restart(runner, :cold) == {:error, {:clock, {:now_ms, 2.5}}}
+      assert %{status: :tripped} = Runner.status(runner)
+      refute_received {:EXIT, ^runner, _reason}
+
+      # Mended, a restart brings the line back, the panel opened again.
+      :ets.delete(__MODULE__, {clock, :now_ms})
+      assert Runner.restart(runner, :cold) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # The runner's own read, before any device's: the trip names the clock, every output 0,
+    # the round in progress run with no time passed; and an answer out of the range a time
+    # is held in, a signed 64-bit integer, the same (decision 394, provisional).
+    test "the runner's own read of a clock gone wrong trips it, every output 0, until the " <>
+           "clock is mended (decision 394)" do
+      for answer <- [:late, 9_223_372_036_854_775_808, "10"] do
+        {opts, %{panel: panel}} = rig()
+        {:ok, clock} = Manual.start_link()
+        {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {RunnerOddClock, clock}))
+        :ok = Runner.subscribe(runner)
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        assert Sim.outputs(panel) == %{[0] => 1}
+
+        :ets.insert(__MODULE__, {{clock, :runner_now_ms}, answer})
+        Manual.advance(clock, 10)
+        assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, ^answer}}}}, 5000
+        assert %{status: :tripped, trip: {:clock, {:now_ms, ^answer}}} = Runner.status(runner)
+        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Runner.restart(runner, :warm) == {:error, {:clock, {:now_ms, answer}}}
+
+        :ets.delete(__MODULE__, {clock, :runner_now_ms})
+        assert Runner.restart(runner, :warm) == :ok
+        Manual.advance(clock, 10)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Runner.stop(runner) == :ok
+      end
+    end
+
+    # At start the range is the host's mistake, as an answer that is no integer is.
+    test "a clock whose time at start is out of the range a time is held in is the host's " <>
+           "mistake (decision 394)" do
+      {opts, _rig} = rig()
+      {:ok, clock} = Manual.start_link()
+
+      for answer <- [9_223_372_036_854_775_808, -9_223_372_036_854_775_809] do
+        :ets.insert(__MODULE__, {{clock, :now_ms}, answer})
+
+        raises(
+          "the runner's clock `Logex.RunnerTest.OddClock` gave #{answer} from now_ms/1: a " <>
+            "clock's time is a whole number of milliseconds from -9223372036854775808 to " <>
+            "9223372036854775807",
+          fn -> Runner.start_link(Keyword.put(opts, :clock, {OddClock, clock})) end
+        )
+      end
     end
 
     # Decision 400 (RV-11): the write limit, `write_limit:`, an option of its own, apart

@@ -14123,8 +14123,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     @impl true
     def now_ms({clock, test}) do
       lag(Process.get(:"$initial_call"), clock, test)
-      Manual.now_ms(clock)
+      timed(Process.get(:"$initial_call"), clock, test)
     end
+
+    # Decision 394 (RV-11): where the walk has set `{test, :bad_time}`, the runner's own
+    # reads answer it, no time, a clock gone wrong.
+    defp timed({Logex.Runner, :init, 1}, clock, test),
+      do: bad_or(:ets.lookup(@table, {test, :bad_time}), clock)
+
+    defp timed(_other, clock, _test), do: Manual.now_ms(clock)
+
+    defp bad_or([{_key, answer}], _clock), do: answer
+    defp bad_or([], clock), do: Manual.now_ms(clock)
 
     @impl true
     def wake_at({clock, _test}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
@@ -14309,6 +14319,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {:trip, :down},
     {:trip, :bit_out_of_range},
     {:trip, :index_out_of_range},
+    # Decision 394 (RV-11): the runner's clock gone wrong.
+    {:trip, :clock},
     :round_first,
     :round_scheduled,
     :round_trigger,
@@ -16503,17 +16515,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp injected({:idle}, w) do
     lag = w.idle + pick([1, 1, 2, 5])
-    :ets.insert(@table, {{self(), :lag}, lag})
-    status = Runner.status(w.runner)
-    :ets.insert(@table, {{self(), :lag}, 0})
-    assert status.status == :running
-    w = %{w | fault: {:watchdog, {:idle, lag}}}
-    w = consumed(w)
-
-    # The time the request took passed inside it, the devices' polls on the way waiting
-    # for the clock's next advance, which delivers them.
-    :ok = Manual.advance(w.manual, 0)
-    tripped!(consumed(w))
+    idle_or_clock(lag - w.idle, lag, w)
   end
 
   defp injected({:stuck, size}, w) do
@@ -16548,6 +16550,39 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     fault = {:io, device, cause(device, callback, how)}
     w = %{w | fault: fault, failing: failing(callback, fault)}
     fault_acted(callback, device, how, w)
+  end
+
+  # Decision 394 (RV-11): one request in two of the idle watchdog's kind, by the lag it
+  # drew, so that no draw moves, meets a clock gone wrong instead.
+  defp idle_or_clock(1, _lag, w), do: clock_injected(w)
+
+  defp idle_or_clock(_other, lag, w) do
+    :ets.insert(@table, {{self(), :lag}, lag})
+    status = Runner.status(w.runner)
+    :ets.insert(@table, {{self(), :lag}, 0})
+    assert status.status == :running
+    w = %{w | fault: {:watchdog, {:idle, lag}}}
+    w = consumed(w)
+
+    # The time the request took passed inside it, the devices' polls on the way waiting
+    # for the clock's next advance, which delivers them.
+    :ok = Manual.advance(w.manual, 0)
+    tripped!(consumed(w))
+  end
+
+  # Decision 394 (RV-11): the clock gives the runner no time as it serves a request, which
+  # it answers with the last time it refreshed at, and it trips naming the clock as it
+  # takes its own notice; a restart while the clock answers so is refused, the runner
+  # tripped as it was, and once it is mended the walk's restarts restart.
+  defp clock_injected(w) do
+    :ets.insert(@table, {{self(), :bad_time}, :late})
+    w = %{w | fault: {:clock, {:now_ms, :late}}}
+    assert %{status: :running} = Runner.status(w.runner)
+    w = until_tripped(w)
+    assert Runner.restart(w.runner, :warm) == {:error, {:clock, {:now_ms, :late}}}
+    assert %{status: :tripped, trip: {:clock, {:now_ms, :late}}} = Runner.status(w.runner)
+    :ets.delete(@table, {self(), :bad_time})
+    tripped!(consumed(w))
   end
 
   # A write's failure told to the simulated device is acted out on its next write: a
@@ -16946,6 +16981,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp trip_kind({:watchdog, {kind, _, _, _}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _, _}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _}}), do: {:trip, kind}
+  defp trip_kind({:clock, {:now_ms, _answer}}), do: {:trip, :clock}
   defp trip_kind({:io, _device, cause}) when is_atom(cause), do: {:trip, cause}
   defp trip_kind({:io, _device, cause}), do: {:trip, elem(cause, 0)}
 
