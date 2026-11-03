@@ -19,7 +19,8 @@ Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's a
 questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, to
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
-420–432, landed on 2026-11-03.)*
+420–432, landed on 2026-11-03, and to RV-15's, decisions 433–436, each as built, their
+marks made in RV-13.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14682,7 +14683,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   `status/1`'s `copy` always there; the child spec's shutdown deadline following
   `write_limit:`; a cold start over a store a fresh start would refuse copying it first;
   each copy numbered, `<store>.dropped.1` and on, none replaced. And every provisional
-  mark RV-5 left on a reading decisions 409–419 settle made the decision's number, with
+  mark RV-5 left on a reading decisions 409–419 settle made the decision's number, and
+  every one RV-15 left on a reading decisions 433–436 settle, each as built, with
   RV-10's in the runner's files (decisions 420–428). It runs after RV-11, whose
   `write_limit:` decision 414 reads, and before RV-6, whose runner code it touches.
 - **RV-14 — the answers to RV-10's questions** (decisions 420–428). Each as built: every
@@ -15044,8 +15046,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   review's own red run at its tip, `located_array_test.exs`'s forces file timing out
   under a load average of 7.5, is RV-11's code and did not recur here.
 
-  *Provisional readings, put to the maintainer.* RV-14 leaves none: decisions 420 to 428
-  took each reading as built. RV-15's, each pinned as built and marked provisional where
+  *Provisional readings, put to the maintainer* *(RV-15's four answered on 2026-11-03,
+  decisions 433 to 436, each as built; RV-13 makes each mark the decision's number)*.
+  RV-14 leaves none: decisions 420 to 428 took each reading as built. RV-15's, each pinned as built and marked provisional where
   the code states it:
 
   1. *A literal bit's latch beside a coil a tag numbers* (decision 431). `otl

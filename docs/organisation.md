@@ -13326,6 +13326,39 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      54's own steps, `recompiled/4` and `Logex.FbType.check/2`, still take what they are
      given as checked and hold none of it, provisional.)*
 
+433. **A latch beside a coil whose bit a tag picks (the review after Milestone 6),** RV-15's
+     question 1 (decisions 257 and 431): `otl lanes[1].pv.3` beside `ote lanes[i].pv.[n]`
+     is warned, as decision 257 warns a latch beside a coil through a tag subscript, and
+     beside `ote lanes[1].pv.[n]` it is quiet, as decision 257 leaves a latch beside its
+     own element's coil, where a word array is quiet in both.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-03): decision 257's member rules stand
+     beside decision 431's. RV-13 makes the mark the decision's number.
+
+434. **Several warnings on one line (the review after Milestone 6),** RV-15's question 2
+     (decision 431): a member's write is told every first a word array's write of its
+     shape would be told, and each the member rules (decisions 253, 257 and 288) give, so
+     up to three where a word array's is told two at most.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-03): each warning cites a write that
+     can meet it, and none is held back. RV-13 makes the mark the decision's number.
+
+435. **A bit a tag picks beside its word written whole through the same tags (the review
+     after Milestone 6),** RV-15's question 3 (decisions 288 and 431): `ote lanes[i].pv.[n]`
+     beside `move 5 lanes[i].pv` is warned, as a word array's `ote w[i].[n]` beside `move 5
+     w[i]` is, where `ote lanes[i].pv.3` beside the same move stays quiet (decision 288).
+
+     **Taken: warned, as built (a)** (the maintainer, 2026-11-03). RV-13 makes the mark the
+     decision's number.
+
+436. **The check's own public steps (the review after Milestone 6),** RV-15's question 4
+     (decisions 54 and 432): `Logex.Compiler.recompiled/4` and `Logex.FbType.check/2` stay
+     public and trust the types and memo they are handed; nothing they return holds or
+     runs a hand-edited type, and a compile refuses one.
+
+     **Taken: public, as built (a)** (the maintainer, 2026-11-03). RV-13 makes the mark the
+     decision's number.
+
 ---
 
 ## 8. Sources, and what is unverified

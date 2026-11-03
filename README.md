@@ -340,7 +340,8 @@ decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which
 items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
 questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
 file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
-over a store it cannot read copying it first, among them. Its answers to the questions
+over a store it cannot read copying it first, among them; its answers to the four
+RV-15 left, decisions 433–436, are each as built. Its answers to the questions
 RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
 runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
 heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
