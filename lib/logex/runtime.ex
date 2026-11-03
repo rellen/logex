@@ -902,7 +902,7 @@ defmodule Logex.Runtime do
   scan's first is marked first (decision 274); and a task's `single` that the image put back starts its trigger's last
   sample at the sample the image holds for it, the task's own by its name where it holds
   one beside a different one of its trigger, as `retained/1` keeps a task's own (since
-  the review of RV-10, provisional), and otherwise its trigger's, as a warm `restart/2`
+  the review of RV-10, decision 425), and otherwise its trigger's, as a warm `restart/2`
   keeps it (decisions 305, 313 and 350), so a trigger sampled at 1 fires on no rising
   edge and a rise logic wrote after the sample fires once, every other at 0 as `start/1`
   has it; one the image holds no sample of its trigger for, which a host's own image or
@@ -923,7 +923,7 @@ defmodule Logex.Runtime do
   with no single or not at all, a global of that name among them, or, since the review of
   RV-10, whose single's sample the image does not hold apart from it, so that it is of
   another trigger; and a global's sample whose global the start keeps and no task of
-  `config` takes, every task on it taken out (provisional).
+  `config` takes, every task on it taken out (decision 425).
   Every entry is a stored value the start did not keep, so the list keeps its name. A
   member every element of an array of instances drops for one reason is one entry,
   `"m1.gates[*].j"`, decision 259's path form, at any depth, `hs[*].ws[*].x`; elements
@@ -996,7 +996,7 @@ defmodule Logex.Runtime do
   # image holds a sample of by its own name, which a round cut short before its step
   # leaves (decision 350), starts at that one, and since the review of RV-10 only where the
   # image holds its single's sample apart from it, as a task's own of that trigger always
-  # has beside it (`Logex.Image.laid_sample/3`, provisional).
+  # has beside it (`Logex.Image.laid_sample/3`, decision 425).
   defp put_back(
          %{last: _} = state,
          %Configuration.Task{single: single, name: name},
@@ -1244,7 +1244,8 @@ defmodule Logex.Runtime do
   # Decision 382 (the maintainer, 2026-11-01): an instance restarted at the resource's
   # clock, so that `restart/3` sets each retained timer's `last` to the resource's `now`, as
   # `start/2` starts every one at its `now`; the instance's `now` moves with it, since a
-  # timer's `last` is never later than its instance's (decision 188, provisional).
+  # timer's `last` is never later than its instance's (decision 188, kept whole by
+  # decision 420).
   defp at_now(%Instance{} = state, now), do: %{state | now: now}
 
   # Decision 305 (the maintainer, 2026-10-29), decision 274's rule for a task's trigger, as
@@ -2388,7 +2389,7 @@ defmodule Logex.Runtime do
     do: element_input(:error, {key, [], value}, tags, program)
 
   # A key is an element's name only where the lexer reads it as one name, its subscripts
-  # numbers a literal may spell, `"steps[16#3]"` the element `steps[3]` (provisional), one a
+  # numbers a literal may spell, `"steps[16#3]"` the element `steps[3]` (decision 426), one a
   # dimension and each within it, as a rung's element is judged when the program compiles.
   defp element_input(
          {:ok, %Tag{section: :var_input, type: {:array, _, _}} = tag},
@@ -2867,7 +2868,7 @@ defmodule Logex.Runtime do
   # key is told by `point_problem/3` only where it names no point as written, so that a
   # cycle of points named as their values pays one clause for it, and is set under the
   # point's own name, two keys that name one point a line each, in key order
-  # (provisional).
+  # (decision 426).
   defp by_values([], inputs, _wiring), do: {[], inputs, %{}}
 
   defp by_values(problems, inputs, wiring) do

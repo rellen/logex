@@ -3110,7 +3110,7 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
-  # The review of RV-10 (provisional): a var_output, or an element of one, that a held
+  # The review of RV-10 (decision 428): a var_output, or an element of one, that a held
   # point's connection starts at the point's value and that the configuration started
   # wires to another point too copies that value to the other point as well, so that the
   # other point moved while every report said only that the first held; accept refuses
@@ -3227,7 +3227,7 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
-  # The review of RV-10 (provisional): a kept instance's own connection both
+  # The review of RV-10 (decision 424): a kept instance's own connection both
   # configurations make holds its point's value from the instance's first run since a
   # start or a restart on, which is why decision 388 excepts it; before that run, a warm
   # restart keeping a retained point and putting the var_output a rung reads at its

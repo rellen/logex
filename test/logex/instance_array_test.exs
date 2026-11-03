@@ -324,8 +324,8 @@ defmodule Logex.InstanceArrayTest do
     # Decision 403's own: a single instance counts what its type holds, so a block holding
     # two `int[40000]` alone compiles, its own declarations each within the bound, and an
     # instance of it is refused, the instance and its 80,000 elements; the instance itself
-    # counted as an element of an array of instances is (provisional).
-    test "var x two, two holding two int[40000] alone, is refused at 80,001 (provisional)" do
+    # counted as an element of an array of instances is (decision 429).
+    test "var x two, two holding two int[40000] alone, is refused at 80,001 (decision 429)" do
       two =
         block!(
           "function_block two\nvar a int[40000]\nvar b int[40000]\nxic a[0].0 ote b[0].1",
@@ -2040,8 +2040,9 @@ defmodule Logex.InstanceArrayTest do
             # member's whole write beside a coil on its bit through a tag subscript, either
             # first, "may" where the write may come through a tag subscript (decision 257's
             # words; the whole write first "…writes whole"); through the very tags
-            # nothing (decision 246). Still not compared (provisional): a whole write
-            # through a tag subscript beside a coil on a literal element's bit.
+            # nothing (decision 246). Since decision 431 a whole write through a tag
+            # subscript beside a coil on a literal element's bit, which a provisional pin
+            # left uncompared until then, is compared as a word array's is, either first.
             {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3",
              [
                {13,
@@ -2062,7 +2063,10 @@ defmodule Logex.InstanceArrayTest do
              ]},
             {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[i].pv", []},
             {"xic go move 5 lane_c[i].pv\nxio go ote lane_c[i].pv.3", []},
-            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv", []}
+            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv",
+             [{13, as.("lane_c[i].pv")}]},
+            {"xic go move 5 lane_c[i].pv\nxio go ote lane_c[1].pv.3",
+             [{13, may.("lane_c[1].pv.3", "move")}]}
           ] do
         assert warnings(source <> rungs) == expected, rungs
       end
