@@ -339,19 +339,24 @@ review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](do
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
 items RV-6 to RV-8 build ("The review after Milestone 6"), its answers to the
 questions RV-4 left, decisions 390–401, which RV-11 builds, and its answers to the
-questions RV-5, RV-10 and RV-12 left, decisions 409–432, which RV-13 to RV-15 build:
-the store and the forces file reading CRLF as LF, a copy of the store numbered, none
-replaced, and a cold start over a store it cannot read copying it first, among them.
-Its answers to the questions
-RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
-element and instance it holds, at every depth (decision 403), the loader's trust in its
-own types one no host can borrow, so a type edited by hand is checked whether a host
-hands it to `Logex.compile/2` or to the compiler's internal entry (decision 404), which
-since RV-15 is no token at all but the loader's own compile, private code that no
-closure or term a host hands in reaches (decision 432), and two bits whose literal
-numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a write
-whose literal places differ from it, no warning (decision 405), the other four as built
-(decisions 402, 406, 407 and 408). Its answers
+questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
+file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
+over a store it cannot read copying it first, among them. Its answers to the questions
+RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
+RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
+closure refused as built (decisions 429 and 430), a bit of a member of an element
+written through a tag subscript or numbered by a tag warned as a word array's bit is
+where the pair may meet (decision 431), and the loader's own compile private code that
+nothing a host hands in reaches, no token at all (decision 432). Its answers to the
+questions RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting
+every tag, element and instance it holds, at every depth (decision 403), the loader's
+trust in its own types one no host can borrow, so a type edited by hand is checked
+whether a host hands it to `Logex.compile/2` or to the compiler's internal entry
+(decision 404), which since RV-15 is no token at all but the loader's own compile,
+private code that no closure or term a host hands in reaches (decision 432), and two bits
+whose literal numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a
+write whose literal places differ from it, no warning (decision 405), the other four as
+built (decisions 402, 406, 407 and 408). Its answers
 to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
 held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
 warm restart's timers counted from the resource's `now` (decision 382), a preset no
@@ -2470,8 +2475,8 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   its var_inputs and var_outputs among them. So `var row cell[256]`, `cell` a block
   holding `ton[256]` alone, would hold 65,792, 256 instances and 65,536 timers, and is
   refused; so is `var x two`, `two` a block holding two `int[40000]` alone, at 80,001,
-  the instance itself counted (provisional: the 80,000 its block holds is the other
-  reading), though `two` itself compiles; so is an array of 65,536 blocks of 200 single
+  the instance itself counted, one rule for every instance (decision 429), though `two`
+  itself compiles; so is an array of 65,536 blocks of 200 single
   timers; and so is a chain of blocks each holding two single instances of the one below,
   at the depth whose count passes 65,536.
 - **Literal subscripts to run an element.** An instruction that runs an instance names

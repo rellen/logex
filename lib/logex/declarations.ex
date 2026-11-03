@@ -34,7 +34,7 @@ defmodule Logex.Declarations do
   `ton[256]` alone, would hold 65,792, 256 instances each counting itself and 256 timers;
   `var x two`, `two` holding two `int[40000]` alone, 80,001, the instance and its 80,000
   elements, a single instance counting itself as an element of an array of instances does
-  (provisional: the 80,000 alone is the other reading); and `var w wide[65536]`, `wide`
+  (decision 429); and `var w wide[65536]`, `wide`
   holding 200 single timers alone, 13,172,736: each is refused at its line, in words that
   name the count and the bound, from Elixir too. A chain of blocks each holding two
   single instances of the one below doubles at each block, and is refused at the
