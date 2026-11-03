@@ -538,10 +538,21 @@ defmodule Logex.RunnerTest do
         fn -> Runner.start_link(Keyword.put(opts, :open, %{"belt" => 100})) end
       )
 
-      for value <- [1, 2_147_483_647, %{}, %{"drive" => 1, "panel" => 2_147_483_647}] do
+      for value <- [2_147_483_647, %{}, %{"drive" => 2_147_483_647, "panel" => 3000}] do
         {opts, _rig} = plant_rig()
         assert {:ok, runner} = Runner.start_link(Keyword.put(opts, :open, value))
         assert %{status: :running} = Runner.status(runner)
+      end
+
+      # The least is a limit taken, never the host's mistake, though an opening meets 1 ms
+      # only now and then: CI's first run of this test, which asserted the start, met a
+      # drive's opening past it.
+      for value <- [1, %{"drive" => 1}] do
+        {opts, _rig} = plant_rig()
+        started = Runner.start_link(Keyword.put(opts, :open, value))
+
+        assert match?({:ok, _runner}, started) or
+                 started == {:error, {:io_init, "drive", :timeout}}
       end
     end
 
