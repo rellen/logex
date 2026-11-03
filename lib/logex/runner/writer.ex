@@ -66,16 +66,39 @@ defmodule Logex.Runner.Writer do
   # is made: the copy first, `<store>.dropped`, and the store only where the copy was
   # made, `{:copied, result}`, the store's result; a copy that fails writes no store,
   # `{:uncopied, reason}`; and with no copy owed the store's write alone, an event's
-  # written/3's.
-  def stored(path, text, owed, ms), do: within(fn -> copied_first(path, text, owed) end, ms)
+  # written/3's. Decision 391 (RV-11's review): an event's write killed at its limit is
+  # told by the file it was in as the limit passed, which the write marks in `made` as
+  # its copy is made: in the copy's, `{:uncopied, :timeout}`, the copy unknown and the
+  # store as it was, since the write does nothing after the call it is killed in; in the
+  # store's, `{:copied, {:error, :timeout}}`, the copy made and the store unknown
+  # (provisional).
+  def stored(path, text, owed, ms) do
+    made = :atomics.new(1, [])
+    in_flight(within(fn -> copied_first(path, text, owed, made) end, ms), made)
+  end
 
-  defp copied_first(path, text, nil), do: Logex.Retain.written(path, text)
+  defp in_flight({:error, :timeout}, made), do: copy_phase(:atomics.get(made, 1))
+  defp in_flight(result, _made), do: result
 
-  defp copied_first(path, text, owed),
-    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text)
+  defp copy_phase(0), do: {:uncopied, :timeout}
+  defp copy_phase(1), do: {:copied, {:error, :timeout}}
 
-  defp copy_then(:ok, path, text), do: {:copied, Logex.Retain.written(path, text)}
-  defp copy_then({:error, reason}, _path, _text), do: {:uncopied, reason}
+  defp copied_first(path, text, nil, _made), do: Logex.Retain.written(path, text)
+
+  defp copied_first(path, text, owed, made),
+    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text, made)
+
+  defp copy_then(:ok, path, text, made) do
+    marked(made)
+    {:copied, Logex.Retain.written(path, text)}
+  end
+
+  defp copy_then({:error, reason}, _path, _text, _made), do: {:uncopied, reason}
+
+  # The period's writer keeps no mark: its write is left to finish, its answer telling
+  # both files (decision 401).
+  defp marked(nil), do: :ok
+  defp marked(made), do: :atomics.put(made, 1, 1)
 
   # One call of the file system, a write's or the forces file's read at a restart, in a
   # process of its own linked to the caller, a runner, which traps exits, waited on for
@@ -146,7 +169,7 @@ defmodule Logex.Runner.Writer do
 
   @impl GenServer
   def handle_cast({:write, at, image, owed}, {path, runner} = state) do
-    result = copied_first(path, Logex.Retain.encode(image, at), owed)
+    result = copied_first(path, Logex.Retain.encode(image, at), owed, nil)
     send(runner, {__MODULE__, self(), at, result})
     {:noreply, state}
   end

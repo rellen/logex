@@ -3503,8 +3503,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
   `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
   and `written_at` the last write known made, until a later write lands or fails, and has
-  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"` (decision
-  391; the key and how long it stands provisional).
+  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"`, and a
+  write over the store that owes the copy first and is killed in the copy's own write,
+  the store as it was; one killed in the store's names the store, the copy made (decision
+  391; the key, how long it stands and the file named provisional).
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
   grid from the runner's start (M6-6, decision 275): the runner takes the retained values
   out between two rounds, as its own work, never inside a round and moving no round's
@@ -3954,14 +3956,16 @@ closed: true
   untimed program the share holds against a due periodic round too (decision 396): a
   request that comes while one is due waits for it, and is served after it while no
   round is due, or in the slot after 4 ms of rounds where they outrun their periods, so
-  that an HMI polling `status/1` in a tight loop never makes a 10 ms task late. On the
-  manual clock a round takes no time unless something passes time inside it, so a
+  that an HMI polling `status/1` in a tight loop holds a due round back by the request
+  in hand at most, or by its slot, never for as long as it polls. On the manual clock a
+  round takes no time unless something passes time inside it, so a
   request is served before the next round. One made while a round is owed, after a round
   that passed time, a slow drive's write, waits for its slot, as on the real clock
-  (decision 131): it comes in the advance that runs the round completing those 4 ms,
-  `advance(clock, 0)` among them, and never later. So a test that would call from the
-  process that moves the clock calls from another, and moves the clock on until the call
-  is answered:
+  (decision 131): it comes in the advance that runs the round completing those 4 ms, or
+  with no untimed program in the advance that runs the round due, `advance(clock, 0)`
+  among them, and never later (provisional for a periodic round). So a
+  test that would call from the process that moves the clock calls from another, and
+  moves the clock on until the call is answered:
 
   ```elixir
   task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
@@ -4284,7 +4288,12 @@ stage: nil
   holds, the restart going on and the line coming back, and `status/1` names it,
   `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
   of it lands or a restart reads it (decision 390; the key and how long it stands
-  provisional); with no such file to name, `status/1` has no `forces_unread`. A
+  provisional); with no such file to name, `status/1` has no `forces_unread`. A restart
+  that reads the file takes what it holds, as every start does, so after a fresh start
+  that could not read it the next restart takes the forces the file held, which no one
+  forced since and `status/1` did not list (provisional); and a relative `forces:` whose
+  working directory the disk does not answer for in time refuses the start, the file
+  "cannot be located", as a relative store's does (provisional). A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every

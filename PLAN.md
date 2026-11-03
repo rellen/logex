@@ -14157,12 +14157,21 @@ and CI checked; each fix with a test that fails when it is reverted.
      is named, the wall clock. (a) As built; (b) the round abandoned at once, its outputs
      never written, before the trip.
   6. *The share with no continuous task* (decision 396). A plant of a 2 ms task whose
-     rounds take 3 ms gives the HMI 1 ms after every 9 ms of rounds at 10%; and a plant
-     that ran timed rounds only and is edited to add a continuous program carries the
-     share's count across the edit, so its first slot comes after the first round, not
-     the fourth. (a) As built; (b) the count begun again at an edit that adds or takes
-     away untimed programs; (c) Logix's alone, the HMI served only in the time no round
-     needs, none at all while rounds outrun their periods.
+     rounds take 3 ms gives the HMI 1 ms after every 9 ms of rounds at 10%; and, since
+     RV-11's review, a plant that ran timed rounds only and is edited to add a continuous
+     program begins the share's count again at the edit, so its first slot comes after
+     the fourth round of the continuous task at 20%, as before decision 396, where the
+     count carried across the edit brought it after the first, which no record asked
+     (the review's finding 6). And a slot serves the requests in the runner's queue as
+     its round ends: an HMI that polls `status/1` one call at a time, each sent once the
+     last is answered, finds its next call still on its way as the round ends, the slot
+     gone and the count begun again, so in a 2 ms plant whose rounds take 6.7 ms it is
+     answered 149 times in 2 s where the parent answered 299 (the review's finding 12),
+     as the continuous task's slot has always done. (a) As built, the count begun again at
+     such an edit, and an empty slot gone; (b) one count carried across the edit; (c) a
+     slot that finds its queue empty keeps the count standing, so the next request is
+     served at once; (d) Logix's alone, the HMI served only in the time no round needs,
+     none at all while rounds outrun their periods.
   7. *An address the configuration does not write* (decision 399). An adapter that
      reports `%{pump: 1}`, a key that is no address, trips `{:unknown_address, :pump}`, as
      it gave it; and `Logex.IO.Sim.set/3` given `[7]` past its inputs refuses it naming
@@ -14170,6 +14179,41 @@ and CI checked; each fix with a test that fails when it is reverted.
      opens it. (a) As built; (b) a key that is no address shown inspected as text,
      `":pump"`, so every address a trip names is text; (c) the sim's refusal naming
      `panel.i.7` once bound.
+
+  Put since RV-11's review, each a reading the review found unasked:
+
+  8. *A test's call on the manual clock while a periodic round is overdue* (decisions
+     131 and 396; finding 1). A box counter on a 10 ms task, no continuous program, run
+     on the manual clock by a test; a slow drive's write passes 509 ms inside a round, so
+     the next round is overdue, and the test then calls `status/1` from the process that
+     moves the clock: the call waits for the advance that runs the round due, which that
+     process never makes, so the test hangs, as a call made while a continuous task's
+     round is owed always did (decision 131). (a) As built, decision 131's rule extended
+     to a due periodic round, the test calling from another process; (b) a request that
+     finds a periodic round overdue runs that round there and then and is served after
+     it, decision 131's passed-over option, for periodic rounds or for both.
+  9. *Forces the file held while a fresh start could not read it* (decisions 127 and
+     390; finding 2). A technician forced the level switch to 7 and the PC crashed; the
+     next start finds the disk stalled at the forces file, starts with no force and names
+     the file in `status/1`; the disk recovers; at the next trip and restart the restart
+     reads the file and forces the level to 7 again, a force the HMI had not listed since
+     the start. (a) As built, every start takes the file (decision 127); (b) while
+     `forces_unread` stands a restart keeps the runner's own set, the file taken only by
+     a force's write or a fresh start, as Logix's forces live in controller memory.
+  10. *A relative forces path whose directory does not answer* (decisions 390 and 400;
+      finding 5). `forces: "plant.forces"` and the disk stalls as the PC boots: the start
+      cannot expand the path, so it cannot claim the file, tell it from the store or
+      write it, and is refused, "plant.forces: the forces file cannot be located: ...",
+      where an absolute path on the same stalled disk starts with no force. (a) As built,
+      refused, the words now "cannot be located"; (b) the forces file's carry-on extended:
+      started with no force, the file named, the path expanded at its first write.
+  11. *Which file an owed copy's killed write names* (decisions 360 and 391; finding 8).
+      A retyped start whose copy of the store failed owes it; a trip's write over the
+      store, the copy first, is killed at its limit while the copy's rename hangs:
+      `status/1` now names the copy unknown, the store as it was, where it named the
+      store, which the write never reached; and one killed in the store's own write names
+      the store, the copy shown made. (a) As built, the file the write was in as its limit
+      passed; (b) both files named while a copy is owed.
 - **RV-12 — the answers to RV-9's questions** (decisions 403, 404 and 405). A declaration
   counting every tag, element and instance its first state holds; the loader's trust a
   token only it holds; a bit's literal number and a one-shot's storage bit told apart by

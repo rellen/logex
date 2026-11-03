@@ -158,6 +158,30 @@ defmodule Logex.RunnerTest do
     defp counted(_none, clock), do: Manual.now_ms(clock)
   end
 
+  # Decision 394 (RV-11's review): the manual clock, whose answer to a device's process
+  # alone is the test's where it has set one, so that a device reads a bad time and the
+  # runner a good one.
+  defmodule DeviceOddClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock), do: odd(Process.get(:"$initial_call"), clock)
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+
+    defp odd({Logex.Runner.Device, :init, 1}, clock),
+      do: answer(:ets.lookup(Logex.RunnerTest, {clock, :device_now_ms}), clock)
+
+    defp odd(_other, clock), do: Manual.now_ms(clock)
+
+    defp answer([{_key, answer}], _clock), do: answer
+    defp answer([], clock), do: Manual.now_ms(clock)
+  end
+
   defmodule NoCancelClock do
     @behaviour Logex.Runner.Clock
 
@@ -610,6 +634,71 @@ defmodule Logex.RunnerTest do
       Manual.advance(clock, 10)
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Sim.outputs(panel) == %{[0] => 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-11's review: a device's own read of a time out of the range a time is held in,
+    # the runner's reads good, takes the device down naming the clock, every output 0,
+    # and the runner trips so, as for an answer that is no integer (decision 394,
+    # provisional: the range).
+    test "a device's own read of a time out of the range a time is held in trips the " <>
+           "runner, naming the clock (decision 394)" do
+      for answer <- [9_223_372_036_854_775_808, -9_223_372_036_854_775_809] do
+        {opts, %{clock: clock, panel: panel}} = rig()
+        {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
+        :ok = Runner.subscribe(runner)
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        assert Sim.outputs(panel) == %{[0] => 1}
+
+        :ets.insert(__MODULE__, {{clock, :device_now_ms}, answer})
+        Manual.advance(clock, 10)
+        assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, ^answer}}}}, 5000
+        assert %{status: :tripped, trip: {:clock, {:now_ms, ^answer}}} = Runner.status(runner)
+        assert Sim.outputs(panel) == %{[0] => 0}
+
+        :ets.delete(__MODULE__, {clock, :device_now_ms})
+        assert Runner.restart(runner, :warm) == :ok
+        Manual.advance(clock, 10)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Runner.stop(runner) == :ok
+      end
+    end
+
+    # RV-11's review: a device gone down by its own read of a bad clock that a round's
+    # write finds gone, before the runner has taken its exit, trips the runner naming the
+    # clock, as its exit does, where the write named the device gone down. The runner held
+    # while the device reads the clock at its poll and goes down, a round's wake ahead of
+    # the device's exit in its mailbox, the round's output changed.
+    test "a device gone down by its own read of a bad clock, found so by a round's write, " <>
+           "trips the runner naming the clock (decision 394)" do
+      {opts, %{clock: clock, panel: panel}} = rig()
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
+      :ok = Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      Sim.set(panel, [0], 0)
+
+      %{"panel" => device} = devices(runner)
+      ref = Process.monitor(device)
+      :sys.suspend(runner)
+      {_timer, token, _at} = :sys.get_state(runner).wake
+      send(runner, {Runner, :wake, token})
+      :ets.insert(__MODULE__, {{clock, :device_now_ms}, :late})
+      Manual.advance(clock, 10)
+
+      assert_receive {:DOWN, ^ref, :process, ^device, {:shutdown, {:clock, {:now_ms, :late}}}},
+                     5000
+
+      :sys.resume(runner)
+
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
+      assert %{status: :tripped, trip: {:clock, {:now_ms, :late}}} = Runner.status(runner)
+      :ets.delete(__MODULE__, {clock, :device_now_ms})
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.stop(runner) == :ok
     end
 
@@ -2012,8 +2101,9 @@ defmodule Logex.RunnerTest do
 
     # Decision 396 (RV-11): a round counts whole with no untimed program, its timed tasks'
     # runs being all it runs: each step here takes 3 ms of a 2 ms period, so at 10% the
-    # slot comes after the round that completes 9 ms, the fourth, the first counting its
-    # millisecond, where a count that left the steps out would bring it at the ninth.
+    # slot comes after the round that completes 9 ms, the fourth, where a count that left
+    # the steps out would bring it at the ninth. The first round's millisecond brings it at
+    # the fourth either way, 1 + 3 + 3 + 3 or 0 + 3 + 3 + 3: the next test holds that.
     test "with no untimed program, a round counts whole, its timed tasks' runs in it " <>
            "(decision 396)" do
       config =
@@ -2045,6 +2135,42 @@ defmodule Logex.RunnerTest do
       assert Manual.now_ms(clock) == 11
     end
 
+    # Decision 396 (RV-11's review): with no untimed program a periodic round that takes no
+    # time counts a millisecond, as the continuous task's does: the first round, run at
+    # start, takes none and each after it 4 ms of a 2 ms period, so at 10% the slot comes
+    # after the third, which completes 1 + 4 + 4 = 9 ms, where a round of no time counted
+    # as none would bring it after the fourth, at 14.
+    test "with no untimed program, a round that takes no time counts a millisecond " <>
+           "(decision 396)" do
+      config =
+        configured(
+          "task fast interval 2 priority 1\nvar_global q bool at drive.q.0\n" <>
+            "program b count with fast\n",
+          %{"count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          poll: 100_000,
+          overhead: 10,
+          steps: StepTakes
+        )
+
+      :ets.insert(__MODULE__, {{runner, :step_ms}, {clock, 4}})
+      Manual.advance(clock, 2)
+      assert {rounds(runner), Manual.now_ms(clock)} == {2, 6}
+      request = :gen_server.send_request(runner, {:get!, "b.n"})
+      assert :gen_server.wait_response(request, 100) == :timeout
+      assert answered_in(request, clock, 2) == {3, 3}
+      assert Manual.now_ms(clock) == 10
+    end
+
     # Decision 396 (RV-11), c1-runner-rounds-2 on the real clock: a hundred host processes
     # that force and unforce a point in a tight loop, each request a write of the forces
     # file, starved a 10 ms task with no continuous task, every round waiting behind each
@@ -2054,8 +2180,12 @@ defmodule Logex.RunnerTest do
     # needs holds, a dozen at the tip. Judged by the requests served a round, at most half
     # the callers, which a loaded machine only lowers, the requests slower and the rounds
     # still each behind one, and never by a round's lateness or the rounds a second. The
-    # task's watchdog and the idle watchdog are a second, so that a machine whose every
-    # core is busy, which stalls a 10 ms step past 50 ms now and then, trips nothing.
+    # task's watchdog and the idle watchdog are 5 s, so that a machine whose every core is
+    # busy trips nothing: at a second the review's load runs latched the panel once in 50
+    # beside the rest of the runner tests, and an instrumented run of them showed the
+    # runner itself not scheduled for 271 ms between the refresh before a force and the
+    # first renewal of its write's wait, due 10 ms on, so a heartbeat of a second is a
+    # loaded machine's to miss; the test reads the requests a round, never the heartbeat.
     test "on the real clock, with no untimed program, a tight loop of forces leaves a " <>
            "10 ms task its periods (decision 396)" do
       dir = Path.join(System.tmp_dir!(), "logex-rv11-#{System.unique_integer([:positive])}")
@@ -2064,7 +2194,7 @@ defmodule Logex.RunnerTest do
 
       config =
         configured(
-          "task fast interval 10 priority 1 watchdog 1000\nvar_global e bool at panel.i.0\n" <>
+          "task fast interval 10 priority 1 watchdog 5000\nvar_global e bool at panel.i.0\n" <>
             "var_global hits dint at panel.q.0\nprogram c count with fast\n  c.n hits\n",
           %{"count" => @count}
         )
@@ -2076,7 +2206,7 @@ defmodule Logex.RunnerTest do
           configuration: config,
           io: %{"panel" => {Sim, sim: panel}},
           forces: Path.join(dir, "plant.forces"),
-          idle: 1000
+          idle: 5000
         )
 
       stop = :atomics.new(1, [])

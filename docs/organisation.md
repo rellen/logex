@@ -2726,7 +2726,8 @@ watchdog's rule across an online edit is decision 129's.)*
   a host's request that comes while one is due waits for it and is served after it while
   no round is due, the periodic rounds then the share's count, each whole, and the slot
   after C ms of them, so that a tight loop of requests no longer makes a 10 ms task
-  late.)*
+  late; since RV-11's review a step that adds the first untimed program or takes away
+  the last begins the count again, provisional.)*
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
   says (decision 50).
   *(Landed with M4-3, 2026-10-18, as these bullets say, with two readings the record
@@ -12778,7 +12779,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      an unforce's write of the file lands or a restart reads it, the key absent otherwise
      (provisional: its name and how long it stands). A line that is no force, a point
      forced twice, a force the configuration cannot take and a link stay the host's
-     mistakes.)*
+     mistakes. RV-11's review: a restart that reads the file again takes what it holds,
+     as decision 127 has every start take the file, so that after a fresh start that could
+     not read it the next restart that can takes the forces the file held, ones no one
+     forced since (provisional, put to the maintainer); a relative path whose expansion,
+     the working directory read, the disk does not answer in time refuses the start, the
+     file "cannot be located", for the forces file as for the store, since the start
+     holds no path to claim, check or write (provisional, put to the maintainer); and the
+     walk's fresh start meets an unreadable file holding forces.)*
 
 391. **A write that timed out may land (the review after Milestone 6),** RV-4's question
      2: a write cut off at its limit may still be finished by the system once the disk
@@ -12797,7 +12805,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and how long they stand). The event and the caller's answer are a failure's,
      `{:error, :timeout}`, a cold restart left tripped and a fresh start not started
      (decision 291); `stop/2`'s doc and README say a stop told `{:error, {:retain,
-     :timeout}}` leaves the store unknown.)*
+     :timeout}}` leaves the store unknown. RV-11's review: a restart whose read of the file
+     fails keeps `forces_unknown`, named beside `forces_unread`; and a write over the store
+     that owes the copy first, killed at its limit, names the file it was in as the limit
+     passed, the copy, the store as it was and the copy still owed, or the store, the copy
+     made, where it named the store whichever (provisional, put to the maintainer).)*
 
 392. **One `.tmp` name (the review after Milestone 6),** RV-4's question 4: each write's
      temporary file is one name beside the store, made new and exclusively each write,
@@ -12832,7 +12844,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      left tripped; mended, a restart brings the line back. At start a bad or out-of-range
      time stays the host's pinned `ArgumentError`. A clock that goes down, raises or exits
      still stops the runner as a shutdown (provisional: the range, the round in progress
-     finished, and the restart's look at both clocks).)*
+     finished, and the restart's look at both clocks). RV-11's review: a device gone down
+     by its own read of the clock trips the runner naming the clock however the runner
+     finds it gone, a round's write to it among it, where a write that came first named
+     the device gone down; a device's read of a time out of the range is pinned; and the
+     walks restate a device's read and a period's wall clock.)*
 
 395. **A runner killed while a card hangs (the review after Milestone 6),** RV-4's
      question 7: the hung device is killed idle + poll after the runner, which gives a
@@ -12857,7 +12873,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      whose rounds outrun their periods leaves the host its S ms of every C + S (provisional:
      the count, and one count carried across an edit that adds or takes away untimed
      programs). c1-runner-rounds-2's 200 callers of force made 17 rounds in 2.5 s of a 10
-     ms task; now 231 in 3.1 s.)*
+     ms task; now 231 in 3.1 s. RV-11's review: an edit's step that adds the first untimed
+     program or takes away the last begins the count again, where one count was carried
+     across it, so that a plant of timed rounds edited to add a continuous program is
+     served its first slot C ms of the continuous task's rounds after the step, as before
+     this decision (provisional); on the manual clock a request that finds a periodic round
+     due waits for the advance that runs it, as decision 131 has a call wait for its slot
+     (provisional); a slot serves the runner's queue, so a lone caller whose next request
+     is still in the mailbox as a round ends is served every other slot where every round
+     brings one (provisional); and the look for a due round reads the clock once, its
+     reading the request's refresh's.)*
 
 397. **A device's report backlog (the review after Milestone 6),** RV-4's question 9
      (c2-runner-persist-5): thousands of reports in one poll period drain in time
@@ -12919,7 +12944,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      renews every device's deadline each poll period while it waits, leaves the wait out
      of the time the idle watchdog reads and takes the devices' notices sent meanwhile
      (provisional). `child_spec/1`'s shutdown is `devices * (idle + poll) + 2 *
-     write_limit`, never less than 5000.)*
+     write_limit`, never less than 5000. RV-11's review: the time a force's write waited is
+     its own request's alone, 0 again once it is answered, pinned.)*
 
 401. **A period's write on a stalled disk (the review after Milestone 6),** RV-4's
      question 13: the write past its limit is reported `:timeout` once and left to
