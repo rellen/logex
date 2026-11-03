@@ -1525,11 +1525,21 @@ defmodule Logex.TagSubscriptTest do
            "`move` on line 18 writes whole: " <> @may_share}
       ]
 
+    # A literal bit's latch first, which writes the bit, as decision 257 tells it.
+    defp beside_latch(write, first),
+      do: [
+        {19,
+         "`#{written(write)}` is in `#{member_array(write)}`, as `#{written(first)}` is, which the " <>
+           "`#{symbol(first)}` on line 18 writes: " <> @may_share}
+      ]
+
     # Each pair `{first, then}`: the second write told as a word array's is, where the pair
     # may meet. RV-12's question 3's forms first, in one dimension, each both ways; then two
     # dimensions and three, a timer's members, the coil through the very tags, another
-    # write through a tag subscript, and a literal bit beside a word written whole through
-    # a tag subscript, the one pair beyond question 3's list a tag subscript reaches.
+    # write through a tag subscript, a literal bit's latch, which decision 257 compares
+    # with a coil through a tag subscript (provisional, beside a bit a tag numbers), and a
+    # literal bit beside a word written whole through a tag subscript, the one pair beyond
+    # question 3's list a tag subscript reaches.
     test "every form a tag reaches is warned where the pair may meet, either way" do
       for {first, then, told} <- [
             {"ote l1[i].pv.3", "ote l1[j].pv.[n]", &tagged/2},
@@ -1562,6 +1572,8 @@ defmodule Logex.TagSubscriptTest do
             {"ote t[i].pre.[n]", "ote t[1].pre.3", &tagged/2},
             {"ote t[1].acc.[n]", "ote t[i].acc.2", &beside/2},
             {"otl l1[i].pv.[n]", "ote l1[1].pv.3", &tagged/2},
+            {"ote l1[i].pv.[n]", "otl l1[1].pv.3", &tagged/2},
+            {"otl l1[1].pv.3", "ote l1[i].pv.[n]", &beside_latch/2},
             {"ote l1[1].pv.[n]", "otu l1[i].pv.[m]", &beside/2}
           ] do
         rungs = "xic a #{first}\nxic a #{then}"
