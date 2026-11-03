@@ -2000,8 +2000,13 @@ line 11: `sloot` is not declared — did you mean `slot`?
   bits whose literal numbers differ, `ote faults[i].1` beside `ote faults[j].2`, the
   bit's number one more place, and a write beside a storage bit whose literal places
   differ from its own, `ote edges[i,0]` beside `ons edges[1,1]`, where `ote edges[i,1]`
-  and `ote faults[j].[n]` may meet and are told. A subscript's tag is a use of it, read,
-  and part of its rung, so an edit that changes it changes the rung.
+  and `ote faults[j].[n]` may meet and are told. Since decision 431 a bit of a member of
+  an element of an array of timers or counters, written through a tag subscript or
+  numbered by a tag, is told as a word array's bit is, the member's word its word:
+  `ote lanes[i].pv.3` beside `ote lanes[j].pv.[n]`, or `ote lanes[1].pv.[n]` beside `move
+  5 lanes[i].pv`, may meet and are told, and `ote lanes[1].pv.[n]` beside `ote
+  lanes[2].pv.3` never meet and are not. A subscript's tag is a use of it, read, and part
+  of its rung, so an edit that changes it changes the rung.
 
 ### Two pulse coils
 

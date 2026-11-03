@@ -1475,6 +1475,294 @@ defmodule Logex.TagSubscriptTest do
     end
   end
 
+  describe "a member's bit through a tag subscript or numbered by a tag (decision 431)" do
+    @members "var_input a bool\nvar_input i int\nvar_input j int\nvar_input k int\n" <>
+               "var_input n int\nvar_input m int\nvar l1 ctu[3]\nvar lc ctu[2,2]\n" <>
+               "var l3 ctu[2,2,2]\nvar t ton[3]\nvar w word[3]\nvar g word[2,2]\n" <>
+               "var h word[2,2,2]\nvar p bool\nvar q bool\nvar_output o bool\n" <>
+               "xic l1[i].q xic lc[i,j].q xic l3[i,j,k].q xic t[i].dn xic w[i].[n] " <>
+               "xic g[i,j].[n] xic h[i,j,k].[n] xic p xic q ote o\n"
+    @may_share "the last one in the scan decides it"
+
+    # The may-share warnings of two rungs after the head, at lines 18 and 19.
+    defp shared(rungs, head \\ @members),
+      do:
+        for(
+          {line, message} <- warnings(head <> rungs),
+          String.ends_with?(message, @may_share),
+          do: {line, message}
+        )
+
+    defp member_array(write),
+      do: write |> String.split(" ") |> List.last() |> String.split("[") |> hd()
+
+    defp written(write), do: write |> String.split(" ") |> List.last()
+
+    defp tagged(write, first),
+      do: [
+        {19,
+         "`#{written(write)}` is in `#{member_array(write)}`, which the `#{symbol(first)}` on line 18 " <>
+           "may write through a tag subscript: " <> @may_share}
+      ]
+
+    defp beside(write, first),
+      do: [
+        {19,
+         "`#{written(write)}` is in `#{member_array(write)}`, as `#{written(first)}` is, " <>
+           what(first) <> " on line 18: " <> @may_share}
+      ]
+
+    defp symbol(write), do: write |> String.split(" ") |> hd()
+
+    defp what("move" <> _ = _first), do: "which the `move`"
+    defp what(_coil), do: "which already has an `ote`"
+
+    # `what/1` names a coil's first as having an `ote`, a move's as writing whole.
+    defp beside_whole(write, first),
+      do: [
+        {19,
+         "`#{written(write)}` is in `#{member_array(write)}`, as `#{written(first)}` is, which the " <>
+           "`move` on line 18 writes whole: " <> @may_share}
+      ]
+
+    # Each pair `{first, then}`: the second write told as a word array's is, where the pair
+    # may meet. RV-12's question 3's forms first, in one dimension, each both ways; then two
+    # dimensions and three, a timer's members, the coil through the very tags, another
+    # write through a tag subscript, and a literal bit beside a word written whole through
+    # a tag subscript, the one pair beyond question 3's list a tag subscript reaches.
+    test "every form a tag reaches is warned where the pair may meet, either way" do
+      for {first, then, told} <- [
+            {"ote l1[i].pv.3", "ote l1[j].pv.[n]", &tagged/2},
+            {"ote l1[j].pv.[n]", "ote l1[i].pv.3", &tagged/2},
+            {"ote l1[1].pv.[n]", "ote l1[i].pv.3", &beside/2},
+            {"ote l1[i].pv.3", "ote l1[1].pv.[n]", &tagged/2},
+            {"ote l1[1].pv.[n]", "move 5 l1[i].pv", &beside/2},
+            {"move 5 l1[i].pv", "ote l1[1].pv.[n]", &tagged/2},
+            {"ote l1[i].pv.[n]", "ote l1[1].pv.[n]", &tagged/2},
+            {"ote l1[1].pv.[n]", "ote l1[i].pv.[n]", &beside/2},
+            {"ote l1[i].pv.[n]", "ote l1[j].pv.[n]", &tagged/2},
+            {"ote l1[i].pv.[n]", "ote l1[1].pv.3", &tagged/2},
+            {"ote l1[1].pv.3", "ote l1[i].pv.[n]", &beside/2},
+            {"ote l1[i].pv.[n]", "move 5 l1[1].pv", &tagged/2},
+            {"move 5 l1[1].pv", "ote l1[i].pv.[n]", &beside_whole/2},
+            {"ote l1[i].pv.[n]", "move 5 l1[j].pv", &tagged/2},
+            {"move 5 l1[j].pv", "ote l1[i].pv.[n]", &tagged/2},
+            {"ote l1[1].pv.3", "move 5 l1[i].pv", &beside/2},
+            {"move 5 l1[i].pv", "ote l1[1].pv.3", &tagged/2},
+            {"ote lc[i,0].pv.3", "ote lc[j,0].pv.[n]", &tagged/2},
+            {"ote lc[1,0].pv.[n]", "ote lc[i,0].pv.3", &beside/2},
+            {"ote lc[i,0].pv.[n]", "ote lc[1,0].pv.3", &tagged/2},
+            {"ote lc[i,0].pv.[n]", "move 5 lc[j,0].pv", &tagged/2},
+            {"ote lc[1,j].pv.[n]", "ote lc[i,1].pv.[m]", &tagged/2},
+            {"ote lc[1,1].pv.[n]", "ote lc[i,1].pv.[m]", &beside/2},
+            {"ote l3[i,0,1].pv.[n]", "ote l3[1,0,1].pv.3", &tagged/2},
+            {"ote l3[1,0,1].pv.[n]", "ote l3[i,0,k].pv.4", &beside/2},
+            {"ote l3[1,j,1].pv.[n]", "ote l3[i,0,k].pv.4", &tagged/2},
+            {"ote l3[i,j,k].pv.[n]", "move 5 l3[0,1,1].pv", &tagged/2},
+            {"ote t[i].pre.[n]", "ote t[1].pre.3", &tagged/2},
+            {"ote t[1].acc.[n]", "ote t[i].acc.2", &beside/2},
+            {"otl l1[i].pv.[n]", "ote l1[1].pv.3", &tagged/2},
+            {"ote l1[1].pv.[n]", "otu l1[i].pv.[m]", &beside/2}
+          ] do
+        rungs = "xic a #{first}\nxic a #{then}"
+        assert {rungs, shared(rungs)} == {rungs, told.(then, first)}
+      end
+
+      assert shared("xic a ote l1[i].pv.[n]\nxic a ote l1[i].pv.[n]") == [
+               {19, "`l1[i].pv.[n]` already has an `ote` on line 18: " <> @may_share}
+             ]
+    end
+
+    # Each pair whose literal places differ, an element's or a bit's, and each pair of
+    # another member's word, never meets and is not warned; nor is a coil beside another
+    # write through the very tags (decision 246).
+    test "a pair whose literal places differ stays quiet" do
+      for rungs <- [
+            "xic a ote l1[1].pv.[n]\nxic a ote l1[2].pv.3",
+            "xic a ote l1[2].pv.3\nxic a ote l1[1].pv.[n]",
+            "xic a ote l1[1].pv.[n]\nxic a ote l1[0].pv.[m]",
+            "xic a ote l1[1].pv.[n]\nmove 5 l1[2].pv",
+            "move 5 l1[2].pv\nxic a ote l1[1].pv.[n]",
+            "xic a ote l1[i].pv.3\nxic a ote l1[1].pv.4",
+            "xic a ote lc[i,0].pv.[n]\nxic a ote lc[j,1].pv.3",
+            "xic a ote lc[1,0].pv.[n]\nxic a ote lc[i,1].pv.3",
+            "xic a ote lc[i,0].pv.[n]\nmove 5 lc[j,1].pv",
+            "xic a ote lc[1,j].pv.[n]\nxic a ote lc[0,i].pv.[m]",
+            "xic a ote l3[i,0,1].pv.[n]\nxic a ote l3[j,1,1].pv.3",
+            "xic a ote l3[1,j,k].pv.[n]\nxic a ote l3[0,i,k].pv.[m]",
+            "xic a ote t[i].pre.[n]\nxic a ote t[j].acc.3",
+            "xic a ote t[i].pre.[n]\nxic a ote t[j].acc.[n]",
+            "xic a ote l1[i].pv.[n]\nxic a otl l1[i].pv.[n]",
+            "xic a otl l1[i].pv.[n]\nxic a ote l1[i].pv.[n]"
+          ] do
+        assert {rungs, shared(rungs)} == {rungs, []}
+      end
+    end
+
+    # Decision 431's words, "judged as a word array's bit is", restated as an oracle: every
+    # pair of a coil, a pulse coil on a literal bit, a word written whole and a latch of a
+    # bit a tag numbers, over a member's word of an array of counters and over a word
+    # array of its shape, in one dimension and two, is told the same, names mapped, but for
+    # the two the member rules held before: a literal bit's latch, which decision 257
+    # compares with a coil through a tag subscript and a word array's rules do not, and a
+    # literal bit's coil and the word written whole through the very tags, which decision
+    # 288 leaves quiet.
+    test "a member's word is judged as a word array of its shape is, every pair" do
+      reached =
+        for {member, word, subscripts} <- [
+              {"l1", "w", ["1", "0", "i", "j"]},
+              {"lc", "g", ["1,0", "0,1", "i,0", "j,1", "1,j"]}
+            ],
+            first <- writes(subscripts),
+            then <- writes(subscripts),
+            reduce: %{} do
+          reached ->
+            on_word = shared(pair(first, then, word, ""))
+            on_member = shared(pair(first, then, member, ".pv"))
+
+            mapped = Enum.map(on_member, &named_as(&1, member, word))
+            Map.update(reached, judged(first, then, on_word, mapped), 1, &(&1 + 1))
+        end
+
+      assert Map.keys(reached) -- [:same, :latch_257, :very_288] == []
+      assert reached[:same] > 1500 and reached[:latch_257] > 0 and reached[:very_288] > 0
+    end
+
+    defp writes(subscripts),
+      do:
+        for(s <- subscripts, b <- ["3", "4", "[n]", "[m]"], do: {"ote", s, b}) ++
+          for(s <- subscripts, do: {"move 5", s, nil}) ++
+          for(s <- subscripts, b <- ["[n]", "3"], do: {"otl", s, b}) ++
+          for(
+            s <- Enum.filter(subscripts, &(not String.contains?(&1, ["i", "j"]))),
+            do: {"osr p", s, "3"}
+          )
+
+    # Two rungs, the second's pulse coil keeping its storage bit in `q`, the first's in `p`.
+    defp pair(first, then, array, suffix),
+      do:
+        "xic a #{written(first, array, suffix)}\nxic a " <>
+          String.replace(written(then, array, suffix), "osr p ", "osr q ")
+
+    defp written({symbol, s, nil}, array, suffix), do: "#{symbol} #{array}[#{s}]#{suffix}"
+    defp written({symbol, s, bit}, array, suffix), do: "#{symbol} #{array}[#{s}]#{suffix}.#{bit}"
+
+    defp named_as({line, message}, member, word),
+      do:
+        {line,
+         message
+         |> String.replace(~r/#{member}\[([^\]]*)\]\.pv/, "#{word}[\\1]")
+         |> String.replace("`#{member}`", "`#{word}`")}
+
+    defp judged(_first, _then, same, same), do: :same
+
+    defp judged({"otl", first, "3"}, {"ote", _then, _bits}, [], [_told]),
+      do: literal_latch(String.contains?(first, ["i", "j"]))
+
+    defp judged({"ote", _first, _bits}, {"otl", then, "3"}, [], [_told]),
+      do: literal_latch(String.contains?(then, ["i", "j"]))
+
+    defp judged({"ote", first, bit}, {"move 5", first, nil}, [_told], [])
+         when bit in ["3", "4"],
+         do: very_tags(String.contains?(first, ["i", "j"]))
+
+    defp judged({"move 5", then, nil}, {"ote", then, bit}, [_told], [])
+         when bit in ["3", "4"],
+         do: very_tags(String.contains?(then, ["i", "j"]))
+
+    defp judged(first, then, on_word, on_member), do: {:differs, first, then, on_word, on_member}
+
+    defp literal_latch(false), do: :latch_257
+    defp literal_latch(true), do: :differs_latch
+
+    defp very_tags(true), do: :very_288
+    defp very_tags(false), do: :differs_very
+
+    # Where several writes may meet a later one, it is told of one, in a word array's
+    # order: a coil through a tag subscript before a coil on a literal element, which comes
+    # before another write through a tag subscript, which comes before another write of a
+    # literal element, each kind's earliest.
+    test "of several writes a later one may meet, it is told the one a word array's would be" do
+      for writes <- [
+            ["ote X[1].[n]", "ote X[j].[m]", "ote X[i].[n]"],
+            ["ote X[j].[m]", "ote X[1].[n]", "ote X[i].[n]"],
+            ["ote X[1].[n]", "otl X[j].[m]", "ote X[i].[n]"],
+            ["move 5 X[1]", "otl X[j].[m]", "ote X[i].[n]"],
+            ["otl X[j].[m]", "move 5 X[1]", "ote X[i].[n]"],
+            ["ote X[1].3", "ote X[j].[m]", "move 5 X[i]"]
+          ] do
+        on_word = shared(Enum.map_join(writes, "\n", &("xic a " <> String.replace(&1, "X", "w"))))
+
+        on_member =
+          writes
+          |> Enum.map_join(
+            "\n",
+            &("xic a " <> Regex.replace(~r/X\[([^\]]*)\]/, &1, "l1[\\1].pv"))
+          )
+          |> shared()
+          |> Enum.map(&named_as(&1, "l1", "w"))
+
+        assert {writes, on_member} == {writes, on_word}
+        assert [_told] = for({20, _message} = told <- on_word, do: told)
+      end
+    end
+
+    # A one-shot keeps no storage bit in a member's word, so no write of one meets a
+    # one-shot's storage bit: beside every form a tag reaches, a word array's storage bit
+    # is told only where a write of the word array meets it (decision 405).
+    test "no write of a member's word meets a one-shot's storage bit" do
+      rungs =
+        "xic a ons w[1].3 ote p\nxic a ote l1[i].pv.[n]\nxic a ote l1[1].pv.[n]\n" <>
+          "move 5 l1[i].pv\nxic a ote lc[i,0].pv.3\nxic a ote w[i].3"
+
+      assert for(
+               {line, message} <- warnings(@members <> rungs),
+               message =~ "storage bit",
+               do: {line, message}
+             ) == [
+               {23,
+                "`ote` writes `w[1].3`, the storage bit of the `ons` on line 18: the one-shot " <>
+                  "then fires on the wrong scans"}
+             ]
+
+      for operand <- ["l1[1].pv.3", "l1[i].pv.3", "l1[i].pv.[n]", "lc[1,0].pv.[n]"] do
+        assert [{18, message}] = messages(@members <> "xic a ons #{operand} ote p")
+        assert message =~ "`ons` keeps its storage bit in "
+      end
+    end
+
+    # Members at depth: a block's own array of counters is judged in its body as a
+    # program's is, and so in each block an array of blocks holds.
+    test "in a block's body, as in a program" do
+      block =
+        "function_block lane\nvar_input a bool\nvar_input i int\nvar_input n int\n" <>
+          "var l1 ctu[3]\nvar_output o bool\nxic l1[i].q ote o\n" <>
+          "xic a ote l1[i].pv.[n]\nxic a ote l1[1].pv.3\nxic a ote l1[2].pv.[n]"
+
+      assert {:ok, %Logex.FbType{} = lane} = Logex.compile(block, name: "lane")
+
+      assert for(
+               %{line: line, message: message} <- lane.body.warnings,
+               String.ends_with?(message, @may_share),
+               do: {line, message}
+             ) == [
+               {9,
+                "`l1[1].pv.3` is in `l1`, which the `ote` on line 8 may write through a tag " <>
+                  "subscript: " <> @may_share},
+               {10,
+                "`l1[2].pv.[n]` is in `l1`, which the `ote` on line 8 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+
+      held =
+        "var_input a bool\nvar_input i int\nvar_input n int\nvar lanes lane[4]\n" <>
+          "var_output o bool\ncal lanes[0] a i n o"
+
+      assert {:ok, program} = Logex.compile(held, name: "p", types: [lane])
+      assert program.blocks["lane"].body.warnings == lane.body.warnings
+    end
+  end
+
   describe "an online edit" do
     test "a one-shot's rung is changed by an element's subscript tag, a use of the rung" do
       head =
@@ -1938,6 +2226,56 @@ defmodule Logex.TagSubscriptTest do
             assert_receive {:compiled, reductions, warnings}, 30_000
             assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
             refute Enum.any?(warnings, &(&1.message =~ "the storage bit"))
+            reductions
+          end
+        )
+      end
+
+      small = compile.(200)
+      large = compile.(400)
+      assert large / small < 2.2, "#{small} at 200, #{large} at 400"
+    end
+
+    # Decision 431: each write of a member's word looks up only the projections of its places
+    # that may meet it, at most 16 for three dimensions and a bit, as decision 405's do, so
+    # coils on the members' bits of literal elements beside as many through tag subscripts
+    # and numbered by tags compile in linear reductions; the least of three runs.
+    test "a member's bits through tags beside literal ones cost linear reductions (decision 431)" do
+      source = fn n ->
+        "var_input a bool\nvar_input i int\nvar_input n int\nvar lc ctu[40,40]\n" <>
+          "var_output q bool\nxic lc[0,0].q ote q\n" <>
+          Enum.map_join(
+            0..(n - 1),
+            "\n",
+            &"xic a ote lc[#{div(&1, 40)},#{rem(&1, 40)}].pv.#{rem(&1, 16)}"
+          ) <>
+          "\n" <>
+          Enum.map_join(0..(n - 1), "\n", &"xic a ote lc[i,#{rem(&1, 40)}].pv.[n]")
+      end
+
+      compile = fn n ->
+        text = source.(n)
+        parent = self()
+
+        Enum.min(
+          for _run <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:ok, p} = Logex.compile(text, name: "p")
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:compiled, later - before, p.warnings})
+                end,
+                [:monitor, min_heap_size: 50_000_000]
+              )
+
+            assert_receive {:compiled, reductions, warnings}, 30_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+
+            assert Enum.count(warnings, &(&1.message =~ "the last one in the scan decides it")) >=
+                     n
+
             reductions
           end
         )

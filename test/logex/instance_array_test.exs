@@ -2040,8 +2040,9 @@ defmodule Logex.InstanceArrayTest do
             # member's whole write beside a coil on its bit through a tag subscript, either
             # first, "may" where the write may come through a tag subscript (decision 257's
             # words; the whole write first "…writes whole"); through the very tags
-            # nothing (decision 246). Still not compared (provisional): a whole write
-            # through a tag subscript beside a coil on a literal element's bit.
+            # nothing (decision 246). Since decision 431 a whole write through a tag
+            # subscript beside a coil on a literal element's bit, which was not compared
+            # (provisional), is compared as a word array's is, either first.
             {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[i].pv.3",
              [
                {13,
@@ -2062,7 +2063,10 @@ defmodule Logex.InstanceArrayTest do
              ]},
             {"xic go ote lane_c[i].pv.3\nxio go move 5 lane_c[i].pv", []},
             {"xic go move 5 lane_c[i].pv\nxio go ote lane_c[i].pv.3", []},
-            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv", []}
+            {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[i].pv",
+             [{13, as.("lane_c[i].pv")}]},
+            {"xic go move 5 lane_c[i].pv\nxio go ote lane_c[1].pv.3",
+             [{13, may.("lane_c[1].pv.3", "move")}]}
           ] do
         assert warnings(source <> rungs) == expected, rungs
       end
