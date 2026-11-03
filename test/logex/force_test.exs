@@ -288,12 +288,14 @@ defmodule Logex.ForceTest do
       assert Runner.get!(runner, "y") == 1
     end
 
-    # An idle watchdog of 5000: since decision 353 the force's write of the forces file and
-    # the restart's read of it each have the idle watchdog and a poll period of real time,
-    # and at the runner's 510 ms a loaded machine's sync outran the force's now and then
-    # (scripts/load.sh, RV-4). The test reads no limit.
+    # A write limit of 5000: since decision 353 the force's write of the forces file and
+    # the restart's read of it each have the write limit of real time, and at the runner's
+    # 510 ms, the idle watchdog and a poll period before decision 400 (RV-11) gave the limit
+    # an option of its own, which an idle watchdog of 5000 stood for here, a loaded
+    # machine's sync outran the force's now and then (scripts/load.sh, RV-4). The test
+    # reads no limit.
     test "is taken while tripped, and the restart's first round reads it", %{tmp_dir: dir} do
-      %{runner: runner, clock: clock, panel: panel} = started(dir, idle: 5000)
+      %{runner: runner, clock: clock, panel: panel} = started(dir, write_limit: 5000)
       Manual.advance(clock, 10)
       Sim.set(panel, [1], 5)
       assert Runner.status(runner).status == :tripped
@@ -791,13 +793,32 @@ defmodule Logex.ForceTest do
       )
     end
 
-    test "a file that cannot be read refuses the start", %{tmp_dir: dir} do
+    # Decision 390 (RV-11), the leave for a fresh start refused when the forces file cannot
+    # be read: one the file system refuses, a directory in its place, starts the runner
+    # with no force, the file named in status/1, where the start was refused, "the forces
+    # file cannot be read: illegal operation on a directory". A force's write of it
+    # that lands names it no more.
+    test "a file that cannot be read starts with no force, naming it (decision 390)",
+         %{tmp_dir: dir} do
       file = Path.join(dir, "forces")
       File.mkdir!(file)
+      %{runner: runner, clock: clock, panel: panel} = started(dir)
 
-      raises("#{file}: the forces file cannot be read: illegal operation on a directory", fn ->
-        started(dir)
-      end)
+      assert %{status: :running, forces: %{}, forces_unread: {^file, :eisdir}} =
+               Runner.status(runner)
+
+      Sim.set(panel, [2], 6)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "seen") == 6
+
+      # The directory there still, a force's write fails and names it still; gone, the
+      # write lands.
+      assert Runner.force(runner, "level", 2) == {:error, {:forces, :eisdir}}
+      assert %{forces: %{}, forces_unread: {^file, :eisdir}} = Runner.status(runner)
+      File.rmdir!(file)
+      assert Runner.force(runner, "level", 2) == :ok
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      assert File.read!(file) == "level 2\n"
     end
 
     test "restart/2 reads it again: a force it cannot take raised in the caller, the " <>
@@ -829,19 +850,27 @@ defmodule Logex.ForceTest do
       assert %{status: :running, forces: %{"level" => 2}} = Runner.status(runner)
       assert {Runner.get!(runner, "y"), Runner.get!(runner, "seen")} == {0, 2}
 
-      # One that cannot be read leaves it tripped too.
+      # Decision 390 (RV-11), the leave for a restart left tripped when the forces file
+      # cannot be read: one that cannot be read, a directory in its place, keeps the forces
+      # the runner holds and the restart goes on, the file named in status/1, where it
+      # raised "the forces file cannot be read" and left the runner tripped.
       Sim.set(panel, [1], 5)
       Sim.set(panel, [1], 0)
       File.rm!(file)
       File.mkdir!(file)
+      assert Runner.restart(runner, :cold) == :ok
 
-      raises("#{file}: the forces file cannot be read: illegal operation on a directory", fn ->
-        Runner.restart(runner, :cold)
-      end)
+      assert %{status: :running, forces: %{"level" => 2}, forces_unread: {^file, :eisdir}} =
+               Runner.status(runner)
 
-      assert %{status: :tripped, forces: %{"level" => 2}} = Runner.status(runner)
+      assert Runner.get!(runner, "seen") == 2
+
+      # Gone again at the next restart, it is no force, and named no more.
+      Sim.set(panel, [1], 5)
+      Sim.set(panel, [1], 0)
       File.rmdir!(file)
       assert Runner.restart(runner, :cold) == :ok
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
       assert Runner.get!(runner, "seen") == 8
       Runner.force(runner, "level", 2)
       Manual.advance(clock, 10)
@@ -875,8 +904,15 @@ defmodule Logex.ForceTest do
       # Its round takes 505 ms, longer than the idle watchdog, within its own watchdog.
       assert Runner.force(runner, "e", 1) == :ok
 
-      assert %{status: :running, rounds: 2, runs: %{"trip" => {505, 2000}}} =
-               Runner.status(runner)
+      # Decision 396 (RV-11): the round due at 10 is owed once the force's round is done,
+      # and the call waits for it, the third round, where it was served at once after the
+      # second.
+      task = Task.async(fn -> Runner.status(runner) end)
+      assert Task.yield(task, 100) == nil
+      Manual.advance(clock, 0)
+
+      assert %{status: :running, rounds: 3, runs: %{"trip" => {505, 2000}}} =
+               Task.await(task)
 
       refute_received {Runner, ^runner, {:trip, _reason}}
       assert Runner.get!(runner, "hits") == 1

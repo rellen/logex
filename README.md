@@ -337,11 +337,19 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), its answers to the
-questions RV-4 left, decisions 390–401, which RV-11 builds, and its answers to the
+items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
 questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
 file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
 over a store it cannot read copying it first, among them. Its answers to the questions
+RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
+runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
+heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
+forces file a start or a restart cannot read carried on and named in `status/1`
+(decision 390), a write past its limit named unknown until a later one lands or fails
+(decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
+their share against a due periodic round (decision 396) and a misread address shown as
+the configuration writes it, `panel.i.7` (decision 399), the other five as built
+(decisions 392, 393, 395, 397 and 401). Its answers to the questions
 RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
 RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
 closure refused as built (decisions 429 and 430), a bit of a member of an element
@@ -3479,24 +3487,36 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   to `tally.retain.tmp`, is flushed to the disk and renamed over the store, as the forces
   file is, so that a crash at any moment leaves the old store or the new; each write's
   `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
-  is limited to the idle watchdog and a poll period of real time, 510 ms unless set, one
-  the disk has not finished by then killed and failed, `:timeout`, so that a stalled disk
-  leaves the runner answering (decision 353); a runner killed while it writes takes its
+  is limited to the runner's write limit of real time, `write_limit:`, 5000 ms unless set,
+  a limit of its own apart from the heartbeat (decision 400), one the disk has not
+  finished by then killed and reported `:timeout`, so that a stalled disk leaves the
+  runner answering (decision 353), while a healthy disk's slow sync on a machine whose
+  cores are all busy, which took over the idle watchdog and a poll period now and then,
+  lands; a runner killed while it writes takes its
   write down with it, which does nothing after the call of the file system it was in, so
   that the next runner's write on the file is never overwritten by it. A write that fails
   leaves the store as it was and is reported, `{:retain, {:error, reason}}` to
   subscribers and `failed` in `status/1`'s `retain`; a cold restart whose write fails is
   left tripped, every output still 0, and a fresh start whose write fails is not started.
+  A write past its limit, killed, may still land once the disk answers, so the store is
+  then the old or the new: it is reported and its caller answered as one that fails is,
+  `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
+  `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
+  and `written_at` the last write known made, until a later write lands or fails, and has
+  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"`, and a
+  write over the store that owes the copy first and is killed in the copy's own write,
+  the store as it was; one killed in the store's names the store, the copy made (decision
+  391; the key, how long it stands and the file named provisional).
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
   grid from the runner's start (M6-6, decision 275): the runner takes the retained values
   out between two rounds, as its own work, never inside a round and moving no round's
   due time, with untimed programs in the share's slot ("Running a plant on the clock",
   below) and otherwise at a wake of its own, and a writer process of its own writes them,
   so that a slow disk delays no round; a write still in progress makes the next wait, the
-  newest replacing any that waited. One the disk has not finished within the idle
-  watchdog and a poll period of real time is reported, `{:retain, {:error, :timeout}}`
-  and `failed: :timeout`, and left to finish, its answer taken when it comes, a write made
-  clearing the failure (decision 353). `status/1`'s `written_at` follows each write made,
+  newest replacing any that waited. One the disk has not finished within the write limit
+  of real time is reported once, `{:retain, {:error, :timeout}}`, named `unknown` in
+  `status/1` meanwhile, and left to finish, its answer taken when it comes, written or
+  failed (decisions 353, 391 and 401). `status/1`'s `written_at` follows each write made,
   the store's age; one that fails is reported as above and the plant runs on. While
   tripped nothing is written but the trip's own write. Each write at an event waits for
   the period's in progress and drops the one waiting, so the event's is the last.
@@ -3517,9 +3537,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   from a store leaves the store byte for byte, while a cold start, `start: :cold`, and a
   start that finds no store have written the initial values before they open a device
   (decisions 271 and 291), and that write stays. Its child spec gives the
-  shutdown `(devices + 2) * (idle + poll)` ms, never less than 5000, so that a
-  supervisor waits for every device's close and the store's write before it kills the
-  runner; a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
+  shutdown `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000, so that a
+  supervisor waits for every device's close, the period's write in progress and the
+  store's write before it kills the runner (decisions 326 and 400); a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
   count the time the runner takes to make the store's text, in proportion to the
   retained values, some seconds for a hundred thousand retained timers, so a plant that
   retains that many gives its own, or a supervisor's shutdown kills the runner in its
@@ -3549,8 +3569,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
   not started (decision 285); `start: :cold` reads none of it and writes a new store at
   once, so a store refused as cut short whose readable part is wanted is copied aside
-  first, as its refusal says. The read is limited to the idle watchdog and a poll period
-  of real time, as every write is, and so is the look at the store and the forces file
+  first, as its refusal says. The read is limited to the write limit of real time, as
+  every write is, and so is the look at the store and the forces file
   for a link before either is read, so that a store on a stalled disk, or a FIFO in its
   place, refuses the start as a store that cannot be read.
 - A fresh start that drops anything from its store, a value retyped, resized or no
@@ -3905,8 +3925,13 @@ closed: true
   among them, so a host's mistake is an `ArgumentError` there; it opens each device,
   reads it once and runs the first round at once. Optional: `clock:` (the monotonic one
   unless set), `poll:` (each device's poll period, 10 ms), `overhead:` (the share kept
-  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `forces:` (the file its
-  forces are kept in, below) and `name:`.
+  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `write_limit:` (how long
+  each write or read of its files may take in real time, 5000 ms, a limit of its own
+  apart from the heartbeat, decision 400), `open:` (how long each device's opening, its
+  adapter's `init/3` and first read, may take in real time, 5000 ms, for every device or
+  by name, `open: %{"drive" => 2000}`, so a drive whose connect takes 600 ms opens with
+  the heartbeat left as it is, decision 398), `forces:` (the file its forces are kept
+  in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -3927,14 +3952,20 @@ closed: true
   resource's events and the runner's `{:round, now, outputs}`; and `stop/2` writes every
   output 0 once and closes every device before it returns.
 - The share is served in slots, the conventional table's: at 20%, at the end of each
-  4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. On the
-  manual clock a round takes no time unless something passes time inside it, so a
+  4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. With no
+  untimed program the share holds against a due periodic round too (decision 396): a
+  request that comes while one is due waits for it, and is served after it while no
+  round is due, or in the slot after 4 ms of rounds where they outrun their periods, so
+  that an HMI polling `status/1` in a tight loop holds a due round back by the request
+  in hand at most, or by its slot, never for as long as it polls. On the manual clock a
+  round takes no time unless something passes time inside it, so a
   request is served before the next round. One made while a round is owed, after a round
   that passed time, a slow drive's write, waits for its slot, as on the real clock
-  (decision 131): it comes in the advance that runs the round completing those 4 ms,
-  `advance(clock, 0)` among them, and never later. So a test that would call from the
-  process that moves the clock calls from another, and moves the clock on until the call
-  is answered:
+  (decision 131): it comes in the advance that runs the round completing those 4 ms, or
+  with no untimed program in the advance that runs the round due, `advance(clock, 0)`
+  among them, and never later (provisional for a periodic round). So a
+  test that would call from the process that moves the clock calls from another, and
+  moves the clock on until the call is answered:
 
   ```elixir
   task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
@@ -4006,12 +4037,17 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   so latched itself, `ms` the heartbeat that refresh gave it, the time after which the
   plant went off (decision 137); `{:io, device, cause}`, an adapter's callback that gave
   an error, raised, threw, exited or gave no result the behaviour gives, a value that does
-  not fit its point, an address that is no point's, a device that did not answer within
+  not fit its point, `{:bad_value, "panel.i.0", 2}` at a bool, an address that is no point's,
+  `{:unknown_address, "panel.i.7"}`, each address as the configuration writes it
+  (decision 399), a device that did not answer within
   its deadline, `:timeout`, a device hung inside its own read or report, `:timeout` too,
   or one whose process went down; since M5-9 `{:fault, task, instance, fault}`, a major
   fault, a bit whose number a tag holds out of its word's bits, the round's first, at the
-  end of the step that met it ("A bit number in a tag", above); and `{:internal, message}`, an exception out of the
-  core, which no host can cause. A device's notices that waited for the runner, a latch or
+  end of the step that met it ("A bit number in a tag", above); since decision 394
+  `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`, a host's clock that
+  gave the runner or a device no time it can hold once the plant runs, a restart refused
+  until the clock is mended, where a start's own read of it is the host's mistake; and
+  `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
 - Every check is made before the round's write, so a round that ran too long, or a
@@ -4235,11 +4271,29 @@ stage: nil
 - Each force and unforce writes the whole set to the file before it returns, `name
   value` a line, to a file beside it renamed over it, so a crash leaves the old set or
   the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`,
-  one the disk has not finished within the idle watchdog and a poll period of real time
-  `{:error, {:forces, :timeout}}` (decision 353). A start reads the file raw, off the
+  one the disk has not finished within the write limit of real time `{:error, {:forces,
+  :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
+  land once the disk answers, so `status/1` names the set it held meanwhile,
+  `forces_unknown`, until a later write of the file lands or fails or a restart reads it
+  (decision 391, the key provisional). While it waits on its disk the runner keeps the
+  heartbeat, renewing every device's deadline each poll period, as it does while it
+  waits on a slow device's write, and leaves the wait out of the time the idle watchdog
+  reads, so a force on a slow disk latches no device and trips nothing; no round runs
+  meanwhile, every output held, and a periodic task's missed periods are reported as
+  overlaps (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
-  other process's file calls: one the disk has not answered within that time refuses the
-  start, the file told as one that cannot be read. A
+  other process's file calls. A file that cannot be read, one the disk has not answered
+  within the write limit or one the file system refuses, a directory in its place among
+  them, starts a fresh start with no force and keeps at a restart the forces the runner
+  holds, the restart going on and the line coming back, and `status/1` names it,
+  `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
+  of it lands or a restart reads it (decision 390; the key and how long it stands
+  provisional); with no such file to name, `status/1` has no `forces_unread`. A restart
+  that reads the file takes what it holds, as every start does, so after a fresh start
+  that could not read it the next restart takes the forces the file held, which no one
+  forced since and `status/1` did not list (provisional); and a relative `forces:` whose
+  working directory the disk does not answer for in time refuses the start, the file
+  "cannot be located", as a relative store's does (provisional). A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
@@ -4357,7 +4411,8 @@ closed: true
   "drive", :timeout}`, a device waiting on the runner for its change is heard at each
   poll meanwhile, and a bad reading of a device released at a restart trips nothing; and
   the contract walk, on the manual clock, waits in real time where the runner waits for
-  its devices, a device's open made late by 100 ms tripping nothing. Every timing rule is
+  its devices, a device's open made late by 700 ms, past the walk's idle watchdog and a
+  poll period and within its opening limit (decision 398), tripping nothing. Every timing rule is
   tested on the manual clock.
 
 ### A located array
@@ -5107,7 +5162,7 @@ in every cycle's outputs at the value it holds.
   Each write is synced and renamed over the store, the rename not itself made durable,
   so on some file systems a power failure just after a write may bring back the write
   before it ("The store on disk", above); and each write the runner makes at an event, a
-  force's among them, is given the idle watchdog and a poll period of real time, so a
+  force's among them, is given the write limit of real time, 5000 ms unless set, so a
   disk slower than that fails every one of them, and has every period's write reported
   late, the plant running on with its store behind, and one the disk finishes after the
   runner gave up on it may still land. Two

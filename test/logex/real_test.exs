@@ -1365,7 +1365,7 @@ defmodule Logex.RealTest do
       Manual.advance(clock, 10)
 
       assert Runner.status(runner).trip ==
-               {:io, "drive", {:bad_value, [0], Integer.pow(2, 128)}}
+               {:io, "drive", {:bad_value, "drive.i.0", Integer.pow(2, 128)}}
 
       Runner.stop(runner)
     end

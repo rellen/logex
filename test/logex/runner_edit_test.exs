@@ -416,8 +416,11 @@ defmodule Logex.RunnerEditTest do
 
     # Each round that runs `b` writes the slow device, which takes 1 ms, so rounds fill
     # their milliseconds and a host's request waits for the share's slot. The share counts
-    # the continuous task's rounds alone (decision 122), so the timed task's rounds before
-    # the edit count none, and the first slot comes C = 4 rounds after the edit, at 20%.
+    # the continuous task's rounds (decision 122), and since decision 396 (RV-11) with no
+    # untimed program the periodic rounds whole; a step that adds the first untimed
+    # program begins the count again (provisional, RV-11's review), so the timed task's
+    # rounds before the edit count none, and the first slot comes C = 4 rounds after the
+    # edit, at 20%.
     test "an untimed program an edit adds is served its slots from its first round" do
       text = """
       task tick interval 10 priority 1

@@ -12,12 +12,15 @@ defmodule Logex.Runner.Writer do
   #
   # Decision 353 (RV-4): every other write the runner makes, a force's of the forces file
   # and the store's at a trip, a stop, a shutdown, a cold restart and a fresh start, is
-  # `written/3`'s, a process of its own for the one write, waited on for the idle watchdog
-  # and a poll period of real time, as the runner waits on the period's writer at an event,
-  # and so is the forces file's read at a restart, the runner's own (`within/2`):
-  # one that has not answered by then is killed and is `{:error, :timeout}`, so that a
-  # stalled disk leaves the runner answering, and one gone down without an answer is
-  # `{:error, {:down, reason}}`. A write killed inside a call of the file system runs that
+  # `written/3`'s, a process of its own for the one write, waited on for the runner's
+  # write limit of real time, as the runner waits on the period's writer at an event, and
+  # so is the forces file's read at a restart, the runner's own (`within/2`): one that has
+  # not answered by then is killed and is `{:error, :timeout}`, so that a stalled disk
+  # leaves the runner answering, and one gone down without an answer is `{:error, {:down,
+  # reason}}`. Since decision 400 (RV-11) that limit is the runner's `write_limit:`, 5000
+  # ms unless set, apart from the heartbeat, where it was the idle watchdog and a poll
+  # period; and a write the runner waits on while it runs, a force's, keeps its devices'
+  # heartbeat meanwhile (written/4). A write killed inside a call of the file system runs that
   # call on to its end in the kernel and then does nothing more, so its file may yet be
   # the old or the new, never a mix (`Logex.Retain.written/2`). Since RV-5's review a copy a
   # fresh start owes is made before any write over the store (stored/4).
@@ -41,22 +44,61 @@ defmodule Logex.Runner.Writer do
   # One write, waited on for `ms` of real time.
   def written(path, text, ms), do: within(fn -> Logex.Retain.written(path, text) end, ms)
 
+  # Decision 400 (RV-11): one write the runner waits on while it runs, a force's of the
+  # forces file, waited on for `ms` of real time as written/3's is, `tick` called on `acc`
+  # every `every` ms of real time while it is out, so that the runner renews its devices'
+  # heartbeat while it waits on its disk within its limit, a runner that is well, as one
+  # waiting on a slow device in time is (decision 348): `{result, acc}`.
+  def written(path, text, ms, {every, acc, tick}),
+    do:
+      ticking(
+        :erlang.spawn_opt(fn -> exit({__MODULE__, Logex.Retain.written(path, text)}) end, [
+          :link,
+          :monitor
+        ]),
+        System.monotonic_time(:microsecond) + 1000 * ms,
+        {every, acc, tick}
+      )
+
   # Decision 360 (RV-5's review): the store's write, an event's, waited on for `ms` of real
   # time as one, and the period's, by the writer, each made where a fresh start's copy of
   # the store it dropped from is owed, its own write having failed, only once that copy
   # is made: the copy first, `<store>.dropped`, and the store only where the copy was
   # made, `{:copied, result}`, the store's result; a copy that fails writes no store,
   # `{:uncopied, reason}`; and with no copy owed the store's write alone, an event's
-  # written/3's.
-  def stored(path, text, owed, ms), do: within(fn -> copied_first(path, text, owed) end, ms)
+  # written/3's. Decision 391 (RV-11's review): an event's write killed at its limit is
+  # told by the file it was in as the limit passed, which the write marks in `made` as
+  # its copy is made: in the copy's, `{:uncopied, :timeout}`, the copy unknown and the
+  # store as it was, since the write does nothing after the call it is killed in; in the
+  # store's, `{:copied, {:error, :timeout}}`, the copy made and the store unknown
+  # (provisional).
+  def stored(path, text, owed, ms) do
+    made = :atomics.new(1, [])
+    in_flight(within(fn -> copied_first(path, text, owed, made) end, ms), made)
+  end
 
-  defp copied_first(path, text, nil), do: Logex.Retain.written(path, text)
+  defp in_flight({:error, :timeout}, made), do: copy_phase(:atomics.get(made, 1))
+  defp in_flight(result, _made), do: result
 
-  defp copied_first(path, text, owed),
-    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text)
+  defp copy_phase(0), do: {:uncopied, :timeout}
+  defp copy_phase(1), do: {:copied, {:error, :timeout}}
 
-  defp copy_then(:ok, path, text), do: {:copied, Logex.Retain.written(path, text)}
-  defp copy_then({:error, reason}, _path, _text), do: {:uncopied, reason}
+  defp copied_first(path, text, nil, _made), do: Logex.Retain.written(path, text)
+
+  defp copied_first(path, text, owed, made),
+    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text, made)
+
+  defp copy_then(:ok, path, text, made) do
+    marked(made)
+    {:copied, Logex.Retain.written(path, text)}
+  end
+
+  defp copy_then({:error, reason}, _path, _text, _made), do: {:uncopied, reason}
+
+  # The period's writer keeps no mark: its write is left to finish, its answer telling
+  # both files (decision 401).
+  defp marked(nil), do: :ok
+  defp marked(made), do: :atomics.put(made, 1, 1)
 
   # One call of the file system, a write's or the forces file's read at a restart, in a
   # process of its own linked to the caller, a runner, which traps exits, waited on for
@@ -76,6 +118,25 @@ defmodule Logex.Runner.Writer do
       ms -> timed_out(pid, ref)
     end
   end
+
+  # The write waited on a tick at a time, the last cut to its limit: each wait that ends
+  # before the limit ticks, and the one that ends at it kills the write. The limit's end
+  # is kept in microseconds, each wait the whole milliseconds left rounded up, so that the
+  # write is given its whole limit, as within/2's single wait gives it.
+  defp ticking({pid, ref} = write, until, {every, acc, _tick} = ticks) do
+    left = max(div(until - System.monotonic_time(:microsecond) + 999, 1000), 0)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, reason} -> {unlinked(pid, answered(reason)), acc}
+    after
+      min(left, every) -> ticked(left <= every, write, until, ticks)
+    end
+  end
+
+  defp ticked(true, {pid, ref}, _until, {_every, acc, _tick}), do: {timed_out(pid, ref), acc}
+
+  defp ticked(false, write, until, {every, acc, tick}),
+    do: ticking(write, until, {every, tick.(acc), tick})
 
   # A write that answered as it was killed answered; one killed is down at once, its call
   # of the file system, if any, left to run on.
@@ -108,7 +169,7 @@ defmodule Logex.Runner.Writer do
 
   @impl GenServer
   def handle_cast({:write, at, image, owed}, {path, runner} = state) do
-    result = copied_first(path, Logex.Retain.encode(image, at), owed)
+    result = copied_first(path, Logex.Retain.encode(image, at), owed, nil)
     send(runner, {__MODULE__, self(), at, result})
     {:noreply, state}
   end

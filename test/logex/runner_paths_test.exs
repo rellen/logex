@@ -168,7 +168,9 @@ defmodule Logex.RunnerPathsTest do
     test "a store another runner copies its store to, and the copy's `.tmp`, are refused",
          %{tmp_dir: dir} do
       store = Path.join(dir, "plant.retain")
-      {:ok, first} = Runner.start_link(opts(retain: store, idle: 5000))
+      # A write limit of 5,000 ms, which covers a loaded machine's disk: since decision 400
+      # (RV-11) `write_limit:`, where an idle watchdog of 5,000 stood for it.
+      {:ok, first} = Runner.start_link(opts(retain: store, write_limit: 5000))
       copy = store <> ".dropped"
 
       raises(held(:retain, copy, "names the store's copy, `.dropped`,", first), fn ->
@@ -183,7 +185,8 @@ defmodule Logex.RunnerPathsTest do
       )
 
       # A store whose copy is another's store.
-      {:ok, other} = Runner.start_link(opts(retain: Path.join(dir, "x.dropped"), idle: 5000))
+      {:ok, other} =
+        Runner.start_link(opts(retain: Path.join(dir, "x.dropped"), write_limit: 5000))
 
       raises(
         "the runner's retain: #{inspect(Path.join(dir, "x"))} is copied to " <>

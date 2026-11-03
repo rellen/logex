@@ -1159,7 +1159,7 @@ defmodule Logex.IntegerWidthTest do
         past = elem({low - 1, high + 1}, at)
         Sim.set(sim, [n], past)
         Manual.advance(clock, 10)
-        assert Runner.status(runner).trip == {:io, "card", {:bad_value, [n], past}}
+        assert Runner.status(runner).trip == {:io, "card", {:bad_value, "card.i.#{n}", past}}
         Runner.stop(runner)
       end
     end

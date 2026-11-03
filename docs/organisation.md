@@ -2721,7 +2721,13 @@ watchdog's rule across an online edit is decision 129's.)*
 - With no untimed program a round comes only when a timed task is due or an event's
   trigger changes (decisions 112, 120 and 123), and the share has no effect, as the
   conventional one has none without a continuous task (p.31): the runner serves its
-  mailbox whenever it waits.
+  mailbox whenever it waits. *(Since decision 396, RV-11, 2026-11-03: with no untimed
+  program the share holds against a due periodic round as against the continuous task:
+  a host's request that comes while one is due waits for it and is served after it while
+  no round is due, the periodic rounds then the share's count, each whole, and the slot
+  after C ms of them, so that a tight loop of requests no longer makes a 10 ms task
+  late; since RV-11's review a step that adds the first untimed program or takes away
+  the last begins the count again, provisional.)*
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
   says (decision 50).
   *(Landed with M4-3, 2026-10-18, as these bullets say, with two readings the record
@@ -2921,8 +2927,9 @@ one of:
   126);
 - `{:watchdog, {:device, device, time_ms}}`, a device's heartbeat;
 - `{:io, device, cause}`, `cause` one of `:timeout`, `{:error, term}`, `{:raised,
-  message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, address, value}`,
-  `{:unknown_address, address}` and `{:down, reason}`;
+  message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, at, value}`,
+  `{:unknown_address, at}` and `{:down, reason}`, `at` the address as the configuration
+  writes it, `"panel.i.7"` (decision 399);
 - `{:internal, message}`, an exception out of the core, which the host contract says
   cannot happen: tripping rather than crashing keeps the state for diagnosis, and zeroes
   the outputs either way. No host can cause it, so a test reaches it through one seam, a
@@ -2975,7 +2982,17 @@ runner keeps its first reason and merges a device's changes into the next round'
 so the restart's first round takes them; and a test makes time pass inside a task's run
 through the seam, a stand-in that passes the manual clock or, for a stuck runner, advances
 it from inside the runner, which the manual clock allows a receiver handling a message,
-its timers on the way delivered to the devices.)*
+its timers on the way delivered to the devices.)* *(Since RV-11, 2026-11-03, the answers
+to RV-4's questions: every file write and read the runner makes is limited by
+`write_limit:`, 5000 ms unless set, apart from the heartbeat, decision 353 standing with
+it (decision 400); a device's opening by an `open:` of its own, 5000 ms unless set
+(decision 398); a forces file a start or a restart cannot read starts with no force or
+keeps the forces held, named in `status/1`'s `forces_unread` (decision 390); a write past
+its limit is named `unknown` until a later write lands or fails (decision 391); a clock
+that answers no time the runner can hold once it runs trips it, naming the clock, and a
+restart brings the line back once it is mended, one that goes down, raises or exits still
+a shutdown (decision 394); and an address a fault names is shown as the configuration
+writes it, `panel.i.7` (decision 399).)*
 
 **What fails, and what happens.**
 
@@ -4434,7 +4451,8 @@ a crash loses at most a period and the write in progress, as decision 292 has it
 writer keeps up with its period; while they fail a crash loses everything since the last
 good write, and while tripped an edit's values reach no store until a restart. A
 runner's child spec gives its shutdown `(devices + 2) * (idle + poll)` ms, never less
-than 5000, so that a supervisor waits for decision 316's write (decision 326); and a
+than 5000, so that a supervisor waits for decision 316's write (decision 326), since
+decision 400, RV-11, `devices * (idle + poll) + 2 * write_limit`; and a
 writer gone down before an event's write is taken as gone at once, `{:down, reason}`.)*
 *(Since M6-7, 2026-10-31, an online edit that adds or takes away a program's qualifier
 reports each path whose retention it changes, `:retain_added` or `:retain_removed`, with
@@ -12752,7 +12770,23 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: carry on and say so (b)** (the maintainer, 2026-11-01): a restart whose
      read of the forces file fails keeps the forces the runner holds, and a fresh start
      starts with none, each reporting the file it could not read in `status/1`. To build
-     in RV-11.
+     in RV-11. *(Landed with RV-11, 2026-11-03, `081dcdb`: a restart whose read of the
+     forces file fails, past `write_limit:` (decision 400) or refused by the file system, a
+     directory in its place among them, keeps the forces the runner holds and goes on, the
+     line coming back; a fresh start whose read fails, or whose look for a link the disk
+     does not answer in time, starts with no force. Each names the file in `status/1`,
+     `forces_unread: {path, reason}`, the path as the host spelled it, until a force's or
+     an unforce's write of the file lands or a restart reads it, the key absent otherwise
+     (provisional: its name and how long it stands). A line that is no force, a point
+     forced twice, a force the configuration cannot take and a link stay the host's
+     mistakes. RV-11's review: a restart that reads the file again takes what it holds,
+     as decision 127 has every start take the file, so that after a fresh start that could
+     not read it the next restart that can takes the forces the file held, ones no one
+     forced since (provisional, put to the maintainer); a relative path whose expansion,
+     the working directory read, the disk does not answer in time refuses the start, the
+     file "cannot be located", for the forces file as for the store, since the start
+     holds no path to claim, check or write (provisional, put to the maintainer); and the
+     walk's fresh start meets an unreadable file holding forces.)*
 
 391. **A write that timed out may land (the review after Milestone 6),** RV-4's question
      2: a write cut off at its limit may still be finished by the system once the disk
@@ -12761,20 +12795,36 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: unknown until a later write (b)** (the maintainer, 2026-11-01): `status/1`
      reports the last write as unknown, neither failed nor written, until a later write
-     lands. To build in RV-11.
+     lands. To build in RV-11. *(Landed with RV-11, 2026-11-03, `1ef194f`: a write over the
+     store or its copy past its limit, a trip's, a stop's, a shutdown's, a cold restart's,
+     a fresh start's or a period's, leaves `status/1`'s `retain` naming the file it may land
+     in, `unknown: "plant.retain"` or the copy's path, `failed` nil and `written_at` the
+     last write known made, until a later write lands or fails; a force's write past its
+     limit names the set it held, `forces_unknown`, until a later write of the file lands
+     or fails or a restart reads it; each key absent otherwise (provisional: their names
+     and how long they stand). The event and the caller's answer are a failure's,
+     `{:error, :timeout}`, a cold restart left tripped and a fresh start not started
+     (decision 291); `stop/2`'s doc and README say a stop told `{:error, {:retain,
+     :timeout}}` leaves the store unknown. RV-11's review: a restart whose read of the file
+     fails keeps `forces_unknown`, named beside `forces_unread`; and a write over the store
+     that owes the copy first, killed at its limit, names the file it was in as the limit
+     passed, the copy, the store as it was and the copy still owed, or the store, the copy
+     made, where it named the store whichever (provisional, put to the maintainer).)*
 
 392. **One `.tmp` name (the review after Milestone 6),** RV-4's question 4: each write's
      temporary file is one name beside the store, made new and exclusively each write,
      whatever stands there deleted first.
 
      **Taken: as built (a)** (the maintainer, 2026-11-01): at most one `.tmp` beside a
-     store, and nothing piles up.
+     store, and nothing piles up. *(RV-11, 2026-11-03: the mark RV-4 left on it is this
+     decision's number.)*
 
 393. **A card whose first read fails (the review after Milestone 6),** RV-4's question 5:
      an adapter opened whose first read fails is written 0 once and closed.
 
      **Taken: as built (a)** (the maintainer, 2026-11-01), as Logix's default fault state
-     is off.
+     is off. *(RV-11, 2026-11-03: the mark RV-4 left on it, PLAN's M14, is this decision's
+     number.)*
 
 394. **A clock that goes wrong (the review after Milestone 6),** RV-4's question 6: a
      host's clock that answers no integer once the runner runs stops the runner as a
@@ -12782,13 +12832,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: a trip (b)** (the maintainer, 2026-11-01): the runner trips, naming the
      clock, its outputs 0, so a restart brings the line back once the clock is mended. To
-     build in RV-11.
+     build in RV-11. *(Landed with RV-11, 2026-11-03, `ccc1366`: once the runner runs, a
+     `now_ms/1` that answers no integer, or one out of a signed 64-bit integer's range,
+     the renewal's and the timers', trips it `{:clock, {:now_ms, answer}}`, every output 0:
+     the runner's own read tells it with a message to itself, the work in hand finished
+     with the last time it refreshed its devices at, a round in progress run with no time
+     passed; a device's read takes the device down and the runner trips naming the clock;
+     a period's write whose `wall_ms/1` gives no time fails, reported, and trips it
+     `{:clock, {:wall_ms, answer}}`. A restart while the clock still answers so, the wall
+     clock asked where a store is named, is refused `{:error, {:clock, cause}}`, the runner
+     left tripped; mended, a restart brings the line back. At start a bad or out-of-range
+     time stays the host's pinned `ArgumentError`. A clock that goes down, raises or exits
+     still stops the runner as a shutdown (provisional: the range, the round in progress
+     finished, and the restart's look at both clocks). RV-11's review: a device gone down
+     by its own read of the clock trips the runner naming the clock however the runner
+     finds it gone, a round's write to it among it, where a write that came first named
+     the device gone down; a device's read of a time out of the range is pinned; and the
+     walks restate a device's read and a period's wall clock.)*
 
 395. **A runner killed while a card hangs (the review after Milestone 6),** RV-4's
      question 7: the hung device is killed idle + poll after the runner, which gives a
      device not hung the time to latch and write its own 0.
 
-     **Taken: as built (a)** (the maintainer, 2026-11-01).
+     **Taken: as built (a)** (the maintainer, 2026-11-01). *(RV-11, 2026-11-03: the mark
+     RV-4 left on it, PLAN's RV-4 entry, is this decision's number.)*
 
 396. **A busy HMI with no continuous task (the review after Milestone 6),** RV-4's
      question 8 (c1-runner-rounds-2): the share a host's requests are held to applies
@@ -12798,13 +12865,31 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: the share against periodic tasks too (b)** (the maintainer, 2026-11-01): a
      host's requests are held to their share against a due periodic round as against the
-     continuous task. To build in RV-11.
+     continuous task. To build in RV-11. *(Landed with RV-11, 2026-11-03, `2ef025c`: with no
+     untimed program a request that comes while a periodic round's due time has come waits
+     for that round, which runs first, and is served after it while no round is due; the
+     periodic rounds are then the share's count, each whole, a millisecond at least, and
+     the slot comes at the end of the round that completes C ms of them, S ms, so a plant
+     whose rounds outrun their periods leaves the host its S ms of every C + S (provisional:
+     the count, and one count carried across an edit that adds or takes away untimed
+     programs). c1-runner-rounds-2's 200 callers of force made 17 rounds in 2.5 s of a 10
+     ms task; now 231 in 3.1 s. RV-11's review: an edit's step that adds the first untimed
+     program or takes away the last begins the count again, where one count was carried
+     across it, so that a plant of timed rounds edited to add a continuous program is
+     served its first slot C ms of the continuous task's rounds after the step, as before
+     this decision (provisional); on the manual clock a request that finds a periodic round
+     due waits for the advance that runs it, as decision 131 has a call wait for its slot
+     (provisional); a slot serves the runner's queue, so a lone caller whose next request
+     is still in the mailbox as a round ends is served every other slot where every round
+     brings one (provisional); and the look for a due round reads the clock once, its
+     reading the request's refresh's.)*
 
 397. **A device's report backlog (the review after Milestone 6),** RV-4's question 9
      (c2-runner-persist-5): thousands of reports in one poll period drain in time
      quadratic in their number.
 
      **Taken: as built (a)** (the maintainer, 2026-11-01): decision 142's order stands.
+     *(RV-11, 2026-11-03: no mark stood on it in the code.)*
 
 398. **A slow card's open (the review after Milestone 6),** RV-4's question 10
      (c3-io-contract-6): every device call, an adapter's `init/3` among them, is limited
@@ -12813,14 +12898,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: an `open:` limit of its own (b)** (the maintainer, 2026-11-01): a device's
      opening is limited by a limit of its own, the heartbeat by idle + poll. To build in
-     RV-11.
+     RV-11. *(Landed with RV-11, 2026-11-03, `ee16f1b` and `434ada2`: `Logex.Runner` takes
+     `open:`, how long in ms of real time a device's opening, its adapter's `init/3` and its
+     first read, may take, a whole number from 1 to 2147483647 for every device or a map of
+     device names to one, each device it names given its own and every other the default,
+     5000 ms; a bad value, and a device it names that `io:` binds no adapter to, are the
+     host's pinned `ArgumentError`s. A device a restart opens again is given its own
+     opening limit; one up is read again within the idle watchdog and a poll period
+     (provisional: the option, its map form, its default and the restart's reread). A
+     drive whose connect takes 600 ms opens beside the default idle watchdog, the heartbeat
+     left as it is.)*
 
 399. **An address shown as text (the review after Milestone 6),** RV-4's question 11
      (c3-io-contract-7): a trip for a misread address names it as the adapter's list,
      `{:unknown_address, ~c"\a"}`.
 
      **Taken: as the configuration writes it (b)** (the maintainer, 2026-11-01): the
-     address is shown as `panel.i.7`. To build in RV-11.
+     address is shown as `panel.i.7`. To build in RV-11. *(Landed with RV-11, 2026-11-03,
+     `d9b1036`: a trip, a start refused and a restart refused for a misread address name
+     it as the configuration writes it, a text, `{:unknown_address, "panel.i.7"}` and
+     `{:bad_value, "panel.i.0", 2}`; a key an adapter gives that is no list of whole
+     numbers, which no configuration writes, as the adapter gave it, `:pump` or `[-1]`
+     (provisional). The device is told its refusal by the adapter's own address, by which
+     it drops the point; `Logex.IO.Sim`'s own refusal of an address a test hands
+     `set/3`, which knows no device's name, keeps the list the test gave (provisional).)*
 
 400. **A busy machine's sync (the review after Milestone 6),** RV-4's question 12: a
      healthy disk's sync can take longer than idle + poll on a machine whose cores are
@@ -12830,14 +12931,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a `write_limit:` of its own (b)** (the maintainer, 2026-11-01): every file
      write and read decision 353 limits is limited by a `write_limit:` option, its
      default a few seconds, apart from the heartbeat; decision 353 stands with that limit
-     in place of idle + poll. To build in RV-11.
+     in place of idle + poll. To build in RV-11. *(Landed with RV-11, 2026-11-03,
+     `026e49f`: `Logex.Runner` takes `write_limit:`, 1 to 2147483647 ms, 5000 unless set,
+     some twenty times the slowest store write measured on a machine whose every core was
+     busy (231 ms, RV-4) and seven times the most a 10 ms sleep overshot there (668 ms,
+     RV-4's review); a bad value is the host's pinned `ArgumentError`. It limits a force's
+     write, the store's at a trip, a stop, a shutdown, a cold restart and `start: :cold`,
+     the period's write and an event's wait on it, the store's copy and its owed copy, the
+     forces file's and the store's reads at a start and a restart, the look for a link, and
+     a relative path's expansion, now made in a process of its own and never in the
+     caller. A force's write, made while the runner runs, keeps the heartbeat: the runner
+     renews every device's deadline each poll period while it waits, leaves the wait out
+     of the time the idle watchdog reads and takes the devices' notices sent meanwhile
+     (provisional). `child_spec/1`'s shutdown is `devices * (idle + poll) + 2 *
+     write_limit`, never less than 5000. RV-11's review: the time a force's write waited is
+     its own request's alone, 0 again once it is answered, pinned.)*
 
 401. **A period's write on a stalled disk (the review after Milestone 6),** RV-4's
      question 13: the write past its limit is reported `:timeout` once and left to
      finish, the newest image written when it answers.
 
      **Taken: as built (a)** (the maintainer, 2026-11-01), as decision 275's period and
-     the life walk have it.
+     the life walk have it. *(RV-11, 2026-11-03: the marks RV-4 left on it, in
+     `Logex.Runner`'s period and PLAN's RV-4 entry, are this decision's number; since
+     decision 391 the write is named `unknown` meanwhile, not `failed: :timeout`.)*
 
 402. **A label used twice that a jump names (the review after Milestone 6),** RV-9's
      question 1: `lbl done` on two rungs after `jmp done` tells the second only that

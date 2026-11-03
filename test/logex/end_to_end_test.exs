@@ -5295,7 +5295,7 @@ defmodule Logex.EndToEndTest do
       # A reading the uint cannot hold is a bad value, and the plant trips on it.
       Sim.set(drive, [0], 65_536)
       Manual.advance(clock, 10)
-      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], 65_536}}
+      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.0", 65_536}}
       assert Runner.get!(runner, "fan_speed") == 65_535
       Runner.stop(runner)
     end
@@ -5412,7 +5412,7 @@ defmodule Logex.EndToEndTest do
         assert :ok = Runner.unforce(runner, "drive_status")
         bad_reading(how, drive, bad)
         Manual.advance(clock, 10)
-        assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [4], bad}}
+        assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.4", bad}}
         Sim.set(drive, [4], 0)
         assert :ok = Runner.force(runner, "drive_status", 65_535)
         assert Runner.restart(runner, :cold) == :ok
@@ -5713,7 +5713,10 @@ defmodule Logex.EndToEndTest do
       assert :ok = Runner.unforce(runner, "fan_hz")
       Sim.set(drive, [0], Integer.pow(2, 128))
       Manual.advance(clock, 10)
-      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], Integer.pow(2, 128)}}
+
+      assert Runner.status(runner).trip ==
+               {:io, "drive", {:bad_value, "drive.i.0", Integer.pow(2, 128)}}
+
       Sim.set(drive, [0], 50.5)
       assert :ok = Runner.force(runner, "fan_hz", 0.1)
       assert Runner.restart(runner, :cold) == :ok
@@ -6374,7 +6377,10 @@ defmodule Logex.EndToEndTest do
       # A zone past a real's range trips the plant; put right, a restart reads the card
       # again, the force still on.
       Sim.set(card, [6], Integer.pow(2, 128))
-      assert Runner.status(runner).trip == {:io, "card", {:bad_value, [6], Integer.pow(2, 128)}}
+
+      assert Runner.status(runner).trip ==
+               {:io, "card", {:bad_value, "card.i.6", Integer.pow(2, 128)}}
+
       Sim.set(card, [6], 190.5)
       assert Runner.restart(runner, :cold) == :ok
       Manual.advance(clock, 10)

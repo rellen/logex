@@ -2141,7 +2141,7 @@ defmodule Logex.BitStringTest do
         value = bad_value(bad, high)
         bad_read(bad, sim, n, value)
         Manual.advance(clock, 10)
-        assert Runner.status(runner).trip == {:io, "card", {:bad_value, [n], value}}
+        assert Runner.status(runner).trip == {:io, "card", {:bad_value, "card.i.#{n}", value}}
         Runner.stop(runner)
       end
     end

@@ -1,9 +1,11 @@
 defmodule Logex.StalledDiskTest do
   @moduledoc """
   Decision 353 (RV-4): every file write the runner makes, a force's of the forces file and
-  the store's at a trip, a stop, a cold restart and a fresh start, is limited to the idle
-  watchdog and a poll period of real time, as the period's write is where the runner waits
-  on it (decision 275), and so is the forces file's read at a restart: one past it fails, a
+  the store's at a trip, a stop, a cold restart and a fresh start, is limited to the
+  runner's write limit of real time, as the period's write is where the runner waits on it
+  (decision 275), and so is the forces file's read at a restart, the limit since decision
+  400 (RV-11) its `write_limit:`, where it was the idle watchdog and a poll period: one
+  past it fails, a
   force `{:error, {:forces, :timeout}}`, a store write reported as any failed write, and the
   runner answers on. A stalled disk is acted out by the VM's file server held
   (`:sys.suspend/1`), which every write's rename goes through, and a delete of what stands
@@ -23,6 +25,24 @@ defmodule Logex.StalledDiskTest do
   alias Logex.{Configuration, Runner}
   alias Logex.IO.Sim
   alias Logex.Runner.Clock.Manual
+
+  # The manual clock, whose every reading takes the milliseconds an agent holds, none
+  # until the test sets some: so that a request's own work takes time once it does.
+  defmodule Ticking do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, ticks}) do
+      Manual.pass(clock, Agent.get(ticks, & &1))
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at({clock, _ticks}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _ticks}, timer), do: Manual.cancel(clock, timer)
+  end
 
   # A box counter: a retained count of the eye's rises, and its lamp at the panel.
   @tally """
@@ -46,17 +66,19 @@ defmodule Logex.StalledDiskTest do
     t1.lamp lamp_q
   """
 
-  # Every write's limit, the idle watchdog and a poll period: 1010 ms of real time. At 110
+  # Every write's limit, the runner's `write_limit:`: 1010 ms of real time, the idle
+  # watchdog and a poll period this file gave every runner for it before decision 400
+  # (RV-11) gave the limit an option of its own, which these runners are given now. At 110
   # ms a write the disk was free for, a fresh start's or a stop's, missed its limit on a
   # loaded machine beside another suite's syncs in four runs of six, and at 510 ms a
   # force's once in fifty (scripts/load.sh); a stalled write fails at any limit, which only
   # the time the test takes reads.
-  @idle 1000
+  @limit 1010
   @poll 10
 
-  defp configured do
+  defp configured(plant \\ @plant) do
     {:ok, tally} = Logex.compile(@tally, name: "tally")
-    {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+    {:ok, config} = Configuration.compile("plant", plant, %{"tally" => tally})
     config
   end
 
@@ -72,7 +94,7 @@ defmodule Logex.StalledDiskTest do
           configuration: configured(),
           io: %{"panel" => {Sim, sim: panel}},
           clock: {Manual, clock},
-          idle: @idle,
+          write_limit: @limit,
           poll: @poll,
           retain: store,
           forces: forces,
@@ -174,7 +196,9 @@ defmodule Logex.StalledDiskTest do
   # The runner's status once a period's write has answered and been taken.
   defp written(runner), do: written_status(Runner.status(runner), runner)
 
-  defp written_status(%{retain: %{failed: :timeout}}, runner), do: written(runner)
+  # Decision 391 (RV-11), the leave for a timed-out write reported failed: the write past
+  # its limit is unknown until its answer is taken, where it was `failed: :timeout`.
+  defp written_status(%{retain: %{unknown: _path}}, runner), do: written(runner)
   defp written_status(status, _runner), do: status
 
   # A FIFO's reader let go: the FIFO opened for reading and writing, which never waits,
@@ -194,7 +218,7 @@ defmodule Logex.StalledDiskTest do
 
   # Waits until a process of the runner's reads a file raw, inside the start's limit, a
   # limit's time at most.
-  defp reading_raw, do: reading_raw(System.monotonic_time(:millisecond) + @idle + @poll)
+  defp reading_raw, do: reading_raw(System.monotonic_time(:millisecond) + @limit)
 
   defp reading_raw(until),
     do: raw_found(Enum.any?(Process.list(), &raw_reader?/1), until)
@@ -227,7 +251,7 @@ defmodule Logex.StalledDiskTest do
 
   # A call that does not hang answers within a few of its limits; one that hangs, as every
   # call did on a stalled disk before decision 353, never does.
-  @answers 4 * (@idle + @poll)
+  @answers 4 * @limit
 
   describe "a stalled disk (decision 353)" do
     test "a force whose write does not end within its limit is {:error, {:forces, :timeout}}, " <>
@@ -240,7 +264,7 @@ defmodule Logex.StalledDiskTest do
 
       {took, answer} = timed(fn -> Runner.force(runner, "eye_1", 1) end)
       assert answer == {:error, {:forces, :timeout}}
-      assert took >= @idle + @poll and took < @answers
+      assert took >= @limit and took < @answers
 
       # The write past its limit was killed, its call of the file system left to the disk:
       # nothing that waits on the file server is alive to write on once the disk is back.
@@ -274,7 +298,10 @@ defmodule Logex.StalledDiskTest do
       Manual.advance(rig.clock, 10)
       assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, @answers
       assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
-      assert %{status: :tripped, retain: %{failed: :timeout}} = Runner.status(runner)
+      # Decision 391 (RV-11), the leave for a timed-out write reported failed: unknown, the
+      # store as the host spelled it, `failed` nil, where it was `failed: :timeout`.
+      assert %{status: :tripped, retain: %{failed: nil, unknown: store}} = Runner.status(runner)
+      assert store == rig.store
       assert Sim.outputs(rig.panel) == %{[0] => 0}
 
       # A cold restart writes the store first, and its write times out as the trip's did.
@@ -352,35 +379,53 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    test "a restart whose forces file's read does not end within its limit is " <>
-           "{:error, {:forces, :timeout}}, the runner tripped as it was",
+    # Decision 390 (RV-11), the leave for a restart answered `{:error, {:forces,
+    # :timeout}}`: the read past its limit keeps the forces the runner holds and the
+    # restart goes on, the line back, the file it could not read named in status/1, where
+    # the restart answered `{:error, {:forces, :timeout}}` and left the runner tripped.
+    test "a restart whose forces file's read does not end within its limit keeps the " <>
+           "forces it holds and goes on, naming the file (decision 390)",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
       assert Runner.force(runner, "level", 7) == :ok
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
-      assert %{status: :tripped, trip: trip} = Runner.status(runner)
+      assert %{status: :tripped} = Runner.status(runner)
 
       # The forces file a FIFO, whose read waits for a writer that never comes.
       File.rm!(rig.forces)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
       {took, answer} = timed(fn -> Runner.restart(runner, :warm) end)
-      assert answer == {:error, {:forces, :timeout}}
-      assert took >= @idle + @poll and took < @answers
-      assert %{status: :tripped, trip: ^trip, forces: %{"level" => 7}} = Runner.status(runner)
+      assert answer == :ok
+      assert took >= @limit and took < @answers
 
-      # The killed read's call let go, and the file back, the restart restarts.
+      assert %{
+               status: :running,
+               trip: nil,
+               forces: %{"level" => 7},
+               forces_unread: {forces, :timeout}
+             } = Runner.status(runner)
+
+      assert forces == rig.forces
+      assert Runner.get!(runner, "level") == 7
+
+      # The killed read's call let go, and the file back, the next force's write lands and
+      # the file is named no more.
       {:ok, pipe} = :file.open(rig.forces, [:write, :raw])
       :ok = :file.close(pipe)
       File.rm!(rig.forces)
-      File.write!(rig.forces, "level 7\n")
-      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
       assert Runner.stop(runner) == :ok
     end
 
-    test "a start whose forces file's read does not end within its limit is refused, " <>
-           "naming the file, and every other file call answers meanwhile",
+    # Decision 390 (RV-11), the leave for a fresh start refused when the forces file cannot
+    # be read: the read past its limit starts the runner with no force, the file named in
+    # status/1, where the start was refused, an ArgumentError naming the file.
+    test "a start whose forces file's read does not end within its limit starts with no " <>
+           "force, naming the file, and every other file call answers meanwhile (decision 390)",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
@@ -388,31 +433,35 @@ defmodule Logex.StalledDiskTest do
 
       # The read raw, off the VM's file server, so that another process's file call, made
       # while the start waits on the FIFO, answers, where a read through the server held
-      # it and every other file call of the VM's for as long as the FIFO had no writer.
-      start = Task.async(fn -> timed(fn -> start_refused(rig.opts) end) end)
-      reading_raw()
+      # it and every other file call of the VM's for as long as the FIFO had no writer. The
+      # start is the test's own, so that the runner it starts is its child.
       other = Path.join(dir, "other")
 
       call =
         Task.async(fn ->
+          reading_raw()
           File.write!(other, "answered\n")
-          File.read!(other)
+          {File.read!(other), System.monotonic_time(:millisecond)}
         end)
 
-      assert Task.yield(call, @answers) == {:ok, "answered\n"}
-      assert Task.yield(start, 0) == nil
-      {took, refused} = Task.await(start, 2 * @answers)
+      {took, {:ok, runner}} = timed(fn -> Runner.start_link(rig.opts) end)
+      started = System.monotonic_time(:millisecond)
+      assert {"answered\n", answered} = Task.await(call, @answers)
+      assert answered < started
+      assert took >= @limit and took < @answers
 
-      assert refused ==
-               "#{rig.forces}: the forces file cannot be read: the disk did not answer within " <>
-                 "the idle watchdog and a poll period"
+      assert %{status: :running, forces: forces, forces_unread: {file, :timeout}} =
+               Runner.status(runner)
 
-      assert took >= @idle + @poll and took < @answers
+      assert forces == %{} and file == rig.forces
+      assert Runner.stop(runner) == :ok
 
-      # The killed read's call let go, and the file gone, the start starts.
+      # The killed read's call let go, and the file gone, the start starts with none and
+      # names no file.
       let_go(rig.forces)
       File.rm!(rig.forces)
       {:ok, runner} = Runner.start_link(rig.opts)
+      refute Map.has_key?(Runner.status(runner), :forces_unread)
       assert Runner.stop(runner) == :ok
     end
 
@@ -431,7 +480,11 @@ defmodule Logex.StalledDiskTest do
       {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
       assert answer == {:error, {:retain, :timeout}}
       assert took < @answers
-      assert %{status: :tripped, trip: ^trip, retain: %{failed: :timeout}} = Runner.status(runner)
+      # Decision 391 (RV-11): unknown, where it was `failed: :timeout`.
+      assert %{status: :tripped, trip: ^trip, retain: %{failed: nil, unknown: store}} =
+               Runner.status(runner)
+
+      assert store == rig.store
       assert Sim.outputs(rig.panel) == %{[0] => 0}
 
       assert Runner.restart(runner, :warm) == :ok
@@ -459,8 +512,10 @@ defmodule Logex.StalledDiskTest do
           assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
         end)
 
-      assert took >= @idle + @poll
-      assert %{status: :running, retain: %{failed: :timeout}} = Runner.status(runner)
+      assert took >= @limit
+      # Decision 391 (RV-11): unknown, where it was `failed: :timeout`.
+      assert %{status: :running, retain: %{failed: nil, unknown: store}} = Runner.status(runner)
+      assert store == rig.store
       eye(rig, 0)
       eye(rig, 1)
       assert Runner.get!(runner, "t1.boxes.cv") == 2
@@ -491,7 +546,7 @@ defmodule Logex.StalledDiskTest do
 
       {took, answer} = timed(fn -> Runner.stop(runner) end)
       assert answer == {:error, {:retain, :timeout}}
-      assert took >= 2 * (@idle + @poll) and took < 2 * @answers
+      assert took >= 2 * @limit and took < 2 * @answers
       assert Sim.closed?(rig.panel)
       :sys.resume(server)
     end
@@ -536,9 +591,9 @@ defmodule Logex.StalledDiskTest do
 
       assert refused ==
                "#{rig.store}: the store cannot be read: the disk did not answer within the " <>
-                 "idle watchdog and a poll period"
+                 "write limit, 1010 ms (write_limit:)"
 
-      assert took >= @idle + @poll and took < @answers
+      assert took >= @limit and took < @answers
       assert Sim.reads(rig.panel) == 0
 
       let_go(rig.store)
@@ -565,10 +620,16 @@ defmodule Logex.StalledDiskTest do
       # The store read raw, off the held server; the copy's rename through it held.
       server = held()
       {took, {:ok, runner}} = timed(fn -> Runner.start_link(next.opts) end)
-      assert took >= @idle + @poll and took < @answers
+      assert took >= @limit and took < @answers
 
-      assert %{status: :running, retain: %{failed: :timeout, copy: nil, dropped: [_drop]}} =
+      # Decision 391 (RV-11): the copy unknown, its path, where it was `failed: :timeout`.
+      assert %{
+               status: :running,
+               retain: %{failed: nil, unknown: copy, copy: nil, dropped: [_drop]}
+             } =
                Runner.status(runner)
+
+      assert copy == rig.store <> ".dropped"
 
       # The killed copy's rename may land once the disk answers, the copy whole; the store
       # is as the start read it until its first write, which since RV-5's review makes the
@@ -590,9 +651,10 @@ defmodule Logex.StalledDiskTest do
     # named by an absolute path, which `Path.expand/1` resolves without the directory the
     # start is made in.
     test "no file call of a fresh start is made in its caller", %{tmp_dir: dir} do
-      # An idle watchdog of 5,000 ms, which covers a loaded machine's disk: the test reads
-      # no limit (RV-4's question 12).
-      rig = rig(dir, idle: 5000)
+      # A write limit of 5,000 ms, which covers a loaded machine's disk: the test reads no
+      # limit (decision 400, where an idle watchdog of 5,000 stood for it, RV-4's question
+      # 12).
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1)
       assert Runner.force(runner, "level", 7) == :ok
@@ -602,7 +664,7 @@ defmodule Logex.StalledDiskTest do
         Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
 
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
-      next = rig(dir, configuration: config, idle: 5000)
+      next = rig(dir, configuration: config, write_limit: 5000)
       assert :erlang.trace_pattern({:file, :_, :_}, true, [:local]) > 0
       {caller, started} = traced_start(next.opts)
       :erlang.trace_pattern({:file, :_, :_}, false, [:local])
@@ -615,6 +677,480 @@ defmodule Logex.StalledDiskTest do
       assert traced_calls(caller) == []
       assert Runner.stop(runner) == :ok
       send(caller, :done)
+    end
+  end
+
+  # The VM's file server held for `ms` of real time and then let go, as a disk slow over a
+  # write, healthy, is.
+  defp held_for(ms) do
+    server = held()
+
+    spawn(fn ->
+      Process.sleep(ms)
+      :sys.resume(server)
+    end)
+
+    server
+  end
+
+  # Decision 391 (RV-11): a write past its limit may still land once the disk answers, the
+  # file the old or the new, so status/1 names it unknown, neither failed nor written,
+  # until a later write lands or fails: the store's and its copy's under `retain`, a
+  # force's as the set it held.
+  describe "a write past its limit is unknown until a later one lands (decision 391)" do
+    test "the store's: unknown until a later write lands, or fails", %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      %{retain: %{written_at: started}} = Runner.status(runner)
+      server = held()
+
+      # A trip's write past its limit: unknown, the last write known made its age.
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+
+      assert %{status: :tripped, retain: %{unknown: store, failed: nil, written_at: ^started}} =
+               written_or_unknown(runner)
+
+      assert store == rig.store
+
+      # The disk back, a cold restart's write lands: unknown no more.
+      :sys.resume(server)
+      assert Runner.restart(runner, :cold) == :ok
+      retain = Runner.status(runner).retain
+      refute Map.has_key?(retain, :unknown)
+      assert retain.failed == nil
+
+      # Past its limit again, a trip's; then a write that fails, the store's `.tmp` a
+      # directory, a stop's: failed, known, unknown no more.
+      eye(rig, 1)
+      server = held()
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{retain: %{unknown: _store}} = written_or_unknown(runner)
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.store <> ".tmp")
+      File.mkdir!(rig.store <> ".tmp")
+      assert {:ok, %{retain: retain}} = {:ok, Runner.status(runner)}
+      assert Map.has_key?(retain, :unknown)
+      assert Runner.restart(runner, :cold) == {:error, {:retain, :eisdir}}
+      retain = Runner.status(runner).retain
+      assert retain.failed == :eisdir
+      refute Map.has_key?(retain, :unknown)
+      File.rmdir!(rig.store <> ".tmp")
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a force's: the set it held unknown until a later write of the file lands, " <>
+           "fails or a restart reads it",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+      server = held()
+
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+
+      assert %{forces: %{"level" => 7}, forces_unknown: %{"eye_1" => 1, "level" => 7}} =
+               Runner.status(runner)
+
+      # The disk back, the killed write may land: the file the old set or the new.
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      assert File.read!(rig.forces) in ["level 7\n", "eye_1 1\nlevel 7\n"]
+
+      # A later write that lands: known, the runner's set.
+      assert Runner.unforce(runner, "eye_1") == :ok
+      assert File.read!(rig.forces) == "level 7\n"
+      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+
+      # Past its limit again; then one that fails, a directory at the `.tmp`: known.
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert %{forces_unknown: %{"eye_1" => 1}} = Runner.status(runner)
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      File.mkdir!(rig.forces <> ".tmp")
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :eisdir}}
+      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+      File.rmdir!(rig.forces <> ".tmp")
+
+      # Past its limit once more; then a restart reads the file, and knows what it holds.
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, forces_unknown: _set} = Runner.status(runner)
+      assert Runner.restart(runner, :warm) == :ok
+      status = Runner.status(runner)
+      refute Map.has_key?(status, :forces_unknown)
+      assert status.forces in [%{"level" => 7}, %{"eye_1" => 1, "level" => 7}]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-11's review: a restart whose read of the file fails knows no more of what it holds
+    # than before (decision 390), so the set a write past its limit held stays unknown,
+    # named beside the file the restart could not read, until a force's write lands.
+    test "a force's set unknown is kept by a restart that cannot read the file, both named",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      forces = rig.forces
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      :sys.resume(server)
+      wait_for_tmp_gone(forces <> ".tmp")
+
+      File.rm!(forces)
+      File.mkdir!(forces)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      assert Runner.restart(runner, :warm) == :ok
+
+      assert %{
+               status: :running,
+               forces: %{"level" => 7},
+               forces_unread: {^forces, :eisdir},
+               forces_unknown: %{"eye_1" => 1, "level" => 7}
+             } = Runner.status(runner)
+
+      # A write that lands: both known.
+      File.rmdir!(forces)
+      assert Runner.unforce(runner, "eye_1") == :ok
+      status = Runner.status(runner)
+      refute Map.has_key?(status, :forces_unread)
+      refute Map.has_key?(status, :forces_unknown)
+      assert File.read!(forces) == "level 7\n"
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-11's review: a write over the store that owes the copy first (decision 360),
+    # killed at its limit, names the file it was in as the limit passed: the copy, where
+    # the copy's write was cut, the store as it was and the copy still owed, where it named
+    # the store, which it never reached; and the store, where it was the store's, the copy
+    # made (provisional). Each is stalled at its rename, the one call of a write the held
+    # file server takes: the copy's, and then, the copy's let through, the store's.
+    test "an owed copy's: a write killed in the copy names the copy, and one killed in " <>
+           "the store's write names the store, the copy made",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+      copy = rig.store <> ".dropped"
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+      File.mkdir!(copy <> ".tmp")
+      {:ok, runner} = Runner.start_link(next.opts)
+      assert %{retain: %{copy: nil, failed: :eisdir, written_at: started}} = Runner.status(runner)
+      File.rmdir!(copy <> ".tmp")
+
+      # A trip's write, killed in the copy's rename: the copy unknown, the store as the
+      # start read it, its age the start's.
+      server = held()
+      Sim.fail(next.panel, :read, {:error, :eio})
+      Manual.advance(next.clock, 10)
+
+      assert %{
+               status: :tripped,
+               retain: %{unknown: ^copy, copy: nil, failed: nil, written_at: ^started}
+             } = written_or_unknown(runner)
+
+      :sys.resume(server)
+      wait_for_tmp_gone(copy <> ".tmp")
+      assert File.read!(rig.store) == read
+
+      # A cold restart's, the copy still owed: the copy's rename let through and the
+      # store's held, killed at the limit: the copy made, the store unknown.
+      server = held()
+      restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+      _copying = waiting_call(server, :rename)
+      :sys.resume(server)
+      :sys.suspend(server)
+      _storing = waiting_call(server, :rename)
+      assert Task.await(restart, @answers) == {:error, {:retain, :timeout}}
+
+      assert %{status: :tripped, retain: %{unknown: store, copy: ^copy, failed: nil}} =
+               Runner.status(runner)
+
+      assert store == rig.store
+      assert :file.read_file(copy, [:raw]) == {:ok, read}
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.store <> ".tmp")
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # The runner's status once a trip's write has been made or found past its limit.
+  defp written_or_unknown(runner), do: tripped_status(Runner.status(runner), runner)
+
+  defp tripped_status(%{status: :running}, runner), do: written_or_unknown(runner)
+  defp tripped_status(status, _runner), do: status
+
+  # Waits until a killed write's late calls are done with its `.tmp`, the disk back: its
+  # rename lands or its delete does, a leftover of its own left to the next write.
+  defp wait_for_tmp_gone(tmp), do: tmp_waited(File.exists?(tmp), tmp, 500)
+
+  defp tmp_waited(false, _tmp, _left), do: :ok
+  defp tmp_waited(true, _tmp, 0), do: :ok
+
+  defp tmp_waited(true, tmp, left) do
+    Process.sleep(10)
+    tmp_waited(File.exists?(tmp), tmp, left - 1)
+  end
+
+  # Decision 400 (RV-11): every file write and read decision 353 limits is limited by the
+  # runner's `write_limit:`, apart from the heartbeat: a write the disk is slow over past
+  # the idle watchdog and a poll period, within the write limit, lands, where it was
+  # killed at the idle watchdog and a poll period before, `:timeout`.
+  describe "the write limit, apart from the heartbeat (decision 400)" do
+    test "a write the disk finishes past the idle watchdog and a poll period, within the " <>
+           "write limit, lands",
+         %{tmp_dir: dir} do
+      # The heartbeat 110 ms, the write limit 1010 and the disk slow for 400 ms of each
+      # write: a write past the heartbeat, within the limit.
+      rig = rig(dir, idle: 100, retain_period: 100)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner, [:retain, :trip])
+      eye(rig, 1)
+
+      # A force.
+      held_for(400)
+      {took, answer} = timed(fn -> Runner.force(runner, "level", 7) end)
+      assert answer == :ok and took >= 400
+      assert File.read!(rig.forces) == "level 7\n"
+      assert %{status: :running, trip: nil, forces: %{"level" => 7}} = Runner.status(runner)
+
+      # The period's write at 100, by the writer: not reported past the heartbeat, and
+      # made once the disk answers.
+      held_for(400)
+      eye(rig, 0)
+      Manual.advance(rig.clock, 80)
+      Process.sleep(600)
+      period_settled(runner)
+      refute_received {Runner, ^runner, {:retain, {:error, :timeout}}}
+      assert %{status: :running, retain: %{failed: nil}} = Runner.status(runner)
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
+
+      # A trip's write, the next box counted first: the panel's notice trips the runner as
+      # it next runs, and status/1 is answered once the trip, its write among it, is done.
+      eye(rig, 1)
+      held_for(400)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, @answers
+      assert %{status: :tripped, retain: %{failed: nil}} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:retain, {:error, _}}}
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 2\n"
+
+      # A cold restart's write, and a stop's.
+      held_for(400)
+      {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
+      assert answer == :ok and took >= 400
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 0\n"
+      held_for(400)
+      {took, answer} = timed(fn -> Runner.stop(runner) end)
+      assert answer == :ok and took >= 400
+
+      # A fresh start's, `start: :cold`.
+      held_for(400)
+      {took, {:ok, again}} = timed(fn -> Runner.start_link(rig.opts ++ [start: :cold]) end)
+      assert took >= 400
+      assert %{status: :running, retain: %{failed: nil}} = Runner.status(again)
+      assert Runner.stop(again) == :ok
+    end
+
+    # Unless set, the write limit is 5000 ms, whatever the idle watchdog: a force the disk
+    # is slow over for 400 ms beside an idle watchdog of 100 lands, and one it does not
+    # finish is cut at 5000.
+    test "the write limit is 5000 ms unless set", %{tmp_dir: dir} do
+      rig = rig(dir, idle: 100)
+      {:ok, runner} = Runner.start_link(Keyword.delete(rig.opts, :write_limit))
+      held_for(400)
+      assert Runner.force(runner, "level", 7) == :ok
+      server = held()
+      {took, answer} = timed(fn -> Runner.force(runner, "level", 8) end)
+      assert answer == {:error, {:forces, :timeout}}
+      assert took >= 5000
+      :sys.resume(server)
+      assert %{status: :running, forces: %{"level" => 7}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "each write past its limit is killed at the write limit, not at the idle watchdog " <>
+           "and a poll period",
+         %{tmp_dir: dir} do
+      # The heartbeat 60 ms and the write limit 1010: each write the disk does not finish
+      # is cut at the limit, never sooner.
+      rig = rig(dir, idle: 50, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner, [:retain])
+      eye(rig, 1)
+      server = held()
+
+      Sim.fail(rig.panel, :read, {:error, :eio})
+
+      {took, _} =
+        timed(fn ->
+          Manual.advance(rig.clock, 10)
+          assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
+        end)
+
+      assert took >= @limit and took < @answers
+
+      {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+
+      {took, answer} = timed(fn -> Runner.stop(runner) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts ++ [start: :cold]) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+      :sys.resume(server)
+    end
+
+    # RV-5's review left a relative path's expansion in the start's caller, where it reads
+    # the working directory through the VM's file server, so that a held server held the
+    # start: it is made in a process of its own within the write limit now, as every file
+    # call of the start is, a working directory the disk does not answer for in time
+    # refusing the start, the file named. Since RV-11's review the refusal says the file
+    # cannot be located, where it said it cannot be read, which decision 390 carries a
+    # forces file's start on past (provisional): with no path the start holds no file as
+    # its own and tells neither from the other; and the store's, a second start named by a
+    # relative store alone, the same. This file is not async, so the working directory
+    # moved here is no other test's.
+    test "a relative path's expansion is made within the write limit, never in the caller",
+         %{tmp_dir: dir} do
+      cwd = File.cwd!()
+      File.cd!(dir)
+      on_exit(fn -> File.cd!(cwd) end)
+      rig = rig(dir, forces: "plant.forces", retain: "plant.retain", write_limit: 5000)
+
+      assert :erlang.trace_pattern({:file, :_, :_}, true, [:local]) > 0
+      {caller, started} = traced_start(rig.opts)
+      :erlang.trace_pattern({:file, :_, :_}, false, [:local])
+      assert {:ok, runner} = started
+      assert traced_calls(caller) == []
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.stop(runner) == :ok
+      send(caller, :done)
+      assert File.read!(Path.join(dir, "plant.forces")) == "level 7\n"
+
+      server = held()
+      opts = Keyword.put(rig.opts, :write_limit, @limit)
+      start = Task.async(fn -> timed(fn -> start_refused(opts) end) end)
+      assert {:ok, {took, refused}} = Task.yield(start, 2 * @answers)
+
+      assert refused ==
+               "plant.forces: the forces file cannot be located: the working directory a " <>
+                 "relative path is read against did not answer within the write limit, " <>
+                 "1010 ms (write_limit:)"
+
+      assert took >= @limit and took < @answers
+
+      opts = Keyword.put(opts, :forces, nil)
+      start = Task.async(fn -> timed(fn -> start_refused(opts) end) end)
+      assert {:ok, {took, refused}} = Task.yield(start, 2 * @answers)
+
+      assert refused ==
+               "plant.retain: the store cannot be located: the working directory a relative " <>
+                 "path is read against did not answer within the write limit, 1010 ms " <>
+                 "(write_limit:)"
+
+      assert took >= @limit and took < @answers
+      :sys.resume(server)
+    end
+
+    # On the real clock a force's write the disk is slow over past the heartbeat, within
+    # the write limit, latches no device and trips nothing: the runner renews its devices
+    # each poll period while it waits on its disk, and the idle watchdog leaves the wait
+    # out of the request's time (provisional), as a slow device's write in time latches
+    # none (decision 348); and the devices' notices sent meanwhile are taken as it ends, so
+    # that the refresh's wake that came during the wait, here the first, the plant's task
+    # due only every 2 s, finds every device heard. The heartbeat 1010 ms and the disk slow
+    # for 2500, so that a loaded machine's late wakes, 668 ms at most seen (RV-4's review),
+    # stay inside the margin of each renewal.
+    test "on the real clock a force's write slow past the heartbeat latches no device and " <>
+           "trips nothing",
+         %{tmp_dir: dir} do
+      rig =
+        rig(dir,
+          configuration: configured(String.replace(@plant, "interval 10", "interval 2000")),
+          clock: {Logex.Runner.Clock.Monotonic, nil},
+          idle: 1000,
+          write_limit: 5000,
+          retain: nil,
+          retain_period: nil
+        )
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner, [:trip])
+
+      # A device that latched, or was taken as hung, tells the runner, which trips as it
+      # takes the notice: status/1, answered after it, would say so.
+      held_for(2500)
+      {took, answer} = timed(fn -> Runner.force(runner, "level", 7) end)
+      assert answer == :ok and took >= 2500
+      Process.sleep(100)
+
+      assert %{status: :running, trip: nil, forces: %{"level" => 7}, unzeroed: []} =
+               Runner.status(runner)
+
+      refute_received {Runner, ^runner, {:trip, _reason}}
+      assert File.read!(rig.forces) == "level 7\n"
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-11's review: the time a force's write waited on the disk is left out of that
+    # request's time alone, 0 again once it is answered, so that a later request whose own
+    # work takes longer than the idle watchdog trips it as ever. Here the clock passes 1000
+    # ms while the force's write waits on the held disk, the idle watchdog 2 ms, and every
+    # reading of the clock then takes 3: the force trips nothing, and a get after it trips
+    # the runner, as any slow request does (decision 128). The plant's task is due only
+    # every 100 s, so that no round is due as either comes (decision 396).
+    test "the time a force's write waited is its own request's alone: a slow request " <>
+           "after it trips the idle watchdog",
+         %{tmp_dir: dir} do
+      {:ok, ticks} = Agent.start_link(fn -> 0 end)
+
+      rig =
+        rig(dir,
+          configuration: configured(String.replace(@plant, "interval 10", "interval 100000")),
+          idle: 2,
+          retain: nil,
+          retain_period: nil
+        )
+
+      opts = Keyword.put(rig.opts, :clock, {Ticking, {rig.clock, ticks}})
+      {:ok, runner} = Runner.start_link(opts)
+      :ok = Runner.subscribe(runner, [:trip])
+
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Manual.pass(rig.clock, 1000)
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert %{status: :running, trip: nil, forces: %{"level" => 7}} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:trip, _reason}}
+
+      Agent.update(ticks, fn _ -> 3 end)
+      assert Runner.get(runner, "total") == {:ok, 0}
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 3}}}}, @answers
+      assert Runner.stop(runner) == :ok
     end
   end
 
@@ -664,7 +1200,10 @@ defmodule Logex.StalledDiskTest do
          %{tmp_dir: dir} do
       for ending <- [:normal, :shutdown, {:shutdown, :end_of_shift}, :killed] do
         rig =
-          rig(Path.join(dir, "#{System.unique_integer([:positive])}"), forces: nil, idle: 5000)
+          rig(Path.join(dir, "#{System.unique_integer([:positive])}"),
+            forces: nil,
+            write_limit: 5000
+          )
 
         File.mkdir_p!(Path.dirname(rig.store))
         {:ok, runner} = Runner.start_link(rig.opts)

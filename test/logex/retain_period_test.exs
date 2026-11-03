@@ -528,13 +528,14 @@ defmodule Logex.RetainPeriodTest do
     # drops the one pending and writes last, after its zeros and closes.
     test "a stop waits for the write in progress, drops the pending one and writes last",
          %{tmp_dir: dir} do
-      # An idle watchdog of 5000: the test holds the writer in real time while the stop
-      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
-      # review), and since decision 353 the stop's own write has that time too; at the
-      # runner's 510 ms a loaded machine's syncs outran the hold now and then
-      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the stop's write
-      # `:timeout`). The test reads no limit.
-      rig = rig(dir, idle: 5000)
+      # A write limit of 5000: the test holds the writer in real time while the stop waits
+      # on it, the write limit before the writer is killed (M6-6's review), and since
+      # decision 353 the stop's own write has that time too; at the runner's 510 ms, the
+      # idle watchdog and a poll period before decision 400 (RV-11) gave the limit an option
+      # of its own, which an idle watchdog of 5000 stood for here, a loaded machine's syncs
+      # outran the hold now and then (scripts/load.sh, RV-4: the writer killed, as at the
+      # parent, or the stop's write `:timeout`). The test reads no limit.
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -567,13 +568,14 @@ defmodule Logex.RetainPeriodTest do
     # PLAN M6-6's Done-when: a stop whose final write fails still stops and says so, the
     # write in progress waited for first.
     test "a stop whose final write fails still stops and returns its reason", %{tmp_dir: dir} do
-      # An idle watchdog of 5000: the test holds the writer in real time while the stop
-      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
-      # review), and since decision 353 the stop's own write has that time too; at the
-      # runner's 510 ms a loaded machine's syncs outran the hold now and then
-      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the stop's write
-      # `:timeout`). The test reads no limit.
-      rig = rig(dir, idle: 5000)
+      # A write limit of 5000: the test holds the writer in real time while the stop waits
+      # on it, the write limit before the writer is killed (M6-6's review), and since
+      # decision 353 the stop's own write has that time too; at the runner's 510 ms, the
+      # idle watchdog and a poll period before decision 400 (RV-11) gave the limit an option
+      # of its own, which an idle watchdog of 5000 stood for here, a loaded machine's syncs
+      # outran the hold now and then (scripts/load.sh, RV-4: the writer killed, as at the
+      # parent, or the stop's write `:timeout`). The test reads no limit.
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -590,12 +592,13 @@ defmodule Logex.RetainPeriodTest do
       assert total(rig.store) == "1"
     end
 
-    # A writer that does not answer by the idle watchdog and a poll period, in real time,
-    # is killed, its write reported failed, `:timeout`, and the stop's write made all the
-    # same (provisional). Since decision 353 the stop's own write has that time too, so
-    # the idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
+    # A writer that does not answer by the write limit, in real time, is killed, its write
+    # reported failed, `:timeout`, and the stop's write made all the same (provisional).
+    # Since decision 353 the stop's own write has that time too, so the limit is 410 here,
+    # where at 70 a loaded machine's sync missed it; the idle watchdog of 400 and a poll
+    # period stood for it before decision 400 (RV-11) gave it `write_limit:`.
     test "a hung writer is killed at its deadline and the stop writes", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 400)
+      rig = rig(dir, write_limit: 410)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -640,9 +643,11 @@ defmodule Logex.RetainPeriodTest do
     # handled its exit, is taken as gone by the event's wait at once, its write reported
     # `{:down, reason}`, never waited on to the deadline and reported `:timeout`. The
     # runner suspended keeps the exit in its mailbox; the stop, a system message, still
-    # reaches it.
+    # reaches it. A write limit of 5000, the wait's deadline, so that a wait to it is told
+    # from none: since decision 400 (RV-11) `write_limit:`, where an idle watchdog of 5000
+    # stood for it.
     test "a writer gone down before an event's write is not waited on", %{tmp_dir: dir} do
-      rig = rig(dir, idle: 5000)
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -691,13 +696,14 @@ defmodule Logex.RetainPeriodTest do
     # one pending, so that the trip's is the last on disk.
     test "a trip waits for the write in progress, drops the pending one and writes last",
          %{tmp_dir: dir} do
-      # An idle watchdog of 5000: the test holds the writer in real time while the trip
-      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
-      # review), and since decision 353 the trip's own write has that time too; at the
-      # runner's 510 ms a loaded machine's syncs outran the hold now and then
-      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the trip's write
-      # `:timeout`). The test reads no limit.
-      rig = rig(dir, idle: 5000)
+      # A write limit of 5000: the test holds the writer in real time while the trip waits
+      # on it, the write limit before the writer is killed (M6-6's review), and since
+      # decision 353 the trip's own write has that time too; at the runner's 510 ms, the
+      # idle watchdog and a poll period before decision 400 (RV-11) gave the limit an option
+      # of its own, which an idle watchdog of 5000 stood for here, a loaded machine's syncs
+      # outran the hold now and then (scripts/load.sh, RV-4: the writer killed, as at the
+      # parent, or the trip's write `:timeout`). The test reads no limit.
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1, 100)
       synced(runner)
@@ -735,13 +741,14 @@ defmodule Logex.RetainPeriodTest do
     # M6-6's review: the period's write a trip waits for is reported as every write is, so
     # that one that fails is said, the trip's own after it.
     test "a trip reports the failure of the period's write it waited for", %{tmp_dir: dir} do
-      # An idle watchdog of 5000: the test holds the writer in real time while the trip
-      # waits on it, the idle watchdog and a poll period before the writer is killed (M6-6's
-      # review), and since decision 353 the trip's own write has that time too; at the
-      # runner's 510 ms a loaded machine's syncs outran the hold now and then
-      # (scripts/load.sh, RV-4: the writer killed, as at the parent, or the trip's write
-      # `:timeout`). The test reads no limit.
-      rig = rig(dir, idle: 5000)
+      # A write limit of 5000: the test holds the writer in real time while the trip waits
+      # on it, the write limit before the writer is killed (M6-6's review), and since
+      # decision 353 the trip's own write has that time too; at the runner's 510 ms, the
+      # idle watchdog and a poll period before decision 400 (RV-11) gave the limit an option
+      # of its own, which an idle watchdog of 5000 stood for here, a loaded machine's syncs
+      # outran the hold now and then (scripts/load.sh, RV-4: the writer killed, as at the
+      # parent, or the trip's write `:timeout`). The test reads no limit.
+      rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)
@@ -767,11 +774,12 @@ defmodule Logex.RetainPeriodTest do
 
     # M6-6's review: a writer that does not answer a trip's wait by its deadline is killed,
     # so that it cannot wake later and write an older image over the trip's. Since
-    # decision 353 the trip's own write has the idle watchdog and a poll period too, so the
-    # idle watchdog is 400 here, where at 60 a loaded machine's sync missed its 70 ms.
+    # decision 353 the trip's own write has the write limit too, so the limit is 410 here,
+    # where at 70 a loaded machine's sync missed it; the idle watchdog of 400 and a poll
+    # period stood for it before decision 400 (RV-11) gave it `write_limit:`.
     test "a hung writer is killed at a trip's deadline and never writes after it",
          %{tmp_dir: dir} do
-      rig = rig(dir, idle: 400)
+      rig = rig(dir, write_limit: 410)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner)
       eye(rig, 1, 100)

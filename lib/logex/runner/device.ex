@@ -761,8 +761,13 @@ defmodule Logex.Runner.Device do
   defp closing(false, _state), do: :ok
 
   # c3-io-contract-9 (RV-4): a time that is no whole number of milliseconds is a clock that
-  # fails, as the runner takes one.
-  defp whole(ms) when is_integer(ms), do: ms
+  # fails, as the runner takes one; since decision 394 (RV-11) one out of the range the
+  # runner holds a time in too. The device stops on it, a shutdown naming the clock, every
+  # output 0 as it closes, and the runner, which traps its exit, trips naming the clock.
+  defp whole(ms)
+       when is_integer(ms) and ms in -9_223_372_036_854_775_808..9_223_372_036_854_775_807,
+       do: ms
+
   defp whole(other), do: exit({:shutdown, {:clock, {:now_ms, other}}})
 
   # The runner's clock gone down, or failing, stops the device, a shutdown, as it stops
