@@ -384,11 +384,13 @@ defmodule Logex.Compiler do
 
   Those types are trusted, as checked already: none is checked, marked for recursion or
   compared with another version, and no table is built, so each instance's tag names its
-  type and `blocks` is empty. A type whose text names one `held` lacks, its own name among
-  them, gives the diagnostic a compile gives for an unknown type. `declared` are the
-  block's members declared from Elixir, which a block `instructionize/3` built keeps no
-  text for; a tag among them no host could give is `:error`. `source` and `file` are nil,
-  and so is each warning's file: they are the caller's to give. It is how
+  type and `blocks` is empty. So nothing it gives holds a type it trusted, none of its
+  rungs, and a compile handed the body as a type checks it (provisional, since decision
+  432). A type whose text names one `held` lacks, its own name among them, gives the
+  diagnostic a compile gives for an unknown type. `declared` are the block's members
+  declared from Elixir, which a block `instructionize/3` built keeps no text for; a tag
+  among them no host could give is `:error`. `source` and `file` are nil, and so is each
+  warning's file: they are the caller's to give. It is how
   `Logex.FbType.check/2` asks that each type a compile is given be the one its source
   gives, once a type, in time linear in the source and the members of the types it names.
   """

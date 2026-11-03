@@ -66,12 +66,16 @@ defmodule Logex.Warnings do
   `move 5 l1[i].pv`, are warned in a word array's words, either first, and `ote
   l1[1].pv.[n]` beside `ote l1[2].pv.3`, whose literal places differ, is not. Two coils
   through the very tags are told the bit already has one, and a coil beside another write
-  through them is not warned (decision 246). The rules the member's bits had before stand
-  where they judge a pair, a literal bit's latch beside a coil through a tag subscript
-  warned (decision 257) and a literal bit beside the word written whole through the very
-  tags quiet (decision 288), and a latch of a literal bit beside a coil on a bit a tag
-  numbers is warned as decision 257 has it (provisional). A one-shot keeps no storage bit
-  in a member, so no write of one meets a storage bit.
+  through them is not warned (decision 246), but a bit a tag numbers beside its word
+  written whole through the very tags is, as a word array's is (provisional). The rules
+  the member's bits had before stand where they judge a pair, a literal bit's latch
+  beside a coil through a tag subscript warned (decision 257) and a literal bit beside
+  the word written whole through the very tags quiet (decision 288), and a latch of a
+  literal bit beside a coil on a bit a tag numbers is warned as decision 257 has it
+  (provisional). Each pair is told on its own, so a write those rules warn of one first
+  may be warned of another here, two warnings where a word array's write gets one
+  (provisional). A one-shot keeps no storage bit in a member, so no write of one meets a
+  storage bit.
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
   one in a section a `jmp` skips and one outside it, are still two, the warning saying the

@@ -1719,6 +1719,57 @@ defmodule Logex.TagSubscriptTest do
       end
     end
 
+    # A bit a tag numbers beside its word written whole through the very tags is warned,
+    # either first, as a word array's is (provisional), where a literal bit beside it stays
+    # quiet, as decision 288 has it and a word array's does not.
+    test "a bit a tag numbers beside its word written whole through the very tags is warned (provisional)" do
+      assert shared("xic a ote l1[i].pv.[n]\nmove 5 l1[i].pv") == [
+               {19,
+                "`l1[i].pv` is in `l1`, which the `ote` on line 18 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+
+      assert shared("move 5 l1[i].pv\nxic a ote l1[i].pv.[n]") == [
+               {19,
+                "`l1[i].pv.[n]` is in `l1`, which the `move` on line 18 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+
+      assert shared("xic a ote l1[i].pv.3\nmove 5 l1[i].pv") == []
+
+      assert shared("xic a ote w[i].3\nmove 5 w[i]") == [
+               {19,
+                "`w[i]` is in `w`, which the `ote` on line 18 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+    end
+
+    # Each pair is told on its own (provisional): a write a member rule warns of a literal
+    # element's bit is told too of a write through a tag subscript that numbers a bit, two
+    # warnings on its line, where a word array's write is told of one.
+    test "a write a member rule warns is told too of a pair a tag reaches (provisional)" do
+      assert shared("xic a ote l1[1].pv.3\nxic a ote l1[i].pv.[n]\nxic a ote l1[i].pv.3") == [
+               {19,
+                "`l1[i].pv.[n]` is in `l1`, as `l1[1].pv.3` is, which already has an `ote` on " <>
+                  "line 18: " <> @may_share},
+               {20,
+                "`l1[i].pv.3` is in `l1`, as `l1[1].pv.3` is, which already has an `ote` on " <>
+                  "line 18: " <> @may_share},
+               {20,
+                "`l1[i].pv.3` is in `l1`, which the `ote` on line 19 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+
+      assert shared("xic a ote w[1].3\nxic a ote w[i].[n]\nxic a ote w[i].3") == [
+               {19,
+                "`w[i].[n]` is in `w`, as `w[1].3` is, which already has an `ote` on line 18: " <>
+                  @may_share},
+               {20,
+                "`w[i].3` is in `w`, which the `ote` on line 19 may write through a tag " <>
+                  "subscript: " <> @may_share}
+             ]
+    end
+
     # A one-shot keeps no storage bit in a member's word, so no write of one meets a
     # one-shot's storage bit: beside every form a tag reaches, a word array's storage bit
     # is told only where a write of the word array meets it (decision 405).

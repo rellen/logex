@@ -1231,6 +1231,33 @@ defmodule Logex.FunctionBlockTest do
       assert FbType.of(%{body | source: @seal}) == seal
     end
 
+    # Decision 54's own steps take what they are given as checked, as their docs say, and
+    # hold none of it (provisional, since decision 432): recompiled/4 over a seal edited by
+    # hand gives the body it gives over the genuine one, which names `seal` and holds no
+    # table, so nothing of the edit is in it; check/2 given a memo that names the edit
+    # answers for it, and a compile, which builds its own memo, refuses it.
+    test "recompiled/4 and check/2 trust what they are given and hold none of it (provisional)" do
+      seal = block!(@seal)
+      [{:rung, [group, {:xio, l, stop}, coil]}] = seal.body.rungs
+      edited = FbType.of(%{seal.body | rungs: [{:rung, [group, {:xic, l, stop}, coil]}]})
+
+      assert {:ok, over_edited} =
+               Logex.Compiler.recompiled(@holder, "holder", %{"seal" => edited})
+
+      assert {:ok, over_seal} = Logex.Compiler.recompiled(@holder, "holder", %{"seal" => seal})
+      assert over_edited == over_seal
+      assert over_edited.blocks == %{}
+
+      holder = block!(@holder, [seal])
+      forged = %{holder | body: %{holder.body | blocks: %{"seal" => edited}}}
+
+      assert {:ok, %{"seal" => _, "holder" => _}} =
+               FbType.check(forged, %{"seal" => [{edited, []}]})
+
+      assert FbType.check(forged, %{}) == :error
+      refused(forged)
+    end
+
     # So too a type a tag declared from Elixir holds, the tag built by hand and not through
     # Logex.Tag.new!/4, which would refuse it first: such a type is known by being the one
     # given under its name, or the one a tag before it held, by value, and otherwise is
