@@ -692,6 +692,20 @@ defmodule Logex.TripTest do
 
   defp seen(runner), do: :ets.lookup_element(__MODULE__, {runner, :seen}, 2)
 
+  # Decision 396 (RV-11): with no untimed program a request made while a periodic round is
+  # due waits for it, so a test calls from another process and moves the clock on until
+  # the call is answered, as Logex.Runner's moduledoc shows.
+  defp called(fun, clock), do: calling(Task.async(fun), clock)
+
+  defp calling(task, clock), do: called_back(Task.yield(task, 10), task, clock)
+
+  defp called_back({:ok, value}, _task, _clock), do: value
+
+  defp called_back(nil, task, clock) do
+    Manual.advance(clock, 0)
+    calling(task, clock)
+  end
+
   describe "the major fault (decisions 153 and 160, M5-9)" do
     # The lamp shows the bit of the panel's `faults` word that its `sel` names; a counter of
     # its own runs beside it; and a second counter on a slower task.
@@ -1181,7 +1195,11 @@ defmodule Logex.TripTest do
       Runner.subscribe(runner)
       Sim.set(panel, [1], 50)
       Manual.advance(clock, 10)
-      assert %{status: :running, runs: %{"fast" => {50, 50}}} = Runner.status(runner)
+
+      # Decision 396 (RV-11): the round at 10 took 50 ms, so the round due at 20 is owed
+      # and the call waits for it, which takes 50 ms too, where it was served at once.
+      assert %{status: :running, runs: %{"fast" => {50, 50}}} =
+               called(fn -> Runner.status(runner) end, clock)
 
       # The next round, late, takes 51 ms: y = 1 is computed and never written.
       Sim.set(panel, %{[0] => 1, [1] => 51})
@@ -1276,18 +1294,21 @@ defmodule Logex.TripTest do
             idle: idle
           )
 
-        runner
+        {runner, clock}
       end
 
-      runner = start.(3)
-      assert Runner.get(runner, "x") == {:ok, 0}
-      assert Runner.status(runner).status == :running
+      # Decision 396 (RV-11): every reading of this clock takes 3 ms, a round's among them,
+      # so a round is due as each call comes, which waits for it, where it was served at
+      # once: each call from another process, the clock moved on until it is answered.
+      {runner, clock} = start.(3)
+      assert called(fn -> Runner.get(runner, "x") end, clock) == {:ok, 0}
+      assert called(fn -> Runner.status(runner) end, clock).status == :running
 
-      runner = start.(2)
-      assert Runner.get(runner, "x") == {:ok, 0}
+      {runner, clock} = start.(2)
+      assert called(fn -> Runner.get(runner, "x") end, clock) == {:ok, 0}
       assert Runner.status(runner).trip == {:watchdog, {:idle, 3}}
       assert Runner.restart(runner, :cold) == :ok
-      assert Runner.status(runner).status == :running
+      assert called(fn -> Runner.status(runner) end, clock).status == :running
     end
   end
 
@@ -3651,7 +3672,10 @@ defmodule Logex.TripTest do
       {panel_at, drive_at} = tripped
       assert Enum.drop(Sim.writes(panel), panel_at) == [%{[0] => 0}]
       assert Enum.drop(Sim.writes(drive), drive_at) == [%{[0] => 0}]
-      assert Runner.status(runner).status == :running
+
+      # Decision 396 (RV-11): the restart's first round took 15 ms, so a round is due and
+      # the call waits for it, where it was served at once.
+      assert called(fn -> Runner.status(runner) end, clock).status == :running
     end
 
     test "a restart that trips again zeroes once more, and once" do

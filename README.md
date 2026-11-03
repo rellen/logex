@@ -3928,7 +3928,11 @@ closed: true
   resource's events and the runner's `{:round, now, outputs}`; and `stop/2` writes every
   output 0 once and closes every device before it returns.
 - The share is served in slots, the conventional table's: at 20%, at the end of each
-  4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. On the
+  4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. With no
+  untimed program the share holds against a due periodic round too (decision 396): a
+  request that comes while one is due waits for it, and is served after it while no
+  round is due, or in the slot after 4 ms of rounds where they outrun their periods, so
+  that an HMI polling `status/1` in a tight loop never makes a 10 ms task late. On the
   manual clock a round takes no time unless something passes time inside it, so a
   request is served before the next round. One made while a round is owed, after a round
   that passed time, a slow drive's write, waits for its slot, as on the real clock

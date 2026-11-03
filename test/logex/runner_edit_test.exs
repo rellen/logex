@@ -416,8 +416,10 @@ defmodule Logex.RunnerEditTest do
 
     # Each round that runs `b` writes the slow device, which takes 1 ms, so rounds fill
     # their milliseconds and a host's request waits for the share's slot. The share counts
-    # the continuous task's rounds alone (decision 122), so the timed task's rounds before
-    # the edit count none, and the first slot comes C = 4 rounds after the edit, at 20%.
+    # the continuous task's rounds (decision 122), and since decision 396 (RV-11) with no
+    # untimed program the periodic rounds whole, one count: the timed task's eleven rounds
+    # of 1 ms before the edit, two slots and 3 ms over, count, where they counted none and
+    # the first slot came C = 4 rounds after the edit, at 20%; so it comes after the first.
     test "an untimed program an edit adds is served its slots from its first round" do
       text = """
       task tick interval 10 priority 1
@@ -452,7 +454,7 @@ defmodule Logex.RunnerEditTest do
       {:ok, _} = Runner.accept(runner, candidate)
       {:ok, _} = Runner.test(runner)
       request = :gen_server.send_request(runner, {:get!, "n.n"})
-      assert waited(request, clock) == 4
+      assert waited(request, clock) == 1
     end
 
     test "the watchdogs read are the configuration's the resource runs (decision 129)" do

@@ -904,8 +904,15 @@ defmodule Logex.ForceTest do
       # Its round takes 505 ms, longer than the idle watchdog, within its own watchdog.
       assert Runner.force(runner, "e", 1) == :ok
 
-      assert %{status: :running, rounds: 2, runs: %{"trip" => {505, 2000}}} =
-               Runner.status(runner)
+      # Decision 396 (RV-11): the round due at 10 is owed once the force's round is done,
+      # and the call waits for it, the third round, where it was served at once after the
+      # second.
+      task = Task.async(fn -> Runner.status(runner) end)
+      assert Task.yield(task, 100) == nil
+      Manual.advance(clock, 0)
+
+      assert %{status: :running, rounds: 3, runs: %{"trip" => {505, 2000}}} =
+               Task.await(task)
 
       refute_received {Runner, ^runner, {:trip, _reason}}
       assert Runner.get!(runner, "hits") == 1

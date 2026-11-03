@@ -172,16 +172,28 @@ defmodule Logex.Runner do
     round's; the slot comes at the end of the round that completes C
     ms; it serves its first request whatever the time, and each whole, so it may run over
     by one; and in the rest of a millisecond a round did not fill the runner serves its
-    requests freely. A host's request is served at once where no round is owed, and with
-    no untimed program always. Every device is refreshed before the runner serves its own
+    requests freely. A host's request is served at once where no round is owed.
+  - With no untimed program, since decision 396, a host's requests are held to their share
+    against a due periodic round as against the continuous task. A request that comes
+    while a periodic round's due time has come waits for that round, which runs first;
+    the requests that waited are served after it, each whole, while no round is due, the
+    time no due round needs, as Logix's communications take only the time no periodic
+    task needs with no continuous task.
+    The rounds are the share's count, each whole from its start to its end, a
+    millisecond at least, and the slot comes at the end of the round that completes C ms
+    of them, S ms as above, so that a plant whose rounds outrun their periods leaves the
+    host its S ms of every C + S, never none and never more (provisional). So a tight loop
+    of `status/1` or `force/3` makes a due round wait for one request at most, or a slot,
+    where it delayed a 10 ms task for as long as it lasted, every period missed an overlap
+    (c1-runner-rounds-2). Every device is refreshed before the runner serves its own
     work, whichever way.
   - **On the manual clock** (decision 131) the same rules run: a round takes no time
     unless something passes time inside it, so a request is served before the next
     round; but one made while a round is owed, after a round that passed time, waits for
     its slot, which comes in the advance that runs the round completing C ms of rounds,
-    `advance(clock, 0)` among them, never later. A test that calls from the process that
-    moves the clock would wait for ever, so it calls from another and moves the clock on
-    until the call is answered:
+    or with no untimed program the round due where none is due after it,
+    `advance(clock, 0)` among them, never later. A test that calls from the process that moves the clock would wait for ever,
+    so it calls from another and moves the clock on until the call is answered:
 
         task = Task.async(fn -> Logex.Runner.get!(runner, "boxes.n") end)
 
@@ -2442,7 +2454,25 @@ defmodule Logex.Runner do
     %{popped(:queue.out(state.queue), now + s, period(state, now)) | used: 0}
   end
 
+  # Decision 396 (RV-11): with no untimed program the periodic rounds are the share's
+  # count, each whole, so that the slot comes at the end of the round that completes C ms
+  # of them, as the continuous task's does, and a plant whose rounds outrun their periods,
+  # each due again at once, leaves the host's requests their S ms, never none and never
+  # more (provisional). A slot with no request waiting refreshes nothing: the requests
+  # that come while no round is due are served at once, and the rest after the round that
+  # was due (freely/1).
+  defp slot(%{untimed: false, used: used, slots: {c, s}, queue: queue} = state)
+       when used >= c,
+       do: %{periodic_slot(:queue.is_empty(queue), s, state) | used: 0}
+
   defp slot(state), do: state
+
+  defp periodic_slot(true, _s, state), do: state
+
+  defp periodic_slot(false, s, state) do
+    state = refresh(state, :idle)
+    popped(:queue.out(state.queue), now(state) + s, state)
+  end
 
   # Requests served while the time lasts, each whole, so the last may run over: up to a
   # slot's end, its first served whatever the time, or, after a round, in the rest of a
@@ -2460,12 +2490,19 @@ defmodule Logex.Runner do
   # A request served may be an edit's step that leaves the configuration with no untimed
   # program, which no slot comes for again: the requests that waited behind it are then
   # served at once, in order, as every request is from now on (decision 108).
-  defp going_on(%{untimed: false} = state, _until), do: freely(state)
+  defp going_on(%{untimed: false, next_round: nil} = state, _until), do: freely(state)
   defp going_on(state, until), do: serving(state, until)
 
   # A round is owed where the configuration has untimed programs and its time has come: a
-  # host's request then waits for the share's slot.
-  defp owed?(%{untimed: true, next_round: at} = state) when at != nil, do: now(state) >= at
+  # host's request then waits for the share's slot. Decision 396 (RV-11): and with none,
+  # where a periodic round's due time has come: the request then waits for that round,
+  # which runs at its wake, and is served after it while no round is due (freely/1), so
+  # that a host's requests are held to their share against a due periodic round as
+  # against the continuous task, the time no due round needs, where a tight loop of
+  # requests was served ahead of a due round with no bound and made a 10 ms task late
+  # (c1-runner-rounds-2); on the manual clock the round comes in the advance that delivers
+  # its wake, as an owed round's slot does (decision 131).
+  defp owed?(%{next_round: at} = state) when at != nil, do: now(state) >= at
   defp owed?(_state), do: false
 
   # One round: the inputs taken, each step of the cycle run and timed, every device
@@ -2621,7 +2658,7 @@ defmodule Logex.Runner do
       state
       | rounds: state.rounds + 1,
         logic: logic,
-        used: used(state, finish - start - timed),
+        used: used(state, finish - start, timed),
         last: {start, finish, again}
     }
 
@@ -3259,9 +3296,12 @@ defmodule Logex.Runner do
     do: %{state | longest: Map.update!(state.longest, task, &max(&1, took))}
 
   # The share's count: a round of the continuous task's from its start to its end, a
-  # millisecond at least, the timed tasks' runs in it left out (decision 122).
-  defp used(%{untimed: true, used: used}, took), do: used + max(took, 1)
-  defp used(%{used: used}, _took), do: used
+  # millisecond at least, the timed tasks' runs in it left out (decision 122); and since
+  # decision 396 (RV-11), with no untimed program, a round whole, its timed tasks' runs
+  # being all it runs, so that the share holds against a due periodic round as against
+  # the continuous task (provisional).
+  defp used(%{untimed: true, used: used}, took, timed), do: used + max(took - timed, 1)
+  defp used(%{used: used}, took, _timed), do: used + max(took, 1)
 
   # A trigger logic writes, an event task's single that is no input point: one that a round
   # changed makes the next round at the next millisecond (decision 123).
@@ -3336,10 +3376,15 @@ defmodule Logex.Runner do
     do: free(:queue.is_empty(queue) or now(state) >= at, at, state)
 
   # With no untimed program no round is owed but for a due time, so every request that
-  # waited is served at once, in order: one an edit's step left waiting for a slot that
-  # no longer comes among them (decision 108).
-  defp freely(%{untimed: false, queue: queue} = state),
+  # waited is served, in order, one an edit's step left waiting for a slot that no longer
+  # comes among them (decision 108), and since decision 396 (RV-11) while no periodic
+  # round is due, each whole, the rest waiting for the round that is due and served after
+  # it: the time no due round needs.
+  defp freely(%{untimed: false, next_round: nil, queue: queue} = state),
     do: free(:queue.is_empty(queue), nil, state)
+
+  defp freely(%{untimed: false, next_round: at, queue: queue} = state),
+    do: free(:queue.is_empty(queue) or now(state) >= at, at, state)
 
   defp free(true, _at, state), do: state
   defp free(false, nil, state), do: released(refresh(state, :idle))

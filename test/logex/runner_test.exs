@@ -16,7 +16,8 @@ defmodule Logex.RunnerTest do
   # A device whose every write takes `ms` on the manual clock, as a slow drive's does, and
   # which has nothing to read: so a round that writes it fills its milliseconds. With
   # `slow: n` only its first n writes take that time, the rest none, so that its writes
-  # again each poll period (decision 130) leave the clock alone.
+  # again each poll period (decision 130) leave the clock alone; with `fast: n` its first
+  # n writes take none before them.
   defmodule SlowIO do
     @behaviour Logex.IO
 
@@ -28,6 +29,7 @@ defmodule Logex.RunnerTest do
 
     @impl true
     def write(_values, %{slow: 0} = state), do: {:ok, state}
+    def write(_values, %{fast: n} = state) when n > 0, do: {:ok, %{state | fast: n - 1}}
 
     def write(_values, %{clock: clock, ms: ms} = state) do
       Manual.pass(clock, ms)
@@ -36,6 +38,23 @@ defmodule Logex.RunnerTest do
 
     defp fewer(:all), do: :all
     defp fewer(n), do: n - 1
+  end
+
+  # A stand-in for the core whose every step takes the milliseconds the test put beside
+  # the runner in this module's table, on the manual clock, as a task's long run does.
+  defmodule StepTakes do
+    alias Logex.Runtime
+
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    def cycle_step(runtime, step) do
+      passed(:ets.lookup(Logex.RunnerTest, {self(), :step_ms}))
+      Runtime.cycle_step(runtime, step)
+    end
+
+    defp passed([{_key, {clock, ms}}]), do: Manual.pass(clock, ms)
+    defp passed([]), do: :ok
   end
 
   # A device that logs each write and its close to an agent, in the order they come: so
@@ -1397,6 +1416,22 @@ defmodule Logex.RunnerTest do
     waited(request, clock)
   end
 
+  # A host's loop, on until told to stop.
+  defp looped(0, loop), do: loop.(loop)
+  defp looped(_stop, _loop), do: :ok
+
+  # The rounds run when a request is answered, with its answer, the clock moved one wake
+  # at a time and at most ten times, so that one never answered fails rather than waits.
+  defp answered_in(request, clock, tries) when tries <= 10,
+    do: answered_in(:gen_server.wait_response(request, 100), request, clock, tries)
+
+  defp answered_in({:reply, value}, _request, _clock, tries), do: {tries, value}
+
+  defp answered_in(:timeout, request, clock, tries) do
+    Manual.advance(clock, 0)
+    answered_in(request, clock, tries + 1)
+  end
+
   # How many of the requests each slot served, one wake at a time, until all are.
   defp slotted([], _clock, slots), do: Enum.reverse(slots)
 
@@ -1847,7 +1882,14 @@ defmodule Logex.RunnerTest do
       assert waited(:gen_server.send_request(runner, {:get!, "b.n"}), clock) == 4
     end
 
-    test "with no untimed program, a request is served at once, a round owed or not" do
+    # Decision 396 (RV-11), the leave for a request served at once with no untimed program,
+    # a round owed or not: a request made while a periodic round is due waits for it, the
+    # round run first and the request served after it, as one made while a round of the
+    # continuous task is owed waits for its slot, where the call was served at once, ahead
+    # of the round, `t.q` the first round's 1. On the manual clock the round comes in the
+    # advance that delivers its wake (decision 131).
+    test "with no untimed program, a request made while a periodic round is due waits for " <>
+           "it, and one made while none is due is served at once (decision 396)" do
       config =
         configured(
           "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
@@ -1860,13 +1902,155 @@ defmodule Logex.RunnerTest do
       {:ok, runner} =
         Runner.start_link(
           configuration: config,
-          io: %{"slow" => {SlowIO, clock: clock, ms: 15}},
+          io: %{"slow" => {SlowIO, clock: clock, ms: 15, slow: 1}},
           clock: {Manual, clock}
         )
 
-      # The first round took 15 ms, so the round due at 10 is owed; the call is served.
+      # The first round took 15 ms, so the round due at 10 is owed; the call waits for it,
+      # which toggles `t.q` back to 0 and takes no time, and is served after it.
       assert Manual.now_ms(clock) == 15
-      assert Runner.get!(runner, "t.q") == 1
+      request = :gen_server.send_request(runner, {:get!, "t.q"})
+      assert :gen_server.wait_response(request, 100) == :timeout
+      assert waited(request, clock) == 0
+      assert {rounds(runner), Manual.now_ms(clock)} == {2, 15}
+
+      # No round due until 20, a request is served at once.
+      assert Runner.get!(runner, "t.q") == 0
+    end
+
+    # Decision 396 (RV-11): with no untimed program the periodic rounds are the share's
+    # count, each whole, so a plant whose rounds outrun their periods serves the host's
+    # requests in the slot after C ms of them, 9 at 10%, and at 50% after each round, the
+    # first round's slot having come with nothing waiting.
+    test "with no untimed program, rounds that outrun their periods leave the host its " <>
+           "slot after C ms of them (decision 396)" do
+      config =
+        configured(
+          "task fast interval 2 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "program t toggle with fast\n  t.q q\nprogram b count with fast\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      for {overhead, waits, again} <- [{10, 3, 6}, {50, 2, 3}] do
+        {:ok, clock} = Manual.start_link()
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+            clock: {Manual, clock},
+            poll: 100_000,
+            overhead: overhead
+          )
+
+        # Each round's write takes 3 ms of a 2 ms period: at 3 the round due at 2 is owed,
+        # and a request waits for the slot, one round each advance.
+        assert {rounds(runner), Manual.now_ms(clock)} == {1, 3}
+        request = :gen_server.send_request(runner, {:get!, "b.n"})
+        assert :gen_server.wait_response(request, 100) == :timeout
+        assert answered_in(request, clock, 1) == {waits, waits}
+        assert Manual.now_ms(clock) == 3 * waits
+
+        # The slot begins the count again: the next requests made while a round is owed
+        # wait for C ms more, three rounds at 10% and one at 50%, and are served in one
+        # slot, each whole, every device refreshed first, with the idle watchdog's
+        # deadline, after the round's step's and its write's.
+        %{"slow" => slow} = devices(runner)
+        request = :gen_server.send_request(runner, {:get!, "b.n"})
+        second = :gen_server.send_request(runner, {:get!, "b.n"})
+        assert :gen_server.wait_response(request, 100) == :timeout
+        traced(slow)
+        assert answered_in(request, clock, waits) == {again, again}
+        assert :gen_server.wait_response(second, 0) == {:reply, again}
+
+        assert refreshes(slow) ==
+                 Enum.flat_map(waits..(again - 1), &[3 * &1 + 100_500, 3 * &1 + 100_500]) ++
+                   [3 * again + 100_500]
+
+        Runner.stop(runner)
+      end
+    end
+
+    # Decision 396 (RV-11): a round counts whole with no untimed program, its timed tasks'
+    # runs being all it runs: each step here takes 3 ms of a 2 ms period, so the slot comes
+    # after the round that completes 9 ms, the first counting its millisecond.
+    test "with no untimed program, a round counts whole, its timed tasks' runs in it " <>
+           "(decision 396)" do
+      config =
+        configured(
+          "task fast interval 2 priority 1\nvar_global q bool at drive.q.0\n" <>
+            "program b count with fast\n",
+          %{"count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          poll: 100_000,
+          steps: StepTakes
+        )
+
+      :ets.insert(__MODULE__, {{runner, :step_ms}, {clock, 3}})
+      Manual.advance(clock, 2)
+      assert {rounds(runner), Manual.now_ms(clock)} == {2, 5}
+      request = :gen_server.send_request(runner, {:get!, "b.n"})
+      assert :gen_server.wait_response(request, 100) == :timeout
+      assert answered_in(request, clock, 2) == {4, 4}
+      assert Manual.now_ms(clock) == 11
+    end
+
+    # Decision 396 (RV-11), c1-runner-rounds-2 on the real clock: a hundred host processes
+    # that force and unforce a point in a tight loop, each request a write of the forces
+    # file, starved a 10 ms task with no continuous task, 17 rounds in 2.5 s; now each
+    # request that comes while a round is due waits for it, and the task keeps its
+    # periods. Judged by the rounds a second against the periods that passed, half at
+    # least, which a busy machine's late wakes leave, and never by a round's lateness.
+    test "on the real clock, with no untimed program, a tight loop of forces leaves a " <>
+           "10 ms task its periods (decision 396)" do
+      dir = Path.join(System.tmp_dir!(), "logex-rv11-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      config =
+        configured(
+          "task fast interval 10 priority 1 watchdog 50\nvar_global e bool at panel.i.0\n" <>
+            "var_global hits dint at panel.q.0\nprogram c count with fast\n  c.n hits\n",
+          %{"count" => @count}
+        )
+
+      {:ok, panel} = Sim.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          forces: Path.join(dir, "plant.forces")
+        )
+
+      stop = :atomics.new(1, [])
+
+      loop = fn loop ->
+        Runner.force(runner, "e", 1)
+        Runner.unforce(runner, "e")
+        looped(:atomics.get(stop, 1), loop)
+      end
+
+      callers = for _ <- 1..100, do: Task.async(fn -> loop.(loop) end)
+      Process.sleep(200)
+      {begun, before} = {System.monotonic_time(:millisecond), Runner.status(runner).rounds}
+      Process.sleep(1000)
+      {ended, after_} = {System.monotonic_time(:millisecond), Runner.status(runner).rounds}
+      :atomics.put(stop, 1, 1)
+      Enum.each(callers, &Task.await(&1, 30_000))
+
+      assert Runner.status(runner).status == :running
+      assert after_ - before >= div(ended - begun, 10) / 2
+      Runner.stop(runner)
     end
 
     test "while it waits, every device refreshed at least once a poll period, with the " <>
@@ -2530,10 +2714,14 @@ defmodule Logex.RunnerTest do
 
       {:ok, clock} = Manual.start_link()
 
+      # Decision 396 (RV-11), the leave for a subscription made while a round was owed and
+      # served ahead of it: a request made while a periodic round is due now waits for it,
+      # so the test subscribes while none is due, the first round's write taking no time,
+      # and the second's 25 ms, where the first's did.
       {:ok, runner} =
         Runner.start_link(
           configuration: config,
-          io: %{"slow" => {SlowIO, clock: clock, ms: 25}},
+          io: %{"slow" => {SlowIO, clock: clock, ms: 25, fast: 1, slow: 1}},
           clock: {Manual, clock},
           poll: 1000
         )
@@ -2541,37 +2729,44 @@ defmodule Logex.RunnerTest do
       assert Runner.subscribe(runner) == :ok
       forwarding(runner, [:ran, :round])
 
-      # The first round's write took 25 ms, so the round at 25 runs the task due at 10 and
-      # misses the one at 20.
+      # The round at 10's write takes 25 ms, so the round at 35 runs the task due at 20 and
+      # misses the one at 30.
+      Manual.advance(clock, 10)
       Manual.advance(clock, 0)
       assert_received {Runner, ^runner, {:overlap, "fast", 1}}
 
-      assert_received {Runner, ^runner,
-                       {:fault, "fast", "z",
-                        %Logex.Fault{severity: :minor, kind: :divide_by_zero}}}
+      # The fault of each round, at 10 and at 35.
+      for _round <- [10, 35] do
+        assert_received {Runner, ^runner,
+                         {:fault, "fast", "z",
+                          %Logex.Fault{severity: :minor, kind: :divide_by_zero}}}
+      end
 
       refute_received {Runner, ^runner, {:ran, _, _, _}}
 
       assert Runner.status(runner).overlaps == %{"fast" => 1}
 
-      # In the order they happened, the round's last.
-      assert for(_ <- 1..3, do: receive(do: ({:forwarded, event} -> event))) == [
-               {:ran, "fast", "t", 25},
-               {:ran, "fast", "z", 25},
-               {:round, 25, %{"q" => 0}}
+      # In the order they happened, each round's last.
+      assert for(_ <- 1..6, do: receive(do: ({:forwarded, event} -> event))) == [
+               {:ran, "fast", "t", 10},
+               {:ran, "fast", "z", 10},
+               {:round, 10, %{"q" => 0}},
+               {:ran, "fast", "t", 35},
+               {:ran, "fast", "z", 35},
+               {:round, 35, %{"q" => 1}}
              ]
 
       refute_received {:forwarded, _}
 
       # Subscribing again replaces the kinds; unsubscribing stops them.
       assert Runner.subscribe(runner, [:round]) == :ok
-      Manual.advance(clock, 0)
-      assert_received {Runner, ^runner, {:round, 50, %{"q" => 1}}}
+      Manual.advance(clock, 5)
+      assert_received {Runner, ^runner, {:round, 40, %{"q" => 0}}}
       refute_received {Runner, ^runner, {:fault, _, _, _}}
       assert Runner.unsubscribe(runner) == :ok
-      Manual.advance(clock, 0)
+      Manual.advance(clock, 10)
       refute_received {Runner, ^runner, _}
-      assert_receive {:forwarded, {:round, 75, _}}
+      assert_receive {:forwarded, {:round, 50, _}}
     end
 
     test "a subscriber that goes down is dropped" do

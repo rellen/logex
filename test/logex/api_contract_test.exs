@@ -14112,6 +14112,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # The manual clock, every reading the runner makes passing `{test, :lag}` ms first where
   # the walk has set it: a host's request that takes that long, for the idle watchdog.
+  # Since decision 396 (RV-11) the runner reads the clock as a request comes, to judge
+  # whether a round is due, which it then waits for: that first reading, `{test,
+  # :lag_from}` set beside the lag, passes nothing, so that the request is judged as it
+  # comes and its own work takes the time.
   # A device's readings, made in its own process, pass nothing; but where the walk has set
   # `{test, :late}`, the first a device makes, inside its open, sleeps that many ms in real
   # time first, once, as a loaded machine is late, which the runner's real-time wait for
@@ -14147,7 +14151,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     def wall_ms({clock, _test}), do: Manual.wall_ms(clock)
 
     defp lag({Logex.Runner, :init, 1}, clock, test),
-      do: lagged(:ets.lookup(@table, {test, :lag}), clock)
+      do: lag_from(:ets.take(@table, {test, :lag_from}), clock, test)
 
     defp lag({Logex.Runner.Device, :init, 1}, _clock, test),
       do: late(:ets.take(@table, {test, :late}))
@@ -14161,6 +14165,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       do: Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
 
     defp lagged(_none, _clock), do: :ok
+
+    defp lag_from([_arrival], _clock, _test), do: :ok
+    defp lag_from([], clock, test), do: lagged(:ets.lookup(@table, {test, :lag}), clock)
   end
 
   # Time passed inside a step on the manual clock, which delivers no device's poll on the
@@ -14367,6 +14374,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 390 (RV-11): a fresh start and a restart whose forces file cannot be read.
     :start_forces_unread,
     :restart_forces_unread,
+    # Decision 396 (RV-11): with no untimed program, a periodic round due as a host's call
+    # comes, which it waits for.
+    :owed_periodic,
+    :waited_periodic,
     :element_pressed,
     :element_forced,
     :element_misfit,
@@ -16557,7 +16568,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp idle_or_clock(1, _lag, w), do: clock_injected(w)
 
   defp idle_or_clock(_other, lag, w) do
-    :ets.insert(@table, {{self(), :lag}, lag})
+    :ets.insert(@table, [{{self(), :lag}, lag}, {{self(), :lag_from}, :arrival}])
     status = Runner.status(w.runner)
     :ets.insert(@table, {{self(), :lag}, 0})
     assert status.status == :running
@@ -17229,9 +17240,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # ---- the checks after every step -------------------------------------------------------
 
   # A round owed is run before a host's call, which would otherwise wait for the share's
-  # slot (decision 131).
+  # slot (decision 131); and since decision 396 (RV-11), with no untimed program, a
+  # periodic round due, which a host's call would otherwise wait for, as for the slot.
   defp settled(%{status: :running, last: last} = w) when last != nil do
-    owed(untimed?(w.config) and next_at(w) <= now(w), w)
+    owed(next_at(w) <= now(w), w)
   end
 
   defp settled(w), do: w
@@ -17239,8 +17251,29 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp owed(false, w), do: w
 
   defp owed(true, w) do
+    reach(:owed_periodic, not untimed?(w.config))
+    waiting(not untimed?(w.config) and own(2) == 1, w)
+  end
+
+  defp waiting(false, w) do
     :ok = Manual.advance(w.manual, 0)
     settled(consumed(w))
+  end
+
+  # Decision 396 (RV-11), restated: with no untimed program a host's call made while a
+  # periodic round is due waits for it, unanswered until the advance that delivers its
+  # wake, and is answered after it, by the walk's own stream so that no draw moves.
+  defp waiting(true, w) do
+    request = :gen_server.send_request(w.runner, :status)
+    :sys.get_state(w.runner)
+    assert :gen_server.wait_response(request, 0) == :timeout
+    before = w.rounds
+    :ok = Manual.advance(w.manual, 0)
+    w = settled(consumed(w))
+    assert {:reply, status} = :gen_server.wait_response(request, 5000)
+    assert status.rounds > before and status.rounds <= w.rounds
+    reach(:waited_periodic, true)
+    w
   end
 
   defp checked(w) do
