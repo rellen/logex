@@ -14194,8 +14194,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   - *Decision 432, no token at all* (`function_block_test.exs`, "the loader's own compile
     is private, and no closure reaches it (decision 432)", "a closure built byte by byte
     is refused, the token's shape and every one the compiler makes (decision 432)", "a
-    real load traced gives nothing to hand in for its own (decision 432)" and "no closure
-    is a token (decisions 404, 430 and 432)"). The loader moves into `Logex.Compiler`,
+    real load traced gives nothing to hand in for its own (decision 432)", in a module of
+    its own that runs alone (*Gates and CI*, below), and "no closure is a token
+    (decisions 404, 430 and 432)"). The loader moves into `Logex.Compiler`,
     the module that compiles, and `Logex.compile/2`, `compile_file/1` and
     `compile_files/1` are its `compile/2`, `compile_file/1` and `compile_files/1`,
     delegated, their docs and argument checks unchanged; its own compile of a file over
@@ -14345,8 +14346,20 @@ and CI checked; each fix with a test that fails when it is reverted.
   record's tree red on two of `end_to_end_test.exs`'s runner tests, M4-5's and M5-8's,
   a force's write of the forces file not made within its limit of real time (`{:error,
   {:forces, :timeout}}`, decision 353) while other suites ran, green alone and at the
-  gate again (RV-7's kind). CI green on each tip backed up before this record,
-  `889e7e8`, `26a279e` and `d20b865`.
+  gate again (RV-7's kind); the traced load's own module (below) 2,786 too. CI green on
+  `889e7e8`, `26a279e` and `d20b865`, and red on this record's first tip, `12fef7d`:
+  `tag_subscript_test.exs`'s exact pin of a scan, "a program of none scans as it did
+  before M5-12", read 33 reductions a rung against its 34, while decision 432's traced
+  load, a test of an async module, held trace patterns on every function of `Enum`,
+  `:lists`, `Map`, `MapSet`, `:maps` and the modules a compile runs through, which every
+  process that calls one meets, traced or not (`p15/perrung_trace.exs`: 34 with no
+  pattern set, 33 with them set for another process, 34 once cleared). Since, that test
+  runs in a module of its own in `function_block_test.exs`,
+  `Logex.FunctionBlockTest.Traced`, `async: false`, which ExUnit runs only once every
+  async module is done, its describe, name and assertions as they were; the trace
+  counts of decision 371's tests, which set patterns only on `recompiled/4`, `loaded/2`
+  and `own_compiled/2`, which no scan calls, stay where they are. `CONTRIBUTING.md`'s
+  "Things that will bite you" tells it.
 
   *Provisional readings, put to the maintainer.* RV-14 leaves none: decisions 420 to 428
   took each reading as built. RV-15's, each pinned as built and marked provisional where

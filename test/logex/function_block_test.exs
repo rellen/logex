@@ -4637,59 +4637,6 @@ defmodule Logex.FunctionBlockTest do
       end
     end
 
-    # Decision 432, RV-12's review's trace again: a real load traced hands the compiler's
-    # internal entry nothing, so no closure of the loader's is there to capture; every
-    # closure any function of the load is handed, the compiler's, the walks' and Enum's,
-    # is refused by it; and the types the loader hands its own compile, which a trace
-    # reads, are checked when a host hands them in, compiled again from their texts, the
-    # seal edited by hand, its `xic` a `xio`, refused.
-    test "a real load traced gives nothing to hand in for its own (decision 432)", %{
-      tmp_dir: dir
-    } do
-      File.write!(
-        Path.join(dir, "seal.ld"),
-        "function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q\n"
-      )
-
-      main = "var_input a bool\nvar_output b bool\nvar s1 seal\ncal s1 a b\n"
-      File.write!(Path.join(dir, "main.ld"), main)
-      {result, calls} = load_traced(fn -> Logex.compile_file(Path.join(dir, "main.ld")) end)
-      assert {:ok, %Logex.Program{}} = result
-      assert [] = for({Logex.Compiler, :loaded, _args} = call <- calls, do: call)
-      closures = Enum.uniq(for {_module, _function, args} <- calls, fun <- funs_in(args), do: fun)
-      assert length(closures) > 50
-      {:ok, tokens, _lines} = Logex.Lexer.tokenize(main)
-      {:ok, routine} = Logex.Parser.parse(tokens)
-
-      for closure <- closures do
-        assert_raise ArgumentError,
-                     "types must be a list of function block types from Logex.compile/2, got: " <>
-                       inspect(closure),
-                     fn -> Logex.Compiler.loaded(routine, closure) end
-      end
-
-      assert [[], [%FbType{name: "seal"} = seal]] =
-               for({Logex.Compiler, :own_compiled, [_ast, types]} <- calls, do: types)
-
-      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 1, own_compiled: 0}} =
-               compiles(fn -> Logex.Compiler.loaded(routine, [seal]) end)
-
-      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 0, own_compiled: 0}} =
-               compiles(fn -> Logex.compile(main, name: "main", types: [seal]) end)
-
-      forged = put_in(seal.body.rungs, swapped(seal.body.rungs, :xic, :xio))
-      assert forged != seal
-
-      message =
-        "types must be function block types from Logex.compile/2, got: " <> inspect(forged)
-
-      assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, [forged]) end
-
-      assert_raise ArgumentError, message, fn ->
-        Logex.compile(main, name: "main", types: [forged])
-      end
-    end
-
     # A module's code as a graph of its own functions: each one's calls to the module's
     # functions, local or not, and the closures it makes, which a caller may call; the
     # functions it exports; and the functions its closures run, each closure its code
@@ -4791,65 +4738,6 @@ defmodule Logex.FunctionBlockTest do
       <<131, encoded::binary>> = :erlang.term_to_binary(term)
       encoded
     end
-
-    # Every call `fun` makes, run in a process of its own, to a function of the modules a
-    # load runs through, with its arguments, and what it gave.
-    defp load_traced(fun) do
-      modules = [
-        Logex,
-        Logex.Compiler,
-        Logex.Declarations,
-        Logex.FbType,
-        Logex.Warnings,
-        Logex.Walk,
-        Logex.Array,
-        Logex.Program,
-        Enum,
-        :lists,
-        Map,
-        MapSet,
-        :maps
-      ]
-
-      for module <- modules, do: Code.ensure_loaded!(module)
-      parent = self()
-      ref = make_ref()
-      pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
-      only = [{:_, [{:==, {:self}, pid}], []}]
-
-      try do
-        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, only, [:local])
-        :erlang.trace(pid, true, [:call])
-        send(pid, :go)
-        assert_receive {^ref, result}, 30_000
-        {result, calls(pid, [])}
-      after
-        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, false, [:local])
-      end
-    end
-
-    defp calls(pid, calls) do
-      receive do
-        {:trace, ^pid, :call, call} -> calls(pid, [call | calls])
-      after
-        0 -> Enum.reverse(calls)
-      end
-    end
-
-    defp funs_in(term) when is_function(term), do: [term]
-    defp funs_in([head | tail]), do: funs_in(head) ++ funs_in(tail)
-    defp funs_in(term) when is_tuple(term), do: funs_in(Tuple.to_list(term))
-    defp funs_in(term) when is_map(term), do: funs_in(Map.to_list(term))
-    defp funs_in(_term), do: []
-
-    # `term` with every instruction `from` made a `to`.
-    defp swapped({from, line, operands}, from, to), do: {to, line, operands}
-
-    defp swapped(term, from, to) when is_tuple(term),
-      do: List.to_tuple(swapped(Tuple.to_list(term), from, to))
-
-    defp swapped(list, from, to) when is_list(list), do: Enum.map(list, &swapped(&1, from, to))
-    defp swapped(term, _from, _to), do: term
 
     # In reductions: each file compiled once, its cost what its own compile reads, the
     # table of the types below it among it, one version of each name and the recursion
@@ -5240,5 +5128,172 @@ defmodule Logex.FunctionBlockTest do
 
     assert %Instance{env: %{"p" => %{"edge" => 0, "t1" => %{"pre" => 100}}}} =
              Runtime.instance(program)
+  end
+end
+
+# Decision 432's trace of a real load, in a module of its own that runs alone (`async:
+# false`), since ExUnit runs such a module only once every async one is done: the trace
+# patterns it sets on every function of the modules a load runs through, `Enum`'s and
+# `:maps`' among them, are met by every process that calls one, traced or not, and move
+# the reductions a scan another test counts exactly (in CI on `12fef7d`,
+# `tag_subscript_test.exs`'s "a program of none scans as it did before M5-12" read 33 a
+# rung against its 34 while they were set).
+defmodule Logex.FunctionBlockTest.Traced do
+  use ExUnit.Case, async: false
+
+  alias Logex.FbType
+
+  @moduletag :tmp_dir
+
+  # The describe of `Logex.FunctionBlockTest` it was written in, so that its name is one.
+  describe "the loader's own types (decision 371)" do
+    # Decision 432, RV-12's review's trace again: a real load traced hands the compiler's
+    # internal entry nothing, so no closure of the loader's is there to capture; every
+    # closure any function of the load is handed, the compiler's, the walks' and Enum's,
+    # is refused by it; and the types the loader hands its own compile, which a trace
+    # reads, are checked when a host hands them in, compiled again from their texts, the
+    # seal edited by hand, its `xic` a `xio`, refused.
+    test "a real load traced gives nothing to hand in for its own (decision 432)", %{
+      tmp_dir: dir
+    } do
+      File.write!(
+        Path.join(dir, "seal.ld"),
+        "function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q\n"
+      )
+
+      main = "var_input a bool\nvar_output b bool\nvar s1 seal\ncal s1 a b\n"
+      File.write!(Path.join(dir, "main.ld"), main)
+      {result, calls} = load_traced(fn -> Logex.compile_file(Path.join(dir, "main.ld")) end)
+      assert {:ok, %Logex.Program{}} = result
+      assert [] = for({Logex.Compiler, :loaded, _args} = call <- calls, do: call)
+      closures = Enum.uniq(for {_module, _function, args} <- calls, fun <- funs_in(args), do: fun)
+      assert length(closures) > 50
+      {:ok, tokens, _lines} = Logex.Lexer.tokenize(main)
+      {:ok, routine} = Logex.Parser.parse(tokens)
+
+      for closure <- closures do
+        assert_raise ArgumentError,
+                     "types must be a list of function block types from Logex.compile/2, got: " <>
+                       inspect(closure),
+                     fn -> Logex.Compiler.loaded(routine, closure) end
+      end
+
+      assert [[], [%FbType{name: "seal"} = seal]] =
+               for({Logex.Compiler, :own_compiled, [_ast, types]} <- calls, do: types)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 1, own_compiled: 0}} =
+               compiles(fn -> Logex.Compiler.loaded(routine, [seal]) end)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 0, own_compiled: 0}} =
+               compiles(fn -> Logex.compile(main, name: "main", types: [seal]) end)
+
+      forged = put_in(seal.body.rungs, swapped(seal.body.rungs, :xic, :xio))
+      assert forged != seal
+
+      message =
+        "types must be function block types from Logex.compile/2, got: " <> inspect(forged)
+
+      assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, [forged]) end
+
+      assert_raise ArgumentError, message, fn ->
+        Logex.compile(main, name: "main", types: [forged])
+      end
+    end
+
+    # `Logex.FunctionBlockTest`'s `compiles/1`, which this module cannot call: how often
+    # `fun`, run in a process of its own that this one traces, compiles a type again from
+    # its text (decision 54's `Logex.Compiler.recompiled/4`), compiles a routine
+    # through the compiler's internal entry (`Logex.Compiler.loaded/2`), and compiles a file
+    # the loader read through its own compile, private since decision 432
+    # (`own_compiled/2`), and what it gave. Until decision 432 the loader's compile was
+    # `loaded/2`'s, counted as `loaded`; since, the loader never calls `loaded/2`.
+    defp compiles(fun) do
+      Code.ensure_loaded!(Logex.Compiler)
+      patterns = [{Logex.Compiler, :recompiled, 4}, {Logex.Compiler, :loaded, 2}]
+      own = {Logex.Compiler, :own_compiled, 2}
+      for pattern <- patterns, do: assert(:erlang.trace_pattern(pattern, true, [:global]) == 1)
+      assert :erlang.trace_pattern(own, true, [:local]) == 1
+
+      try do
+        parent = self()
+        ref = make_ref()
+        pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
+        :erlang.trace(pid, true, [:call])
+        send(pid, :go)
+        assert_receive {^ref, result}, 30_000
+        {result, traced(pid, %{recompiled: 0, loaded: 0, own_compiled: 0})}
+      after
+        for pattern <- patterns, do: :erlang.trace_pattern(pattern, false, [:global])
+        :erlang.trace_pattern(own, false, [:local])
+      end
+    end
+
+    defp traced(pid, counts) do
+      receive do
+        {:trace, ^pid, :call, {Logex.Compiler, kind, _args}} ->
+          traced(pid, Map.update!(counts, kind, &(&1 + 1)))
+      after
+        0 -> counts
+      end
+    end
+
+    # Every call `fun` makes, run in a process of its own, to a function of the modules a
+    # load runs through, with its arguments, and what it gave.
+    defp load_traced(fun) do
+      modules = [
+        Logex,
+        Logex.Compiler,
+        Logex.Declarations,
+        Logex.FbType,
+        Logex.Warnings,
+        Logex.Walk,
+        Logex.Array,
+        Logex.Program,
+        Enum,
+        :lists,
+        Map,
+        MapSet,
+        :maps
+      ]
+
+      for module <- modules, do: Code.ensure_loaded!(module)
+      parent = self()
+      ref = make_ref()
+      pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
+      only = [{:_, [{:==, {:self}, pid}], []}]
+
+      try do
+        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, only, [:local])
+        :erlang.trace(pid, true, [:call])
+        send(pid, :go)
+        assert_receive {^ref, result}, 30_000
+        {result, calls(pid, [])}
+      after
+        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, false, [:local])
+      end
+    end
+
+    defp calls(pid, calls) do
+      receive do
+        {:trace, ^pid, :call, call} -> calls(pid, [call | calls])
+      after
+        0 -> Enum.reverse(calls)
+      end
+    end
+
+    defp funs_in(term) when is_function(term), do: [term]
+    defp funs_in([head | tail]), do: funs_in(head) ++ funs_in(tail)
+    defp funs_in(term) when is_tuple(term), do: funs_in(Tuple.to_list(term))
+    defp funs_in(term) when is_map(term), do: funs_in(Map.to_list(term))
+    defp funs_in(_term), do: []
+
+    # `term` with every instruction `from` made a `to`.
+    defp swapped({from, line, operands}, from, to), do: {to, line, operands}
+
+    defp swapped(term, from, to) when is_tuple(term),
+      do: List.to_tuple(swapped(Tuple.to_list(term), from, to))
+
+    defp swapped(list, from, to) when is_list(list), do: Enum.map(list, &swapped(&1, from, to))
+    defp swapped(term, _from, _to), do: term
   end
 end
