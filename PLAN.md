@@ -18,7 +18,8 @@ milestone decided having landed, and a paragraph naming what waits: the review a
 Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's and RV-2's
 questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, to
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
-RV-12's, decisions 409–432, for RV-13 to RV-15.)*
+RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
+420–432, landed on 2026-11-03.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -13454,7 +13455,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     scalar, an element read by its name or through a tag subscript, and a word's bit, both
     ways, by decision 347's holds and decisions 386's and 387's; an element no rung reads
     is held as before, and a kept instance's own connection both configurations make is
-    excepted as for decision 374 (provisional, question 5). No pin changed. Restated in
+    excepted as for decision 374 (question 5, decision 424). No pin changed. Restated in
     the configuration-edit walk's prediction of accept's refusals (`ce_predicted/2`, a
     version whose `n` is 2 reading `out`, no draw more, reaching `:read_held`). Docs:
     `Logex.Configuration.Edit`'s moduledoc.
@@ -13466,7 +13467,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     :undeclared}`, beside every other dropped value (`Logex.Image.dropped_triggers/2`), and
     the resource starts, so the runner's fresh start from a store written at a cut round
     reports it in `status/1`; only a sample by a global's name the image does not hold is
-    still refused, the image's own mistake (provisional, question 6). The leave: three of
+    still refused, the image's own mistake (question 6, decision 425). The leave: three of
     RV-3's pins, a sample of `total2` and of `fast` dropped where they were refused, and
     the store refused for a trigger of no held global naming `shown`, a global of the
     configuration, where `arm`, of none, is now a task's sample to drop. How it meets
@@ -13587,11 +13588,12 @@ and CI checked; each fix with a test that fails when it is reverted.
   "panel", :timeout}`, and two growth bounds, under a load average of 9 to 16.
 
   *Provisional readings, put to the maintainer* *(all nine answered on 2026-11-02,
-  decisions 420 to 428, each as built; RV-14 makes each mark the decision's number)*.
-  Each is pinned as built; 1 to 7 are marked provisional where the code states them
+  decisions 420 to 428, each as built; RV-14 made each mark the decision's number)*.
+  Each is pinned as built; 1 to 7 were marked provisional where the code states them
   (`399d7f6`), and 8 is the decision's own
   consequence, noted because a host sees it. RV-10's review (below) changed 4 to 7 as
-  each now says and added 9, each marked provisional where the code states it.
+  each now says and added 9, each marked provisional where the code states it; since
+  RV-14 each mark is its decision's number, 420 to 428.
 
   1. *The instance's own `now` at a warm `restart/2`* (decision 382). The decision moves a
      timer's `last` to the resource's `now`; a timer's `last` is never later than its
@@ -13666,7 +13668,7 @@ and CI checked; each fix with a test that fails when it is reverted.
      the other point, as decision 374 refuses a hold the var_output cannot keep, so the
      edit is taken only with a restart; an element wired alone and in its array wired whole
      among them, both ways; a kept instance's own connections both configurations make,
-     which hold one value, the var_output's, excepted (provisional). (a) As built; (b) held,
+     which hold one value, the var_output's, excepted (decision 428). (a) As built; (b) held,
      and the other point's move reported, a report kind of its own; (c) not held, the new
      point moving to the var_output's value at the first cycle, reported.
   **RV-10's review** (2026-11-02, of `a77acf5`: nine findings; its probes under the
@@ -13687,7 +13689,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     alone and in its array wired whole, either newly; a kept instance's own connections
     both configurations make, which hold one value, are excepted. The record is silent:
     the refusal is decision 374's and 388's answer to a hold that cannot keep its
-    promise, provisional, question 9.
+    promise, question 9, decision 428.
   - *3, the two rules no test held* (the same describe): a `:value` slot's read, a
     compare's, an add's and a move's, and an array var_output held whole read through one
     element, `o[1]` and `o[n]`, each refused, the review's R10 and R11.
@@ -13713,7 +13715,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     the review's warm restart `aux` 0 against `k2` 1, naming both values, and takes it once
     the instance has run, the lamp following its own rung; and no switch starts such a
     var_output, so a restart after accept leaves it as it is, as decision 374 leaves its
-    own (provisional, question 5).
+    own (question 5, decision 424).
   - *6, question 4 and the moduledoc* (`config_edit_test.exs`, "a retyped instance's
     frozen connection (decisions 386 and 387)"): the code held a point an instance the
     edit retypes wires through the same connection in both, the new type's var_output
@@ -13930,7 +13932,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   an array of blocks of timers, and an instance's first state.
 
   *Provisional readings, put to the maintainer* *(all four answered on 2026-11-02,
-  decisions 429 to 432: 1 and 2 as built, 3 and 4 changed, to build in RV-15)*. The
+  decisions 429 to 432: 1 and 2 as built, 3 and 4 changed, built by RV-15 on 2026-11-03
+  and every mark made the decision's number)*. The
   record is silent on each; IEC and Logix say nothing that settles them.
 
   1. *The declared instance itself* (decision 403). `var x two`, `two` a block holding
@@ -14148,12 +14151,232 @@ and CI checked; each fix with a test that fails when it is reverted.
   provisional mark RV-10 left on a reading they settle made the decision's number, in
   `lib/`, `test/` names and comments, README and PLAN's RV-10 entry, save those in the
   runner's files, which RV-13 makes. It runs with RV-15.
+  **RV-14 as built** (2026-11-03, branch `rv15` on `9a9a48c`, with RV-15). Decisions 420
+  to 428 took every reading as built, so RV-14 changes no rule and no test's assertion:
+  each provisional mark RV-10 left on a reading they settle is its decision's number.
+  - *Decision 420*, the instance's own `now` at a warm `restart/2`: the runtime's comment
+    at `at_now/2` (decision 188 kept whole).
+  - *Decision 421*, the forecast rise's `.acc`: `Logex.Edit`'s moduledoc and
+    `Logex.Edit.Plan`'s comment at `done/5`.
+  - *Decision 422*, an untest's hold, and *decision 423*, a retyped instance's:
+    `Logex.Configuration.Edit`'s moduledoc.
+  - *Decision 424*, decision 388's exception and reach: `Logex.Configuration.Edit`'s
+    moduledoc (its reach and the restart after accept) and its comments at `misheld/4`,
+    `own_misread/4` and the own source never started; `config_edit_test.exs`'s comment on
+    the own source before the instance's first run; this file's RV-10 entry (decision 388
+    and its review's finding 5); decision 388's two notes.
+  - *Decision 425*, decision 389's reason: `Logex.Image`'s two comments, the runtime's
+    `start/2` doc (a task's own sample, a global's no task takes) and its comment at
+    `put_back/3`; this file's RV-10 entry (decision 389); decision 389's note.
+  - *Decision 426*, what decision 384 takes as a value: `Logex.Name`'s comment at
+    `by_value/1` and the runtime's at a cycle's keys (`by_values/3`).
+  - *Decision 427* left no mark: the reading was the decision's own, noted.
+  - *Decision 428*, a var_output wired to two points refused: `Logex.Configuration.Edit`'s
+    moduledoc (twice) and its fan-out comment; `config_edit_test.exs`'s fan-out comment;
+    this file's RV-10 entry (finding 2 and question 9); decision 386's note.
+  - *Left to RV-13*: none. RV-10's marks are all in the files above (`399d7f6`, `37722f8`,
+    `ce59970`, read by `git show`); none is in `lib/logex/runner.ex`, `lib/logex/runner/`,
+    `lib/logex/io*` or the runner's test files, whose "provisional" marks, read one by
+    one, are RV-4's and RV-5's (decisions 390–419), RV-13's and RV-11's to make. Marks
+    older than RV-10 on readings decisions 420–428 also cover, the runtime's
+    `"steps[16#3]"` (`0a2d8f5`) among them, are other items' and left as they are.
 - **RV-15 — the answers to RV-12's questions** (decisions 431 and 432). A member's bit
   written through a tag subscript or numbered by a tag warned "may share" where the pair
   may meet, as a word array's bit is; the loader's trusted compile private code no closure
   or term a host hands in reaches, no token at all, decision 371's cost kept. And every
   provisional mark RV-12 left on a reading decisions 429–432 settle made the decision's
   number.
+  **RV-15 as built** (2026-11-03, branch `rv15` on `9a9a48c`). Each decision that changes
+  something has a test that fails when it is reverted, judged by the full suite (the
+  mutation tables below); the leave each used, a pin of the reading it changes, changed
+  there and as it says, is named with it.
+
+  - *Decision 432, no token at all* (`function_block_test.exs`, "the loader's own compile
+    is private, and no closure reaches it (decision 432)", "a closure built byte by byte
+    is refused, the token's shape and every one the compiler makes (decision 432)", "a
+    real load traced gives nothing to hand in for its own (decision 432)" and "no closure
+    is a token (decisions 404, 430 and 432)"). The loader moves into `Logex.Compiler`,
+    the module that compiles, and `Logex.compile/2`, `compile_file/1` and
+    `compile_files/1` are its `compile/2`, `compile_file/1` and `compile_files/1`,
+    delegated, their docs and argument checks unchanged; its own compile of a file over
+    the blocks it compiled itself in the same load, `own_compiled/2`, is private, reached
+    only from `compile_file/1` and `compile_files/1`, which take paths and start every
+    load afresh, through private functions, its recursion over a file's blocks and over
+    the paths explicit so that no closure of the module reaches it. The first test reads
+    the module's code (`beam_disasm`): no export but those two reaches `own_compiled/2`
+    or the unchecked table of its types, none of the 125 closures the module can make
+    does, nor the compile beneath them but through `instructionize/3`'s check, and
+    `Logex` makes none. `Logex.Compiler.loaded/2` is kept, as `instructionize/3` exactly,
+    every type a list hands it checked as decision 54 has it and every closure refused,
+    never called: decisions 430 and 432 name its refusal of a host's closure as standing,
+    RV-9's review pinned its junk refusals, and a host that called it keeps its answer;
+    the loader no longer calls it. Decision 54's own steps, `recompiled/4` and
+    `Logex.FbType.check/2`, public for the check, take what they are given as checked, as
+    their docs said, and nothing either gives holds a type it trusted: pinned as built
+    and marked provisional (`function_block_test.exs`, "recompiled/4 and check/2 trust
+    what they are given and hold none of it (provisional)", question 4 below). RV-12's
+    review's forge again (`p15/forge432.exs`):
+    a load traced hands `loaded/2` no closure, the types it hands its own compile, which a
+    trace reads, compile when handed in only after their texts are compiled again, and the
+    seal edited by hand, its `xic` a `xio`, is refused through `loaded/2` and `types:`; a
+    closure of `Logex`'s of no arguments built byte by byte, the token's shape, and one of
+    each of the compiler's 125 closures so built are refused as junk, where at `9a9a48c`
+    the review's `forge404.exs` compiled the forged seal (`b` 0 against the genuine 1);
+    at the tip `forge404.exs` stops at its first step, no closure captured. The leave:
+    the trace counts of `function_block_test.exs`, which counted `loaded/2` as the
+    loader's compile, count `own_compiled/2` beside it, the loader's `loaded: 0`; the
+    decision 404 closure test takes decision 432's name and comment. The surface pin
+    (`runtime_test.exs`): `Logex.Compiler` gains `compile/2`, `compile_file/1` and
+    `compile_files/1`, internal (no doc), `Logex`'s own three moved with the loader;
+    `Logex`'s pin is unchanged. Docs: `Logex.Compiler`'s moduledoc and `recompiled/4`'s
+    doc, `Logex.compile_file/1`'s doc, `Logex.FbType.check/2`'s doc, README's "What has
+    landed", decisions 371's and 404's notes, the forge's account taken out; CLAUDE.md's
+    lines for `lib/logex.ex` and `lib/logex/compiler.ex` kept true.
+  - *Decision 431, a member's bit judged as a word array's* (`tag_subscript_test.exs`, "a
+    member's bit through a tag subscript or numbered by a tag (decision 431)", eight
+    tests, and "a member's bits through tags beside literal ones cost linear reductions
+    (decision 431)"). `Logex.Warnings` keeps each write of a member's word of an element,
+    `l1[1].pv`, as a decision of its own, by its element's places, a literal's value or a
+    tag, its bit, numbered by a tag, a literal bit or the word whole, and whether it is a
+    coil, and judges each pair the member rules before it did not: those where a tag
+    numbers a bit of one, or a write through a tag subscript writes the word whole, and a
+    tag subscripts an element of either, each with a bit that meets every bit on one side,
+    so its element's places alone tell whether it may meet. Every form of RV-12's
+    question 3 is warned where the pair may meet, either first, in one, two and three
+    dimensions, arrays of counters and of timers, in a program and a block's body, in a
+    word array's words; a pair whose literal places differ, `ote l1[1].pv.[n]` beside
+    `ote l1[2].pv.3`, stays quiet; two coils through the very tags are told the bit
+    already has one, a coil and another write through them nothing (decision 246); of
+    several firsts a write is told the one a word array's would be. An oracle test judges
+    every pair of a coil, a pulse coil, a word written whole and a latch over a member's
+    word and over a word array of its shape, 2,269 pairs in one dimension and two: each
+    is told the same, names mapped, but the two the member rules held before, decision
+    257's literal latch and decision 288's very tags. Three readings the record is silent
+    on are pinned as built, each provisional (below): a literal bit's latch beside a coil
+    a tag numbers warned, as decision 257 warns it; a bit a tag numbers beside its word
+    written whole through the very tags warned, as a word array's is, where decision 288
+    leaves a literal bit quiet; and a write a member rule warns told too of a pair a tag
+    reaches, two warnings on its line. A one-shot keeps no storage bit in a member, so no
+    write of one meets one, pinned. A routine whose coils name no member's bit of an
+    element pays nothing; one whose member words no tag reaches keeps none of the
+    decisions. The leave: `instance_array_test.exs`'s pin of `ote
+    lane_c[1].pv.3` beside `move 5 lane_c[i].pv`, unwarned (provisional), is warned as a
+    word array's is, and its reverse is pinned beside it. Docs: `Logex.Warnings`'
+    moduledoc, README's passage on a write through a tag subscript.
+  - *The probes and fuzzers* (`p15/pr/`): RV-12's review's 15,414 pairs of
+    `pairs405.exs` give the same warnings at the tip as at `9a9a48c`, byte for byte, and
+    `judge405.exs` the same classes; `member405.exs` differs in thirteen of its 21
+    pairs, question 3's forms, each now warned, and in nothing else; `fz405.exs`, 6,000
+    programs, differs in 116, 136 warnings added and none dropped, every one of two
+    writes the oracle (`an405.exs`) says may meet, 132 lines warned that were not, and
+    none raised;
+    RV-9's review's `fix9/fz.exs`, 4,000 programs, in 53, 54 added, none dropped, every
+    one may meet, 48 lines new. Where a line was warned already by a member rule, a pair
+    of question 3's beside it may add a second warning of its own pair: each warning is of
+    a pair that may meet, where a word array's would cite one first.
+  - *RV-15's marks*: decision 429 in README's "65,536 elements at every depth",
+    `Logex.Declarations`' moduledoc, `instance_array_test.exs`'s test name and comment
+    and decision 403's note; decision 430 in the compiler's comment at `loaded/2` and
+    decision 404's note; the forge's account, decision 432's to take out, gone from
+    `Logex.Compiler`'s moduledoc and comments, `Logex.compile_file/1`'s doc, README and
+    decision 404's note.
+
+  *Cost* against `9a9a48c`, in reductions, the least of nine runs each in a fresh process
+  whose heap the collector never visits, the parent's tree and the tip's read from
+  directories of one length (`p15/cost431.exs`; RV-12's measure, which reads them from
+  paths of different lengths, moved every file's cost by some 12 reductions from the
+  path alone): every `.ld` and `.logex` file README shows 5 to 18 fewer (0.02% to
+  0.20%), the loader's closure and its two `Function.info/2` reads gone; a chain of 20
+  files through the loader 165 fewer (0.13%) and of 40 329 fewer (0.11%), each file still
+  compiled once, 2.38x at 2x as at the parent; `compile_files/1` over such a chain so
+  too; every program of `compile_total_test.exs`'s pin and of RV-12's storage index
+  within 5 of the parent's, `Logex.compile/2` one call more through its delegate; a
+  block's own file 1 more. Decision 431's own: 200 coils on members' bits of literal
+  elements, no write a tag reaches, 2.2% more in one dimension and 2.0% in two, the
+  decisions made and dropped; 100 such beside 100 through tags 12.6% more in one
+  dimension and 19.1% in two, linear (1.90x at 2x). Every scan is exactly the parent's:
+  200 mixed rungs energised and not, an array of blocks of timers, and an instance's
+  first state. RV-14 and the marks change no code.
+
+  *Mutation tables* (`p15/m432/` and `p15/m432b/` on `889e7e8`, `p15/m431/` on
+  `e20d19a`, each judged by the full suite):
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | m432_dependency_closure | the loader's recursion over a file's blocks a closure, as before | 1, the code's reach |
+  | m432_files_closure | `compile_files/1`'s over its paths a closure, as before | 1, the code's reach |
+  | m432_own_public | the loader's own compile exported | 2: the code's reach and the surface pin |
+  | m432_list_trusted | a list handed to `loaded/2` trusted, as RV-9 had it | 6 |
+  | m432_loader_checks | the loader's own types checked again | 4 (and 1 load) |
+  | m432_loader_through_loaded | the loader compiling through `loaded/2`, checked | 7 (and 1 load) |
+  | m432_token | the token restored, a closure of the compiler's own trusted | 7 |
+  | m431_filter_none | no write of a member's word kept, every word read as one no tag reaches | 6 |
+  | m431_kind_unmarked | no kind of write marked, so no pair looked at | 6 |
+  | m431_lb_coil_none | a coil on a literal element's literal bit kept no decision | 6 |
+  | m431_ln_coil_none | a coil a tag numbers on a literal element kept none | 4 |
+  | m431_ln_write_none | another write a tag numbers on a literal element, a latch's, kept none | 1 |
+  | m431_latch_none | a literal bit's latch kept none | 1 |
+  | m431_tb_coil_none | a coil on a literal bit through a tag subscript kept none | 2 |
+  | m431_tn_coil_none | a coil a tag numbers through a tag subscript kept none | 5 |
+  | m431_tw_none | a word written whole through a tag subscript kept none | 4 (and 1 load) |
+  | m431_writes_none | no write but a coil kept one | 4 |
+  | m431_reaching_numbered_only | a word written whole through a tag subscript not one a tag reaches | 3 |
+  | m431_lb_no_tw | a literal element's coil on a literal bit not compared with a word written whole through a tag subscript | 3 |
+  | m431_tw_no_lb | that word not compared with the coil, the other way | 3 |
+  | m431_places_tag | every place read as a tag, so no literal places told apart | 2 |
+  | m431_order_swap | a coil through a tag subscript told of a literal element's coil before one through a tag | 1 |
+  | m431_very_plain | two coils through the very tags told "may write through a tag subscript" | 2 |
+  | m431_unlike_plain | a write through the very tags as a coil compared with it (decision 246) | 2 |
+
+  Every mutant is killed by the full suite. Where a row says "load", that many more
+  failures were a cost bound or a runner's call under the load of other suites on the
+  machine (a load average of 10 to 15), RV-7's kind, each passing at the gate:
+  `retain_period_test.exs`'s round with a store, `real_test.exs`'s warnings' cost and
+  the life walk's runner start (`{:error, {:retain, :timeout}}`). The three pins of
+  RV-15's provisional readings that came after the table, two of decision 431's and one
+  of decision 54's steps, pin readings as built and are no fix's.
+
+  *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
+  full suite at a time: `9a9a48c` 2,773 (11 doctests, 2,762 tests); `889e7e8` 2,776;
+  `26a279e` and `e20d19a` 2,783, a run of `26a279e`'s tree red once on
+  `located_array_test.exs`'s growth in reductions under a load average of some 15 from
+  other suites, green at once again (RV-7's kind); the pins `e95095c`, the marks
+  `d20b865` and this record 2,786 (11 doctests, 2,775 tests), a first run of this
+  record's tree red on two of `end_to_end_test.exs`'s runner tests, M4-5's and M5-8's,
+  a force's write of the forces file not made within its limit of real time (`{:error,
+  {:forces, :timeout}}`, decision 353) while other suites ran, green alone and at the
+  gate again (RV-7's kind). CI green on each tip backed up before this record,
+  `889e7e8`, `26a279e` and `d20b865`.
+
+  *Provisional readings, put to the maintainer.* RV-14 leaves none: decisions 420 to 428
+  took each reading as built. RV-15's, each pinned as built and marked provisional where
+  the code states it:
+
+  1. *A literal bit's latch beside a coil a tag numbers* (decision 431). `otl
+     lanes[1].pv.3` beside `ote lanes[i].pv.[n]`, either first, is warned, as decision
+     257 warns that latch beside `ote lanes[i].pv.3`; a word array's latch of a literal
+     bit, `otl w[1].3` beside `ote w[i].[n]`, is not compared at all. (a) As built, the
+     member's own rule; (b) as a word array's, not warned.
+  2. *Two warnings on one line* (decision 431). A write a member rule already warns may
+     meet another write through a tag that numbers a bit, and is told of each: after `ote
+     lanes[1].pv.3` and `ote lanes[i].pv.[n]`, `ote lanes[i].pv.3` is told it is in
+     `lanes` as `lanes[1].pv.3` is, and that the `ote` on the second line may write it,
+     where a word array's write is told of one, the coil through a tag subscript. (a) As
+     built, each pair told; (b) one warning a write, a word array's choice.
+  3. *A bit a tag numbers beside its word written whole through the very tags* (decision
+     431). `ote lanes[i].pv.[n]` beside `move 5 lanes[i].pv` is warned, as `ote w[i].[n]`
+     beside `move 5 w[i]` is, where decision 288 leaves `ote lanes[i].pv.3` beside `move 5
+     lanes[i].pv` quiet, the very tags. (a) As built, a word array's; (b) quiet, as
+     decision 288's.
+  4. *The check's own steps* (decision 432). `Logex.Compiler.recompiled/4` and
+     `Logex.FbType.check/2`, decision 54's instruments and public for it, take the types
+     and the memo they are given as checked already, as their docs say: over a block
+     edited by hand `recompiled/4` gives a body that names it and holds none of its
+     rungs, and `check/2` given a memo that names the edit answers for it; a compile,
+     which builds its own memo and checks the body handed back as a type, refuses each.
+     So nothing a host builds passes for checked through them, but they are public
+     functions that trust what they are given. (a) As is; (b) both private, the check's
+     walk moved into the compiler, `Logex.FbType.user?/1` the one public check.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

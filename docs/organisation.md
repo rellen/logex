@@ -12142,7 +12142,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      so that every point a step reports held holds.)* *(RV-10's review, 2026-11-02: a held
      point whose var_output the configuration started wires to another point too, the
      candidate's `m1.aux k3` beside `m1.aux k2`, is refused at accept, since the hold
-     would move that other point, provisional; and assemble and cancel start each holder
+     would move that other point (decision 428); and assemble and cancel start each holder
      again before they prune, so that a prune's report of the var_output is of the value
      the hold leaves.)*
 
@@ -12513,7 +12513,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      again, where it compiled 1,035 more. RV-9's review, 2026-11-02: what `loaded/2` is
      handed is held to a type list's shape, and junk is refused as a compile's `types:` is.)*
      *(RV-12, 2026-11-02: decision 404 makes the trust a closure only the loader makes,
-     and a list handed to `loaded/2` is checked as decision 54 has it.)*
+     and a list handed to `loaded/2` is checked as decision 54 has it.)* *(RV-15,
+     2026-11-03: decision 432 takes the closure out: the loader compiles each file over
+     its own types through private code no closure reaches, `loaded/2` no longer the
+     loader's, and a chain still compiles once a file and none again.)*
 
 372. **Two writes whose subscripts differ (the review after Milestone 6),** RV-2's question
      6: `ote ee[1,i]` and `ote ee[0,i]`, two rows of a lamp panel, are warned as coils
@@ -12706,7 +12709,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      refusal's form decision 374's has, naming the var_output and the line of the first
      rung that reads it, a scalar, an element read by its name or a tag subscript, and a
      word's bit, both ways; a kept instance's own connection both configurations make is
-     excepted, as for decision 374 (provisional); restated in the configuration-edit
+     excepted, as for decision 374 (decision 424); restated in the configuration-edit
      walk's prediction of accept's refusals, `:read_held`.)* *(RV-10's review, 2026-11-02:
      a read is every read of the var_output's tag, a `:value` slot's and a tag subscript's
      or a bit number's in any slot, a write's among them, `xic a[idx]`, `ote o[idx]` and
@@ -12715,7 +12718,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      kept instance's own connection is refused where its var_output holds another value
      than its point at accept, as only a start or a restart before the instance's first run
      leaves it, and never started at a switch, so that a restart after accept leaves it as
-     it is, as decision 374 leaves its own (provisional); restated in the
+     it is, as decision 374 leaves its own (decision 424); restated in the
      configuration-edit walk, `:read_held_unrun`, and the hold walk.)*
 
 389. **A stored sample of a task the configuration drops (the review after Milestone 6),**
@@ -12728,16 +12731,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(Landed with RV-10, 2026-11-02: a sample by a name the configuration declares as no
      global and as no task with a single is dropped, `{task, :undeclared}`, beside every
      other drop, so `status/1` reports it; only one by a global's name the image does not
-     hold is still refused (provisional). RV-5's `<store>.dropped` copy, decision 360,
-     follows `start/2`'s dropped list, so it covers this drop as any; RV-5 had not landed
-     on `main` when RV-10 closed.)* *(RV-10's review, 2026-11-02: every stored sample the
-     start lays on no task is dropped and reported: a sample by a name the image holds no
-     global of is a task's whatever the configuration now declares by it, since the image
-     keeps a global's sample only with its global, so one a global of the configuration
-     now has is dropped where it was refused; a global's sample no task takes, its global
-     kept; and a task's own laid only where the image holds its single's apart from it, so
-     one of a trigger its single no longer names is dropped, the task starting at its new
-     trigger's value (decision 319), each `{name, :undeclared}` (provisional).)*
+     hold is still refused (until RV-10's review, below). RV-5's `<store>.dropped` copy,
+     decision 360, follows `start/2`'s dropped list, so it covers this drop as any; RV-5
+     had not landed on `main` when RV-10 closed.)* *(RV-10's review, 2026-11-02: every
+     stored sample the start lays on no task is dropped and reported: a sample by a name
+     the image holds no global of is a task's whatever the configuration now declares by
+     it, since the image keeps a global's sample only with its global, so one a global of
+     the configuration now has is dropped where it was refused; a global's sample no task
+     takes, its global kept; and a task's own laid only where the image holds its
+     single's apart from it, so one of a trigger its single no longer names is dropped,
+     the task starting at its new trigger's value (decision 319), each `{name,
+     :undeclared}` (decision 425).)*
 
 390. **A stalled disk at a restart or a start (the review after Milestone 6),** RV-4's
      question 1: a restart's read of the forces file is limited as decision 353 limits a
@@ -12865,8 +12869,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      below at depth 16, 131,071, its refusal costing no more than the compile at depth 1.
      A block's own declarations are each bounded, not their sum, so `two` compiles and no
      instance of it can be declared, `var x two` refused at 80,001, the instance itself
-     among them (provisional, put to the maintainer: the 80,000 its type holds is the
-     other reading).)*
+     among them (decision 429).)*
 
 404. **The loader's trust (the review after Milestone 6),** RV-9's question 3: a host that
      calls the internal `Logex.Compiler.loaded/2` with a hand-edited block type gets it
@@ -12883,7 +12886,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      edited by hand refused in `types:`'s words, as through `compile/2`; any other
      closure, a host's or an external function of `Logex`, is refused as junk in those
      words (decision 430). A chain of files still compiles once a file, none again.)*
-     *(RV-15, 2026-11-02: decision 432 takes the token out. The loader is
+     *(RV-15, 2026-11-03: decision 432 takes the token out. The loader is
      `Logex.Compiler`'s private code, `Logex.compile_file/1` and `compile_files/1`
      delegated to it, and its own compile of a file over the blocks it compiled itself
      is reached only from those two, which take paths, through private functions and no
@@ -13040,7 +13043,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the instance's `now` with it; nothing a host reads shows it but a timer.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02): decision 188 stays whole. RV-14
-     makes the mark the decision's number.
+     makes the mark the decision's number. *(RV-14, 2026-11-03: made, in the runtime's
+     comment at the restart's clock.)*
 
 421. **What a forecast rise names (the review after Milestone 6),** RV-10's question 2:
      `{:dn_rises, name, {acc, pre}}` carries the timer's present `.acc`, as a drop's
@@ -13048,7 +13052,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-02): the time of the test is not known
      at accept, and a caught-up `.acc` capped at `.pre` would always read `.pre`. RV-14
-     makes the mark the decision's number.
+     makes the mark the decision's number. *(RV-14, 2026-11-03: made, in `Logex.Edit`'s
+     moduledoc and `Logex.Edit.Plan`'s comment.)*
 
 422. **An untest holds too (the review after Milestone 6),** RV-10's question 3: decisions
      386 and 387 hold at an untest's switch as at a test's, so a spare lamp the original
@@ -13056,7 +13061,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      back.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02), as Logix leaves a tag no rung
-     writes. RV-14 makes the mark the decision's number.
+     writes. RV-14 makes the mark the decision's number. *(RV-14, 2026-11-03: made, in
+     `Logex.Configuration.Edit`'s moduledoc.)*
 
 423. **An instance whose type changes (the review after Milestone 6),** RV-10's question
      4: a point an instance the edit retypes wires through the same connection in both
@@ -13064,7 +13070,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      holds one in an instance it retypes.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02). RV-14 makes the mark the
-     decision's number.
+     decision's number. *(RV-14, 2026-11-03: made, in `Logex.Configuration.Edit`'s
+     moduledoc.)*
 
 424. **Decision 388's exception and reach (the review after Milestone 6),** RV-10's
      question 5: a kept instance's own connection both configurations make is excepted
@@ -13074,7 +13081,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and every read of the var_output's tag counts.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02). RV-14 makes the mark the
-     decision's number.
+     decision's number. *(RV-14, 2026-11-03: made, in `Logex.Configuration.Edit`'s
+     moduledoc and comments, a comment of `config_edit_test.exs`, PLAN's RV-10 entry and
+     decision 388's notes.)*
 
 425. **Decision 389's reason (the review after Milestone 6),** RV-10's question 6: every
      stored trigger sample a start lays on no task is dropped and reported `{name,
@@ -13082,7 +13091,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-02): one reason for a stored value
      the configuration takes nowhere, the copy keeping it. RV-14 makes the mark the
-     decision's number.
+     decision's number. *(RV-14, 2026-11-03: made, in `Logex.Image`'s comments, the
+     runtime's comment and `start/2`'s doc, PLAN's RV-10 entry and decision 389's note.)*
 
 426. **What decision 384 takes as a value (the review after Milestone 6),** RV-10's
      question 7: every integer literal names an element by its value, so `temps[16#3]` is
@@ -13090,14 +13100,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      refused.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02), as IEC reads `16#3` wherever an
-     integer goes. RV-14 makes the mark the decision's number.
+     integer goes. RV-14 makes the mark the decision's number. *(RV-14, 2026-11-03: made,
+     in `Logex.Name`'s comment and the runtime's comment on a cycle's keys.)*
 
 427. **A held-on `tof`'s done bit before the first scan (the review after Milestone 6),**
      RV-10's question 8: rested by the restart (decision 385), a fan's run-on reads `.dn`
      0 at once, where until RV-10 it read 1 until the first scan.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02), as Logix's prescan leaves a
-     TOF.
+     TOF. *(RV-14, 2026-11-03: no mark to make; the reading was pinned as built.)*
 
 428. **A held point's var_output wired to another point too (the review after Milestone
      6),** RV-10's question 9: accept refuses an edit that would hold a point whose
@@ -13106,6 +13117,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: refused, as built (a)** (the maintainer, 2026-11-02), as decision 374 refuses
      a hold the var_output cannot keep. RV-14 makes the mark the decision's number.
+     *(RV-14, 2026-11-03: made, in `Logex.Configuration.Edit`'s moduledoc and comments, a
+     comment of `config_edit_test.exs`, PLAN's RV-10 entry and decision 386's note.)*
 
 429. **The declared instance itself (the review after Milestone 6),** RV-12's question 1
      (decision 403): an instance counts one besides what its type holds, alone or in an
@@ -13114,14 +13127,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      can be declared.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02): one rule for every instance.
-     RV-15 makes the mark the decision's number.
+     RV-15 makes the mark the decision's number. *(RV-15, 2026-11-03: made, in README,
+     `Logex.Declarations`' moduledoc, `instance_array_test.exs`'s test name and comment
+     and decision 403's note.)*
 
 430. **A closure that is not the loader's (the review after Milestone 6),** RV-12's
      question 2 (decision 404): a host's closure handed to `Logex.Compiler.loaded/2` is
      refused, "types must be a list of function block types", and never called.
 
      **Taken: as built (a)** (the maintainer, 2026-11-02). RV-15 makes the mark the
-     decision's number.
+     decision's number. *(RV-15, 2026-11-03: made, in the compiler's comment at `loaded/2`
+     and decision 404's note; since decision 432 the loader never calls `loaded/2`, so
+     every closure handed to it is refused, the old token's kind among them.)*
 
 431. **A bit a tag numbers of a member of an element (the review after Milestone 6),**
      RV-12's question 3: two coils that may set one bit of a member of an element, `ote
@@ -13131,7 +13148,25 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: warned (b)** (the maintainer, 2026-11-02): a member's bit written through a
      tag subscript or numbered by a tag is judged as a word array's bit is, warned "may
      share" where the pair may meet, and a pair whose literal places differ stays quiet,
-     as decisions 372 and 405 have it. To build in RV-15.
+     as decisions 372 and 405 have it. To build in RV-15. *(Landed with RV-15, 2026-11-03:
+     `Logex.Warnings` keeps each write of a member's word of an element, `l1[1].pv`, a
+     decision of its own by its element's literal or tag subscripts, its bit, numbered by a
+     tag, a literal bit or the word whole, and whether it is a coil, and judges each pair
+     the member rules before it did not, those where a tag numbers a bit of one, or a
+     write through a tag subscript writes the word whole, and a tag subscripts an element
+     of either, as a word array's element and bits are judged (decision 405): every form
+     of RV-12's question 3 warned where the pair may meet, either first, in a word array's
+     words and in its order of firsts, `ote l1[1].pv.[n]` beside `ote l1[2].pv.3` quiet;
+     and so `ote l1[1].pv.3` beside `move 5 l1[i].pv`, which a provisional pin had left
+     unwarned. Decision 257's literal latch and decision 288's very tags stand where they
+     judge a pair; a literal bit's latch beside a coil a tag numbers is warned as decision
+     257 warns it, a bit a tag numbers beside its word written whole through the very tags
+     as a word array's is, and a write a member rule warns is told too of a pair a tag
+     reaches, each provisional. A one-shot keeps no storage bit in a member, so no such
+     write meets one. A routine whose coils name no member's bit of an element pays
+     nothing; 200 literal coils on members' bits, with no write a tag reaches, compile
+     2.2% dearer, and 100 beside 100 through tags 12.6% in one dimension and 19.1% in two,
+     linear.)*
 
 432. **A token built byte by byte (the review after Milestone 6),** RV-12's question 4
      (decision 404, RV-12's review): a closure a host builds byte by byte in the VM's
@@ -13142,7 +13177,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      compile is private code that no closure or term a host hands in reaches, so nothing a
      host builds passes for the loader's own, as decision 404 has it; decision 371's cost
      stands, a chain of blocks compiled once a file, and decision 430's refusal of a host's
-     closure stands. To build in RV-15.
+     closure stands. To build in RV-15. *(Landed with RV-15, 2026-11-03: the loader is
+     `Logex.Compiler`'s, `Logex.compile/2`, `compile_file/1` and `compile_files/1` its
+     `compile/2`, `compile_file/1` and `compile_files/1`, delegated, and its own compile of
+     a file over the blocks it compiled itself in the same load, `own_compiled/2`, is
+     private, reached only from `compile_file/1` and `compile_files/1`, which take paths,
+     through private functions and no closure, which a test reads from the module's code.
+     `loaded/2`, which the loader no longer calls, is `instructionize/3`, every type a
+     list hands it checked and every closure refused, never called (decision 430). The old
+     token's shape and every closure the compiler makes, built byte by byte, are refused,
+     and a real load traced hands `loaded/2` nothing; a chain of files still compiles once
+     a file, a little cheaper, 165 reductions fewer at 20 files and 329 at 40. Decision
+     54's own steps, `recompiled/4` and `Logex.FbType.check/2`, still take what they are
+     given as checked and hold none of it, provisional.)*
 
 ---
 
