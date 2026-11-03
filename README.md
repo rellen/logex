@@ -3458,10 +3458,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   number cut in its digits read as a smaller one; a hand edit that changes a line in
   place keeps the count, and one that adds or takes away a line changes it too. A store
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. A store an editor saved with CRLF
-  line ends, or a lone CR's, is refused at its first line holding a carriage return,
-  told so in those words, and one saved with a byte-order mark before its header is told
-  so too, the rest of it read as if the mark were not there; a comment, a tab and a byte
+  before, and the next write makes it `logex retain 2`. The runner ends each line with LF
+  and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
+  configuration file, so a store an editor saved with CRLF line ends starts as written,
+  its lines counted however they end, and its next write is LF's again (decision 410); one
+  saved with a byte-order mark before its header is told so, the rest of it read as if
+  the mark were not there; a comment, a tab and a byte
   past ASCII are each refused, told as what they are; and a refusal names at most the
   first 50 problems and then counts the rest, each text of the store it quotes at most 60
   bytes and printable, and the store's path printable too, each line's 1,000 bytes
@@ -4304,9 +4306,10 @@ stage: nil
   point not forced is accepted (decision 140); with no runner, deleting the file clears
   every force. Since RV-5 a refusal names at most the first 50 problems and then counts
   the rest, each text of the file it quotes at most 60 bytes, a point's name and a
-  value's spelling among them, a control byte or one past ASCII but a tab or a carriage
-  return shown as `\xFF`, and the file's path printable; a carriage return after a value,
-  as a file saved with CRLF line ends holds, is still no force.
+  value's spelling among them, a control byte or one past ASCII but a tab shown as
+  `\xFF`, and the file's path printable. A line ends at LF, CRLF or a lone CR alike, as
+  in a program, so a file a technician saved with CRLF line ends forces as written, `hz
+  1.5` forcing 1.5, and the next force writes it with LF (decision 410).
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's

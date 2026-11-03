@@ -14431,7 +14431,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 360 (RV-5): a fresh start that dropped from its store copied it; and decision
     # 355: the store a warm start would read, cut short, refused.
     :store_copied,
-    :store_cut_refused
+    :store_cut_refused,
+    # Decision 410 (RV-13): a warm fresh start from a store saved with CRLF line ends and
+    # from one saved with a lone CR's, and a forces file saved with CRLF beside it.
+    :store_crlf_read,
+    :store_cr_read,
+    :forces_crlf_read
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14752,6 +14757,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # the copy's `.tmp`, and the store's text while its copy is owed.
       owing: false,
       owed: nil,
+      # Decision 410 (RV-13): the bytes the last fresh start read, the store saved with the
+      # line end its text chose, and that text, nil for none (`line_ended!/2`).
+      saved: nil,
       # Decision 390 (RV-11): the forces file status/1 names as one the last start or
       # restart could not read, nil for none; and since RV-11's review what the file holds
       # where it is not the set the runner holds, after a fresh start that could not read
@@ -14822,7 +14830,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # its own trip wrote after.
   defp store_text(%{store: nil}), do: nil
   defp store_text(%{stored: nil}), do: nil
-  defp store_text(%{store: store}), do: File.read!(store)
+  defp store_text(w), do: on_disk(w)
+
+  # The store's text as the model reads it: as the runner wrote it, with LF, or, where it
+  # is still the bytes the last fresh start read, saved with CRLF or a lone CR's line ends
+  # (decision 410, `line_ended!/2`), the text it was saved from, which the runner never
+  # writes otherwise.
+  defp on_disk(w), do: unsaved(File.read!(w.store), w.saved)
+
+  defp unsaved(saved, {saved, text}), do: text
+  defp unsaved(text, _saved), do: text
 
   # The model's resource at a fresh start (decision 271, restated): with no store, the
   # configuration's; with a store and nothing written yet, the configuration's, written at
@@ -14889,6 +14906,38 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     File.write!(w.store, text)
     reach(:store_cut_refused, true)
   end
+
+  # Decision 410, restated (RV-13): a store and a forces file saved with CRLF line ends,
+  # or a lone CR's, are read as the runner wrote them, with LF. Before each warm fresh
+  # start that reads a store, the store, and the forces file where it holds a force, are
+  # saved again with the line end the store's own text chooses, so that no draw is taken,
+  # LF, CRLF or a lone CR, and the model reads each as it was; the copy a start makes is
+  # the bytes it read, the store as saved, and the runner's next write of either is LF's.
+  defp line_ended!(%{start: :cold}, text), do: text
+  defp line_ended!(_w, nil), do: nil
+
+  defp line_ended!(w, text) do
+    ending = Enum.at(["\n", "\r\n", "\r"], rem(:erlang.phash2(text), 3))
+    saved = String.replace(text, "\n", ending)
+    File.write!(w.store, saved)
+    forces_ended!(w.file, ending)
+    reach(:store_crlf_read, ending == "\r\n")
+    reach(:store_cr_read, ending == "\r")
+    saved
+  end
+
+  defp saved_as(nil, _text), do: nil
+  defp saved_as(saved, text), do: {saved, text}
+
+  defp forces_ended!(nil, _ending), do: :ok
+  defp forces_ended!(file, ending), do: forces_saved!(File.read(file), file, ending)
+
+  defp forces_saved!({:ok, text}, file, ending) when text != "" do
+    File.write!(file, String.replace(text, "\n", ending))
+    reach(:forces_crlf_read, ending == "\r\n")
+  end
+
+  defp forces_saved!(_none, _file, _ending), do: :ok
 
   # Decision 360, restated (RV-5): a warm fresh start whose matching drops anything copies
   # the store it read, byte for byte, to `<store>.dropped` before its first write; any other
@@ -15146,6 +15195,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     reach(:write_limit_given, w.write_limit != nil)
     cut_refused!(w, text, opts)
+    saved = line_ended!(w, text)
+    w = %{w | saved: saved_as(saved, text)}
     late = late_open()
     unreadable = start_unreadable(w)
     {:ok, runner} = Runner.start_link(opts)
@@ -15189,7 +15240,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
-    w = copied_at(w, text)
+    w = copied_at(w, saved)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
     # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
@@ -15902,6 +15953,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # store while it is, and the end's write making it.
     :life_copy_owed,
     :life_copy_made_late,
+    # Decision 410 (RV-13): a warm fresh start from a store saved with CRLF line ends and
+    # from one saved with a lone CR's, and a forces file saved with CRLF beside it.
+    :store_crlf_read,
+    :store_cr_read,
+    :forces_crlf_read,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -16244,7 +16300,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # A count in the store's text that no dint holds, as a hand edit leaves it.
   defp misfit_store(:misfit, %{stored: {_kt, k}} = w) when is_integer(k) do
-    text = File.read!(w.store)
+    text = on_disk(w)
     assert text =~ "\nk1.k dint #{k}\n"
     File.write!(w.store, String.replace(text, "\nk1.k dint #{k}\n", "\nk1.k dint 3000000000\n"))
   end
@@ -16320,7 +16376,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_store!(%{store: nil}), do: :ok
 
   defp life_store!(w) do
-    text = File.read!(w.store)
+    text = on_disk(w)
     life_counts!(w, text)
     life_body!(w.shelf_stored, text)
     reach(:life_changed_store, w.change != nil)

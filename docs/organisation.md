@@ -4638,7 +4638,7 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   `ArgumentError` a line each, and the runner does not start; `start: :cold` does not
   read it. *(Since decision 355, RV-5, 2026-11-02: the header is `logex retain 2` and the
   last line the store's count of lines, `end 11 lines` for the store above, the header
-  and the end line among them, as `wc -l` counts them (the words provisional); a store of
+  and the end line among them, as `wc -l` counts them (the words decision 409's); a store of
   version 2 whose last line is no end line, or whose end line counts other than its
   lines, is refused at a fresh start, naming the file and the line. A cut keeps a file's
   first bytes and the end line is the last of them, so a cut at a line boundary or inside
@@ -4655,7 +4655,13 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   as if it were not there; the cut store's message saying that `start: :cold` writes over
   it at once; and every refusal's path printable, a line's 1,000 bytes counted after it,
   and a forces file's point names and spellings quoted in 60 bytes as every text of the
-  file is.)*
+  file is.)* *(Decision 410, RV-13, 2026-11-03: the store and the forces file read a line
+  ended by LF, CRLF or a lone CR alike, as B8 has the source's and a configuration file's
+  readers read them, a store's lines counted however they end, so that a store or a
+  forces file a hand edit saved with CRLF line ends is read as written, `hz 1.5` forcing
+  1.5, where RV-5 refused the store at its first carriage return and M5-11's review read
+  a carriage return after a value as no force; a store saved so and cut short is refused
+  as any cut store is, and logex writes both with LF.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

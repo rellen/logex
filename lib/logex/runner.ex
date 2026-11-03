@@ -272,12 +272,14 @@ defmodule Logex.Runner do
     `m1.boxes.cv dint 41`, an array's elements in the elements' order, `m1.weights int[8]
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
     `last` never; and since decision 355 its end line, `end 9 lines`, its count of lines,
-    the header and the end line among them (the words provisional), so that a store cut
-    short anywhere, at a line's end or inside a number, is refused at a fresh start, never
-    read short. A store of `logex retain 1`, which has no end line, is read as before.
-    Since RV-5 a store holding a carriage return, as one saved with CRLF line ends does,
-    is refused in those words at its first line holding one (provisional); a comment, a
-    tab and a byte no store holds are each told as what they are; and a
+    the header and the end line among them (the words decision 409's), so that a store
+    cut short anywhere, at a line's end or inside a number, is refused at a fresh start,
+    never read short. A store of `logex retain 1`, which has no end line, is read as
+    before. The runner writes each line ended by LF, and since decision 410 reads a line
+    ended by LF, CRLF or a lone CR alike, as the source's and a configuration file's
+    readers do, so that a store a hand edit saved with CRLF line ends starts, its lines
+    counted however they end, where RV-5 refused it at its first carriage return; a
+    comment, a tab and a byte no store holds are each told as what they are; and a
     refusal, the forces file's as the store's, names at most its first 50 problems and
     counts the rest, each text of the file it quotes at most 60 bytes and printable. A
     hand edit is made with the runner stopped (decision 284): a runner still running
@@ -461,8 +463,10 @@ defmodule Logex.Runner do
   since and `status/1` did not show (provisional, RV-11's review); a line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
-  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file is read exactly as the runner writes it, a last line with no newline
-  read, and an unforce of a point not forced is accepted, writing the set again
+  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file is read exactly as the runner writes it, a last line with no line end
+  read, and since decision 410 a line ended by LF, CRLF or a lone CR read alike, the
+  runner writing LF, so that `hz 1.5` saved with CRLF line ends forces 1.5, where its
+  carriage return was no force (M5-11's review), and an unforce of a point not forced is accepted, writing the set again
   (decision 140), but for a point's value, which since decision 218 for a real point and
   decision 226 for every other is any number the lexer reads as one literal and the
   point's type holds, `fan_hz 37.50`, `3.75e1` or `37`, `eye_1 01` or `level 16#ff`, held
@@ -1893,7 +1897,7 @@ defmodule Logex.Runner do
   defp forces_read({:ok, text}, path, points) do
     {forces, _lines, problems} =
       text
-      |> String.split("\n")
+      |> forces_lines()
       |> unended()
       |> Enum.with_index(1)
       |> Enum.reduce({%{}, %{}, []}, &force_line(&1, &2, points))
@@ -1901,15 +1905,21 @@ defmodule Logex.Runner do
     forces_taken(Enum.reverse(problems), path, forces)
   end
 
-  # The text after the last newline, empty in a file the runner wrote, is no line.
+  # Decision 410 (RV-13): the file's lines end with LF, CRLF or a lone CR alike, as B8 has
+  # the source's and a configuration file's readers read them and as the store's are
+  # (`Logex.Retain`), so that `hz 1.5` saved with CRLF line ends forces 1.5, where M5-11's
+  # review read the carriage return after its value as no force; the runner writes LF.
+  defp forces_lines(text), do: String.split(text, ["\r\n", "\r", "\n"])
+
+  # The text after the last line end, empty in a file the runner wrote, is no line.
   defp unended(lines), do: unended(List.last(lines), lines)
   defp unended("", lines), do: Enum.drop(lines, -1)
   defp unended(_last, lines), do: lines
 
-  # A line holding a byte no forces file holds, a tab, a carriage return, any other
-  # control byte or one past ASCII, is no force (RV-5), told before its name is read, so
-  # that a refusal quotes no such byte raw; a tab and a carriage return after a value were
-  # no force before (M5-11's review), quoted as they are.
+  # A line holding a byte no forces file holds, a tab, any other control byte or one past
+  # ASCII, is no force (RV-5), told before its name is read, so that a refusal quotes no
+  # such byte raw; a tab after a value was no force before (M5-11's review), quoted as it
+  # is. A carriage return ends a line since decision 410, so no line holds one.
   defp force_line({text, line}, acc, points),
     do: force_text(Logex.Refusal.unprintable(text), {text, line}, acc, points)
 

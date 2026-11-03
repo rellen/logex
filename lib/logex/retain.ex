@@ -36,7 +36,8 @@ defmodule Logex.Retain do
   #
   # The end line (decision 355): a store's last line is `end <count> lines`, its count of
   # lines, the header and the end line among them, as `wc -l` counts a file whose last
-  # line ends with a newline (the words provisional). A store of version 2 whose last
+  # line ends with a newline (the words decision 409's), and since decision 410 however
+  # each line ends, LF, CRLF or a lone CR. A store of version 2 whose last
   # line is no end line, or whose end line counts other than the lines it has, is refused
   # at a fresh start, naming the file and the line, so that a store is read whole or not
   # at all. Why a count of lines catches both kinds of cut: a cut keeps a file's first
@@ -51,10 +52,12 @@ defmodule Logex.Retain do
   # line, is read as it was, a cut one among it; every store written since is of version
   # 2.
   #
-  # A store's lines end with LF, as the runner writes them; since RV-5 (a7-docs-1,
-  # c2-runner-persist-10) one holding a carriage return, as a hand edit saved with CRLF
-  # line ends leaves, is refused in plain words at its first, where every line was told as
-  # the line it seemed and was not (provisional). A refusal names the file and each line,
+  # A store's lines end with LF, as the runner writes them, and since decision 410
+  # (RV-13) a line ended by CRLF or a lone CR is read alike, as B8 has the source's and a
+  # configuration file's readers read it, so that a store a hand edit saved with CRLF line
+  # ends starts, where RV-5 (a7-docs-1, c2-runner-persist-10) refused it at its first
+  # line holding a carriage return; a store saved so and cut short is refused as any cut
+  # store is, its last line no end line or its count cut. A refusal names the file and each line,
   # bounded and printable as `Logex.Refusal` has it, the forces file's and the image's
   # too (b3-store-image-11); and a comment, a tab and a byte no store holds are each told
   # as what it is (b3-store-image-10), where a line holding one was told as a line of no
@@ -214,28 +217,8 @@ defmodule Logex.Retain do
   # is not one, or is of another configuration, is the host's mistake, every problem a line
   # of one ArgumentError, `<path>: line <n>: …` (decisions 276 and 285). What its image
   # holds is judged by `Logex.Runtime.start/2`, which forgives a changed configuration.
-  def decode!(text, at), do: returned(:binary.match(text, "\r"), text, at)
-
-  # RV-5 (a7-docs-1, c2-runner-persist-10): a store holding a carriage return, which a
-  # hand edit saved with CRLF line ends, or a lone CR's, leaves at every line's end, is
-  # refused in plain words at the first line that holds one, and nothing else of it told,
-  # where every line was told as the line it seemed and was not, `the store is of version
-  # 1\r`; the forces file, whose refusal of a carriage return after a value its tests pin
-  # (M5-11's review), tells one as no force (provisional: refused, where the source's and
-  # a configuration file's readers read CRLF as LF).
-  defp returned({at, 1}, text, {path, _name}),
-    do:
-      refused!(
-        [
-          {length(:binary.matches(binary_part(text, 0, at), "\n")) + 1,
-           "the line ends with a carriage return, as a store saved with CRLF line ends does: " <>
-             "a store's lines end with LF alone, as the runner writes them, so save it so"}
-        ],
-        path
-      )
-
-  defp returned(:nomatch, text, {path, name}) do
-    {marked, lines} = text |> String.split("\n") |> unended() |> Enum.with_index(1) |> marked()
+  def decode!(text, {path, name}) do
+    {marked, lines} = text |> lines() |> unended() |> Enum.with_index(1) |> marked()
     {written_at, problems} = headed(lines, name)
     {body, ending, last} = ended(lines)
 
@@ -332,7 +315,16 @@ defmodule Logex.Retain do
          "count of lines a whole number"}
     ]
 
-  # The text after the last newline, empty in a file the runner wrote, is no line.
+  # Decision 410 (RV-13): a store's lines end with LF, CRLF or a lone CR alike, as B8 has
+  # the source's and a configuration file's readers read them (`Logex.Lexer`,
+  # `Logex.Configuration.Text`), so that a store a hand edit saved with CRLF line ends,
+  # or a lone CR's, is read as the store it is, where since RV-5 it was refused at its
+  # first line holding a carriage return; the runner writes LF. `\r\n` is one line end,
+  # the longest of the three where they meet, and `\r\r\n` two, a line left empty between
+  # them, as the lexer reads it.
+  defp lines(text), do: String.split(text, ["\r\n", "\r", "\n"])
+
+  # The text after the last line end, empty in a file the runner wrote, is no line.
   defp unended(lines), do: unended(List.last(lines), lines)
   defp unended("", lines), do: Enum.drop(lines, -1)
   defp unended(_last, lines), do: lines

@@ -15,7 +15,9 @@ defmodule Logex.Refusal do
   #   ended `…`, each byte of it no store or forces file holds shown as its escape, `\xFF`,
   #   so that a refusal is printable, where a byte past ASCII made `IO.puts/1` of it raise;
   #   a tab and a carriage return are quoted as they are, as the forces file's refusals
-  #   quoted them before, which its tests pin (M5-11's review).
+  #   quoted them before, which its tests pin (M5-11's review). Since decision 410 (RV-13)
+  #   a carriage return ends a line of either file, as LF does, so no line quoted holds
+  #   one.
   # - Since RV-5's review the file's path, the host's, as each line names it, is printable
   #   and bounded too (path/1): a control byte, DEL and a byte of no UTF-8 character shown
   #   as its escape, and a path past 4,096 bytes, the most a path Linux opens holds, shown

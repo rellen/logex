@@ -841,41 +841,109 @@ defmodule Logex.RetainStoreTest do
       do: @head <> Enum.map_join(lines, &(&1 <> "\n")) <> "end #{length(lines) + 3} lines\n"
 
     # a7-docs-1, c2-runner-persist-10: a store a hand edit saved with CRLF line ends, or
-    # a lone CR's, refused in plain words at its first line holding a carriage return,
-    # nothing else of it told, where each line was told as the line it seemed and was not,
-    # "the store is of version 1\r" (provisional: refused, where the source's and a
-    # configuration file's readers read CRLF as LF, since the forces file's tests pin a
-    # carriage return after a value as no force).
-    test "a store saved with CRLF or a lone CR is refused in plain words", %{tmp_dir: dir} do
+    # a lone CR's, where each line was told as the line it seemed and was not, "the store
+    # is of version 1\r". RV-5 refused it in plain words at its first line holding a
+    # carriage return; decision 410 (RV-13), the leave for that reading: it is read as the
+    # store it is, a line ended by LF, CRLF or a lone CR alike, as B8 has the source's and
+    # a configuration file's readers read them, its lines counted however they end, and the
+    # next write is LF's.
+    test "a store saved with CRLF or a lone CR is read as the runner wrote it",
+         %{tmp_dir: dir} do
       rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0, 1])
+      assert values(runner) == [2, 2, 1, 2]
       assert Runner.stop(runner) == :ok
       text = File.read!(rig.store)
-      reads = Sim.reads(rig.panel)
+      refute text =~ "\r"
+
+      # Each line ended so, and one line alone ended by CRLF, and every kind of end in one
+      # store: each starts with every value the stop wrote, and its next write is LF's.
+      mixed =
+        text
+        |> String.split("\n", trim: true)
+        |> Enum.zip(Stream.cycle(["\r\n", "\r", "\n"]))
+        |> Enum.map_join(fn {line, ending} -> line <> ending end)
+
+      for saved <- [
+            String.replace(text, "\n", "\r\n"),
+            String.replace(text, "\n", "\r"),
+            String.replace(text, "\nt1.boxes ctu\n", "\nt1.boxes ctu\r\n"),
+            mixed
+          ] do
+        File.write!(rig.store, saved)
+        opener_down(rig.panel)
+        {:ok, runner} = Runner.start_link(rig.opts)
+        assert values(runner) == [2, 2, 1, 2], inspect(saved)
+        assert Runner.status(runner).retain.dropped == []
+        assert Runner.stop(runner) == :ok
+        assert File.read!(rig.store) == text
+      end
+    end
+
+    # Decision 410: a store saved with CRLF, or a lone CR's, cut at any byte is refused, or
+    # read whole, as one saved with LF is (decision 355): its end line is last however its
+    # lines end, so only a cut of its last line end, or of the CR or the LF of a last CRLF,
+    # keeps every line whole; every other cut leaves a last line that is no end line, or
+    # cuts the end line's count or its word.
+    test "a store saved with CRLF or a lone CR and cut short is refused, as one of LF is" do
+      text = """
+      logex retain 2
+      configuration plant written 2026-10-30T14:00:00Z
+      global total dint 1234567
+      instance l1 line
+      l1.n dint 76543
+      end 6 lines
+      """
+
+      whole = Retain.decode!(text, {"s", "plant"})
 
       for ending <- ["\r\n", "\r"] do
-        File.write!(rig.store, String.replace(text, "\n", ending))
+        saved = String.replace(text, "\n", ending)
+        assert Retain.decode!(saved, {"s", "plant"}) == whole
 
-        raises(
-          "#{rig.store}: line 1: the line ends with a carriage return, as a store saved with " <>
-            "CRLF line ends does: a store's lines end with LF alone, as the runner writes " <>
-            "them, so save it so",
-          fn -> Runner.start_link(rig.opts) end
-        )
+        results =
+          for at <- 0..(byte_size(saved) - 1) do
+            try do
+              {:read, Retain.decode!(binary_part(saved, 0, at), {"s", "plant"})}
+            rescue
+              error in ArgumentError -> {:refused, error.message}
+            end
+          end
+
+        {read, refused} = Enum.split_with(results, &match?({:read, _}, &1))
+        kept = byte_size(ending)
+        assert read == List.duplicate({:read, whole}, kept), ending
+        assert Enum.take(results, -kept) == read
+        assert length(refused) == byte_size(saved) - kept
+
+        for {:refused, message} <- refused,
+            do: assert(message =~ ~r/\As: line \d+: /, message)
       end
 
-      # A carriage return in one line alone told at its line.
-      File.write!(rig.store, String.replace(text, "\nt1.boxes ctu\n", "\nt1.boxes ctu\r\n"))
+      # A cut inside a number of a CRLF store, and at a line's end, each told at the line
+      # the cut left last, as the store saved with LF is.
+      saved = String.replace(text, "\n", "\r\n")
+      [{at, 3}] = :binary.matches(saved, "123")
+      [{line_5, 4}] = :binary.matches(saved, "l1.n")
 
       raises(
-        "#{rig.store}: line 5: the line ends with a carriage return, as a store saved with " <>
-          "CRLF line ends does: a store's lines end with LF alone, as the runner writes " <>
-          "them, so save it so",
-        fn -> Runner.start_link(rig.opts) end
+        "s: line 3: `global total dint 12` is the store's last line, and no end line: a " <>
+          "store of `logex retain 2` ends with `end <count> lines`, its count of lines, so " <>
+          "this one was cut short, and a store cut short is not read: start it with " <>
+          "start: :cold to start over it, which writes a new store over it at once, so " <>
+          "copy it aside first to keep what it holds",
+        fn -> Retain.decode!(binary_part(saved, 0, at + 2), {"s", "plant"}) end
       )
 
-      assert Sim.reads(rig.panel) == reads
+      raises(
+        "s: line 4: `instance l1 line` is the store's last line, and no end line: a " <>
+          "store of `logex retain 2` ends with `end <count> lines`, its count of lines, so " <>
+          "this one was cut short, and a store cut short is not read: start it with " <>
+          "start: :cold to start over it, which writes a new store over it at once, so " <>
+          "copy it aside first to keep what it holds",
+        fn -> Retain.decode!(binary_part(saved, 0, line_5), {"s", "plant"}) end
+      )
     end
 
     test "a comment, a tab and a byte no store holds are told as what they are" do
