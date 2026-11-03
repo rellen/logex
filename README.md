@@ -3506,7 +3506,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
   `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
   and `written_at` the last write known made, until a later write lands or fails, and has
-  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"`, and a
+  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped.1"`, and a
   write over the store that owes the copy first and is killed in the copy's own write,
   the store as it was; one killed in the store's names the store, the copy made (decision
   391; the key, how long it stands and the file named provisional).
@@ -3549,10 +3549,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   write and the store keeps its last write before it.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
-  `.tmp` the other is written through, or the forces file naming the store's copy,
-  `tally.retain.dropped` (below), or its `.tmp`, is refused at start, a pinned line. And
-  one runner's: a start naming a store, a forces file, a store's copy or a `.tmp` of any
-  that another runner of the same VM holds is refused, naming it and that runner, until
+  `.tmp` the other is written through, or the forces file naming one of the store's
+  copies, `tally.retain.dropped.1` or any number (below), or their `.tmp`, is refused at
+  start, a pinned line. And one runner's: a start naming a store, a forces file, a name
+  of a store's copies or a `.tmp` of any that another runner of the same VM holds, or
+  whose store's copies' names another runner holds a file at, is refused, naming it and
+  that runner, until
   the holder stops, crashes or is killed, when the file is free again (decision 356), the
   VM's table of them kept by a process of logex's own that no application's stop takes
   down; two VMs on one file are the host's to avoid, as are two paths to one file through
@@ -3578,23 +3580,37 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   place, refuses the start as a store that cannot be read.
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
-  drops them, first copies the store as it read it to `tally.retain.dropped` (decision
-  360), before its first write over the store, so that what it dropped outlives the next
-  write: to take the deploy back, stop the runner, put the copy in the store's place and
-  start the configuration it was written for, in that order: the copy stands until the
-  next start that drops anything, so starting the configuration it was written for over
-  the store the mistaken deploy wrote, which it drops from too, copies that store over
-  the copy, and the values the copy held are gone. A start that drops nothing leaves the
-  copy where it is. The copy is written as every other write is, through its own `.tmp`
-  and within the same limit, one that fails reported as a failed write is, `failed` in
-  `status/1`'s `retain`, and the start goes on with the copy owed: every write over the
+  drops them, first copies the store as it read it to a file of its own (decision 360),
+  before its first write over the store, so that what it dropped outlives every write
+  after it: the first copy `tally.retain.dropped.1`, the next `tally.retain.dropped.2`,
+  and on, each numbered one past the highest that stands beside the store, a file or a
+  directory a host named so among them, and none replaced (decision 418); a copy stays
+  until the host deletes it, and a start that drops nothing makes none. To take a
+  mistaken deploy back, stop the runner, put the copy that deploy's start made, the one
+  its `status/1` named, in the store's place, and start the configuration it was written
+  for:
+
+  ```
+  $ cp tally.retain.dropped.2 tally.retain
+  ```
+
+  Starting the good configuration first loses nothing: it drops from the store the
+  mistaken deploy wrote and copies that one to the next number, `tally.retain.dropped.3`,
+  the good values staying in `tally.retain.dropped.2`, to be put back as above. An
+  unnumbered `tally.retain.dropped`, which an earlier logex made and replaced at each
+  start that dropped, is kept as it stands and counts for nothing (provisional). The copy
+  is written as every other write is, through the copies' own `.tmp`,
+  `tally.retain.dropped.tmp`, and within the same limit, and never renamed over a file:
+  one a host makes at its number while it is written fails it, `:eexist` (provisional).
+  One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
+  the start goes on with the copy owed (decision 416): every write over the
   store, the period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the
-  copy first and writes the store only once the copy is made, so that while it cannot be
-  made, a full disk or a directory in its place, the store stays as the start read it,
-  every write fails as above, and a crash or a stop meanwhile loses what changed since
-  the start, the next start dropping from the same store and copying it again
-  (provisional). `status/1`'s `retain` names the copy once made, `copy:
-  "tally.retain.dropped"`, beside `dropped`, and always has a `copy`, nil while the copy
+  copy first, under the next number then, and writes the store only once the copy is
+  made, so that while it cannot be made, a full disk or a directory at its `.tmp`, the
+  store stays as the start read it, every write fails as above, and a crash or a stop
+  meanwhile loses what changed since the start, the next start dropping from the same
+  store and copying it again. `status/1`'s `retain` names the copy once made, `copy:
+  "tally.retain.dropped.1"`, beside `dropped`, and always has a `copy`, nil while the copy
   is owed and where nothing was dropped, `dropped` and `failed` telling the two apart
   (decision 412).
 

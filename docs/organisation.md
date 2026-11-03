@@ -4687,7 +4687,19 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   a forces file naming either is refused at start, decision 325's rule (provisional).)*
   *(Decision 412, RV-13, 2026-11-03: `copy` is always in the retain report, nil where the
   start dropped nothing and while the copy is owed, as its other keys are always there,
-  `dropped` and `failed` telling the two nils apart.)*
+  `dropped` and `failed` telling the two nils apart.)* *(Decision 418, RV-13, 2026-11-03:
+  each copy is a name of its own, `<store>.dropped.<n>`, n one past the highest number
+  standing beside the store, every file or directory named so counting, and none is
+  replaced: a copy stays until the host deletes it, so a mistaken deploy is taken back
+  from the copy its start made whatever started after it; the copies are written through
+  their one `.tmp`, `<store>.dropped.tmp`, decision 392's one `.tmp` unchanged, renamed
+  only where nothing stands at the copy's name, a file a host makes there meanwhile
+  failing the copy, `:eexist`, owed as decision 416 has a copy that cannot be made
+  (provisional); an unnumbered `<store>.dropped` an earlier logex left is kept and counts
+  for nothing (provisional); decision 356's claim covers every copy's name, a runner's
+  file at another's copy's name refused both ways, and decision 325's refusal of a forces
+  file on a copy covers every number and `<store>.dropped`, written through the copies'
+  `.tmp`.)*
   *(RV-5's review, 2026-11-02: a copy that fails is owed, every write over the store, the
   period's and every event's, making it first and writing the store only once it is made,
   so that no write replaces the store before its copy is made, where the period's write

@@ -47,10 +47,12 @@ defmodule Logex.Runner do
   (c1-runner-rounds-6).
 
   **Its files** (RV-4). A runner holds its store and its forces file, each with the `.tmp`
-  beside it that it is written through, and since decision 360 its store's copy,
-  `<store>.dropped`, with its own `.tmp`, from its start until it stops, crashes or is
-  killed (decision 356): a start that names a file another runner of this VM holds, as
-  its store, its forces file, the store's copy or the `.tmp` of any, is the host's
+  beside it that it is written through, and since decision 360 its store's copies, since
+  decision 418 every copy's name, `<store>.dropped.<n>` whatever its number, with the one
+  `.tmp` they are written through, `<store>.dropped.tmp`, from its start until it stops,
+  crashes or is killed (decision 356): a start that names a file another runner of this
+  VM holds, as its store, its forces file, one of its store's copies' names or the `.tmp`
+  of any, or whose store's copies' names another runner holds a file at, is the host's
   mistake, one
   `ArgumentError` naming the option, the path as the host spelled it, what the file is to
   the other runner and that runner's pid, told before either file is read and nothing
@@ -382,18 +384,25 @@ defmodule Logex.Runner do
     resource by decision 277's matching (`Logex.Runtime.start/2`), each value kept only
     where the configuration retains its path, of exactly its type, and it fits, the rest
     dropped and reported in `status/1`'s `retain`, and since decision 360 the store, as
-    the start read it, copied to `<store>.dropped` before its first write over it, in the
-    runner's own process once its files are claimed and before any device is opened, so
-    that a mistaken deploy's drops can be taken back from the copy once the next write has
-    made the store the new configuration's: the copy is written as every other write is,
-    through its own `.tmp`, limited the same, its failure reported as a failed write's,
-    `failed` in `status/1`, and the start goes on, the copy then owed: since RV-5's
-    review every write over the store, the period's, a trip's, a stop's, a shutdown's
-    and a cold restart's, makes it first and writes the store only once it is made, each
-    while it cannot be made a write that fails, so that no write replaces the store before
-    its copy is made (provisional); it stands until the next start that drops anything, a
-    start that drops nothing leaving it where it is, and `status/1`'s `retain` names it,
-    `copy`; a file that does not exist none, written at once; and one
+    the start read it, copied before its first write over it, in the runner's own process
+    once its files are claimed and before any device is opened, so that a mistaken
+    deploy's drops can be taken back from the copy once the next write has made the store
+    the new configuration's: since decision 418 each copy is a name of its own,
+    `<store>.dropped.<n>`, n one past the highest number standing beside the store, every
+    file or directory named so counting, 1 where none does, and none is replaced, a copy
+    staying until the host deletes it; an unnumbered `<store>.dropped` an earlier logex
+    left is kept as it stands and counts for nothing (provisional). The copy is written as
+    every other write is, through the copies' one `.tmp`, `<store>.dropped.tmp`, limited
+    the same, and renamed only where nothing stands at its name, so that a file a host
+    makes there while it is written fails it, `:eexist` (provisional); its failure is
+    reported as a failed write's, `failed` in `status/1`, and the start goes on, the copy
+    then owed (decision 416): since RV-5's review every write over the store, the
+    period's, a trip's, a stop's, a shutdown's and a cold restart's, makes it first, under
+    the next number then, and writes the store only once it is made, each while it cannot
+    be made a write that fails, so that no write replaces the store before its copy is
+    made; a start that drops nothing makes none, and `status/1`'s `retain` names the copy
+    the start made, `copy`, `plant.retain.dropped.2`; a file that does not exist none,
+    written at once; and one
     that cannot be
     read, that is no store, a line of no store's shape, an image `Logex.Runtime.start/2`
     refuses, a store of another configuration, which a renamed configuration's is, or
@@ -406,7 +415,9 @@ defmodule Logex.Runner do
     `retain:` is the host's mistake (decision 323), as are `retain:` naming the forces
     file, after `Path.expand/1`, or the `.tmp` either is written through (decision 325),
     since decision 360 `forces:` naming the store's copy or the `.tmp` the copy is written
-    through (provisional), and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
+    through, since decision 418 any of its numbered copies' names, `<store>.dropped.<n>`,
+    whatever the number's digits, the copies' `.tmp` and `<store>.dropped`, which is
+    written through it, and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
     news, the store's age and its drops, reaches no subscriber, since none can exist
     before `start_link/1` returns: `status/1`'s `retain` carries both (decision 324).
 
@@ -791,36 +802,42 @@ defmodule Logex.Runner do
   defp first_written(start), do: start
 
   # Decision 360 (RV-5): a fresh start that dropped anything from its store (decision
-  # 277's matching, `status/1`'s `dropped`) copies the store, as it read it, to
-  # `<store>.dropped` before its first write over it, here in its init/1, before any device
-  # is opened, so that a mistaken deploy's drops can be taken back from the copy after the
-  # next write has made the store the new configuration's. The copy is a write as every
-  # other, `<store>.dropped.tmp` synced and renamed over it, limited to the idle watchdog
-  # and a poll period of real time (decision 353), since decision 400 to the write limit;
-  # it stands until the next start that
-  # drops anything, and a start that drops nothing leaves it where it is. `status/1`'s
-  # `retain` names it, `copy`, the copy's path as the host spelled the store, or nil where
-  # its write failed, the failure then `failed` as any failed write's, and the start goes
-  # on; since decision 412 `copy` is always there, nil too where the start dropped
-  # nothing, where it was a key only a start that dropped had. Since RV-5's review a copy that fails is owed, its text kept under
-  # `retain`'s `owed`, and every write over the store, the period's, a trip's, a stop's, a
-  # shutdown's and a cold restart's, makes the copy first and writes the store only once
-  # it is made (`Writer.stored/4`, noted/3), so that no write replaces the store before
-  # its copy is made, as decision 360 has it, where one did and the drops were lost; the
-  # start still goes on, decision 275's rule for a failed write (provisional).
+  # 277's matching, `status/1`'s `dropped`) copies the store, as it read it, before its
+  # first write over it, here in its init/1, before any device is opened, so that a
+  # mistaken deploy's drops can be taken back from the copy after the next write has made
+  # the store the new configuration's. Since decision 418 (RV-13) each copy is a name of
+  # its own, `<store>.dropped.<n>`, n one past the highest that stands, and none is
+  # replaced, where one `<store>.dropped` was replaced at each start that dropped
+  # (`Writer.copy/3`); a copy stays until the host deletes it, and a start that makes none
+  # leaves every one as it is. The copy is a write as every other, through
+  # `<store>.dropped.tmp`, the one `.tmp` of the copies (decision 392), synced and renamed
+  # to its name, limited to the idle watchdog and a poll period of real time (decision
+  # 353), since decision 400 to the write limit. `status/1`'s `retain` names the copy the
+  # start made, `copy`, its path as the host spelled the store, `plant.retain.dropped.2`,
+  # or nil where its write failed, the failure then `failed` as any failed write's, and the
+  # start goes on; since decision 412 `copy` is always there, nil too where the start
+  # dropped nothing, where it was a key only a start that dropped had. Since RV-5's review
+  # a copy that fails is owed, its text kept under `retain`'s `owed`, and every write over
+  # the store, the period's, a trip's, a stop's, a shutdown's and a cold restart's, makes
+  # the copy first, numbered as it is made, and writes the store only once it is made
+  # (`Writer.stored/4`, noted/3), so that no write replaces the store before its copy is
+  # made, as decision 360 has it, where one did and the drops were lost; the start still
+  # goes on, decision 275's rule for a failed write, decision 416's.
   defp dropped_copy(%{copy: text, retain: retain} = start) when is_binary(text) do
-    copied = Writer.written(retain.at <> ".dropped", text, start.write_limit)
+    copied = Writer.copied(retain.at, text, start.write_limit)
     %{start | copy: nil, retain: copy_made(copied, text, retain)}
   end
 
   defp dropped_copy(start), do: start
 
-  defp copy_made(:ok, _text, retain), do: Map.put(retain, :copy, retain.path <> ".dropped")
+  defp copy_made({:ok, n}, _text, retain), do: Map.put(retain, :copy, Paths.copy(retain.path, n))
 
   # Decision 391 (RV-11): a copy past its limit may yet land, so it is owed as one that
-  # failed is and named `unknown`, neither failed nor made, until a later write makes it.
-  defp copy_made({:error, :timeout}, text, retain),
-    do: unknown(Map.merge(retain, %{copy: nil, owed: text}), retain.path <> ".dropped")
+  # failed is and named `unknown`, neither failed nor made, until a later write makes it;
+  # since decision 418 by the number it took, and one killed before it took a number,
+  # which can land nowhere, is a copy that failed, `:timeout` (provisional).
+  defp copy_made({:unknown, n}, text, retain),
+    do: unknown(Map.merge(retain, %{copy: nil, owed: text}), Paths.copy(retain.path, n))
 
   defp copy_made({:error, reason}, text, retain),
     do: Map.merge(retain, %{copy: nil, failed: reason, owed: text})
@@ -926,8 +943,9 @@ defmodule Logex.Runner do
   the last write failed, nil where it did not; and `dropped` what the fresh start's
   matching dropped, `{path, reason}` in path order, as `Logex.Runtime.start/2` gives it
   (decisions 275 and 277); and since decision 360 `copy`, always there since decision
-  412: the copy of the store the fresh start made before its first write,
-  `<store>.dropped` as the host spelled the store, nil where the start dropped nothing,
+  412: the copy of the store the fresh start made before its first write, since decision
+  418 `<store>.dropped.<n>`, its own number, as the host spelled the store, nil where the
+  start dropped nothing,
   and nil while the copy is owed, its write having failed, its reason then `failed` as
   any failed write's, until a write over the store makes it first, `dropped` and `failed`
   telling the two nils apart; and since decision 391, where the last write
@@ -1150,7 +1168,7 @@ defmodule Logex.Runner do
   # unable to write or to open a device, gives its files up at once, so that a start made
   # right after it finds them free.
   defp held({:held, path, holder, role}, start),
-    do: {:error, {:held, held_told(List.keyfind(start.named, path, 0), holder, role)}}
+    do: {:error, {:held, held_told(named_entry(start.named, path), holder, role)}}
 
   defp held(:ok, start),
     do: given_up(first_begun(first_write(start), dropped_copy(start)), start)
@@ -2983,24 +3001,31 @@ defmodule Logex.Runner do
     do: {:ok, %{state | retain: Map.delete(%{retain | written_at: at, failed: nil}, :unknown)}}
 
   # Decision 360 (RV-5's review): a copy owed and made by a write over the store, before
-  # it, named in `status/1` from then on and owed no more, the store's own write then
-  # noted as any; and one that failed again a failed write, the store not written and the
-  # copy still owed.
-  defp noted({:copied, result}, at, %{retain: retain} = state),
+  # it, named in `status/1` from then on and owed no more, since decision 418 by the
+  # number it took, the store's own write then noted as any; and one that failed again a
+  # failed write, the store not written and the copy still owed.
+  defp noted({:copied, n, result}, at, %{retain: retain} = state),
     do:
-      noted(result, at, %{state | retain: %{retain | owed: nil, copy: retain.path <> ".dropped"}})
+      noted(result, at, %{
+        state
+        | retain: %{retain | owed: nil, copy: Paths.copy(retain.path, n)}
+      })
 
   # Decision 391 (RV-11's review): an event's write killed at its limit in the owed copy's
-  # write, the store's after it not begun, names the copy as unknown, the store as it
-  # was and the copy still owed, where it named the store, which it could not have
-  # reached (`Writer.stored/4`); one killed in the store's write, the copy made, names the
-  # store, by the clause above (provisional).
-  defp noted({:uncopied, :timeout}, _at, %{retain: retain} = state) do
+  # write, the store's after it not begun, names the copy as unknown, since decision 418
+  # by the number it took, the store as it was and the copy still owed, where it named
+  # the store, which it could not have reached (`Writer.stored/4`); one killed in the
+  # store's write, the copy made, names the store, by the clause above (provisional); and
+  # one killed before its copy took a number, which can land nowhere, a write that failed,
+  # `:timeout`, the copy still owed (provisional).
+  defp noted({:uncopied, {:unknown, n}}, _at, %{retain: retain} = state) do
     published(state, [{:retain, {:error, :timeout}}])
-    {{:error, {:retain, :timeout}}, %{state | retain: unknown(retain, retain.path <> ".dropped")}}
+
+    {{:error, {:retain, :timeout}},
+     %{state | retain: unknown(retain, Paths.copy(retain.path, n))}}
   end
 
-  defp noted({:uncopied, reason}, _at, state), do: noted({:error, reason}, nil, state)
+  defp noted({:uncopied, reason}, _at, state), do: failed(reason, state)
 
   # Decision 391 (RV-11): a write past its limit, killed or left to finish, may still land
   # once the disk answers, the store the old or the new, so it is neither failed nor
@@ -3014,7 +3039,9 @@ defmodule Logex.Runner do
     {{:error, {:retain, :timeout}}, %{state | retain: unknown(retain, retain.path)}}
   end
 
-  defp noted({:error, reason}, _at, %{retain: retain} = state) do
+  defp noted({:error, reason}, _at, state), do: failed(reason, state)
+
+  defp failed(reason, %{retain: retain} = state) do
     published(state, [{:retain, {:error, reason}}])
 
     {{:error, {:retain, reason}},
@@ -3997,9 +4024,11 @@ defmodule Logex.Runner do
 
   # Decision 356: the files a runner holds, each `{path, role, option, given}`, its store
   # and its forces file and then the `.tmp` beside each, so that a file another runner
-  # holds is named before a `.tmp` that meets one; and since decision 360 (RV-5) the copy
-  # a fresh start keeps of a store it dropped from, `<store>.dropped`, and the `.tmp` it is
-  # written through.
+  # holds is named before a `.tmp` that meets one; and since decision 360 (RV-5) the
+  # `.tmp` the copies a start keeps of its store are written through, and since decision
+  # 418 (RV-13) every copy's name, `<store>.dropped.<n>`, which `Logex.Runner.Paths`
+  # checks against every other runner's files where no row could claim them, in place of
+  # the one `<store>.dropped` decision 360 had.
   defp held_files(store, store_at, forces, forces_at) do
     files = held_file(store, store_at, :retain) ++ held_file(forces, forces_at, :forces)
 
@@ -4009,12 +4038,23 @@ defmodule Logex.Runner do
   end
 
   defp held_copy(nil, nil), do: []
+  defp held_copy(given, at), do: [{at <> ".dropped.tmp", {:tmp, :dropped}, :retain, given}]
 
-  defp held_copy(given, at),
-    do: [
-      {at <> ".dropped", :dropped, :retain, given},
-      {at <> ".dropped.tmp", {:tmp, :dropped}, :retain, given}
-    ]
+  # The runner's own file a holder's refusal names: one of its rows, or, where another
+  # runner holds one of its store's copies' names (decision 418), that copy, as the host
+  # spelled the store.
+  defp named_entry(named, path), do: named_or_copy(List.keyfind(named, path, 0), named, path)
+
+  defp named_or_copy(nil, named, path) do
+    {store, _n} = Paths.copy_of(path)
+    {^store, :retain, :retain, given} = List.keyfind(named, store, 0)
+
+    {path,
+     {:copy, given <> binary_part(path, byte_size(store), byte_size(path) - byte_size(store))},
+     :retain, given}
+  end
+
+  defp named_or_copy(entry, _named, _path), do: entry
 
   defp held_file(nil, nil, _role), do: []
   defp held_file(given, at, role), do: [{at, role, role, given}]
@@ -4028,7 +4068,7 @@ defmodule Logex.Runner do
   defp unheld!(false, :ok, _named), do: :ok
 
   defp unheld!(false, {:held, path, holder, role}, named),
-    do: raise(ArgumentError, held_told(List.keyfind(named, path, 0), holder, role))
+    do: raise(ArgumentError, held_told(named_entry(named, path), holder, role))
 
   defp registered?(nil), do: false
   defp registered?(name), do: is_pid(where(name))
@@ -4066,7 +4106,7 @@ defmodule Logex.Runner do
       "the runner's #{option}: #{inspect(given)} #{meets(ours, given)}" <>
         "#{theirs(theirs, holder)}: two runners on one file write each over the other's"
 
-  defp meets(:dropped, given), do: "is copied to #{inspect(given <> ".dropped")}, "
+  defp meets({:copy, copy}, _given), do: "is copied to #{inspect(copy)}, "
 
   defp meets({:tmp, :dropped}, given),
     do: "is copied through #{inspect(given <> ".dropped.tmp")}, "
@@ -4130,7 +4170,7 @@ defmodule Logex.Runner do
 
   defp file_of(:retain), do: "store"
   defp file_of(:forces), do: "forces file"
-  defp file_of(:dropped), do: "store's copy, `.dropped`,"
+  defp file_of(:dropped), do: "store's copy, `.dropped.<n>`,"
 
   # The store and the forces file are two files however each is named, `./plant.retain`
   # and `plant.retain` one file, and neither is the `.tmp` the other is written through
@@ -4185,16 +4225,23 @@ defmodule Logex.Runner do
   defp meeting(forces, _path, _forces_tmp, forces), do: :forces_through
   defp meeting(_forces, _path, _forces_tmp, _path_tmp), do: :apart
 
-  # Decision 360 (RV-5): nor is the forces file the store's copy, `<store>.dropped`, or the
-  # `.tmp` the copy is written through, which a fresh start that drops would write over
-  # with the store's text (provisional, decision 325's rule for the copy).
+  # Decision 360 (RV-5): nor is the forces file the store's copy or the `.tmp` the copy is
+  # written through, which a start that copies would write over with the store's text,
+  # decision 325's rule for the copy; since decision 418 (RV-13) any of the store's
+  # numbered copies, `<store>.dropped.<n>`, a copy's name, and `<store>.dropped`, which is
+  # no copy's name but is written through the copies' `.tmp`, `<store>.dropped.tmp`.
   defp copied_over(:apart, forces, path),
-    do: copy_met(forces in [path <> ".dropped", path <> ".dropped.tmp"])
+    do:
+      copy_met(
+        forces == path <> ".dropped.tmp" or match?({^path, _n}, Paths.copy_of(forces)),
+        forces == path <> ".dropped"
+      )
 
   defp copied_over(met, _forces, _path), do: met
 
-  defp copy_met(true), do: :forces_copied
-  defp copy_met(false), do: :apart
+  defp copy_met(true, _through), do: :forces_copied
+  defp copy_met(false, true), do: :forces_through_copies
+  defp copy_met(false, false), do: :apart
 
   defp apart!(:apart, _path, _forces), do: :ok
 
@@ -4219,9 +4266,19 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's forces: #{inspect(forces)} is the copy its retain: #{inspect(path)} " <>
-          "is copied to by a fresh start that drops from it, `.dropped`, or the `.tmp` the " <>
-          "copy is written through: the store's copy and the forces file are two files"
+        "the runner's forces: #{inspect(forces)} is a copy its retain: #{inspect(path)} " <>
+          "is copied to by a start that drops from it, `.dropped.<n>`, or the `.tmp` the " <>
+          "copies are written through: the store's copies and the forces file are apart"
+      )
+
+  defp apart!(:forces_through_copies, path, forces),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's forces: #{inspect(forces)} is written through " <>
+          "#{inspect(forces <> ".tmp")}, the `.tmp` its retain: #{inspect(path)} is copied " <>
+          "through by a start that drops from it: the store's copies and the forces file " <>
+          "are apart"
       )
 
   defp apart!(:forces_through, path, forces),
@@ -4306,7 +4363,8 @@ defmodule Logex.Runner do
   # the forces file's is since RV-4's review, so that a FIFO or a stalled disk in the
   # store's place refuses the start as a file that cannot be read where it hung the
   # caller for good (provisional). Decision 360: a store it dropped anything from is kept
-  # as it was read, the text the start copies to `<store>.dropped` (dropped_copy/1).
+  # as it was read, the text the start copies, since decision 418 to the next of the
+  # store's numbered copies, `<store>.dropped.<n>` (dropped_copy/1).
   defp store_read!({nil, nil}, _mode, _configuration, runtime, _clock, _ms),
     do: {runtime, nil, nil, nil}
 

@@ -23,7 +23,9 @@ defmodule Logex.Runner.Writer do
   # heartbeat meanwhile (written/4). A write killed inside a call of the file system runs that
   # call on to its end in the kernel and then does nothing more, so its file may yet be
   # the old or the new, never a mix (`Logex.Retain.written/2`). Since RV-5's review a copy a
-  # fresh start owes is made before any write over the store (stored/4).
+  # fresh start owes is made before any write over the store (stored/4), and since decision
+  # 418 (RV-13) each copy is a name of its own, `<store>.dropped.<n>`, numbered as it is
+  # made, inside the write's own process and its limit (copy/3).
   #
   # Since RV-4's review the one write's process is linked to the runner as the period's
   # writer is, so that a runner killed, or crashed, while it waits on a write takes the
@@ -34,6 +36,8 @@ defmodule Logex.Runner.Writer do
   # the write's answer, nothing left in its mailbox.
 
   use GenServer
+
+  alias Logex.Runner.Paths
 
   def start_link(path), do: GenServer.start_link(__MODULE__, {path, self()})
 
@@ -63,42 +67,132 @@ defmodule Logex.Runner.Writer do
   # Decision 360 (RV-5's review): the store's write, an event's, waited on for `ms` of real
   # time as one, and the period's, by the writer, each made where a fresh start's copy of
   # the store it dropped from is owed, its own write having failed, only once that copy
-  # is made: the copy first, `<store>.dropped`, and the store only where the copy was
-  # made, `{:copied, result}`, the store's result; a copy that fails writes no store,
-  # `{:uncopied, reason}`; and with no copy owed the store's write alone, an event's
-  # written/3's. Decision 391 (RV-11's review): an event's write killed at its limit is
-  # told by the file it was in as the limit passed, which the write marks in `made` as
-  # its copy is made: in the copy's, `{:uncopied, :timeout}`, the copy unknown and the
-  # store as it was, since the write does nothing after the call it is killed in; in the
-  # store's, `{:copied, {:error, :timeout}}`, the copy made and the store unknown
+  # is made: the copy first, since decision 418 the next of the store's numbered copies
+  # (copy/3), and the store only where the copy was made, `{:copied, n, result}`, the
+  # copy's number and the store's result; a copy that fails writes no store, `{:uncopied,
+  # reason}`; and with no copy owed the store's write alone, an event's written/3's.
+  # Decision 391 (RV-11's review): an event's write killed at its limit is told by the
+  # file it was in as the limit passed, which the write tells its caller as it goes, its
+  # copy's number once chosen and then the copy made: in the copy's, `{:uncopied,
+  # {:unknown, n}}`, the copy `<store>.dropped.<n>` unknown and the store as it was,
+  # since the write does nothing after the call it is killed in, or `{:uncopied,
+  # :timeout}` where it was killed before it chose the number, so that no copy can land;
+  # in the store's, `{:copied, n, {:error, :timeout}}`, the copy made and the store unknown
   # (provisional).
   def stored(path, text, owed, ms) do
-    made = :atomics.new(1, [])
-    in_flight(within(fn -> copied_first(path, text, owed, made) end, ms), made)
+    told = {self(), make_ref()}
+    in_flight(within(fn -> copied_first(path, text, owed, told) end, ms), told)
   end
 
-  defp in_flight({:error, :timeout}, made), do: copy_phase(:atomics.get(made, 1))
-  defp in_flight(result, _made), do: result
-
-  defp copy_phase(0), do: {:uncopied, :timeout}
-  defp copy_phase(1), do: {:copied, {:error, :timeout}}
-
-  defp copied_first(path, text, nil, _made), do: Logex.Retain.written(path, text)
-
-  defp copied_first(path, text, owed, made),
-    do: copy_then(Logex.Retain.written(path <> ".dropped", owed), path, text, made)
-
-  defp copy_then(:ok, path, text, made) do
-    marked(made)
-    {:copied, Logex.Retain.written(path, text)}
+  # The copy made is looked for first, its number's note before it in the mailbox.
+  defp in_flight({:error, :timeout}, {_caller, tag}) do
+    receive do
+      {^tag, {:copied, n}} -> flushed(tag, {:copied, n, {:error, :timeout}})
+    after
+      0 -> uncopied(tag)
+    end
   end
 
-  defp copy_then({:error, reason}, _path, _text, _made), do: {:uncopied, reason}
+  defp in_flight(result, {_caller, tag}), do: flushed(tag, result)
 
-  # The period's writer keeps no mark: its write is left to finish, its answer telling
+  defp uncopied(tag) do
+    receive do
+      {^tag, n} -> flushed(tag, {:uncopied, {:unknown, n}})
+    after
+      0 -> {:uncopied, :timeout}
+    end
+  end
+
+  # A write's notes to its caller taken, none left in the caller's mailbox: each comes
+  # before its process's exit, which the caller has taken.
+  defp flushed(tag, result) do
+    receive do
+      {^tag, _note} -> flushed(tag, result)
+    after
+      0 -> result
+    end
+  end
+
+  defp copied_first(path, text, nil, _told), do: Logex.Retain.written(path, text)
+
+  defp copied_first(path, text, owed, told),
+    do: copy_then(copy(path, owed, told), path, text, told)
+
+  defp copy_then({:ok, n}, path, text, told) do
+    tell(told, {:copied, n})
+    {:copied, n, Logex.Retain.written(path, text)}
+  end
+
+  defp copy_then({:error, reason}, _path, _text, _told), do: {:uncopied, reason}
+
+  # Decision 418 (RV-13): a fresh start's copy of its store, waited on for `ms` of real
+  # time as one write: `{:ok, n}`, the copy `<store>.dropped.<n>` made; `{:unknown, n}`,
+  # killed at its limit once its number was chosen, so that it may yet land there
+  # (decision 391); or `{:error, reason}`, `:timeout` among them where it was killed
+  # before, so that no copy can land.
+  def copied(store, text, ms) do
+    told = {self(), make_ref()}
+    numbered(within(fn -> copy(store, text, told) end, ms), told)
+  end
+
+  defp numbered({:error, :timeout}, {_caller, tag}) do
+    receive do
+      {^tag, n} -> {:unknown, n}
+    after
+      0 -> {:error, :timeout}
+    end
+  end
+
+  defp numbered(result, {_caller, tag}), do: flushed(tag, result)
+
+  # Decision 418 (RV-13): a copy of the store, under a name of its own, the next of its
+  # numbered copies, `<store>.dropped.<n>`, n one past the highest number that stands
+  # beside the store, 1 where none does, none replaced: every entry of the store's
+  # directory named the store's name, `.dropped.` and a whole number in decimal digits
+  # counts as standing, by its number's value, whatever it is, a copy, a file or a
+  # directory a host made there, so that the copy's name is free as the copy begins; an
+  # unnumbered `<store>.dropped` an earlier logex left counts for nothing and is left as it
+  # stands (provisional). The directory is read raw, off the VM's file server, as the
+  # files are, inside the write's own process and its limit; the copy is written through
+  # the one `.tmp` of the store's copies, `<store>.dropped.tmp`, and renamed only where
+  # nothing stands at its name (`Logex.Retain.written/2`), so that one a host made there
+  # since the directory was read is never replaced: the copy then fails, `:eexist`, and
+  # is owed as one that fails is, its next try numbered past it (provisional, decision
+  # 416's rule). `told`, `{caller, tag}`, is told `{tag, n}` once the number is chosen,
+  # and nil, the period's writer, nothing. `{:ok, n}` or `{:error, reason}`.
+  def copy(store, text, told),
+    do: copy_numbered(next_copy(store), store, text, told)
+
+  defp copy_numbered({:ok, n}, store, text, told) do
+    tell(told, n)
+    copy_written(Logex.Retain.written({Paths.copy(store, n), store <> ".dropped.tmp"}, text), n)
+  end
+
+  defp copy_numbered(error, _store, _text, _told), do: error
+
+  defp copy_written(:ok, n), do: {:ok, n}
+  defp copy_written(error, _n), do: error
+
+  defp next_copy(store),
+    do: past_highest(:prim_file.list_dir_all(Path.dirname(store)), Path.basename(store))
+
+  defp past_highest({:ok, names}, base),
+    do: {:ok, 1 + Enum.max([0 | for(name <- names, n <- copy_number(name, base), do: n)])}
+
+  defp past_highest(error, _base), do: error
+
+  defp copy_number(name, base), do: same_store(Paths.copy_of(named(name)), base)
+
+  defp named(name) when is_list(name), do: List.to_string(name)
+  defp named(name), do: name
+
+  defp same_store({base, n}, base), do: [n]
+  defp same_store(_other, _base), do: []
+
+  # The period's writer tells no caller: its write is left to finish, its answer telling
   # both files (decision 401).
-  defp marked(nil), do: :ok
-  defp marked(made), do: :atomics.put(made, 1, 1)
+  defp tell(nil, _note), do: :ok
+  defp tell({caller, tag}, note), do: send(caller, {tag, note})
 
   # One call of the file system, a write's or the forces file's read at a restart, in a
   # process of its own linked to the caller, a runner, which traps exits, waited on for

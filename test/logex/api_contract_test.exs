@@ -14697,7 +14697,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     File.rm(file || Path.join(dir, "none"))
     store = store_beside(file, dir, seed)
     File.rm(Path.join(dir, "retain-#{seed}"))
-    File.rm(Path.join(dir, "retain-#{seed}.dropped"))
+    for copy <- Path.wildcard(Path.join(dir, "retain-#{seed}.dropped*")), do: File.rm_rf!(copy)
     period = period_beside(store, seed)
 
     w = %{
@@ -14710,7 +14710,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       file: file,
       store: store,
       stored: nil,
-      copied: [nil],
+      # Decision 418 (RV-13): the store's numbered copies as they stood after the last
+      # start, number by number, each file's bytes (`copies_standing/1`).
+      copies: %{},
       period: period,
       due: nil,
       origin: nil,
@@ -14940,26 +14942,51 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp forces_saved!(_none, _file, _ending), do: :ok
 
   # Decision 360, restated (RV-5): a warm fresh start whose matching drops anything copies
-  # the store it read, byte for byte, to `<store>.dropped` before its first write; any other
-  # start, cold, from no store or dropping nothing, makes none and leaves an earlier copy
-  # as it was. The drops are the model's own, restated from the draws (`life_dropped/1`,
-  # `unretained/2`), and the copy's file read at the start's return, before any write.
-  # The copy is a write limited by decision 353 to the idle watchdog and a poll period of
-  # real time, the walk's 400 or 500 ms: on a loaded machine one past it is reported as a
-  # write that fails, `failed: :timeout`, no copy named, and may land after (a load run
-  # met it once in fourteen), so the model then holds both the copy and the one before
-  # it as what the file may be, until a later copy is made in time.
-  defp copied_at(%{store: nil} = w, _text), do: w
+  # the store it read, byte for byte, before its first write; any other start, cold, from
+  # no store or dropping nothing, makes none and leaves every earlier copy as it was. The
+  # drops are the model's own, restated from the draws (`life_dropped/1`, `unretained/2`),
+  # and the copies' files read at the start's return, before any write. Decision 418,
+  # restated (RV-13): each copy a name of its own, `<store>.dropped.<n>`, n one past the
+  # highest number standing as the start began, read from the store's directory by the
+  # walk itself before the start (`copies_standing/1`), and none replaced: every copy that
+  # stood then stands after it, byte for byte, and the copy made, where one is, under the
+  # next number. The copy is a write limited by decision 353, since decision 400 to the
+  # write limit: on a loaded machine one past it is named unknown under its number, and
+  # may land after, so the model then reads that number as the copy or no file; and one
+  # killed before it took a number is a copy that failed, `:timeout`, which lands nowhere.
+  defp copied_at(%{store: nil} = w, _text, _standing), do: w
 
-  defp copied_at(w, text) do
+  defp copied_at(w, text, standing) do
     drops = drops_restated(w)
-    {copied, owed} = copy_told(drops, Runner.status(w.runner).retain, text, w)
-    assert File.read(w.store <> ".dropped") in Enum.map(copied, &copy_read/1)
+    next = 1 + Enum.max([0 | Map.keys(standing)])
+    {made, owed} = copy_told(drops, Runner.status(w.runner).retain, text, w, next)
+    copies = copies_standing(w)
+    assert Map.take(copies, Map.keys(standing)) == standing
+    copy_landed!(made, copies)
     reach(:store_copied, drops != [])
-    reach(:store_copy_kept, drops == [] and w.copied != [nil])
+    reach(:store_copy_kept, drops == [] and standing != %{})
+    reach(:store_copy_numbered_past, match?({n, [_text]} when n > 1, made))
     reach(:life_copied_changed, drops != [] and w.change != nil)
-    owing(%{w | copied: copied, owed: owed})
+    owing(%{w | copies: copies, owed: owed})
   end
+
+  # The store's copies standing in its directory, `%{n => bytes}`: each file named the
+  # store's name, `.dropped.` and a whole number in decimal digits, by its number's value.
+  defp copies_standing(%{store: nil}), do: %{}
+
+  defp copies_standing(w) do
+    base = Path.basename(w.store)
+
+    for name <- File.ls!(Path.dirname(w.store)),
+        [_name, digits] <- [Regex.run(~r/\A#{Regex.escape(base)}\.dropped\.(\d+)\z/, name)],
+        into: %{},
+        do: {String.to_integer(digits), File.read!(Path.join(Path.dirname(w.store), name))}
+  end
+
+  defp copy_landed!(nil, _copies), do: :ok
+
+  defp copy_landed!({n, texts}, copies),
+    do: assert(copy_read(Map.get(copies, n)) in Enum.map(texts, &copy_read/1), inspect(n))
 
   # While the copy is owed every write over the store fails, the first round's trip's
   # among them, and leaves the store as the start read it (`copy_owed/1`).
@@ -14974,40 +15001,50 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp drops_restated(%{stored: {_kt, k}} = w), do: unretained(k, w.draws.running.keep)
 
-  # What the file may hold after the start, by what status/1 names, and the copy owed: no
-  # copy where nothing was dropped, the copy where it was made, and the copy or the one
-  # before it where its write ran past its limit; and since RV-5's review, where the
-  # start met a directory at the copy's `.tmp`, the one before it, the copy owed, the
-  # store's text as read (`copy_owed/1`). A copy past its limit is owed too, and the
-  # next write over the store makes it; the walk's ends read it only as one of the two.
+  # The copy the start made, by what status/1 names, `{n, texts}`, its number and what
+  # its file may hold, or nil for none, and the copy owed: no copy where nothing was
+  # dropped; the copy where it was made, under the next number; where its write ran past
+  # its limit, its number named unknown, the copy or no file; and since RV-5's review,
+  # where the start met a directory at the copies' `.tmp`, none, the copy owed, the
+  # store's text as read (`copy_owed/1`). A copy past its limit is owed too, and the next
+  # write over the store makes it, under the next number then standing.
   # Decision 412 (RV-13): `copy` always there, nil where nothing was dropped, where it was
   # no key.
-  defp copy_told([], retain, _text, w) do
+  defp copy_told([], retain, _text, _w, _next) do
     assert Map.fetch(retain, :copy) == {:ok, nil}
-    {w.copied, nil}
+    {nil, nil}
   end
 
-  defp copy_told(_drops, retain, text, %{owing: true} = w) do
-    assert owed_told(retain, w.store <> ".dropped"), inspect(retain)
-    {w.copied, text}
+  defp copy_told(_drops, retain, text, %{owing: true} = w, next) do
+    assert owed_told(retain, copy_named(w, next)), inspect(retain)
+    {nil, text}
   end
 
   # Decision 391 (RV-11): a copy past its limit is unknown, its path named, `failed` nil,
-  # where it was `failed: :timeout`; it may land, so the walk's ends read the copy as it or
-  # the one before.
-  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w) do
-    assert copy == w.store <> ".dropped"
-    {[text | w.copied], nil}
+  # where it was `failed: :timeout`; it may land, so the walk reads its number as the copy
+  # or no file. Since decision 418 one killed before it took a number is `failed:
+  # :timeout`, no file named, a copy that lands nowhere.
+  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next) do
+    assert copy == copy_named(w, next)
+    {{next, [text, nil]}, nil}
   end
 
-  defp copy_told(_drops, retain, text, w) do
-    assert retain.copy == w.store <> ".dropped"
-    {[text], nil}
+  defp copy_told(_drops, %{copy: nil, failed: :timeout} = retain, _text, _w, _next) do
+    refute Map.has_key?(retain, :unknown)
+    {nil, nil}
   end
+
+  defp copy_told(_drops, retain, text, w, next) do
+    assert retain.copy == copy_named(w, next)
+    {{next, [text]}, nil}
+  end
+
+  defp copy_named(w, n), do: "#{w.store}.dropped.#{n}"
 
   # The copy owed: the directory at its `.tmp` refused it, `failed: :eisdir`, known; or,
-  # past its limit, it is unknown (decision 391).
-  defp owed_told(%{copy: nil, failed: :eisdir} = retain, _copy),
+  # past its limit, it is unknown (decision 391), or, since decision 418, killed before it
+  # took a number, `failed: :timeout`.
+  defp owed_told(%{copy: nil, failed: failed} = retain, _copy) when failed in [:eisdir, :timeout],
     do: not Map.has_key?(retain, :unknown)
 
   defp owed_told(%{copy: nil, failed: nil, unknown: copy}, copy), do: true
@@ -15199,6 +15236,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     cut_refused!(w, text, opts)
     saved = line_ended!(w, text)
     w = %{w | saved: saved_as(saved, text)}
+    standing = copies_standing(w)
     late = late_open()
     unreadable = start_unreadable(w)
     {:ok, runner} = Runner.start_link(opts)
@@ -15242,7 +15280,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
-    w = copied_at(w, saved)
+    w = copied_at(w, saved, standing)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
     # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
@@ -15960,6 +15998,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_crlf_read,
     :store_cr_read,
     :forces_crlf_read,
+    # Decision 418 (RV-13): a start that dropped made a copy numbered past one that stood.
+    :store_copy_numbered_past,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -16139,10 +16179,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # the store after it, of the store as the start read it.
   defp owed_made!(%{owed: nil} = w), do: w
 
+  # Since decision 418 (RV-13) under the next number past those that stood, every one
+  # of them as it was, and one past its limit that landed late beside it holding the same.
   defp owed_made!(w) do
-    assert File.read(w.store <> ".dropped") == {:ok, w.owed}
+    copies = copies_standing(w)
+    assert Map.take(copies, Map.keys(w.copies)) == w.copies
+    made = Map.drop(copies, Map.keys(w.copies))
+    assert Enum.min(Map.keys(made)) == 1 + Enum.max([0 | Map.keys(w.copies)]), inspect(made)
+    assert Enum.uniq(Map.values(made)) == [w.owed]
     reach(:life_copy_made_late, true)
-    %{w | copied: [w.owed], owed: nil}
+    %{w | copies: copies, owed: nil}
   end
 
   defp life_end(:stop, runner), do: assert(Runner.stop(runner) == :ok)
@@ -16286,7 +16332,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     life_failed!(w.failed_seen, retain)
     assert retain.copy == nil
     assert File.read!(w.store) == w.owed
-    assert File.read(w.store <> ".dropped") in Enum.map(w.copied, &copy_read/1)
+    copies = copies_standing(w)
+    assert Map.take(copies, Map.keys(w.copies)) == w.copies
+    assert Enum.uniq(Map.values(Map.drop(copies, Map.keys(w.copies)))) in [[], [w.owed]]
     reach(:life_copy_owed, w.failed_seen)
     w = unblocked(%{w | store_failing: false})
     writer_settled(settled(wait(w, ms)))

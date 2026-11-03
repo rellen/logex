@@ -629,16 +629,22 @@ defmodule Logex.StalledDiskTest do
              } =
                Runner.status(runner)
 
-      assert copy == rig.store <> ".dropped"
+      # Decision 418 (RV-13), the leave for the one `.dropped`: the copy's own number,
+      # `.dropped.1`, the first.
+      assert copy == rig.store <> ".dropped.1"
 
       # The killed copy's rename may land once the disk answers, the copy whole; the store
       # is as the start read it until its first write, which since RV-5's review makes the
-      # copy owed first, the stop's here.
+      # copy owed first, the stop's here, since decision 418 under the next number past
+      # the killed copy where that landed, none replaced.
       :sys.resume(server)
       assert File.read!(rig.store) == read
-      assert File.read(rig.store <> ".dropped") in [{:ok, read}, {:error, :enoent}]
+      landed = File.read(copy)
+      assert landed in [{:ok, read}, {:error, :enoent}]
       assert Runner.stop(runner) == :ok
-      assert File.read!(rig.store <> ".dropped") == read
+      owed = owed_copy(landed, rig.store)
+      assert File.read!(owed) == read
+      assert File.read(copy) == {:ok, read}
       refute File.read!(rig.store) == read
     end
 
@@ -679,6 +685,10 @@ defmodule Logex.StalledDiskTest do
       send(caller, :done)
     end
   end
+
+  # Decision 418: the copy a stop made of a copy owed, past one that landed late.
+  defp owed_copy({:ok, _read}, store), do: store <> ".dropped.2"
+  defp owed_copy({:error, :enoent}, store), do: store <> ".dropped.1"
 
   # The VM's file server held for `ms` of real time and then let go, as a disk slow over a
   # write, healthy, is.
@@ -843,17 +853,20 @@ defmodule Logex.StalledDiskTest do
       eye(rig, 1)
       assert Runner.stop(runner) == :ok
       read = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
+      # Decision 418 (RV-13), the leave for the one `.dropped`: the copy's own number, the
+      # first, `.dropped.1`, written through the copies' one `.tmp`.
+      copy = rig.store <> ".dropped.1"
+      tmp = rig.store <> ".dropped.tmp"
 
       {:ok, retyped} =
         Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
 
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
       next = rig(dir, forces: nil, configuration: config)
-      File.mkdir!(copy <> ".tmp")
+      File.mkdir!(tmp)
       {:ok, runner} = Runner.start_link(next.opts)
       assert %{retain: %{copy: nil, failed: :eisdir, written_at: started}} = Runner.status(runner)
-      File.rmdir!(copy <> ".tmp")
+      File.rmdir!(tmp)
 
       # A trip's write, killed in the copy's rename: the copy unknown, the store as the
       # start read it, its age the start's.
@@ -867,11 +880,14 @@ defmodule Logex.StalledDiskTest do
              } = written_or_unknown(runner)
 
       :sys.resume(server)
-      wait_for_tmp_gone(copy <> ".tmp")
+      wait_for_tmp_gone(tmp)
       assert File.read!(rig.store) == read
 
       # A cold restart's, the copy still owed: the copy's rename let through and the
-      # store's held, killed at the limit: the copy made, the store unknown.
+      # store's held, killed at the limit: the copy made, the store unknown. Since
+      # decision 418 the copy is numbered past the killed one where that landed, none
+      # replaced.
+      made = owed_copy(File.read(copy), rig.store)
       server = held()
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
       _copying = waiting_call(server, :rename)
@@ -880,14 +896,68 @@ defmodule Logex.StalledDiskTest do
       _storing = waiting_call(server, :rename)
       assert Task.await(restart, @answers) == {:error, {:retain, :timeout}}
 
-      assert %{status: :tripped, retain: %{unknown: store, copy: ^copy, failed: nil}} =
+      assert %{status: :tripped, retain: %{unknown: store, copy: ^made, failed: nil}} =
                Runner.status(runner)
 
       assert store == rig.store
-      assert :file.read_file(copy, [:raw]) == {:ok, read}
+      assert :file.read_file(made, [:raw]) == {:ok, read}
       :sys.resume(server)
       wait_for_tmp_gone(rig.store <> ".tmp")
       assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # Decision 418 (RV-13): each copy a name of its own, numbered one past the highest that
+  # stands as it begins, and never renamed over a file: one a host makes at its number
+  # while it is written, here while the copy's write waits on the held file server in its
+  # delete of a leftover at the copies' `.tmp`, after it read the directory, is left as it
+  # is, the copy failing `:eexist` and owed, as decision 416 has a copy that cannot be
+  # made, the start going on; the next write over the store makes it under the next number
+  # past the host's file (provisional: failed and owed, where it could take the next free
+  # number at once).
+  describe "a copy's number (decision 418)" do
+    test "a file a host makes at the copy's number while it is written is never replaced",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+      File.write!(rig.store <> ".dropped.tmp", "a leftover")
+      server = held()
+
+      start =
+        Task.async(fn ->
+          {:ok, runner} = Runner.start_link(next.opts)
+          Process.unlink(runner)
+          runner
+        end)
+
+      _copying = waiting_call(server, :delete)
+      host = rig.store <> ".dropped.1"
+      :ok = :file.write_file(host, "a host's file", [:raw])
+      :sys.resume(server)
+      runner = Task.await(start, @answers)
+
+      assert %{status: :running, retain: %{copy: nil, failed: :eexist, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      assert File.read!(host) == "a host's file"
+      assert File.read!(rig.store) == read
+      refute File.exists?(rig.store <> ".dropped.tmp")
+
+      # The stop's write makes the owed copy first, under the next number, and then the
+      # store.
+      assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store <> ".dropped.2") == read
+      assert File.read!(host) == "a host's file"
+      refute File.read!(rig.store) == read
     end
   end
 

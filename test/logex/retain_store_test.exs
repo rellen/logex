@@ -1254,11 +1254,14 @@ defmodule Logex.RetainStoreTest do
   end
 
   # Decision 360 (the review after Milestone 6, c6-pmi-2): a fresh start that drops
-  # anything from its store copies the store, as it read it, to `<store>.dropped` before
-  # its first write over it, kept until the next such start, so that a mistaken deploy's
-  # drops can be taken back after the next write has made the store the new
-  # configuration's; the copy a time-limited write (decision 353), its failure reported
-  # as a failed write's, the start going on; and `status/1` names it. Each runner here is
+  # anything from its store copies the store, as it read it, before its first write over
+  # it, so that a mistaken deploy's drops can be taken back after the next write has made
+  # the store the new configuration's; the copy a time-limited write (decision 353), its
+  # failure reported as a failed write's, the start going on; and `status/1` names it.
+  # Decision 418 (RV-13), the leave for the one `<store>.dropped` and its replacement:
+  # each copy a name of its own, `<store>.dropped.<n>`, n one past the highest that
+  # stands, none replaced, where one `<store>.dropped` was replaced at each start that
+  # dropped; each test's copy below is `.dropped.1`, its first, where it was `.dropped`. Each runner here is
   # given a write limit of 5,000 ms, which covers a loaded machine's disk, none reading
   # the limit: since decision 400 (RV-11) `write_limit:`, where an idle watchdog of 5,000
   # stood for it (RV-4's question 12).
@@ -1291,7 +1294,7 @@ defmodule Logex.RetainStoreTest do
         rig.opts
         |> Keyword.put(:configuration, config)
         |> Keyword.put(:io, %{
-          "panel" => {Watching, sim: rig.panel, store: rig.store <> ".dropped", test: self()}
+          "panel" => {Watching, sim: rig.panel, store: rig.store <> ".dropped.1", test: self()}
         })
 
     test "a start that drops copies the store before any device is read, and names the copy",
@@ -1305,7 +1308,7 @@ defmodule Logex.RetainStoreTest do
 
       {:ok, runner} = Runner.start_link(watched(rig, retyped()))
       assert_receive {:read, {:ok, ^read}}, 5000
-      copy = rig.store <> ".dropped"
+      copy = rig.store <> ".dropped.1"
 
       assert Runner.status(runner).retain == %{
                path: rig.store,
@@ -1325,22 +1328,23 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) =~ "\nt1.boxes ctu_int\n"
       assert File.read!(copy) == read
       assert read =~ "\nt1.boxes ctu\nt1.boxes.cu bool 1\nt1.boxes.cv dint 2\n"
-      refute File.exists?(copy <> ".tmp")
+      refute File.exists?(rig.store <> ".dropped.tmp")
       assert Runner.stop(runner) == :ok
     end
 
-    # Kept until the next start that drops: one that drops nothing, warm, cold or with no
-    # store, makes none and leaves the copy where it is, and status/1 names none, its
-    # `copy` nil since decision 412 (RV-13), the leave for `copy` absent, where it had no
-    # `copy`; the next that drops replaces it with the store it read.
-    test "the copy kept until the next start that drops", %{tmp_dir: dir} do
+    # Kept: a start that drops nothing, warm, cold or with no store, makes none and leaves
+    # the copy where it is, and status/1 names none, its `copy` nil since decision 412
+    # (RV-13), the leave for `copy` absent, where it had no `copy`; and since decision 418
+    # the next that drops makes a copy of its own, the next number, `.dropped.2`, the
+    # first kept, where it replaced the one copy with the store it read.
+    test "every copy kept, the next that drops numbered past it", %{tmp_dir: dir} do
       rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0, 1])
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
       first = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
+      copy = rig.store <> ".dropped.1"
 
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
       pressed(rig, [0, 1])
@@ -1366,14 +1370,62 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
 
-      # The store the retyped plant wrote, met by the original: dropped, and copied.
+      # The store the retyped plant wrote, met by the original: dropped, and copied, to a
+      # name of its own, the first copy as it was.
       File.write!(rig.store, second)
       {:ok, runner} = Runner.start_link(rig.opts)
+      next = rig.store <> ".dropped.2"
 
-      assert %{dropped: [{"t1.boxes", {:retyped, "ctu_int", "ctu"}}], copy: ^copy} =
+      assert %{dropped: [{"t1.boxes", {:retyped, "ctu_int", "ctu"}}], copy: ^next} =
                Runner.status(runner).retain
 
-      assert File.read!(copy) == second
+      assert File.read!(next) == second
+      assert File.read!(copy) == first
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 418 (RV-13): a copy's number is one past the highest that stands beside the
+    # store, every entry named the store's name, `.dropped.` and a whole number counting
+    # by its number's value, whatever it is, a file or a directory a host made among them,
+    # so that the copy's name is free; none is replaced; and an unnumbered `.dropped` an
+    # earlier logex left counts for nothing and is kept as it stands (provisional).
+    test "a copy numbered one past the highest that stands, none replaced", %{tmp_dir: dir} do
+      rig = rig(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      at = &(rig.store <> &1)
+
+      File.write!(at.(".dropped"), "an earlier logex's copy")
+      File.write!(at.(".dropped.3"), "a host's file")
+      File.write!(at.(".dropped.07"), "a host's seventh")
+      File.mkdir!(at.(".dropped.9"))
+      File.write!(at.(".dropped.12.tmp"), "no copy's name")
+      File.write!(at.(".dropped.x"), "nor this")
+      before = for name <- File.ls!(dir), into: %{}, do: {name, File.read(Path.join(dir, name))}
+
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      assert %{dropped: [_drop], copy: copy} = Runner.status(runner).retain
+      assert copy == at.(".dropped.10")
+      assert File.read!(copy) == read
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+
+      for {name, was} <- before,
+          name != "plant.retain",
+          do: assert(File.read(Path.join(dir, name)) == was, name)
+
+      # The next start that drops, the next number past it, the copy before it kept.
+      File.write!(rig.store, read)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      assert %{copy: next} = Runner.status(runner).retain
+      assert next == at.(".dropped.11")
+      assert File.read!(next) == read
+      assert File.read!(copy) == read
+      assert File.read!(at.(".dropped")) == "an earlier logex's copy"
+      refute File.exists?(at.(".dropped.tmp"))
       assert Runner.stop(runner) == :ok
     end
 
@@ -1387,7 +1439,7 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
       read = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
+      copy = rig.store <> ".dropped.1"
 
       for {source, dropped} <- [
             {String.replace(@plant, "t1", "t2"), [{"t1", :undeclared}]},
@@ -1422,8 +1474,8 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
       read = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
-      File.mkdir!(copy <> ".tmp")
+      copy = rig.store <> ".dropped.1"
+      File.mkdir!(rig.store <> ".dropped.tmp")
 
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
       :ok = Runner.subscribe(runner)
@@ -1442,7 +1494,7 @@ defmodule Logex.RetainStoreTest do
         refute File.exists?(copy)
       end
 
-      File.rmdir!(copy <> ".tmp")
+      File.rmdir!(rig.store <> ".dropped.tmp")
       Manual.advance(rig.clock, 1000)
       period_written(runner)
       assert %{retain: %{failed: nil, copy: ^copy}} = Runner.status(runner)
@@ -1477,9 +1529,9 @@ defmodule Logex.RetainStoreTest do
 
       {:ok, runner} = Runner.start_link(opts)
       assert %{path: ^spelled, copy: copy, dropped: [_drop]} = Runner.status(runner).retain
-      assert copy == spelled <> ".dropped"
-      assert File.read!(rig.store <> ".dropped") == read
-      refute File.exists?(Path.join([dir, "a", "plant.retain.dropped"]))
+      assert copy == spelled <> ".dropped.1"
+      assert File.read!(rig.store <> ".dropped.1") == read
+      refute File.exists?(Path.join([dir, "a", "plant.retain.dropped.1"]))
       assert Runner.stop(runner) == :ok
     end
 
@@ -1570,8 +1622,9 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
       read = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
-      File.mkdir!(copy <> ".tmp")
+      copy = rig.store <> ".dropped.1"
+      tmp = rig.store <> ".dropped.tmp"
+      File.mkdir!(tmp)
       opts = Keyword.put(rig.opts, :configuration, retyped())
 
       {:ok, runner} = Runner.start_link(opts)
@@ -1589,7 +1642,7 @@ defmodule Logex.RetainStoreTest do
 
       {:ok, runner} = Runner.start_link(opts)
       assert %{retain: %{failed: :eisdir, copy: nil, dropped: [_drop]}} = Runner.status(runner)
-      File.rmdir!(copy <> ".tmp")
+      File.rmdir!(tmp)
       tripped(rig, runner)
       assert %{status: :tripped, retain: %{failed: nil, copy: ^copy}} = Runner.status(runner)
       assert File.read!(copy) == read
@@ -1602,7 +1655,7 @@ defmodule Logex.RetainStoreTest do
       for ended <- [:cold, :stop] do
         File.write!(rig.store, read)
         File.rm!(copy)
-        File.mkdir!(copy <> ".tmp")
+        File.mkdir!(tmp)
         {:ok, runner} = Runner.start_link(opts)
         assert %{retain: %{failed: :eisdir, copy: nil}} = Runner.status(runner)
         made_copy(ended, rig, runner, read)
@@ -1679,15 +1732,38 @@ defmodule Logex.RetainStoreTest do
         fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> ".tmp")) end
       )
 
-      # Decision 360 (RV-5): nor the store's copy, which a start that drops writes over.
-      for copy <- [rig.store <> ".dropped", rig.store <> ".dropped.tmp"] do
+      # Decision 360 (RV-5): nor the store's copy, which a start that drops writes over;
+      # since decision 418 (RV-13), the leave for the one `.dropped`, any of its numbered
+      # copies, `.dropped.<n>`, whatever the number's digits, or the copies' one `.tmp`,
+      # and `.dropped`, which is written through that `.tmp`.
+      for copy <- ~w(.dropped.1 .dropped.12 .dropped.007 .dropped.tmp) do
         raises(
-          "the runner's forces: #{inspect(copy)} is the copy its retain: " <>
-            "#{inspect(rig.store)} is copied to by a fresh start that drops from it, " <>
-            "`.dropped`, or the `.tmp` the copy is written through: the store's copy and the " <>
-            "forces file are two files",
-          fn -> Runner.start_link(Keyword.put(rig.opts, :forces, copy)) end
+          "the runner's forces: #{inspect(rig.store <> copy)} is a copy its retain: " <>
+            "#{inspect(rig.store)} is copied to by a start that drops from it, " <>
+            "`.dropped.<n>`, or the `.tmp` the copies are written through: the store's " <>
+            "copies and the forces file are apart",
+          fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> copy)) end
         )
+      end
+
+      raises(
+        "the runner's forces: #{inspect(rig.store <> ".dropped")} is written through " <>
+          "#{inspect(rig.store <> ".dropped.tmp")}, the `.tmp` its retain: " <>
+          "#{inspect(rig.store)} is copied through by a start that drops from it: the " <>
+          "store's copies and the forces file are apart",
+        fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> ".dropped")) end
+      )
+
+      # A forces file whose name only looks like a copy's is no copy: started, in a
+      # directory of its own, so that the store its start writes is no file this test
+      # reads.
+      apart = rig(Path.join(dir, "apart"))
+      File.mkdir_p!(Path.join(dir, "apart"))
+
+      for name <- ~w(.dropped.1.tmp .dropped.x .dropped. .dropped.-1) do
+        {:ok, runner} = Runner.start_link(Keyword.put(apart.opts, :forces, apart.store <> name))
+        assert Runner.stop(runner) == :ok
+        opener_down(apart.panel)
       end
 
       for bad <- [:hot, nil, "warm"] do

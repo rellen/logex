@@ -7,11 +7,26 @@ defmodule Logex.Runner.Paths do
   #
   # - A runner's files are its store and its forces file, each with the `.tmp` beside it
   #   it is written through (`Logex.Retain.written/2`), and since decision 360 (RV-5) the
-  #   copy a fresh start keeps of a store it dropped from, `<store>.dropped`, with its own
-  #   `.tmp`, each `{path, role}`, the role `:retain`, `:forces`, `:dropped`, `{:tmp,
+  #   copies a start keeps of its store, written through their own `.tmp`,
+  #   `<store>.dropped.tmp`, each `{path, role}`, the role `:retain`, `:forces`, `{:tmp,
   #   :retain}`, `{:tmp, :forces}` or `{:tmp, :dropped}`; claimed all or none in its own
   #   process once its name is registered, before anything is written, and given up as it
   #   terminates, after its last write.
+  # - Since decision 418 (RV-13) each copy is a name of its own, `<store>.dropped.<n>`,
+  #   n one past the highest that stands (`Logex.Runner.Writer.copy/3`), none replaced,
+  #   where decision 360 had one, `<store>.dropped`; a runner holds every copy's name of
+  #   its store, which no row of the table can claim, so that a claim is checked against
+  #   them once its rows are in: a file of the runner's that is a copy's name of a store
+  #   another live runner holds, `x.dropped.3` beside the store `x`, and a store of the
+  #   runner's one of whose copies' names another live runner holds as any file of its
+  #   own, are each refused, `{:held, path, holder, role}`, as a row another holds is, the
+  #   role `:dropped` for a copy's name, so that no runner of this VM writes at a name
+  #   another's copies are made under. Every row is put in before the check, so that of two
+  #   starts at once whose files cross so, one at least sees the other's and is refused
+  #   (crossed/3). An unnumbered `<store>.dropped` an earlier runner left is no copy's name
+  #   and no file a runner writes, kept as it stands (provisional); a store or forces file
+  #   named so is written through `<store>.dropped.tmp`, the copies' `.tmp`, and refused
+  #   as that `.tmp`'s.
   # - A file is held by a runner whose process is alive: one that crashed or was killed,
   #   whose terminate/2 never ran, holds nothing, its claims taken over by the next runner
   #   that claims the file. So a path is free again once its holder stops, crashes or is
@@ -37,13 +52,92 @@ defmodule Logex.Runner.Paths do
   # race, which stands its own in, the one seam to the window between a claim's look-up
   # of a holder and its replace of that holder's claim.
   def claim(files, pid, alive? \\ &Process.alive?/1),
-    do: claimed(files, {pid, table(), alive?}, [])
+    do: crossed_claim(claimed(files, {pid, table(), alive?}, []), files, pid)
+
+  defp crossed_claim(:ok, files, pid), do: uncrossed(crossed(files, pid, table()), files, pid)
+  defp crossed_claim(held, _files, _pid), do: held
+
+  defp uncrossed(:ok, _files, _pid), do: :ok
+
+  defp uncrossed(held, files, pid) do
+    release(files, pid)
+    held
+  end
 
   # The first of the files a live runner holds, `{:held, path, holder, role}`, or `:ok`,
   # claiming nothing: the check a start makes in its caller before it reads either file,
   # so that a file another runner holds is told as that, never as what is in it; the claim
   # in the runner's own process is the one that decides.
-  def held(files), do: first_held(files, table())
+  def held(files), do: crossed_held(first_held(files, table()), files)
+
+  defp crossed_held(:ok, files), do: crossed(files, nil, table())
+  defp crossed_held(held, _files), do: held
+
+  # Decision 418: a store's copy named, `<store>.dropped.<n>`, n in decimal.
+  def copy(store, n), do: store <> ".dropped." <> Integer.to_string(n)
+
+  # The store and number a path names as a copy, `{store, n}`, or nil: a path whose end
+  # after its last `.dropped.` is a whole number in decimal digits, `x.dropped.3` and
+  # `x.dropped.007` among them, the number by its value; `x.dropped`, `x.dropped.tmp` and
+  # `x.dropped.3.tmp` none.
+  def copy_of(path), do: numbered(:binary.matches(path, ".dropped."), path)
+
+  defp numbered([], _path), do: nil
+
+  defp numbered(matches, path) do
+    {at, length} = List.last(matches)
+    count = byte_size(path) - at - length
+    digits(digits?(binary_part(path, at + length, count)), path, at, count)
+  end
+
+  defp digits(true, path, at, count),
+    do: {binary_part(path, 0, at), String.to_integer(binary_part(path, byte_size(path), -count))}
+
+  defp digits(false, _path, _at, _count), do: nil
+
+  defp digits?(""), do: false
+  defp digits?(text), do: all_digits?(text)
+
+  defp all_digits?(<<c, rest::binary>>) when c in ?0..?9, do: all_digits?(rest)
+  defp all_digits?(<<>>), do: true
+  defp all_digits?(_other), do: false
+
+  # Decision 418: the runner's files against every copy's name of a store another live
+  # runner holds, and its store's copies' names against every file another live runner
+  # holds, after its rows are in where it claims (`pid` its own, nil for the caller's
+  # check): the first that crosses, `{:held, path, holder, role}`, its own file a copy's
+  # name with the role `:dropped`, or another's file at one of its store's copies' names
+  # with that file's role, or `:ok`.
+  defp crossed(files, pid, table) do
+    others = for {_path, holder, _role} = row <- :ets.tab2list(table), holder != pid, do: row
+    first_crossed(files, Enum.filter(others, &alive?/1))
+  end
+
+  defp alive?({_path, holder, _role}), do: Process.alive?(holder)
+
+  defp first_crossed([], _others), do: :ok
+
+  defp first_crossed([{path, role} | rest], others),
+    do: crossing(copy_held(copy_of(path), others, path), role, path, rest, others)
+
+  defp crossing(nil, :retain, path, rest, others),
+    do: copies_held(Enum.find(others, &copy_named?(&1, path)), rest, others)
+
+  defp crossing(nil, _role, _path, rest, others), do: first_crossed(rest, others)
+  defp crossing(held, _role, _path, _rest, _others), do: held
+
+  defp copy_held(nil, _others, _path), do: nil
+
+  defp copy_held({store, _n}, others, path),
+    do: copy_holder(Enum.find(others, &match?({^store, _holder, :retain}, &1)), path)
+
+  defp copy_holder(nil, _path), do: nil
+  defp copy_holder({_store, holder, :retain}, path), do: {:held, path, holder, :dropped}
+
+  defp copy_named?({other, _holder, _role}, store), do: match?({^store, _n}, copy_of(other))
+
+  defp copies_held(nil, rest, others), do: first_crossed(rest, others)
+  defp copies_held({other, holder, role}, _rest, _others), do: {:held, other, holder, role}
 
   defp first_held([], _table), do: :ok
 

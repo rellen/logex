@@ -162,10 +162,29 @@ defmodule Logex.Retain do
   # (Provisional: one name, its file new each write, where the review suggested a unique
   # name a write, which would leave each killed write's file beside the store and change
   # the name decision 325 and the documents give.)
-  def written(path, text) do
+  def written(path, text) when is_binary(path) do
     beside = path <> ".tmp"
     renamed(written_out(made(beside), text), beside, path)
   end
+
+  # Decision 418 (RV-13): a copy of the store, `{path, beside}`, its name of its own,
+  # `<store>.dropped.<n>`, written through the one `.tmp` every copy of the store is
+  # written through, `<store>.dropped.tmp` (decision 392's one `.tmp`, unchanged), by the
+  # same rule, and never renamed over a file: where anything stands at its name as the
+  # rename comes, looked at raw, which its number, one past the highest that stands
+  # (`Logex.Runner.Writer.copy/3`), leaves only to a file made there since, the write
+  # fails, `{:error, :eexist}`, its `.tmp` deleted, the file that stands untouched.
+  def written({path, beside}, text),
+    do: unreplaced(written_out(made(beside), text), beside, path)
+
+  defp unreplaced(:ok, beside, path),
+    do: free(:file.read_link_info(path, [:raw]), beside, path)
+
+  defp unreplaced(error, beside, _path), do: discarded(error, beside)
+
+  defp free({:error, :enoent}, beside, path), do: renamed(:ok, beside, path)
+  defp free({:ok, _info}, beside, _path), do: discarded({:error, :eexist}, beside)
+  defp free(error, beside, _path), do: discarded(error, beside)
 
   defp made(beside), do: made_again(made_new(beside), beside)
 
