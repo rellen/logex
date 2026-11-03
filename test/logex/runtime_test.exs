@@ -1182,87 +1182,6 @@ add e i y",
       end
     end
 
-    # Decision 190: the check is made once, where the program is first handed in, and on no
-    # scan, a lone instance's or a resource's, so that a scan costs what it did before
-    # decision 182 (`jump_test.exs` holds a skipped rung to decision 171's bound again).
-    test "the check runs where a program is handed in, and on no scan" do
-      {:ok, p} = Logex.compile(@sums, name: "m")
-      s = Runtime.instance(p)
-      scan = %Scan{now: 0, first: true}
-
-      configuration =
-        Logex.Configuration.new!(
-          name: "plant",
-          programs: [p],
-          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
-          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
-          connections: [%Logex.Configuration.Connection{instance: "m1", member: "go", to: 1}]
-        )
-
-      runtime = Runtime.start(configuration)
-      # Loaded first: a pattern names only the functions of a module loaded.
-      Code.ensure_loaded!(Logex.Program)
-      assert :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, true, [:global]) == 1
-
-      try do
-        assert checks(fn -> Runtime.instance(p) end) == 1
-        assert checks(fn -> Runtime.call(p, s, %{"go" => 1}, scan) end) == 0
-        assert checks(fn -> Runtime.put_inputs(p, s, %{"go" => 1}) end) == 0
-        assert checks(fn -> Runtime.scan(p, s, 10) end) == 0
-        assert checks(fn -> Runtime.restart(p, s, :cold) end) == 0
-        # Decision 200: an edit's accept checks the program running and its candidate.
-        assert checks(fn -> Logex.Edit.accept(p, p, s) end) == 2
-        assert checks(fn -> Runtime.start(configuration) end) == 1
-        assert checks(fn -> Runtime.cycle(runtime, 10, %{}) end) == 0
-        assert checks(fn -> Runtime.cycle(runtime, 20, %{}) end) == 0
-
-        # A configuration edit checks its candidate's program types once, at its accept,
-        # and since decision 200 the program types the resource runs, once each, and its
-        # switch starts the instance it adds with no check of its own.
-        candidate = %{
-          configuration
-          | instances:
-              configuration.instances ++
-                [%Logex.Configuration.Instance{name: "m2", type: "m", task: "fast"}],
-            connections:
-              configuration.connections ++
-                [%Logex.Configuration.Connection{instance: "m2", member: "go", to: 0}]
-        }
-
-        assert checks(fn -> Logex.Configuration.Edit.accept(runtime, candidate) end) == 2
-        {:ok, edit, _} = Logex.Configuration.Edit.accept(runtime, candidate)
-        assert checks(fn -> Logex.Configuration.Edit.test(edit, runtime) end) == 0
-      after
-        :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, false, [:global])
-      end
-    end
-
-    # How often `fun`, run in a process of its own that this one traces, checks a program.
-    defp checks(fun) do
-      parent = self()
-      ref = make_ref()
-
-      pid =
-        spawn_link(fn ->
-          receive do
-            :go -> send(parent, {ref, fun.()})
-          end
-        end)
-
-      :erlang.trace(pid, true, [:call])
-      send(pid, :go)
-      assert_receive {^ref, _}, 5000
-      counted(pid, 0)
-    end
-
-    defp counted(pid, n) do
-      receive do
-        {:trace, ^pid, :call, {Logex.Program, :edited_by_hand, _}} -> counted(pid, n + 1)
-      after
-        100 -> n
-      end
-    end
-
     # The check walks the program's rungs and each body once, where the program is first
     # handed in: linear in the program.
     defp reductions_for(n, fun) do
@@ -2774,6 +2693,110 @@ add e i y",
                [at: 1, decode!: 2, encode: 2, number: 1, written: 2]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Retain)
+    end
+  end
+end
+
+# RV-15's review: the test of decision 190's check traces `Logex.Program.edited_by_hand/1`,
+# which every instance's start runs, so it runs in a module of its own, `async: false`,
+# alone (CONTRIBUTING.md, "A trace pattern moves every process's reductions"), in the
+# describe it was written in, so that its name is one.
+defmodule Logex.RuntimeTest.Traced do
+  use ExUnit.Case, async: false
+
+  alias Logex.{Runtime, Scan}
+
+  @sums """
+  var_input go bool
+  var d sint
+  var c1 ctu
+  var_output ok bool
+  var_output ok2 bool
+
+  xic go add 100 100 d ote ok
+  xic go mul 100 2 c1.pv ote ok2
+  """
+
+  describe "a program edited by hand after it compiled (decision 182)" do
+    # Decision 190: the check is made once, where the program is first handed in, and on no
+    # scan, a lone instance's or a resource's, so that a scan costs what it did before
+    # decision 182 (`jump_test.exs` holds a skipped rung to decision 171's bound again).
+    test "the check runs where a program is handed in, and on no scan" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      s = Runtime.instance(p)
+      scan = %Scan{now: 0, first: true}
+
+      configuration =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [p],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "go", to: 1}]
+        )
+
+      runtime = Runtime.start(configuration)
+      # Loaded first: a pattern names only the functions of a module loaded.
+      Code.ensure_loaded!(Logex.Program)
+      assert :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, true, [:global]) == 1
+
+      try do
+        assert checks(fn -> Runtime.instance(p) end) == 1
+        assert checks(fn -> Runtime.call(p, s, %{"go" => 1}, scan) end) == 0
+        assert checks(fn -> Runtime.put_inputs(p, s, %{"go" => 1}) end) == 0
+        assert checks(fn -> Runtime.scan(p, s, 10) end) == 0
+        assert checks(fn -> Runtime.restart(p, s, :cold) end) == 0
+        # Decision 200: an edit's accept checks the program running and its candidate.
+        assert checks(fn -> Logex.Edit.accept(p, p, s) end) == 2
+        assert checks(fn -> Runtime.start(configuration) end) == 1
+        assert checks(fn -> Runtime.cycle(runtime, 10, %{}) end) == 0
+        assert checks(fn -> Runtime.cycle(runtime, 20, %{}) end) == 0
+
+        # A configuration edit checks its candidate's program types once, at its accept,
+        # and since decision 200 the program types the resource runs, once each, and its
+        # switch starts the instance it adds with no check of its own.
+        candidate = %{
+          configuration
+          | instances:
+              configuration.instances ++
+                [%Logex.Configuration.Instance{name: "m2", type: "m", task: "fast"}],
+            connections:
+              configuration.connections ++
+                [%Logex.Configuration.Connection{instance: "m2", member: "go", to: 0}]
+        }
+
+        assert checks(fn -> Logex.Configuration.Edit.accept(runtime, candidate) end) == 2
+        {:ok, edit, _} = Logex.Configuration.Edit.accept(runtime, candidate)
+        assert checks(fn -> Logex.Configuration.Edit.test(edit, runtime) end) == 0
+      after
+        :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, false, [:global])
+      end
+    end
+
+    # How often `fun`, run in a process of its own that this one traces, checks a program.
+    defp checks(fun) do
+      parent = self()
+      ref = make_ref()
+
+      pid =
+        spawn_link(fn ->
+          receive do
+            :go -> send(parent, {ref, fun.()})
+          end
+        end)
+
+      :erlang.trace(pid, true, [:call])
+      send(pid, :go)
+      assert_receive {^ref, _}, 5000
+      counted(pid, 0)
+    end
+
+    defp counted(pid, n) do
+      receive do
+        {:trace, ^pid, :call, {Logex.Program, :edited_by_hand, _}} -> counted(pid, n + 1)
+      after
+        100 -> n
+      end
     end
   end
 end

@@ -2020,6 +2020,16 @@ defmodule Logex.TagSubscriptTest do
 
       assert shared("xic a otl l1[1].pv.3\nxic a ote l1[i].pv.[n]") ==
                beside_latch("ote l1[i].pv.[n]", "otl l1[1].pv.3")
+
+      # So where the member's word is judged as a word array, a write through a tag
+      # subscript beside them: the latch is told nothing of the coil, as a word array's is.
+      for writes <- [
+            ["move 5 X[j]", "ote X[1].[n]", "otl X[1].3"],
+            ["move 5 X[j]", "otl X[1].3", "ote X[1].[n]"]
+          ] do
+        assert {writes, several(writes, "l1", ".pv")} == {writes, several(writes, "w", "")}
+        assert [{_line, _move}] = several(writes, "w", "")
+      end
     end
   end
 

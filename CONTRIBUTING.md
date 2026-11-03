@@ -379,7 +379,10 @@ choice, not an oversight to fix.
   (with the patterns set for another process 33 here too, 34 once cleared). A test that
   traces a module another test's cost reaches runs in a module of its own with `async:
   false`, which ExUnit runs only once every async module is done, as
-  `Logex.FunctionBlockTest.Traced` does.
+  `Logex.FunctionBlockTest.Traced` and `Logex.RuntimeTest.Traced` do;
+  `function_block_test.exs` reads every test file's syntax tree and holds each module
+  that sets a pattern to it, the runner's two that still run async
+  (`retain_store_test.exs`, `runner_edit_test.exs`) named as theirs to move.
 - **Wait for a process's `DOWN` before asking another process about it.** `Process.exit/2`
   does not wait, and an exit signal and a later call to another process are not ordered:
   three tests in `trip_test.exs` killed the drive and read `status/1` at once, and in CI
