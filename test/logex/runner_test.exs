@@ -2053,7 +2053,9 @@ defmodule Logex.RunnerTest do
     # one request at most and the requests between two rounds are those the time no round
     # needs holds, a dozen at the tip. Judged by the requests served a round, at most half
     # the callers, which a loaded machine only lowers, the requests slower and the rounds
-    # still each behind one, and never by a round's lateness or the rounds a second.
+    # still each behind one, and never by a round's lateness or the rounds a second. The
+    # task's watchdog and the idle watchdog are a second, so that a machine whose every
+    # core is busy, which stalls a 10 ms step past 50 ms now and then, trips nothing.
     test "on the real clock, with no untimed program, a tight loop of forces leaves a " <>
            "10 ms task its periods (decision 396)" do
       dir = Path.join(System.tmp_dir!(), "logex-rv11-#{System.unique_integer([:positive])}")
@@ -2062,7 +2064,7 @@ defmodule Logex.RunnerTest do
 
       config =
         configured(
-          "task fast interval 10 priority 1 watchdog 50\nvar_global e bool at panel.i.0\n" <>
+          "task fast interval 10 priority 1 watchdog 1000\nvar_global e bool at panel.i.0\n" <>
             "var_global hits dint at panel.q.0\nprogram c count with fast\n  c.n hits\n",
           %{"count" => @count}
         )
@@ -2073,7 +2075,8 @@ defmodule Logex.RunnerTest do
         Runner.start_link(
           configuration: config,
           io: %{"panel" => {Sim, sim: panel}},
-          forces: Path.join(dir, "plant.forces")
+          forces: Path.join(dir, "plant.forces"),
+          idle: 1000
         )
 
       stop = :atomics.new(1, [])
@@ -2091,7 +2094,7 @@ defmodule Logex.RunnerTest do
       calls = Enum.sum(Enum.map(callers, &Task.await(&1, 60_000)))
       status = Runner.status(runner)
 
-      assert status.status == :running
+      assert %{status: :running, trip: nil} = status
       assert calls <= 50 * (status.rounds - before)
       Runner.stop(runner)
     end

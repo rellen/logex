@@ -3467,7 +3467,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `tally.retain.tmp` is a file of its own, made new, whatever stood there deleted; and each
   is limited to the runner's write limit of real time, `write_limit:`, 5000 ms unless set,
   a limit of its own apart from the heartbeat (decision 400), one the disk has not
-  finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
+  finished by then killed and reported `:timeout`, so that a stalled disk leaves the
   runner answering (decision 353), while a healthy disk's slow sync on a machine whose
   cores are all busy, which took over the idle watchdog and a poll period now and then,
   lands; a runner killed while it writes takes its
