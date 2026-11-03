@@ -2921,8 +2921,9 @@ one of:
   126);
 - `{:watchdog, {:device, device, time_ms}}`, a device's heartbeat;
 - `{:io, device, cause}`, `cause` one of `:timeout`, `{:error, term}`, `{:raised,
-  message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, address, value}`,
-  `{:unknown_address, address}` and `{:down, reason}`;
+  message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, at, value}`,
+  `{:unknown_address, at}` and `{:down, reason}`, `at` the address as the configuration
+  writes it, `"panel.i.7"` (decision 399);
 - `{:internal, message}`, an exception out of the core, which the host contract says
   cannot happen: tripping rather than crashing keeps the state for diagnosis, and zeroes
   the outputs either way. No host can cause it, so a test reaches it through one seam, a

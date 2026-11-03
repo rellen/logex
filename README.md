@@ -4011,7 +4011,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   so latched itself, `ms` the heartbeat that refresh gave it, the time after which the
   plant went off (decision 137); `{:io, device, cause}`, an adapter's callback that gave
   an error, raised, threw, exited or gave no result the behaviour gives, a value that does
-  not fit its point, an address that is no point's, a device that did not answer within
+  not fit its point, `{:bad_value, "panel.i.0", 2}` at a bool, an address that is no point's,
+  `{:unknown_address, "panel.i.7"}`, each address as the configuration writes it
+  (decision 399), a device that did not answer within
   its deadline, `:timeout`, a device hung inside its own read or report, `:timeout` too,
   or one whose process went down; since M5-9 `{:fault, task, instance, fault}`, a major
   fault, a bit whose number a tag holds out of its word's bits, the round's first, at the

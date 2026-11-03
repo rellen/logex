@@ -527,9 +527,11 @@ defmodule Logex.Runner do
     in its device's process: an `{:error, reason, state}` it gives is `{:error, reason}`,
     a raise `{:raised, message}`, a throw `{:thrown, term}`, an exit `{:exited, term}`,
     and a result of no shape `Logex.IO` gives `{:raised, message}`, a message that says
-    so; a read's or a report's value that does not fit its point is `{:bad_value,
-    address, value}` and an address that is no input point's `{:unknown_address,
-    address}`; a device that does not answer a round's write within its own deadline, the
+    so; a read's or a report's value that does not fit its point is `{:bad_value, at,
+    value}` and an address that is no input point's `{:unknown_address, at}`, `at` the
+    address as the configuration writes it since decision 399, `"panel.i.7"`, a text,
+    where an adapter gives a list of whole numbers, and as the adapter gave it otherwise,
+    `:pump` or `[-1]`, which no configuration writes (provisional); a device that does not answer a round's write within its own deadline, the
     idle watchdog and a poll period from the start of its own write (decision 348), in
     real time, is `:timeout`, and is killed, its outputs left to what it does on losing
     its master, and named, every device written before it having answered in time and
@@ -2196,7 +2198,25 @@ defmodule Logex.Runner do
   defp misread({device, values}, state), do: misfit(vetted(device, values, state), device)
 
   defp misfit({:ok, _changes}, _device), do: nil
-  defp misfit({:fault, cause}, device), do: {device, cause}
+  defp misfit({:fault, cause}, device), do: {device, shown(device, cause)}
+
+  # Decision 399 (RV-11): an address a fault names is shown as the configuration writes
+  # it, `panel.i.7`, a reading's being an input's, where the adapter's own list,
+  # `{:unknown_address, ~c"\a"}`, printed as a charlist; one that is no list of whole
+  # numbers, which no configuration writes, as the adapter gave it (provisional). The
+  # device is told its refusal by the adapter's own address, by which it holds the point.
+  defp shown(device, {:unknown_address, address}),
+    do: {:unknown_address, written(fields?(address), device, address)}
+
+  defp shown(device, {:bad_value, address, value}),
+    do: {:bad_value, written(fields?(address), device, address), value}
+
+  defp written(true, device, address), do: spelled(device, :input, address)
+  defp written(false, _device, address), do: address
+
+  defp fields?([field]) when is_integer(field) and field >= 0, do: true
+  defp fields?([field | rest]) when is_integer(field) and field >= 0, do: fields?(rest)
+  defp fields?(_other), do: false
 
   defp first_read(nil, read, state) do
     changes =
@@ -2403,7 +2423,8 @@ defmodule Logex.Runner do
         values: Enum.into(changes, state.values)
     }
 
-  defp changed(device, {:fault, cause}, state), do: tripped(state, {:io, device, cause})
+  defp changed(device, {:fault, cause}, state),
+    do: tripped(state, {:io, device, shown(device, cause)})
 
   defp changed(_device, {:ok, changes}, state) do
     {triggers, others} = Enum.split_with(changes, &unforced_trigger?(&1, state))
@@ -3213,7 +3234,7 @@ defmodule Logex.Runner do
 
   defp reread_checked({:fault, cause}, _values, name, pid, _rest, state) do
     Device.refused(pid, cause)
-    {{:error, {:io_init, name, cause}}, state}
+    {{:error, {:io_init, name, shown(name, cause)}}, state}
   end
 
   defp reopen_read({:ok, values}, name, pid, points, rest, state),
@@ -3236,7 +3257,7 @@ defmodule Logex.Runner do
 
   defp reopen_checked({:fault, cause}, name, pid, _points, _rest, state) do
     asked(pid, &Device.close/2, state.idle + state.poll)
-    {{:error, {:io_init, name, cause}}, state}
+    {{:error, {:io_init, name, shown(name, cause)}}, state}
   end
 
   defp reopened({:ok, state}, mode), do: {:ok, released(mode, state)}

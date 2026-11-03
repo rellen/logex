@@ -1310,7 +1310,7 @@ defmodule Logex.LocatedArrayTest do
       # restarts on what the card gives now, the force still on.
       Sim.set(card, [5], 1.0e39)
 
-      assert %{status: :tripped, trip: {:io, "card", {:bad_value, [5], 1.0e39}}} =
+      assert %{status: :tripped, trip: {:io, "card", {:bad_value, "card.i.5", 1.0e39}}} =
                Runner.status(runner)
 
       Sim.set(card, [5], 70)
@@ -1350,7 +1350,7 @@ defmodule Logex.LocatedArrayTest do
       Sim.set(card, %{[1] => 11.0, [3] => 33.0})
       Manual.advance(clock, 10)
 
-      assert %{status: :tripped, trip: {:io, "card", {:bad_value, [2], 1.0e39}}} =
+      assert %{status: :tripped, trip: {:io, "card", {:bad_value, "card.i.2", 1.0e39}}} =
                Runner.status(runner)
 
       # The restart reads the card whole again, the good elements with it.

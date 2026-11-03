@@ -16656,24 +16656,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp cause(_device, callback, :throw), do: {:thrown, {Sim, callback}}
   defp cause(_device, callback, :exit), do: {:exited, {Sim, callback}}
-  defp cause(_device, _callback, {:value, [0], value}), do: {:bad_value, [0], value}
+  # Decision 399 (RV-11): each address a fault names as the configuration writes it, the
+  # device's name, `i` for a reading and the address's fields, `panel.i.0`.
+  defp cause(device, _callback, {:value, [0], value}), do: {:bad_value, "#{device}.i.0", value}
 
   # M5-13: an element of the panel's located array, whose int 70000 does not fit, is a bad
   # value at its own address, refused as any point's is (decision 143); the drive has no
   # input there.
   defp cause("panel", _callback, {:value, [4], value}) do
     reach(:element_misfit, true)
-    {:bad_value, [4], value}
+    {:bad_value, "panel.i.4", value}
   end
 
   # M5-15: a float past a single's range at the drive's real point, as at the panel's dint,
   # is a bad value (decision 166).
   defp cause(device, _callback, {:value, [2], value}) do
     reach(:real_misfit, device == "drive")
-    {:bad_value, [2], value}
+    {:bad_value, "#{device}.i.2", value}
   end
 
-  defp cause(_device, _callback, {:value, address, _value}), do: {:unknown_address, address}
+  defp cause(device, _callback, {:value, address, _value}),
+    do: {:unknown_address, Enum.join([device, "i" | address], ".")}
 
   # A step slow by about its task's watchdog, or the continuous task's over the round,
   # either side of it; one whose watchdog is far longer is slow by less than the idle
