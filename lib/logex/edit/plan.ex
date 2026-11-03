@@ -1618,7 +1618,7 @@ defmodule Logex.Edit.Plan do
   # not, where until then it was. Since decision 381 (the maintainer, 2026-11-01) a rise is
   # forecast where they together reach it, `.acc` below it but the catch-up setting `.dn`
   # at that run, a `ton`'s and an `rto`'s, where until RV-10 only an `.acc` already at or
-  # past it was. The report's `.acc` is the state's, as a drop's is (provisional).
+  # past it was. The report's `.acc` is the state's, as a drop's is (decision 421).
   defp done(nil, _value, _name, _rules, _caught), do: []
 
   defp done(

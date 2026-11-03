@@ -257,14 +257,14 @@ defmodule Logex.Image do
   # configuration now declares by it, a global of that name among them, since the image
   # keeps a global's sample only with its retained global: only a sample that is no bool's
   # value, or a name that is none, is the image's own mistake, where until the review a
-  # name the configuration declares as a global was refused (provisional).
+  # name the configuration declares as a global was refused (decision 425).
   defp trigger_lines(name, sample),
     do: name_lines(name, "triggers") ++ sample_lines(sample, name)
 
   # Decision 389 (the maintainer, 2026-11-01), RV-3's question 16: a sample the image holds
   # that the start lays back on no task of the configuration is dropped and reported as a
   # dropped value is (decision 277), `{name, :undeclared}`, a dropped global's reason
-  # (provisional), and the resource starts, where until RV-10 the start was refused; so the
+  # (decision 425), and the resource starts, where until RV-10 the start was refused; so the
   # runner's fresh start reports it in `status/1`, and decision 360's copy of the store to
   # `<store>.dropped`, RV-5's, made from that start's dropped list, needs nothing of its own
   # for it. Since the review of RV-10 that is every such sample (`laid_samples/3`): a

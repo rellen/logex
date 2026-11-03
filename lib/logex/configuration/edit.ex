@@ -55,7 +55,7 @@ defmodule Logex.Configuration.Edit do
   program reads, naming that rung's line, since the hold would change what the rung
   gives, and since the review of RV-10 one whose var_output the configuration started
   wires to another point too, naming that point, since the hold would move it
-  (provisional): a candidate's at its line, among the others, and one of the running
+  (decision 428): a candidate's at its line, among the others, and one of the running
   configuration that an untest would hold after them, its line there named.
 
   **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
@@ -178,9 +178,9 @@ defmodule Logex.Configuration.Edit do
   point rewired from one var_output no rung writes to another, `m1.aux k2` made `m1.aux2
   k2`, a point no connection drove that is newly wired from one, and a point an instance
   the edit retypes copies out through the same connection in both, whose new type's
-  var_output is another (provisional), a scalar, an element and each element of an array
-  wired whole its program does not write, both ways, an untest's among them
-  (provisional), so that the point keeps its value until a rung writes the var_output,
+  var_output is another (decision 423), a scalar, an element and each element of an
+  array wired whole its program does not write, both ways, an untest's among them
+  (decision 422), so that the point keeps its value until a rung writes the var_output,
   where until RV-10 it moved at the first cycle with an empty forecast. A var_output that
   holds the value already is not written. One of another type than its point's cannot
   hold every value the point may, so accept refuses its connection (decision 374), one
@@ -190,7 +190,7 @@ defmodule Logex.Configuration.Edit do
   run, one whose type does not hold the point's value is left as it is (decision 374).
   And since decision 388 accept refuses a connection that would hold a var_output a rung
   of its program reads, `xic aux ote lamp`, its element `o[1]` or `o[i]`, any element
-  through a tag subscript, or a bit of it, `w.3` (provisional), and since the review of
+  through a tag subscript, or a bit of it, `w.3` (decision 424), and since the review of
   RV-10 a read in any slot that reads, a compare's, an add's or a move's value among
   them, and of the var_output as a tag subscript or a bit number in any slot, a write's
   among them, `xic a[idx]`, `ote o[idx]` or `xic w.[n]`, and of any element of an array
@@ -203,7 +203,7 @@ defmodule Logex.Configuration.Edit do
   restart before that first run leaves it, `` ... and holds 0 where `k2` holds 1 until `m1`
   first runs after a start or a restart: ... ``, takes it once the instance has run, and
   no switch starts such a var_output at its point's value, so a restart after accept
-  leaves it as it is, as decision 374 leaves its own (provisional). And since the review of
+  leaves it as it is, as decision 374 leaves its own (decision 424). And since the review of
   RV-10 accept refuses a connection whose var_output, or an element of one, the
   configuration started wires to another point too, `m1.aux` held at `k3`'s 0 and wired
   to `k2` at 1 as well, since the hold would move that other point while every report
@@ -212,7 +212,7 @@ defmodule Logex.Configuration.Edit do
   a held point is wired to a var_output that drives another point only with a restart
   ``, an element wired alone and in its array wired whole among them, both ways, a kept
   instance's own connections both configurations make, which hold one value, the
-  var_output's, excepted (provisional). The next switch of the same edit
+  var_output's, excepted (decision 428). The next switch of the same edit
   first gives back each such write in an instance both configurations run as one type,
   where the var_output still holds what it wrote and no restart came since, `{:hold_undone,
   "m1.aux", 1}`, as fix F11 gives back a resume, so that a test and an untest with no
@@ -1179,13 +1179,13 @@ defmodule Logex.Configuration.Edit do
   # by its own reads, `o[1]` and `o[i]`, a word's by its bits', `w.3`, where until RV-10 the
   # hold was taken. A kept instance's own connection that both configurations make is the
   # one exception, as for decision 374: it holds the point's value from its first run on, so
-  # the rung reads what it read (provisional). Since the review of RV-10 a read is any read
+  # the rung reads what it read (decision 424). Since the review of RV-10 a read is any read
   # of the var_output's tag, a `:value` slot's and a tag subscript's or a bit number's in any
   # slot among them (`program_reads/1`), each program type read once; a kept instance's own
   # connection is refused where the var_output a rung reads holds another value than its
   # point at accept (`own_misread/4`); and a connection whose var_output another
   # connection of the configuration started wires to another point too is refused,
-  # naming that point (`fanned_out/3`), each provisional.
+  # naming that point (`fanned_out/3`), decisions 424 and 428.
   defp misheld(original, candidate, {wires, driven, reads}, runtime),
     do:
       {for(
@@ -1271,7 +1271,7 @@ defmodule Logex.Configuration.Edit do
   # the instance's first run since a start or a restart on, which copied it out; before
   # that run the var_output may hold another, and where a rung reads it the hold would
   # change what that rung gives, so accept refuses it then, naming both values (the review
-  # of RV-10, provisional), and takes it once the instance has run.
+  # of RV-10, decision 424), and takes it once the instance has run.
   defp own_misread(config, {connection, member, name}, {{line, held}, reads}, runtime) do
     {type, read} = Map.fetch!(reads, connection.instance)
 
@@ -1304,8 +1304,8 @@ defmodule Logex.Configuration.Edit do
         "gives, so the edit is accepted only once `#{instance}` has run, or with a restart"
     ]
 
-  # The fan-out (the review of RV-10, provisional): a var_output, or an element of one, that
-  # a held point's connection starts at the point's value and that the configuration
+  # The fan-out (the review of RV-10, decision 428): a var_output, or an element of one,
+  # that a held point's connection starts at the point's value and that the configuration
   # started wires to another point too copies that value out to the other point as well,
   # `m1.aux` wired to `k3`, held at 0, and to `k2` at 1, so that `k2` would go off while
   # every report said only that `k3` holds; and two held points wired from it cannot both
@@ -1447,7 +1447,7 @@ defmodule Logex.Configuration.Edit do
   defp earliest(lines), do: Enum.min(for(line <- lines, line != nil, do: line), fn -> nil end)
 
   # A kept instance's own connection whose var_output a rung reads is never started at its
-  # point's value (the review of RV-10, provisional): from the instance's first run since a
+  # point's value (the review of RV-10, decision 424): from the instance's first run since a
   # start or a restart on it holds that value, and before that run accept refuses it, so
   # only a restart after accept leaves it another, which a switch then leaves as it is, as
   # decision 374 leaves its own, the rung reading what the instance holds.

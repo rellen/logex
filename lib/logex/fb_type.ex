@@ -669,7 +669,9 @@ defmodule Logex.FbType do
   again: a compile given types, or tags, that share what they hold compiles each shared
   type's source once, and stays linear in the distinct types (`Logex.Declarations.split/4`
   shares it with the tags). Every type given is still walked, and compiled again at full
-  depth where it holds anything new.
+  depth where it holds anything new. `checked` is trusted as the calls before it made it:
+  one a host builds that names a type edited by hand answers for that type, and a
+  compile, which starts its own at `%{}`, refuses it (provisional, since decision 432).
   """
   def check(%__MODULE__{body: %Program{tags: tags, blocks: blocks}} = type, checked)
       when is_map(tags) and not is_struct(tags) and is_map(blocks) and is_map(checked),

@@ -1231,6 +1231,33 @@ defmodule Logex.FunctionBlockTest do
       assert FbType.of(%{body | source: @seal}) == seal
     end
 
+    # Decision 54's own steps take what they are given as checked, as their docs say, and
+    # hold none of it (provisional, since decision 432): recompiled/4 over a seal edited by
+    # hand gives the body it gives over the genuine one, which names `seal` and holds no
+    # table, so nothing of the edit is in it; check/2 given a memo that names the edit
+    # answers for it, and a compile, which builds its own memo, refuses it.
+    test "recompiled/4 and check/2 trust what they are given and hold none of it (provisional)" do
+      seal = block!(@seal)
+      [{:rung, [group, {:xio, l, stop}, coil]}] = seal.body.rungs
+      edited = FbType.of(%{seal.body | rungs: [{:rung, [group, {:xic, l, stop}, coil]}]})
+
+      assert {:ok, over_edited} =
+               Logex.Compiler.recompiled(@holder, "holder", %{"seal" => edited})
+
+      assert {:ok, over_seal} = Logex.Compiler.recompiled(@holder, "holder", %{"seal" => seal})
+      assert over_edited == over_seal
+      assert over_edited.blocks == %{}
+
+      holder = block!(@holder, [seal])
+      forged = %{holder | body: %{holder.body | blocks: %{"seal" => edited}}}
+
+      assert {:ok, %{"seal" => _, "holder" => _}} =
+               FbType.check(forged, %{"seal" => [{edited, []}]})
+
+      assert FbType.check(forged, %{}) == :error
+      refused(forged)
+    end
+
     # So too a type a tag declared from Elixir holds, the tag built by hand and not through
     # Logex.Tag.new!/4, which would refuse it first: such a type is known by being the one
     # given under its name, or the one a tag before it held, by value, and otherwise is
@@ -4313,106 +4340,13 @@ defmodule Logex.FunctionBlockTest do
     defp chain_inner(d, d), do: "xic x ote y\n"
     defp chain_inner(k, _d), do: "var s b#{k + 1}\ncal s x y\n"
 
-    # How often `fun`, run in a process of its own that this one traces, compiles a type
-    # again from its text (decision 54's `Logex.Compiler.recompiled/4`) and compiles a file
-    # the loader read (`Logex.Compiler.loaded/2`), and what it gave.
-    defp compiles(fun) do
-      Code.ensure_loaded!(Logex.Compiler)
-      patterns = [{Logex.Compiler, :recompiled, 4}, {Logex.Compiler, :loaded, 2}]
-      for pattern <- patterns, do: assert(:erlang.trace_pattern(pattern, true, [:global]) == 1)
-
-      try do
-        parent = self()
-        ref = make_ref()
-        pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
-        :erlang.trace(pid, true, [:call])
-        send(pid, :go)
-        assert_receive {^ref, result}, 30_000
-        {result, traced(pid, %{recompiled: 0, loaded: 0})}
-      after
-        for pattern <- patterns, do: :erlang.trace_pattern(pattern, false, [:global])
-      end
-    end
-
-    defp traced(pid, counts) do
-      receive do
-        {:trace, ^pid, :call, {Logex.Compiler, kind, _args}} ->
-          traced(pid, Map.update!(counts, kind, &(&1 + 1)))
-      after
-        0 -> counts
-      end
-    end
-
-    test "a chain of d files compiles d + 1 times through compile_file/1, none again", %{
-      tmp_dir: dir
-    } do
-      for d <- [10, 20] do
-        sub = Path.join(dir, "d#{d}")
-        File.mkdir_p!(sub)
-        prog = chain_files(sub, d)
-        assert {{:ok, %Logex.Program{}}, counts} = compiles(fn -> Logex.compile_file(prog) end)
-        assert counts == %{recompiled: 0, loaded: d + 1}, "a chain of #{d}"
-      end
-    end
-
-    test "so through compile_files/1 and a configuration's loader, each file once a call", %{
-      tmp_dir: dir
-    } do
-      prog = chain_files(dir, 12)
-
-      for k <- 1..3 do
-        File.write!(
-          Path.join(dir, "p#{k}.ld"),
-          "var_input x bool\nvar_output y bool\nvar s b#{k}\ncal s x y\n"
-        )
-      end
-
-      paths = [prog | for(k <- 1..3, do: Path.join(dir, "p#{k}.ld"))]
-
-      assert {results, %{recompiled: 0, loaded: 16}} =
-               compiles(fn -> Logex.compile_files(paths) end)
-
-      assert Enum.all?(results, &match?({:ok, %Logex.Program{}}, &1))
-
-      File.write!(
-        Path.join(dir, "plant.logex"),
-        "var_global g bool\ntask t interval 10 priority 1\nprogram m1 p1 with t\n" <>
-          "program m2 p2 with t\nprogram m3 p3 with t\nm1.x g\nm2.x g\nm3.x g\n"
-      )
-
-      assert {{:ok, %Configuration{}}, %{recompiled: 0, loaded: 15}} =
-               compiles(fn -> Configuration.compile_file(Path.join(dir, "plant.logex")) end)
-    end
-
-    # The trust is the loader's, in its own call, and no mark on a type: the same chain
-    # handed in by a host through `types:` is compiled again, each type its table holds
-    # once (decision 54), and a loaded type edited by hand is refused.
-    test "a type a host hands in is checked, a loaded one among them, and one edited refused",
-         %{tmp_dir: dir} do
-      chain_files(dir, 12)
-      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
-      held = "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y"
-
-      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 0}} =
-               compiles(fn -> Logex.compile(held, name: "m", types: [b1]) end)
-
-      edited = put_in(b1.body.blocks["b12"].body.rungs, [])
-
-      assert_raise ArgumentError,
-                   ~r/^types must be function block types from Logex.compile\/2, got: /,
-                   fn -> Logex.compile(held, name: "m", types: [edited]) end
-
-      assert_raise ArgumentError,
-                   ~r/^types must be function block types from Logex.compile\/2, got: /,
-                   fn -> Logex.compile(held, name: "m", types: [%{b1 | members: []}]) end
-    end
-
-    # RV-9's review: `Logex.Compiler.loaded/2` is the loader's and no host's way in, but
+    # RV-9's review: `Logex.Compiler.loaded/2` was the loader's and no host's way in, but
     # junk handed to it is a host mistake in the words a compile's `types:` is refused in,
     # each pinned, where it raised FunctionClauseError or Protocol.UndefinedError: not a
     # list, an improper one, an element no type, a built-in, two of one name, and a type
     # whose table holds what is no type or is no map. Since decision 404 a list handed in
-    # takes instructionize/3's check, in the same words.
+    # takes instructionize/3's check, in the same words, and since decision 432, when the
+    # loader stopped calling it, everything handed in does.
     test "junk handed to the loader's compile is refused in the words of types:'s", %{
       tmp_dir: dir
     } do
@@ -4443,64 +4377,13 @@ defmodule Logex.FunctionBlockTest do
       end
     end
 
-    # Decision 404: a type is trusted as the loader's own only through the closure the
-    # loader makes during its load. A list handed to the loader's compile is checked as
-    # decision 54 has it, each type its table holds compiled again once, where RV-9's
-    # trusted it, and a type in it edited by hand, or built as a struct by a host, is
-    # refused in types:'s words; the loader's own chain still compiles none again.
-    test "a list handed to the loader's compile is checked, a forged type in it refused (decision 404)",
-         %{tmp_dir: dir} do
-      prog = chain_files(dir, 12)
-      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
-
-      {:ok, tokens, _lines} =
-        Logex.Lexer.tokenize("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y")
-
-      {:ok, routine} = Logex.Parser.parse(tokens)
-
-      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 1}} =
-               compiles(fn -> Logex.Compiler.loaded(routine, [b1]) end)
-
-      assert {{:ok, %Logex.Program{}}, %{recompiled: 0, loaded: 13}} =
-               compiles(fn -> Logex.compile_file(prog) end)
-
-      built = struct(FbType, Map.from_struct(b1))
-      assert built == b1
-      assert {:ok, %Logex.Program{}} = Logex.Compiler.loaded(routine, [built])
-
-      for forged <- [
-            put_in(b1.body.blocks["b12"].body.rungs, []),
-            put_in(b1.body.rungs, Enum.drop(b1.body.rungs, 1)),
-            %{b1 | members: []},
-            %{b1 | members: b1.members ++ [hd(b1.members)]},
-            %{b1 | elements: 0},
-            put_in(b1.body.blocks["b2"].elements, 0),
-            put_in(b1.body.source, b1.body.source <> "xic x ote y\n"),
-            struct(FbType, %{Map.from_struct(b1) | elements: b1.elements + 1})
-          ] do
-        assert_raise ArgumentError,
-                     "types must be function block types from Logex.compile/2, got: " <>
-                       inspect(forged),
-                     fn -> Logex.Compiler.loaded(routine, [forged]) end
-
-        assert_raise ArgumentError,
-                     "types must be function block types from Logex.compile/2, got: " <>
-                       inspect(forged),
-                     fn ->
-                       Logex.compile("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y",
-                         name: "m",
-                         types: [forged]
-                       )
-                     end
-      end
-    end
-
-    # Decision 404: the token is no field of a type, no option and no name a host can
-    # give: a closure the loader alone makes, of its own module, of no arguments. A
-    # closure of a host's, one that gives the loader's own types among them, and an
-    # external function of the loader's module, which any host can name, are each refused
-    # as junk in types:'s words, and nothing is compiled.
-    test "no closure but the loader's own is the token (decision 404)", %{tmp_dir: dir} do
+    # Decisions 404, 430 and 432: no field of a type, no option and no name a host can
+    # give marks a type the loader's, and since decision 432 no closure either: the token
+    # decision 404 made, a closure of the loader's module of no arguments, is gone, and
+    # every closure is refused. A closure of a host's, one that gives the loader's own
+    # types among them, and an external function of the loader's module, which any host
+    # can name, are each refused as junk in types:'s words, and nothing is compiled.
+    test "no closure is a token (decisions 404, 430 and 432)", %{tmp_dir: dir} do
       chain_files(dir, 2)
       assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
       assert Enum.sort(Map.keys(Map.from_struct(b1))) == [:body, :elements, :members, :name]
@@ -4532,6 +4415,176 @@ defmodule Logex.FunctionBlockTest do
                        loaded: true
                      )
                    end
+    end
+
+    # Decision 432: the loader's own compile, `own_compiled/2`, is private code of
+    # `Logex.Compiler`, read here from the module's own code. No function it exports
+    # reaches it but `compile_file/1` and `compile_files/1`, which take paths and start
+    # every load afresh; no closure the module's code can make, each of which a host can
+    # build byte by byte in the VM's external term format with free values of its own,
+    # reaches it, nor the unchecked table of its types, nor the compile beneath them but
+    # through instructionize/3's check; and `Logex` makes no closure at all, where the
+    # token was one of its own.
+    test "the loader's own compile is private, and no closure reaches it (decision 432)" do
+      graph = code_graph(Logex.Compiler)
+      refute {:own_compiled, 2} in graph.exports
+      refute {:loaded_list, 1} in graph.exports
+      assert length(graph.funs) == graph.fun_table and graph.fun_table > 100
+
+      own = reaching(graph, [{:own_compiled, 2}, {:loaded_list, 1}], [])
+
+      assert Enum.sort(Enum.filter(own, &(&1 in graph.exports))) == [
+               compile_file: 1,
+               compile_files: 1
+             ]
+
+      assert Enum.filter(own, &(&1 in graph.funs)) == []
+
+      beneath =
+        reaching(graph, [{:instructionized, 3}], [{:instructionize, 3}, {:own_compiled, 2}])
+
+      assert Enum.filter(beneath, &(&1 in graph.exports or &1 in graph.funs)) == []
+      assert {:loaded, 2} in reaching(graph, [{:instructionize, 3}], [])
+      assert {:compile, 2} in reaching(graph, [{:instructionize, 3}], [])
+      assert %{funs: [], fun_table: 0} = code_graph(Logex)
+    end
+
+    # Decision 432, RV-12's review's forge again: a closure of `Logex`'s of no arguments
+    # giving a hand-edited type, the token's shape, built byte by byte from the module's
+    # checksum, and one of every closure `Logex.Compiler`'s code makes, each refused by the
+    # compiler's internal entry and by `types:` as junk, never called: none is a token.
+    test "a closure built byte by byte is refused, the token's shape and every one the compiler makes (decision 432)",
+         %{tmp_dir: dir} do
+      chain_files(dir, 2)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+      held = "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y"
+      {:ok, tokens, _lines} = Logex.Lexer.tokenize(held)
+      {:ok, routine} = Logex.Parser.parse(tokens)
+      edited = put_in(b1.body.blocks["b2"].body.rungs, [])
+      token = forged_closure(Logex, {0, 0, 0, 1}, [edited])
+      assert Function.info(token, :module) == {:module, Logex}
+      assert Function.info(token, :type) == {:type, :local}
+      assert Function.info(token, :arity) == {:arity, 0}
+
+      lambdas =
+        for lambda <- code_lambdas(Logex.Compiler),
+            do: forged_closure(Logex.Compiler, lambda, [edited])
+
+      assert length(lambdas) == code_graph(Logex.Compiler).fun_table
+
+      for other <- [token | lambdas] do
+        message =
+          "types must be a list of function block types from Logex.compile/2, got: " <>
+            inspect(other)
+
+        assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, other) end
+
+        assert_raise ArgumentError, message, fn ->
+          Logex.compile(held, name: "m", types: other)
+        end
+      end
+    end
+
+    # A module's code as a graph of its own functions: each one's calls to the module's
+    # functions, local or not, and the closures it makes, which a caller may call; the
+    # functions it exports; and the functions its closures run, each closure its code
+    # makes, with the count its table of closures holds.
+    defp code_graph(module) do
+      {^module, beam, _file} = :code.get_object_code(module)
+      {:beam_file, ^module, exports, _attributes, _info, code} = :beam_disasm.file(beam)
+
+      edges =
+        for {:function, name, arity, _entry, instructions} <- code,
+            into: %{},
+            do: {{name, arity}, Enum.uniq(Enum.flat_map(instructions, &called(&1, module)))}
+
+      funs =
+        for {:function, _name, _arity, _entry, instructions} <- code,
+            {:make_fun3, {^module, name, arity}, _index, _uniq, _dst, _free} <- instructions,
+            uniq: true,
+            do: {name, arity}
+
+      %{
+        exports: for({name, arity, _label} <- exports, do: {name, arity}),
+        edges: edges,
+        funs: funs,
+        fun_table: fun_count(:beam_lib.chunks(beam, [~c"FunT"]))
+      }
+    end
+
+    # The count of the module's table of closures, which a module that makes none lacks.
+    defp fun_count({:ok, {_module, [{~c"FunT", <<count::32, _entries::binary>>}]}}), do: count
+    defp fun_count({:error, :beam_lib, {:missing_chunk, _file, ~c"FunT"}}), do: 0
+
+    defp called({call, _arity, {module, name, arity}}, module) when call in [:call, :call_only],
+      do: [{name, arity}]
+
+    defp called({:call_last, _arity, {module, name, arity}, _frame}, module), do: [{name, arity}]
+
+    defp called({call, _arity, {:extfunc, module, name, arity}}, module)
+         when call in [:call_ext, :call_ext_only],
+         do: [{name, arity}]
+
+    defp called({:call_ext_last, _arity, {:extfunc, module, name, arity}, _frame}, module),
+      do: [{name, arity}]
+
+    defp called({:make_fun3, {module, name, arity}, _index, _uniq, _dst, _free}, module),
+      do: [{name, arity}]
+
+    defp called(_instruction, _module), do: []
+
+    # Every function from which one of `goals` is reached, not through one of `bounds`.
+    defp reaching(%{edges: edges}, goals, bounds) do
+      callers =
+        for {caller, callees} <- edges, callee <- callees, reduce: %{} do
+          acc -> Map.update(acc, callee, [caller], &[caller | &1])
+        end
+
+      walked(goals, MapSet.new(goals), callers, MapSet.new(bounds))
+    end
+
+    defp walked([], seen, _callers, _bounds), do: MapSet.to_list(seen)
+
+    defp walked([function | rest], seen, callers, bounds) do
+      fresh =
+        for caller <- Map.get(callers, function, []),
+            not MapSet.member?(seen, caller) and not MapSet.member?(bounds, caller),
+            uniq: true,
+            do: caller
+
+      walked(fresh ++ rest, MapSet.union(seen, MapSet.new(fresh)), callers, bounds)
+    end
+
+    # Each closure a module's code makes: its arity, its index, its old uniq and how many
+    # values it holds.
+    defp code_lambdas(module) do
+      {^module, beam, _file} = :code.get_object_code(module)
+      {:beam_file, ^module, _exports, _attributes, _info, code} = :beam_disasm.file(beam)
+
+      for {:function, _name, _arity, _entry, instructions} <- code,
+          {:make_fun3, {^module, _fun, arity}, index, uniq, _dst, {:list, free}} <- instructions,
+          uniq: true,
+          do: {arity - length(free), index, uniq, length(free)}
+    end
+
+    # A closure of `module`'s, local, built byte by byte in the VM's external term format
+    # (NEW_FUN_EXT) as RV-12's review built the loader's token: the module's checksum its
+    # uniq, and each value it holds `value`.
+    defp forged_closure(module, {arity, index, uniq, held}, value) do
+      values = List.duplicate(value, held)
+
+      body =
+        <<arity, module.module_info(:md5)::binary, index::32, held::32>> <>
+          external(module) <>
+          external(index) <>
+          external(uniq) <> external(self()) <> Enum.map_join(values, &external/1)
+
+      :erlang.binary_to_term(<<131, 112, byte_size(body) + 4::32, body::binary>>)
+    end
+
+    defp external(term) do
+      <<131, encoded::binary>> = :erlang.term_to_binary(term)
+      encoded
     end
 
     # In reductions: each file compiled once, its cost what its own compile reads, the
@@ -4923,5 +4976,408 @@ defmodule Logex.FunctionBlockTest do
 
     assert %Instance{env: %{"p" => %{"edge" => 0, "t1" => %{"pre" => 100}}}} =
              Runtime.instance(program)
+  end
+end
+
+# Decision 432's trace of a real load, in a module of its own that runs alone (`async:
+# false`), since ExUnit runs such a module only once every async one is done: the trace
+# patterns it sets on every function of the modules a load runs through, `Enum`'s and
+# `:maps`' among them, are met by every process that calls one, traced or not, and move
+# the reductions a scan another test counts exactly (in CI on `12fef7d`,
+# `tag_subscript_test.exs`'s "a program of none scans as it did before M5-12" read 33 a
+# rung against its 34 while they were set).
+defmodule Logex.FunctionBlockTest.Traced do
+  use ExUnit.Case, async: false
+
+  alias Logex.{Configuration, FbType}
+
+  @moduletag :tmp_dir
+
+  # The describe of `Logex.FunctionBlockTest` they were written in, so that their names
+  # are its. Each test here traces a function another test's cost reaches, the compiler's
+  # `recompiled/4`, `loaded/2` and `own_compiled/2` among them, so it runs alone (RV-15's
+  # review; CONTRIBUTING.md, "A trace pattern moves every process's reductions").
+  describe "the loader's own types (decision 371)" do
+    # A chain of `d` block files, `b1` holding `b2` and so on, and `prog.ld` holding `b1`.
+    defp chain_files(dir, d) do
+      for k <- 1..d do
+        inner = chain_inner(k, d)
+
+        File.write!(
+          Path.join(dir, "b#{k}.ld"),
+          "function_block b#{k}\nvar_input x bool\nvar_output y bool\n" <> inner
+        )
+      end
+
+      File.write!(
+        Path.join(dir, "prog.ld"),
+        "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y\n"
+      )
+
+      Path.join(dir, "prog.ld")
+    end
+
+    defp chain_inner(d, d), do: "xic x ote y\n"
+    defp chain_inner(k, _d), do: "var s b#{k + 1}\ncal s x y\n"
+
+    test "a chain of d files compiles d + 1 times through compile_file/1, none again", %{
+      tmp_dir: dir
+    } do
+      for d <- [10, 20] do
+        sub = Path.join(dir, "d#{d}")
+        File.mkdir_p!(sub)
+        prog = chain_files(sub, d)
+        assert {{:ok, %Logex.Program{}}, counts} = compiles(fn -> Logex.compile_file(prog) end)
+        assert counts == %{recompiled: 0, loaded: 0, own_compiled: d + 1}, "a chain of #{d}"
+      end
+    end
+
+    test "so through compile_files/1 and a configuration's loader, each file once a call", %{
+      tmp_dir: dir
+    } do
+      prog = chain_files(dir, 12)
+
+      for k <- 1..3 do
+        File.write!(
+          Path.join(dir, "p#{k}.ld"),
+          "var_input x bool\nvar_output y bool\nvar s b#{k}\ncal s x y\n"
+        )
+      end
+
+      paths = [prog | for(k <- 1..3, do: Path.join(dir, "p#{k}.ld"))]
+
+      assert {results, %{recompiled: 0, loaded: 0, own_compiled: 16}} =
+               compiles(fn -> Logex.compile_files(paths) end)
+
+      assert Enum.all?(results, &match?({:ok, %Logex.Program{}}, &1))
+
+      File.write!(
+        Path.join(dir, "plant.logex"),
+        "var_global g bool\ntask t interval 10 priority 1\nprogram m1 p1 with t\n" <>
+          "program m2 p2 with t\nprogram m3 p3 with t\nm1.x g\nm2.x g\nm3.x g\n"
+      )
+
+      assert {{:ok, %Configuration{}}, %{recompiled: 0, loaded: 0, own_compiled: 15}} =
+               compiles(fn -> Configuration.compile_file(Path.join(dir, "plant.logex")) end)
+    end
+
+    # The trust is the loader's, in its own call, and no mark on a type: the same chain
+    # handed in by a host through `types:` is compiled again, each type its table holds
+    # once (decision 54), and a loaded type edited by hand is refused.
+    test "a type a host hands in is checked, a loaded one among them, and one edited refused",
+         %{tmp_dir: dir} do
+      chain_files(dir, 12)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+      held = "var_input x bool\nvar_output y bool\nvar s b1\ncal s x y"
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 0, own_compiled: 0}} =
+               compiles(fn -> Logex.compile(held, name: "m", types: [b1]) end)
+
+      edited = put_in(b1.body.blocks["b12"].body.rungs, [])
+
+      assert_raise ArgumentError,
+                   ~r/^types must be function block types from Logex.compile\/2, got: /,
+                   fn -> Logex.compile(held, name: "m", types: [edited]) end
+
+      assert_raise ArgumentError,
+                   ~r/^types must be function block types from Logex.compile\/2, got: /,
+                   fn -> Logex.compile(held, name: "m", types: [%{b1 | members: []}]) end
+    end
+
+    # Decision 404: a list handed to the loader's compile, `loaded/2` until decision 432,
+    # is checked as decision 54 has it, each type its table holds compiled again once,
+    # where RV-9's trusted it, and a type in it edited by hand, or built as a struct by a
+    # host, is refused in types:'s words; the loader's own chain still compiles none
+    # again, through its own compile, private since decision 432, and never `loaded/2`.
+    test "a list handed to the loader's compile is checked, a forged type in it refused (decision 404)",
+         %{tmp_dir: dir} do
+      prog = chain_files(dir, 12)
+      assert {:ok, %FbType{} = b1} = Logex.compile_file(Path.join(dir, "b1.ld"))
+
+      {:ok, tokens, _lines} =
+        Logex.Lexer.tokenize("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y")
+
+      {:ok, routine} = Logex.Parser.parse(tokens)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 12, loaded: 1, own_compiled: 0}} =
+               compiles(fn -> Logex.Compiler.loaded(routine, [b1]) end)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 0, loaded: 0, own_compiled: 13}} =
+               compiles(fn -> Logex.compile_file(prog) end)
+
+      built = struct(FbType, Map.from_struct(b1))
+      assert built == b1
+      assert {:ok, %Logex.Program{}} = Logex.Compiler.loaded(routine, [built])
+
+      for forged <- [
+            put_in(b1.body.blocks["b12"].body.rungs, []),
+            put_in(b1.body.rungs, Enum.drop(b1.body.rungs, 1)),
+            %{b1 | members: []},
+            %{b1 | members: b1.members ++ [hd(b1.members)]},
+            %{b1 | elements: 0},
+            put_in(b1.body.blocks["b2"].elements, 0),
+            put_in(b1.body.source, b1.body.source <> "xic x ote y\n"),
+            struct(FbType, %{Map.from_struct(b1) | elements: b1.elements + 1})
+          ] do
+        assert_raise ArgumentError,
+                     "types must be function block types from Logex.compile/2, got: " <>
+                       inspect(forged),
+                     fn -> Logex.Compiler.loaded(routine, [forged]) end
+
+        assert_raise ArgumentError,
+                     "types must be function block types from Logex.compile/2, got: " <>
+                       inspect(forged),
+                     fn ->
+                       Logex.compile("var_input x bool\nvar_output y bool\nvar s b1\ncal s x y",
+                         name: "m",
+                         types: [forged]
+                       )
+                     end
+      end
+    end
+
+    # Decision 432, RV-12's review's trace again: a real load traced hands the compiler's
+    # internal entry nothing, so no closure of the loader's is there to capture; every
+    # closure any function of the load is handed, the compiler's, the walks' and Enum's,
+    # is refused by it; and the types the loader hands its own compile, which a trace
+    # reads, are checked when a host hands them in, compiled again from their texts, the
+    # seal edited by hand, its `xic` a `xio`, refused.
+    test "a real load traced gives nothing to hand in for its own (decision 432)", %{
+      tmp_dir: dir
+    } do
+      File.write!(
+        Path.join(dir, "seal.ld"),
+        "function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q\n"
+      )
+
+      main = "var_input a bool\nvar_output b bool\nvar s1 seal\ncal s1 a b\n"
+      File.write!(Path.join(dir, "main.ld"), main)
+      {result, calls} = load_traced(fn -> Logex.compile_file(Path.join(dir, "main.ld")) end)
+      assert {:ok, %Logex.Program{}} = result
+      assert [] = for({Logex.Compiler, :loaded, _args} = call <- calls, do: call)
+      closures = Enum.uniq(for {_module, _function, args} <- calls, fun <- funs_in(args), do: fun)
+      assert length(closures) > 50
+      {:ok, tokens, _lines} = Logex.Lexer.tokenize(main)
+      {:ok, routine} = Logex.Parser.parse(tokens)
+
+      for closure <- closures do
+        assert_raise ArgumentError,
+                     "types must be a list of function block types from Logex.compile/2, got: " <>
+                       inspect(closure),
+                     fn -> Logex.Compiler.loaded(routine, closure) end
+      end
+
+      assert [[], [%FbType{name: "seal"} = seal]] =
+               for({Logex.Compiler, :own_compiled, [_ast, types]} <- calls, do: types)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 1, own_compiled: 0}} =
+               compiles(fn -> Logex.Compiler.loaded(routine, [seal]) end)
+
+      assert {{:ok, %Logex.Program{}}, %{recompiled: 1, loaded: 0, own_compiled: 0}} =
+               compiles(fn -> Logex.compile(main, name: "main", types: [seal]) end)
+
+      forged = put_in(seal.body.rungs, swapped(seal.body.rungs, :xic, :xio))
+      assert forged != seal
+
+      message =
+        "types must be function block types from Logex.compile/2, got: " <> inspect(forged)
+
+      assert_raise ArgumentError, message, fn -> Logex.Compiler.loaded(routine, [forged]) end
+
+      assert_raise ArgumentError, message, fn ->
+        Logex.compile(main, name: "main", types: [forged])
+      end
+    end
+
+    # How often `fun`, run in a process of its own that this one traces, compiles a type
+    # again from
+    # its text (decision 54's `Logex.Compiler.recompiled/4`), compiles a routine
+    # through the compiler's internal entry (`Logex.Compiler.loaded/2`), and compiles a file
+    # the loader read through its own compile, private since decision 432
+    # (`own_compiled/2`), and what it gave. Until decision 432 the loader's compile was
+    # `loaded/2`'s, counted as `loaded`; since, the loader never calls `loaded/2`.
+    defp compiles(fun) do
+      Code.ensure_loaded!(Logex.Compiler)
+      patterns = [{Logex.Compiler, :recompiled, 4}, {Logex.Compiler, :loaded, 2}]
+      own = {Logex.Compiler, :own_compiled, 2}
+      for pattern <- patterns, do: assert(:erlang.trace_pattern(pattern, true, [:global]) == 1)
+      assert :erlang.trace_pattern(own, true, [:local]) == 1
+
+      try do
+        parent = self()
+        ref = make_ref()
+        pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
+        :erlang.trace(pid, true, [:call])
+        send(pid, :go)
+        assert_receive {^ref, result}, 30_000
+        {result, traced(pid, %{recompiled: 0, loaded: 0, own_compiled: 0})}
+      after
+        for pattern <- patterns, do: :erlang.trace_pattern(pattern, false, [:global])
+        :erlang.trace_pattern(own, false, [:local])
+      end
+    end
+
+    defp traced(pid, counts) do
+      receive do
+        {:trace, ^pid, :call, {Logex.Compiler, kind, _args}} ->
+          traced(pid, Map.update!(counts, kind, &(&1 + 1)))
+      after
+        0 -> counts
+      end
+    end
+
+    # Every call `fun` makes, run in a process of its own, to a function of the modules a
+    # load runs through, with its arguments, and what it gave.
+    defp load_traced(fun) do
+      modules = [
+        Logex,
+        Logex.Compiler,
+        Logex.Declarations,
+        Logex.FbType,
+        Logex.Warnings,
+        Logex.Walk,
+        Logex.Array,
+        Logex.Program,
+        Enum,
+        :lists,
+        Map,
+        MapSet,
+        :maps
+      ]
+
+      for module <- modules, do: Code.ensure_loaded!(module)
+      parent = self()
+      ref = make_ref()
+      pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
+      only = [{:_, [{:==, {:self}, pid}], []}]
+
+      try do
+        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, only, [:local])
+        :erlang.trace(pid, true, [:call])
+        send(pid, :go)
+        assert_receive {^ref, result}, 30_000
+        {result, calls(pid, [])}
+      after
+        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, false, [:local])
+      end
+    end
+
+    defp calls(pid, calls) do
+      receive do
+        {:trace, ^pid, :call, call} -> calls(pid, [call | calls])
+      after
+        0 -> Enum.reverse(calls)
+      end
+    end
+
+    defp funs_in(term) when is_function(term), do: [term]
+    defp funs_in([head | tail]), do: funs_in(head) ++ funs_in(tail)
+    defp funs_in(term) when is_tuple(term), do: funs_in(Tuple.to_list(term))
+    defp funs_in(term) when is_map(term), do: funs_in(Map.to_list(term))
+    defp funs_in(_term), do: []
+
+    # `term` with every instruction `from` made a `to`.
+    defp swapped({from, line, operands}, from, to), do: {to, line, operands}
+
+    defp swapped(term, from, to) when is_tuple(term),
+      do: List.to_tuple(swapped(Tuple.to_list(term), from, to))
+
+    defp swapped(list, from, to) when is_list(list), do: Enum.map(list, &swapped(&1, from, to))
+    defp swapped(term, _from, _to), do: term
+  end
+
+  # RV-15's review: a pattern `:erlang.trace_pattern/3` sets is met by every process that
+  # calls the function, traced or not, and moves its count of reductions (CONTRIBUTING.md,
+  # "A trace pattern moves every process's reductions"), so every test module that sets
+  # one is `async: false`, which ExUnit runs only once every async module is done: read
+  # from every test file's syntax tree, each module's own body, a module inside it read as
+  # one of its own.
+  describe "the tests that trace" do
+    test "every test module that sets a trace pattern runs alone" do
+      root = Path.expand("../..", __DIR__)
+
+      traced =
+        for path <- Path.wildcard(Path.join(root, "test/**/*.exs")),
+            {module, async, true} <- modules(Code.string_to_quoted!(File.read!(path))),
+            do: {Path.relative_to(path, root), module, async}
+
+      assert {"test/logex/function_block_test.exs", "Logex.FunctionBlockTest.Traced", false} in traced
+      assert {"test/logex/runtime_test.exs", "Logex.RuntimeTest.Traced", false} in traced
+
+      # The runner's two, whose patterns name `Logex.Runtime`'s `retained/1` and
+      # `restart/2`, `:file` and `Logex.Edit`, run in async modules still: the runner's
+      # tests are another item's to change, and no other test is held to them here.
+      runner = [
+        {"test/logex/retain_store_test.exs", "Logex.RetainStoreTest"},
+        {"test/logex/runner_edit_test.exs", "Logex.RunnerEditTest"}
+      ]
+
+      assert for({path, module, true} <- traced, do: {path, module}) -- runner == []
+    end
+
+    test "the reading finds a module that traces, async or not, and none that does not" do
+      source = """
+      defmodule A do
+        use ExUnit.Case, async: true
+        test "t", do: :erlang.trace_pattern({M, :f, 1}, true, [:global])
+
+        defmodule A.Inner do
+          use ExUnit.Case
+        end
+      end
+
+      defmodule B do
+        use ExUnit.Case, async: false
+        defp p, do: :erlang.trace_pattern({M, :f, 1}, false, [:local])
+      end
+
+      defmodule C do
+        use ExUnit.Case, async: true
+        test "t", do: :erlang.trace(self(), true, [:call])
+      end
+      """
+
+      assert Enum.sort(modules(Code.string_to_quoted!(source))) == [
+               {"A", true, true},
+               {"A.Inner", false, false},
+               {"B", false, true},
+               {"C", true, false}
+             ]
+    end
+
+    # Each module of a file's tree: its name as written, whether its `use ExUnit.Case`
+    # asks for `async: true`, and whether its own body sets a trace pattern.
+    defp modules(tree) do
+      {_tree, found} = Macro.prewalk(tree, [], &defined/2)
+      found
+    end
+
+    defp defined({:defmodule, _, [name, [do: body]]} = node, found),
+      do: {node, [{Macro.to_string(name), async?(own(body)), traces?(own(body))} | found]}
+
+    defp defined(node, found), do: {node, found}
+
+    defp own(body), do: Macro.prewalk(body, &unnested/1)
+
+    defp unnested({:defmodule, _, _}), do: nil
+    defp unnested(node), do: node
+
+    defp async?(body) do
+      {_body, async} = Macro.prewalk(body, false, &asked/2)
+      async
+    end
+
+    defp asked({:use, _, [{:__aliases__, _, [:ExUnit, :Case]}, options]} = node, _async),
+      do: {node, Keyword.get(options, :async, false)}
+
+    defp asked(node, async), do: {node, async}
+
+    defp traces?(body) do
+      {_body, traces} = Macro.prewalk(body, false, &tracing/2)
+      traces
+    end
+
+    defp tracing({{:., _, [:erlang, :trace_pattern]}, _, _} = node, _traces), do: {node, true}
+    defp tracing(node, traces), do: {node, traces}
   end
 end

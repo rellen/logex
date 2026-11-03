@@ -54,7 +54,8 @@ own documentation holds:
 - `lib/logex.ex` — `Logex`, the public way in: `compile/2` (source and `name:`, `types:`
   the user blocks it may hold) and `compile_file/1`, a `.ld` file named after it, its
   blocks loaded from `<word>.ld` beside it, and `compile_files/1`, several files over one
-  memo; a program, a block's type or every mistake as diagnostics.
+  memo; a program, a block's type or every mistake as diagnostics; each delegated to
+  `Logex.Compiler`.
 - `lib/logex/lexer.ex` — `Logex.Lexer`, source text to tokens by binary pattern matching,
   each with `{line, column}`; names with `.` parts, bits and subscripts, signed, based and
   real literals with their spellings, and every lex error located.
@@ -67,7 +68,8 @@ own documentation holds:
   takes the declarations into a tag table, checks every instruction against
   `instructions/0`'s signatures and every operand against the table, lowers to the IR and
   gives a program, a block type or diagnostics; `signature/2` for the walks; `lowered?/1`
-  and `recompiled/4` for a type given.
+  and `recompiled/4` for a type given; and the loader behind `Logex`'s three, its own
+  compile private.
 - `lib/logex/declarations.ex` — `Logex.Declarations`, declaration lines to tags: sections,
   qualifiers, the one table of elementary types (`table/0`) with Figure 11's widenings,
   IEC's generic classes, arrays' sizes and initial lists, `check/1` for a line and for

@@ -337,17 +337,26 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-4 left, decisions 390–401, which RV-11 builds. Its answers to the questions
-RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting every tag,
-element and instance it holds, at every depth (decision 403), the loader's trust in its
-own types a token only it makes, so a type edited by hand is checked whether a host
-hands it to `Logex.compile/2` or to the loader's internal entry (decision 404), though a
-token a host builds byte by byte in the VM's external term format passes for the
-loader's (provisional), and two bits whose literal numbers differ, `w[i].3` and
-`w[j].4`, or a one-shot's storage bit beside a write whose literal places differ from
-it, no warning (decision 405), the other four as built (decisions 402, 406, 407 and
-408). Its answers
+items RV-6 to RV-8 build ("The review after Milestone 6"), its answers to the
+questions RV-4 left, decisions 390–401, which RV-11 builds, and its answers to the
+questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
+file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
+over a store it cannot read copying it first, among them. Its answers to the questions
+RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
+RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
+closure refused as built (decisions 429 and 430), a bit of a member of an element
+written through a tag subscript or numbered by a tag warned as a word array's bit is
+where the pair may meet (decision 431), and the loader's own compile private code that
+nothing a host hands in reaches, no token at all (decision 432). Its answers to the
+questions RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting
+every tag, element and instance it holds, at every depth (decision 403), the loader's
+trust in its own types one no host can borrow, so a type edited by hand is checked
+whether a host hands it to `Logex.compile/2` or to the compiler's internal entry
+(decision 404), which since RV-15 is no token at all but the loader's own compile,
+private code that no closure or term a host hands in reaches (decision 432), and two bits
+whose literal numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a
+write whose literal places differ from it, no warning (decision 405), the other four as
+built (decisions 402, 406, 407 and 408). Its answers
 to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
 held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
 warm restart's timers counted from the resource's `now` (decision 382), a preset no
@@ -1996,8 +2005,13 @@ line 11: `sloot` is not declared — did you mean `slot`?
   bits whose literal numbers differ, `ote faults[i].1` beside `ote faults[j].2`, the
   bit's number one more place, and a write beside a storage bit whose literal places
   differ from its own, `ote edges[i,0]` beside `ons edges[1,1]`, where `ote edges[i,1]`
-  and `ote faults[j].[n]` may meet and are told. A subscript's tag is a use of it, read,
-  and part of its rung, so an edit that changes it changes the rung.
+  and `ote faults[j].[n]` may meet and are told. Since decision 431 a bit of a member of
+  an element of an array of timers or counters, written through a tag subscript or
+  numbered by a tag, is told as a word array's bit is, the member's word its word:
+  `ote lanes[i].pv.3` beside `ote lanes[j].pv.[n]`, or `ote lanes[1].pv.[n]` beside `move
+  5 lanes[i].pv`, may meet and are told, and `ote lanes[1].pv.[n]` beside `ote
+  lanes[2].pv.3` never meet and are not. A subscript's tag is a use of it, read, and part
+  of its rung, so an edit that changes it changes the rung.
 
 ### Two pulse coils
 
@@ -2461,8 +2475,8 @@ line 8: `lane_t.dn` names a member of `lane_t`, but `lane_t` is an array of 4 to
   its var_inputs and var_outputs among them. So `var row cell[256]`, `cell` a block
   holding `ton[256]` alone, would hold 65,792, 256 instances and 65,536 timers, and is
   refused; so is `var x two`, `two` a block holding two `int[40000]` alone, at 80,001,
-  the instance itself counted (provisional: the 80,000 its block holds is the other
-  reading), though `two` itself compiles; so is an array of 65,536 blocks of 200 single
+  the instance itself counted, one rule for every instance (decision 429), though `two`
+  itself compiles; so is an array of 65,536 blocks of 200 single
   timers; and so is a chain of blocks each holding two single instances of the one below,
   at the depth whose count passes 65,536.
 - **Literal subscripts to run an element.** An instruction that runs an instance names

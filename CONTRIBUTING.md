@@ -370,6 +370,19 @@ choice, not an oversight to fix.
   here and 15.6 in CI on `8f92723`, over its bound of 10. Since `eae603f` each side is
   the least of five runs, 5.8 to 7.4 over eight runs, and the bound stayed where it was.
   Read such a figure as the least of several runs; never widen its bound to pass.
+- **A trace pattern moves every process's reductions, traced or not.** A pattern set
+  with `:erlang.trace_pattern/3` is met by every process that calls the function, so
+  while one test traces `Enum`, `:lists` or `:maps` another test's count of reductions
+  moves: decision 432's traced load, a test of an async module, set patterns on every
+  function of the modules a compile runs through, and in CI on `12fef7d`
+  `tag_subscript_test.exs`'s exact pin of a scan read 33 reductions a rung against its 34
+  (with the patterns set for another process 33 here too, 34 once cleared). A test that
+  traces a module another test's cost reaches runs in a module of its own with `async:
+  false`, which ExUnit runs only once every async module is done, as
+  `Logex.FunctionBlockTest.Traced` and `Logex.RuntimeTest.Traced` do;
+  `function_block_test.exs` reads every test file's syntax tree and holds each module
+  that sets a pattern to it, the runner's two that still run async
+  (`retain_store_test.exs`, `runner_edit_test.exs`) named as theirs to move.
 - **Wait for a process's `DOWN` before asking another process about it.** `Process.exit/2`
   does not wait, and an exit signal and a later call to another process are not ordered:
   three tests in `trip_test.exs` killed the drive and read `status/1` at once, and in CI
