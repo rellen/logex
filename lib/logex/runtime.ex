@@ -2389,7 +2389,7 @@ defmodule Logex.Runtime do
     do: element_input(:error, {key, [], value}, tags, program)
 
   # A key is an element's name only where the lexer reads it as one name, its subscripts
-  # numbers a literal may spell, `"steps[16#3]"` the element `steps[3]` (provisional), one a
+  # numbers a literal may spell, `"steps[16#3]"` the element `steps[3]` (decision 426), one a
   # dimension and each within it, as a rung's element is judged when the program compiles.
   defp element_input(
          {:ok, %Tag{section: :var_input, type: {:array, _, _}} = tag},

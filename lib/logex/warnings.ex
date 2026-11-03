@@ -1091,11 +1091,11 @@ defmodule Logex.Warnings do
   # did, its marks and their look the one walk's more (RV-15's review). A literal bit
   # through a tag subscript and its element written whole through the very tags are
   # through the very tags, `{:vel, element, bit}` (other/3), as decision 288 has them.
-  defp covered({[], _latched}), do: %{}
   defp covered({tagged, latched}), do: Map.new(tagged ++ latched, &{&1, true})
 
   # Each word some write reaches through a tag subscript, and `{:latched, word}` for each
-  # whose literal bit of a literal element another write writes (decided/2).
+  # whose literal bit of a literal element another write writes beside a coil through a
+  # tag subscript on a bit a tag numbers, which covers the word too (decided/2).
   defp tagged_too([{:mword_write, word} | decisions], {tagged, latched}),
     do: tagged_too(decisions, {[word | tagged], latched})
 

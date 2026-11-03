@@ -4958,9 +4958,11 @@ defmodule Logex.Compiler do
   # from compile_file/1 and compile_files/1, which take paths, through private functions
   # and no closure (`function_block_test.exs` reads it from this module's code), so no
   # type, list, closure, memo or other term a host hands in reaches it, and nothing a host
-  # builds, byte by byte or otherwise, passes for the loader's own. Every public entry that
-  # takes types, compile/2's `types`, instructionize/3 and loaded/2, checks each as
-  # decision 54 has it.
+  # builds, byte by byte or otherwise, passes for the loader's own. Every public entry
+  # that compiles a routine over types it is handed, compile/2's `types`, instructionize/3
+  # and loaded/2, checks each as decision 54 has it; decision 54's own steps,
+  # recompiled/4 and `Logex.FbType.check/2`, public for the check, take what they are
+  # given as checked and hold none of it (provisional, RV-15's question 4).
   @doc false
   def compile(source, options)
 

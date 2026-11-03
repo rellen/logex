@@ -13839,7 +13839,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     instance it holds at every depth". Pinned, each beside a twin within the bound:
     `cell[256]` of a block holding `ton[256]` alone, at 65,792, in a block's file and in
     a program; `var x two` of two `int[40000]` alone at 80,001, the instance itself
-    counted (provisional, question 1 below), though `two` compiles; `wide[65536]` of 200
+    counted (question 1 below, decision 429), though `two` compiles; `wide[65536]` of 200
     single timers alone at 13,172,736; a chain of blocks each holding two single
     instances of the one below, `d1` two timers, `d15` taken at 65,535, `d16` refused at
     131,071 and `d17`'s own declaration of one at its line, the refused compile at depth
@@ -13872,7 +13872,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     source edited and a struct built with another count, each refused through `loaded/2`
     and through `compile/2` in `types:`'s words. A host's closure, one that gives the
     loader's own types among them, and an external function of `Logex` are refused as
-    junk in those words (provisional, question 2 below), and `compile/2` takes no
+    junk in those words (question 2 below, decision 430), and `compile/2` takes no
     `loaded:` option. The loader's chain still compiles once a file, none again: the
     trace counts are unchanged. RV-9's review held the trusted list to a type list's
     shape; that list comes only from the loader now, and junk handed to `loaded/2` takes
@@ -14177,9 +14177,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   - *Left to RV-13*: none. RV-10's marks are all in the files above (`399d7f6`, `37722f8`,
     `ce59970`, read by `git show`); none is in `lib/logex/runner.ex`, `lib/logex/runner/`,
     `lib/logex/io*` or the runner's test files, whose "provisional" marks, read one by
-    one, are RV-4's and RV-5's (decisions 390–419), RV-13's and RV-11's to make. Marks
-    older than RV-10 on readings decisions 420–428 also cover, the runtime's
-    `"steps[16#3]"` (`0a2d8f5`) among them, are other items' and left as they are.
+    one, are RV-4's and RV-5's (decisions 390–419), RV-13's and RV-11's to make. A mark
+    older than RV-10 on a reading decision 426 also covers, the runtime's comment on a
+    host's element key, `"steps[16#3]"` the element `steps[3]` (`0a2d8f5`), which no
+    item owned, is made too since RV-15's review.
 - **RV-15 — the answers to RV-12's questions** (decisions 431 and 432). A member's bit
   written through a tag subscript or numbered by a tag warned "may share" where the pair
   may meet, as a word array's bit is; the loader's trusted compile private code no closure
@@ -14233,38 +14234,50 @@ and CI checked; each fix with a test that fails when it is reverted.
     doc, `Logex.compile_file/1`'s doc, `Logex.FbType.check/2`'s doc, README's "What has
     landed", decisions 371's and 404's notes, the forge's account taken out; CLAUDE.md's
     lines for `lib/logex.ex` and `lib/logex/compiler.ex` kept true.
-  - *Decision 431, a member's bit judged as a word array's* (`tag_subscript_test.exs`, "a
-    member's bit through a tag subscript or numbered by a tag (decision 431)", eight
-    tests, and "a member's bits through tags beside literal ones cost linear reductions
-    (decision 431)"). `Logex.Warnings` keeps each write of a member's word of an element,
-    `l1[1].pv`, as a decision of its own, by its element's places, a literal's value or a
-    tag, its bit, numbered by a tag, a literal bit or the word whole, and whether it is a
-    coil, and judges each pair the member rules before it did not: those where a tag
-    numbers a bit of one, or a write through a tag subscript writes the word whole, and a
-    tag subscripts an element of either, each with a bit that meets every bit on one side,
-    so its element's places alone tell whether it may meet. Every form of RV-12's
-    question 3 is warned where the pair may meet, either first, in one, two and three
-    dimensions, arrays of counters and of timers, in a program and a block's body, in a
-    word array's words; a pair whose literal places differ, `ote l1[1].pv.[n]` beside
-    `ote l1[2].pv.3`, stays quiet; two coils through the very tags are told the bit
-    already has one, a coil and another write through them nothing (decision 246); of
-    several firsts a write is told the one a word array's would be. An oracle test judges
+  - *Decision 431, a member's word judged as a word array of its shape*
+    (`tag_subscript_test.exs`, "a member's bit through a tag subscript or numbered by a
+    tag (decision 431)", twelve tests, and two of cost: "a member's bits through tags
+    beside literal ones cost linear reductions (decision 431)" and "coils on members'
+    bits no write reaches through a tag subscript cost what they did before decision
+    431"). As rebuilt after RV-15's review (below): `Logex.Warnings` finds the member
+    words of an element, `l1[1].pv`, that some write reaches through a tag subscript, a
+    coil's or another write's, each marked as the one walk of a routine's decisions meets
+    it, and judges each such word as a word array of its shape: every write of the word,
+    of a literal element or through a tag subscript, is also the decision a word array's
+    write of that shape would be, its array `{:mword_of, array, members}` and its
+    elements `{:mword_el, …}`, quoted in the member's names, judged by the word array's
+    own clauses (decision 405), so that every pair is judged and every first chosen as a
+    word array's is. Every form of RV-12's question 3 is warned where the pair may meet,
+    either first, in one, two and three dimensions, arrays of counters and of timers, in
+    a program and a block's body, in a word array's words; a pair whose literal places
+    differ, `ote l1[1].pv.[n]` beside `ote l1[2].pv.3`, stays quiet; two coils through
+    the very tags are told the bit already has one, a coil and another write through
+    them nothing (decision 246); of several writes a write is told every first a word
+    array's write would be told. The member rules (decisions 253, 257 and 288) judge the
+    member's writes as before, and a warning both give in the same words is told once;
+    where a member rule's first is another, the write is told both (question 2). The
+    word array's judgement gives way to the record in two places: a literal bit through
+    a tag subscript and its word written whole through the very tags are through the
+    very tags, quiet, as decision 288 has them (`{:vel, element, bit}`, equal at every
+    bit); and a latch of a literal element's literal bit, which a word array's rules
+    compare with nothing, is compared with a coil on a bit a tag numbers through a tag
+    subscript, in a first of its own that the word array's rules do not read, as
+    decision 257 compares it with one on that bit (question 1). An oracle test judges
     every pair of a coil, a pulse coil, a word written whole and a latch over a member's
     word and over a word array of its shape, 2,269 pairs in one dimension and two: each
     is told the same, names mapped, but the two the member rules held before, decision
-    257's literal latch and decision 288's very tags. Three readings the record is silent
-    on are pinned as built, each provisional (below): a literal bit's latch beside a coil
-    a tag numbers warned, as decision 257 warns it; a bit a tag numbers beside its word
-    written whole through the very tags warned, as a word array's is, where decision 288
-    leaves a literal bit quiet; and a write a member rule warns told too of a pair a tag
-    reaches, two warnings on its line. A one-shot keeps no storage bit in a member, so no
-    write of one meets one, pinned. A routine whose coils name no member's bit of an
-    element pays nothing; one whose member words no tag reaches keeps none of the
-    decisions. The leave: `instance_array_test.exs`'s pin of `ote
+    257's literal latch and decision 288's very tags. A seeded oracle over 400 programs
+    of three to six writes, in one dimension and two, holds every warning the word
+    array's write is told among the member's, names mapped, but where decision 288's
+    pair stands in the program, and every warning the member's write is told to cite a
+    write that may meet it, by the text alone. An array of counters declared from Elixir
+    is warned of nothing. A one-shot keeps no storage bit in a member, so no write of
+    one meets one, pinned. The leave: `instance_array_test.exs`'s pin of `ote
     lane_c[1].pv.3` beside `move 5 lane_c[i].pv`, unwarned (provisional), is warned as a
     word array's is, and its reverse is pinned beside it. Docs: `Logex.Warnings`'
     moduledoc, README's passage on a write through a tag subscript.
-  - *The probes and fuzzers* (`p15/pr/`): RV-12's review's 15,414 pairs of
+  - *The probes and fuzzers* of the first build (`p15/pr/`), its warnings in pairs the
+    rebuilt engine's (below): RV-12's review's 15,414 pairs of
     `pairs405.exs` give the same warnings at the tip as at `9a9a48c`, byte for byte, and
     `judge405.exs` the same classes; `member405.exs` differs in thirteen of its 21
     pairs, question 3's forms, each now warned, and in nothing else; `fz405.exs`, 6,000
@@ -14292,15 +14305,17 @@ and CI checked; each fix with a test that fails when it is reverted.
   compiled once, 2.38x at 2x as at the parent; `compile_files/1` over such a chain so
   too; every program of `compile_total_test.exs`'s pin and of RV-12's storage index
   within 5 of the parent's, `Logex.compile/2` one call more through its delegate; a
-  block's own file 1 more. Decision 431's own: 200 coils on members' bits of literal
-  elements, no write a tag reaches, 2.2% more in one dimension and 2.0% in two, the
-  decisions made and dropped; 100 such beside 100 through tags 12.6% more in one
-  dimension and 19.1% in two, linear (1.90x at 2x). Every scan is exactly the parent's:
+  block's own file 1 more. Decision 431's own, as rebuilt after RV-15's review (its
+  table below): 200 coils on members' bits of literal elements, no write through a tag
+  subscript, 0.33% to 0.50% more, six or seven reductions a coil; a word array's, as
+  before; 100 such beside 100 through tags 46% to 68% more, linear (1.93x at 2x, 1.97x
+  at 4x). Every scan is exactly the parent's:
   200 mixed rungs energised and not, an array of blocks of timers, and an instance's
   first state. RV-14 and the marks change no code.
 
   *Mutation tables* (`p15/m432/` and `p15/m432b/` on `889e7e8`, `p15/m431/` on
-  `e20d19a`, each judged by the full suite):
+  `e20d19a`, each judged by the full suite; the `m431_` rows are of decision 431's first
+  build, whose code RV-15's review replaced, its own table below):
 
   | Mutant | What it does | Tests failed |
   |---|---|---|
@@ -14361,21 +14376,161 @@ and CI checked; each fix with a test that fails when it is reverted.
   and `own_compiled/2`, which no scan calls, stay where they are. `CONTRIBUTING.md`'s
   "Things that will bite you" tells it.
 
+  *RV-15's review* (2026-11-03, on `4cad992`, `rev15work/`) found nothing that breaks
+  decision 432 and six things to mend, each mended on `rv15` and named here by its
+  number.
+
+  1. *Decision 431 cost programs it could say nothing about* (Medium). Every routine
+     whose coils named a member's bit made the decisions of every such word, and dropped
+     only those of words no tag numbered nor wrote whole through a tag subscript: 200
+     coils a tag numbers on literal elements 9.0% dearer than at `9a9a48c`, 11.6% in two
+     dimensions, a coil beside its word written whole 8.6%, unmeasured and unpinned.
+     Since `8e0e6d1`, a member's word is judged as a word array only where some write
+     reaches it through a tag subscript of its element, a coil's, marked as `coils` are
+     folded, or another write's, marked in the one walk of its write slots; any other
+     keeps a mark of each coil and costs six or seven reductions a coil. Pinned:
+     `tag_subscript_test.exs`, "coils on members' bits no write reaches through a tag
+     subscript cost what they did before decision 431", seven programs against
+     `9a9a48c`'s figures, restated through the parse, the least of three runs, 7 or 8
+     reductions a rung for members' bits, literal, numbered, in two dimensions, beside
+     their words written whole and beside latches, and 1 for a word array's.
+  2. *Of several writes, a member's write was not told what a word array's is* (Medium).
+     The first build's lookups stopped at the first kind that found a write, so of three
+     to six writes a member's write was told fewer firsts than a word array's (the
+     review's `ote l[i].pv.3`, `otl l[j].pv.4`, `ote l[0].pv.[n]`: the `otl` untold) or a
+     later one; PLAN, the moduledoc and decision 431's note said it was told the one a
+     word array's would be. Since `8e0e6d1` each write of a covered word is also the
+     decision a word array's write of its shape would be, run through the word array's
+     own clauses (`Logex.Warnings`' virtual/4), so a member's write is told every first a
+     word array's would be told, names mapped; the member rules stand beside it, a
+     warning both give told once, so a member's write may be told of three firsts where a
+     word array's is told of two (question 2, reframed). Two places give way to the
+     record: decision 288's very tags (`{:vel, element, bit}`, a literal bit and the word
+     whole equal through the very tags) and question 1's latch, in firsts of its own that
+     the word array's rules do not read, which the seeded oracle found had moved a word
+     array's first when kept among them. Pinned: "of several writes, a member's write is
+     told every first a word array's is" (the review's cases), and "of programs of
+     several writes, every warning a word array's is told, each of writes that may meet",
+     a seeded oracle over 400 programs of three to six writes in one dimension and two:
+     the word array's warnings among the member's, names mapped, but where decision 288's
+     pair stands, and every member warning citing a write that may meet it by the text
+     alone, its reach asserted (a program the same, one told more, one of decision 288).
+     The review's own fuzz, 5,608 programs of which 1,778 differed, at `8e0e6d1`: of
+     2,790, every one either the same or told more, on lines the word array warns; of
+     15,000 drawn of every kind, the word array's warnings among the member's in every
+     program but those holding decision 288's pair, and none citing a write that cannot
+     meet it. `mpairs.exs`'s 38,032 pairs and 6,354 suite inputs give the first build's
+     warnings exactly. Words of RV-12's forms alone, a literal bit through a tag
+     subscript, are judged so too, as decision 431's words have them: in a program of
+     `ote l[0].pv.4`, `ote l[i].pv.3`, `otl l[i].pv.3`, `ote l[1].pv.3` the last is told
+     of the `otl` beside the `ote`, as a word array's is, where it was told of the `ote`
+     alone.
+  3. *Four mutants survived* (Medium-Low). `mword_earliest`'s `min_by` and the `:mword`
+     clause of `decides?` belonged to the first build's lookups, gone with them; the word
+     array's own `earliest/1` decides now, and the clause's successor,
+     `from_source?/2`'s for a member's word, is pinned by "an array of counters declared
+     from Elixir is warned of nothing". The two cost guards are the first build's too;
+     their successors are the marks above, pinned by the cost test. The table below.
+  4. *Question 1 left out an inconsistency* (Low-Medium). `otl lanes[1].pv.3` is warned
+     beside `ote lanes[i].pv.[n]` and quiet beside `ote lanes[1].pv.[n]`, the likelier to
+     set its bit; a word array's latch is quiet beside both. Question 1 now says so, with
+     a third option, and "a literal bit's latch beside a coil a tag numbers of its own
+     element is quiet (provisional)" pins it, alone and where a write through a tag
+     subscript makes the member's word one judged as a word array.
+  5. *Marks and records* (Low): this file's RV-12 entry's two marks, "(question 1 below,
+     decision 429)" and "(question 2 below, decision 430)"; the runtime's `"steps[16#3]"`,
+     which decision 426 settles and no item owned, made in RV-14's account and decision
+     426's note; decision 404's note's forge history restored, its marks the decisions'
+     numbers, decision 432's note after it; and the compiler's comment at the loader,
+     which said every public entry that takes types checks them, now names decision
+     54's own steps, `recompiled/4` and `Logex.FbType.check/2`, as trusting what they
+     are given (question 4).
+  6. *The traced load's module had no test that failed reverted* (Low), and the async
+     module's `compiles/1` still traced `recompiled/4`, `loaded/2` and `own_compiled/2`.
+     Since `328a755` the four tests of decisions 371 and 404 that trace them run in
+     `Logex.FunctionBlockTest.Traced`, in the describe they were written in, and
+     `runtime_test.exs`'s trace of `Logex.Program.edited_by_hand/1` in
+     `Logex.RuntimeTest.Traced`, both `async: false`; "every test module that sets a
+     trace pattern runs alone" reads every test file's syntax tree and holds each module
+     that sets one to `async: false`, a second test pinning the reading. The runner's two
+     that still set patterns in async modules, `retain_store_test.exs` (on
+     `Logex.Runtime`'s `retained/1` and `restart/2`, and every function of `:file`) and
+     `runner_edit_test.exs` (every function of `Logex.Edit`), are named in the test as
+     theirs, RV-11's files, left to it.
+
+  *Cost of RV-15's review's rebuild* against `9a9a48c` and the first build (`4cad992`),
+  the least of nine runs in a fresh process with a heap the collector never visits
+  (`p15/rf/cost.exs`): 200 coils on members' bits of literal elements, literal or a tag
+  numbering them, in one dimension or two, beside their words written whole, 0.33% to
+  0.50% over the parent where the first build was 1.9% to 11.6%; word arrays and reads
+  as the parent; 100 coils of literal elements beside 100 through tags 46% to 68% over
+  the parent where the first build was 3.1% to 18.0%: such a routine pays, beside what
+  it paid, what a word array of its shape pays to be judged (a word array's 100 beside
+  100 is 32% to 62% over its 200 literal), linear, 1.93x at 2x and 1.97x at 4x for two
+  dimensions. `real_test.exs`'s exact pin of a warnings rung read 221.35 against its
+  221.34 with the once-told warnings a function around the reduce, and 221.34 with it
+  after the reduce, as built: the same calls, a reduction's difference in the counting
+  alone. Every scan is the parent's.
+
+  *Mutation table of RV-15's review's fixes* (`p15/rf/mut/` on `328a755`, each judged by
+  the full suite, 2,793 tests):
+
+  | Mutant | What it does | Tests failed |
+  |---|---|---|
+  | r_cover_all | every member's word a coil names judged as a word array | 1, the cost |
+  | r_mark_literal_whole | a literal element's word written whole marked as through a tag subscript | 1, the cost |
+  | r_latch_everywhere | a literal bit's latch marked wherever its word is coiled | 1, the cost |
+  | r_latch_alone | latches alone covering a word | none: equivalent, since a latch is marked only beside a coil a tag numbers through a tag subscript, which covers the word; the clause removed with this record |
+  | r_no_virtual | no word judged as a word array | 5 |
+  | r_writes_unmarked | writes through a tag subscript other than a coil's not marked | 5 |
+  | r_unprobed | the word array's coils not probed for its coils through a tag subscript | 6 |
+  | r_vwrites_none | no write but a coil judged as the word array's | 8 |
+  | r_no_once | a warning both rule sets give told twice | 8 |
+  | r_vel_unequal | a literal bit and its word through the very tags told apart (decision 288) | 2 |
+  | r_latch_off | the latch of question 1 not compared | 2 |
+  | r_from_source_true | a member's word declared from Elixir judged | 1 |
+  | r_latch_own_element | the latch compared with a coil a tag numbers of its own element | 7 |
+  | r_traced_async | `Logex.FunctionBlockTest.Traced` async again (`4cad992` reverted) | 1 |
+  | r_runtime_traced_async | `Logex.RuntimeTest.Traced` async | 1 (and 1 growth bound, `retain_image_test.exs`'s matching of 512 timers against 2,048, which makes instances and so meets the pattern on `edited_by_hand/1`: the exposure itself, or the load average of 13) |
+
+  Every mutant but the equivalent one is killed by the full suite; the cost mutants by
+  the cost test alone, each over its bound (r_latch_everywhere at 9.5 reductions a rung
+  against 8).
+
+  *Gates and CI of RV-15's review's fixes.* `8e0e6d1` (decision 431 rebuilt) GATE-OK
+  2,791 (11 doctests, 2,780 tests), CI green (41577879406); `328a755` (the traced tests
+  alone, question 1's pin) GATE-OK 2,793 (11 doctests, 2,782 tests), CI green
+  (41578381620); this record, the comments and the redundant clause,
+  GATE-OK 2,793 (11 doctests, 2,782 tests). A first run of the working tree before `8e0e6d1` was red on
+  `real_test.exs`'s exact rung of warnings (above), mended before the commit. The
+  review's own red run at its tip, `located_array_test.exs`'s forces file timing out
+  under a load average of 7.5, is RV-11's code and did not recur here.
+
   *Provisional readings, put to the maintainer.* RV-14 leaves none: decisions 420 to 428
   took each reading as built. RV-15's, each pinned as built and marked provisional where
   the code states it:
 
   1. *A literal bit's latch beside a coil a tag numbers* (decision 431). `otl
      lanes[1].pv.3` beside `ote lanes[i].pv.[n]`, either first, is warned, as decision
-     257 warns that latch beside `ote lanes[i].pv.3`; a word array's latch of a literal
-     bit, `otl w[1].3` beside `ote w[i].[n]`, is not compared at all. (a) As built, the
-     member's own rule; (b) as a word array's, not warned.
-  2. *Two warnings on one line* (decision 431). A write a member rule already warns may
-     meet another write through a tag that numbers a bit, and is told of each: after `ote
-     lanes[1].pv.3` and `ote lanes[i].pv.[n]`, `ote lanes[i].pv.3` is told it is in
-     `lanes` as `lanes[1].pv.3` is, and that the `ote` on the second line may write it,
-     where a word array's write is told of one, the coil through a tag subscript. (a) As
-     built, each pair told; (b) one warning a write, a word array's choice.
+     257 warns that latch beside `ote lanes[i].pv.3`; beside `ote lanes[1].pv.[n]`, a coil
+     a tag numbers of the latch's own element, the likelier of the two to set the latched
+     bit, it is quiet (RV-15's review, finding 4), as a word array's latch of a literal
+     bit, `otl w[1].3`, is beside either, compared with nothing. (a) As built: warned
+     beside the coil through a tag subscript, quiet beside the one on its own element;
+     (b) as a word array's, quiet beside both; (c) warned beside both.
+  2. *Several firsts on one line* (decision 431, reframed after RV-15's review). A
+     member's write is told every first a word array's write of its shape would be told,
+     and where a member rule (decisions 253, 257, 288) cites another first, that one too,
+     a warning both give in the same words told once: after `ote lanes[i,i].pv.[n]`,
+     `move 5 lanes[j,i].pv` and `otu lanes[j,i].pv.3`, `ote lanes[1,0].pv.3` is told of
+     the `ote`, the `move` and the `otu`, three warnings, where `ote w[1,0].3` on a word
+     array is told of the `ote` and the `move`, two; and after `ote lanes[1].pv.3` and
+     `ote lanes[i].pv.[n]`, `ote lanes[i].pv.3` is told of both, where `ote w[i].3` is
+     told of the second alone. A word array's write is told of two firsts at most, a coil
+     through a tag subscript and another write; a member's of three. Every first told is
+     of a write that may meet it. (a) As built, each rule's first told; (b) only a word
+     array's firsts where the word is judged as a word array, a member rule's own told
+     only where the word array's rules tell the write nothing.
   3. *A bit a tag numbers beside its word written whole through the very tags* (decision
      431). `ote lanes[i].pv.[n]` beside `move 5 lanes[i].pv` is warned, as `ote w[i].[n]`
      beside `move 5 w[i]` is, where decision 288 leaves `ote lanes[i].pv.3` beside `move 5

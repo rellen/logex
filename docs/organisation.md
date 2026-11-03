@@ -12878,14 +12878,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a token only the loader holds (b)** (the maintainer, 2026-11-01): a type is
      trusted as the loader's own only through what the loader alone makes during its
      load, so a hand-edited type handed in any way is checked as decision 54 has it. To
-     build in RV-12. *(Landed with RV-12, 2026-11-02: the loader handed its own types to
-     `Logex.Compiler.loaded/2` through a closure it made in `Logex` during the load, and
-     `loaded/2` trusted only a closure of no arguments local to `Logex`; no field of a
-     type, no option and no atom marks a type the loader's. A list handed to `loaded/2`
-     is checked as decision 54 has it, each type its table holds compiled again, and one
-     edited by hand refused in `types:`'s words, as through `compile/2`; any other
-     closure, a host's or an external function of `Logex`, is refused as junk in those
-     words (decision 430). A chain of files still compiles once a file, none again.)*
+     build in RV-12. *(Landed with RV-12, 2026-11-02: the loader hands its own types to
+     `Logex.Compiler.loaded/2` through a closure it makes in `Logex` during the load, `fn
+     -> types end`, and `loaded/2` trusts only a closure of no arguments local to
+     `Logex`, which no host code can make, short of building one from the external term
+     format; no field of a type, no option and no atom marks a type the loader's. A list
+     handed to `loaded/2` is checked as decision 54 has it, each type its table holds
+     compiled again, and one edited by hand refused in `types:`'s words, as through
+     `compile/2`; any other closure, a host's or an external function of `Logex`, is
+     refused as junk in those words (decision 430). A chain of files still compiles once
+     a file, none again. RV-12's review built such a closure byte by byte, from `Logex`'s
+     beam and its checksum, and `loaded/2` compiled the hand-edited type it gave
+     unchecked; whether such a term is a way of handing a type in was put to the
+     maintainer (decision 432).)*
      *(RV-15, 2026-11-03: decision 432 takes the token out. The loader is
      `Logex.Compiler`'s private code, `Logex.compile_file/1` and `compile_files/1`
      delegated to it, and its own compile of a file over the blocks it compiled itself
@@ -13101,7 +13106,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-02), as IEC reads `16#3` wherever an
      integer goes. RV-14 makes the mark the decision's number. *(RV-14, 2026-11-03: made,
-     in `Logex.Name`'s comment and the runtime's comment on a cycle's keys.)*
+     in `Logex.Name`'s comment and the runtime's comment on a cycle's keys; and, after
+     RV-15's review, in the runtime's older comment on a host's element key,
+     `"steps[16#3]"` the element `steps[3]`, which no item owned.)*
 
 427. **A held-on `tof`'s done bit before the first scan (the review after Milestone 6),**
      RV-10's question 8: rested by the restart (decision 385), a fan's run-on reads `.dn`
@@ -13149,23 +13156,34 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      tag subscript or numbered by a tag is judged as a word array's bit is, warned "may
      share" where the pair may meet, and a pair whose literal places differ stays quiet,
      as decisions 372 and 405 have it. To build in RV-15. *(Landed with RV-15, 2026-11-03:
-     `Logex.Warnings` keeps each write of a member's word of an element, `l1[1].pv`, a
-     decision of its own by its element's literal or tag subscripts, its bit, numbered by a
-     tag, a literal bit or the word whole, and whether it is a coil, and judges each pair
-     the member rules before it did not, those where a tag numbers a bit of one, or a
-     write through a tag subscript writes the word whole, and a tag subscripts an element
-     of either, as a word array's element and bits are judged (decision 405): every form
-     of RV-12's question 3 warned where the pair may meet, either first, in a word array's
-     words and in its order of firsts, `ote l1[1].pv.[n]` beside `ote l1[2].pv.3` quiet;
-     and so `ote l1[1].pv.3` beside `move 5 l1[i].pv`, which a provisional pin had left
-     unwarned. Decision 257's literal latch and decision 288's very tags stand where they
-     judge a pair; a literal bit's latch beside a coil a tag numbers is warned as decision
-     257 warns it, a bit a tag numbers beside its word written whole through the very tags
-     as a word array's is, and a write a member rule warns is told too of a pair a tag
-     reaches, each provisional. A one-shot keeps no storage bit in a member, so no such
-     write meets one. A routine whose coils name no member's bit of an element pays
-     nothing; 200 literal coils on members' bits, with no write a tag reaches, compile
-     2.2% dearer, and 100 beside 100 through tags 12.6% in one dimension and 19.1% in two,
+     `Logex.Warnings` judges a member's word of an element, `l1[1].pv`, that some write
+     reaches through a tag subscript as a word array of its shape: each write of the word,
+     of a literal element or through a tag subscript, is also the decision a word array's
+     write of its shape would be, judged by the word array's own rules (decision 405) and
+     quoted in the member's names. So every form of RV-12's question 3 is warned where the
+     pair may meet, either first, in a word array's words, and so `ote l1[1].pv.3` beside
+     `move 5 l1[i].pv`, which a provisional pin had left unwarned; `ote l1[1].pv.[n]`
+     beside `ote l1[2].pv.3` stays quiet; and of several writes a write is told every
+     first a word array's write of its shape would be told. The member rules (decisions
+     253, 257 and 288) judge the member's writes as before, a warning both give in the
+     same words told once, so where a member rule cites another first a write is told of
+     both, up to three where a word array's write is told of two (provisional). Decision
+     257's literal latch and decision 288's very tags stand: a latch of a literal
+     element's literal bit is warned beside a coil through a tag subscript on a bit a tag
+     numbers as decision 257 warns it beside one on that bit (provisional), and is quiet
+     beside a coil a tag numbers of its own literal element, as a word array's is; a
+     literal bit through a tag subscript beside its word written whole through the very
+     tags is quiet, and a bit a tag numbers beside it warned, as a word array's
+     (provisional). A one-shot keeps no storage bit in a member, so no such write meets
+     one. RV-15's review found that the first build judged only the pairs the member rules
+     did not, by lookups of its own, so that of several writes a member's write was told
+     fewer firsts than a word array's or a later one, in 7% of programs of three to six
+     writes, and that every routine whose coils named a member's bit made decisions it
+     never needed, 9.0% dearer for 200 coils a tag numbers on literal elements; since, a
+     word no write reaches through a tag subscript keeps none, such a routine within 8
+     reductions a rung of `9a9a48c`, and a routine that writes a word through a tag
+     subscript pays, beside what it paid, what a word array of its shape pays to be
+     judged, 100 coils on literal elements beside 100 through tags 46% to 68% dearer,
      linear.)*
 
 432. **A token built byte by byte (the review after Milestone 6),** RV-12's question 4
