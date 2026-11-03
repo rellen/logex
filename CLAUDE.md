@@ -142,7 +142,7 @@ own documentation holds:
   forces file each runner of the VM holds, claimed at its start and given up as it ends.
 - `lib/logex/runner/writer.ex` — `Logex.Runner.Writer`, internal: the process that writes
   the store every period, and every other file call of the runner's, each in a process of
-  its own limited to the idle watchdog and a poll period of real time.
+  its own limited to the runner's write limit of real time.
 - `lib/logex/runner/clock.ex` — `Logex.Runner.Clock`, the clock behaviour the runner reads
   time through.
 - `lib/logex/runner/clock/monotonic.ex` — `Logex.Runner.Clock.Monotonic`, the machine's
@@ -231,7 +231,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   its own.
 - `test/logex/clock_test.exs` — the two clocks.
 - `test/logex/io_test.exs` — `Logex.IO.Sim`, `Logex.IO.points/1` and `bind!/2`.
-- `test/logex/runner_test.exs` — the runner on the manual clock.
+- `test/logex/runner_test.exs` — the runner on the manual clock, and on the real clock
+  where a rule is of real time.
 - `test/logex/trip_test.exs` — the watchdogs, the trip and `restart/2`.
 - `test/logex/force_test.exs` — forcing and the forces file.
 - `test/logex/runner_paths_test.exs` — the files a runner holds: two runners of one VM on

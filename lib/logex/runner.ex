@@ -72,8 +72,8 @@ defmodule Logex.Runner do
   to `write_limit:` of real time, 5000 ms unless set, a limit of its own apart from the
   heartbeat, so that a healthy disk's sync on a machine whose cores are all busy meets
   it, and a disk that has not answered by then is a stalled one, the write killed and
-  failed, `:timeout`, or the read told as a file that cannot be read, the runner
-  answering on. A relative path's expansion at a start, which reads the working directory
+  reported `:timeout`, unknown until a later write lands or fails (decision 391), or the
+  read told as a file that cannot be read, the runner answering on. A relative path's expansion at a start, which reads the working directory
   through the VM's file server, is made so too, never in the caller. A force's write,
   made while the runner runs, keeps the heartbeat as a slow device's write in time does
   (decision 348): each poll period of real time while it waits on its disk the runner
@@ -472,8 +472,8 @@ defmodule Logex.Runner do
   After each step the rounds read the configuration the resource runs: each task's
   watchdog (decision 129), and whether it has untimed programs, an instance an edit adds
   with no task rounding back to back and one it sets aside no more, and a step that
-  leaves none followed at once by every request that waited for the share's slot, in
-  order, as each is served from then on; and the next round is planned again from the
+  leaves none followed by every request that waited for the share's slot, in order, as
+  each is served from then on, at once while no periodic round is due (decision 396); and the next round is planned again from the
   last, so that a task whose interval changed is next due where decision 40 moves it,
   its `now` the step's time on the runner's clock, given to the switch as the time since
   the last round, 0 while tripped, so that with no untimed program a cut served long
@@ -2461,8 +2461,9 @@ defmodule Logex.Runner do
   # round that completes them, the runner serves its own work for up to S ms, each request
   # whole, before the next round, and goes back to rounds at once where none waits; so on
   # the manual clock a slot comes in the advance that runs that round, never at a later one
-  # (decision 131). Only a configuration with untimed programs is served in slots: one
-  # without serves its requests whenever it waits (decision 108).
+  # (decision 131). A configuration with no untimed program served its requests whenever
+  # it waited (decision 108); since decision 396 it is served so while no round is due,
+  # and in the slot after C ms of its periodic rounds (below).
   defp slot(%{untimed: true, used: used, slots: {c, s}, retain: nil} = state) when used >= c do
     state = refresh(state, :idle)
     %{popped(:queue.out(state.queue), now(state) + s, state) | used: 0}
@@ -2509,8 +2510,10 @@ defmodule Logex.Runner do
     do: going_on(answered(request, %{state | queue: queue}), until)
 
   # A request served may be an edit's step that leaves the configuration with no untimed
-  # program, which no slot comes for again: the requests that waited behind it are then
-  # served at once, in order, as every request is from now on (decision 108).
+  # program, which no slot of the continuous task's comes for again: the requests that
+  # waited behind it are then served in order as every request is from now on (decision
+  # 108), at once where no round is due and, since decision 396, on to the slot's end, and
+  # after it while no round is due (freely/1), where one is.
   defp going_on(%{untimed: false, next_round: nil} = state, _until), do: freely(state)
   defp going_on(state, until), do: serving(state, until)
 
@@ -3051,12 +3054,13 @@ defmodule Logex.Runner do
   # the newest taken out replacing the one that waited, latest wins. Since RV-4's review
   # the write is limited as every other file write the runner makes is (decision 353):
   # one not answered within the write limit of real time (decision 400) from when it
-  # was handed is reported failed, `{:retain, {:error, :timeout}}` and `failed: :timeout`,
-  # the plant running on, where nothing told a stalled disk before. The writer is left to
-  # its write, one at a time and the newest image waiting as ever (decision 275), since a
-  # write the disk finishes late is still the newest on it: its answer, when it comes, is
-  # taken as any, a write made clearing the failure (provisional). An event's write still
-  # waits on it within its own limit and kills it past that (drained_writer/1).
+  # was handed is reported once, `{:retain, {:error, :timeout}}`, and since decision 391
+  # named `unknown` in `status/1`, neither failed nor written, the plant running on, where
+  # nothing told a stalled disk before. The writer is left to its write, one at a time and
+  # the newest image waiting as ever (decision 275), since a write the disk finishes late
+  # is still the newest on it: its answer, when it comes, is taken as any, a write made
+  # or failed ending the unknown (decision 401). An event's write still waits on it within
+  # its own limit and kills it past that (drained_writer/1).
   defp handed(%{retain: %{period: %{busy: true} = periodic}} = state, write),
     do: put_period(state, %{periodic | pending: write})
 

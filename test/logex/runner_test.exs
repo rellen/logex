@@ -146,7 +146,16 @@ defmodule Logex.RunnerTest do
     defp odd(_other, clock), do: Manual.now_ms(clock)
 
     defp answer([{_key, answer}], _clock), do: answer
-    defp answer([], clock), do: Manual.now_ms(clock)
+    defp answer([], clock), do: counted(:ets.lookup(Logex.RunnerTest, {clock, :bad_reads}), clock)
+
+    # Where the test has set `{answer, n}`, the runner's next n readings give the answer,
+    # and the clock is mended after them.
+    defp counted([{key, {answer, n}}], _clock) when n > 0 do
+      :ets.insert(Logex.RunnerTest, {key, {answer, n - 1}})
+      answer
+    end
+
+    defp counted(_none, clock), do: Manual.now_ms(clock)
   end
 
   defmodule NoCancelClock do
@@ -572,6 +581,36 @@ defmodule Logex.RunnerTest do
         assert Sim.outputs(panel) == %{[0] => 1}
         assert Runner.stop(runner) == :ok
       end
+    end
+
+    # Decision 394 (RV-11): the clock's notices sent while the runner stood tripped, here a
+    # status/1's two readings of it, wait in the mailbox behind a restart, which finds the
+    # clock mended: the restart takes them as nothing, and the line comes back and stays.
+    test "a restart that finds the clock mended takes its notices from while it stood " <>
+           "tripped as nothing (decision 394)" do
+      {opts, %{panel: panel}} = rig()
+      {:ok, clock} = Manual.start_link()
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {RunnerOddClock, clock}))
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      :ets.insert(__MODULE__, {{clock, :runner_now_ms}, :late})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:clock, {:now_ms, :late}}} = Runner.status(runner)
+
+      :ets.delete(__MODULE__, {clock, :runner_now_ms})
+      :ets.insert(__MODULE__, {{clock, :bad_reads}, {:late, 2}})
+      :sys.suspend(runner)
+      status = :gen_server.send_request(runner, :status)
+      restart = :gen_server.send_request(runner, {:restart, :warm})
+      :sys.resume(runner)
+      assert {:reply, %{status: :tripped}} = :gen_server.wait_response(status, 5000)
+      assert :gen_server.wait_response(restart, 5000) == {:reply, :ok}
+      assert [{_key, {:late, 0}}] = :ets.lookup(__MODULE__, {clock, :bad_reads})
+
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Runner.stop(runner) == :ok
     end
 
     # At start the range is the host's mistake, as an answer that is no integer is.
@@ -1416,9 +1455,9 @@ defmodule Logex.RunnerTest do
     waited(request, clock)
   end
 
-  # A host's loop, on until told to stop.
-  defp looped(0, loop), do: loop.(loop)
-  defp looped(_stop, _loop), do: :ok
+  # A host's loop, on until told to stop, its count of calls made.
+  defp looped(0, loop, calls), do: loop.(loop, calls)
+  defp looped(_stop, _loop, calls), do: calls
 
   # The rounds run when a request is answered, with its answer, the clock moved one wake
   # at a time and at most ten times, so that one never answered fails rather than waits.
@@ -1972,8 +2011,9 @@ defmodule Logex.RunnerTest do
     end
 
     # Decision 396 (RV-11): a round counts whole with no untimed program, its timed tasks'
-    # runs being all it runs: each step here takes 3 ms of a 2 ms period, so the slot comes
-    # after the round that completes 9 ms, the first counting its millisecond.
+    # runs being all it runs: each step here takes 3 ms of a 2 ms period, so at 10% the
+    # slot comes after the round that completes 9 ms, the fourth, the first counting its
+    # millisecond, where a count that left the steps out would bring it at the ninth.
     test "with no untimed program, a round counts whole, its timed tasks' runs in it " <>
            "(decision 396)" do
       config =
@@ -1992,6 +2032,7 @@ defmodule Logex.RunnerTest do
           io: %{"drive" => {Sim, sim: drive}},
           clock: {Manual, clock},
           poll: 100_000,
+          overhead: 10,
           steps: StepTakes
         )
 
@@ -2006,10 +2047,13 @@ defmodule Logex.RunnerTest do
 
     # Decision 396 (RV-11), c1-runner-rounds-2 on the real clock: a hundred host processes
     # that force and unforce a point in a tight loop, each request a write of the forces
-    # file, starved a 10 ms task with no continuous task, 17 rounds in 2.5 s; now each
-    # request that comes while a round is due waits for it, and the task keeps its
-    # periods. Judged by the rounds a second against the periods that passed, half at
-    # least, which a busy machine's late wakes leave, and never by a round's lateness.
+    # file, starved a 10 ms task with no continuous task, every round waiting behind each
+    # caller's request, some 100 requests a round at the parent (14 rounds in 1,075 ms);
+    # now each request that comes while a round is due waits for it, so a round waits for
+    # one request at most and the requests between two rounds are those the time no round
+    # needs holds, a dozen at the tip. Judged by the requests served a round, at most half
+    # the callers, which a loaded machine only lowers, the requests slower and the rounds
+    # still each behind one, and never by a round's lateness or the rounds a second.
     test "on the real clock, with no untimed program, a tight loop of forces leaves a " <>
            "10 ms task its periods (decision 396)" do
       dir = Path.join(System.tmp_dir!(), "logex-rv11-#{System.unique_integer([:positive])}")
@@ -2034,22 +2078,21 @@ defmodule Logex.RunnerTest do
 
       stop = :atomics.new(1, [])
 
-      loop = fn loop ->
+      loop = fn loop, calls ->
         Runner.force(runner, "e", 1)
         Runner.unforce(runner, "e")
-        looped(:atomics.get(stop, 1), loop)
+        looped(:atomics.get(stop, 1), loop, calls + 2)
       end
 
-      callers = for _ <- 1..100, do: Task.async(fn -> loop.(loop) end)
-      Process.sleep(200)
-      {begun, before} = {System.monotonic_time(:millisecond), Runner.status(runner).rounds}
+      before = Runner.status(runner).rounds
+      callers = for _ <- 1..100, do: Task.async(fn -> loop.(loop, 0) end)
       Process.sleep(1000)
-      {ended, after_} = {System.monotonic_time(:millisecond), Runner.status(runner).rounds}
       :atomics.put(stop, 1, 1)
-      Enum.each(callers, &Task.await(&1, 30_000))
+      calls = Enum.sum(Enum.map(callers, &Task.await(&1, 60_000)))
+      status = Runner.status(runner)
 
-      assert Runner.status(runner).status == :running
-      assert after_ - before >= div(ended - begun, 10) / 2
+      assert status.status == :running
+      assert calls <= 50 * (status.rounds - before)
       Runner.stop(runner)
     end
 

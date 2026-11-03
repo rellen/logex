@@ -12145,7 +12145,8 @@ and CI checked; each fix with a test that fails when it is reverted.
     `{:error, {:forces, :timeout}}`, a store write `:timeout` reported as any failed write,
     the runner answering on. The forces file's read at a restart is limited the same and
     made raw, off the VM's file server, `{:error, {:forces, :timeout}}`, the runner tripped
-    as it was (provisional). A stalled disk is acted out by the VM's file server held
+    as it was (decision 390, which RV-11 changed: the restart carries on with the forces it
+    holds). A stalled disk is acted out by the VM's file server held
     (`:sys.suspend/1`), which every write's rename goes through, and the restart's read by
     a FIFO in the forces file's place; a force, a trip's write, a cold restart's, a stop
     waiting on a period's write and on its own, a fresh start's and a restart's read each
@@ -12157,7 +12158,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     each write's `<path>.tmp` is made new and exclusively, whatever stands there deleted
     and the open tried again, so that a killed write's late write, sync or close reaches its
     own file, unlinked by then, and never the next write's; a link at the `.tmp` is removed
-    and the file it names untouched; a directory there is `:eisdir` still (provisional:
+    and the file it names untouched; a directory there is `:eisdir` still (decision 392:
     one name, each write's file its own, where the review suggested a unique name a write).
     Mutants: the open not exclusive, no retry after the delete, a directory no longer told
     `:eisdir`, each red.
@@ -12200,7 +12201,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     adapter closed, a later one trips. Mutant: any map taken, red.
   - *M14* (c3-io-contract-3, -4; `io_test.exs`): an adapter whose `init/3` succeeded is
     closed where its first read fails, its outputs written 0 once first, as a device opened
-    is closed (provisional: the zeros); the device process traps exits, which
+    is closed (decision 393: the zeros); the device process traps exits, which
     `Logex.IO`'s moduledoc now says ("The device's process"), and an exit from any process
     linked to it but its runner is the device's own as a link has it, `:normal` passed
     over and any other stopping it, zeroed and closed, the runner tripping
@@ -12316,15 +12317,19 @@ and CI checked; each fix with a test that fails when it is reverted.
     and a compile are as they were, `runtime.ex` untouched. Merged over RV-3, the same
     round costs 2041.2 where `d7a1290`'s cost 2019.1 (+1.1%), and 1735.4 where 1727.8
     (+0.4%).
-  - *Provisional readings*: the restart's forces read limited and refused
+  - *Provisional readings* *(each settled on 2026-11-01 but the last, its decision's
+    number now its mark, RV-11)*: the restart's forces read limited and refused
     `{:error, {:forces, :timeout}}`, and since RV-4's review the start's refused as a file
-    that cannot be read (question 1); a write killed past its limit may land once the disk
-    answers (question 2); M10's one `.tmp` name made new each write (question 4); the zeros
-    of a failed first read's close (question 5); since RV-4's review a period's write past
-    its limit reported and left to finish (question 13), where before it was limited only
-    where the runner waits on it; a bad clock answer later a shutdown naming the clock
-    (question 6); a killed runner's hung device killed after the idle watchdog and a poll
-    period (question 7); `Logex.IO.Sim`'s 100,000 writes. A restart's arrival, which was
+    that cannot be read (question 1, decision 390, changed in RV-11: carried on, named); a
+    write killed past its limit may land once the disk answers (question 2, decision 391,
+    changed in RV-11: unknown until a later write); M10's one `.tmp` name made new each
+    write (question 4, decision 392, as built); the zeros of a failed first read's close
+    (question 5, decision 393, as built); since RV-4's review a period's write past its
+    limit reported and left to finish (question 13, decision 401, as built), where before
+    it was limited only where the runner waits on it; a bad clock answer later a shutdown
+    naming the clock (question 6, decision 394, changed in RV-11: a trip); a killed
+    runner's hung device killed after the idle watchdog and a poll period (question 7,
+    decision 395, as built); `Logex.IO.Sim`'s 100,000 writes, no question's. A restart's arrival, which was
     the runner's taking it from its mailbox (question 3), is decision 354's exactly since
     RV-4's review.
   - *Questions for the maintainer*, by what an operator sees *(the twelve open answered on
@@ -12454,7 +12459,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   - *8, a period's write on a stalled disk* (`stalled_disk_test.exs`): one not answered
     within the idle watchdog and a poll period of real time from when it was handed is
     reported, `{:retain, {:error, :timeout}}` and `failed: :timeout`, and left to finish,
-    its answer taken when it comes (provisional, question 13): killing it broke the
+    its answer taken when it comes (decision 401, question 13; since decision 391, RV-11,
+    named `unknown` meanwhile, not `failed: :timeout`): killing it broke the
     API-contract LifeWalk's oracle of decision 275's latest wins, which holds the writer
     for three periods. Mutant: no limit, red.
   - *9, c4-api-fuzz-9* (`runner_test.exs`): a `{:via, module, term}` name whose module is
