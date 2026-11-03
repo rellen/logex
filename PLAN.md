@@ -13045,7 +13045,16 @@ and CI checked; each fix with a test that fails when it is reverted.
   stays here to watch. RV-11 leaves the rest: the cost and growth bounds, the real-clock
   poll test, a runner call's own timeout and the runner-death test's 5 s wait. RV-11's
   first real-clock test of decision 396 failed under the mutation run's load and a load
-  run, and was mended before it landed; none of its tests is RV-7's.)*
+  run, and was mended before it landed; none of its tests is RV-7's.)* *(RV-11's review,
+  2026-11-03: `trip_test.exs`'s "on the real clock, a bad reading of a device released
+  while the one before it is read again trips nothing", older than RV-11, which changed
+  only the address it pins, had its restart refused once in 50 runs of the review's load
+  set, `{:error, {:io_init, "panel", {:bad_value, "panel.i.0", 2}}}`, the panel's reread
+  reading the bad value no poll had taken in the 700 ms the drive's reread slept, and
+  passed 30 of 30 alone under load at both RV-11's tip and its parent: here to watch.
+  CI ran the merge `6e3b6a6` red at `retain_period_test.exs:930`, 10.115 against 10, and
+  a mutant's suite failed `retain_configuration_test.exs:1327` once, warm 16251 against
+  cold 16246, neither touched by the code under test: the cost bounds above.)*
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
@@ -14214,6 +14223,134 @@ and CI checked; each fix with a test that fails when it is reverted.
       store, which the write never reached; and one killed in the store's own write names
       the store, the copy shown made. (a) As built, the file the write was in as its limit
       passed; (b) both files named while a copy is owed.
+
+  **RV-11's review** (2026-11-03, of `7aefae7`: twelve findings, nothing that loses data or
+  leaves an output on; its probes under the review's scratchpad, `rev11work/`). Each is
+  closed with a test that fails when its fix is reverted, the mutants judged by the full
+  suite (below), or with a document made true; fixed in `20c9578`.
+  - *1, a test's call on the manual clock while a periodic round is overdue*: as built,
+    decision 131's rule, a call made while a round is owed waiting for the advance that
+    runs it, extended to a due periodic round; the reading is marked provisional where
+    the moduledoc, `owed/1` and README's "Running a plant on the clock" state it, and put
+    to the maintainer (question 8).
+  - *2, forces the file held while a fresh start could not read it*: as built, a restart
+    that reads the file takes what it holds, as decision 127 has every start take it;
+    marked provisional in the moduledoc's "Forcing", `forces_text/2` and README, and put
+    to the maintainer (question 9). The runner walk now reaches it: a fresh start after a
+    crash meets an unreadable file whatever forces the crash left in it
+    (`:start_unread_forces_held`), the model holding what the file holds apart from the
+    runner's set (`file_forces`) until a force's write lands or a start or a restart,
+    refused or not, reads it (`:restart_took_unread_forces`).
+  - *3, five mutants that survived*, each now red (the table below):
+    `stalled_disk_test.exs`'s "the time a force's write waited is its own request's
+    alone: a slow request after it trips the idle watchdog", a clock whose readings take
+    the milliseconds an agent holds, 1000 ms passed while the force's write waits on the
+    held disk and then 3 ms a reading against an idle watchdog of 2 (`r_waited_kept`);
+    its "a force's set unknown is kept by a restart that cannot read the file, both
+    named" (`r_unread_restart_clears_unknown`, `r_both_keys`); `runner_test.exs`'s "a
+    device's own read of a time out of the range a time is held in trips the runner,
+    naming the clock", a clock that answers a device's process alone (`d_no_range`); and
+    its "with no untimed program, a round that takes no time counts a millisecond", 4 ms
+    steps at 10% so that the first round's millisecond brings the slot a round sooner
+    (`r_used_no_min`), the comment of the whole-round test that claimed it put right.
+  - *4, the load runs*: decision 396's real-clock test latched the panel once in 50 of the
+    review's load set, its heartbeat a second. The review's 15 runs of that set again,
+    the runner and its devices instrumented (`scratchpad/rv/p11fix/`), failed none, but
+    showed the runner itself not scheduled for 271 ms between the refresh before a force
+    and the first renewal of its write's wait, due 10 ms on, its wakes as late, where
+    `refresh_gap` reads only a gap a refresh ends and never the one a latch ends; the
+    review's 86 ms did not rule a final gap out. Seventy runs of the plant alone under
+    eight busy loops, with and without a disk syncing beside it, latched nothing. So the
+    test's task watchdog and idle watchdog are 5 s, the heartbeat a loaded machine's to
+    miss, the bound it reads, the requests a round, as it was; it ran 50 of 50 under
+    `scripts/load.sh` (below). `trip_test.exs`'s older real-clock reread, refused once in
+    50 beside the rest and 30 of 30 alone under load at the tip and the parent, its only
+    change in RV-11 the address it pins, is RV-7's to watch, recorded there.
+  - *5, a relative forces path whose directory does not answer*: a start that cannot
+    expand the path is refused as before, for the forces file as for the store, since it
+    holds no path to claim (decision 356), check (decision 325) or write, but in words
+    decision 390 has not retired: "plant.forces: the forces file cannot be located: the
+    working directory a relative path is read against did not answer within the write
+    limit, 1010 ms (write_limit:)", and the store's "plant.retain: the store cannot be
+    located: ...", each pinned in `stalled_disk_test.exs`; the comment that called it the
+    host's mistake as for the file itself, the moduledoc and README say so, provisional
+    (question 10).
+  - *6, the leave stretched in `runner_edit_test.exs`*: an edit's step that adds the first
+    untimed program or takes away the last begins the share's count again
+    (`recounted/2`), so that test's pin is the parent's again, `waited(request, clock) ==
+    4`, the count of the timed rounds before the edit none of the continuous task's;
+    provisional, question 6.
+  - *7, the walks*: the runner walk's clock gone wrong is in one injection of three a
+    device's read alone (`Lagged`'s `{test, :bad_device}`), the device down, its own 0
+    written as it closes, the trip naming the clock and the restart opening it again
+    (`:clock_device`); the life walk's failing write is in one of four a period's write
+    whose wall clock gives no time (`{test, :bad_wall}`), the trip naming it, a restart
+    refused until it is mended (`{:trip, :clock_wall}`, in `@life_reach`); half the walks
+    give `write_limit:`, by the seed (`:write_limit_given`); and every check asserts no
+    `forces_unknown`, which no walk's write can earn, the disk healthy and the limit of
+    real time. Restating the device's read found a reading of decision 394 the code did
+    not hold: a round's write to a device that went down by its own read of the clock,
+    before the runner took its exit, tripped `{:io, device, {:down, :noproc}}` or the
+    exit's reason; it trips naming the clock now, as the exit does (`in_time/6`,
+    `downed/3`, `clock_exit/1`), pinned by `runner_test.exs`'s "a device gone down by its
+    own read of a bad clock, found so by a round's write, trips the runner naming the
+    clock", the runner held while the device goes down behind a round's wake.
+  - *8, the file an owed copy's killed write names*: `Writer.stored/4` marks the copy made
+    before the store's write, so a write killed in the copy's is `{:uncopied, :timeout}`,
+    the copy named `unknown`, the store as it was and the copy still owed, and one killed
+    in the store's `{:copied, {:error, :timeout}}`, the copy shown made and the store
+    unknown (`stalled_disk_test.exs`, "an owed copy's: a write killed in the copy names the
+    copy, and one killed in the store's write names the store, the copy made", each
+    stalled at its rename); provisional, question 11. The period's write is left to finish,
+    its answer telling both files, and still names the store.
+  - *9, the cost of a request*: `owed/1`'s reading of the clock is the request's refresh's
+    (`requested/3`), so a request served at once reads the clock as often as at the parent
+    (below).
+  - *10, CI*: the merge `6e3b6a6` is red at `retain_period_test.exs:930`, 10.115 against
+    10, and `retain_configuration_test.exs:1327` failed once in a mutant's suite, each a
+    cost bound of RV-7's; noted there.
+  - *11, README*: "Running a plant on the clock" says the request waits, with no untimed
+    program, for the round due, and that a tight loop holds a due round back by the
+    request in hand or its slot, where it said it never makes a 10 ms task late.
+  - *12, a lone caller every other slot*: as built, the continuous task's slot rule; the
+    moduledoc says so, provisional, and question 6 puts it.
+
+  *The review's mutation table*, each mutant the full suite at `20c9578`
+  (`scratchpad/rv/mut11r/`, `scripts/mutate.sh`), the review's five survivors first:
+
+  | Mutant | What it does | Full suite | Red by |
+  |---|---|---|---|
+  | r_waited_kept | a force's wait never set back to 0 | red | "the time a force's write waited is its own request's alone …" |
+  | r_unread_restart_clears_unknown | a restart that cannot read the file forgets `forces_unknown` | red | "a force's set unknown is kept by a restart that cannot read the file, both named" |
+  | r_both_keys | `forces_unknown` not shown beside `forces_unread` | red | the same |
+  | d_no_range | a device takes a time out of the range | red | "a device's own read of a time out of the range …" |
+  | r_used_no_min | a periodic round of no time counts none | red | "with no untimed program, a round that takes no time counts a millisecond" |
+  | f8_uncopied_store | a write killed in the copy names the store | red | "an owed copy's: …" (and `retain_image_test.exs:1482`'s growth bound, RV-7's) |
+  | f8_no_mark | the copy never marked made | red | the same |
+  | f8_always_store | the mark not read, the store named | red | the same |
+  | f6_carried | the share's count carried across an edit that adds untimed programs | red | `runner_edit_test.exs`'s "an untimed program an edit adds is served its slots from its first round" |
+  | w394_noproc | a write that finds the device gone names it gone, its exit left | red | "a device gone down by its own read of a bad clock, found so by a round's write …" (and `retain_configuration_test.exs:1327`'s cost bound, RV-7's) |
+  | w394_down_clock | a device's clock exit a write meets named as the device's | red | the same |
+  | f5_read_words | the expansion's refusal "cannot be read" | red | "a relative path's expansion is made within the write limit …" |
+  | f2_restart_keeps | reading (b) of question 9: a restart while `forces_unread` stands keeps the runner's set | red | the runner walk and the life walk |
+  | f9_reading_twice | a request served at once reads the clock again for its refresh | **survived** | equivalent but for the cost below, which no test reads: the reading is the same time on the manual clock, a microsecond's difference on the monotonic one |
+
+  *The cost*, each the least of several runs in reductions (the review's scripts,
+  `scratchpad/rv/p11fix/cost/cost.txt`), main `bcab56b`, the reviewed `7aefae7` and
+  `20c9578`: a round of three devices, outputs changing 2041.74, 2044.91 and 2045.29, and
+  unchanged 1739.64, 1742.13 and 1741.96; a store round less a no-store round 8.05, 8.94
+  and 7.96, the bound 10; a period's write 447,205 at all three; a fresh start in its
+  caller 4,650,408, 4,653,898 and 4,655,901 (+0.04% on the reviewed); the whole VM's over
+  a period's advance 8,646,957, 8,636,996 and 8,647,585; and a host's request on the
+  runner's side, `status/1` on a periodic plant 269.97, 308.86 and 270.49, `get/2` 278.09,
+  315.32 and 277.44, and on a continuous plant `status/1` 301.91, 302.46 and 264.30,
+  `get/2` 315.78, 315.30 and 277.41, the look for a due round's reading now the
+  refresh's, so a continuous plant's request reads the clock once less than at main.
+
+  *Load runs* (`scripts/load.sh`, four busy loops): the nine tests the review added or
+  changed in `runner_test.exs`, `stalled_disk_test.exs` and `runner_edit_test.exs`, decision
+  396's real-clock test among them, 50 runs at `20c9578`, none failed
+  (`scratchpad/rv/p11fix/loadN.txt`). *CI*: `20c9578` green (run 41632267313).
 - **RV-12 — the answers to RV-9's questions** (decisions 403, 404 and 405). A declaration
   counting every tag, element and instance its first state holds; the loader's trust a
   token only it holds; a bit's literal number and a one-shot's storage bit told apart by
