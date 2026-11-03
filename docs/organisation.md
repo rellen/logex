@@ -4685,6 +4685,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   where it is; and named in `status/1`'s `retain`, `copy`, where the start dropped
   anything. The runner holds the copy and its `.tmp` as its own files (decision 356), and
   a forces file naming either is refused at start, decision 325's rule (provisional).)*
+  *(Decision 412, RV-13, 2026-11-03: `copy` is always in the retain report, nil where the
+  start dropped nothing and while the copy is owed, as its other keys are always there,
+  `dropped` and `failed` telling the two nils apart.)*
   *(RV-5's review, 2026-11-02: a copy that fails is owed, every write over the store, the
   period's and every event's, making it first and writing the store only once it is made,
   so that no write replaces the store before its copy is made, where the period's write

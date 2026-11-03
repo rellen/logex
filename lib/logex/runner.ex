@@ -799,10 +799,10 @@ defmodule Logex.Runner do
   # and a poll period of real time (decision 353), since decision 400 to the write limit;
   # it stands until the next start that
   # drops anything, and a start that drops nothing leaves it where it is. `status/1`'s
-  # `retain` names it, `copy`, where the start dropped anything: the copy's path as the host
-  # spelled the store, or nil where its write failed, the failure then `failed` as any
-  # failed write's, and the start goes on (provisional: the copy's own key, beside the
-  # drops it keeps). Since RV-5's review a copy that fails is owed, its text kept under
+  # `retain` names it, `copy`, the copy's path as the host spelled the store, or nil where
+  # its write failed, the failure then `failed` as any failed write's, and the start goes
+  # on; since decision 412 `copy` is always there, nil too where the start dropped
+  # nothing, where it was a key only a start that dropped had. Since RV-5's review a copy that fails is owed, its text kept under
   # `retain`'s `owed`, and every write over the store, the period's, a trip's, a stop's, a
   # shutdown's and a cold restart's, makes the copy first and writes the store only once
   # it is made (`Writer.stored/4`, noted/3), so that no write replaces the store before
@@ -925,11 +925,12 @@ defmodule Logex.Runner do
   UTC `DateTime` to the second, the store's age; `failed` the reason
   the last write failed, nil where it did not; and `dropped` what the fresh start's
   matching dropped, `{path, reason}` in path order, as `Logex.Runtime.start/2` gives it
-  (decisions 275 and 277); and since decision 360, where the fresh start dropped anything,
-  `copy`, the copy of the store it made before its first write, `<store>.dropped` as the
-  host spelled the store, or nil while it is owed, its write having failed, its reason
-  then `failed` as any failed write's, until a write over the store makes it first; a
-  start that dropped nothing has no `copy`; and since decision 391, where the last write
+  (decisions 275 and 277); and since decision 360 `copy`, always there since decision
+  412: the copy of the store the fresh start made before its first write,
+  `<store>.dropped` as the host spelled the store, nil where the start dropped nothing,
+  and nil while the copy is owed, its write having failed, its reason then `failed` as
+  any failed write's, until a write over the store makes it first, `dropped` and `failed`
+  telling the two nils apart; and since decision 391, where the last write
   over the store or its copy ran past its limit and may yet land, `unknown`, that file's
   path as the host spelled it, `failed` then nil, until a later write lands or fails, and
   no `unknown` otherwise.
@@ -2164,9 +2165,9 @@ defmodule Logex.Runner do
       )
 
   # Decision 390 (RV-11): the forces file a start or a restart could not read, `{path,
-  # reason}`, the path as the host spelled it, shown while it stands, and no key otherwise,
-  # as decision 360's `copy` is (provisional), so that every status of a file read holds
-  # as it was.
+  # reason}`, the path as the host spelled it, shown while it stands, and no key otherwise
+  # (provisional), as decision 360's `copy` was until decision 412 made it always there,
+  # so that every status of a file read holds as it was.
   defp shown_unread(status, %{forces_unread: nil, forces_unknown: nil}), do: status
 
   defp shown_unread(status, %{forces_unread: unread, forces_unknown: nil}),
@@ -3051,9 +3052,9 @@ defmodule Logex.Runner do
   defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed])
 
   # Decision 391: the file a write past its limit may yet land in, the store or its copy,
-  # as the host spelled it, `failed` nil: a key of `retain`'s only while it stands, as
-  # `copy` is (provisional), so that every status of a write that landed or failed holds
-  # as it was.
+  # as the host spelled it, `failed` nil: a key of `retain`'s only while it stands
+  # (provisional), as `copy` was until decision 412 made it always there, so that every
+  # status of a write that landed or failed holds as it was.
   defp unknown(retain, path), do: Map.put(%{retain | failed: nil}, :unknown, path)
 
   # The next due time after `at`, on the grid.
@@ -4369,12 +4370,22 @@ defmodule Logex.Runner do
 
   # `status/1`'s `retain` (decisions 275 and 277): the store's path, the time its last
   # write was made at, nil before the first, the reason the last write failed, nil where
-  # it did not, and what the fresh start dropped; and, kept from status/1, the path every
-  # read and write of the store is made through, resolved once at the start, and since
-  # RV-5's review the copy of the store a fresh start owes, its text, where its own write
-  # failed, nil otherwise (decision 360, dropped_copy/1).
+  # it did not, and what the fresh start dropped; since decision 412 (RV-13) the copy the
+  # start made, always there, nil until it is made and where the start made none, as the
+  # report's other keys are always there (dropped_copy/1); and, kept from status/1, the
+  # path every read and write of the store is made through, resolved once at the start,
+  # and since RV-5's review the copy of the store a fresh start owes, its text, where its
+  # own write failed, nil otherwise (decision 360, dropped_copy/1).
   defp retained({path, at}, written_at, dropped),
-    do: %{path: path, at: at, written_at: written_at, failed: nil, dropped: dropped, owed: nil}
+    do: %{
+      path: path,
+      at: at,
+      written_at: written_at,
+      failed: nil,
+      dropped: dropped,
+      copy: nil,
+      owed: nil
+    }
 
   # The host's wall clock, to the second, for a store's header, `{:ok, at}`; since RV-4
   # (c2-runner-persist-6) an answer that is no whole number of milliseconds since the Unix

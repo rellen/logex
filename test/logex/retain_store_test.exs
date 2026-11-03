@@ -1330,8 +1330,9 @@ defmodule Logex.RetainStoreTest do
     end
 
     # Kept until the next start that drops: one that drops nothing, warm, cold or with no
-    # store, makes none and leaves the copy where it is, and status/1 names none; the next
-    # that drops replaces it with the store it read.
+    # store, makes none and leaves the copy where it is, and status/1 names none, its
+    # `copy` nil since decision 412 (RV-13), the leave for `copy` absent, where it had no
+    # `copy`; the next that drops replaces it with the store it read.
     test "the copy kept until the next start that drops", %{tmp_dir: dir} do
       rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -1352,8 +1353,7 @@ defmodule Logex.RetainStoreTest do
         {:ok, runner} =
           Runner.start_link(Keyword.merge(rig.opts, [configuration: retyped()] ++ extra))
 
-        assert %{dropped: []} = retain = Runner.status(runner).retain
-        refute Map.has_key?(retain, :copy)
+        assert %{dropped: [], copy: nil} = Runner.status(runner).retain
         assert File.read!(copy) == first
         assert Runner.stop(runner) == :ok
         opener_down(rig.panel)
@@ -1361,7 +1361,7 @@ defmodule Logex.RetainStoreTest do
 
       File.rm!(rig.store)
       {:ok, runner} = Runner.start_link(rig.opts)
-      refute Map.has_key?(Runner.status(runner).retain, :copy)
+      assert %{dropped: [], copy: nil} = Runner.status(runner).retain
       assert File.read!(copy) == first
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
@@ -1874,11 +1874,14 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(rig.store) ==
                Retain.encode(Runtime.retained(Runtime.start(config)), ~U[2026-10-30 14:00:00Z])
 
+      # Decision 412 (RV-13), the leave for `copy` absent: `copy` always there, nil where
+      # the start made no copy.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:00Z],
                failed: nil,
-               dropped: []
+               dropped: [],
+               copy: nil
              }
 
       assert Runner.stop(runner) == :ok
@@ -1905,7 +1908,8 @@ defmodule Logex.RetainStoreTest do
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:02Z],
                failed: nil,
-               dropped: []
+               dropped: [],
+               copy: nil
              }
 
       assert Runner.stop(runner) == :ok

@@ -14980,8 +14980,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # start met a directory at the copy's `.tmp`, the one before it, the copy owed, the
   # store's text as read (`copy_owed/1`). A copy past its limit is owed too, and the
   # next write over the store makes it; the walk's ends read it only as one of the two.
+  # Decision 412 (RV-13): `copy` always there, nil where nothing was dropped, where it was
+  # no key.
   defp copy_told([], retain, _text, w) do
-    refute Map.has_key?(retain, :copy)
+    assert Map.fetch(retain, :copy) == {:ok, nil}
     {w.copied, nil}
   end
 

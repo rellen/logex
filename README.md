@@ -3594,8 +3594,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   every write fails as above, and a crash or a stop meanwhile loses what changed since
   the start, the next start dropping from the same store and copying it again
   (provisional). `status/1`'s `retain` names the copy once made, `copy:
-  "tally.retain.dropped"`, beside `dropped`, nil while it is owed, and has no `copy` where
-  nothing was dropped.
+  "tally.retain.dropped"`, beside `dropped`, and always has a `copy`, nil while the copy
+  is owed and where nothing was dropped, `dropped` and `failed` telling the two apart
+  (decision 412).
 
 ### An event task
 
