@@ -179,8 +179,12 @@ defmodule Logex.Runner do
     tasks' runs in it left out, so that the runner's own work never counts as the
     round's; the slot comes at the end of the round that completes C
     ms; it serves its first request whatever the time, and each whole, so it may run over
-    by one; and in the rest of a millisecond a round did not fill the runner serves its
-    requests freely. A host's request is served at once where no round is owed.
+    by one; since decision 442 one that finds nothing queued stays open until a request
+    takes it, the request that comes while a round is owed then served at once and the
+    slot closed behind it, the count begun again at the slot all the same, so that the
+    share still holds requests to one a slot; and in the rest of a millisecond a round did
+    not fill the runner serves its requests freely. A host's request is served at once
+    where no round is owed.
   - With no untimed program, since decision 396, a host's requests are held to their share
     against a due periodic round as against the continuous task. A request that comes
     while a periodic round's due time has come waits for that round, which runs first;
@@ -190,19 +194,23 @@ defmodule Logex.Runner do
     The rounds are the share's count, each whole from its start to its end, a
     millisecond at least, and the slot comes at the end of the round that completes C ms
     of them, S ms as above, so that a plant whose rounds outrun their periods leaves the
-    host its S ms of every C + S, never none and never more (provisional). So a tight loop
+    host its S ms of every C + S, never none and never more (decision 442). So a tight loop
     of `status/1` or `force/3` makes a due round wait for one request at most, or a slot,
     where it delayed a 10 ms task for as long as it lasted, every period missed an overlap
     (c1-runner-rounds-2). Every device is refreshed before the runner serves its own
     work, whichever way. A slot serves the requests in the runner's queue as the round
-    that brings it ends; one still in its mailbox then, a caller's next request sent as
-    its last is answered, finds the slot gone and the count begun again, as with the
-    continuous task, so that a lone caller in a loop, each request sent once the last is
-    answered, is served once every other slot where every round brings one (provisional).
+    that brings it ends, and since decision 442 one that finds none stays open, with the
+    continuous task as without it: a caller's next request, sent as its last is answered
+    and still in the runner's mailbox as the round ends, is served at once as it comes,
+    taking the open slot, so that a lone caller in a loop is served after every round
+    that brings a slot, where it found the slot gone and was served every other one; a
+    step that adds the first untimed program or takes away the last begins the count
+    again and closes a slot left open (decisions 396 and 442).
   - **On the manual clock** (decision 131) the same rules run: a round takes no time
     unless something passes time inside it, so a request is served before the next
     round; but one made while a round is owed, after a round that passed time, waits for
-    its slot, which comes in the advance that runs the round completing C ms of rounds,
+    its slot, unless a slot left open takes it at once (decision 442), which comes in the
+    advance that runs the round completing C ms of rounds,
     or with no untimed program the round due where none is due after it,
     `advance(clock, 0)` among them, never later, as decision 131 has a call wait for its
     slot (provisional for a periodic round: an overdue one is not run by the request that
@@ -1454,6 +1462,12 @@ defmodule Logex.Runner do
 
   # A request served at once is refreshed at the time owed/1 read, where it read one, so
   # that the look for a due round costs no reading more (RV-11's review).
+  # Decision 442 (RV-16): a request that comes while a round is owed takes the slot left
+  # open, served at once, the slot closed behind it; and waits for the share's next slot
+  # otherwise.
+  defp requested(:owed, request, %{slot_open: true} = state),
+    do: answered(request, refresh(%{state | slot_open: false}, :idle))
+
   defp requested(:owed, request, state), do: %{state | queue: :queue.in(request, state.queue)}
 
   defp requested({:free, at}, request, state),
@@ -1699,9 +1713,9 @@ defmodule Logex.Runner do
   # first untimed program or takes away the last begins it again, the rounds it counted
   # being of the other kind: a plant of timed rounds alone edited to add a continuous
   # program is served its first slot C ms of the continuous task's rounds after the
-  # step, as before decision 396 (provisional).
+  # step, as before decision 396 (decision 442: as built), and closes a slot left open.
   defp recounted(%{untimed: same} = state, same), do: state
-  defp recounted(state, _was), do: %{state | used: 0}
+  defp recounted(state, _was), do: %{state | used: 0, slot_open: false}
 
   # Decision 139: a switch's time, decision 40's `now`, is the step's on the runner's clock,
   # the time since the last round, so that a cut served long after it is counted from the
@@ -2461,7 +2475,12 @@ defmodule Logex.Runner do
   # answers its caller; and `behind`, the forces' requests that came while one was out, in
   # order, each served once the one before it is answered, a round, a trip, a restart and
   # an edit's step leaving them waiting, and a stop answering each as a runner that is not
-  # running. Decision 441 (RV-16): `in_round`, nil but inside a round, and there, from its
+  # running. Decision 442 (RV-16): `slot_open`, whether the share's last slot found
+  # nothing queued and no request has taken it since, false from the start; set by a slot
+  # that finds nothing queued, cleared by the request that takes it and by a slot that
+  # serves its queue; a trip and a restart leave it as they leave the share's count, an
+  # edit's step that begins the count again (recounted/2) clears it, and a stop ends it.
+  # Decision 441 (RV-16): `in_round`, nil but inside a round, and there, from its
   # start to its plan of the next, the events of the steps it has run and not published,
   # newest first, [] before its first step and once its own events are published, so that
   # a reading of the clock gone wrong in it trips at once and publishes the round as far as
@@ -2554,6 +2573,7 @@ defmodule Logex.Runner do
           )
         ),
       used: 0,
+      slot_open: false,
       restarts: 0,
       status: :running,
       trip: nil,
@@ -2691,30 +2711,40 @@ defmodule Logex.Runner do
   # and in the slot after C ms of its periodic rounds (below).
   defp slot(%{untimed: true, used: used, slots: {c, s}, retain: nil} = state) when used >= c do
     state = refresh(state, :idle)
-    %{popped(:queue.out(state.queue), now(state) + s, state) | used: 0}
+    %{popped(:queue.out(state.queue), now(state) + s, opened(state)) | used: 0}
   end
 
   # M6-6: a runner given a store takes a period due out first in the slot, out of its S ms.
   defp slot(%{untimed: true, used: used, slots: {c, s}} = state) when used >= c do
     state = refresh(state, :idle)
     now = now(state)
-    %{popped(:queue.out(state.queue), now + s, period(state, now)) | used: 0}
+    %{popped(:queue.out(state.queue), now + s, period(opened(state), now)) | used: 0}
   end
 
   # Decision 396 (RV-11): with no untimed program the periodic rounds are the share's
   # count, each whole, so that the slot comes at the end of the round that completes C ms
   # of them, as the continuous task's does, and a plant whose rounds outrun their periods,
   # each due again at once, leaves the host's requests their S ms, never none and never
-  # more (provisional). A slot with no request waiting refreshes nothing: the requests
-  # that come while no round is due are served at once, and the rest after the round that
-  # was due (freely/1).
+  # more (decision 442). A slot with no request waiting refreshes nothing and stays open
+  # (opened/1): the requests that come while no round is due are served at once, and the
+  # rest after the round that was due (freely/1), or at once where a slot is open.
   defp slot(%{untimed: false, used: used, slots: {c, s}, queue: queue} = state)
        when used >= c,
        do: %{periodic_slot(:queue.is_empty(queue), s, state) | used: 0}
 
   defp slot(state), do: state
 
-  defp periodic_slot(true, _s, state), do: state
+  # Decision 442 (RV-16): a slot that finds nothing queued stays open until a request
+  # takes it, so that a poller whose next call is still on its way as the round ends,
+  # sent once its last was answered, is served at once as it comes, though a round be
+  # owed (requested/3), where the slot was gone and the poller served every other slot; a
+  # slot that finds requests queued serves them as ever, and closes. The count still
+  # begins again at the slot, so the share still holds requests to one a slot: the next
+  # comes C ms of rounds on, whether or not a request took the open one, and with it a
+  # queue that is empty again opens it again.
+  defp opened(state), do: %{state | slot_open: :queue.is_empty(state.queue)}
+
+  defp periodic_slot(true, _s, state), do: %{state | slot_open: true}
 
   defp periodic_slot(false, s, state) do
     state = refresh(state, :idle)

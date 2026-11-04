@@ -941,7 +941,10 @@ defmodule Logex.ForceTest do
 
       # Decision 396 (RV-11): the round due at 10 is owed once the force's round is done,
       # and the call waits for it, the third round, where it was served at once after the
-      # second.
+      # second. Decision 442 (RV-16), the leave for a slot that finds nothing queued gone:
+      # the force's round brought a slot that found nothing waiting, which stays open, and
+      # the first call takes it at once, after the second round; the next waits.
+      assert %{rounds: 2} = Runner.status(runner)
       task = Task.async(fn -> Runner.status(runner) end)
       assert Task.yield(task, 100) == nil
       Manual.advance(clock, 0)

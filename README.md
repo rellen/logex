@@ -4003,13 +4003,18 @@ closed: true
   request that comes while one is due waits for it, and is served after it while no
   round is due, or in the slot after 4 ms of rounds where they outrun their periods, so
   that an HMI polling `status/1` in a tight loop holds a due round back by the request
-  in hand at most, or by its slot, never for as long as it polls. On the manual clock a
+  in hand at most, or by its slot, never for as long as it polls. A slot that finds
+  nothing waiting stays open until a request takes it (decision 442), so an HMI that
+  polls one call at a time, its next call still on its way as a round ends, is served at
+  once as it comes, after every round that brings a slot, where it was served every
+  other one; the share still holds requests to one a slot. On the manual clock a
   round takes no time unless something passes time inside it, so a
   request is served before the next round. One made while a round is owed, after a round
   that passed time, a slow drive's write, waits for its slot, as on the real clock
   (decision 131): it comes in the advance that runs the round completing those 4 ms, or
   with no untimed program in the advance that runs the round due, `advance(clock, 0)`
-  among them, and never later (provisional for a periodic round). So a
+  among them, and never later (decision 444), unless a slot left open takes it at once
+  (decision 442). So a
   test that would call from the process that moves the clock calls from another, and
   moves the clock on until the call is answered:
 

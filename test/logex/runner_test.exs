@@ -1674,6 +1674,13 @@ defmodule Logex.RunnerTest do
   end
 
   # A request's answer, the clock moved one wake at a time until it comes.
+  # Decision 442 (RV-16): the first request served at once where a slot was left open.
+  defp first_served(true, sent_at, _slot), do: sent_at
+  defp first_served(false, _sent_at, slot), do: slot
+
+  defp taken(true, runner), do: assert(Runner.get!(runner, "b.n") == 1)
+  defp taken(false, _runner), do: :ok
+
   defp waited(request, clock),
     do: answer(:gen_server.wait_response(request, 0), request, clock)
 
@@ -1883,13 +1890,21 @@ defmodule Logex.RunnerTest do
             overhead: share
           )
 
-        for gap <- [0, 3, 1, 8, 2, 13, 0, 5] do
+        # Decision 442 (RV-16), the leave for a slot that finds nothing queued gone: one
+        # that came with nothing waiting since the last that served stays open, so the
+        # first of two requests sent together takes it, served at once, and the second
+        # waits for the next slot, as every request did; with none open both wait for it.
+        Enum.reduce([0, 3, 1, 8, 2, 13, 0, 5], 0, fn gap, last ->
           Enum.each(1..gap//1, fn _ -> Manual.advance(clock, 0) end)
           r = rounds(runner)
-          request = :gen_server.send_request(runner, {:get!, "b.n"})
-          served = waited(request, clock)
-          assert served == c * (div(r, c) + 1), "#{share}%: sent after #{r} rounds"
-        end
+          next = c * (div(r, c) + 1)
+          first = :gen_server.send_request(runner, {:get!, "b.n"})
+          second = :gen_server.send_request(runner, {:get!, "b.n"})
+          opened = first_served(c * div(r, c) > last, r, next)
+          assert waited(first, clock) == opened, "#{share}%: sent after #{r} rounds"
+          assert waited(second, clock) == next, "#{share}%: sent after #{r} rounds"
+          next
+        end)
       end
     end
 
@@ -1907,9 +1922,9 @@ defmodule Logex.RunnerTest do
       # Since RV-4 (c5-tests-3) also 86%, S = round(6.14) = 6, where ceil gives 7 and a slot
       # of three requests: two a slot.
       for {share, slots} <- [
-            {50, List.duplicate(1, 40)},
-            {86, List.duplicate(2, 20)},
-            {90, List.duplicate(3, 13) ++ [1]}
+            {50, List.duplicate(1, 39)},
+            {86, List.duplicate(2, 19) ++ [1]},
+            {90, List.duplicate(3, 13)}
           ] do
         {:ok, clock} = Manual.start_link()
         {:ok, panel} = Sim.start_link(clock: clock)
@@ -1922,7 +1937,11 @@ defmodule Logex.RunnerTest do
             overhead: share
           )
 
-        requests = for _ <- 1..40, do: :gen_server.send_request(runner, {:get!, "b.n"})
+        # Decision 442 (RV-16), the leave for a slot that finds nothing queued gone: the
+        # first round's slot, which found nothing waiting, stays open, and the first of
+        # the forty takes it at once; the other thirty-nine wait for the slots after it.
+        [first | requests] = for _ <- 1..40, do: :gen_server.send_request(runner, {:get!, "b.n"})
+        assert {:reply, _value} = :gen_server.wait_response(first, 5000)
         assert slotted(requests, clock, []) == slots, "#{share}%"
       end
     end
@@ -2082,7 +2101,11 @@ defmodule Logex.RunnerTest do
           overhead: 50
         )
 
+      # Decision 442 (RV-16), the leave for a slot that finds nothing queued gone: the
+      # first round's slot found nothing waiting and stays open, and a request takes it
+      # at once; the next waits for the slot as before.
       %{"slow" => slow} = devices(runner)
+      assert Runner.get!(runner, "b.n") == 1
       traced(slow)
       request = :gen_server.send_request(runner, {:get!, "b.n"})
       queued(runner, 1)
@@ -2175,8 +2198,13 @@ defmodule Logex.RunnerTest do
         )
 
       # The first round took 15 ms, so the round due at 10 is owed; the call waits for it,
-      # which toggles `t.q` back to 0 and takes no time, and is served after it.
+      # which toggles `t.q` back to 0 and takes no time, and is served after it. Decision
+      # 442 (RV-16), the leave for a slot that finds nothing queued gone: the first round's
+      # 15 ms brought a slot that found nothing waiting, which stays open, and a call made
+      # now takes it, served at once ahead of the round, `t.q` the first round's 1, the
+      # slot closed behind it; the next call waits.
       assert Manual.now_ms(clock) == 15
+      assert Runner.get!(runner, "t.q") == 1
       request = :gen_server.send_request(runner, {:get!, "t.q"})
       assert :gen_server.wait_response(request, 100) == :timeout
       assert waited(request, clock) == 0
@@ -2199,7 +2227,11 @@ defmodule Logex.RunnerTest do
           %{"toggle" => @toggle, "count" => @count}
         )
 
-      for {overhead, waits, again} <- [{10, 3, 6}, {50, 2, 3}] do
+      # Decision 442 (RV-16), the leave for a slot that finds nothing queued gone: at 50%
+      # the first round's slot came with nothing waiting and stays open, and a request
+      # takes it at once, `b.n` the first round's 1, before the request that waits; at
+      # 10% none has come yet.
+      for {overhead, waits, again, open} <- [{10, 3, 6, false}, {50, 2, 3, true}] do
         {:ok, clock} = Manual.start_link()
 
         {:ok, runner} =
@@ -2214,6 +2246,7 @@ defmodule Logex.RunnerTest do
         # Each round's write takes 3 ms of a 2 ms period: at 3 the round due at 2 is owed,
         # and a request waits for the slot, one round each advance.
         assert {rounds(runner), Manual.now_ms(clock)} == {1, 3}
+        taken(open, runner)
         request = :gen_server.send_request(runner, {:get!, "b.n"})
         assert :gen_server.wait_response(request, 100) == :timeout
         assert answered_in(request, clock, 1) == {waits, waits}
@@ -2237,6 +2270,48 @@ defmodule Logex.RunnerTest do
 
         Runner.stop(runner)
       end
+    end
+
+    # Decision 442 (RV-16): a slot that finds nothing queued stays open until a request
+    # takes it. A lone poller sends its next call once its last is answered, so on a plant
+    # whose rounds outrun their periods its call is still on its way as a round ends,
+    # behind the round's wake in the runner's mailbox: the slot finds nothing queued and
+    # stays open, and the call that comes is served at once, after every round, where the
+    # slot was gone and the call waited a round for the next, the poller served every
+    # other slot (RV-11's review, 149 calls in 2 s where 299 were served before decision
+    # 396). Each round's write takes 3 ms of a 2 ms period; at 50% every round brings its
+    # slot.
+    test "an open slot serves the poller's call that comes behind the round at once " <>
+           "(decision 442)" do
+      config =
+        configured(
+          "task fast interval 2 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "program t toggle with fast\n  t.q q\nprogram b count with fast\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+          clock: {Manual, clock},
+          poll: 100_000,
+          overhead: 50
+        )
+
+      for round <- 2..6 do
+        :sys.suspend(runner)
+        {_timer, token, _at} = :sys.get_state(runner).wake
+        send(runner, {Runner, :wake, token})
+        request = :gen_server.send_request(runner, {:get!, "b.n"})
+        :sys.resume(runner)
+        assert :gen_server.wait_response(request, 1000) == {:reply, round}
+        assert rounds(runner) == round
+      end
+
+      assert Runner.stop(runner) == :ok
     end
 
     # Decision 396 (RV-11): a round counts whole with no untimed program, its timed tasks'

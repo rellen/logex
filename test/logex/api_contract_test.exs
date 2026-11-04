@@ -13998,7 +13998,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   set unknown (decision 391). Since RV-16 every round's forces are the ones the forces
   file holds as it begins, a force in effect only once its write has landed (decision
   437), and a restart now and then reads a device up 700 ms late in real time, past the
-  idle watchdog and a poll period and within its opening limit (decision 439).
+  idle watchdog and a poll period and within its opening limit (decision 439); a round
+  whose clock goes wrong halfway through stops there, nothing written (decision 441);
+  and the share's count with no untimed program is restated, a call made while a
+  periodic round is due taking a slot left open at once and the next waiting (decision
+  442).
 
   It is checked against two models that know nothing of the runner's code.
 
@@ -14430,6 +14434,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # comes, which it waits for.
     :owed_periodic,
     :waited_periodic,
+    # Decision 442 (RV-16): a call made while a periodic round is due, taking the open slot.
+    :open_slot_taken,
     :element_pressed,
     :element_forced,
     :element_misfit,
@@ -14800,6 +14806,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # Decision 437 (RV-16): the forces file as the round in hand began, as the seam read
       # it (`on_file!/2`).
       on_file: nil,
+      # Decisions 396 and 442 (RV-16): the share's count with no untimed program, the ms of
+      # rounds since the last slot, whether that slot is open, and whether the walk's
+      # waiting call is queued (`shared/4`).
+      share: %{used: 0, open: false, queued: false},
       # RV-11's review: the device a clock gone wrong for it alone took down, which wrote
       # its own 0 as it closed.
       clock_down: nil,
@@ -15347,7 +15357,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         down: MapSet.new(),
         hung: %{},
         start: nil,
-        g_sample: sample_of(image)
+        g_sample: sample_of(image),
+        share: %{used: 0, open: false, queued: false}
       })
 
     w = shelved_at_start(image, w, rt)
@@ -15804,10 +15815,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp reconfigured(%{status: :running} = w, config) do
     reach(:untimed_added, untimed?(config) and not untimed?(w.config))
     reach(:untimed_taken, untimed?(w.config) and not untimed?(config))
-    %{w | config: config, longest: longest(w.longest, config), floor: now(w), late: 0}
+
+    %{
+      w
+      | config: config,
+        longest: longest(w.longest, config),
+        floor: now(w),
+        late: 0,
+        share: recounted(untimed?(config) == untimed?(w.config), w.share)
+    }
   end
 
-  defp reconfigured(w, config), do: %{w | config: config, longest: longest(w.longest, config)}
+  defp reconfigured(w, config),
+    do: %{
+      w
+      | config: config,
+        longest: longest(w.longest, config),
+        share: recounted(untimed?(config) == untimed?(w.config), w.share)
+    }
+
+  # Decision 396 (RV-11's review), restated: a step that adds the first untimed program or
+  # takes away the last begins the share's count again, and since decision 442 (RV-16)
+  # closes a slot left open.
+  defp recounted(true, share), do: share
+  defp recounted(false, _share), do: %{used: 0, open: false, queued: false}
 
   defp now(w), do: Manual.now_ms(w.manual)
 
@@ -17450,9 +17481,26 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         floor: nil,
         logic: logic,
         last: %{at: round.at, took: round.took, again: changed},
-        longest: continuous_ran(w, round.took)
+        longest: continuous_ran(w, round.took),
+        share: shared(untimed?(w.config), w.share, round.took, slots_of(w.overhead))
     }
   end
+
+  # Decisions 396 and 442, restated: with no untimed program each round counts whole, a
+  # millisecond at least, and the round that completes C ms of them brings the slot,
+  # which begins the count again; one that finds nothing queued stays open until a
+  # request takes it, and one that finds the walk's waiting request serves it and
+  # closes. A request queued is answered by the round it waited for in any case. With
+  # untimed programs the walk sends no call while a round is owed, and counts nothing.
+  defp shared(true, share, _took, _c), do: %{share | queued: false}
+
+  defp shared(false, %{used: used} = share, took, c) when used + max(took, 1) >= c,
+    do: %{used: 0, open: not share.queued, queued: false}
+
+  defp shared(false, share, took, _c),
+    do: %{share | used: share.used + max(took, 1), queued: false}
+
+  defp slots_of(p), do: max(1, round((100 - p) / p))
 
   defp round_trip(w, round), do: round_over(continuous(w.config), round, w)
 
@@ -17717,10 +17765,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp waiting(true, w) do
     request = :gen_server.send_request(w.runner, :status)
     :sys.get_state(w.runner)
+    took_slot(w.share.open, request, w)
+  end
+
+  # Decision 442 (RV-16), restated: a slot that found nothing queued is open, and the call
+  # made while the round is due takes it, answered at once, ahead of the round, the slot
+  # closed behind it, so that a second call made then waits for the round; with none open
+  # the call waits for the round, as decision 396 has it.
+  defp took_slot(true, request, w) do
+    assert {:reply, status} = :gen_server.wait_response(request, 0)
+    assert status.rounds == w.rounds
+    reach(:open_slot_taken, true)
+    second = :gen_server.send_request(w.runner, :status)
+    :sys.get_state(w.runner)
+    took_slot(false, second, %{w | share: %{w.share | open: false}})
+  end
+
+  defp took_slot(false, request, w) do
     assert :gen_server.wait_response(request, 0) == :timeout
     before = w.rounds
     :ok = Manual.advance(w.manual, 0)
-    w = settled(consumed(w))
+    w = settled(consumed(%{w | share: %{w.share | queued: true}}))
     assert {:reply, status} = :gen_server.wait_response(request, 5000)
     assert status.rounds > before and status.rounds <= w.rounds
     reach(:waited_periodic, true)
