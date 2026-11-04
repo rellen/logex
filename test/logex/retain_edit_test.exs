@@ -511,15 +511,27 @@ defmodule Logex.RetainEditTest do
     # A plan of no retained path pays one clause a switch: an edit of programs that mark
     # nothing and one of programs that mark every line `non_retain`, which retain nothing,
     # switch at the same cost. (Their accepts differ, as at the parent, in the programs'
-    # own checks.)
+    # own checks.) Held equal until decision 357, a bound since: the marked edit's switch
+    # costs no more than the unmarked one's. Since RV-7's review the two are counted one
+    # after the other nine times and the least of their differences held, the difference
+    # within one state of the VM's, which moves a count by a few reductions as other tests
+    # run (`retain_configuration_test.exs`'s paired/2).
     test "an edit of programs that retain nothing pays nothing for the qualifiers" do
       state = scanned(sized(16, ""), 1)
       {:ok, edit, _} = Edit.accept(sized(16, ""), sized(16, ""), state)
       marked = sized(16, "non_retain ")
       {:ok, marked_edit, _} = Edit.accept(marked, marked, state)
 
-      assert reductions(fn -> Edit.test(edit, state) end) ==
-               reductions(fn -> Edit.test(marked_edit, state) end)
+      {marked, unmarked} =
+        Enum.min_by(
+          for _ <- 1..9 do
+            {reductions(fn -> Edit.test(marked_edit, state) end),
+             reductions(fn -> Edit.test(edit, state) end)}
+          end,
+          fn {a, b} -> a - b end
+        )
+
+      assert marked <= unmarked, "marked #{marked}, unmarked #{unmarked}"
     end
   end
 

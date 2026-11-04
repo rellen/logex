@@ -608,7 +608,8 @@ defmodule Logex.FrontendTest do
     # A plain decimal is read by `String.to_integer/1` as before, so it costs what it did,
     # 2 reductions more than a name of its length; a `_` or a base is read digit by digit,
     # and every spelling is linear in the number of literals and in their digits. Counted
-    # where the collector never runs, so each count is the same on every run.
+    # where the collector never runs, so that no collection's work is in a count, which
+    # moves from run to run by the hundredths the VM's own state moves.
     test "growth: a plain decimal costs what it did, and every spelling is linear" do
       line = fn word, n -> lexed(String.duplicate("mov #{word} hh\n", n)) end
       per = fn word -> (line.(word, 200) - line.(word, 100)) / 100 end

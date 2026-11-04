@@ -678,12 +678,18 @@ defmodule Logex.ReviewLowsTest do
       program = "var_input x bool\nvar_output y bool\nxic x ote y\n"
       File.write!(seal, block)
 
+      # The swaps are made raw, off the VM's file server, which serves every other file call
+      # of the VM one at a time (RV-7's review): through it the loop kept a write or a
+      # rename queued there at every moment, so that every other call waited behind one,
+      # and under the busy loops beside a full suite this test's 300 loads, and
+      # `configuration_test.exs`'s loader's beside it, ran past ExUnit's 60 s, where alone
+      # under the loops they took 2 s and 0.5 s.
       swapper =
         spawn_link(fn ->
           Stream.cycle([block, program])
           |> Enum.each(fn text ->
-            File.write!(seal <> ".new", text)
-            File.rename!(seal <> ".new", seal)
+            :ok = :file.write_file(seal <> ".new", text, [:raw])
+            :ok = :prim_file.rename(seal <> ".new", seal)
           end)
         end)
 

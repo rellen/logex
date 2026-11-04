@@ -1452,6 +1452,17 @@ defmodule Logex.RetainImageTest do
       r
     end
 
+    # RV-7: a start over an image updates maps of more than 32 keys, whose count moves from
+    # one call to the next by a few per cent of their work (512 timers' start over their
+    # image read 1,290,508 to 1,339,464 in twelve runs of one VM, 2,048's 5,256,833 to
+    # 5,566,125, the ratio 3.93 to 4.27, where under load it read 4.79 against 4.6); the
+    # least of five, the start over the image and the bare one measured in turn, read 4.08
+    # to 4.09 in six. Each figure is the least of five so, as `CONTRIBUTING.md` asks.
+    defp apart(fun, twin) do
+      {a, b} = Enum.unzip(for _ <- 1..5, do: {reductions(fun), reductions(twin)})
+      Enum.min(a) - Enum.min(b)
+    end
+
     # `n` retained dints and an unretained array of `big` elements, in one instance.
     defp sized(n, big) do
       decls = Enum.map_join(1..n, "\n", &"var retain r#{&1} dint #{&1}")
@@ -1484,23 +1495,17 @@ defmodule Logex.RetainImageTest do
         p = c!("var_input go bool\nvar retain tl ton[#{n}]\nxic go ton tl[0] 5", [], "t")
         {:ok, config} = Configuration.compile("plant", "program m1 t\n  m1.go 0", %{"t" => p})
         image = Runtime.retained(Runtime.start(config))
-
-        {reductions(fn -> Runtime.start(config, image) end),
-         reductions(fn -> Runtime.start(config) end)}
+        apart(fn -> Runtime.start(config, image) end, fn -> Runtime.start(config) end)
       end
 
-      {with_512, bare_512} = timers.(512)
-      {with_2048, bare_2048} = timers.(2048)
-      a = with_512 - bare_512
-      b = with_2048 - bare_2048
+      a = timers.(512)
+      b = timers.(2048)
       assert b <= 4.6 * a, "512 timers #{a}, 2048 timers #{b}"
 
       dints = fn n ->
         config = sized(n, 16)
         image = Runtime.retained(Runtime.start(config))
-
-        reductions(fn -> Runtime.start(config, image) end) -
-          reductions(fn -> Runtime.start(config) end)
+        apart(fn -> Runtime.start(config, image) end, fn -> Runtime.start(config) end)
       end
 
       d100 = dints.(100)

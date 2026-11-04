@@ -2309,9 +2309,11 @@ defmodule Logex.TagSubscriptTest do
   end
 
   describe "growth, in reductions" do
-    # Counted in a process of its own with a heap the collector never visits, so each count
-    # is the same on every run: a scan's reductions for each rung, the difference of 200
-    # rungs and 100 over 100.
+    # Counted in a process of its own with a heap the collector never visits, so that no
+    # collection's work is in a count: a scan's reductions for each rung, the difference of
+    # 200 rungs and 100 over 100, the same from run to run but for the hundredths a map of
+    # more than 32 keys or the VM's own state moves (`CONTRIBUTING.md`, "A count moves with
+    # the VM's own state").
     defp per_rung(head, rung) do
       cost = fn n ->
         source = head.(n) <> Enum.map_join(1..n, "\n", rung)
@@ -2373,9 +2375,6 @@ defmodule Logex.TagSubscriptTest do
       assert grid <= literal_grid + 18, "#{grid} against #{literal_grid}"
     end
 
-    # A program with no tag subscript scans, rung for rung, in exactly the reductions it
-    # took at e00ae03, before M5-12: an instruction is caught only where its clause's head
-    # sees such an element among its operands. A `cal` is caught as it was.
     # The type an arithmetic, bitwise or root instruction computes in is read from an
     # element's array in the scan's table, with no rule asked (`Logex.Program.destination/3`).
     test "an element a tag subscripts as a destination costs what a literal one does, and its read" do
@@ -2391,44 +2390,82 @@ defmodule Logex.TagSubscriptTest do
         l = per_rung(fixed(head), fn _ -> literal end)
         # Measured: 5 reductions a rung more, the subscript's read, its check and the
         # instruction's catch, and no more: a type asked of the one rule would cost one.
-        assert t == l + 5, "#{tagged} took #{t} a rung, #{literal} #{l}"
+        # Pinned as exactly 5 more until decision 357; a bound since, with half a reduction
+        # for the hundredths a rung's count moves, so that the subscript's read made cheaper
+        # holds it too.
+        assert t <= l + 5.5, "#{tagged} took #{t} a rung, #{literal} #{l}"
       end
     end
 
-    test "a program of none scans as it did before M5-12" do
-      assert per_rung(
-               fixed("var_input a bool\nvar_input b bool\nvar_output q bool\n"),
-               fn _ -> "xic a xio b ote q" end
-             ) == 34.0
+    # A program with no tag subscript runs no catch, as before M5-12 (`e00ae03`): an
+    # instruction is caught only where its clause's head sees an element a tag subscripts
+    # among its operands, a bit of one among them, and one on a bit a tag numbers, or a
+    # `cal`, is caught once, as it was. A catch costs a reduction. Since decision 357 each
+    # rung is held against one measured in the same run that differs from it in that catch
+    # alone, where the exact figures it took at `e00ae03` were pinned (34, 16, 17, 18, 23,
+    # 27 and 35 a rung, a `cal` 178.01): on a de-energised rung no operand is read, so an
+    # element a tag subscripts costs one reduction more than a literal one or a bool, and a
+    # bit a tag numbers, or a `cal` in a contact's place, what it does. A catch where none
+    # is due makes a pair cost the same; a reduction more for a call both rungs of a pair
+    # make moves both. Each bound leaves half a reduction a rung for the hundredths by which
+    # a rung's count moves as the bigger program's maps grow, under the one a catch costs.
+    # The pairs cover every shape of instruction a scan dispatches, one operand, two and
+    # three (RV-7's review: an `add` caught where none is due passed the pairs of contacts,
+    # coils and moves alone): an `add` on a literal element against one on an element a
+    # tag subscripts, and each two-instruction rung de-energised, whose second instruction
+    # does nothing, against a latch on an element a tag subscripts, which a de-energised
+    # rung leaves as it is and the catch alone makes dearer, 21 reductions a rung against 22.
+    test "a program of none is caught nowhere, as before M5-12, a tag's bit and a `cal` once" do
+      head =
+        fixed(
+          "var off bool\nvar_input a bool\nvar_input i int\nvar_input k int\n" <>
+            "var_input w word\nvar_input n int\nvar e bool[8]\nvar v int[8]\nvar g int[4,8]\n" <>
+            "var h word[8]\nvar_output q bool\nvar_output d int\nvar z int\nvar t word\n"
+        )
 
-      assert per_rung(fixed("var_input a int\nvar w int[8]\nvar_output d int\n"), fn _ ->
-               "move w[3] d"
-             end) == 16.0
+      caught = per_rung(head, fixed("xic off xic e[i] ote q"))
 
-      assert per_rung(fixed("var_input a int\nvar w int[8]\nvar_output d int\n"), fn _ ->
-               "move a w[3]"
-             end) == 17.0
-
-      assert per_rung(fixed("var g int[4,8]\nvar_output d int\n"), fn _ -> "move g[1,3] d" end) ==
-               18.0
-
-      assert per_rung(fixed("var e bool[8]\nvar_output q bool\n"), fn _ -> "xic e[3] ote q" end) ==
-               23.0
-
-      assert per_rung(fixed("var g word[8]\nvar_output q bool\n"), fn _ -> "xic g[1].3 ote q" end) ==
-               27.0
-
-      assert per_rung(
-               fixed("var_input w word\nvar_input n int\nvar_output q bool\n"),
-               fn _ -> "xic w.[n] ote q" end
-             ) == 35.0
-
-      cals = fn n ->
-        "var_input a bool\nvar_output q bool\n" <>
-          Enum.map_join(1..n, "\n", &"var s#{&1} seal") <> "\n"
+      for {plain, tagged} <- [
+            {"xic off xic a ote q", "xic off xic e[i] ote q"},
+            {"xic off xic e[3] ote q", "xic off xic e[i] ote q"},
+            {"xic off move v[3] d", "xic off move v[i] d"},
+            {"xic off move k v[3]", "xic off move k v[i]"},
+            {"xic off move g[1,3] d", "xic off move g[1,i] d"},
+            {"xic off xic h[1].3 ote q", "xic off xic h[i].3 ote q"},
+            {"xic off add k k v[3]", "xic off add k k v[i]"}
+          ] do
+        {p, t} = {per_rung(head, fixed(plain)), per_rung(head, fixed(tagged))}
+        assert p <= t - 0.5, "`#{plain}` took #{p} a rung, as caught as `#{tagged}`, #{t}"
       end
 
-      assert_in_delta per_rung(cals, &"cal s#{&1} a q"), 178.01, 0.001
+      latch = per_rung(head, fixed("xic off otl e[i]"))
+
+      for rung <- [
+            "xic off otl q",
+            "xic off otl e[3]",
+            "xic off move k z",
+            "xic off add k k z",
+            "xic off not w t",
+            "xic off shl w 1 t"
+          ] do
+        plain = per_rung(head, fixed(rung))
+        assert plain <= latch - 0.5, "`#{rung}` took #{plain} a rung, as caught as #{latch}"
+      end
+
+      tag_bit = per_rung(head, fixed("xic off xic w.[n] ote q"))
+
+      assert tag_bit <= caught + 0.5,
+             "a tag's bit took #{tag_bit} a rung, a caught element #{caught}"
+
+      cals = fn n ->
+        "var off bool\nvar_input a bool\nvar_input i int\nvar e bool[8]\nvar_output q bool\n" <>
+          Enum.map_join(1..n, "\n", &"var s#{&1} seal\nvar t#{&1} seal") <> "\n"
+      end
+
+      # A `cal` in a caught contact's place: the two rungs differ in that instruction alone.
+      contact = per_rung(cals, &"xic off xic e[i] cal s#{&1} a q")
+      cal = per_rung(cals, &"xic off cal t#{&1} a q cal s#{&1} a q")
+      assert cal <= contact + 0.5, "a `cal` took #{cal - contact} more than a caught contact"
     end
 
     # Decision 235: a coil on an element of a bool array makes the warnings look for writes
@@ -2556,27 +2593,17 @@ defmodule Logex.TagSubscriptTest do
       assert large / small < 2.2, "#{small} at 200, #{large} at 400"
     end
 
-    # RV-15's review: decision 431's own decisions were made for every member's word a coil
-    # names a bit of, though only a pair with a tag subscript on one side is judged beyond
-    # the member rules, so that 200 coils on members' bits of literal elements numbered by a
-    # tag, and no tag subscript, compiled 9.0% dearer than at `9a9a48c`, 11.6% in two
-    # dimensions. A member's word is judged as a word array only where some write reaches
-    # it through a tag subscript (`Logex.Warnings`' covered/2); any other keeps a mark of
-    # each coil, one look over the decisions more. Each program here compiles within 8
-    # reductions a rung of what it did at `9a9a48c`, a word array's within 1, whose compile
-    # and parse these are, the least of five runs there and of three here, each in a
-    # process of its own with a heap the collector never visits, on Elixir 1.20.4 and OTP
-    # 28; the parse is the same at both, so the parent's compile is restated as its ratio
-    # to the parse.
-    test "coils on members' bits no write reaches through a tag subscript cost what they did before decision 431" do
-      cost = fn f ->
+    # The least of three compiles in a process of its own with a heap the collector never
+    # visits, so that a figure moves by a few reductions of hundreds of thousands at most.
+    defp least_compile(source) do
+      cost = fn ->
         parent = self()
 
         {_pid, ref} =
           :erlang.spawn_opt(
             fn ->
               {:reductions, before} = Process.info(self(), :reductions)
-              f.()
+              Logex.compile(source, name: "p")
               {:reductions, later} = Process.info(self(), :reductions)
               send(parent, {:reductions, later - before})
             end,
@@ -2588,50 +2615,77 @@ defmodule Logex.TagSubscriptTest do
         n
       end
 
-      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
+      Enum.min(for _ <- 1..3, do: cost.())
+    end
 
+    # RV-15's review: decision 431's own decisions were made for every member's word a coil
+    # names a bit of, though only a pair with a tag subscript on one side is judged beyond
+    # the member rules, so that 200 coils on members' bits of literal elements numbered by a
+    # tag, and no tag subscript, compiled 9.0% dearer than at `9a9a48c`, 11.6% in two
+    # dimensions. A member's word is judged as a word array only where some write reaches
+    # it through a tag subscript (`Logex.Warnings`' covered/2); any other keeps a mark of
+    # each coil, one look over the decisions more. Each program here was held within 8
+    # reductions a rung of what it did at `9a9a48c`, a word array's within 1, restated from
+    # the parent's compile and parse. Since decision 357 each is held against a twin
+    # compiled in the same run: members' bits against the same coils on bits of a word
+    # array's elements, which decision 431 never reaches, and a word array's against the
+    # same coils on bits of scalar words, the two programs declaring and reading the same
+    # tags. Each twin costs what it measured apart at RV-7, `apart` a rung, and the bound
+    # allows 8 a rung more, a word array's half of one: every member's word judged as a word
+    # array costs 150 to 257 a rung more, and a word array's coils kept as a member's word's
+    # one more, each past its bound, while a call both twins make moves both.
+    test "coils on members' bits no write reaches through a tag subscript cost what they did before decision 431" do
       head =
-        "var_input a bool\nvar_input n int\nvar l1 ctu[200]\nvar lc ctu[20,20]\nvar w dint[200]\n" <>
-          "var_output q bool\nxic l1[0].q xic lc[0,0].q ote q\n"
+        "var_input a bool\nvar_input n int\nvar l1 ctu[200]\nvar lc ctu[20,20]\n" <>
+          "var w dint[200]\nvar wg dint[20,20]\nvar_output q bool\n" <>
+          "xic l1[0].q xic lc[0,0].q ote q\n"
 
       rungs = fn rung -> Enum.map_join(0..199, "\n", rung) end
       two = &"lc[#{div(&1, 20)},#{rem(&1, 20)}]"
+      words = &"wg[#{div(&1, 20)},#{rem(&1, 20)}]"
 
-      # {label, rungs, the rungs' count, the bound a rung, the parent's compile, its parse}
-      for {label, rungs, n, per_rung, compiled_then, parsed_then} <- [
-            {"members' literal bits", rungs.(&"xic a ote l1[#{&1}].pv.#{rem(&1, 16)}"), 200, 8,
-             283_326, 14_014},
-            {"members' literal bits in two dimensions",
-             rungs.(&"xic a ote #{two.(&1)}.pv.#{rem(&1, 16)}"), 200, 8, 311_430, 15_624},
-            {"members' bits a tag numbers", rungs.(&"xic a ote l1[#{&1}].pv.[n]"), 200, 8,
-             281_636, 13_942},
-            {"members' bits a tag numbers in two dimensions",
-             rungs.(&"xic a ote #{two.(&1)}.pv.[n]"), 200, 8, 308_337, 15_552},
-            {"members' bits a tag numbers beside their words written whole",
-             rungs.(&"xic a ote l1[#{&1}].pv.[n]\nxic a move 5 l1[#{&1}].pv"), 400, 8, 528_755,
-             29_455},
-            {"members' literal bits beside latches of them",
-             rungs.(
-               &"xic a ote l1[#{&1}].pv.#{rem(&1, 16)}\nxic a otl l1[#{&1}].pv.#{rem(&1 + 1, 16)}"
-             ), 400, 8, 521_675, 27_595},
-            {"a word array's bits", rungs.(&"xic a ote w[#{&1}].#{rem(&1, 16)}"), 200, 1, 263_492,
-             13_214}
+      scalars =
+        "var_input a bool\nvar_input n int\nvar l1 ctu[200]\nvar lc ctu[20,20]\n" <>
+          "var w dint[200]\n" <>
+          Enum.map_join(0..199, "", &"var v#{&1} dint\n") <>
+          "var_output q bool\nxic l1[0].q xic lc[0,0].q ote q\nxic w[0].0 " <>
+          Enum.map_join(0..199, " ", &"xic v#{&1}.0") <> " ote q\n"
+
+      # {label, the rungs' count, the program, its twin, `apart`, the bound a rung over it}
+      for {label, n, source, twin, apart, per_rung} <- [
+            {"members' literal bits", 200,
+             head <> rungs.(&"xic a ote l1[#{&1}].pv.#{rem(&1, 16)}"),
+             head <> rungs.(&"xic a ote w[#{&1}].#{rem(&1, 16)}"), 105, 8},
+            {"members' literal bits in two dimensions", 200,
+             head <> rungs.(&"xic a ote #{two.(&1)}.pv.#{rem(&1, 16)}"),
+             head <> rungs.(&"xic a ote #{words.(&1)}.#{rem(&1, 16)}"), 108, 8},
+            {"members' bits a tag numbers", 200, head <> rungs.(&"xic a ote l1[#{&1}].pv.[n]"),
+             head <> rungs.(&"xic a ote w[#{&1}].[n]"), 105, 8},
+            {"members' bits a tag numbers in two dimensions", 200,
+             head <> rungs.(&"xic a ote #{two.(&1)}.pv.[n]"),
+             head <> rungs.(&"xic a ote #{words.(&1)}.[n]"), 126, 8},
+            {"members' bits a tag numbers beside their words written whole", 400,
+             head <> rungs.(&"xic a ote l1[#{&1}].pv.[n]\nxic a move 5 l1[#{&1}].pv"),
+             head <> rungs.(&"xic a ote w[#{&1}].[n]\nxic a move 5 w[#{&1}]"), 77, 8},
+            {"members' literal bits beside latches of them", 400,
+             head <>
+               rungs.(
+                 &"xic a ote l1[#{&1}].pv.#{rem(&1, 16)}\nxic a otl l1[#{&1}].pv.#{rem(&1 + 1, 16)}"
+               ),
+             head <>
+               rungs.(&"xic a ote w[#{&1}].#{rem(&1, 16)}\nxic a otl w[#{&1}].#{rem(&1 + 1, 16)}"),
+             113, 8},
+            {"a word array's bits", 200, scalars <> rungs.(&"xic a ote w[#{&1}].#{rem(&1, 16)}"),
+             scalars <> rungs.(&"xic a ote v#{&1}.#{rem(&1, 16)}"), 201.5, 0.5}
           ] do
-        source = head <> rungs
         assert {:ok, %Logex.Program{}} = Logex.compile(source, name: "p"), label
-        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+        assert {:ok, %Logex.Program{}} = Logex.compile(twin, name: "p"), label
+        {compiled, twinned} = {least_compile(source), least_compile(twin)}
 
-        parsed =
-          least.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
-
-        at_parent = div(compiled_then * parsed, parsed_then)
-
-        assert compiled - at_parent <= per_rung * n,
-               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
-                 "at 9a9a48c, #{Float.round((compiled - at_parent) / n, 1)} a rung"
+        assert compiled - twinned <= (apart + per_rung) * n,
+               "#{label} compiled in #{compiled} reductions, #{compiled - twinned} more than " <>
+                 "its twin, #{Float.round((compiled - twinned) / n, 1)} a rung against " <>
+                 "#{apart} measured apart"
       end
     end
 
@@ -2642,79 +2696,75 @@ defmodule Logex.TagSubscriptTest do
     # array of three dimensions, 210 for elements of a bool array of three, 117 and 70 for
     # one dimension's, and so beside a write through a tag subscript of another array. It
     # is built only for the arrays a write names through a tag subscript. Each program here,
-    # alone and beside `ote z[i]`, compiles within 16 reductions a rung of what it did at
-    # `f31bf70`, whose compile and parse these are, the least of five runs there and of
-    # three here, each in a process of its own with a heap the collector never visits, on
-    # Elixir 1.20.4 and OTP 28; the parse is the same at both, so the parent's compile is
-    # restated as its ratio to the parse.
+    # alone and beside `ote z[i]`, was held within 16 reductions a rung of what it did at
+    # `f31bf70`, restated from the parent's compile and parse. Since decision 357 each is
+    # held against a twin compiled in the same run, the same one-shots keeping their
+    # storage bits in scalar words' bits or in scalar bools, which no index reaches. Each
+    # twin costs what it measured apart at RV-7, `apart` a rung, its 200 or 64 scalars
+    # declared where the program declares one array, and the bound allows 16 a rung more:
+    # the index built for every array costs 81 to 369 a rung more, past its bound, while a
+    # call both twins make moves both.
     test "one-shots on elements of arrays no write names through a tag subscript cost what they did before decision 405" do
-      cost = fn f ->
-        parent = self()
-
-        {_pid, ref} =
-          :erlang.spawn_opt(
-            fn ->
-              {:reductions, before} = Process.info(self(), :reductions)
-              f.()
-              {:reductions, later} = Process.info(self(), :reductions)
-              send(parent, {:reductions, later - before})
-            end,
-            [:monitor, min_heap_size: 8_000_000]
-          )
-
-        assert_receive {:reductions, n}, 10_000
-        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
-        n
-      end
-
-      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
-
       head = fn n, array ->
         "var_input a bool\nvar #{array}\n" <> Enum.map_join(0..(n - 1), "", &"var p#{&1} bool\n")
+      end
+
+      bools = fn n ->
+        "var_input a bool\n" <>
+          Enum.map_join(0..(n - 1), "", &"var p#{&1} bool\nvar b#{&1} bool\n")
+      end
+
+      words = fn n ->
+        "var_input a bool\n" <>
+          Enum.map_join(0..(n - 1), "", &"var p#{&1} bool\n") <>
+          Enum.map_join(0..(n - 1), "", &"var ww#{&1} word\n")
       end
 
       three = &"h[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}].#{div(&1, 64)}"
       cube = &"f[#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{div(&1, 16)}]"
       beside = "\nvar_input i int\nvar z bool[4]"
+      scalar_word = &"ww#{&1}.#{div(&1, 64)}"
+      scalar_bool = &"b#{&1}"
 
-      # {label, rungs, the array, a rung's storage bit, the rung after them, the parent's
-      # compile, its parse}
-      for {label, n, array, storage, last, compiled_then, parsed_then} <- [
-            {"bits of a word array of three dimensions", 200, "h word[4,4,4]", three, "", 440_495,
-             29_554},
-            {"elements of a bool array of three dimensions", 64, "f bool[4,4,4]", cube, "",
-             131_205, 9_277},
+      shots = fn n, storage, last ->
+        Enum.map_join(0..(n - 1), "\n", &"xic a ons #{storage.(&1)} ote p#{&1}") <> last
+      end
+
+      # {label, rungs, the program's head, its storage bit, its twin's head, the twin's
+      # storage bit, the rung after them, `apart`}
+      for {label, n, array, storage, twin_head, twin_storage, last, apart} <- [
+            {"bits of a word array of three dimensions", 200, "h word[4,4,4]", three, words.(200),
+             scalar_word, "", 49},
+            {"elements of a bool array of three dimensions", 64, "f bool[4,4,4]", cube,
+             bools.(64), scalar_bool, "", 57},
             {"bits of a word array of one dimension", 200, "w word[64]",
-             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "", 389_707, 26_100},
-            {"elements of a bool array of one dimension", 64, "e bool[64]", &"e[#{&1}]", "",
-             116_314, 8_162},
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", words.(200), scalar_word, "", -204},
+            {"elements of a bool array of one dimension", 64, "e bool[64]", &"e[#{&1}]",
+             bools.(64), scalar_bool, "", -175},
             {"bits of a word array of three dimensions beside z[i]", 200,
-             "h word[4,4,4]" <> beside, three, "\nxic a ote z[i]", 451_746, 29_705},
+             "h word[4,4,4]" <> beside, three, words.(200) <> "var_input i int\nvar z bool[4]\n",
+             scalar_word, "\nxic a ote z[i]", 49},
             {"elements of a bool array of three dimensions beside z[i]", 64,
-             "f bool[4,4,4]" <> beside, cube, "\nxic a ote z[i]", 136_066, 9_429},
+             "f bool[4,4,4]" <> beside, cube, bools.(64) <> "var_input i int\nvar z bool[4]\n",
+             scalar_bool, "\nxic a ote z[i]", 57},
             {"bits of a word array of one dimension beside z[i]", 200, "w word[64]" <> beside,
-             &"w[#{rem(&1, 64)}].#{div(&1, 64)}", "\nxic a ote z[i]", 400_955, 26_250},
+             &"w[#{rem(&1, 64)}].#{div(&1, 64)}",
+             words.(200) <> "var_input i int\nvar z bool[4]\n", scalar_word, "\nxic a ote z[i]",
+             -204},
             {"elements of a bool array of one dimension beside z[i]", 64, "e bool[64]" <> beside,
-             &"e[#{&1}]", "\nxic a ote z[i]", 121_169, 8_314}
+             &"e[#{&1}]", bools.(64) <> "var_input i int\nvar z bool[4]\n", scalar_bool,
+             "\nxic a ote z[i]", -175}
           ] do
-        source =
-          head.(n, array) <>
-            Enum.map_join(0..(n - 1), "\n", &"xic a ons #{storage.(&1)} ote p#{&1}") <> last
-
+        source = head.(n, array) <> shots.(n, storage, last)
+        twin = twin_head <> shots.(n, twin_storage, last)
         assert {:ok, %Logex.Program{warnings: []}} = Logex.compile(source, name: "p"), label
-        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+        assert {:ok, %Logex.Program{warnings: []}} = Logex.compile(twin, name: "p"), label
+        {compiled, twinned} = {least_compile(source), least_compile(twin)}
 
-        parsed =
-          least.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
-
-        at_parent = div(compiled_then * parsed, parsed_then)
-
-        assert compiled - at_parent <= 16 * n,
-               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
-                 "at f31bf70, #{Float.round((compiled - at_parent) / n, 1)} a rung"
+        assert compiled - twinned <= (apart + 16) * n,
+               "#{label} compiled in #{compiled} reductions, #{compiled - twinned} more than " <>
+                 "its twin, #{Float.round((compiled - twinned) / n, 1)} a rung against " <>
+                 "#{apart} measured apart"
       end
     end
 
@@ -2724,57 +2774,41 @@ defmodule Logex.TagSubscriptTest do
     # array naming a bit, so the warnings would be the same, but each such write would be
     # kept under twice the projections: 164 reductions a write more for an array of three
     # dimensions, 90 for one of two. Each program here, 64 such writes beside a coil
-    # through a tag subscript, compiles within 16 reductions a write of what it did at
-    # `f31bf70`, measured as the test above measures.
+    # through a tag subscript, was held within 16 reductions a write of what it did at
+    # `f31bf70`. Since decision 357 each is held against a twin compiled in the same run,
+    # the same 64 writes into scalar ints beside the same coil, `apart` a write more as
+    # measured at RV-7, the bound 16 a write more: a bool element given a bit's place costs
+    # 84 and 158 a write more, past its bound.
     test "an element of a bool array written whole keeps no bit's place, and costs what it did" do
-      cost = fn f ->
-        parent = self()
-
-        {_pid, ref} =
-          :erlang.spawn_opt(
-            fn ->
-              {:reductions, before} = Process.info(self(), :reductions)
-              f.()
-              {:reductions, later} = Process.info(self(), :reductions)
-              send(parent, {:reductions, later - before})
-            end,
-            [:monitor, min_heap_size: 8_000_000]
-          )
-
-        assert_receive {:reductions, n}, 10_000
-        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
-        n
-      end
-
-      least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
-
       # {label, the array, the coil through a tag subscript, a write's subscripts, the
-      # warnings, the parent's compile, its parse}
-      for {label, array, tagged, subscripts, warned, compiled_then, parsed_then} <- [
+      # warnings, `apart`}
+      for {label, array, tagged, subscripts, warned, apart} <- [
             {"three dimensions", "f bool[4,4,4]", "f[i,0,0]",
-             &"#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}", 4, 118_610, 5_953},
+             &"#{rem(&1, 4)},#{rem(div(&1, 4), 4)},#{rem(div(&1, 16), 4)}", 4, 535},
             {"two dimensions", "f bool[16,4]", "f[i,0]", &"#{rem(&1, 16)},#{rem(div(&1, 16), 4)}",
-             16, 97_608, 5_384}
+             16, 217}
           ] do
+        head = "var_input a bool\nvar_input i int\nvar #{array}\n"
+
         source =
-          "var_input a bool\nvar_input i int\nvar #{array}\nxic a ote #{tagged}\n" <>
+          head <>
+            "xic a ote #{tagged}\n" <>
             Enum.map_join(0..63, "\n", &"xic a move 1 f[#{subscripts.(&1)}]")
+
+        twin =
+          head <>
+            Enum.map_join(0..63, "", &"var s#{&1} int\n") <>
+            "xic a ote #{tagged}\n" <> Enum.map_join(0..63, "\n", &"xic a move 1 s#{&1}")
 
         assert {:ok, %Logex.Program{warnings: warnings}} = Logex.compile(source, name: "p")
         assert {label, length(warnings)} == {label, warned}
-        compiled = least.(fn -> Logex.compile(source, name: "p") end)
+        assert {:ok, %Logex.Program{}} = Logex.compile(twin, name: "p")
+        {compiled, twinned} = {least_compile(source), least_compile(twin)}
 
-        parsed =
-          least.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
-
-        at_parent = div(compiled_then * parsed, parsed_then)
-
-        assert compiled - at_parent <= 16 * 64,
-               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
-                 "at f31bf70, #{Float.round((compiled - at_parent) / 64, 1)} a write"
+        assert compiled - twinned <= (apart + 16) * 64,
+               "#{label} compiled in #{compiled} reductions, #{compiled - twinned} more than " <>
+                 "its twin, #{Float.round((compiled - twinned) / 64, 1)} a write against " <>
+                 "#{apart} measured apart"
       end
     end
 
@@ -2795,13 +2829,12 @@ defmodule Logex.TagSubscriptTest do
       _warm = compile.(10)
       assert compile.(400) / compile.(200) < 2.4
 
-      scan_cost =
-        per_rung(
-          fixed("var_input i int\nvar_input j int\nvar g int[4,8]\nvar_output q int\n"),
-          fn _ -> "move g[i,j] q" end
-        )
-
-      assert scan_cost < 60
+      head = fixed("var_input i int\nvar_input j int\nvar g int[4,8]\nvar_output q int\n")
+      scan_cost = per_rung(head, fn _ -> "move g[i,j] q" end)
+      # Held under 60 reductions a rung, 39 measured, until decision 357; since then under
+      # the same share of a literal element's, 18 in the same run.
+      literal = per_rung(head, fn _ -> "move g[1,3] q" end)
+      assert scan_cost < 60 / 18 * literal, "#{scan_cost} a rung, a literal one #{literal}"
     end
   end
 end

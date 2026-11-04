@@ -762,12 +762,20 @@ defmodule Logex.CompileTotalTest do
   # an element's name 15 to 18 reductions where Logex.Array.split/1 had cost 4, so that a
   # program of arrays compiled up to 7.6% dearer than at `e365fa4`. A rung's last
   # instruction is now looked at first, and an element's name read in one split. Each
-  # program here compiles within a bound a rung of what it did at `e365fa4`, whose compile
-  # and parse these are, measured in a process of its own with a heap the collector never
-  # visits, the least of three runs, on Elixir 1.20.4 and OTP 28; the parse is the same at
-  # both, so the parent's compile is restated as its ratio to the parse.
-  describe "the cost of RV-2's checks against the parent" do
-    test "a program compiles within a few reductions a rung of what it did at e365fa4" do
+  # program here was held within 8 reductions a rung of its compile at `e365fa4`, 16 for one
+  # of arrays, restated from the parent's compile and parse. Since decision 357 each is held
+  # against a twin compiled in the same run, measured in a process of its own with a heap
+  # the collector never visits, the least of three runs: a program of no arrays against
+  # the same rungs with the instruction that does something first, the order whose look
+  # costs the same however the look is made (a `cal` alone against a `cal` of a literal
+  # element, its scalar's look made apart), and a program of arrays against the same rungs
+  # over plain tags, whose names are never split. Each twin costs what it measured apart at
+  # RV-7, `apart` a rung, and the bound allows the parent's 8 or 16 a rung more: a look
+  # from the first instruction costs ten contacts 11 a rung more and a group 23, and the
+  # old reading an element's name 60 to 134 a rung, each past its bound, while a reduction
+  # more for a call both twins make moves both.
+  describe "the cost of RV-2's checks against a twin" do
+    test "a program compiles within a few reductions a rung of its twin" do
       cost = fn f ->
         parent = self()
 
@@ -790,58 +798,63 @@ defmodule Logex.CompileTotalTest do
       least = fn f -> Enum.min(for _ <- 1..3, do: cost.(f)) end
       rungs = fn rung -> Enum.map_join(1..200, "\n", fn _ -> rung end) end
       seal = seal()
+      bools = "var_input a bool\nvar_input b bool\nvar_output q bool\n"
+      jumps = &Enum.map_join(1..100, "\n", &1)
+      instances = Enum.map_join(1..200, "\n", &"var s#{&1} seal") <> "\nvar sa seal[200]\n"
+      elements = "var_input a bool\nvar e bool[8]\nvar i int\nvar_output q bool\n"
+      grid = "var_input a bool\nvar e bool[8]\nvar g int[4,4]\nvar_output q bool\n"
+      tagged = "var e bool[8]\nvar i int\nvar j int\nvar g int[4,4]\nvar_output q bool\n"
+      timers = Enum.map_join(0..199, "\n", &"xic a ton t[#{&1}] 5")
+      scalars = Enum.map_join(0..199, "\n", &"xic a ton t#{&1} 5")
 
-      # {label, source, the parent's compile, its parse, the bound a rung}: 8 for a program
-      # of no arrays, decision 351's look at the last instruction and the lows' checks of a
-      # `cal`, and 16 for one of arrays, a reduction or two for each element's name more.
-      for {label, source, compiled_then, parsed_then, per_rung} <- [
+      # {label, source, its twin, `apart`, the bound a rung over the twin and `apart`}
+      for {label, source, twin, apart, per_rung} <- [
             {"ten contacts",
-             "var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
-               rungs.("xic a xio b xic a xio b xic a xio b xic a xio b xic a xio b ote q"),
-             710_150, 46_239, 8},
-            {"groups",
-             "var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
-               rungs.("( xic a | xio b | xic a xio b ) ote q"), 385_610, 28_013, 8},
+             bools <> rungs.("xic a xio b xic a xio b xic a xio b xic a xio b xic a xio b ote q"),
+             bools <> rungs.("ote q xic a xio b xic a xio b xic a xio b xic a xio b xic a xio b"),
+             -1, 8},
+            {"groups", bools <> rungs.("( xic a | xio b | xic a xio b ) ote q"),
+             bools <> rungs.("( ote q xic a | xio b | xic a xio b )"), -5, 8},
             {"jumps",
              "var_input a bool\nvar_output q bool\n" <>
-               Enum.map_join(1..100, "\n", &"xic a jmp l#{&1}\nlbl l#{&1} xic a ote q"), 198_013,
-             12_519, 8},
+               jumps.(&"xic a jmp l#{&1}\nlbl l#{&1} xic a ote q"),
+             "var_input a bool\nvar_output q bool\n" <>
+               jumps.(&"jmp l#{&1} xic a\nlbl l#{&1} ote q xic a"), -2, 8},
             {"blocks",
              "var_input a bool\nvar_output q bool\n" <>
-               Enum.map_join(1..200, "\n", &"var s#{&1} seal") <>
-               "\n" <> Enum.map_join(1..200, "\n", &"cal s#{&1} a q"), 229_598, 19_132, 8},
+               instances <> Enum.map_join(1..200, "\n", &"cal s#{&1} a q"),
+             "var_input a bool\nvar_output q bool\n" <>
+               instances <> Enum.map_join(0..199, "\n", &"cal sa[#{&1}] a q"), -159, 8},
             {"bits",
              "var_input a bool\nvar w word\nvar n int\nvar_output q bool\n" <>
-               rungs.("xic w.3 xio w.[n] ote w.4"), 309_678, 15_421, 8},
-            {"elements",
-             "var_input a bool\nvar e bool[8]\nvar i int\nvar_output q bool\n" <>
-               rungs.("xic e[1] xio e[i] ote q"), 280_354, 16_630, 16},
-            {"literal subscripts",
-             "var_input a bool\nvar e bool[8]\nvar g int[4,4]\nvar_output q bool\n" <>
-               rungs.("xic e[1] move g[1,2] g[3,3] ote q"), 408_696, 25_251, 16},
+               rungs.("xic w.3 xio w.[n] ote w.4"),
+             "var_input a bool\nvar w word\nvar n int\nvar_output q bool\n" <>
+               rungs.("ote w.4 xic w.3 xio w.[n]"), -1, 8},
+            {"elements", elements <> rungs.("xic e[1] xio e[i] ote q"),
+             "var e1 bool\nvar ei bool\n" <> elements <> rungs.("xic e1 xio ei ote q"), 272, 16},
+            {"literal subscripts", grid <> rungs.("xic e[1] move g[1,2] g[3,3] ote q"),
+             "var e1 bool\nvar g12 int\nvar g33 int\n" <>
+               grid <> rungs.("xic e1 move g12 g33 ote q"), 690, 16},
             {"tag subscripts",
-             "var_input a bool\nvar e bool[8]\nvar i int\nvar j int\nvar g int[4,4]\n" <>
-               "var_output q bool\n" <> rungs.("xic e[i] move g[i,j] g[j,i] ote q"), 390_543,
-             19_334, 16},
+             "var_input a bool\n" <> tagged <> rungs.("xic e[i] move g[i,j] g[j,i] ote q"),
+             "var_input a bool\nvar ei bool\nvar gij int\nvar gji int\n" <>
+               tagged <> rungs.("xic ei move gij gji ote q"), 615, 16},
             {"an array of timers",
              "var_input a bool\nvar t ton[200]\nvar_output q bool\n" <>
-               Enum.map_join(0..199, "\n", &"xic a ton t[#{&1}] 5") <>
-               "\n" <> rungs.("xic t[3].dn ote q"), 450_799, 27_096, 16}
+               timers <> "\n" <> rungs.("xic t[3].dn ote q"),
+             "var_input a bool\n" <>
+               Enum.map_join(0..199, "\n", &"var t#{&1} ton") <>
+               "\nvar_output q bool\n" <> scalars <> "\n" <> rungs.("xic t3.dn ote q"), 11, 16}
           ] do
         assert {:ok, %Logex.Program{}} = Logex.compile(source, name: "p", types: [seal]), label
+        assert {:ok, %Logex.Program{}} = Logex.compile(twin, name: "p", types: [seal]), label
         compiled = least.(fn -> Logex.compile(source, name: "p", types: [seal]) end)
+        twinned = least.(fn -> Logex.compile(twin, name: "p", types: [seal]) end)
 
-        parsed =
-          least.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
-
-        at_parent = div(compiled_then * parsed, parsed_then)
-
-        assert compiled - at_parent <= per_rung * 200,
-               "#{label} compiled in #{compiled} reductions, #{compiled - at_parent} more than " <>
-                 "at e365fa4, #{Float.round((compiled - at_parent) / 200, 1)} a rung"
+        assert compiled - twinned <= (apart + per_rung) * 200,
+               "#{label} compiled in #{compiled} reductions, #{compiled - twinned} more than " <>
+                 "its twin, #{Float.round((compiled - twinned) / 200, 1)} a rung against " <>
+                 "#{apart} measured apart"
       end
     end
   end
