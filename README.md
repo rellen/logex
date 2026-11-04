@@ -4320,12 +4320,15 @@ stage: nil
   :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
   land once the disk answers, so `status/1` names the set it held meanwhile,
   `forces_unknown`, until a later write of the file lands or fails or a restart reads it
-  (decision 391, the key provisional). While it waits on its disk the runner keeps the
-  heartbeat, renewing every device's deadline each poll period, as it does while it
-  waits on a slow device's write, and leaves the wait out of the time the idle watchdog
-  reads, so a force on a slow disk latches no device and trips nothing; no round runs
-  meanwhile, every output held, and a periodic task's missed periods are reported as
-  overlaps (provisional). A start reads the file raw, off the
+  (decision 391, the key provisional). The rounds run on while the write is out, in a
+  process of its own, and the force takes effect at the first round after it lands, its
+  call answered then (decision 437): so on a slow disk the logic keeps the plant under
+  control, every round reading the forces as they were and `status/1` listing those, and
+  no force is in effect before the file holds it. A force asked while another's write is
+  out waits behind it, in order, built on the set it leaves; a trip, a restart or an
+  edit's step meanwhile leaves the write as it is, the force taken onto the set the runner
+  then holds once it lands; and a stop waits for it to its limit and answers its caller
+  (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls. A file that cannot be read, one the disk has not answered
   within the write limit or one the file system refuses, a directory in its place among

@@ -14081,9 +14081,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       {test, clock} = walk()
       now = Manual.now_ms(clock)
       inputs = Logex.ApiContractTest.RunnerWalk.delayed(test, now, inputs)
+      send(test, {:walked, self(), {:on_file, on_file(:ets.lookup(@table, {test, :file}))}})
       send(test, {:walked, self(), {:steps, elapsed, inputs, now}})
       Runtime.cycle_steps(runtime, elapsed, inputs)
     end
+
+    # Decision 437 (RV-16): the forces file as the round begins, read raw, so that the walk
+    # sees that every force the round reads is one the file holds (decision 117).
+    defp on_file([{_key, nil}]), do: nil
+    defp on_file([{_key, file}]), do: :file.read_file(file, [:raw])
 
     def cycle_step(runtime, {_kind, task, _run} = step) do
       result = Runtime.cycle_step(runtime, step)
@@ -14436,7 +14442,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # from one saved with a lone CR's, and a forces file saved with CRLF beside it.
     :store_crlf_read,
     :store_cr_read,
-    :forces_crlf_read
+    :forces_crlf_read,
+    # Decision 437 (RV-16): a round that read a force the file held as it began.
+    :forces_on_file
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14698,6 +14706,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     sims = Map.new(reports, fn {name, r} -> {name, sim(r, manual)} end)
     file = life_file(life, pick([nil, Path.join(dir, "forces-#{seed}")]), dir, seed)
     File.rm(file || Path.join(dir, "none"))
+    :ets.insert(@table, {{test, :file}, file})
     store = store_beside(file, dir, seed)
     File.rm(Path.join(dir, "retain-#{seed}"))
     for copy <- Path.wildcard(Path.join(dir, "retain-#{seed}.dropped*")), do: File.rm_rf!(copy)
@@ -14771,6 +14780,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # it, nil where it holds that set.
       unread: nil,
       file_forces: nil,
+      # Decision 437 (RV-16): the forces file as the round in hand began, as the seam read
+      # it (`on_file!/2`).
+      on_file: nil,
       # RV-11's review: the device a clock gone wrong for it alone took down, which wrote
       # its own 0 as it closed.
       clock_down: nil,
@@ -17042,6 +17054,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp logged(w, entry), do: %{w | log: [entry | w.log]}
 
+  # Decision 437 (RV-16): the forces file as a round begins, read by the seam.
+  defp record(w, {:on_file, read}), do: %{w | on_file: read}
+
   # A round begins: the runner gave the core its elapsed time and inputs.
   defp record(w, {:steps, elapsed, inputs, at} = record) do
     assert w.status == :running, "a round ran while tripped: #{inspect(record)}"
@@ -17050,6 +17065,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     kind = round_kind(w, inputs)
     timed!(w, kind, elapsed, at)
     inputs!(w, inputs, at)
+    on_file!(w, w.on_file)
     {rt, steps} = Runtime.cycle_steps(w.rt, elapsed, inputs)
     {cycled, outputs, events} = Runtime.cycle(w.rt, elapsed, inputs)
     reach(:"round_#{kind}", true)
@@ -17459,6 +17475,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
              "#{name} read #{inspect(value)} at #{at}, held #{inspect(held)}"
     end
   end
+
+  # Decision 437 (RV-16), restated: a force is in effect from the first round after its
+  # write lands and in none before, so that every round reads a force only once the file
+  # holds it (decision 117): as each round begins the file holds exactly the forces the
+  # round reads, in its own words, a line each, however its lines end (decision 410). A
+  # file a start or a restart could not read is no set the runner holds (decision 390):
+  # while one stands nothing is asserted of it; with no forces file there is none.
+  defp on_file!(%{file: nil}, nil), do: :ok
+  defp on_file!(%{unread: {_file, _reason}}, _read), do: :ok
+
+  defp on_file!(w, {:ok, text}) do
+    held =
+      for line <- String.split(text, ["\r\n", "\r", "\n"], trim: true), into: %{} do
+        [name, value] = String.split(line, " ")
+        {name, value}
+      end
+
+    assert held == Map.new(w.forces, fn {name, value} -> {name, "#{value}"} end),
+           "a round read #{inspect(w.forces)}, the file holding #{inspect(text)}"
+
+    reach(:forces_on_file, map_size(w.forces) > 0)
+  end
+
+  defp on_file!(%{forces: forces}, {:error, :enoent}) when map_size(forces) == 0, do: :ok
 
   # A real point's reading by value, its device's 0 and the 0.0 the resource holds one
   # reading (M5-15); every other point's exactly, so that a float at an integer or a bool

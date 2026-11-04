@@ -1451,6 +1451,250 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # Decision 437 (RV-16): the rounds run on while a force's or an unforce's write of the
+  # forces file is out, and the force takes effect at the first round after the write
+  # lands, so that the logic keeps the plant under control on a slow disk and no force is
+  # in effect before the file holds it (decision 117); the caller waits for the write as
+  # it did. Each write is stalled at its rename, the held file server's one call of it.
+  describe "the rounds run on while a force's write is out (decision 437)" do
+    test "rounds run, status/1 answers and the force is in effect from the first round " <>
+           "after the write lands, none before",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 0)
+      %{rounds: before} = Runner.status(runner)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "eye_1", 1) end)
+      _writing = waiting_call(server, :rename)
+
+      # Five rounds while the write waits on the disk, the eye read as its device gives it,
+      # and status/1 answered, the force listed nowhere yet.
+      for _ <- 1..5, do: Manual.advance(rig.clock, 10)
+
+      assert %{status: :running, rounds: rounds, forces: forces, trip: nil} =
+               Runner.status(runner)
+
+      assert rounds == before + 5 and forces == %{}
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Task.yield(force, 0) == nil
+
+      # The disk back, the force answered once its write has landed, the file holding it,
+      # and read from the next round on.
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\n"
+      assert %{forces: %{"eye_1" => 1}, rounds: ^rounds} = Runner.status(runner)
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      Manual.advance(rig.clock, 10)
+      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # The record is silent on a second force while one's write is out: it waits behind it,
+    # in order, its write built on the set the first left (provisional).
+    test "a force asked while another's write is out waits behind it, its write built on " <>
+           "the set the first left",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      first = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      second = calling(Task.async(fn -> Runner.force(runner, "eye_1", 1) end))
+      unforced = calling(Task.async(fn -> Runner.unforce(runner, "level") end))
+      assert %{forces: %{}} = Runner.status(runner)
+
+      # One write out at a time: the second's has not begun, the first's alone waits.
+      assert {:messages, messages} = Process.info(server, :messages)
+
+      assert length(
+               for({:"$gen_call", _, request} <- messages, elem(request, 0) == :rename, do: 1)
+             ) == 1
+
+      :sys.resume(server)
+      assert Task.await(first, @answers) == :ok
+      assert Task.await(second, @answers) == :ok
+      assert Task.await(unforced, @answers) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\n"
+      assert %{forces: %{"eye_1" => 1}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # A trip, a restart and an edit's step made while a force's write is out leave it as
+    # it was: it is taken onto the set the runner then holds once it lands, and read from
+    # the first round after it, a restart's first round, which reads the file as every
+    # start does, among them where it came first.
+    test "a trip, a restart and an edit's step made while it is out leave it as it was",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 0)
+
+      # A trip while it is out: the force taken once it lands, the runner still tripped,
+      # and read by the restart's first round.
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "eye_1", 1) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, forces: %{}} = Runner.status(runner)
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert %{status: :tripped, forces: %{"eye_1" => 1}} = Runner.status(runner)
+      assert Runner.restart(runner, :warm) == :ok
+      assert Sim.outputs(rig.panel) == %{[0] => 1}
+
+      # A restart while it is out: the restart reads the file as it stands, raw, the old
+      # set, and the force is taken once it lands, read from the next round on.
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      server = held()
+      unforce = Task.async(fn -> Runner.unforce(runner, "eye_1") end)
+      _writing = waiting_call(server, :rename)
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running, forces: %{"eye_1" => 1}} = Runner.status(runner)
+      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      :sys.resume(server)
+      assert Task.await(unforce, @answers) == :ok
+      assert File.read!(rig.forces) == ""
+      assert %{forces: %{}} = Runner.status(runner)
+      Manual.advance(rig.clock, 10)
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+
+      # An edit's steps while it is out, each answered: the force taken once it lands onto
+      # the configuration the edit switched to.
+      faster = configured(String.replace(@plant, "interval 10", "interval 5"))
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 3) end)
+      _writing = waiting_call(server, :rename)
+      assert {:ok, _forecast} = Runner.accept(runner, faster)
+      assert {:ok, _report} = Runner.test(runner)
+      assert {:ok, _report} = Runner.assemble(runner)
+      assert %{edit: nil, forces: %{}} = Runner.status(runner)
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      Manual.advance(rig.clock, 5)
+      assert Runner.get!(runner, "level") == 3
+      assert Runner.stop(runner) == :ok
+    end
+
+    # A stop made while a force's write is out waits for it, to its own limit, and answers
+    # its caller as it ends, the files given up only after it (decision 356); a force that
+    # waited behind it is answered as to a runner that is not running (provisional).
+    test "a stop made while it is out waits for it and answers its caller, every output 0",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+
+      behind =
+        calling(Task.async(fn -> stop_answer_of(fn -> Runner.force(runner, "eye_1", 0) end) end))
+
+      assert %{forces: %{}} = Runner.status(runner)
+      stop = Task.async(fn -> Runner.stop(runner) end)
+      assert Task.yield(stop, 200) == nil
+      assert Sim.closed?(rig.panel)
+      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert Task.await(stop, @answers) == :ok
+      assert Task.await(behind, @answers) == gone_told(runner)
+      assert File.read!(rig.forces) == "level 7\n"
+
+      # Past its limit, the stop answers the force's caller at that limit.
+      rig = rig(Path.join(dir, "late"), retain: nil, retain_period: nil)
+      File.mkdir_p!(Path.dirname(rig.forces))
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> timed(fn -> Runner.force(runner, "level", 7) end) end)
+      _writing = waiting_call(server, :rename)
+      assert Runner.stop(runner) == :ok
+      assert {took, {:error, {:forces, :timeout}}} = Task.await(force, @answers)
+      assert took >= @limit and took < @answers
+      :sys.resume(server)
+    end
+
+    # On the real clock: the runner's rounds go on, and status/1 is answered, while the
+    # write waits on the held disk, the force's call still out, however loaded the machine;
+    # the force read once it lands. The task's watchdog and the idle watchdog are 5 s, the
+    # heartbeat a loaded machine's to miss, which this test does not read.
+    test "on the real clock the rounds run on while a force's write is out", %{tmp_dir: dir} do
+      rig =
+        rig(dir,
+          configuration:
+            configured(String.replace(@plant, "priority 1", "priority 1 watchdog 5000")),
+          clock: {Logex.Runner.Clock.Monotonic, nil},
+          idle: 5000,
+          write_limit: 20_000,
+          retain: nil,
+          retain_period: nil
+        )
+
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "eye_1", 1) end)
+      _writing = waiting_call(server, :rename)
+      %{rounds: before} = Runner.status(runner)
+      deadline = System.monotonic_time(:millisecond) + 10_000
+      assert %{forces: %{}, trip: nil} = rounds_past(runner, before, deadline)
+      assert Task.yield(force, 0) == nil
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert lamp_on(rig.panel, System.monotonic_time(:millisecond) + 10_000) == 1
+
+      assert %{status: :running, trip: nil, forces: %{"eye_1" => 1}, unzeroed: []} =
+               Runner.status(runner)
+
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # The status once a round has run past `before`, polled until `deadline`.
+  defp rounds_past(runner, before, deadline),
+    do: past(Runner.status(runner), runner, before, deadline)
+
+  defp past(%{rounds: rounds} = status, _runner, before, _deadline) when rounds > before,
+    do: status
+
+  defp past(_status, runner, before, deadline) do
+    assert System.monotonic_time(:millisecond) < deadline, "no round ran while the write was out"
+    Process.sleep(10)
+    rounds_past(runner, before, deadline)
+  end
+
+  # The panel's lamp once a round has written it on, polled until `deadline`.
+  defp lamp_on(panel, deadline), do: lamp(Sim.outputs(panel), panel, deadline)
+
+  defp lamp(%{[0] => 1}, _panel, _deadline), do: 1
+
+  defp lamp(_outputs, panel, deadline) do
+    assert System.monotonic_time(:millisecond) < deadline, "the force was never read"
+    Process.sleep(10)
+    lamp_on(panel, deadline)
+  end
+
+  # A task once its call has been sent, waiting for the answer, so that a request the test
+  # makes after it comes behind it in the runner's mailbox.
+  defp calling(task), do: in_call(Process.info(task.pid, :current_function), task)
+
+  defp in_call({:current_function, {:gen, :do_call, 4}}, task), do: task
+
+  defp in_call(_elsewhere, task) do
+    Process.sleep(1)
+    calling(task)
+  end
+
+  defp stop_answer_of(call) do
+    call.()
+  rescue
+    error in ArgumentError -> {:raised, error.message}
+  end
+
   # A start made in a process of its own that this one traces, a process cannot trace its
   # own calls, kept alive, the runner's parent, until the test is done with it.
   defp traced_start(opts) do
