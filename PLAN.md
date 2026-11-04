@@ -20,7 +20,7 @@ questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
 420–432, landed on 2026-11-03, and to RV-15's, decisions 433–436, each as built, their
-marks made in RV-13.)*
+marks made in RV-13, and to RV-11's, decisions 437–447, for RV-16.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14134,8 +14134,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   as decision 398's entry says and mended in `434ada2`; the merge of main, `6e3b6a6`, and
   the commit that records this are reported where the item lands.
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; the
-  reading taken is the closest to it, IEC and Logix.
+  *Provisional readings, put to the maintainer* *(all eleven answered on 2026-11-04,
+  decisions 437 to 447: 2, 7, 8, 10 and 11 as built, 1, 3, 4, 5, 6 and 9 changed, to build
+  in RV-16)*. The record is silent on each; the reading taken is the closest to it, IEC
+  and Logix.
 
   1. *A force on a slow disk holds the logic* (decision 400). A technician forces an
      input while the card is slow: the runner waits for the forces file's write, up to the
@@ -15086,6 +15088,15 @@ and CI checked; each fix with a test that fails when it is reverted.
      So nothing a host builds passes for checked through them, but they are public
      functions that trust what they are given. (a) As is; (b) both private, the check's
      walk moved into the compiler, `Logex.FbType.user?/1` the one public check.
+- **RV-16 — the answers to RV-11's questions** (decisions 437, 439, 440, 441, 442 and
+  445). The rounds running on while a force's write of the forces file is made, the force
+  taken at the first round after it lands; every card a restart reads given its own
+  `open:`; `status/1`'s `forces_unread`, `forces_unknown` and `unknown` always there; a
+  round whose clock reading is found wrong abandoned, its outputs never written; a slot of
+  the share that finds nothing queued kept until a request takes it; and while
+  `forces_unread` stands, a restart keeping the runner's own forces. And every provisional
+  mark RV-11 left on a reading decisions 437–447 settle made the decision's number. It
+  runs after RV-13 and before RV-6, whose runner code both touch.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
