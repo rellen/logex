@@ -904,6 +904,8 @@ defmodule Logex.RetainPeriodCostTest do
 
     Manual.advance(clock, 100)
     {:reductions, a} = Process.info(runner, :reductions)
+    {:garbage_collection, g1} = Process.info(runner, :garbage_collection)
+    {:heap_size, h1} = Process.info(runner, :heap_size)
     rounds = Runner.status(runner).rounds
 
     for i <- 1..20 do
@@ -912,7 +914,24 @@ defmodule Logex.RetainPeriodCostTest do
     end
 
     {:reductions, b} = Process.info(runner, :reductions)
+    {:garbage_collection, g2} = Process.info(runner, :garbage_collection)
+    {:heap_size, h2} = Process.info(runner, :heap_size)
     rounds = Runner.status(runner).rounds - rounds
+    st = :sys.get_state(runner)
+    {:reductions, c} = Process.info(runner, :reductions)
+    for _ <- 1..200, do: :sys.get_state(runner)
+    {:reductions, d} = Process.info(runner, :reductions)
+
+    IO.puts(
+      :stderr,
+      "RV7SYS #{inspect(extra != [])} sys=#{(d - c) / 200} own=#{(b - a - (d - c)) / rounds}"
+    )
+
+    IO.puts(
+      :stderr,
+      "RV7RP #{inspect(extra != [])} #{(b - a) / rounds} rounds=#{rounds} gcs=#{g2[:minor_gcs] - g1[:minor_gcs]} heap=#{h1}->#{h2} flat=#{:erts_debug.flat_size(st)} retain=#{:erts_debug.flat_size(st.retain)} parts=#{inspect(Enum.map(Enum.to_list(st.retain || %{}), fn {k, v} -> {k, :erts_debug.flat_size(v)} end))}"
+    )
+
     assert Runner.stop(runner) == :ok
     GenServer.stop(panel)
     GenServer.stop(clock)

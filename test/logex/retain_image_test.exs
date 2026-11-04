@@ -1493,6 +1493,7 @@ defmodule Logex.RetainImageTest do
       {with_2048, bare_2048} = timers.(2048)
       a = with_512 - bare_512
       b = with_2048 - bare_2048
+      IO.puts(:stderr, "RV7RI timers #{with_512} #{bare_512} #{with_2048} #{bare_2048} #{b / a}")
       assert b <= 4.6 * a, "512 timers #{a}, 2048 timers #{b}"
 
       dints = fn n ->
@@ -1505,6 +1506,7 @@ defmodule Logex.RetainImageTest do
 
       d100 = dints.(100)
       d400 = dints.(400)
+      IO.puts(:stderr, "RV7RI dints #{d100} #{d400} #{d400 / d100}")
       assert d400 <= 4.6 * d100, "100 dints #{d100}, 400 dints #{d400}"
     end
 
