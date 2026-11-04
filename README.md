@@ -337,16 +337,20 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"). Its answers to the questions
-RV-5 left, decisions 409–419, have landed with RV-13: the store and the forces file
-reading a line ended by CRLF or a lone CR as one ended by LF (decision 410), `status/1`'s
-`copy` always there, nil where nothing was copied (decision 412), the shutdown's write
-making the store's text within the write limit, which the child spec's deadline counts
-(decision 414), a cold start over a store a fresh start would refuse copying it first
-(decision 417) and each copy of the store a name of its own, `<store>.dropped.1` and on,
-none replaced (decision 418), the other six as built (decisions 409, 411, 413, 415, 416
-and 419); its answers to the four RV-15 left, decisions 433–436, are each as built, their
-marks made with RV-13. Its answers to the questions
+items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
+questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
+a force is written, a round whose clock reads wrong abandoned before it writes, and a
+restart after a start that could not read the forces file keeping the forces the runner
+holds, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
+CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
+nothing was copied (decision 412), the shutdown's write making the store's text within
+the write limit, which the child spec's deadline counts (decision 414), a cold start
+over a store a fresh start would refuse copying it first (decision 417) and each copy of
+the store a name of its own, `<store>.dropped.1` and on, none replaced (decision 418),
+the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to the
+four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13. Its
+answers to the questions
 RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
 runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
 heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a

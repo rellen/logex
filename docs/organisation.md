@@ -13142,7 +13142,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      report from every start, `status/1`'s doc saying so; the leave, the pins of a report
      with no `copy`; the walks assert the key there and nil where nothing was dropped.
      RV-11's `unknown`, `forces_unread` and `forces_unknown` stay keys only while they
-     stand, RV-11's question 4.)*
+     stand, RV-11's question 4, which decision 440 makes always present, RV-16's to
+     build.)*
 
 413. **A store that is a link (the review after Milestone 6),** RV-5's question 5: a store
      or forces file that is a symbolic link, to a persistent card say, is refused at
@@ -13459,6 +13460,104 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: public, as built (a)** (the maintainer, 2026-11-03). RV-13 makes the mark the
      decision's number. *(RV-13, 2026-11-04: the marks made, in `lib/` and the tests'
      names and comments.)*
+
+437. **A force on a slow disk (the review after Milestone 6),** RV-11's question 1
+     (decision 400): a force waits for the forces file's write, up to `write_limit:`, and
+     no round runs meanwhile, the devices' heartbeat kept, the outputs held where they
+     were and a task's missed periods reported as overlaps. Logix keeps forces in
+     controller memory.
+
+     **Taken: rounds run on (b)** (the maintainer, 2026-11-04): the rounds run on while a
+     force's or an unforce's write of the forces file is made, and the force takes effect
+     at the first round after the write lands, so the logic keeps the plant under control
+     and no force is in effect before the file holds it (decision 117); a write that fails
+     or is cut off leaves the force not taken, as now. To build in RV-16.
+
+438. **`open:`'s form and its default (the review after Milestone 6),** RV-11's question 2
+     (decision 398): one number for every device or a map by device's name, 5 s unless
+     set.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-04). RV-16 makes the mark the
+     decision's number.
+
+439. **A restart's reread of a card that stayed up (the review after Milestone 6),**
+     RV-11's question 3 (decision 398): a restart gives its `open:` limit only to a device
+     that went down, so a gateway that stayed up and answers its reread in 700 ms refuses
+     the restart at idle + poll, `{:io_init, "gw", :timeout}`.
+
+     **Taken: `open:` for every card a restart reads (b)** (the maintainer, 2026-11-04):
+     every device a restart opens or reads again is limited by its own `open:`, the
+     heartbeat by idle + poll as before. To build in RV-16.
+
+440. **The keys that name a file not read or a write not known (the review after
+     Milestone 6),** RV-11's question 4 (decisions 390 and 391): `status/1`'s
+     `forces_unread`, `forces_unknown` and `unknown` are there only while what they name
+     stands.
+
+     **Taken: always present (b)** (the maintainer, 2026-11-04): each is always in the
+     report, nil where nothing stands, as decision 412 has the store's `copy`. To build in
+     RV-16.
+
+441. **A clock gone wrong in the middle of a round (the review after Milestone 6),**
+     RV-11's question 5 (decision 394): the round finishes as if no time had passed and
+     writes its outputs, and the trip then writes 0. A Logix major fault stops the logic
+     at once.
+
+     **Taken: the round abandoned (b)** (the maintainer, 2026-11-04): a round whose clock
+     reading is found wrong stops there, its outputs never written, and the trip's 0 is
+     the first the devices are given after it. To build in RV-16.
+
+442. **The share with no continuous task (the review after Milestone 6),** RV-11's
+     question 6 (decision 396): a slot that finds nothing queued is gone, so an HMI
+     polling one call at a time on an overrunning 2 ms plant is answered half as often as
+     before RV-11; an edit that adds the first continuous program, or removes the last,
+     begins the share's count again.
+
+     **Taken: an unused slot kept (c)** (the maintainer, 2026-11-04): a slot that finds
+     nothing queued stays open until a request takes it, so a poller's next call is
+     served at once, the share still holding requests to one a slot; the count's new
+     beginning at such an edit stays as built. To build in RV-16.
+
+443. **An address the configuration does not write (the review after Milestone 6),**
+     RV-11's question 7 (decision 399): a trip for an address the configuration has no
+     point for names it as the adapter gave it, `{:unknown_address, :pump}`.
+
+     **Taken: the adapter's term, as built (a)** (the maintainer, 2026-11-04). RV-16 makes
+     the mark the decision's number.
+
+444. **A test's call on the manual clock while a periodic round is overdue (the review
+     after Milestone 6),** RV-11's question 8 (decisions 131 and 396): a request waits for
+     the due round, so on the manual clock it waits until the clock is moved.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-04): decision 131's rule on every
+     clock; a test calls from another process. RV-16 makes the mark the decision's
+     number.
+
+445. **Forces the file held while a fresh start could not read it (the review after
+     Milestone 6),** RV-11's question 9 (decisions 127 and 390): a restart after such a
+     start takes what the file holds, so a force the HMI has not listed since the start
+     comes back.
+
+     **Taken: the runner's own set kept (b)** (the maintainer, 2026-11-04): while
+     `forces_unread` stands, a restart keeps the forces the runner holds and takes none
+     from the file, and the next write of the forces file, a force's or an unforce's,
+     writes the runner's set over it, so no force comes back that the HMI was not
+     showing. To build in RV-16.
+
+446. **A relative forces path whose directory does not answer (the review after Milestone
+     6),** RV-11's question 10 (decisions 356, 390 and 400): such a start is refused,
+     "cannot be located", the runner having no path to claim.
+
+     **Taken: refused, as built (a)** (the maintainer, 2026-11-04): decision 356's check
+     needs the whole path; README advises an absolute one. RV-16 makes the mark the
+     decision's number.
+
+447. **Which file an owed copy's cut-off write names (the review after Milestone 6),**
+     RV-11's question 11 (decisions 360 and 391): the file whose write was cut off, the
+     copy or the store, the copy shown made where the cut came in the store's write.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-04), with the copy's name as
+     decision 418 numbers it. RV-16 makes the mark the decision's number.
 
 ---
 

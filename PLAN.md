@@ -20,7 +20,8 @@ questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
-RV-15's, decisions 433–436, each as built, their marks made in RV-13.)*
+RV-15's, decisions 433–436, each as built, their marks made in RV-13, and to RV-11's,
+decisions 437–447, for RV-16.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14141,8 +14142,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   as decision 398's entry says and mended in `434ada2`; the merge of main, `6e3b6a6`, and
   the commit that records this are reported where the item lands.
 
-  *Provisional readings, put to the maintainer.* The record is silent on each; the
-  reading taken is the closest to it, IEC and Logix.
+  *Provisional readings, put to the maintainer* *(all eleven answered on 2026-11-04,
+  decisions 437 to 447: 2, 7, 8, 10 and 11 as built, 1, 3, 4, 5, 6 and 9 changed, to build
+  in RV-16)*. The record is silent on each; the reading taken is the closest to it, IEC
+  and Logix.
 
   1. *A force on a slow disk holds the logic* (decision 400). A technician forces an
      input while the card is slow: the runner waits for the forces file's write, up to the
@@ -14730,7 +14733,8 @@ and CI checked; each fix with a test that fails when it is reverted.
     and the copy kept through a warm, a cold and a storeless start, each a report with no
     `copy`, now `copy: nil`; the walks' `copy_told/5` asserts the key there and nil. RV-11's
     comments that compared its own keys with `copy` "as `copy` is" now say "as `copy` was
-    until decision 412", RV-11's marks left as they are (its question 4).
+    until decision 412", RV-11's marks left as they are (its question 4, answered since
+    by decision 440, RV-16's to build).
   - *Decision 418, a copy a name of its own, none replaced* (`b96a4df`;
     `retain_store_test.exs`'s "a copy numbered one past the highest that stands, none
     replaced" and "every copy kept, the next that drops numbered past it";
@@ -14860,8 +14864,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     (419) in `Logex.Refusal`'s head; and this file's RV-5 entry, each mark and its
     provisional readings' list. The refusal's bounds, 50 problems, 60 bytes and 1,000 a
     line, and the bytes quoted as they are, no decision took up, and they stay
-    provisional. RV-11's marks are left as they are (its questions are with the
-    maintainer); RV-10's in the runner's files, which this item was to make, are none,
+    provisional. RV-11's marks are left as they are, its questions with the maintainer
+    as this was built and answered since, decisions 437–447, which RV-16 builds and whose
+    marks it makes; RV-10's in the runner's files, which this item was to make, are none,
     as RV-14's entry records ("Left to RV-13").
 
   *The mutation table*, each mutant judged by the full suite (`scripts/mutate.sh`,
@@ -14922,9 +14927,10 @@ and CI checked; each fix with a test that fails when it is reverted.
   *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
   full suite at a time: the parent `7222266` 2,819 (11 doctests, 2,808 tests); `bbd5ced`
   and `7d9fc7c` 2,821; `b96a4df` 2,824; `29fec98` 2,828; `addea97` and `5fa9e00` 2,829;
-  and this entry's commit, which changes no rule, 2,829. CI was green at once on every
-  commit before it, `bbd5ced` to `5fa9e00`. The machine restarted once under the mutation
-  table, which was run again from the patch it was in.
+  this entry's commit, which changes no rule, 2,829; and the merge of main, which
+  brought decisions 437–447 and RV-16's entry, 2,829. CI was green at once on every
+  commit before this entry's, `bbd5ced` to `5fa9e00`. The machine restarted once under
+  the mutation table, which was run again from the patch it was in.
 
   *Provisional readings, put to the maintainer*, by what an operator sees. The record is
   silent on each; the reading taken is the closest to it, IEC and Logix. Logix keeps no
@@ -15392,6 +15398,15 @@ and CI checked; each fix with a test that fails when it is reverted.
      So nothing a host builds passes for checked through them, but they are public
      functions that trust what they are given. (a) As is; (b) both private, the check's
      walk moved into the compiler, `Logex.FbType.user?/1` the one public check.
+- **RV-16 — the answers to RV-11's questions** (decisions 437, 439, 440, 441, 442 and
+  445). The rounds running on while a force's write of the forces file is made, the force
+  taken at the first round after it lands; every card a restart reads given its own
+  `open:`; `status/1`'s `forces_unread`, `forces_unknown` and `unknown` always there; a
+  round whose clock reading is found wrong abandoned, its outputs never written; a slot of
+  the share that finds nothing queued kept until a request takes it; and while
+  `forces_unread` stands, a restart keeping the runner's own forces. And every provisional
+  mark RV-11 left on a reading decisions 437–447 settle made the decision's number. It
+  runs after RV-13 and before RV-6, whose runner code both touch.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
