@@ -1541,23 +1541,39 @@ defmodule Logex.RealTest do
     end
 
     # A program of no reals carries `reals: nil`, which `move`'s first clause and a scan's
-    # copy-out match in their heads, so it scans rung for rung in exactly what it did
-    # before M5-10, at 5eac41f.
+    # copy-out match in their heads, so it scans rung for rung as it did before M5-10, at
+    # 5eac41f, where the exact figures were pinned (17, 34 and 27 a rung). Since decision
+    # 357 each rung is held against the same rung beside a real, measured in the same run:
+    # a `move` there looks its destination up in the program's reals, four reductions more,
+    # and an `add` or a `gt` looks nothing up in either. A program of none that looked its
+    # reals up would cost what the one beside a real does, and a reduction more for a call
+    # both make moves both. Each bound leaves half a reduction a rung for the hundredths by
+    # which a rung's count moves as the bigger program's maps grow.
     test "a program of no reals scans as it did before M5-10" do
-      assert per_rung("var_input a dint\nvar_output d dint\n", "move a d") == 17.0
-      assert per_rung("var_input a dint\nvar_output d dint\n", "add a a d") == 34.0
+      for {head, rung, looked_up} <- [
+            {"var_input a dint\nvar_output d dint\n", "move a d", 1},
+            {"var_input a dint\nvar_output d dint\n", "add a a d", 0},
+            {"var_input a dint\nvar_input b dint\nvar_output q bool\n", "gt a b ote q", 0}
+          ] do
+        none = per_rung(head <> "var x dint\n", rung)
+        beside = per_rung(head <> "var x real\n", rung)
 
-      assert per_rung("var_input a dint\nvar_input b dint\nvar_output q bool\n", "gt a b ote q") ==
-               27.0
+        assert none <= beside - looked_up + 0.5,
+               "`#{rung}` took #{none} a rung, beside a real #{beside}"
+      end
     end
 
+    # The `add` and `sqrt` of a real were held to 1.5 times 34, a dint `add`'s reductions a
+    # rung as pinned before decision 357; since then to 1.5 times a dint `add`'s measured in
+    # the same run.
     test "a real's instruction costs within a small factor of a dint's" do
       dint = per_rung("var_input a dint\nvar_output d dint\n", "move a d")
+      add = per_rung("var_input a dint\nvar_output d dint\n", "add a a d")
 
       for type <- ["real", "lreal"] do
         assert per_rung("var_input a #{type}\nvar_output d #{type}\n", "move a d") <= 2.5 * dint
-        assert per_rung("var_input a #{type}\nvar_output d #{type}\n", "add a a d") <= 1.5 * 34
-        assert per_rung("var_input a #{type}\nvar_output d #{type}\n", "sqrt a d") <= 1.5 * 34
+        assert per_rung("var_input a #{type}\nvar_output d #{type}\n", "add a a d") <= 1.5 * add
+        assert per_rung("var_input a #{type}\nvar_output d #{type}\n", "sqrt a d") <= 1.5 * add
       end
 
       # A dint's `move` beside a real looks its destination up in the program's reals.
@@ -1896,21 +1912,37 @@ defmodule Logex.RealTest do
 
     # The pass is told an instruction that holds a real literal by its clause's guard, so a
     # program of none costs what it did at a8a4f8f, rung for rung, measured on its warnings
-    # alone.
+    # alone, where the exact figures were pinned (113.09, 187.34, 221.34 and 104.09 a rung).
+    # Since decision 357 each rung is held against the same rung with one instruction that
+    # holds a real literal in a real's slot, held exactly, in place of one that holds none,
+    # measured in the same run: the literal's look and its rounding cost 167 to 204
+    # reductions a rung more. A pass that looked at every instruction for a real literal
+    # would cost a program of none 17 to 26 a rung more, its signature read and its slots
+    # zipped, and the rung beside it no more, so each bound is the difference measured less
+    # 8, half the least of those; a reduction more for a call both rungs make moves both.
     test "a program of no real literal pays nothing for it" do
-      for {head, rung, cost} <- [
-            {"var_input a dint\nvar_output d dint\n", "add a 1234 d", 113.09},
-            {"var_input a bool\nvar_output q bool\n", "xic a ote q", 187.34},
-            {"var_input a int\nvar_output q bool\n", "gt a 5 ote q", 221.34},
-            {"var_input a real\nvar_output d real\n", "move a d", 104.09}
+      for {head, rung, literal, apart} <- [
+            {"var_input a dint\nvar_output d dint\nvar_input r real\nvar_output x real\n",
+             "add a 1234 d", "add r 1.0 x", 204},
+            {"var_input a bool\nvar_output q bool\nvar_output x real\n", "xic a ote q",
+             "xic a move 1.0 x", 167},
+            {"var_input a int\nvar_output q bool\nvar_output x real\n", "gt a 5 ote q",
+             "gt a 5 move 1.0 x", 167},
+            {"var_input a real\nvar_output d real\n", "move a d", "move 1.0 d", 190}
           ] do
-        warned = fn n ->
+        warned = fn rung, n ->
           p = program(head <> Enum.map_join(1..n, "\n", fn _ -> rung end))
           tags = Logex.Program.typed_tags(p)
           reductions(fn -> Logex.Warnings.of(p.rungs, tags) end)
         end
 
-        assert (warned.(200) - warned.(100)) / 100 == cost, rung
+        per_rung = fn rung ->
+          _warm = warned.(rung, 10)
+          (warned.(rung, 200) - warned.(rung, 100)) / 100
+        end
+
+        {none, held} = {per_rung.(rung), per_rung.(literal)}
+        assert none <= held - (apart - 8), "`#{rung}` took #{none} a rung, `#{literal}` #{held}"
       end
     end
 

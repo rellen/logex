@@ -456,12 +456,17 @@ defmodule Logex.ElementBitTest do
     # Measured: a bit of an element reads in what a tag's bit does, 27 reductions a rung,
     # and is written in one more, 31 against 30; a two-dimension element's bit two and
     # eight more, its element's own copy; and a bit an element's tag numbers as a tag's.
+    # The tag's bit was pinned at exactly 27 and each element's at exactly the tag's until
+    # decision 357; since then the tag's bit is held to a bool's read, 24 in the same run,
+    # and its mask, 3 more, and each element's to the tag's, so that either made cheaper
+    # holds them too, each with half a reduction for the hundredths a rung's count moves.
     test "a bit of an element costs what a tag's bit does, give or take its element's copy" do
+      bool = per_rung("var w word\nvar b bool\nvar a bool\n", "xic b ote a")
       tag = per_rung("var w word\nvar a bool\n", "xic w.3 ote a")
       element = per_rung("var w word[4]\nvar a bool\n", "xic w[2].3 ote a")
       grid = per_rung("var w word[2,4]\nvar a bool\n", "xic w[1,2].3 ote a")
-      assert tag == 27.0
-      assert element == tag
+      assert tag <= bool + 3.5, "a tag's bit took #{tag} a rung, a bool #{bool}"
+      assert element <= tag + 0.5
       assert grid <= tag + 2
 
       tag = per_rung("var w word\nvar a bool\n", "xic a ote w.3")
@@ -472,7 +477,7 @@ defmodule Logex.ElementBitTest do
 
       tag = per_rung("var w word\nvar n int\nvar a bool\n", "xic w.[n] ote a")
       element = per_rung("var w word[4]\nvar n int\nvar a bool\n", "xic w[2].[n] ote a")
-      assert element == tag
+      assert element <= tag + 0.5
 
       tag = per_rung("var w word\nvar n int\nvar a bool\n", "xic a ote w.[n]")
       element = per_rung("var w word[4]\nvar n int\nvar a bool\n", "xic a ote w[2].[n]")

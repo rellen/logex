@@ -1650,12 +1650,19 @@ defmodule Logex.BitStringTest do
       assert scan(p, %{"a" => 0x8001}) == %{"w" => 0x8001, "q" => 1}
     end
 
-    # A program of no bit strings compiles, against its own parse, in no more reductions than
-    # it did before M5-8 (`ebf44ee`), whose ratios these are, measured in a process of its
-    # own with a heap the collector never visits, so exact: each name is split once, an
-    # instruction of one class holds its operands with no grouping, and the warnings look
-    # for no whole write where no coil names a bit, nor for a storage bit's writes where no
-    # one-shot keeps one. M5-8 as it landed made them 1.13x to 1.18x dearer.
+    # A program of no bit strings compiles as it did before M5-8 (`ebf44ee`): each name is
+    # split once, an instruction of one class holds its operands with no grouping, and the
+    # warnings look for no whole write where no coil names a bit, nor for a storage bit's
+    # writes where no one-shot keeps one. M5-8 as it landed made them 1.13x to 1.18x dearer.
+    # Each was held, against its own parse, to the ratio measured at `ebf44ee`. Since
+    # decision 357 each is held against the same program compiled in the same run beside
+    # one rung more, a coil on a bit or a one-shot, against the same beside a rung of the
+    # same size that holds neither: the warnings look for whole writes, 42 to 63 reductions
+    # a rung, and for a storage bit's writes, 59 to 103, only beside the first, so each
+    # program beside a plain rung costs at least 20 and 29 a rung less than beside the bit
+    # or the one-shot, half the least look; a look made where neither is costs both alike,
+    # under each bound, and a call both programs make moves both. Each count is the least
+    # of three in a process of its own with a heap the collector never visits.
     test "a program of no bit strings compiles in what it did before M5-8" do
       cost = fn f ->
         parent = self()
@@ -1676,30 +1683,35 @@ defmodule Logex.BitStringTest do
         n
       end
 
+      compiled = fn source ->
+        {:ok, _program} = Logex.compile(source, name: "p")
+        Enum.min(for _ <- 1..3, do: cost.(fn -> Logex.compile(source, name: "p") end))
+      end
+
       rungs = fn rung -> Enum.map_join(1..200, "\n", fn _ -> rung end) end
 
-      for {source, before} <- [
-            {"var_input a dint\nvar_output d dint\n" <> rungs.("add a 1234 d"), 15.32},
-            {"var_input a uint\nvar_output d uint\n" <> rungs.("move a d"), 16.84},
-            {"var_input a dint\nvar_output q bool\n" <> rungs.("gt a 5 ote q"), 16.32},
-            {"var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
-               rungs.("xic a xio b ote q"), 17.02},
-            {"var_input a dint\nvar_output d int\n" <> rungs.("dint_to_int a d"), 14.26},
-            {"var t ton\nvar_input a bool\nvar_output d dint\nxic a ton t 100\n" <>
-               rungs.("move t.acc d"), 16.13}
+      for {head, rung} <- [
+            {"var_input a dint\nvar_output d dint\n", "add a 1234 d"},
+            {"var_input a uint\nvar_output d uint\n", "move a d"},
+            {"var_input a dint\nvar_output q bool\n", "gt a 5 ote q"},
+            {"var_input a bool\nvar_input b bool\nvar_output q bool\n", "xic a xio b ote q"},
+            {"var_input a dint\nvar_output d int\n", "dint_to_int a d"},
+            {"var t ton\nvar_input a bool\nvar_output d dint\nxic a ton t 100\n", "move t.acc d"}
           ] do
-        {:ok, _program} = Logex.compile(source, name: "p")
-        compiled = cost.(fn -> Logex.compile(source, name: "p") end)
+        beside = fn decls, extra ->
+          "var_input zz bool\n" <> decls <> head <> extra <> rungs.(rung)
+        end
 
-        parsed =
-          cost.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
+        bit = compiled.(beside.("var zw word\n", "xic zz ote zw.3\n"))
+        coil = compiled.(beside.("var zb bool\n", "xic zz ote zb\n"))
+        shot = compiled.(beside.("var zs bool\nvar zp bool\n", "xic zz ons zs ote zp\n"))
+        contact = compiled.(beside.("var zs bool\nvar zp bool\n", "xic zz xic zs ote zp\n"))
 
-        assert compiled / parsed <= before,
-               "#{String.slice(source, -20, 20)} compiled in #{Float.round(compiled / parsed, 2)}x " <>
-                 "its parse, #{before}x before M5-8"
+        assert coil <= bit - 20 * 200,
+               "`#{rung}` beside a coil took #{coil}, beside a coil on a bit #{bit}"
+
+        assert contact <= shot - 29 * 200,
+               "`#{rung}` beside a contact took #{contact}, beside a one-shot #{shot}"
       end
     end
 

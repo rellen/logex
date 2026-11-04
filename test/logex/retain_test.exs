@@ -669,31 +669,44 @@ defmodule Logex.RetainTest do
     # an edit's accept and a configuration's check run) passes over an instance of a block
     # that retains nothing by a guard, so that each costs no more than it did at `c963cab`,
     # before M6-1, where it cost 7 reductions more an instance: the slopes over 100 and 400
-    # instances, of `seal` and of `seal[2]`, against the parent's, 24 and 21 a check and
-    # 138.3 and 256.3 an instance/1, measured on it.
+    # instances, of `seal` and of `seal[2]`, were held to the parent's, 24 and 21 a check
+    # and 138.3 and 256.3 an instance/1, measured on it. Since decision 357 each slope is
+    # held against the same program's with every instance `non_retain`, measured in the
+    # same run, which no guard passes over: the walk of an instance that keeps nothing is
+    # 12 reductions an instance more, 14 an element pair, and an unmarked instance walked
+    # so would cost what a `non_retain` one does, so the bound is half the walk. Each count
+    # is the least of three.
     test "a program of unmarked block instances is checked as it was before M6-1" do
       plain = block!(@plain)
+      least = fn fun -> Enum.min(for _ <- 1..3, do: reductions(fun)) end
 
-      for {decl, use, check, made} <- [
-            {"plain", &"cal s#{&1} go q", 24, 139},
-            {"plain[2]", &"cal s#{&1}[0] go q", 21, 257}
+      for {decl, use, walk} <- [
+            {"plain", &"cal s#{&1} go q", 6},
+            {"plain[2]", &"cal s#{&1}[0] go q", 7}
           ] do
-        [{c1, i1}, {c2, i2}] =
-          for n <- [100, 400] do
-            p =
-              c!(
-                "var_input go bool\nvar_output q bool\n" <>
-                  Enum.map_join(1..n, "\n", &"var s#{&1} #{decl}") <>
-                  "\n" <> Enum.map_join(1..n, "\n", use),
-                [plain]
-              )
+        slopes = fn qualifier ->
+          [{c1, i1}, {c2, i2}] =
+            for n <- [100, 400] do
+              p =
+                c!(
+                  "var_input go bool\nvar_output q bool\n" <>
+                    Enum.map_join(1..n, "\n", &"var #{qualifier}s#{&1} #{decl}") <>
+                    "\n" <> Enum.map_join(1..n, "\n", use),
+                  [plain]
+                )
 
-            {reductions(fn -> Program.edited_by_hand(p) end),
-             reductions(fn -> Runtime.instance(p) end)}
-          end
+              {least.(fn -> Program.edited_by_hand(p) end), least.(fn -> Runtime.instance(p) end)}
+            end
 
-        assert (c2 - c1) / 300 <= check, "#{decl}: a check #{(c2 - c1) / 300} an instance"
-        assert (i2 - i1) / 300 <= made, "#{decl}: instance/1 #{(i2 - i1) / 300} an instance"
+          {(c2 - c1) / 300, (i2 - i1) / 300}
+        end
+
+        {check, made} = slopes.("")
+        {walked, walked_made} = slopes.("non_retain ")
+        assert check <= walked - walk, "#{decl}: a check #{check} an instance, #{walked} walked"
+
+        assert made <= walked_made - walk,
+               "#{decl}: instance/1 #{made} an instance, #{walked_made} walked"
       end
     end
 
@@ -1123,7 +1136,9 @@ defmodule Logex.RetainTest do
     # Decision 385: the rest is the restart's, so a scan pays nothing for it: the first scan
     # after a warm restart of retained `tof`s held on at the outage, every kind, costs
     # exactly what the same scan not marked first does, its rung false and true, where
-    # decision 349's first-scan clauses read `first` and ran a rule of their own.
+    # decision 349's first-scan clauses read `first` and ran a rule of their own. Held equal
+    # until decision 357, a bound since: the first scan costs no more than the other, so
+    # that a first scan made cheaper holds it too.
     test "a scan reads no first for a tof: the first after a restart costs as any other" do
       p = c!(@run_on, [block!(@run_on_block)])
       on = scans(p, Runtime.instance(p), List.duplicate(%{"motor" => 1}, 3))
@@ -1140,7 +1155,7 @@ defmodule Logex.RetainTest do
         {out, first} = scan.(warm, true).()
         {^out, again} = scan.(later, false).()
         assert first.env == again.env
-        assert reductions(scan.(warm, true)) == reductions(scan.(later, false)), inspect(motor)
+        assert reductions(scan.(warm, true)) <= reductions(scan.(later, false)), inspect(motor)
       end
     end
 

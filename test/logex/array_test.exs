@@ -1298,27 +1298,53 @@ defmodule Logex.ArrayTest do
       end
     end
 
-    # A program of no array checks no key for an element, so a call costs what it did.
+    # A program of no array checks no key for an element, so a call costs what it did: it
+    # was pinned at 76 reductions a call of one key, measured at e60cc0a, before decision
+    # 222, and after it. Since decision 357 a key's cost is held against the same program's
+    # beside an array, measured in the same run: 38 reductions a key of 64 var_inputs
+    # against 61, where each key is looked for among the elements and merged as an array's
+    # input is. A program of none that took the element path would cost what that does, so
+    # the bound is half the difference, 11 a key, which a call both make the dearer moves in
+    # neither.
     test "a program of no array pays nothing for the rule" do
-      {:ok, p} = Logex.compile("var_input a bool\nvar_output q bool\nxic a ote q", name: "p")
-      state = Runtime.instance(p)
-      parent = self()
+      per_key = fn beside ->
+        {:ok, p} =
+          Logex.compile(
+            Enum.map_join(1..64, "", &"var_input i#{&1} bool\n") <>
+              beside <> "var_output q bool\nxic i1 ote q",
+            name: "p"
+          )
 
-      {_pid, ref} =
-        :erlang.spawn_opt(
-          fn ->
-            {:reductions, before} = Process.info(self(), :reductions)
-            Runtime.put_inputs(p, state, %{"a" => 1})
-            {:reductions, later} = Process.info(self(), :reductions)
-            send(parent, {:reductions, later - before})
-          end,
-          [:monitor, min_heap_size: 1_000_000]
-        )
+        state = Runtime.instance(p)
+        parent = self()
 
-      assert_receive {:reductions, r}, 10_000
-      assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
-      # Measured at e60cc0a, before decision 222, and after it.
-      assert r == 76
+        cost = fn keys ->
+          inputs = Map.new(1..keys, &{"i#{&1}", 1})
+
+          {_pid, ref} =
+            :erlang.spawn_opt(
+              fn ->
+                {:reductions, before} = Process.info(self(), :reductions)
+                Runtime.put_inputs(p, state, inputs)
+                {:reductions, later} = Process.info(self(), :reductions)
+                send(parent, {:reductions, later - before})
+              end,
+              [:monitor, min_heap_size: 1_000_000]
+            )
+
+          assert_receive {:reductions, r}, 10_000
+          assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+          r
+        end
+
+        # Measured once to warm what the first call loads, and then counted.
+        _warm = cost.(64)
+        (cost.(64) - cost.(32)) / 32
+      end
+
+      none = per_key.("")
+      beside = per_key.("var x bool[1]\n")
+      assert none <= beside - 11, "a key took #{none} reductions, #{beside} beside an array"
     end
   end
 
@@ -1412,14 +1438,35 @@ defmodule Logex.ArrayTest do
              "instance/1 took #{instance}, env #{env}, a walk #{walk}"
     end
 
-    # A program of no arrays scans, rung for rung, in exactly what it took at f43d82a,
-    # before M5-11: an element is told from a tag by its operand's shape in the clause head.
+    # A program of no arrays scans as it did before M5-11 (`f43d82a`): an element is told
+    # from a tag by its operand's shape in the clause head, so a tag's read and write pay
+    # nothing for elements. Since decision 357 each rung is held against the same rung over
+    # literal elements, measured in the same run, where the exact figures it took at
+    # `f43d82a` were pinned (29, 17, 27, 34 and 32 a rung): a tag costs what an element of
+    # its type does but what each measured apart, a reduction for `Map.get/3`'s default
+    # where an element's read is `elem/2` of its array, and three less for a `not`, whose
+    # element's source type is looked up in its array. A tag told from an element by a call
+    # costs a reduction an operand more, two or three a rung, and a reduction more for a
+    # call both rungs of a pair make moves both. Each bound leaves half a reduction a rung
+    # for the hundredths by which a rung's count moves as the bigger program's maps grow.
     test "a program of none scans as it did before M5-11" do
-      assert per_rung("var a bool\nvar b bool\nvar q bool\n", "xic a xio b ote q") == 29.0
-      assert per_rung("var a uint\nvar d dint\n", "move a d") == 17.0
-      assert per_rung("var w word\nvar q bool\n", "xic w.3 ote q") == 27.0
-      assert per_rung("var a int\nvar b int\nvar d int\n", "add a b d") == 34.0
-      assert per_rung("var a word\nvar d word\n", "not a d") == 32.0
+      head =
+        "var a bool\nvar b bool\nvar q bool\nvar e bool[8]\nvar u uint\nvar d dint\n" <>
+          "var ua uint[8]\nvar da dint[8]\nvar w word\nvar wa word[8]\nvar x int\nvar y int\n" <>
+          "var z int\nvar ia int[8]\nvar v word\nvar t word\n"
+
+      for {tags, elements, apart} <- [
+            {"xic a xio b ote q", "xic e[0] xio e[1] ote e[2]", 1},
+            {"move u d", "move ua[0] da[0]", 1},
+            {"xic w.3 ote q", "xic wa[0].3 ote e[2]", 0},
+            {"add x y z", "add ia[0] ia[1] ia[2]", 0},
+            {"not v t", "not wa[0] wa[1]", -3}
+          ] do
+        {tag, element} = {per_rung(head, tags), per_rung(head, elements)}
+
+        assert tag <= element + apart + 0.5,
+               "`#{tags}` took #{tag} a rung, `#{elements}` #{element}"
+      end
     end
 
     test "an array's state check is linear in its elements, and its compile in its uses" do
@@ -1448,9 +1495,11 @@ defmodule Logex.ArrayTest do
 
       # M5-11's review: each element of an integer array costs about one reduction a scan,
       # one guard with no function called, where it cost fourteen, every element checked
-      # twice through a function; a real's about eight.
+      # twice through a function; a real's about eight, through its rule. Each was held
+      # under a figure, 1.5 and 12, until decision 357; since then each is held against the
+      # other, measured in the same run: an int element at most a quarter of a real's, and
+      # a real's under twelve of an int's.
       per_element = (check.(16_000) - check.(8_000)) / 8_000
-      assert per_element < 1.5, "an int element's check took #{per_element} reductions"
 
       real = fn n ->
         {:ok, p} = Logex.compile("var a real[#{n}]\nvar d real\nmove a[0] d", name: "p")
@@ -1474,7 +1523,8 @@ defmodule Logex.ArrayTest do
       end
 
       per_real = (real.(16_000) - real.(8_000)) / 8_000
-      assert per_real < 12, "a real element's check took #{per_real} reductions"
+      assert per_element <= per_real / 4, "an int element took #{per_element}, a real #{per_real}"
+      assert per_real < 12 * per_element, "a real element took #{per_real}, an int #{per_element}"
 
       compile = fn n ->
         text =

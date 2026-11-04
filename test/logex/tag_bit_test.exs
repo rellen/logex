@@ -920,28 +920,45 @@ defmodule Logex.TagBitTest do
       assert tag_bit / bool < 1.5, "a tag's bit took #{Float.round(tag_bit / bool, 2)}x a bool's"
     end
 
-    # A program with no bit numbered by a tag scans, rung for rung, in exactly the reductions
-    # it took at 1ee676b, before M5-9: an instruction is caught only where its clause's head
-    # sees such a bit among its operands. A `cal` is always caught, its formals any number,
-    # one reduction more a run.
-    test "a program of none scans as it did before M5-9, a `cal` one reduction more" do
-      assert per_rung(
-               fixed("var_input a bool\nvar_input b bool\nvar_output q bool\n"),
-               fn _ -> "xic a xio b ote q" end
-             ) == 34.0
+    # A program with no bit numbered by a tag runs no catch, as before M5-9 (`1ee676b`): an
+    # instruction is caught only where its clause's head sees such a bit among its operands,
+    # and a `cal` always, its formals any number, once. A catch costs a reduction. Since
+    # decision 357 each rung is held against one measured in the same run that differs from
+    # it in that catch alone, where the exact figures it took at `1ee676b` were pinned
+    # (34, 27 and 17 a rung, a `cal` 178.01): on a de-energised rung no operand is read, so
+    # a contact on a bit a tag numbers costs one reduction more than one on a literal bit or
+    # a bool, and a `cal` costs what such a contact does. A catch where none is due makes a
+    # pair cost the same; a reduction more for a call both rungs of a pair make moves both.
+    # Each bound leaves half a reduction a rung for the hundredths by which a rung's count
+    # moves as the bigger program's maps grow, under the one a catch costs.
+    test "a program of none is caught nowhere, as before M5-9, and a `cal` once" do
+      head =
+        fixed(
+          "var off bool\nvar_input a bool\nvar_input w word\nvar_input n int\n" <>
+            "var_output q bool\n"
+        )
 
-      assert per_rung(fixed("var_input w word\nvar_output q bool\n"), fn _ -> "xic w.3 ote q" end) ==
-               27.0
+      caught = per_rung(head, fn _ -> "xic off xic w.[n] ote q" end)
 
-      assert per_rung(fixed("var_input a uint\nvar_output d dint\n"), fn _ -> "move a d" end) ==
-               17.0
-
-      cals = fn n ->
-        "var_input a bool\nvar_output q bool\n" <>
-          Enum.map_join(1..n, "\n", &"var s#{&1} seal") <> "\n"
+      for rung <- ["xic off xic a ote q", "xic off xio a ote q", "xic off xic w.3 ote q"] do
+        plain = per_rung(head, fn _ -> rung end)
+        assert plain <= caught - 0.5, "`#{rung}` took #{plain} a rung, as caught as #{caught}"
       end
 
-      assert_in_delta per_rung(cals, &"cal s#{&1} a q"), 177.01 + 1, 0.001
+      cals = fn n ->
+        "var off bool\nvar_input a bool\nvar_input w word\nvar_input n int\n" <>
+          "var_output q bool\n" <>
+          Enum.map_join(1..n, "\n", &"var s#{&1} seal\nvar t#{&1} seal") <> "\n"
+      end
+
+      # A `cal` in a caught contact's place: the two rungs differ in that instruction alone.
+      contact = per_rung(cals, &"xic off xic w.[n] cal s#{&1} a q")
+      cal = per_rung(cals, &"xic off cal t#{&1} a q cal s#{&1} a q")
+      assert cal <= contact + 0.5, "a `cal` took #{cal - contact} more than a caught contact"
+      plain = per_rung(cals, &"xic off xic a cal s#{&1} a q")
+
+      assert plain <= contact - 0.5,
+             "a contact beside a `cal` took #{plain}, as caught as #{contact}"
     end
 
     test "a program's tag bits cost linear reductions to compile and to scan" do

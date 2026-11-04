@@ -1343,12 +1343,14 @@ defmodule Logex.RetainConfigurationTest do
           end
 
         assert Runtime.restart(rp, :warm) == Runtime.restart(rp, :cold)
-        warm = reductions(fn -> Runtime.restart(rp, :warm) end)
-        cold = reductions(fn -> Runtime.restart(rp, :cold) end)
-        assert warm <= cold + 4, "n=#{n}: warm #{warm}, cold #{cold}"
 
-        cycle = fn rt -> reductions(fn -> Runtime.cycle(rt, 10, %{"pb1" => 0}) end) end
-        assert cycle.(rp) == cycle.(rk), "n=#{n}"
+        {warm, cold} =
+          interleaved(fn -> Runtime.restart(rp, :warm) end, fn -> Runtime.restart(rp, :cold) end)
+
+        assert warm <= cold + 4, "n=#{n}: warm #{warm}, cold #{cold}"
+        cycle = fn rt -> fn -> Runtime.cycle(rt, 10, %{"pb1" => 0}) end end
+        {kept, plain} = interleaved(cycle.(rk), cycle.(rp))
+        assert kept <= plain, "n=#{n}: kept #{kept}, plain #{plain}"
       end
     end
 
@@ -1622,6 +1624,21 @@ defmodule Logex.RetainConfigurationTest do
   # three was so in one of RV-10's gates, warm 16253 against cold 16247, where both read
   # 16246 on a quiet machine fifteen runs of fifteen.
   defp reductions(fun), do: Enum.min(for _ <- 1..9, do: reductions_once(fun))
+
+  # Two functions' costs, each the least of nine runs, measured in turn. A call's count
+  # moves by a few reductions with the VM's own state, which other tests change as they
+  # run, compiling modules among them: one restart read 16253 reductions, then 16248 once
+  # thirty modules were compiled, and 16253 again after a persistent term was put and
+  # erased (RV-7), so two figures each the least of nine runs read one after the other
+  # can differ by six with no change to logex, as RV-12's `38fbc8e` read in CI, warm 16252
+  # against cold 16246. Measured in turn, each figure's least comes from the states both
+  # saw. Until RV-7 the warm restart's and the cold's were read one after the other, and
+  # the cycles' were held equal; the kept cycle is held to the plain one, so that a
+  # retained global made cheaper holds it too.
+  defp interleaved(first, second) do
+    {a, b} = Enum.unzip(for _ <- 1..9, do: {reductions_once(first), reductions_once(second)})
+    {Enum.min(a), Enum.min(b)}
+  end
 
   defp reductions_once(fun) do
     parent = self()

@@ -1576,15 +1576,26 @@ defmodule Logex.LocatedArrayTest do
     end
 
     # A configuration with no located array cycles and restarts, a point at a time, in what
-    # it did at a8af419, before M5-13: measured there with this very configuration, 105.625 a
-    # pair of an input and an output point and 4.53 an output point's copy-out, and here
-    # within half a reduction a point, which one more call a point would pass: runs vary by a
-    # quarter of one, as the BEAM moves a Map.new by a reduction or two from run to run.
+    # it did at a8af419, before M5-13: its wiring's elements, element outputs and located
+    # arrays are nil, which the input image, the copy-out and a restart match in their
+    # heads. Each was held within half a reduction a point of what it measured there,
+    # 105.625 a pair of an input and an output point, 4.53 an output point's copy-out and
+    # 38.45 a restart's group of four globals. Since decision 357 each is held against the
+    # same configuration beside a located array of inputs and one of outputs, measured in
+    # the same run: beside them an input point is laid over the arrays' elements first, 22
+    # reductions a group more, and a restart looks each global up among the located
+    # arrays, 5 more, each bound half of that, and an output point is copied out as it is
+    # beside none, the bound the half reduction one more call a point would pass. Each count
+    # is the least of five: building a map of more than 32 keys, as a restart does, is
+    # charged a few reductions more or less from one call to the next, a quarter of one a
+    # group here, where the counts were single and moved by up to 0.7 a group.
     test "a configuration of no located array cycles as before M5-13" do
       {:ok, relay} =
         Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out\n", name: "relay")
 
-      measure = fn n ->
+      least = fn fun -> Enum.min(for _ <- 1..5, do: reductions(fun)) end
+
+      measure = fn n, beside ->
         globals =
           Enum.map_join(1..n, "", fn i ->
             "var_global x#{i} bool at panel.i.#{i}\nvar_global f#{i} real at drive.i.#{i}\n" <>
@@ -1593,27 +1604,33 @@ defmodule Logex.LocatedArrayTest do
 
         text =
           "task fast interval 10 priority 1\nvar_global a bool at panel.i.0\nvar_global b bool at panel.q.0\n" <>
-            globals <> "program r relay with fast\nr.in a\nr.out b\n"
+            beside <> globals <> "program r relay with fast\nr.in a\nr.out b\n"
 
         {:ok, c} = Configuration.compile("plant", text, %{"relay" => relay})
         inputs = Map.merge(Map.new(1..n, &{"x#{&1}", 1}), Map.new(1..n, &{"f#{&1}", 1.5}))
         {runtime, _, _} = Runtime.cycle(Runtime.start(c), 10, inputs)
 
-        {reductions(fn -> Runtime.cycle(runtime, 10, inputs) end),
-         reductions(fn -> Runtime.cycle_outputs(runtime) end),
-         reductions(fn -> Runtime.restart(runtime, :cold) end)}
+        {least.(fn -> Runtime.cycle(runtime, 10, inputs) end),
+         least.(fn -> Runtime.cycle_outputs(runtime) end),
+         least.(fn -> Runtime.restart(runtime, :cold) end)}
       end
 
-      {c32, o32, r32} = measure.(32)
-      {c64, o64, r64} = measure.(64)
-      assert_in_delta (c64 - c32) / 32, 105.625, 0.5
-      assert_in_delta (o64 - o32) / 32, 4.53, 0.5
-      # A restart, measured there at 39.4 to 39.7 a group of four globals, an unlocated
-      # array among them, which a located array's look-up would make 2 dearer; since RV-3's
-      # review at 38.4 to 38.5, the resource reading a global's first value by its own
-      # private rule, where it called `Logex.Configuration.started/1`, which counted an
-      # array's elements again.
-      assert_in_delta (r64 - r32) / 32, 38.45, 0.5
+      per_group = fn beside ->
+        {c32, o32, r32} = measure.(32, beside)
+        {c64, o64, r64} = measure.(64, beside)
+        {(c64 - c32) / 32, (o64 - o32) / 32, (r64 - r32) / 32}
+      end
+
+      {cycle, out, restart} = none = per_group.("")
+
+      {cycle_beside, out_beside, restart_beside} =
+        beside =
+        per_group.("var_global li bool[2] at card.i.0\nvar_global lo bool[2] at card.q.0\n")
+
+      message = "none #{inspect(none)}, beside located arrays #{inspect(beside)}"
+      assert cycle <= cycle_beside - 11, message
+      assert out <= out_beside + 0.5, message
+      assert restart <= restart_beside - 2.5, message
     end
   end
 end

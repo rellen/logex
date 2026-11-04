@@ -2482,21 +2482,53 @@ defmodule Logex.InstanceArrayTest do
           "var t #{kind}[#{n}]\n"
       end
 
-    # A program with no array of instances scans, rung for rung, in exactly the reductions
-    # it took at aa41f4d, before M5-14: an element's clauses are told by their heads.
-    test "a program of none scans as it did before M5-14" do
-      for {kind, rung, measured} <- [
-            {"ton", &"xic a ton t#{&1} 100", 112.01},
-            {"ton_ltime", &"xic a ton t#{&1} 100", 115.01},
-            {"tp", &"xic a tp t#{&1} 100", 119.01},
-            {"ctu", &"xic a ctu t#{&1} 5", 154.02},
-            {"ctud", &"xic a ctu t#{&1} 5\nxic a ctd t#{&1} 5", 343.01},
-            {"seal", &"cal t#{&1} a q", 288.02},
-            {"ton", &"xic t#{&1}.dn ote q", 87.03},
-            {"ctu", &"move t#{&1}.cv d", 80.01}
-          ] do
-        assert per_rung(scalars(kind), rung) == measured, "#{kind}: #{rung.(1)}"
+    # Both kinds declared, so that a rung of scalar instances and one of elements are counted
+    # over one table: 200 of each kind and an array of 200 of it.
+    defp declared(kind),
+      do: fn _n ->
+        "var_input a bool\nvar_input k dint\nvar_input i int\nvar off bool\n" <>
+          "var_output q bool\nvar_output d dint\n" <>
+          Enum.map_join(1..200, "\n", &"var t#{&1} #{kind}") <> "\nvar t #{kind}[200]\n"
       end
+
+    # A program with no array of instances scans as it did before M5-14 (`aa41f4d`): an
+    # element's clauses are told by their heads, so a scalar instance's run, read and write
+    # pay nothing for elements, and an instruction on a member of an element a tag
+    # subscripts is caught where none other is. Since decision 357 each scalar rung is held
+    # against the same rung on a literal element, measured in the same run over one table
+    # holding both, where the exact figures it took at `aa41f4d` were pinned (112.01 to
+    # 343.01 a rung): a scalar costs what an element does but what each measured apart,
+    # a reduction for a scalar member's or timer's `Map.get/3` where an element's is
+    # `elem/2` of its array, and one to four less where an element's run puts it back in its
+    # array. A scalar told from an element by a call costs a reduction a read or write more,
+    # and a reduction more for a call both rungs of a pair make moves both. The catch is held
+    # as `tag_bit_test.exs` holds it: on a de-energised rung no operand is read, so a contact
+    # on a scalar's member costs one reduction less than one on an element a tag subscripts.
+    # Each bound leaves half a reduction a rung for the hundredths by which a rung's count
+    # moves as the bigger program's maps grow.
+    test "a program of none scans as it did before M5-14" do
+      for {kind, scalar, element, apart} <- [
+            {"ton", &"xic a ton t#{&1} 100", &"xic a ton t[#{&1 - 1}] 100", 1},
+            {"ton_ltime", &"xic a ton t#{&1} 100", &"xic a ton t[#{&1 - 1}] 100", 1},
+            {"tp", &"xic a tp t#{&1} 100", &"xic a tp t[#{&1 - 1}] 100", 0},
+            {"ctu", &"xic a ctu t#{&1} 5", &"xic a ctu t[#{&1 - 1}] 5", -1},
+            {"ctud", &"xic a ctu t#{&1} 5\nxic a ctd t#{&1} 5",
+             &"xic a ctu t[#{&1 - 1}] 5\nxic a ctd t[#{&1 - 1}] 5", -2},
+            {"seal", &"cal t#{&1} a q", &"cal t[#{&1 - 1}] a q", -4},
+            {"ton", &"xic t#{&1}.dn ote q", &"xic t[#{&1 - 1}].dn ote q", 1},
+            {"ctu", &"move t#{&1}.cv d", &"move t[#{&1 - 1}].cv d", 1}
+          ] do
+        {s, e} = {per_rung(declared(kind), scalar), per_rung(declared(kind), element)}
+
+        assert s <= e + apart + 0.5,
+               "#{kind}: `#{scalar.(1)}` took #{s} a rung, `#{element.(1)}` #{e}"
+      end
+
+      plain = per_rung(declared("ton"), &"xic off xic t#{&1}.dn ote q")
+      caught = per_rung(declared("ton"), fn _ -> "xic off xic t[i].dn ote q" end)
+
+      assert plain <= caught - 0.5,
+             "a scalar's member took #{plain} a rung, as caught as #{caught}"
     end
 
     # Measured: each element costs its instruction's run and some 9 to 14 reductions more
