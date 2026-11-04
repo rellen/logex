@@ -1002,6 +1002,59 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # Decision 414 (RV-13): the end's write, a stop's or a shutdown's, takes the retained
+  # image out and makes the store's text in the write's own process, within the write
+  # limit, which the child spec's shutdown deadline counts, where the runner made them in
+  # its own process with no limit (b3-store-image-4), so that a store too big to make and
+  # write within the limit is cut off at it and told, `{:retain, {:error, :timeout}}`,
+  # never killed by its supervisor in the making. Traced: the runner itself calls neither
+  # `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2` as it ends, and a process it
+  # starts, the write's, calls both, the store then written. A trace pattern moves every
+  # process's reductions, and this module is not async (CONTRIBUTING.md).
+  describe "the end's write within its limit (decision 414)" do
+    test "the end's write makes the store's text in the write's own process",
+         %{tmp_dir: dir} do
+      for ending <- [:stop, :shutdown] do
+        rig = rig(Path.join(dir, "#{ending}"), forces: nil, write_limit: 5000)
+        File.mkdir_p!(Path.join(dir, "#{ending}"))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        Process.unlink(runner)
+        eye(rig, 1)
+        ref = Process.monitor(runner)
+        assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
+        assert :erlang.trace_pattern({Logex.Runtime, :retained, 1}, true, [:local]) == 1
+        :erlang.trace(runner, true, [:call, :set_on_spawn])
+        ended_by(ending, runner)
+        assert_receive {:DOWN, ^ref, :process, ^runner, _reason}, @answers
+        :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
+        :erlang.trace_pattern({Logex.Runtime, :retained, 1}, false, [:local])
+        calls = traced_all()
+        refute Enum.any?(calls, &match?({^runner, _mfa}, &1)), inspect(calls)
+
+        assert [{write, {Logex.Runtime, :retained, [_runtime]}}] =
+                 for({_pid, {Logex.Runtime, :retained, _}} = call <- calls, do: call)
+
+        assert [{^write, {Logex.Retain, :encode, [_image, _at]}}] =
+                 for({_pid, {Logex.Retain, :encode, _}} = call <- calls, do: call)
+
+        assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
+      end
+    end
+  end
+
+  defp ended_by(:stop, runner), do: assert(Runner.stop(runner) == :ok)
+
+  defp ended_by(:shutdown, runner),
+    do: assert(Task.await(Task.async(fn -> GenServer.stop(runner, :shutdown) end)) == :ok)
+
+  defp traced_all do
+    receive do
+      {:trace, pid, :call, mfa} -> [{pid, mfa} | traced_all()]
+    after
+      0 -> []
+    end
+  end
+
   # The runner's status once a trip's write has been made or found past its limit.
   defp written_or_unknown(runner), do: tripped_status(Runner.status(runner), runner)
 

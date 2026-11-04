@@ -45,8 +45,18 @@ defmodule Logex.Runner.Writer do
   # fresh start owes, nil for none (stored/4).
   def write(pid, at, image, owed), do: GenServer.cast(pid, {:write, at, image, owed})
 
-  # One write, waited on for `ms` of real time.
-  def written(path, text, ms), do: within(fn -> Logex.Retain.written(path, text) end, ms)
+  # One write, waited on for `ms` of real time. Decision 414 (RV-13): `text` the store's
+  # text, or a function that makes it, an event's or a start's write of the store, so that
+  # the retained image's take-out and its text, in proportion to the retained values, are
+  # made in the write's own process and within its limit, where the runner made them
+  # first, unlimited, so that a supervisor's shutdown deadline, which counts the write
+  # limit, waited for the write it was given and killed the runner in a store too big to
+  # make in it; a store too big to make and write within the limit is cut off at it, a
+  # write past its limit as any (decision 391).
+  def written(path, text, ms), do: within(fn -> Logex.Retain.written(path, made(text)) end, ms)
+
+  defp made(text) when is_binary(text), do: text
+  defp made(text) when is_function(text, 0), do: text.()
 
   # Decision 400 (RV-11): one write the runner waits on while it runs, a force's of the
   # forces file, waited on for `ms` of real time as written/3's is, `tick` called on `acc`
@@ -113,14 +123,14 @@ defmodule Logex.Runner.Writer do
     end
   end
 
-  defp copied_first(path, text, nil, _told), do: Logex.Retain.written(path, text)
+  defp copied_first(path, text, nil, _told), do: Logex.Retain.written(path, made(text))
 
   defp copied_first(path, text, owed, told),
     do: copy_then(copy(path, owed, told), path, text, told)
 
   defp copy_then({:ok, n}, path, text, told) do
     tell(told, {:copied, n})
-    {:copied, n, Logex.Retain.written(path, text)}
+    {:copied, n, Logex.Retain.written(path, made(text))}
   end
 
   defp copy_then({:error, reason}, _path, _text, _told), do: {:uncopied, reason}
@@ -198,8 +208,13 @@ defmodule Logex.Runner.Writer do
   # process of its own linked to the caller, a runner, which traps exits, waited on for
   # `ms` of real time; its result rides on its process's exit, so that nothing is left in
   # the caller's mailbox, whichever way it ends, its link's exit taken with its monitor's.
-  def within(call, ms),
-    do: waited(:erlang.spawn_opt(fn -> exit({__MODULE__, call.()}) end, [:link, :monitor]), ms)
+  # Decision 414 (RV-13): the limit counted from before the process is made, so that the
+  # copy of what its call holds, a resource's image to take out among it, is within it.
+  def within(call, ms) do
+    begun = System.monotonic_time(:millisecond)
+    write = :erlang.spawn_opt(fn -> exit({__MODULE__, call.()}) end, [:link, :monitor])
+    waited(write, max(ms - (System.monotonic_time(:millisecond) - begun), 0))
+  end
 
   # The same for a read made in a start's caller, which need not trap exits, its process
   # unlinked: a read that outlives its caller writes nothing.

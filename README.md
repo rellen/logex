@@ -3542,11 +3542,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   (decisions 271 and 291), and that write stays. Its child spec gives the
   shutdown `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000, so that a
   supervisor waits for every device's close, the period's write in progress and the
-  store's write before it kills the runner (decisions 326 and 400); a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
-  count the time the runner takes to make the store's text, in proportion to the
-  retained values, some seconds for a hundred thousand retained timers, so a plant that
-  retains that many gives its own, or a supervisor's shutdown kills the runner in its
-  write and the store keeps its last write before it.
+  store's write before it kills the runner (decisions 326 and 400); a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. Since
+  decision 414 the shutdown's write makes the store's text, in proportion to the retained
+  values, some seconds for a hundred thousand retained timers, within the write limit, so
+  the deadline counts it: a store too big to make and write within the limit is cut off
+  at it and reported, `{:retain, {:error, :timeout}}`, the store keeping its last write,
+  where a supervisor killed the runner in its write and told no one, and a plant that
+  retains that many gives a longer `write_limit:`, which the deadline follows.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, or the forces file naming one of the store's

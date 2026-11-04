@@ -42,8 +42,9 @@ defmodule Logex.Runner do
   review its `shutdown:` is long enough for every device's close and the store's write,
   `(devices + 2) * (idle + poll)` ms and never less than 5000 (`child_spec/1`, decision
   326), since decision 400 `devices * (idle + poll) + 2 * write_limit`, the writer's write
-  and the store's own each given the write limit, so that a supervisor does not kill it
-  before decision 316's write, nor more than 4294967295, the longest a supervisor waits
+  and the store's own each given the write limit, and since decision 414 the store's own
+  its text's making among it, so that a supervisor does not kill it before decision
+  316's write, nor more than 4294967295, the longest a supervisor waits
   (c1-runner-rounds-6).
 
   **Its files** (RV-4). A runner holds its store and its forces file, each with the `.tmp`
@@ -757,13 +758,18 @@ defmodule Logex.Runner do
   (decision 326); since decision 400 the writer's write and the store's own each given
   the write limit, `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000. `devices` is the number of devices `io:` binds; an option that is not
   yet the runner's, which `start_link/1` refuses, counts as its default. A host that
-  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own. The time does
-  not count the runner's own work before the store's write, the retained image taken out
-  and made the store's text, in proportion to the retained values (b3-store-image-4,
-  kept for decision 352's bound on the runner's own work): a shutdown of two arrays of
-  16,384 retained timers took 2.7 s here, and of 65,536 more than its 5000 ms, so that
-  the supervisor killed the runner in its write and the store kept its last write; a
-  host whose plant retains tens of thousands of values gives its own `shutdown:`.
+  gives its own `shutdown:`, by `Supervisor.child_spec/2`, takes its own. Since decision
+  414 the deadline follows `write_limit:` whole: the shutdown's write, every orderly
+  exit's, takes the retained image out and makes the store's text in the write's own
+  process, within the write limit, where the runner made them first, with no limit, in
+  proportion to the retained values (b3-store-image-4), so that a supervisor waits as long
+  as the shutdown's write may take, and a store too big to make and write within the
+  limit is cut off at it and reported as any write past its limit, `{:retain, {:error,
+  :timeout}}`, the store keeping its last write (decision 391), where the supervisor
+  killed the runner in its write and no one was told: a shutdown of two arrays of 65,536
+  retained timers, some 15 s of work here, ends at the write limit, 5 s, reported, and
+  with `write_limit: 30_000` writes its store. RV-6 makes the write itself cheaper
+  (decision 352).
   """
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
@@ -880,7 +886,10 @@ defmodule Logex.Runner do
   where the write failed, the runner stopped all the same; one with no store answers
   `:ok` as before; since decision 391 a write past its limit, `{:error, {:retain,
   :timeout}}`, may still land once the disk answers, so that the store is then the old or
-  the stop's own, unknown. The stop is still a system message, served when the runner reaches it,
+  the stop's own, unknown; and since decision 414 the stop's write makes the store's text
+  within the write limit too, the retained image taken out and written in the write's own
+  process, so that a store too big to make within the limit answers `{:error, {:retain,
+  :timeout}}` at it, the store keeping its last write. The stop is still a system message, served when the runner reaches it,
   never held for a slot and served by a runner suspended too: its caller names itself to
   the runner first, and the runner answers it as it terminates, a call in effect only,
   since a call would wait on a suspended runner for ever (decision 321). A clock gone by
@@ -1360,7 +1369,7 @@ defmodule Logex.Runner do
   # no time, so the stop's write is none, answered as a write that failed, the runner
   # stopped by its stop's reason all the same, where the clock's exit escaped to the caller.
   defp stop_written(state) do
-    {reply, _state} = kept_store(state, state.runtime)
+    {reply, _state} = kept_store(state, state.runtime, :end)
     reply
   catch
     :exit, {:shutdown, {:clock, reason}} -> {:error, {:retain, {:clock, reason}}}
@@ -1381,7 +1390,7 @@ defmodule Logex.Runner do
   defp shut_down(_crash, _state), do: :ok
 
   defp shutdown_store(state) do
-    kept_store(state, state.runtime)
+    kept_store(state, state.runtime, :end)
     :ok
   catch
     :exit, {:shutdown, {:clock, _reason}} -> :ok
@@ -3016,19 +3025,36 @@ defmodule Logex.Runner do
   # forces file is; a write that fails is reported, `{:retain, {:error, reason}}` to the
   # subscribers and `failed` in `status/1`'s `retain`, the store as it was, and given back
   # as `{:error, {:retain, reason}}`.
-  defp kept_store(%{retain: nil} = state, _runtime), do: {:ok, state}
+  defp kept_store(state, runtime), do: kept_store(state, runtime, :event)
 
-  defp kept_store(%{retain: retain} = state, runtime) do
+  defp kept_store(%{retain: nil} = state, _runtime, _when), do: {:ok, state}
+
+  defp kept_store(%{retain: retain} = state, runtime, ending) do
     state = drained_writer(state)
-    stamped(wall(state.clock), retain, runtime, state)
+    stamped(wall(state.clock), retain, {runtime, ending}, state)
   end
 
-  defp stamped({:ok, at}, retain, runtime, state) do
-    text = Logex.Retain.encode(Runtime.retained(runtime), at)
-    noted(store_written(retain, text, state.write_limit), at, state)
-  end
+  defp stamped({:ok, at}, retain, made, state),
+    do: noted(store_written(retain, text_of(made, at), state.write_limit), at, state)
 
-  defp stamped(failed, _retain, _runtime, state), do: noted(failed, nil, state)
+  defp stamped(failed, _retain, _made, state), do: noted(failed, nil, state)
+
+  # Decision 414 (RV-13): the end's write, every orderly exit's, a stop's, a parent's
+  # shutdown and a `:normal` exit (decisions 316 and 328), takes the retained image out and
+  # makes the store's text in the write's own process, within the write limit
+  # (`Writer.written/3`), where the runner made them first, with no limit, in proportion to
+  # the retained values (b3-store-image-4): so that the end's write ends within its
+  # limit, its text's making counted, as the child spec's shutdown deadline counts it, and
+  # a store too big to make and write within it is cut off at it and reported as any write
+  # past its limit (decision 391), `{:retain, {:error, :timeout}}` and a stop's answer,
+  # where a supervisor killed the runner in its write and no one was told. A trip's write,
+  # a cold restart's and a fresh start's make it in the runner as before, no deadline but
+  # the write limit on the file's own write waiting on them, the runner's own work
+  # decision 352 gives RV-6 to bound (provisional).
+  defp text_of({runtime, :end}, at),
+    do: fn -> Logex.Retain.encode(Runtime.retained(runtime), at) end
+
+  defp text_of({runtime, :event}, at), do: Logex.Retain.encode(Runtime.retained(runtime), at)
 
   # An event's write of the store, the owed copy first where one is (decision 360).
   defp store_written(%{owed: nil, at: path}, text, ms), do: Writer.written(path, text, ms)

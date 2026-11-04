@@ -4452,7 +4452,10 @@ writer keeps up with its period; while they fail a crash loses everything since 
 good write, and while tripped an edit's values reach no store until a restart. A
 runner's child spec gives its shutdown `(devices + 2) * (idle + poll)` ms, never less
 than 5000, so that a supervisor waits for decision 316's write (decision 326), since
-decision 400, RV-11, `devices * (idle + poll) + 2 * write_limit`; and a
+decision 400, RV-11, `devices * (idle + poll) + 2 * write_limit`, and since decision 414,
+RV-13, the shutdown's write, every orderly exit's, making the store's text within the
+write limit, so that a store too big to make and write within it is cut off and reported,
+`{:retain, {:error, :timeout}}`, never killed by the supervisor in its making; and a
 writer gone down before an event's write is taken as gone at once, `{:down, reason}`.)*
 *(Since M6-7, 2026-10-31, an online edit that adds or takes away a program's qualifier
 reports each path whose retention it changes, `:retain_added` or `:retain_removed`, with
