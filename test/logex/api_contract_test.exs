@@ -16191,11 +16191,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # fresh start after a crash meets a directory in the forces file's place, and starts
   # with none, naming the file in status/1, until a force's write; and a restart meets
   # one, and keeps the forces the runner holds, the restart going on, naming it until a
-  # force's write or a restart that reads it. The file is put back as it was, once the
-  # start or the restart has read it. Since RV-11's review the crash may leave forces in
-  # the file, which the fresh start that cannot read it does not take and the next
-  # restart that reads it takes, as every start takes the file (decision 127,
-  # provisional), unless a force's write first writes the runner's own set over them.
+  # force's write. The file is put back as it was, once the start or the restart has
+  # read it. Since RV-11's review the crash may leave forces in the file, which the fresh
+  # start that cannot read it does not take, and since decision 445 no restart takes them
+  # while the file is named, the runner's own set kept, until a force's write writes it
+  # over them.
   defp start_unreadable(%{file: file, crashed: true, logical: now})
        when is_binary(file) and rem(now, 2) == 0,
        do: unreadable(file)

@@ -13877,7 +13877,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     made in a process of its own. A force's write, made while the runner runs, keeps the
     heartbeat: the runner renews every device's deadline each poll period of real time
     while it waits, leaves the wait out of the time the idle watchdog reads and takes the
-    devices' notices sent meanwhile (provisional, question 1). `child_spec/1`'s shutdown
+    devices' notices sent meanwhile (decision 437, RV-16). `child_spec/1`'s shutdown
     is `devices * (idle + poll) + 2 * write_limit`, never less than 5000 (decision 326
     with this limit; decision 414 is RV-13's). The leave, a write limited to idle + poll:
     the tests that gave a runner a long idle watchdog only to cover its disk give
@@ -13898,13 +13898,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     range, or naming no device bound"). `open:`, how long in ms of real time a device's
     opening, its adapter's `init/3` and its first read, may take: a whole number from 1
     to 2147483647 for every device, or a map of device names to one, each device it names
-    given its own and every other the default, 5000 ms (provisional, question 2). A bad
+    given its own and every other the default, 5000 ms (decision 438, RV-16). A bad
     value is the host's pinned `ArgumentError`, and a device it names that `io:` binds no
     adapter to is "the runner's open: names the device `drvie`, which io: binds no adapter
     to — did you mean `drive`?". The heartbeat stays the idle watchdog and a poll period:
     no device has heard a deadline while one opens. A device a restart opens again is
     given its own opening limit; one up is read again within the idle watchdog and a poll
-    period (provisional, question 3). CI's first run of `ee16f1b` was red, the range test
+    period (decision 439, RV-16). CI's first run of `ee16f1b` was red, the range test
     asserting that `open: 1` starts, where on CI the drive's opening took more than 1 ms
     and timed out as the limit says; `434ada2` asserts the least limit taken, the start
     made or timed out, never the host's mistake. No test pinned the reading changed. The
@@ -13922,7 +13922,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     disk does not answer in time, starts with no force. Each names the file in
     `status/1`, `forces_unread: {path, reason}`, the path as the host spelled it, until a
     force's or an unforce's write of the file lands or a restart reads it, the key absent
-    otherwise (provisional, question 4). A line that is no force, a point forced twice, a
+    otherwise (decision 440, RV-16). A line that is no force, a point forced twice, a
     force the configuration cannot take and a link stay the host's mistakes. The leave, a
     restart answered `{:error, {:forces, :timeout}}` and a fresh start refused: the
     stalled-disk FIFO tests, a restart's and a start's, and `force_test.exs`'s directory
@@ -13940,7 +13940,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     and `written_at` the last write known made, until a later write lands or fails; a
     force's write past its limit names the set it held, `forces_unknown`, until a later
     write of the file lands or fails or a restart reads it; each key absent otherwise
-    (provisional, question 4). The event and the caller's answer stay a failure's,
+    (decision 440, RV-16). The event and the caller's answer stay a failure's,
     `{:error, :timeout}`, a cold restart left tripped and a fresh start not started
     (decision 291); `stop/2`'s doc and README say a stop told `{:error, {:retain,
     :timeout}}` leaves the store unknown. The force's wait keeps its limit's end in
@@ -13966,7 +13966,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     clock still answers so, the wall clock asked where a store is named, is refused
     `{:error, {:clock, cause}}`, the runner left tripped; mended, a restart brings the
     line back, the clock's notices from while it stood tripped taken as nothing
-    (provisional, question 5). At start a bad or out-of-range time is the host's pinned
+    (decision 441, RV-16). At start a bad or out-of-range time is the host's pinned
     `ArgumentError`. A clock that goes down, raises or exits still stops the runner as a
     shutdown. The leave, a clock gone wrong a shutdown: `runner_test.exs`'s "a clock whose
     now_ms/1 gives no time later trips or stops the runner" is "… trips the runner,
@@ -13987,7 +13987,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     task needs; the periodic rounds are then the share's count, each whole from its start
     to its end, a millisecond at least, and the slot comes at the end of the round that
     completes C ms of them, S ms, so a plant whose rounds outrun their periods leaves the
-    host its S ms of every C + S, never none and never more (provisional, question 6).
+    host its S ms of every C + S, never none and never more (decision 442, RV-16).
     c1-runner-rounds-2, reproduced at the parent: 200 processes forcing and unforcing in a
     tight loop made 17 rounds of a 10 ms task in 2.5 s, 239 periods missed, `latest_wake`
     179 ms; at the tip 231 rounds in 3.1 s, 4 missed. The real-clock test counts the
@@ -14022,7 +14022,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     the configuration writes it, a text, `{:unknown_address, "panel.i.7"}` and
     `{:bad_value, "panel.i.0", 2}`, where the adapter's list printed as a charlist; a key
     an adapter gives that is no list of whole numbers, which no configuration writes, as
-    the adapter gave it, `:pump` or `[-1]` (provisional, question 7). The device is told
+    the adapter gave it, `:pump` or `[-1]` (decision 443, RV-16). The device is told
     its refusal by the adapter's own address, by which it drops the point. The leave:
     every trip reason and `io_init` refusal the suite pinned with a list address, in
     `trip_test.exs`, `end_to_end_test.exs`, `located_array_test.exs`, `real_test.exs`,
@@ -14241,12 +14241,12 @@ and CI checked; each fix with a test that fails when it is reverted.
   suite (below), or with a document made true; fixed in `20c9578`.
   - *1, a test's call on the manual clock while a periodic round is overdue*: as built,
     decision 131's rule, a call made while a round is owed waiting for the advance that
-    runs it, extended to a due periodic round; the reading is marked provisional where
+    runs it, extended to a due periodic round; the reading is marked, decision 444 since RV-16, where
     the moduledoc, `owed/1` and README's "Running a plant on the clock" state it, and put
     to the maintainer (question 8).
   - *2, forces the file held while a fresh start could not read it*: as built, a restart
     that reads the file takes what it holds, as decision 127 has every start take it;
-    marked provisional in the moduledoc's "Forcing", `forces_text/2` and README, and put
+    marked, decision 445 since RV-16, in the moduledoc's "Forcing", `forces_text/2` and README, and put
     to the maintainer (question 9). The runner walk now reaches it: a fresh start after a
     crash meets an unreadable file whatever forces the crash left in it
     (`:start_unread_forces_held`), the model holding what the file holds apart from the
@@ -14284,13 +14284,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     working directory a relative path is read against did not answer within the write
     limit, 1010 ms (write_limit:)", and the store's "plant.retain: the store cannot be
     located: ...", each pinned in `stalled_disk_test.exs`; the comment that called it the
-    host's mistake as for the file itself, the moduledoc and README say so, provisional
+    host's mistake as for the file itself, the moduledoc and README say so, decision 446 since RV-16
     (question 10).
   - *6, the leave stretched in `runner_edit_test.exs`*: an edit's step that adds the first
     untimed program or takes away the last begins the share's count again
     (`recounted/2`), so that test's pin is the parent's again, `waited(request, clock) ==
     4`, the count of the timed rounds before the edit none of the continuous task's;
-    provisional, question 6.
+    decision 442 since RV-16.
   - *7, the walks*: the runner walk's clock gone wrong is in one injection of three a
     device's read alone (`Lagged`'s `{test, :bad_device}`), the device down, its own 0
     written as it closes, the trip naming the clock and the restart opening it again
@@ -14312,7 +14312,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     in the store's `{:copied, {:error, :timeout}}`, the copy shown made and the store
     unknown (`stalled_disk_test.exs`, "an owed copy's: a write killed in the copy names the
     copy, and one killed in the store's write names the store, the copy made", each
-    stalled at its rename); provisional, question 11. The period's write is left to finish,
+    stalled at its rename); decision 447 since RV-16. The period's write is left to finish,
     its answer telling both files, and still names the store.
   - *9, the cost of a request*: `owed/1`'s reading of the clock is the request's refresh's
     (`requested/3`), so a request served at once reads the clock as often as at the parent
@@ -14324,7 +14324,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     program, for the round due, and that a tight loop holds a due round back by the
     request in hand or its slot, where it said it never makes a 10 ms task late.
   - *12, a lone caller every other slot*: as built, the continuous task's slot rule; the
-    moduledoc says so, provisional, and question 6 puts it.
+    moduledoc says so, and question 6 puts it, decision 442 since RV-16 the slot kept open.
 
   *The review's mutation table*, each mutant the full suite at `20c9578`
   (`scratchpad/rv/mut11r/`, `scripts/mutate.sh`), the review's five survivors first:

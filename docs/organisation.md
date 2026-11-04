@@ -2727,7 +2727,8 @@ watchdog's rule across an online edit is decision 129's.)*
   no round is due, the periodic rounds then the share's count, each whole, and the slot
   after C ms of them, so that a tight loop of requests no longer makes a 10 ms task
   late; since RV-11's review a step that adds the first untimed program or takes away
-  the last begins the count again, provisional.)*
+  the last begins the count again, as built by decision 442, which since RV-16 also
+  keeps a slot that finds nothing queued open until a request takes it.)*
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
   says (decision 50).
   *(Landed with M4-3, 2026-10-18, as these bullets say, with two readings the record

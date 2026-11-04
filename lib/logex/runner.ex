@@ -80,7 +80,7 @@ defmodule Logex.Runner do
   expansion at a start, which reads the working directory through the VM's file server,
   is made so too, never in the caller; one the disk does not answer in time leaves the
   start no file to hold, check or write, and refuses it, the store or the forces file
-  "cannot be located" (provisional), where decision 390 carries a fresh start on past a
+  "cannot be located" (decision 446), where decision 390 carries a fresh start on past a
   forces file that cannot be read. Since decision 437 a force's or an unforce's write of
   the forces file is made off the runner's path, in a process of its own limited the
   same, and the rounds run on while it is out, every device refreshed by them and by the
@@ -97,8 +97,8 @@ defmodule Logex.Runner do
   that has not opened within its own `open:` limit of real time, 5000 ms unless set, is
   killed and `:timeout`, so that a drive whose connect takes 600 ms opens beside the idle
   watchdog's 500, the heartbeat left as it is, and a hung card refuses the start at the
-  time its limit gives (decision 398, provisional: the option, its map form and its
-  default); a device a restart opens again is given the same limit, and since decision 439
+  time its limit gives (decision 398; the option, its map form and its default as built,
+  decision 438); a device a restart opens again is given the same limit, and since decision 439
   so is one up that a restart reads again, every device a restart opens or reads limited
   by its own `open:`, so that a gateway that stayed up and answers its reread in 700 ms
   lets the restart through, the heartbeat left the idle watchdog and a poll period, a
@@ -213,7 +213,7 @@ defmodule Logex.Runner do
     advance that runs the round completing C ms of rounds,
     or with no untimed program the round due where none is due after it,
     `advance(clock, 0)` among them, never later, as decision 131 has a call wait for its
-    slot (provisional for a periodic round: an overdue one is not run by the request that
+    slot (decision 444 for a periodic round: an overdue one is not run by the request that
     finds it, decision 131's option passed over). A test that calls from the process
     that moves the clock would wait for ever, so it calls from another and moves the
     clock on until the call is answered:
@@ -607,7 +607,7 @@ defmodule Logex.Runner do
     value}` and an address that is no input point's `{:unknown_address, at}`, `at` the
     address as the configuration writes it since decision 399, `"panel.i.7"`, a text,
     where an adapter gives a list of whole numbers, and as the adapter gave it otherwise,
-    `:pump` or `[-1]`, which no configuration writes (provisional); a device that does not answer a round's write within its own deadline, the
+    `:pump` or `[-1]`, which no configuration writes (decision 443); a device that does not answer a round's write within its own deadline, the
     idle watchdog and a poll period from the start of its own write (decision 348), in
     real time, is `:timeout`, and is killed, its outputs left to what it does on losing
     its master, and named, every device written before it having answered in time and
@@ -2445,7 +2445,7 @@ defmodule Logex.Runner do
   # Decision 399 (RV-11): an address a fault names is shown as the configuration writes
   # it, `panel.i.7`, a reading's being an input's, where the adapter's own list,
   # `{:unknown_address, ~c"\a"}`, printed as a charlist; one that is no list of whole
-  # numbers, which no configuration writes, as the adapter gave it (provisional). The
+  # numbers, which no configuration writes, as the adapter gave it (decision 443). The
   # device is told its refusal by the adapter's own address, by which it holds the point.
   defp shown(device, {:unknown_address, address}),
     do: {:unknown_address, written(fields?(address), device, address)}
@@ -2799,7 +2799,7 @@ defmodule Logex.Runner do
   # requests was served ahead of a due round with no bound and made a 10 ms task late
   # (c1-runner-rounds-2); on the manual clock the round comes in the advance that delivers
   # its wake, as an owed round's slot does (decision 131), the request that finds it due
-  # waiting for that advance rather than running it (provisional, RV-11's review). Since
+  # waiting for that advance rather than running it (decision 444). Since
   # decision 396 it reads the clock at every request of a plant with a periodic task,
   # where it read none with no untimed program, and a request served at once is
   # refreshed at that reading (requested/3), so that it costs no reading more.
@@ -3304,7 +3304,7 @@ defmodule Logex.Runner do
   # write, the store's after it not begun, names the copy as unknown, since decision 418
   # by the number it took, the store as it was and the copy still owed, where it named
   # the store, which it could not have reached (`Writer.stored/4`); one killed in the
-  # store's write, the copy made, names the store, by the clause above (provisional); and
+  # store's write, the copy made, names the store, by the clause above (decision 447); and
   # one killed before its copy took a number, which can land nowhere, a write that failed,
   # `:timeout`, the copy still owed (provisional).
   defp noted({:uncopied, {:unknown, n}}, _at, %{retain: retain} = state) do
@@ -3712,7 +3712,7 @@ defmodule Logex.Runner do
   # millisecond at least, the timed tasks' runs in it left out (decision 122); and since
   # decision 396 (RV-11), with no untimed program, a round whole, its timed tasks' runs
   # being all it runs, so that the share holds against a due periodic round as against
-  # the continuous task (provisional).
+  # the continuous task (decision 442: the count as built).
   defp used(%{untimed: true, used: used}, took, timed), do: used + max(took - timed, 1)
   defp used(%{used: used}, took, _timed), do: used + max(took, 1)
 
@@ -4251,8 +4251,9 @@ defmodule Logex.Runner do
   # heartbeat by the idle watchdog and a poll period as ever: a whole number of ms for
   # every device, or a map of device names to one, each device it names given its own and
   # every other the default, 5000 ms, "a module's open its own timeout", as Logix gives one
-  # (provisional: the option and its default, a few seconds as the write limit's, where
-  # Logix's transition to Run waits 20 s for one attempt to connect, decision 142). A
+  # (decision 438: the option and its default as built, a few seconds as the write
+  # limit's, where Logix's transition to Run waits 20 s for one attempt to connect,
+  # decision 142). A
   # device it names that `io:` binds no adapter to, by a name of no device or a key that
   # is no string, is the host's mistake, as is a time out of an interval's range.
   defp opens!(ms, devices) when ms in @interval,
@@ -4488,7 +4489,7 @@ defmodule Logex.Runner do
   # carries on past for the forces file: it leaves the start with no file to read, hold
   # as its own (decision 356), tell from the other (decision 325) or write, a file that
   # cannot be located, and refuses the start, the host's mistake, for either file
-  # (provisional, RV-11's review). An absolute path is expanded by its words alone,
+  # (decision 446). An absolute path is expanded by its words alone,
   # reading no file, and in the caller.
   defp expanded!(nil, _option, _ms), do: nil
   defp expanded!(path, option, ms), do: expanding!(Path.type(path), path, option, ms)

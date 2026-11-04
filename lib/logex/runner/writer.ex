@@ -114,7 +114,7 @@ defmodule Logex.Runner.Writer do
   # since the write does nothing after the call it is killed in, or `{:uncopied,
   # :timeout}` where it was killed before it chose the number, so that no copy can land;
   # in the store's, `{:copied, n, {:error, :timeout}}`, the copy made and the store unknown
-  # (provisional).
+  # (decision 447).
   def stored(path, text, owed, ms) do
     told = {self(), make_ref()}
     in_flight(within(fn -> copied_first(path, text, owed, told) end, ms), told)

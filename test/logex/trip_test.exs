@@ -2249,7 +2249,7 @@ defmodule Logex.TripTest do
     # Decision 399 (RV-11): an address a fault names is shown as the configuration writes
     # it, its device, `i` and its fields, a text, where the adapter's list printed as a
     # charlist, `{:unknown_address, ~c"\a"}`; a key that is no list of whole numbers, which
-    # no configuration writes, as the adapter gave it (provisional). At a start, at a
+    # no configuration writes, as the adapter gave it (decision 443). At a start, at a
     # poll's read and at a restart's.
     test "an address a fault names is shown as the configuration writes it (decision 399)" do
       config =

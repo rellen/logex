@@ -667,8 +667,8 @@ defmodule Logex.RunnerTest do
 
     # RV-11's review: a device's own read of a time out of the range a time is held in,
     # the runner's reads good, takes the device down naming the clock, every output 0,
-    # and the runner trips so, as for an answer that is no integer (decision 394,
-    # provisional: the range).
+    # and the runner trips so, as for an answer that is no integer (decision 394, the
+    # range as built, decision 441).
     test "a device's own read of a time out of the range a time is held in trips the " <>
            "runner, naming the clock (decision 394)" do
       for answer <- [9_223_372_036_854_775_808, -9_223_372_036_854_775_809] do
@@ -841,7 +841,7 @@ defmodule Logex.RunnerTest do
 
     # Decision 398 (RV-11): a device's opening limited by `open:`, a limit of its own, a
     # whole number of milliseconds in an interval's range for every device, or a map of
-    # device names to one, each name a device io: binds, 5000 unless set (provisional).
+    # device names to one, each name a device io: binds, 5000 unless set (decision 438).
     test "an opening limit out of its range, or naming no device bound (decision 398)" do
       {opts, _rig} = plant_rig()
 

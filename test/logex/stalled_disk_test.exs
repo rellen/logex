@@ -877,7 +877,7 @@ defmodule Logex.StalledDiskTest do
     # killed at its limit, names the file it was in as the limit passed: the copy, where
     # the copy's write was cut, the store as it was and the copy still owed, where it named
     # the store, which it never reached; and the store, where it was the store's, the copy
-    # made (provisional). Each is stalled at its rename, the one call of a write the held
+    # made (decision 447). Each is stalled at its rename, the one call of a write the held
     # file server takes: the copy's, and then, the copy's let through, the store's.
     test "an owed copy's: a write killed in the copy names the copy, and one killed in " <>
            "the store's write names the store, the copy made",
@@ -1342,7 +1342,7 @@ defmodule Logex.StalledDiskTest do
     # call of the start is, a working directory the disk does not answer for in time
     # refusing the start, the file named. Since RV-11's review the refusal says the file
     # cannot be located, where it said it cannot be read, which decision 390 carries a
-    # forces file's start on past (provisional): with no path the start holds no file as
+    # forces file's start on past (decision 446): with no path the start holds no file as
     # its own and tells neither from the other; and the store's, a second start named by a
     # relative store alone, the same. This file is not async, so the working directory
     # moved here is no other test's.
@@ -1389,14 +1389,14 @@ defmodule Logex.StalledDiskTest do
     end
 
     # On the real clock a force's write the disk is slow over past the heartbeat, within
-    # the write limit, latches no device and trips nothing: the runner renews its devices
-    # each poll period while it waits on its disk, and the idle watchdog leaves the wait
-    # out of the request's time (provisional), as a slow device's write in time latches
-    # none (decision 348); and the devices' notices sent meanwhile are taken as it ends, so
-    # that the refresh's wake that came during the wait, here the first, the plant's task
-    # due only every 2 s, finds every device heard. The heartbeat 1010 ms and the disk slow
-    # for 2500, so that a loaded machine's late wakes, 668 ms at most seen (RV-4's review),
-    # stay inside the margin of each renewal.
+    # the write limit, latches no device and trips nothing: since decision 437 the write is
+    # made off the runner's path and the runner goes on refreshing its devices at its
+    # waits and rounds as ever, where decision 400 had it renew them each poll period while
+    # it waited on its disk and leave the wait out of the request's time; the refresh's
+    # wake that comes during the write, here the first, the plant's task due only every
+    # 2 s, finds every device heard. The heartbeat 1010 ms and the disk slow for 2500, so
+    # that a loaded machine's late wakes, 668 ms at most seen (RV-4's review), stay inside
+    # the margin of each refresh.
     test "on the real clock a force's write slow past the heartbeat latches no device and " <>
            "trips nothing",
          %{tmp_dir: dir} do
