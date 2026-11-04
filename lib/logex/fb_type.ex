@@ -671,7 +671,7 @@ defmodule Logex.FbType do
   shares it with the tags). Every type given is still walked, and compiled again at full
   depth where it holds anything new. `checked` is trusted as the calls before it made it:
   one a host builds that names a type edited by hand answers for that type, and a
-  compile, which starts its own at `%{}`, refuses it (provisional, since decision 432).
+  compile, which starts its own at `%{}`, refuses it (decision 436, since decision 432).
   """
   def check(%__MODULE__{body: %Program{tags: tags, blocks: blocks}} = type, checked)
       when is_map(tags) and not is_struct(tags) and is_map(blocks) and is_map(checked),

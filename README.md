@@ -338,14 +338,19 @@ the milestones newest first). What waits to land is the rest of the maintainer's
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
 items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-5 left, decisions 409–419, which RV-13 builds: the store and the forces
-file reading CRLF as LF, a copy of the store numbered, none replaced, and a cold start
-over a store it cannot read copying it first, among them; its answers to the four
-RV-15 left, decisions 433–436, are each as built; and its answers to the questions
-RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while a force
-is written, a round whose clock reads wrong abandoned before it writes, and a restart
-after a start that could not read the forces file keeping the forces the runner holds,
-among them. Its answers to the questions
+questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
+a force is written, a round whose clock reads wrong abandoned before it writes, and a
+restart after a start that could not read the forces file keeping the forces the runner
+holds, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
+CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
+nothing was copied (decision 412), the shutdown's write making the store's text within
+the write limit, which the child spec's deadline counts (decision 414), a cold start
+over a store a fresh start would refuse copying it first (decision 417) and each copy of
+the store a name of its own, `<store>.dropped.1` and on, none replaced (decision 418),
+the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to the
+four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13. Its
+answers to the questions
 RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
 runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
 heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
@@ -395,8 +400,9 @@ given its own time (decision 348), every file write the runner makes limited (de
 store or forces file (decision 356), each in "Running a plant on the clock" and "The
 store on disk", below. RV-5's, the store's, have landed: a store's last line its count of
 lines, `logex retain 2`, so that a store cut short is refused, never read short (decision
-355), and a copy of the store a fresh start drops from, `<store>.dropped` (decision 360),
-each in "The store on disk". The one of decisions 347–360 that changes the source language
+355), and a copy of the store a fresh start drops from (decision 360), numbered since
+decision 418, `<store>.dropped.1`, each in "The store on disk". The one of decisions
+347–360 that changes the source language
 has landed with RV-2: a rung that writes nothing and jumps nowhere, such as the first half
 of a rung wrapped onto two lines, `xic start xio stop` above `ote motor`, is refused at
 its line, told that a newline ends a rung (decision 351).
@@ -3462,10 +3468,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   number cut in its digits read as a smaller one; a hand edit that changes a line in
   place keeps the count, and one that adds or takes away a line changes it too. A store
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. A store an editor saved with CRLF
-  line ends, or a lone CR's, is refused at its first line holding a carriage return,
-  told so in those words, and one saved with a byte-order mark before its header is told
-  so too, the rest of it read as if the mark were not there; a comment, a tab and a byte
+  before, and the next write makes it `logex retain 2`. The runner ends each line with LF
+  and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
+  configuration file, so a store an editor saved with CRLF line ends starts as written,
+  its lines counted however they end, and its next write is LF's again (decision 410); one
+  saved with a byte-order mark before its header is told so, the rest of it read as if
+  the mark were not there; a comment, a tab and a byte
   past ASCII are each refused, told as what they are; and a refusal names at most the
   first 50 problems and then counts the rest, each text of the store it quotes at most 60
   bytes and printable, and the store's path printable too, each line's 1,000 bytes
@@ -3508,7 +3516,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
   `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
   and `written_at` the last write known made, until a later write lands or fails, and has
-  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped"`, and a
+  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped.1"`, and a
   write over the store that owes the copy first and is killed in the copy's own write,
   the store as it was; one killed in the store's names the store, the copy made (decision
   391; the key, how long it stands and the file named provisional).
@@ -3541,30 +3549,36 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   whose devices cannot be opened at its start writes nothing as it ends: a warm start
   from a store leaves the store byte for byte, while a cold start, `start: :cold`, and a
   start that finds no store have written the initial values before they open a device
-  (decisions 271 and 291), and that write stays. Its child spec gives the
-  shutdown `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000, so that a
+  (decisions 271 and 291), and that write stays. Its child spec gives the shutdown
+  `devices * (idle + poll) + 2 * write_limit` ms, never less than 5000, so that a
   supervisor waits for every device's close, the period's write in progress and the
-  store's write before it kills the runner (decisions 326 and 400); a host's own `shutdown:` in `Supervisor.child_spec/2` is its own. It does not
-  count the time the runner takes to make the store's text, in proportion to the
-  retained values, some seconds for a hundred thousand retained timers, so a plant that
-  retains that many gives its own, or a supervisor's shutdown kills the runner in its
-  write and the store keeps its last write before it.
+  store's write before it kills the runner (decisions 326 and 400); a host's own
+  `shutdown:` in `Supervisor.child_spec/2` is its own. Since decision 414 the shutdown's
+  write makes the store's text, in proportion to the retained values, some seconds for a
+  hundred thousand retained timers, within the write limit, so the deadline counts it: a
+  store too big to make and write within the limit is cut off at it and reported,
+  `{:retain, {:error, :timeout}}`, the store keeping its last write, where a supervisor
+  killed the runner in its write and told no one, and a plant that retains that many gives
+  a longer `write_limit:`, which the deadline follows.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
-  `.tmp` the other is written through, or the forces file naming the store's copy,
-  `tally.retain.dropped` (below), or its `.tmp`, is refused at start, a pinned line. And
-  one runner's: a start naming a store, a forces file, a store's copy or a `.tmp` of any
-  that another runner of the same VM holds is refused, naming it and that runner, until
-  the holder stops, crashes or is killed, when the file is free again (decision 356), the
-  VM's table of them kept by a process of logex's own that no application's stop takes
-  down; two VMs on one file are the host's to avoid, as are two paths to one file through
-  a linked directory. Each path is resolved once, at the start, so a `File.cd` after it
+  `.tmp` the other is written through, or the forces file naming one of the store's
+  copies, `tally.retain.dropped.1` or any number (below), or their `.tmp`, or an
+  unnumbered `tally.retain.dropped`, which would be written through that `.tmp`, is
+  refused at start, a pinned line. And one runner's: a start naming a store, a forces file, a name
+  of a store's copies or a `.tmp` of any that another runner of the same VM holds, or
+  whose store's copies' names another runner holds a file at, is refused, naming it and
+  that runner, until the holder stops, crashes or is killed, when the file is free again
+  (decision 356), the VM's table of them kept by a process of logex's own that no
+  application's stop takes down; two VMs on one file are the host's to avoid, as are two
+  paths to one file through a linked directory. Each path is resolved once, at the start,
+  so a `File.cd` after it
   moves neither file. A start under a name another process holds is `{:error,
   {:already_started, pid}}` and writes nothing, `start: :cold` among it, its write made
   once the name is registered (M11). A store or a forces file that is a symbolic link is
   refused at start, the host told to name the file it links to, since every write is a
   new file renamed over the old, which would put a file in the link's place and leave the
-  file it names as it was (provisional); a link put there after the start is replaced so
+  file it names as it was (decision 413); a link put there after the start is replaced so
   at the next write.
 - A fresh start reads the store warm unless `start: :cold`, and starts the resource from
   it as `Logex.Runtime.start/2` does, each value kept only where the configuration
@@ -3572,32 +3586,58 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   store's path, the time its header names and what the start dropped. A store of another
   configuration, a line of no store's shape, a store cut short (decision 355), or a store
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
-  not started (decision 285); `start: :cold` reads none of it and writes a new store at
-  once, so a store refused as cut short whose readable part is wanted is copied aside
-  first, as its refusal says. The read is limited to the write limit of real time, as
-  every write is, and so is the look at the store and the forces file
-  for a link before either is read, so that a store on a stalled disk, or a FIFO in its
-  place, refuses the start as a store that cannot be read.
+  not started (decision 285); `start: :cold` starts from none of it and writes a new
+  store at once, and since decision 417 copies such a store first, under the next of its
+  numbered copies, `tally.retain.dropped.1` (below), writing the new store only once the
+  copy is made, so that a store refused as cut short keeps its readable part, as its
+  refusal says; a copy that cannot be made, or a store that stands but cannot be read,
+  refuses the cold start as a failed write does, `{:error, {:retain, reason}}`, the store
+  as it was (provisional for the store that cannot be read), and a store that reads whole
+  gets no copy. A cold `restart/2` reads no store and copies none (provisional). The
+  read is limited to the write limit of real time, as every write is, and so is the look
+  at the store and the forces file for a link before either is read, so that a store on a
+  stalled disk, or a FIFO in its place, refuses the start as a store that cannot be read
+  (decision 415).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
-  drops them, first copies the store as it read it to `tally.retain.dropped` (decision
-  360), before its first write over the store, so that what it dropped outlives the next
-  write: to take the deploy back, stop the runner, put the copy in the store's place and
-  start the configuration it was written for, in that order: the copy stands until the
-  next start that drops anything, so starting the configuration it was written for over
-  the store the mistaken deploy wrote, which it drops from too, copies that store over
-  the copy, and the values the copy held are gone. A start that drops nothing leaves the
-  copy where it is. The copy is written as every other write is, through its own `.tmp`
-  and within the same limit, one that fails reported as a failed write is, `failed` in
-  `status/1`'s `retain`, and the start goes on with the copy owed: every write over the
-  store, the period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the
-  copy first and writes the store only once the copy is made, so that while it cannot be
-  made, a full disk or a directory in its place, the store stays as the start read it,
-  every write fails as above, and a crash or a stop meanwhile loses what changed since
-  the start, the next start dropping from the same store and copying it again
-  (provisional). `status/1`'s `retain` names the copy once made, `copy:
-  "tally.retain.dropped"`, beside `dropped`, nil while it is owed, and has no `copy` where
-  nothing was dropped.
+  drops them, first copies the store as it read it to a file of its own (decision 360),
+  before its first write over the store, so that what it dropped outlives every write
+  after it: the first copy `tally.retain.dropped.1`, the next `tally.retain.dropped.2`,
+  and on, each numbered one past the highest that stands beside the store, a file or a
+  directory a host named so among them, and none replaced (decision 418); a copy stays
+  until the host deletes it, and a start that drops nothing makes none. To take a
+  mistaken deploy back, stop the runner, put the copy that deploy's start made, the one
+  its `status/1` named, in the store's place, and start the configuration it was written
+  for:
+
+  ```
+  $ cp tally.retain.dropped.2 tally.retain
+  ```
+
+  Starting the good configuration first loses nothing: it drops from the store the
+  mistaken deploy wrote and copies that one to the next number, `tally.retain.dropped.3`,
+  the good values staying in `tally.retain.dropped.2`, to be put back as above. An
+  unnumbered `tally.retain.dropped`, which an earlier logex made and replaced at each
+  start that dropped, is kept as it stands and counts for nothing (provisional). The copy
+  is written as every other write is, through the copies' own `.tmp`,
+  `tally.retain.dropped.tmp`, and within the same limit, and not renamed over a file
+  that stands at its number as it looks, just before its rename: one a host makes there
+  while it is written, before that look, fails it, `:eexist`, and one made between the
+  look and the rename, which goes through the VM's file server and waits in its queue on
+  a stalled disk, is replaced (provisional). A store's copies are its name read whole: a
+  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each start that drops
+  makes a copy of its own, even where the highest copy holds the same bytes, as a start
+  that fails after its copy, a device that cannot be opened, and is started again makes
+  one each time (provisional). One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
+  the start goes on with the copy owed (decision 416): every write over the store, the
+  period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the copy first,
+  under the next number then, and writes the store only once the copy is made, so that
+  while it cannot be made, a full disk or a directory at its `.tmp`, the store stays as
+  the start read it, every write fails as above, and a crash or a stop meanwhile loses
+  what changed since the start, the next start dropping from the same store and copying it
+  again. `status/1`'s `retain` names the copy once made, `copy: "tally.retain.dropped.1"`,
+  beside `dropped`, and always has a `copy`, nil while the copy is owed and where nothing
+  was dropped, `dropped` and `failed` telling the two apart (decision 412).
 
 ### An event task
 
@@ -4308,9 +4348,10 @@ stage: nil
   point not forced is accepted (decision 140); with no runner, deleting the file clears
   every force. Since RV-5 a refusal names at most the first 50 problems and then counts
   the rest, each text of the file it quotes at most 60 bytes, a point's name and a
-  value's spelling among them, a control byte or one past ASCII but a tab or a carriage
-  return shown as `\xFF`, and the file's path printable; a carriage return after a value,
-  as a file saved with CRLF line ends holds, is still no force.
+  value's spelling among them, a control byte or one past ASCII but a tab shown as
+  `\xFF`, and the file's path printable. A line ends at LF, CRLF or a lone CR alike, as
+  in a program, so a file a technician saved with CRLF line ends forces as written, `hz
+  1.5` forcing 1.5, and the next force writes it with LF (decision 410).
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's

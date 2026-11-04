@@ -385,7 +385,7 @@ defmodule Logex.Compiler do
   Those types are trusted, as checked already: none is checked, marked for recursion or
   compared with another version, and no table is built, so each instance's tag names its
   type and `blocks` is empty. So nothing it gives holds a type it trusted, none of its
-  rungs, and a compile handed the body as a type checks it (provisional, since decision
+  rungs, and a compile handed the body as a type checks it (decision 436, since decision
   432). A type whose text names one `held` lacks, its own name among them, gives the
   diagnostic a compile gives for an unknown type. `declared` are the block's members
   declared from Elixir, which a block `instructionize/3` built keeps no text for; a tag
@@ -4962,7 +4962,7 @@ defmodule Logex.Compiler do
   # that compiles a routine over types it is handed, compile/2's `types`, instructionize/3
   # and loaded/2, checks each as decision 54 has it; decision 54's own steps,
   # recompiled/4 and `Logex.FbType.check/2`, public for the check, take what they are
-  # given as checked and hold none of it (provisional, RV-15's question 4).
+  # given as checked and hold none of it (decision 436, RV-15's question 4).
   @doc false
   def compile(source, options)
 

@@ -649,6 +649,39 @@ defmodule Logex.ForceTest do
       assert Runner.status(runner).forces == %{"level" => 4, "x" => 1}
     end
 
+    # Decision 410 (RV-13): a line ends at LF, CRLF or a lone CR alike, as B8 has the
+    # source's and a configuration file's readers read them, so that a file a technician
+    # saved in an editor that writes CRLF forces as written; a refusal names each line by
+    # its number so counted; and the next write is the runner's, LF.
+    test "a line ended by CRLF or a lone CR is a line, as one ended by LF is",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+
+      for saved <- ["level 4\r\nx 1\r\n", "level 4\rx 1\r", "level 4\r\nx 1\r", "level 4\rx 1"] do
+        File.write!(file, saved)
+        %{runner: runner} = started(dir)
+        assert Runner.status(runner).forces == %{"level" => 4, "x" => 1}, inspect(saved)
+        assert Runner.unforce(runner, "x") == :ok
+        assert File.read!(file) == "level 4\n"
+        Runner.stop(runner)
+      end
+
+      File.write!(file, "level 4\rlevle 1\r\nx 2\ny 1\r")
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 2: `levle` is no input point of `plant` — did you mean `level`?",
+            "#{file}: line 3: `x` is a bool, forced to 0 or 1, got: 2",
+            "#{file}: line 4: `y` is an output point, at `panel.q.0`: only an input point is " <>
+              "forced"
+          ],
+          "\n"
+        ),
+        fn -> started(dir) end
+      )
+    end
+
     test "every force the configuration cannot take, and every line that is no force, " <>
            "named in one refusal, the runner not started",
          %{tmp_dir: dir} do

@@ -140,7 +140,7 @@ own documentation holds:
   devices, watchdogs and the trip, forcing, an edit's steps, the store and its period.
 - `lib/logex/runner/device.ex` — `Logex.Runner.Device`, internal: one bound device's
   process, its reads, writes again at every poll, latch and close.
-- `lib/logex/runner/paths.ex` — `Logex.Runner.Paths`, internal: the store, its copy and the
+- `lib/logex/runner/paths.ex` — `Logex.Runner.Paths`, internal: the store, its copies and the
   forces file each runner of the VM holds, claimed at its start and given up as it ends.
 - `lib/logex/runner/writer.ex` — `Logex.Runner.Writer`, internal: the process that writes
   the store every period, and every other file call of the runner's, each in a process of
