@@ -14099,9 +14099,19 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       {test, clock} = walk()
       ms = slow(:ets.take(@table, {test, :slow, task}))
       passed(clock, ms)
-      send(test, {:walked, self(), {:step, task, ms}})
+      send(test, {:walked, self(), stepped(:ets.take(@table, {test, :wrong_after}), task, ms)})
       result
     end
+
+    # Decision 441 (RV-16): where the walk has set `{test, :wrong_after}`, the runner's
+    # readings of the clock give no time from the end of this step on, `{test, :bad_time}`,
+    # its round's next reading the first.
+    defp stepped([{{test, :wrong_after}, answer}], task, ms) do
+      :ets.insert(@table, {{test, :bad_time}, answer})
+      {:step, task, ms, :clock}
+    end
+
+    defp stepped([], task, ms), do: {:step, task, ms}
 
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
 
@@ -14360,6 +14370,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # RV-11's review a device's read's and a period's write's wall clock's.
     {:trip, :clock},
     :clock_device,
+    # Decision 441 (RV-16): a round stopped by its clock halfway through, nothing written.
+    :clock_mid_round,
     :round_first,
     :round_scheduled,
     :round_trigger,
@@ -16909,6 +16921,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp clock_injected(_runner_read, w), do: runner_clock_injected(w)
 
+  # The clock moved on a millisecond at a time until a round's step comes and its clock
+  # trips the runner (decision 441).
+  defp clock_stopped(%{status: :tripped} = w, _left), do: w
+  defp clock_stopped(_w, 0), do: flunk("no round's step met the clock gone wrong")
+
+  defp clock_stopped(w, left) do
+    :ok = Manual.advance(w.manual, 1)
+    clock_stopped(consumed(w), left - 1)
+  end
+
   # The clock moved on a millisecond at a time until the period's write trips the runner.
   defp wall_tripped(%{status: :tripped} = w, _left), do: w
   defp wall_tripped(_w, 0), do: flunk("no period's write tripped the runner")
@@ -16922,7 +16944,33 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # it answers with the last time it refreshed at, and it trips naming the clock as it
   # takes its own notice; a restart while the clock answers so is refused, the runner
   # tripped as it was, and once it is mended the walk's restarts restart.
-  defp runner_clock_injected(w) do
+  defp runner_clock_injected(w), do: runner_clock_injected(rem(div(w.logical, 3), 2), w)
+
+  # Decision 441 (RV-16), restated: half the runner's own reads gone wrong, by the walk's
+  # own time, so that no draw moves, come halfway through a round, after its step: the
+  # round stops there, publishing as far as it ran, and no device is written its
+  # outputs, each device's every write since the round began its last outputs, a poll's
+  # write again, or the trip's zeros; a restart while the clock answers so is refused.
+  defp runner_clock_injected(1, w) do
+    :ets.insert(@table, {{self(), :wrong_after}, :late})
+    before = writes(w)
+    w = clock_stopped(%{w | fault: {:clock, {:now_ms, :late}}}, 200)
+
+    for {name, sim} <- w.sims do
+      zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+      last = List.last(before[name])
+
+      for write <- Enum.drop(Sim.writes(sim), length(before[name])),
+          do: assert(write in [last, zeros], "#{name} was written #{inspect(write)}")
+    end
+
+    reach(:clock_mid_round, true)
+    assert Runner.restart(w.runner, :warm) == {:error, {:clock, {:now_ms, :late}}}
+    :ets.delete(@table, {self(), :bad_time})
+    tripped!(consumed(w))
+  end
+
+  defp runner_clock_injected(0, w) do
     :ets.insert(@table, {{self(), :bad_time}, :late})
     w = %{w | fault: {:clock, {:now_ms, :late}}}
     assert %{status: :running} = Runner.status(w.runner)
@@ -17147,6 +17195,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     %{period_stored(w) | due: grid_after(w, at), late: 0}
   end
 
+  # Decision 441 (RV-16), restated: a step after which the runner's clock gives no time
+  # ends its round there: the step ran, its events and its resource kept, but its time is
+  # none the runner could read, so no task's longest run is moved by it, and the round
+  # trips naming the clock, no later step run and no output written.
+  defp record(w, {:step, task, _ms, :clock} = record) do
+    w = logged(w, record)
+    %{steps: [{_kind, ^task, _} = step | rest]} = round = w.round
+    assert round.trip == nil, "a step ran after #{inspect(round.trip)}"
+    {rt, events} = Runtime.cycle_step(round.rt, step)
+
+    %{
+      w
+      | g_sample: g_stood(task, round.g_rise, w.g_sample),
+        round:
+          Map.merge(round, %{
+            rt: rt,
+            steps: rest,
+            ran: round.ran ++ events,
+            trip: {:clock, {:now_ms, :late}},
+            clock: true
+          })
+    }
+  end
+
   defp record(w, {:step, task, ms} = record) do
     w = logged(w, record)
     %{steps: [{kind, ^task, _} = step | rest]} = round = w.round
@@ -17215,7 +17287,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:trip, true)
     reach(trip_kind(reason), true)
     reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
-    w = all_steps(round.steps, w, round.took)
+    w = stepped_all(round, w)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end
 
@@ -17270,6 +17342,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # or a device's fault as the round's outputs were written.
   defp ended_trip([], w, round), do: round_trip(w, round) || w.fault
   defp ended_trip(_steps, _w, _round), do: nil
+
+  # Decision 441 (RV-16): a round its clock stopped never timed itself.
+  defp stepped_all(%{clock: true}, w), do: w
+  defp stepped_all(round, w), do: all_steps(round.steps, w, round.took)
 
   defp all_steps([], w, took), do: %{w | longest: continuous_ran(w, took)}
   defp all_steps(_steps, w, _took), do: w

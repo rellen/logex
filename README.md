@@ -4092,7 +4092,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   end of the step that met it ("A bit number in a tag", above); since decision 394
   `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`, a host's clock that
   gave the runner or a device no time it can hold once the plant runs, a restart refused
-  until the clock is mended, where a start's own read of it is the host's mistake; and
+  until the clock is mended, where a start's own read of it is the host's mistake, and
+  since decision 441 a round that reads it so stops there and trips at once, its outputs
+  never written, so the trip's 0 is the first the devices are given after it; and
   `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.

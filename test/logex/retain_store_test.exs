@@ -110,6 +110,16 @@ defmodule Logex.RetainStoreTest do
     %{clock: clock, panel: panel, store: store, opts: opts}
   end
 
+  # A task once its call has been sent and waits for its answer.
+  defp waiting(task), do: in_call(Process.info(task.pid, :current_function), task)
+
+  defp in_call({:current_function, {:gen, :do_call, 4}}, task), do: task
+
+  defp in_call(_elsewhere, task) do
+    Process.sleep(1)
+    waiting(task)
+  end
+
   defp pressed(%{panel: panel, clock: clock}, eyes) do
     for eye <- eyes do
       Sim.set(panel, [0], eye)
@@ -2612,6 +2622,35 @@ defmodule Logex.RetainStoreTest do
       :persistent_term.erase({OddWall, rig.clock})
       assert Runner.restart(runner, :warm) == :ok
       assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 441 (RV-16): with no untimed program the period's write comes at the end of
+    # the round due with it, which reads its wall clock: one gone wrong stops that round
+    # there and trips at once, so that a request that waited for the round is answered by
+    # the trip, where the round went on to serve it running and the trip came after.
+    test "a period's write whose wall clock gives no time trips the round due with it at " <>
+           "once (decision 441)",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :clock, {OddWall, rig.clock}))
+      :ok = Runner.subscribe(runner)
+      pressed(rig, [1])
+      :persistent_term.put({OddWall, rig.clock}, 1.5)
+      on_exit(fn -> :persistent_term.erase({OddWall, rig.clock}) end)
+
+      # The period due at 1000 with the round there, a status/1 waiting for that round.
+      Manual.pass(rig.clock, 990)
+      status = Task.async(fn -> Runner.status(runner) end)
+      waiting(status)
+      _ = :sys.get_state(runner)
+      Manual.advance(rig.clock, 0)
+
+      assert %{status: :tripped, trip: {:clock, {:wall_ms, 1.5}}} = Task.await(status)
+      assert_receive {Runner, ^runner, {:retain, {:error, {:clock, {:wall_ms, 1.5}}}}}
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:wall_ms, 1.5}}}}
+      :persistent_term.erase({OddWall, rig.clock})
+      assert Runner.restart(runner, :warm) == :ok
       assert Runner.stop(runner) == :ok
     end
 

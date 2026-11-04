@@ -174,12 +174,39 @@ defmodule Logex.RunnerTest do
     def cancel(clock, timer), do: Manual.cancel(clock, timer)
 
     defp odd({Logex.Runner.Device, :init, 1}, clock),
-      do: answer(:ets.lookup(Logex.RunnerTest, {clock, :device_now_ms}), clock)
+      do: own(:ets.lookup(Logex.RunnerTest, {clock, :device_now_ms, self()}), clock)
 
     defp odd(_other, clock), do: Manual.now_ms(clock)
 
+    # Decision 441 (RV-16): where the test has set one for this device's process alone,
+    # that answer, the other devices reading the clock as it is.
+    defp own([{_key, answer}], _clock), do: answer
+    defp own([], clock), do: answer(:ets.lookup(Logex.RunnerTest, {clock, :device_now_ms}), clock)
+
     defp answer([{_key, answer}], _clock), do: answer
     defp answer([], clock), do: Manual.now_ms(clock)
+  end
+
+  # Decision 441 (RV-16): the core's steps, but where the test has set `{:wrong_after,
+  # runner}`, `{clock, answer}`, the runner's next reading of `RunnerOddClock` after the
+  # round's first step gives the answer, once: a clock gone wrong halfway through a round.
+  defmodule WrongAfterStep do
+    alias Logex.Runtime
+
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+
+    def cycle_step(runtime, step) do
+      result = Runtime.cycle_step(runtime, step)
+      wrong(:ets.take(Logex.RunnerTest, {:wrong_after, self()}))
+      result
+    end
+
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    defp wrong([{_key, {clock, answer}}]),
+      do: :ets.insert(Logex.RunnerTest, {{clock, :bad_reads}, {answer, 1}})
+
+    defp wrong([]), do: :ok
   end
 
   defmodule NoCancelClock do
@@ -577,9 +604,10 @@ defmodule Logex.RunnerTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # The runner's own read, before any device's: the trip names the clock, every output 0,
-    # the round in progress run with no time passed; and an answer out of the range a time
-    # is held in, a signed 64-bit integer, the same (decision 394, provisional).
+    # The runner's own read, before any device's: the trip names the clock, every output 0;
+    # and an answer out of the range a time is held in, a signed 64-bit integer, the same
+    # (decision 394, the range as built). Since decision 441 a round that reads it so is
+    # abandoned there, its outputs never written (below).
     test "the runner's own read of a clock gone wrong trips it, every output 0, until the " <>
            "clock is mended (decision 394)" do
       for answer <- [:late, 9_223_372_036_854_775_808, "10"] do
@@ -699,6 +727,76 @@ defmodule Logex.RunnerTest do
       :ets.delete(__MODULE__, {clock, :device_now_ms})
       assert Runner.restart(runner, :warm) == :ok
       assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 441 (RV-16), the leave for a round run on with no time passed: a reading of
+    # the runner's clock gone wrong halfway through a round, after its step, stops the
+    # round there, its outputs never written, so that the trip's 0 is the first write the
+    # panel is given after it, where the round ran on and wrote its 1 before the trip
+    # zeroed it; mended, a restart brings the line back.
+    test "a round whose clock reading goes wrong halfway through stops there, its outputs " <>
+           "never written (decision 441)" do
+      {opts, %{panel: panel}} = rig()
+      {:ok, clock} = Manual.start_link()
+
+      opts =
+        opts
+        |> Keyword.put(:clock, {RunnerOddClock, clock})
+        |> Keyword.put(:steps, WrongAfterStep)
+
+      {:ok, runner} = Runner.start_link(opts)
+      :ok = Runner.subscribe(runner, [:trip, :round])
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:round, 10, _outputs}}, 5000
+      Sim.set(panel, [0], 1)
+      :ets.insert(__MODULE__, {{:wrong_after, runner}, {clock, :late}})
+      Manual.advance(clock, 10)
+
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
+      refute_received {Runner, ^runner, {:round, _now, _outputs}}
+      assert %{status: :tripped, trip: {:clock, {:now_ms, :late}}} = Runner.status(runner)
+      refute %{[0] => 1} in Sim.writes(panel)
+      assert Sim.outputs(panel) == %{[0] => 0}
+
+      assert Runner.restart(runner, :warm) == :ok
+      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 441 (RV-16): a device gone down by its own read of a bad clock, its exit
+    # waiting in the runner's mailbox behind a round's wake, stops the round as it comes to
+    # its writes: the drive, written before the panel in device-name order, is never given
+    # the round's 1, where the round wrote it and then found the panel gone; the trip names
+    # the clock, and its 0 is the drive's next write.
+    test "a round that finds a device gone down by its own bad clock writes no device " <>
+           "(decision 441)" do
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global y bool at drive.q.0\nprogram r relay with fast\n  r.in x\n  r.out y\n"
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+      {opts, %{clock: clock, panel: panel, drive: drive}} = plant_rig(config)
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
+      :ok = Runner.subscribe(runner)
+      Manual.advance(clock, 10)
+      Sim.set(panel, [0], 1)
+
+      %{"panel" => device} = devices(runner)
+      ref = Process.monitor(device)
+      :sys.suspend(runner)
+      {_timer, token, _at} = :sys.get_state(runner).wake
+      send(runner, {Runner, :wake, token})
+      :ets.insert(__MODULE__, {{clock, :device_now_ms, device}, :late})
+      Manual.advance(clock, 10)
+
+      assert_receive {:DOWN, ^ref, :process, ^device, {:shutdown, {:clock, {:now_ms, :late}}}},
+                     5000
+
+      :sys.resume(runner)
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
+      refute %{[0] => 1} in Sim.writes(drive)
+      assert Sim.outputs(drive) == %{[0] => 0}
       assert Runner.stop(runner) == :ok
     end
 
