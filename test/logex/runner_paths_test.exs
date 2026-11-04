@@ -163,39 +163,123 @@ defmodule Logex.RunnerPathsTest do
       assert Runner.stop(first) == :ok
     end
 
-    # Decision 360 (RV-5): the copy a fresh start keeps of a store it dropped from,
-    # `<store>.dropped`, and the `.tmp` it is written through, are the runner's too.
+    # Decision 360 (RV-5): the copy a fresh start keeps of a store it dropped from, and the
+    # `.tmp` it is written through, are the runner's too. Decision 418 (RV-13), the leave
+    # for the one `<store>.dropped`: every copy's name, `<store>.dropped.<n>`, whatever
+    # its number, which no row of the VM's table claims, is the runner's, checked against
+    # every other runner's files: a store or a forces file at one of them refused, and a
+    # store one of whose copies' names another runner holds, where the one `.dropped` was
+    # claimed as a file.
     test "a store another runner copies its store to, and the copy's `.tmp`, are refused",
          %{tmp_dir: dir} do
       store = Path.join(dir, "plant.retain")
       # A write limit of 5,000 ms, which covers a loaded machine's disk: since decision 400
       # (RV-11) `write_limit:`, where an idle watchdog of 5,000 stood for it.
       {:ok, first} = Runner.start_link(opts(retain: store, write_limit: 5000))
-      copy = store <> ".dropped"
 
-      raises(held(:retain, copy, "names the store's copy, `.dropped`,", first), fn ->
-        Runner.start_link(opts(retain: copy))
-      end)
+      for copy <- [store <> ".dropped.1", store <> ".dropped.42", store <> ".dropped.007"] do
+        raises(held(:retain, copy, "names the store's copy, `.dropped.<n>`,", first), fn ->
+          Runner.start_link(opts(retain: copy))
+        end)
+
+        raises(held(:forces, copy, "names the store's copy, `.dropped.<n>`,", first), fn ->
+          Runner.start_link(opts(forces: copy))
+        end)
+      end
 
       raises(
-        "the runner's retain: #{inspect(copy <> ".tmp")} names the `.tmp` another runner of " <>
-          "this VM, #{inspect(first)}, writes its store's copy, `.dropped`, through, which it " <>
-          "holds until it stops: two runners on one file write each over the other's",
-        fn -> Runner.start_link(opts(retain: copy <> ".tmp")) end
+        "the runner's retain: #{inspect(store <> ".dropped.tmp")} names the `.tmp` another " <>
+          "runner of this VM, #{inspect(first)}, writes its store's copy, `.dropped.<n>`, " <>
+          "through, which it holds until it stops: two runners on one file write each over " <>
+          "the other's",
+        fn -> Runner.start_link(opts(retain: store <> ".dropped.tmp")) end
       )
 
-      # A store whose copy is another's store.
+      # A store whose copy is another's store, or another's forces file.
       {:ok, other} =
-        Runner.start_link(opts(retain: Path.join(dir, "x.dropped"), write_limit: 5000))
+        Runner.start_link(opts(retain: Path.join(dir, "x.dropped.3"), write_limit: 5000))
 
       raises(
         "the runner's retain: #{inspect(Path.join(dir, "x"))} is copied to " <>
-          "#{inspect(Path.join(dir, "x.dropped"))}, the store of another runner of this VM, " <>
-          "#{inspect(other)}, which holds it until it stops: two runners on one file write " <>
-          "each over the other's",
+          "#{inspect(Path.join(dir, "x.dropped.3"))}, the store of another runner of this " <>
+          "VM, #{inspect(other)}, which holds it until it stops: two runners on one file " <>
+          "write each over the other's",
         fn -> Runner.start_link(opts(retain: Path.join(dir, "x"))) end
       )
 
+      {:ok, forcing} =
+        Runner.start_link(opts(forces: Path.join(dir, "y.dropped.1"), write_limit: 5000))
+
+      raises(
+        "the runner's retain: #{inspect(Path.join(dir, "y"))} is copied to " <>
+          "#{inspect(Path.join(dir, "y.dropped.1"))}, the forces file of another runner of " <>
+          "this VM, #{inspect(forcing)}, which holds it until it stops: two runners on one " <>
+          "file write each over the other's",
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "y"))) end
+      )
+
+      # Each told in the caller before either file is read, as a row another runner holds
+      # is: a store at a copy's name that holds no store, and a store whose copy's name
+      # another holds, which holds none, are each told what they meet, never what they
+      # hold.
+      File.write!(store <> ".dropped.5", "no store\n")
+
+      raises(
+        held(:retain, store <> ".dropped.5", "names the store's copy, `.dropped.<n>`,", first),
+        fn ->
+          Runner.start_link(opts(retain: store <> ".dropped.5"))
+        end
+      )
+
+      File.write!(Path.join(dir, "x"), "no store\n")
+
+      raises(
+        "the runner's retain: #{inspect(Path.join(dir, "x"))} is copied to " <>
+          "#{inspect(Path.join(dir, "x.dropped.3"))}, the store of another runner of this " <>
+          "VM, #{inspect(other)}, which holds it until it stops: two runners on one file " <>
+          "write each over the other's",
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "x"))) end
+      )
+
+      # The review of RV-13: a store's copies' names are its name read whole, `.dropped.`
+      # and a number, so that a store whose own name ends in `.dropped` has them, both
+      # ways: a store at the first copy's name of `v.dropped`, which another holds, and a
+      # store `z.dropped` whose copy's name another holds as its store, each refused, where
+      # a search for `.dropped.`, whose matches never overlap, read neither as a copy.
+      {:ok, dropped} =
+        Runner.start_link(opts(retain: Path.join(dir, "v.dropped"), write_limit: 5000))
+
+      raises(
+        held(
+          :retain,
+          Path.join(dir, "v.dropped.dropped.1"),
+          "names the store's copy, `.dropped.<n>`,",
+          dropped
+        ),
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "v.dropped.dropped.1"))) end
+      )
+
+      {:ok, copied} =
+        Runner.start_link(opts(retain: Path.join(dir, "z.dropped.dropped.2"), write_limit: 5000))
+
+      raises(
+        "the runner's retain: #{inspect(Path.join(dir, "z.dropped"))} is copied to " <>
+          "#{inspect(Path.join(dir, "z.dropped.dropped.2"))}, the store of another runner " <>
+          "of this VM, #{inspect(copied)}, which holds it until it stops: two runners on " <>
+          "one file write each over the other's",
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "z.dropped"))) end
+      )
+
+      assert Runner.stop(copied) == :ok
+      assert Runner.stop(dropped) == :ok
+
+      # A name that only looks like a copy's is none: started beside them.
+      for apart <- ~w(.dropped .dropped.1.tmp .dropped.x .dropped.) do
+        {:ok, beside} = Runner.start_link(opts(forces: Path.join(dir, "x" <> apart)))
+        assert Runner.stop(beside) == :ok
+      end
+
+      assert Runner.stop(forcing) == :ok
       assert Runner.stop(other) == :ok
       assert Runner.stop(first) == :ok
       assert claims(store) == []
@@ -224,6 +308,34 @@ defmodule Logex.RunnerPathsTest do
         for task <- tasks, do: send(task.pid, go)
         answers = Enum.map(tasks, &Task.await/1)
         assert Enum.sort(Enum.map(answers, &elem(&1, 0))) == [:ok, :refused]
+        for {:ok, pid} <- answers, do: assert(Runner.stop(pid) == :ok)
+      end
+    end
+
+    # Decision 418 (RV-13): a store and a file at one of its copies' names, started at once,
+    # never both run: each claim's rows are in before it is checked against the other's, so
+    # that one at least sees the other and is refused.
+    test "of two starts at once, a store and a file at its copy's name, never both start",
+         %{tmp_dir: dir} do
+      for n <- 1..20 do
+        store = Path.join(dir, "#{n}.retain")
+        both = [opts(retain: store), opts(retain: store <> ".dropped.#{n}")]
+        go = self()
+
+        tasks =
+          for opts <- both do
+            Task.async(fn ->
+              receive do
+                ^go -> :ok
+              end
+
+              started_or_refused(opts)
+            end)
+          end
+
+        for task <- tasks, do: send(task.pid, go)
+        answers = Enum.map(tasks, &Task.await/1)
+        assert Enum.count(answers, &match?({:ok, _pid}, &1)) <= 1
         for {:ok, pid} <- answers, do: assert(Runner.stop(pid) == :ok)
       end
     end
@@ -323,6 +435,25 @@ defmodule Logex.RunnerPathsTest do
       Process.exit(second, :kill)
       assert_receive {:DOWN, ^ref, :process, ^second, :killed}
       {:ok, third} = Runner.start_link(opts(retain: store))
+
+      # A killed runner's rows stand in the table, its terminate/2 never run, and hold
+      # nothing, a copy's name among them (decision 418): a store at a copy's name of the
+      # killed runner's store, and a store whose copy's name the killed runner held as its
+      # store, each start, where a check that counted a dead holder's rows refused them
+      # (the review of RV-13).
+      for {held_by_dead, starting} <- [{"y", "y.dropped.1"}, {"w.dropped.3", "w"}] do
+        {:ok, dead} = Runner.start_link(opts(retain: Path.join(dir, held_by_dead)))
+        Process.unlink(dead)
+        ref = Process.monitor(dead)
+        Process.exit(dead, :kill)
+        assert_receive {:DOWN, ^ref, :process, ^dead, :killed}
+
+        assert [{_path, ^dead, :retain}] =
+                 :ets.lookup(Logex.Runner.Paths, Path.join(dir, held_by_dead))
+
+        {:ok, after_dead} = Runner.start_link(opts(retain: Path.join(dir, starting)))
+        assert Runner.stop(after_dead) == :ok
+      end
 
       # A start refused once its files are claimed, a device that cannot be opened, gives
       # them up at once, so that a start made right after finds them free.

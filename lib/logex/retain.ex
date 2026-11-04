@@ -36,37 +36,41 @@ defmodule Logex.Retain do
   #
   # The end line (decision 355): a store's last line is `end <count> lines`, its count of
   # lines, the header and the end line among them, as `wc -l` counts a file whose last
-  # line ends with a newline (the words provisional). A store of version 2 whose last
-  # line is no end line, or whose end line counts other than the lines it has, is refused
-  # at a fresh start, naming the file and the line, so that a store is read whole or not
-  # at all. Why a count of lines catches both kinds of cut: a cut keeps a file's first
-  # bytes, and the end line, which holds the count, is the last of them. A cut at a line
-  # boundary, or inside a line before the end line, a value's number cut in its digits
-  # among them, takes the end line with it, and the line that is then last counts
-  # nothing; a cut inside the end line cuts its count or the word after it, and a count
-  # cut in its digits is smaller than the lines before it and it, which the cut did not
-  # change. Only a cut of the last newline alone keeps every line whole, and that store is
-  # read. The count catches, too, a line lost or doubled inside the file, and a line a hand
-  # edit added or removed without changing it. A store of version 1, which has no end
-  # line, is read as it was, a cut one among it; every store written since is of version
-  # 2.
+  # line ends with a newline (the words decision 409's), and since decision 410 however
+  # each line ends, LF, CRLF or a lone CR. A store of version 2 whose last line is no end
+  # line, or whose end line counts other than the lines it has, is refused at a fresh
+  # start, naming the file and the line, so that a store is read whole or not at all. Why
+  # a count of lines catches both kinds of cut: a cut keeps a file's first bytes, and the
+  # end line, which holds the count, is the last of them. A cut at a line boundary, or
+  # inside a line before the end line, a value's number cut in its digits among them,
+  # takes the end line with it, and the line that is then last counts nothing; a cut
+  # inside the end line cuts its count or the word after it, and a count cut in its digits
+  # is smaller than the lines before it and it, which the cut did not change. Only a cut
+  # of the last newline alone keeps every line whole, and that store is read. The count
+  # catches, too, a line lost or doubled inside the file, and a line a hand edit added or
+  # removed without changing it. A store of version 1, which has no end line, is read as
+  # it was, a cut one among it; every store written since is of version 2.
   #
-  # A store's lines end with LF, as the runner writes them; since RV-5 (a7-docs-1,
-  # c2-runner-persist-10) one holding a carriage return, as a hand edit saved with CRLF
-  # line ends leaves, is refused in plain words at its first, where every line was told as
-  # the line it seemed and was not (provisional). A refusal names the file and each line,
-  # bounded and printable as `Logex.Refusal` has it, the forces file's and the image's
-  # too (b3-store-image-11); and a comment, a tab and a byte no store holds are each told
-  # as what it is (b3-store-image-10), where a line holding one was told as a line of no
-  # shape, or one before any instance's lines, and an empty line after the end line as
-  # one, where it would be told as a store cut short. Since RV-5's review a store that
-  # begins with a byte-order mark, as an editor that saves UTF-8 with one writes it, is
-  # told so in plain words and the rest read as if it were not there; a store cut after
+  # A store's lines end with LF, as the runner writes them, and since decision 410 (RV-13)
+  # a line ended by CRLF or a lone CR is read alike, as B8 has the source's and a
+  # configuration file's readers read it, so that a store a hand edit saved with CRLF line
+  # ends starts, where RV-5 (a7-docs-1, c2-runner-persist-10) refused it at its first line
+  # holding a carriage return; a store saved so and cut short is refused as any cut store
+  # is, its last line no end line or its count cut. A refusal names the file and each
+  # line, bounded and printable as `Logex.Refusal` has it, the forces file's and the
+  # image's too (b3-store-image-11); and a comment, a tab and a byte no store holds are
+  # each told as what it is (b3-store-image-10), where a line holding one was told as a
+  # line of no shape, or one before any instance's lines, and an empty line after the end
+  # line as one, where it would be told as a store cut short. Since RV-5's review a store
+  # that begins with a byte-order mark, as an editor that saves UTF-8 with one writes it,
+  # is told so in plain words and the rest read as if it were not there; a store cut after
   # its header, inside its second line or at its end, is told once, at the line the cut
   # left last; an end line in a store whose header is not `logex retain 2`, which only
   # version 2's rule reads, is told as one that header does not take, never as one before
-  # the store's last; and the message for a store cut short says that `start: :cold`
-  # writes over it at once.
+  # the store's last; and the message for a store cut short said that `start: :cold`
+  # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
+  # to the next of its numbered copies (decision 418), and then writes over it, as a cold
+  # start over any store a fresh start would refuse does (`Logex.Runner`).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -159,10 +163,34 @@ defmodule Logex.Retain do
   # (Provisional: one name, its file new each write, where the review suggested a unique
   # name a write, which would leave each killed write's file beside the store and change
   # the name decision 325 and the documents give.)
-  def written(path, text) do
+  def written(path, text) when is_binary(path) do
     beside = path <> ".tmp"
     renamed(written_out(made(beside), text), beside, path)
   end
+
+  # Decision 418 (RV-13): a copy of the store, `{path, beside}`, its name of its own,
+  # `<store>.dropped.<n>`, written through the one `.tmp` every copy of the store is
+  # written through, `<store>.dropped.tmp` (decision 392's one `.tmp`, unchanged), by the
+  # same rule, and not renamed over a file that stands at its name as it looks: where
+  # anything stands there, looked at raw once the `.tmp` is written, just before the
+  # rename, which its number, one past the highest that stands
+  # (`Logex.Runner.Writer.copy/3`), leaves only to a file made there since the directory
+  # was read, the write fails, `{:error, :eexist}`, its `.tmp` deleted, the file that
+  # stands untouched. The look and the rename are two calls, the rename through the VM's
+  # file server, whose queue on a stalled disk it waits in: a file a host makes at the
+  # copy's name between them is replaced by the copy (provisional, the review of RV-13: a
+  # rename that refuses a name that stands is a hard link, which a FAT card has not).
+  def written({path, beside}, text),
+    do: unreplaced(written_out(made(beside), text), beside, path)
+
+  defp unreplaced(:ok, beside, path),
+    do: free(:file.read_link_info(path, [:raw]), beside, path)
+
+  defp unreplaced(error, beside, _path), do: discarded(error, beside)
+
+  defp free({:error, :enoent}, beside, path), do: renamed(:ok, beside, path)
+  defp free({:ok, _info}, beside, _path), do: discarded({:error, :eexist}, beside)
+  defp free(error, beside, _path), do: discarded(error, beside)
 
   defp made(beside), do: made_again(made_new(beside), beside)
 
@@ -214,28 +242,8 @@ defmodule Logex.Retain do
   # is not one, or is of another configuration, is the host's mistake, every problem a line
   # of one ArgumentError, `<path>: line <n>: …` (decisions 276 and 285). What its image
   # holds is judged by `Logex.Runtime.start/2`, which forgives a changed configuration.
-  def decode!(text, at), do: returned(:binary.match(text, "\r"), text, at)
-
-  # RV-5 (a7-docs-1, c2-runner-persist-10): a store holding a carriage return, which a
-  # hand edit saved with CRLF line ends, or a lone CR's, leaves at every line's end, is
-  # refused in plain words at the first line that holds one, and nothing else of it told,
-  # where every line was told as the line it seemed and was not, `the store is of version
-  # 1\r`; the forces file, whose refusal of a carriage return after a value its tests pin
-  # (M5-11's review), tells one as no force (provisional: refused, where the source's and
-  # a configuration file's readers read CRLF as LF).
-  defp returned({at, 1}, text, {path, _name}),
-    do:
-      refused!(
-        [
-          {length(:binary.matches(binary_part(text, 0, at), "\n")) + 1,
-           "the line ends with a carriage return, as a store saved with CRLF line ends does: " <>
-             "a store's lines end with LF alone, as the runner writes them, so save it so"}
-        ],
-        path
-      )
-
-  defp returned(:nomatch, text, {path, name}) do
-    {marked, lines} = text |> String.split("\n") |> unended() |> Enum.with_index(1) |> marked()
+  def decode!(text, {path, name}) do
+    {marked, lines} = text |> lines() |> unended() |> Enum.with_index(1) |> marked()
     {written_at, problems} = headed(lines, name)
     {body, ending, last} = ended(lines)
 
@@ -305,14 +313,17 @@ defmodule Logex.Retain do
 
   defp ending(["end", count, "lines"], text, n), do: counted(number(count), text, n)
 
+  # Decision 417 (RV-13): the remedy says that a cold start copies the store first, under
+  # the next of its numbered copies (decision 418), and then writes over it, where it
+  # warned the operator to copy it aside first.
   defp ending(_other, text, n),
     do: [
       {n,
        "#{quoted(text)} is the store's last line, and no end line: a store of " <>
          "`#{@header}` ends with `end <count> lines`, its count of lines, so this one was " <>
          "cut short, and a store cut short is not read: start it with start: :cold to " <>
-         "start over it, which writes a new store over it at once, so copy it aside first " <>
-         "to keep what it holds"}
+         "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
+         "then writes a new store over it"}
     ]
 
   defp counted({:ok, n}, _text, n), do: []
@@ -332,7 +343,16 @@ defmodule Logex.Retain do
          "count of lines a whole number"}
     ]
 
-  # The text after the last newline, empty in a file the runner wrote, is no line.
+  # Decision 410 (RV-13): a store's lines end with LF, CRLF or a lone CR alike, as B8 has
+  # the source's and a configuration file's readers read them (`Logex.Lexer`,
+  # `Logex.Configuration.Text`), so that a store a hand edit saved with CRLF line ends,
+  # or a lone CR's, is read as the store it is, where since RV-5 it was refused at its
+  # first line holding a carriage return; the runner writes LF. `\r\n` is one line end,
+  # the longest of the three where they meet, and `\r\r\n` two, a line left empty between
+  # them, as the lexer reads it.
+  defp lines(text), do: String.split(text, ["\r\n", "\r", "\n"])
+
+  # The text after the last line end, empty in a file the runner wrote, is no line.
   defp unended(lines), do: unended(List.last(lines), lines)
   defp unended("", lines), do: Enum.drop(lines, -1)
   defp unended(_last, lines), do: lines

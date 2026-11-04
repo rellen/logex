@@ -69,13 +69,13 @@ defmodule Logex.Warnings do
   member's writes as before, and a warning both give in the same words is told once;
   where a member rule cites another first than the word array's would, the write is told
   both, so a write may be told of three firsts where a word array's is told of two at
-  most (provisional). Two coils through the very tags are told the bit already has one,
+  most (decision 434). Two coils through the very tags are told the bit already has one,
   and a coil beside another write through them is not warned (decision 246); a bit a tag
   numbers beside its word written whole through the very tags is warned, as a word
-  array's is (provisional), where a literal bit beside it stays quiet (decision 288). A
+  array's is (decision 435), where a literal bit beside it stays quiet (decision 288). A
   latch of a literal element's literal bit, which a word array's rules compare with
   nothing, is warned beside a coil through a tag subscript on that bit (decision 257) and
-  beside one on a bit a tag numbers (provisional), and is quiet beside a coil a tag
+  beside one on a bit a tag numbers (decision 433), and is quiet beside a coil a tag
   numbers of its own literal element, as a word array's is. A member's word no write
   reaches through a tag subscript has only literal elements' writes, which the member
   rules judge as a word array's are, and costs what it did. A one-shot keeps no storage
@@ -1057,14 +1057,14 @@ defmodule Logex.Warnings do
       {in_array(meeting(coils, {:member_at, group}, places), {:array, array}, at, shown),
        {coils, first_at(wholes, {:member_some, group}, places, {shown, at}, nil), bitted}}
 
-  # Decision 431 (provisional): a literal bit of a literal element's member, written by an
-  # instruction other than a coil, `otl l1[1].pv.3`, and a coil on a bit a tag numbers of
-  # the member through a tag subscript, `ote l1[i].pv.[n]`, are warned where they may
-  # meet, either first, as decision 257 warns that latch beside `ote l1[i].pv.3`: the
-  # latch told the array the coil may write through a tag subscript, the coil told the
-  # latch's bit, which the latch writes. Each keeps a first of its own, `{:latched, tag}`
-  # and `{:numbered_at, tag}`, which nothing else reads, so that the word array's own
-  # judgement of either (virtual/4) is as a word array's.
+  # Decision 431, as decision 433 took it: a literal bit of a literal element's member,
+  # written by an instruction other than a coil, `otl l1[1].pv.3`, and a coil on a bit a
+  # tag numbers of the member through a tag subscript, `ote l1[i].pv.[n]`, are warned
+  # where they may meet, either first, as decision 257 warns that latch beside `ote
+  # l1[i].pv.3`: the latch told the array the coil may write through a tag subscript, the
+  # coil told the latch's bit, which the latch writes. Each keeps a first of its own,
+  # `{:latched, tag}` and `{:numbered_at, tag}`, which nothing else reads, so that the
+  # word array's own judgement of either (virtual/4) is as a word array's.
   defp decided({:literal_latch, tag, at, shown, places}, {coils, wholes, bitted}),
     do:
       {in_array(meeting(coils, {:numbered_at, tag}, places), {:array, tag}, at, shown),
@@ -1232,7 +1232,7 @@ defmodule Logex.Warnings do
   # element's literal bit, `otl l1[1].pv.3`, which a word array's rules compare with
   # nothing, is compared with a coil on a bit a tag numbers through a tag subscript, `ote
   # l1[i].pv.[n]`, alone, as decision 257 has a latch of it beside `ote l1[i].pv.3`
-  # (provisional, decided/2), a pair of its own beside the word array's.
+  # (decision 433, decided/2), a pair of its own beside the word array's.
   defp virtual_write(
          {:member, _, {:element, _, array, index, element}, members},
          words,

@@ -1785,12 +1785,14 @@ defmodule Logex.RealTest do
                  "#{file}: line 2: `big 1.0e-400 1.0` is no force: a line holds an input " <>
                  "point's name and its value, as `eye_1 1`"
 
-      # Nor is a comment, a tab or a return after the number, which the lexer would pass
-      # over (M5-11's review); a number no float holds, `1.0e-400`, is 0.0 since decision
-      # 237.
+      # Nor is a comment or a tab after the number, which the lexer would pass over
+      # (M5-11's review); a number no float holds, `1.0e-400`, is 0.0 since decision 237.
+      # A return after it was no force too, until decision 410 (RV-13), the leave for that
+      # reading: a carriage return ends a line, as B8 has the source's and a configuration
+      # file's readers read it, so `hz 1.5\r` forces 1.5, below.
       for text <-
             ["1.", "1e5", "+3", "0x10", "8#7", "1.5L", "3 4", "x"] ++
-              ["1.5//c", "1.5 //c", "1.5\t", "1.5\r", "1.0e-400 x", "1_0.0e-400//c"] do
+              ["1.5//c", "1.5 //c", "1.5\t", "1.0e-400 x", "1_0.0e-400//c"] do
         File.write!(file, "hz #{text}\n")
 
         assert raised(fn -> run_fan(file) end) ==
@@ -1798,6 +1800,25 @@ defmodule Logex.RealTest do
                    "name and its value, as `eye_1 1`",
                text
       end
+
+      # Decision 410: `hz 1.5\r`, ended by CR and LF, by CRLF or by a lone CR, forces 1.5,
+      # the line ending at the carriage return; the next force writes the file with LF.
+      for saved <- ["hz 1.5\r\n", "hz 1.5\r", "big 2.5\rhz 1.5\r\n"] do
+        File.write!(file, saved)
+        {{:ok, runner}, _clock, _sim} = run_fan(file)
+        assert Runner.status(runner).forces["hz"] === 1.5, inspect(saved)
+        assert Runner.force(runner, "big", 1.0) == :ok
+        assert File.read!(file) == "big 1.0\nhz 1.5\n"
+        Runner.stop(runner)
+      end
+
+      # A lone CR before a CRLF is a line end of its own, as the lexer reads it, so the
+      # line between them is empty, and no force.
+      File.write!(file, "hz 1.5\r\r\n")
+
+      assert raised(fn -> run_fan(file) end) ==
+               "#{file}: line 2: `` is no force: a line holds an input point's name and its " <>
+                 "value, as `eye_1 1`"
     end
   end
 

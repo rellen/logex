@@ -141,6 +141,23 @@ defmodule Logex.StalledDiskTest do
   defp caller_found([pid | _], _server, _kind), do: pid
   defp caller_found([], server, kind), do: waiting_call(server, kind)
 
+  # A call of `kind` waiting in the held file server, `{:called, pid}`, or `:answered`
+  # where the task it was awaited from ended first, its write killed at its limit before
+  # it made the call.
+  defp called_or_answered(server, kind, task),
+    do: called_or_ended(callers(Process.info(server, :messages), kind), server, kind, task)
+
+  defp callers({:messages, messages}, kind),
+    do: for({:"$gen_call", {pid, _}, request} <- messages, elem(request, 0) == kind, do: pid)
+
+  defp called_or_ended([pid | _], _server, _kind, _task), do: {:called, pid}
+
+  defp called_or_ended([], server, kind, task),
+    do: ended_or_waiting(Process.alive?(task.pid), server, kind, task)
+
+  defp ended_or_waiting(false, _server, _kind, _task), do: :answered
+  defp ended_or_waiting(true, server, kind, task), do: called_or_answered(server, kind, task)
+
   # Waits until a stop's request to terminate waits in the runner's mailbox.
   defp terminate_waiting(runner),
     do: terminate_found(Process.info(runner, :messages), runner)
@@ -565,7 +582,7 @@ defmodule Logex.StalledDiskTest do
   end
 
   # RV-5: the store's read at a fresh start raw and limited as the forces file's is
-  # (provisional), and decision 360's copy of a store the start dropped from a write as
+  # (decision 415), and decision 360's copy of a store the start dropped from a write as
   # every other, limited the same, its failure reported and the start going on.
   describe "a fresh start's store on a stalled disk (RV-5, decision 360)" do
     test "a start whose store's read does not end within its limit is refused, naming the " <>
@@ -629,16 +646,22 @@ defmodule Logex.StalledDiskTest do
              } =
                Runner.status(runner)
 
-      assert copy == rig.store <> ".dropped"
+      # Decision 418 (RV-13), the leave for the one `.dropped`: the copy's own number,
+      # `.dropped.1`, the first.
+      assert copy == rig.store <> ".dropped.1"
 
       # The killed copy's rename may land once the disk answers, the copy whole; the store
       # is as the start read it until its first write, which since RV-5's review makes the
-      # copy owed first, the stop's here.
+      # copy owed first, the stop's here, since decision 418 under the next number past
+      # the killed copy where that landed, none replaced.
       :sys.resume(server)
       assert File.read!(rig.store) == read
-      assert File.read(rig.store <> ".dropped") in [{:ok, read}, {:error, :enoent}]
+      landed = File.read(copy)
+      assert landed in [{:ok, read}, {:error, :enoent}]
       assert Runner.stop(runner) == :ok
-      assert File.read!(rig.store <> ".dropped") == read
+      owed = owed_copy(landed, rig.store)
+      assert File.read!(owed) == read
+      assert File.read(copy) == {:ok, read}
       refute File.read!(rig.store) == read
     end
 
@@ -679,6 +702,10 @@ defmodule Logex.StalledDiskTest do
       send(caller, :done)
     end
   end
+
+  # Decision 418: the copy a stop made of a copy owed, past one that landed late.
+  defp owed_copy({:ok, _read}, store), do: store <> ".dropped.2"
+  defp owed_copy({:error, :enoent}, store), do: store <> ".dropped.1"
 
   # The VM's file server held for `ms` of real time and then let go, as a disk slow over a
   # write, healthy, is.
@@ -843,17 +870,20 @@ defmodule Logex.StalledDiskTest do
       eye(rig, 1)
       assert Runner.stop(runner) == :ok
       read = File.read!(rig.store)
-      copy = rig.store <> ".dropped"
+      # Decision 418 (RV-13), the leave for the one `.dropped`: the copy's own number, the
+      # first, `.dropped.1`, written through the copies' one `.tmp`.
+      copy = rig.store <> ".dropped.1"
+      tmp = rig.store <> ".dropped.tmp"
 
       {:ok, retyped} =
         Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
 
       {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
       next = rig(dir, forces: nil, configuration: config)
-      File.mkdir!(copy <> ".tmp")
+      File.mkdir!(tmp)
       {:ok, runner} = Runner.start_link(next.opts)
       assert %{retain: %{copy: nil, failed: :eisdir, written_at: started}} = Runner.status(runner)
-      File.rmdir!(copy <> ".tmp")
+      File.rmdir!(tmp)
 
       # A trip's write, killed in the copy's rename: the copy unknown, the store as the
       # start read it, its age the start's.
@@ -867,27 +897,294 @@ defmodule Logex.StalledDiskTest do
              } = written_or_unknown(runner)
 
       :sys.resume(server)
-      wait_for_tmp_gone(copy <> ".tmp")
+      wait_for_tmp_gone(tmp)
       assert File.read!(rig.store) == read
 
       # A cold restart's, the copy still owed: the copy's rename let through and the
-      # store's held, killed at the limit: the copy made, the store unknown.
+      # store's held, killed at the limit: the copy made, the store unknown. Since
+      # decision 418 the copy is numbered past the killed one where that landed, none
+      # replaced.
+      made = owed_copy(File.read(copy), rig.store)
       server = held()
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
-      _copying = waiting_call(server, :rename)
+      assert {:called, _copying} = called_or_answered(server, :rename, restart)
       :sys.resume(server)
       :sys.suspend(server)
-      _storing = waiting_call(server, :rename)
+      # The store's write killed at its limit in its rename, or, on a machine loaded past
+      # the limit's 1,010 ms, in its raw calls before it, which tells the same: the store
+      # unknown, the copy made. The wait ends either way, where it waited for a rename that
+      # never came, once in fifty runs under load (the review of RV-13).
+      _storing = called_or_answered(server, :rename, restart)
       assert Task.await(restart, @answers) == {:error, {:retain, :timeout}}
 
-      assert %{status: :tripped, retain: %{unknown: store, copy: ^copy, failed: nil}} =
+      assert %{status: :tripped, retain: %{unknown: store, copy: ^made, failed: nil}} =
                Runner.status(runner)
 
       assert store == rig.store
-      assert :file.read_file(copy, [:raw]) == {:ok, read}
+      assert :file.read_file(made, [:raw]) == {:ok, read}
       :sys.resume(server)
       wait_for_tmp_gone(rig.store <> ".tmp")
       assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # Decision 418 (RV-13): each copy a name of its own, numbered one past the highest that
+  # stands as it begins, and not renamed over a file that stands at its number as it
+  # looks, raw, just before its rename: one a host makes there while it is written, here
+  # while the copy's write waits on the held file server in its delete of a leftover at
+  # the copies' `.tmp`, after it read the directory and before that look, is left as it
+  # is, the copy failing `:eexist` and owed, as decision 416 has a copy that cannot be
+  # made, the start going on; the next write over the store makes it under the next number
+  # past the host's file (provisional: failed and owed, where it could take the next free
+  # number at once). The test's name said "while it is written", which the review of
+  # RV-13 found true only before the look (below).
+  describe "a copy's number (decision 418)" do
+    test "a file a host makes at the copy's number while it is written, before the copy " <>
+           "looks at its name, is never replaced",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+      File.write!(rig.store <> ".dropped.tmp", "a leftover")
+      server = held()
+
+      start =
+        Task.async(fn ->
+          {:ok, runner} = Runner.start_link(next.opts)
+          Process.unlink(runner)
+          runner
+        end)
+
+      _copying = waiting_call(server, :delete)
+      host = rig.store <> ".dropped.1"
+      :ok = :file.write_file(host, "a host's file", [:raw])
+      :sys.resume(server)
+      runner = Task.await(start, @answers)
+
+      assert %{status: :running, retain: %{copy: nil, failed: :eexist, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      assert File.read!(host) == "a host's file"
+      assert File.read!(rig.store) == read
+      refute File.exists?(rig.store <> ".dropped.tmp")
+
+      # The stop's write makes the owed copy first, under the next number, and then the
+      # store.
+      assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store <> ".dropped.2") == read
+      assert File.read!(host) == "a host's file"
+      refute File.read!(rig.store) == read
+    end
+
+    # The review of RV-13: the look and the rename are two calls, the rename through the
+    # VM's file server, so that a file a host makes at the copy's number between them, as
+    # the rename waits in the held server's queue, is replaced by the copy, the copy made
+    # and named (provisional, a question to the maintainer: decision 418 has none
+    # replaced, and the rename that refuses a name that stands, a hard link, is not on
+    # every card's file system).
+    test "a file a host makes at the copy's number after the copy looked, as its rename " <>
+           "waits, is replaced (provisional)",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+      assert Runner.stop(runner) == :ok
+      read = File.read!(rig.store)
+
+      {:ok, retyped} =
+        Logex.compile(String.replace(@tally, "boxes ctu", "boxes ctu_int"), name: "tally")
+
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => retyped})
+      next = rig(dir, forces: nil, configuration: config)
+      server = held()
+
+      start =
+        Task.async(fn ->
+          {:ok, runner} = Runner.start_link(next.opts)
+          Process.unlink(runner)
+          runner
+        end)
+
+      assert {:called, _renaming} = called_or_answered(server, :rename, start)
+      host = rig.store <> ".dropped.1"
+      assert :file.read_link_info(host, [:raw]) == {:error, :enoent}
+      :ok = :file.write_file(host, "a host's file", [:raw])
+      :sys.resume(server)
+      runner = Task.await(start, @answers)
+
+      assert %{status: :running, retain: %{copy: ^host, failed: nil, dropped: [_drop]}} =
+               Runner.status(runner)
+
+      assert File.read!(host) == read
+      refute File.exists?(rig.store <> ".dropped.tmp")
+      assert Runner.stop(runner) == :ok
+      refute File.exists?(rig.store <> ".dropped.2")
+    end
+  end
+
+  # Decision 417 (RV-13): a cold start over a store a fresh start would refuse copies it
+  # first and writes the store only once the copy is made, so a copy the disk does not
+  # finish within the write limit is judged as decision 291 judges a cold start whose
+  # first write fails: the start refused, `{:error, {:retain, :timeout}}`, no device read
+  # and the store as it was, the copy's rename alone left to land once the disk answers;
+  # and a store that stands but whose read does not end within its limit, a FIFO in its
+  # place, can be copied by no start, the same (provisional).
+  describe "a cold start's copy (decision 417)" do
+    test "a cold start whose copy does not end within its limit starts nothing, the store " <>
+           "as it was",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil, start: :cold)
+      cut = "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\nglobal tot"
+      File.write!(rig.store, cut)
+      server = held()
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+      assert Sim.reads(rig.panel) == 0
+      assert :file.read_file(rig.store, [:raw]) == {:ok, cut}
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.store <> ".dropped.tmp")
+      assert File.read!(rig.store) == cut
+      assert File.read(rig.store <> ".dropped.1") in [{:ok, cut}, {:error, :enoent}]
+      refute File.exists?(rig.store <> ".tmp")
+    end
+
+    test "a cold start over a store whose read does not end within its limit starts nothing",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil, start: :cold)
+      {_, 0} = System.cmd("mkfifo", [rig.store])
+      on_exit(fn -> let_go(rig.store) end)
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+      assert Sim.reads(rig.panel) == 0
+      assert {:ok, %File.Stat{type: :other}} = File.lstat(rig.store)
+      let_go(rig.store)
+    end
+  end
+
+  # Decision 414 (RV-13): the end's write, a stop's or a shutdown's, takes the retained
+  # image out and makes the store's text in the write's own process, within the write
+  # limit, which the child spec's shutdown deadline counts, where the runner made them in
+  # its own process with no limit (b3-store-image-4), so that a store too big to make and
+  # write within the limit is cut off at it and told, `{:retain, {:error, :timeout}}`,
+  # never killed by its supervisor in the making. Traced: the runner itself calls neither
+  # `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2` as it ends, and a process it
+  # starts, the write's, calls both, the store then written. A trace pattern moves every
+  # process's reductions, and this module is not async (CONTRIBUTING.md).
+  describe "the end's write within its limit (decision 414)" do
+    test "the end's write makes the store's text in the write's own process",
+         %{tmp_dir: dir} do
+      for ending <- [:stop, :shutdown] do
+        rig = rig(Path.join(dir, "#{ending}"), forces: nil, write_limit: 5000)
+        File.mkdir_p!(Path.join(dir, "#{ending}"))
+        {:ok, runner} = Runner.start_link(rig.opts)
+        Process.unlink(runner)
+        eye(rig, 1)
+        ref = Process.monitor(runner)
+        assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
+        assert :erlang.trace_pattern({Logex.Runtime, :retained, 1}, true, [:local]) == 1
+        :erlang.trace(runner, true, [:call, :set_on_spawn])
+        ended_by(ending, runner)
+        assert_receive {:DOWN, ^ref, :process, ^runner, _reason}, @answers
+        :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
+        :erlang.trace_pattern({Logex.Runtime, :retained, 1}, false, [:local])
+        calls = traced_all()
+        refute Enum.any?(calls, &match?({^runner, _mfa}, &1)), inspect(calls)
+
+        assert [{write, {Logex.Runtime, :retained, [_runtime]}}] =
+                 for({_pid, {Logex.Runtime, :retained, _}} = call <- calls, do: call)
+
+        assert [{^write, {Logex.Retain, :encode, [_image, _at]}}] =
+                 for({_pid, {Logex.Retain, :encode, _}} = call <- calls, do: call)
+
+        assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
+      end
+    end
+  end
+
+  # Decision 414: the limit counted from before the write's process is made, so that the
+  # copy into it of what its call holds, a large resource among it, is within the limit
+  # and the shutdown's deadline counts it (`Logex.Runner.Writer.within/2`). Traced: the
+  # caller reads the clock, makes the write's process and reads the clock again, the wait
+  # its limit less the time between, where a limit counted from after the process was
+  # made read the clock once, before, or not at all. A trace pattern moves every
+  # process's reductions, and this module is not async (CONTRIBUTING.md).
+  describe "a write's limit counted from before its process is made (decision 414)" do
+    test "the caller reads the clock before it makes the write's process and after" do
+      test = self()
+
+      caller =
+        spawn(fn ->
+          Process.flag(:trap_exit, true)
+
+          receive do
+            :go -> send(test, {:within, Logex.Runner.Writer.within(fn -> :written end, 5000)})
+          end
+
+          receive do
+            :done -> :ok
+          end
+        end)
+
+      assert :erlang.trace_pattern({System, :monotonic_time, 1}, true, [:global]) == 1
+      :erlang.trace(caller, true, [:call, :procs])
+      send(caller, :go)
+      assert_receive {:within, :written}, 5000
+      :erlang.trace(caller, false, [:call, :procs])
+      :erlang.trace_pattern({System, :monotonic_time, 1}, false, [:global])
+      ref = :erlang.trace_delivered(caller)
+      assert_receive {:trace_delivered, ^caller, ^ref}, 5000
+      send(caller, :done)
+
+      assert [
+               {:clock, :millisecond},
+               {:spawned, write},
+               {:clock, :millisecond}
+             ] = clock_and_spawns(caller)
+
+      assert {:module, Logex.Runner.Writer} == :erlang.fun_info(write, :module)
+    end
+  end
+
+  # The caller's clock reads and the processes it made, in the order it made them, each a
+  # process's function where it made one.
+  defp clock_and_spawns(caller) do
+    receive do
+      {:trace, ^caller, :call, {System, :monotonic_time, [unit]}} ->
+        [{:clock, unit} | clock_and_spawns(caller)]
+
+      {:trace, ^caller, :spawn, _pid, {:erlang, :apply, [fun, []]}} ->
+        [{:spawned, fun} | clock_and_spawns(caller)]
+
+      {:trace, ^caller, _other, _pid} ->
+        clock_and_spawns(caller)
+
+      {:trace, ^caller, _other, _pid, _info} ->
+        clock_and_spawns(caller)
+    after
+      0 -> []
+    end
+  end
+
+  defp ended_by(:stop, runner), do: assert(Runner.stop(runner) == :ok)
+
+  defp ended_by(:shutdown, runner),
+    do: assert(Task.await(Task.async(fn -> GenServer.stop(runner, :shutdown) end)) == :ok)
+
+  defp traced_all do
+    receive do
+      {:trace, pid, :call, mfa} -> [{pid, mfa} | traced_all()]
+    after
+      0 -> []
     end
   end
 
