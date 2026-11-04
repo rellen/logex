@@ -1316,12 +1316,15 @@ defmodule Logex.RetainStoreTest do
       assert_receive {:read, {:ok, ^read}}, 5000
       copy = rig.store <> ".dropped.1"
 
+      # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil where no
+      # write is unknown.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:00Z],
                failed: nil,
                dropped: [{"t1.boxes", {:retyped, "ctu", "ctu_int"}}],
-               copy: copy
+               copy: copy,
+               unknown: nil
              }
 
       # The store itself as it was until the first write over it, the period's, which
@@ -2018,13 +2021,15 @@ defmodule Logex.RetainStoreTest do
                Retain.encode(Runtime.retained(Runtime.start(config)), ~U[2026-10-30 14:00:00Z])
 
       # Decision 412 (RV-13), the leave for `copy` absent: `copy` always there, nil where
-      # the start made no copy.
+      # the start made no copy; and decision 440 (RV-16) `unknown` so, nil where no write
+      # is unknown.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:00Z],
                failed: nil,
                dropped: [],
-               copy: nil
+               copy: nil,
+               unknown: nil
              }
 
       assert Runner.stop(runner) == :ok
@@ -2047,12 +2052,14 @@ defmodule Logex.RetainStoreTest do
       # first (decision 274): the counter and the total kept, `shown` from the count.
       assert values(runner) == kept
 
+      # Decision 440 (RV-16), the leave for `unknown` absent: nil where no write is unknown.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:02Z],
                failed: nil,
                dropped: [],
-               copy: nil
+               copy: nil,
+               unknown: nil
              }
 
       assert Runner.stop(runner) == :ok

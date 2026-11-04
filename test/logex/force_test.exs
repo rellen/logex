@@ -850,7 +850,8 @@ defmodule Logex.ForceTest do
       assert %{forces: %{}, forces_unread: {^file, :eisdir}} = Runner.status(runner)
       File.rmdir!(file)
       assert Runner.force(runner, "level", 2) == :ok
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      # Decision 440 (RV-16), the leave for the key absent: nil where the file reads.
+      assert Runner.status(runner).forces_unread == nil
       assert File.read!(file) == "level 2\n"
     end
 
@@ -903,7 +904,8 @@ defmodule Logex.ForceTest do
       Sim.set(panel, [1], 0)
       File.rmdir!(file)
       assert Runner.restart(runner, :cold) == :ok
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      # Decision 440 (RV-16), the leave for the key absent: nil where the file reads.
+      assert Runner.status(runner).forces_unread == nil
       assert Runner.get!(runner, "seen") == 8
       Runner.force(runner, "level", 2)
       Manual.advance(clock, 10)

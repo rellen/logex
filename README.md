@@ -3515,11 +3515,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   then the old or the new: it is reported and its caller answered as one that fails is,
   `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
   `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
-  and `written_at` the last write known made, until a later write lands or fails, and has
-  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped.1"`, and a
-  write over the store that owes the copy first and is killed in the copy's own write,
-  the store as it was; one killed in the store's names the store, the copy made (decision
-  391; the key, how long it stands and the file named provisional).
+  and `written_at` the last write known made, until a later write lands or fails, and
+  `unknown: nil` otherwise, the key always there (decision 440); so does a copy's,
+  `unknown: "tally.retain.dropped.1"`, and a write over the store that owes the copy
+  first and is killed in the copy's own write, the store as it was; one killed in the
+  store's names the store, the copy made (decisions 391 and 447).
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
   grid from the runner's start (M6-6, decision 275): the runner takes the retained values
   out between two rounds, as its own work, never inside a round and moving no round's
@@ -4322,8 +4322,8 @@ stage: nil
   one the disk has not finished within the write limit of real time `{:error, {:forces,
   :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
   land once the disk answers, so `status/1` names the set it held meanwhile,
-  `forces_unknown`, until a later write of the file lands or fails or a restart reads it
-  (decision 391, the key provisional). The rounds run on while the write is out, in a
+  `forces_unknown`, until a later write of the file lands or fails or a restart reads it,
+  nil otherwise, the key always there (decisions 391 and 440). The rounds run on while the write is out, in a
   process of its own, and the force takes effect at the first round after it lands, its
   call answered then (decision 437): so on a slow disk the logic keeps the plant under
   control, every round reading the forces as they were and `status/1` listing those, and
@@ -4338,8 +4338,8 @@ stage: nil
   them, starts a fresh start with no force and keeps at a restart the forces the runner
   holds, the restart going on and the line coming back, and `status/1` names it,
   `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
-  of it lands or a restart reads it (decision 390; the key and how long it stands
-  provisional); with no such file to name, `status/1` has no `forces_unread`. A restart
+  of it lands or a restart reads it (decision 390); with no such file to name,
+  `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
   that reads the file takes what it holds, as every start does, so after a fresh start
   that could not read it the next restart takes the forces the file held, which no one
   forced since and `status/1` did not list (provisional); and a relative `forces:` whose

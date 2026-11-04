@@ -214,9 +214,11 @@ defmodule Logex.StalledDiskTest do
   defp written(runner), do: written_status(Runner.status(runner), runner)
 
   # Decision 391 (RV-11), the leave for a timed-out write reported failed: the write past
-  # its limit is unknown until its answer is taken, where it was `failed: :timeout`.
-  defp written_status(%{retain: %{unknown: _path}}, runner), do: written(runner)
-  defp written_status(status, _runner), do: status
+  # its limit is unknown until its answer is taken, where it was `failed: :timeout`; and
+  # decision 440 (RV-16), the leave for the key absent: `unknown` always there, nil once
+  # the answer is taken.
+  defp written_status(%{retain: %{unknown: nil}} = status, _runner), do: status
+  defp written_status(_unknown, runner), do: written(runner)
 
   # A FIFO's reader let go: the FIFO opened for reading and writing, which never waits,
   # by a shell spawned straight, its path an argument, since a file call through the VM's
@@ -434,7 +436,8 @@ defmodule Logex.StalledDiskTest do
       File.rm!(rig.forces)
       assert Runner.force(runner, "eye_1", 1) == :ok
       assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert Runner.status(runner).forces_unread == nil
       assert Runner.stop(runner) == :ok
     end
 
@@ -478,7 +481,8 @@ defmodule Logex.StalledDiskTest do
       let_go(rig.forces)
       File.rm!(rig.forces)
       {:ok, runner} = Runner.start_link(rig.opts)
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert Runner.status(runner).forces_unread == nil
       assert Runner.stop(runner) == :ok
     end
 
@@ -745,7 +749,8 @@ defmodule Logex.StalledDiskTest do
       :sys.resume(server)
       assert Runner.restart(runner, :cold) == :ok
       retain = Runner.status(runner).retain
-      refute Map.has_key?(retain, :unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert retain.unknown == nil
       assert retain.failed == nil
 
       # Past its limit again, a trip's; then a write that fails, the store's `.tmp` a
@@ -754,16 +759,20 @@ defmodule Logex.StalledDiskTest do
       server = held()
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
-      assert %{retain: %{unknown: _store}} = written_or_unknown(runner)
+      # Decision 440 (RV-16): the key always there, so its file named.
+      assert %{retain: %{unknown: unknown}} = written_or_unknown(runner)
+      assert unknown == rig.store
       :sys.resume(server)
       wait_for_tmp_gone(rig.store <> ".tmp")
       File.mkdir!(rig.store <> ".tmp")
       assert {:ok, %{retain: retain}} = {:ok, Runner.status(runner)}
-      assert Map.has_key?(retain, :unknown)
+      # Decision 440 (RV-16): the key always there, so its file named.
+      assert retain.unknown == rig.store
       assert Runner.restart(runner, :cold) == {:error, {:retain, :eisdir}}
       retain = Runner.status(runner).retain
       assert retain.failed == :eisdir
-      refute Map.has_key?(retain, :unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert retain.unknown == nil
       File.rmdir!(rig.store <> ".tmp")
       assert Runner.stop(runner) == :ok
     end
@@ -774,7 +783,8 @@ defmodule Logex.StalledDiskTest do
       rig = rig(dir, retain: nil, retain_period: nil)
       {:ok, runner} = Runner.start_link(rig.opts)
       assert Runner.force(runner, "level", 7) == :ok
-      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert Runner.status(runner).forces_unknown == nil
       server = held()
 
       assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
@@ -790,7 +800,8 @@ defmodule Logex.StalledDiskTest do
       # A later write that lands: known, the runner's set.
       assert Runner.unforce(runner, "eye_1") == :ok
       assert File.read!(rig.forces) == "level 7\n"
-      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert Runner.status(runner).forces_unknown == nil
 
       # Past its limit again; then one that fails, a directory at the `.tmp`: known.
       server = held()
@@ -800,7 +811,8 @@ defmodule Logex.StalledDiskTest do
       wait_for_tmp_gone(rig.forces <> ".tmp")
       File.mkdir!(rig.forces <> ".tmp")
       assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :eisdir}}
-      refute Map.has_key?(Runner.status(runner), :forces_unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert Runner.status(runner).forces_unknown == nil
       File.rmdir!(rig.forces <> ".tmp")
 
       # Past its limit once more; then a restart reads the file, and knows what it holds.
@@ -810,10 +822,13 @@ defmodule Logex.StalledDiskTest do
       wait_for_tmp_gone(rig.forces <> ".tmp")
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
-      assert %{status: :tripped, forces_unknown: _set} = Runner.status(runner)
+      # Decision 440 (RV-16): the key always there, so the set it holds named.
+      assert %{status: :tripped, forces_unknown: set} = Runner.status(runner)
+      assert set == %{"eye_1" => 1, "level" => 7}
       assert Runner.restart(runner, :warm) == :ok
       status = Runner.status(runner)
-      refute Map.has_key?(status, :forces_unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert status.forces_unknown == nil
       assert status.forces in [%{"level" => 7}, %{"eye_1" => 1, "level" => 7}]
       assert Runner.stop(runner) == :ok
     end
@@ -850,8 +865,10 @@ defmodule Logex.StalledDiskTest do
       File.rmdir!(forces)
       assert Runner.unforce(runner, "eye_1") == :ok
       status = Runner.status(runner)
-      refute Map.has_key?(status, :forces_unread)
-      refute Map.has_key?(status, :forces_unknown)
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert status.forces_unread == nil
+      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
+      assert status.forces_unknown == nil
       assert File.read!(forces) == "level 7\n"
       assert Runner.stop(runner) == :ok
     end

@@ -15080,13 +15080,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # :timeout`, no file named, a copy that lands nowhere. Each is owed, as the runner owes
   # it, so that the next write's copy is checked, its number and its bytes, by
   # `owed_made!/1` (the review of RV-13), where the model forgot it.
-  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next) do
+  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next)
+       when is_binary(copy) do
     assert copy == copy_named(w, next)
     {{next, [text, nil]}, text}
   end
 
+  # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil.
   defp copy_told(_drops, %{copy: nil, failed: :timeout} = retain, text, _w, _next) do
-    refute Map.has_key?(retain, :unknown)
+    assert Map.fetch!(retain, :unknown) == nil
     {nil, text}
   end
 
@@ -15100,8 +15102,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # The copy owed: the directory at its `.tmp` refused it, `failed: :eisdir`, known; or,
   # past its limit, it is unknown (decision 391), or, since decision 418, killed before it
   # took a number, `failed: :timeout`.
+  # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil.
   defp owed_told(%{copy: nil, failed: failed} = retain, _copy) when failed in [:eisdir, :timeout],
-    do: not Map.has_key?(retain, :unknown)
+    do: Map.fetch!(retain, :unknown) == nil
 
   defp owed_told(%{copy: nil, failed: nil, unknown: copy}, copy), do: true
   defp owed_told(_retain, _copy), do: false
@@ -17670,9 +17673,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 390: the forces file a start or a restart could not read, named until a
     # force's write lands or a restart reads it. Decision 391: the set a force's write
     # past its limit held, which no walk's write is, the disk healthy and its limit of
-    # real time, so none (RV-11's review).
-    assert Map.get(status, :forces_unread) == w.unread
-    assert Map.get(status, :forces_unknown) == nil
+    # real time, so none (RV-11's review). Decision 440 (RV-16): each key always there,
+    # nil where nothing stands, and the store's report's `unknown` so.
+    assert Map.fetch!(status, :forces_unread) == w.unread
+    assert Map.fetch!(status, :forces_unknown) == nil
+    retain_keys!(status.retain)
 
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
     life_paths!(w)
@@ -17688,6 +17693,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp outputs_of({:either, outputs}), do: outputs
   defp outputs_of(outputs), do: [outputs]
+
+  # Decision 440 (RV-16): a store's report holds `unknown` always, nil or a file's path.
+  defp retain_keys!(nil), do: :ok
+  defp retain_keys!(%{unknown: unknown}) when unknown == nil or is_binary(unknown), do: :ok
 
   # Decision 262: the devices status/1 names while tripped, none while running.
   defp unzeroed!(%{status: :running} = w, named) do

@@ -325,7 +325,7 @@ defmodule Logex.Runner do
     left as for a write that fails, and `status/1`'s `retain` names the file it may land
     in, `unknown: "plant.retain"`, the store or its copy as the host spelled it, `failed`
     nil and `written_at` the last write known made, until a later write lands or fails,
-    the key absent otherwise (provisional: its name and that it stands only so long); a
+    and since decision 440 the key always there, nil where no write is unknown; a
     stop told `{:error, {:retain, :timeout}}` leaves the store so, the old or the new,
     the last write or the stop's. Since decision 317 a
     cold restart that a device then refuses writes the store back, after the refusal's
@@ -489,8 +489,8 @@ defmodule Logex.Runner do
   the new, which a restart, reading the file as every start does, then takes, and
   `status/1` lists; since decision 391 `status/1` names meanwhile the set the write
   held, `forces_unknown`, until a later write of the file lands or fails or a restart
-  reads it, the key absent otherwise (provisional: its name and that it stands only so
-  long). Every start reads it, `start_link/1` in the caller,
+  reads it, and since decision 440 the key always there, nil where no such write
+  stands. Every start reads it, `start_link/1` in the caller,
   after the configuration and the bindings, and `restart/2` before it releases anything,
   each raw, off the VM's file server, and limited to the write limit of real time
   (decisions 353 and 400), so that a runner killed while an input is forced, and started
@@ -502,8 +502,7 @@ defmodule Logex.Runner do
   going on, the line coming back, and `status/1` names the file, `forces_unread: {path,
   reason}`, the path as the host spelled it and `reason` `:timeout` or the file system's
   own, until a force's or an unforce's write of the file lands or a restart reads it,
-  the key absent while the file reads (provisional: its name and that it stands only so
-  long); a restart that reads the file once it reads again takes what it holds, as every
+  and since decision 440 the key always there, nil while the file reads; a restart that reads the file once it reads again takes what it holds, as every
   start does (decision 127), so that a fresh start that could not read it, which started
   with no force, takes at its next restart the forces the file held, ones no one forced
   since and `status/1` did not show (provisional, RV-11's review); a line that is no force, a point forced twice, and a force the configuration
@@ -974,12 +973,13 @@ defmodule Logex.Runner do
   restart; `now`, the resource's time; `rounds`, the rounds run, a round that tripped
   not among them; `trip`, the trip's reason, nil while running; `overlaps`, each task's
   (`Logex.Runtime.overlaps/1`);
-  `forces`, every force, by its point's name, with its value; since decision 390, where
-  the last start or restart could not read the forces file, `forces_unread`, `{path,
-  reason}`, until a force's or an unforce's write of it lands or a restart reads it, and
-  no such key otherwise; since decision 391, where a force's write ran past its limit
-  and may yet land, `forces_unknown`, the set it held, until a later write of the file
-  lands or fails or a restart reads it, and no such key otherwise; `edit`, the stage of the
+  `forces`, every force, by its point's name, with its value; since decision 390
+  `forces_unread`, where the last start or restart could not read the forces file,
+  `{path, reason}`, until a force's or an unforce's write of it lands or a restart reads
+  it, and since decision 440 always there, nil where the file was read; since decision
+  391 `forces_unknown`, where a force's write ran past its limit and may yet land, the set
+  it held, until a later write of the file lands or fails or a restart reads it, and since
+  decision 440 always there, nil where no such write stands; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms;
@@ -1001,10 +1001,11 @@ defmodule Logex.Runner do
   start dropped nothing,
   and nil while the copy is owed, its write having failed, its reason then `failed` as
   any failed write's, until a write over the store makes it first, `dropped` and `failed`
-  telling the two nils apart; and since decision 391, where the last write
-  over the store or its copy ran past its limit and may yet land, `unknown`, that file's
-  path as the host spelled it, `failed` then nil, until a later write lands or fails, and
-  no `unknown` otherwise.
+  telling the two nils apart; and since decision 391 `unknown`, where the last write
+  over the store or its copy ran past its limit and may yet land, that file's path as the
+  host spelled it, `failed` then nil, until a later write lands or fails, and since
+  decision 440 always there, nil where no such write stands, as `copy` is since decision
+  412, so that a display that reads the three keys finds each on a healthy plant.
   """
   def status(runner), do: call(runner, :status)
 
@@ -2315,40 +2316,26 @@ defmodule Logex.Runner do
   defp demonitor(nil), do: :ok
   defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
 
+  # Decision 440 (RV-16): `forces_unread` and `forces_unknown` always in the report, nil
+  # where nothing stands, as decision 412 has the store's `copy`, where each was a key
+  # only while it stood.
   defp status_of(state),
-    do:
-      shown_unread(
-        %{
-          status: state.status,
-          now: state.logical,
-          rounds: state.rounds,
-          trip: state.trip,
-          overlaps: Runtime.overlaps(state.runtime),
-          forces: state.forces,
-          edit: stage(state.edit),
-          runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
-          latest_wake: state.latest_wake,
-          refresh_gap: state.refresh_gap,
-          unzeroed: Enum.sort(state.unzeroed),
-          retain: shown_store(state.retain)
-        },
-        state
-      )
-
-  # Decision 390 (RV-11): the forces file a start or a restart could not read, `{path,
-  # reason}`, the path as the host spelled it, shown while it stands, and no key otherwise
-  # (provisional), as decision 360's `copy` was until decision 412 made it always there,
-  # so that every status of a file read holds as it was.
-  defp shown_unread(status, %{forces_unread: nil, forces_unknown: nil}), do: status
-
-  defp shown_unread(status, %{forces_unread: unread, forces_unknown: nil}),
-    do: Map.put(status, :forces_unread, unread)
-
-  defp shown_unread(status, %{forces_unread: nil, forces_unknown: unknown}),
-    do: Map.put(status, :forces_unknown, unknown)
-
-  defp shown_unread(status, %{forces_unread: unread, forces_unknown: unknown}),
-    do: Map.merge(status, %{forces_unread: unread, forces_unknown: unknown})
+    do: %{
+      status: state.status,
+      now: state.logical,
+      rounds: state.rounds,
+      trip: state.trip,
+      overlaps: Runtime.overlaps(state.runtime),
+      forces: state.forces,
+      forces_unread: state.forces_unread,
+      forces_unknown: state.forces_unknown,
+      edit: stage(state.edit),
+      runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
+      latest_wake: state.latest_wake,
+      refresh_gap: state.refresh_gap,
+      unzeroed: Enum.sort(state.unzeroed),
+      retain: shown_store(state.retain)
+    }
 
   # Each event of a kind its subscriber named, sent, never awaited.
   defp published(%{subscribers: subscribers}, events),
@@ -3175,7 +3162,7 @@ defmodule Logex.Runner do
   # Decision 391 (RV-11): a write that lands is the store's age, `written_at`, the last
   # write neither failed nor unknown.
   defp noted(:ok, at, %{retain: retain} = state),
-    do: {:ok, %{state | retain: Map.delete(%{retain | written_at: at, failed: nil}, :unknown)}}
+    do: {:ok, %{state | retain: %{retain | written_at: at, failed: nil, unknown: nil}}}
 
   # Decision 360 (RV-5's review): a copy owed and made by a write over the store, before
   # it, named in `status/1` from then on and owed no more, since decision 418 by the
@@ -3221,8 +3208,7 @@ defmodule Logex.Runner do
   defp failed(reason, %{retain: retain} = state) do
     published(state, [{:retain, {:error, reason}}])
 
-    {{:error, {:retain, reason}},
-     %{state | retain: Map.delete(%{retain | failed: reason}, :unknown)}}
+    {{:error, {:retain, reason}}, %{state | retain: %{retain | failed: reason, unknown: nil}}}
   end
 
   # ---- the period's writes (M6-6, decision 275) -----------------------------------------
@@ -3256,10 +3242,9 @@ defmodule Logex.Runner do
   defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed])
 
   # Decision 391: the file a write past its limit may yet land in, the store or its copy,
-  # as the host spelled it, `failed` nil: a key of `retain`'s only while it stands
-  # (provisional), as `copy` was until decision 412 made it always there, so that every
-  # status of a write that landed or failed holds as it was.
-  defp unknown(retain, path), do: Map.put(%{retain | failed: nil}, :unknown, path)
+  # as the host spelled it, `failed` nil; since decision 440 (RV-16) a key of `retain`'s
+  # always, nil where no write is unknown, as decision 412 has `copy`.
+  defp unknown(retain, path), do: %{retain | failed: nil, unknown: path}
 
   # The next due time after `at`, on the grid.
   defp next_due(%{every: every, from: from}, at), do: from + every * (div(at - from, every) + 1)
@@ -4652,6 +4637,7 @@ defmodule Logex.Runner do
       failed: nil,
       dropped: dropped,
       copy: nil,
+      unknown: nil,
       owed: nil
     }
 
