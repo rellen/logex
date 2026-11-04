@@ -14945,7 +14945,20 @@ and CI checked; each fix with a test that fails when it is reverted.
      write over the store makes the copy as `plant.retain.dropped.5`. (a) As built,
      failed and owed, as decision 416 has a copy that cannot be made; (b) the next free
      number at once, the copy made in the same start. (A host's file named so before the
-     start counts as standing and is never at the next number.)
+     start counts as standing and is never at the next number.) *Since RV-13's review*
+     the question has a second half: the copy looks at its name raw just before its
+     rename, and the rename goes through the VM's file server, which on a stalled disk
+     holds it in its queue; a backup script's `plant.retain.dropped.4` dropped there in
+     that moment is replaced by the copy, `status/1` showing `copy:
+     "plant.retain.dropped.4"`, `failed: nil`, the script's file gone (pinned as
+     provisional, `stalled_disk_test.exs`'s "… after the copy looked, as its rename
+     waits, is replaced"). (a) As built, the documents saying so; (b) a hard link to the
+     name, which fails `:eexist` in one call where anything stands there, then the `.tmp`
+     unlinked: none ever replaced, but a FAT or exFAT card, which has no hard links,
+     refuses every copy, so (b) needs a fallback there, (a)'s window or (c); (c) the copy
+     written straight to its name, opened exclusively, which fails where anything stands:
+     none replaced, but a copy cut short by a crash is left under its number, a partial
+     `plant.retain.dropped.4` an operator could put back.
   2. *An unnumbered `plant.retain.dropped` an earlier logex left* (decision 418). An
      operator upgrading finds the one copy RV-5 made beside the store. It is kept as it
      stands and counts for nothing: the first numbered copy is `plant.retain.dropped.1`.
@@ -14988,6 +15001,15 @@ and CI checked; each fix with a test that fails when it is reverted.
      352); (b) every write's text within the limit, so that such a plant's trip, cold
      restart and `start: :cold` write fails at 5 s unless `write_limit:` is raised, a cold
      start then refused.
+  8. *A start that fails after its copy, started again* (decisions 360 and 418; RV-13's
+     review). A deploy that drops from the store copies it, and then its drive's device
+     cannot be opened; a supervisor restarts the runner while the gateway boots, five
+     times: `plant.retain.dropped.1` to `.5` stand, each the same bytes, and the sixth
+     start makes `.6`. So does a copy killed past its limit that lands late, and the owed
+     copy then made again (`stalled_disk_test.exs` asserts both). A store of 1 MB on a
+     card fills it at a megabyte a restart. (a) As built, a copy every start that drops;
+     (b) no new copy where the highest-numbered copy already holds the same bytes,
+     `status/1`'s `copy` naming that one, at the cost of reading it at each such start.
 - **RV-14 — the answers to RV-10's questions** (decisions 420–428). Each as built: every
   provisional mark RV-10 left on a reading they settle made the decision's number, in
   `lib/`, `test/` names and comments, README and PLAN's RV-10 entry, save those in the

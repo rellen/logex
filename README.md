@@ -3563,8 +3563,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, or the forces file naming one of the store's
-  copies, `tally.retain.dropped.1` or any number (below), or their `.tmp`, is refused at
-  start, a pinned line. And one runner's: a start naming a store, a forces file, a name
+  copies, `tally.retain.dropped.1` or any number (below), or their `.tmp`, or an
+  unnumbered `tally.retain.dropped`, which would be written through that `.tmp`, is
+  refused at start, a pinned line. And one runner's: a start naming a store, a forces file, a name
   of a store's copies or a `.tmp` of any that another runner of the same VM holds, or
   whose store's copies' names another runner holds a file at, is refused, naming it and
   that runner, until the holder stops, crashes or is killed, when the file is free again
@@ -3619,9 +3620,15 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   unnumbered `tally.retain.dropped`, which an earlier logex made and replaced at each
   start that dropped, is kept as it stands and counts for nothing (provisional). The copy
   is written as every other write is, through the copies' own `.tmp`,
-  `tally.retain.dropped.tmp`, and within the same limit, and never renamed over a file:
-  one a host makes at its number while it is written fails it, `:eexist` (provisional).
-  One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
+  `tally.retain.dropped.tmp`, and within the same limit, and not renamed over a file
+  that stands at its number as it looks, just before its rename: one a host makes there
+  while it is written, before that look, fails it, `:eexist`, and one made between the
+  look and the rename, which goes through the VM's file server and waits in its queue on
+  a stalled disk, is replaced (provisional). A store's copies are its name read whole: a
+  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each start that drops
+  makes a copy of its own, even where the highest copy holds the same bytes, as a start
+  that fails after its copy, a device that cannot be opened, and is started again makes
+  one each time (provisional). One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
   the start goes on with the copy owed (decision 416): every write over the store, the
   period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the copy first,
   under the next number then, and writes the store only once the copy is made, so that

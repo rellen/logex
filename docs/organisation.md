@@ -4718,6 +4718,16 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   so that no write replaces the store before its copy is made, where the period's write
   replaced it and the drops were lost for good; the start still goes on, decision 275's
   rule for a failed write (decision 416).)*
+  *(RV-13's review, 2026-11-04: a store's copies are its name read whole, then
+  `.dropped.` and a number, so that a store named `plant.dropped` counts
+  `plant.dropped.dropped.<n>` as its own, in the numbering, decision 356's claims and
+  decision 325's refusal, where a search for `.dropped.`, whose matches never overlap,
+  read none of them and numbered every copy 1; the copy looks at its name raw just before
+  its rename, which goes through the VM's file server, so a file a host makes there
+  before that look fails it, `:eexist`, and one made between the look and the rename is
+  replaced (provisional, a question to the maintainer); each start that drops makes a
+  copy, though the highest hold the same bytes (provisional, a question); and the forces
+  refusals name a cold start's copy too.)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
@@ -13197,7 +13207,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision 275 runs on past a failed write; the drops are never lost. *(RV-13,
      2026-11-04: RV-5's marks on it are this decision's number; since decision 418 the
      owed copy is numbered as it is made, and a file a host makes at its number while it
-     is written fails it, `:eexist`, owed so (provisional).)*
+     is written fails it, `:eexist`, owed so (provisional); since RV-13's review, one made
+     before the copy's look at its name, raw, just before the rename, one made between
+     that look and the rename, through the VM's file server, replaced (provisional).)*
 
 417. **A cold start over a store refused as cut (the review after Milestone 6),** RV-5's
      question 9: `start: :cold` writes a new store at once over one a fresh start refused,
@@ -13248,7 +13260,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      is unknown by its number, one killed before it took one a copy that failed,
      `:timeout` (provisional). The leave: every pin of the one `.dropped` and its
      replacement, numbered. The walks read the copies from the directory before and after
-     each start.)*
+     each start.)* *(RV-13's review, 2026-11-04: a store's copies are told by its name
+     read whole, never by a search for `.dropped.` in an entry's name, so that a store
+     named `plant.dropped` numbers its copies `plant.dropped.dropped.<n>` past its own,
+     and decision 356's claims and decision 325's refusal cover them, where the search,
+     whose matches never overlap, read none, numbered every copy 1 and failed each after
+     the first, `:eexist`, every write after it held; "a file made there meanwhile failing
+     it" holds only for one made before the copy's raw look at its name, one made between
+     that look and the rename, which waits in the file server's queue on a stalled disk,
+     replaced (provisional, a question to the maintainer: a hard link refuses a name that
+     stands, and a FAT card has none); and each start that drops copies the store though
+     the highest copy hold the same bytes, a start failing after its copy and started
+     again among them (provisional, a question).)*
 
 419. **A long path in a refusal (the review after Milestone 6),** RV-5's question 11: a
      refusal shows a path past 4,096 bytes as `…` and its last 4,096 bytes.

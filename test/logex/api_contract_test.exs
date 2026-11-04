@@ -14653,8 +14653,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # was read, and no more: a runner that gives the core such a change late, once time has
   # passed inside a step, by less than that time but by more than two poll periods, is
   # caught once the time passed is behind it. A check that kept the most time ever passed
-  # would allow it for the rest of the walk.
+  # would allow it for the rest of the walk. Its time limit 300 s, as the other walks',
+  # where ExUnit's 60 s stood, which a loaded machine passed once in some twenty suites
+  # (the review of RV-13).
   @tag :tmp_dir
+  @tag timeout: 300_000
   test "the walk's input check holds a read device's input to the time passed while it " <>
          "was read",
        %{tmp_dir: dir} do
@@ -15019,10 +15022,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp copy_landed!({n, texts}, copies),
     do: assert(copy_read(Map.get(copies, n)) in Enum.map(texts, &copy_read/1), inspect(n))
 
-  # While the copy is owed every write over the store fails, the first round's trip's
-  # among them, and leaves the store as the start read it (`copy_owed/1`).
+  # While the copy is owed and cannot be made, a directory at the copies' `.tmp`, every
+  # write over the store fails, the first round's trip's among them, and leaves the store
+  # as the start read it (`copy_owed/1`); a copy owed because its write ran past its limit
+  # is made by the next write, before the store's, which then lands (`owed_made!/1`).
   defp owing(%{owed: nil} = w), do: w
-  defp owing(w), do: %{w | store_failing: true, failed_seen: false}
+  defp owing(%{owing: true} = w), do: %{w | store_failing: true, failed_seen: false}
+  defp owing(w), do: w
 
   defp drops_restated(%{start: :cold}), do: []
   defp drops_restated(%{stored: nil}), do: []
@@ -15054,15 +15060,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Decision 391 (RV-11): a copy past its limit is unknown, its path named, `failed` nil,
   # where it was `failed: :timeout`; it may land, so the walk reads its number as the copy
   # or no file. Since decision 418 one killed before it took a number is `failed:
-  # :timeout`, no file named, a copy that lands nowhere.
+  # :timeout`, no file named, a copy that lands nowhere. Each is owed, as the runner owes
+  # it, so that the next write's copy is checked, its number and its bytes, by
+  # `owed_made!/1` (the review of RV-13), where the model forgot it.
   defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next) do
     assert copy == copy_named(w, next)
-    {{next, [text, nil]}, nil}
+    {{next, [text, nil]}, text}
   end
 
-  defp copy_told(_drops, %{copy: nil, failed: :timeout} = retain, _text, _w, _next) do
+  defp copy_told(_drops, %{copy: nil, failed: :timeout} = retain, text, _w, _next) do
     refute Map.has_key?(retain, :unknown)
-    {nil, nil}
+    {nil, text}
   end
 
   defp copy_told(_drops, retain, text, w, next) do

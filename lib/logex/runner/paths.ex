@@ -76,27 +76,26 @@ defmodule Logex.Runner.Paths do
   # Decision 418: a store's copy named, `<store>.dropped.<n>`, n in decimal.
   def copy(store, n), do: store <> ".dropped." <> Integer.to_string(n)
 
-  # The store and number a path names as a copy, `{store, n}`, or nil: a path whose end
-  # after its last `.dropped.` is a whole number in decimal digits, `x.dropped.3` and
-  # `x.dropped.007` among them, the number by its value; `x.dropped`, `x.dropped.tmp` and
-  # `x.dropped.3.tmp` none.
-  def copy_of(path), do: numbered(:binary.matches(path, ".dropped."), path)
+  # The number a path names as a copy of `store`, or nil: a path that is the store's name
+  # read whole, then `.dropped.` and a whole number in decimal digits and nothing more,
+  # `x.dropped.3` and `x.dropped.007` copies of `x`, the number by its value; `x.dropped`,
+  # `x.dropped.tmp` and `x.dropped.3.tmp` none. The store's name is a prefix compared
+  # whole, never a search for `.dropped.` in the path, so that a store whose own name ends
+  # in `.dropped` counts its copies, `x.dropped.dropped.1` the first of `x.dropped`'s,
+  # which a search's matches, never overlapping, read as none (the review of RV-13).
+  def copy_of(path, store), do: numbered_after(path, store <> ".dropped.")
 
-  defp numbered([], _path), do: nil
+  defp numbered_after(path, prefix)
+       when byte_size(path) > byte_size(prefix) and
+              binary_part(path, 0, byte_size(prefix)) == prefix,
+       do: number(binary_part(path, byte_size(prefix), byte_size(path) - byte_size(prefix)))
 
-  defp numbered(matches, path) do
-    {at, length} = List.last(matches)
-    count = byte_size(path) - at - length
-    digits(digits?(binary_part(path, at + length, count)), path, at, count)
-  end
+  defp numbered_after(_path, _prefix), do: nil
 
-  defp digits(true, path, at, count),
-    do: {binary_part(path, 0, at), String.to_integer(binary_part(path, byte_size(path), -count))}
+  defp number(text), do: whole(all_digits?(text), text)
 
-  defp digits(false, _path, _at, _count), do: nil
-
-  defp digits?(""), do: false
-  defp digits?(text), do: all_digits?(text)
+  defp whole(true, digits), do: String.to_integer(digits)
+  defp whole(false, _text), do: nil
 
   defp all_digits?(<<c, rest::binary>>) when c in ?0..?9, do: all_digits?(rest)
   defp all_digits?(<<>>), do: true
@@ -118,7 +117,7 @@ defmodule Logex.Runner.Paths do
   defp first_crossed([], _others), do: :ok
 
   defp first_crossed([{path, role} | rest], others),
-    do: crossing(copy_held(copy_of(path), others, path), role, path, rest, others)
+    do: crossing(copy_held(path, others), role, path, rest, others)
 
   defp crossing(nil, :retain, path, rest, others),
     do: copies_held(Enum.find(others, &copy_named?(&1, path)), rest, others)
@@ -126,15 +125,15 @@ defmodule Logex.Runner.Paths do
   defp crossing(nil, _role, _path, rest, others), do: first_crossed(rest, others)
   defp crossing(held, _role, _path, _rest, _others), do: held
 
-  defp copy_held(nil, _others, _path), do: nil
+  defp copy_held(path, others), do: copy_holder(Enum.find(others, &copied_to?(&1, path)), path)
 
-  defp copy_held({store, _n}, others, path),
-    do: copy_holder(Enum.find(others, &match?({^store, _holder, :retain}, &1)), path)
+  defp copied_to?({store, _holder, :retain}, path), do: is_integer(copy_of(path, store))
+  defp copied_to?(_row, _path), do: false
 
   defp copy_holder(nil, _path), do: nil
   defp copy_holder({_store, holder, :retain}, path), do: {:held, path, holder, :dropped}
 
-  defp copy_named?({other, _holder, _role}, store), do: match?({^store, _n}, copy_of(other))
+  defp copy_named?({other, _holder, _role}, store), do: is_integer(copy_of(other, store))
 
   defp copies_held(nil, rest, others), do: first_crossed(rest, others)
   defp copies_held({other, holder, role}, _rest, _others), do: {:held, other, holder, role}

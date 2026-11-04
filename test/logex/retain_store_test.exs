@@ -1434,6 +1434,53 @@ defmodule Logex.RetainStoreTest do
       assert File.read!(at.(".dropped")) == "an earlier logex's copy"
       refute File.exists?(at.(".dropped.tmp"))
       assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+
+      # A directory a host made past the highest copy counts as standing too, the highest
+      # then (the review of RV-13): the next copy is numbered past it, where a count of
+      # files alone would take its number and fail, `:eexist`.
+      File.mkdir!(at.(".dropped.20"))
+      File.write!(rig.store, read)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+      assert %{copy: past, failed: nil} = Runner.status(runner).retain
+      assert past == at.(".dropped.21")
+      assert File.read!(past) == read
+      assert File.dir?(at.(".dropped.20"))
+      assert Runner.stop(runner) == :ok
+    end
+
+    # The review of RV-13: a store's copies are told by its name read whole, never by a
+    # search for `.dropped.` in an entry's name, so that a store whose own name ends in
+    # `.dropped` counts its copies, `plant.dropped.dropped.<n>`, and numbers the next past
+    # them, each write after the start then made; where the search's matches, which never
+    # overlap, read none of them, every copy was numbered 1, each after the first failed,
+    # `:eexist`, and owed, and every write over the store failed behind it for the run.
+    test "a store whose name ends in `.dropped` numbers its copies past its own",
+         %{tmp_dir: dir} do
+      store = Path.join(dir, "plant.dropped")
+      rig = rig(dir, write_limit: 5000, retain: store)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(store)
+
+      for n <- 1..3 do
+        File.write!(store, read)
+        {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
+        copy = store <> ".dropped.#{n}"
+        assert %{copy: ^copy, failed: nil, dropped: [_drop]} = Runner.status(runner).retain
+        assert File.read!(copy) == read
+        Manual.advance(rig.clock, 1000)
+        period_written(runner)
+        assert File.read!(store) =~ "\nt1.boxes ctu_int\n"
+        assert %{failed: nil, copy: ^copy} = Runner.status(runner).retain
+        assert Runner.stop(runner) == :ok
+        opener_down(rig.panel)
+      end
+
+      for n <- 1..3, do: assert(File.read!(store <> ".dropped.#{n}") == read)
+      refute File.exists?(store <> ".dropped.4")
     end
 
     # A drop of any kind is copied for, the report itself the trigger: an instance the
@@ -1742,22 +1789,35 @@ defmodule Logex.RetainStoreTest do
       # Decision 360 (RV-5): nor the store's copy, which a start that drops writes over;
       # since decision 418 (RV-13), the leave for the one `.dropped`, any of its numbered
       # copies, `.dropped.<n>`, whatever the number's digits, or the copies' one `.tmp`,
-      # and `.dropped`, which is written through that `.tmp`.
-      for copy <- ~w(.dropped.1 .dropped.12 .dropped.007 .dropped.tmp) do
+      # and `.dropped`, which is written through that `.tmp`; and since decision 417 a cold
+      # start over a store a fresh start would refuse copies it too, which the message
+      # says (the review of RV-13). A store whose own name ends in `.dropped` has its
+      # copies refused as any store's, its name read whole: `plant.dropped`'s first is
+      # `plant.dropped.dropped.1`.
+      dropped = Path.join(dir, "plant.dropped")
+
+      for {store, copy} <-
+            [{rig.store, ".dropped.1"}, {rig.store, ".dropped.12"}] ++
+              [{rig.store, ".dropped.007"}, {rig.store, ".dropped.tmp"}] ++
+              [{dropped, ".dropped.1"}, {dropped, ".dropped.30"}] do
         raises(
-          "the runner's forces: #{inspect(rig.store <> copy)} is a copy its retain: " <>
-            "#{inspect(rig.store)} is copied to by a start that drops from it, " <>
-            "`.dropped.<n>`, or the `.tmp` the copies are written through: the store's " <>
-            "copies and the forces file are apart",
-          fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> copy)) end
+          "the runner's forces: #{inspect(store <> copy)} is a copy its retain: " <>
+            "#{inspect(store)} is copied to, `.dropped.<n>`, by a start that drops from " <>
+            "it or a cold start over it where a fresh start would refuse it, or the `.tmp` " <>
+            "the copies are written through: the store's copies and the forces file are " <>
+            "apart",
+          fn ->
+            Runner.start_link(Keyword.merge(rig.opts, retain: store, forces: store <> copy))
+          end
         )
       end
 
       raises(
         "the runner's forces: #{inspect(rig.store <> ".dropped")} is written through " <>
           "#{inspect(rig.store <> ".dropped.tmp")}, the `.tmp` its retain: " <>
-          "#{inspect(rig.store)} is copied through by a start that drops from it: the " <>
-          "store's copies and the forces file are apart",
+          "#{inspect(rig.store)} is copied through by a start that drops from it or a cold " <>
+          "start over it where a fresh start would refuse it: the store's copies and the " <>
+          "forces file are apart",
         fn -> Runner.start_link(Keyword.put(rig.opts, :forces, rig.store <> ".dropped")) end
       )
 
@@ -2143,6 +2203,49 @@ defmodule Logex.RetainStoreTest do
         opener_down(rig.panel)
         refute File.exists?(rig.store <> ".dropped.4")
       end
+    end
+
+    # Decision 417: a store is judged as a warm fresh start judges it, by its text's read,
+    # `Logex.Retain.decode!/2`, and by the image's check, `Logex.Runtime.start/2`, so that
+    # one whose text reads whole but whose image the start refuses, an element line for an
+    # instance that holds no array, or a trigger's sample no bool holds, is copied first by
+    # a cold start too, where a judge of the text alone wrote over it with no copy (the
+    # review of RV-13).
+    test "a cold start copies a store whose text reads but whose image a start refuses",
+         %{tmp_dir: dir} do
+      rig = rig(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      whole = File.read!(rig.store)
+      cold = Keyword.put(rig.opts, :start, :cold)
+
+      added = [
+        {"t1.lamp bool 1\n", "t1.lamp bool 1\nt1.w[1] bool 1\n"},
+        {"global total_boxes dint 2\n", "global total_boxes dint 2\ntrigger clr 2\n"}
+      ]
+
+      for {{from, to}, n} <- Enum.with_index(added, 1) do
+        text = counted(String.replace(whole, from, to))
+        refute text == whole
+        assert {%{instances: %{"t1" => _}}, _at} = Retain.decode!(text, {rig.store, "plant"})
+        File.write!(rig.store, text)
+        assert_raise ArgumentError, fn -> Runner.start_link(rig.opts) end
+        {:ok, runner} = Runner.start_link(cold)
+        copy = rig.store <> ".dropped.#{n}"
+        assert %{copy: ^copy, dropped: [], failed: nil} = Runner.status(runner).retain
+        assert File.read!(copy) == text
+        assert values(runner) == [0, 0, 1, 0]
+        assert Runner.stop(runner) == :ok
+        opener_down(rig.panel)
+      end
+    end
+
+    # A store's text with its end line's count made the count of its lines again.
+    defp counted(text) do
+      lines = length(String.split(text, "\n", trim: true))
+      String.replace(text, ~r/end \d+ lines\n\z/, "end #{lines} lines\n")
     end
 
     defp stand(:whole, store, whole), do: File.write!(store, whole)

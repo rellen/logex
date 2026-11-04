@@ -171,10 +171,15 @@ defmodule Logex.Retain do
   # Decision 418 (RV-13): a copy of the store, `{path, beside}`, its name of its own,
   # `<store>.dropped.<n>`, written through the one `.tmp` every copy of the store is
   # written through, `<store>.dropped.tmp` (decision 392's one `.tmp`, unchanged), by the
-  # same rule, and never renamed over a file: where anything stands at its name as the
-  # rename comes, looked at raw, which its number, one past the highest that stands
-  # (`Logex.Runner.Writer.copy/3`), leaves only to a file made there since, the write
-  # fails, `{:error, :eexist}`, its `.tmp` deleted, the file that stands untouched.
+  # same rule, and not renamed over a file that stands at its name as it looks: where
+  # anything stands there, looked at raw once the `.tmp` is written, just before the
+  # rename, which its number, one past the highest that stands
+  # (`Logex.Runner.Writer.copy/3`), leaves only to a file made there since the directory
+  # was read, the write fails, `{:error, :eexist}`, its `.tmp` deleted, the file that
+  # stands untouched. The look and the rename are two calls, the rename through the VM's
+  # file server, whose queue on a stalled disk it waits in: a file a host makes at the
+  # copy's name between them is replaced by the copy (provisional, the review of RV-13: a
+  # rename that refuses a name that stands is a hard link, which a FAT card has not).
   def written({path, beside}, text),
     do: unreplaced(written_out(made(beside), text), beside, path)
 

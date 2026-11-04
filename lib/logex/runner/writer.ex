@@ -162,14 +162,21 @@ defmodule Logex.Runner.Writer do
   # counts as standing, by its number's value, whatever it is, a copy, a file or a
   # directory a host made there, so that the copy's name is free as the copy begins; an
   # unnumbered `<store>.dropped` an earlier logex left counts for nothing and is left as it
-  # stands (provisional). The directory is read raw, off the VM's file server, as the
-  # files are, inside the write's own process and its limit; the copy is written through
-  # the one `.tmp` of the store's copies, `<store>.dropped.tmp`, and renamed only where
-  # nothing stands at its name (`Logex.Retain.written/2`), so that one a host made there
-  # since the directory was read is never replaced: the copy then fails, `:eexist`, and
-  # is owed as one that fails is, its next try numbered past it (provisional, decision
-  # 416's rule). `told`, `{caller, tag}`, is told `{tag, n}` once the number is chosen,
-  # and nil, the period's writer, nothing. `{:ok, n}` or `{:error, reason}`.
+  # stands (provisional). The store's name is read whole, so that a store whose own name
+  # ends in `.dropped` counts its own copies (`Logex.Runner.Paths.copy_of/2`). The
+  # directory is read raw, off the VM's file server, as the files are, inside the write's
+  # own process and its limit; the copy is written through the one `.tmp` of the store's
+  # copies, `<store>.dropped.tmp`, and renamed only where nothing stands at its name as it
+  # looks, raw, just before the rename (`Logex.Retain.written/2`), so that one a host
+  # made there since the directory was read and before that look is not replaced: the
+  # copy then fails, `:eexist`, and is owed as one that fails is, its next try numbered
+  # past it (provisional, decision 416's rule); one made between the look and the rename,
+  # which goes through the VM's file server and on a stalled disk waits in its queue, is
+  # replaced (provisional, the review of RV-13). Each start that drops copies the store
+  # as it read it, though the highest copy hold the same bytes, a start that fails after
+  # its copy and is started again among them (provisional). `told`, `{caller, tag}`, is
+  # told `{tag, n}` once the number is chosen, and nil, the period's writer, nothing.
+  # `{:ok, n}` or `{:error, reason}`.
   def copy(store, text, told),
     do: copy_numbered(next_copy(store), store, text, told)
 
@@ -191,13 +198,13 @@ defmodule Logex.Runner.Writer do
 
   defp past_highest(error, _base), do: error
 
-  defp copy_number(name, base), do: same_store(Paths.copy_of(named(name)), base)
+  defp copy_number(name, base), do: listed(Paths.copy_of(named(name), base))
 
   defp named(name) when is_list(name), do: List.to_string(name)
   defp named(name), do: name
 
-  defp same_store({base, n}, base), do: [n]
-  defp same_store(_other, _base), do: []
+  defp listed(nil), do: []
+  defp listed(n), do: [n]
 
   # The period's writer tells no caller: its write is left to finish, its answer telling
   # both files (decision 401).

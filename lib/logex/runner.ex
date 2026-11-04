@@ -394,13 +394,20 @@ defmodule Logex.Runner do
     unnumbered `<store>.dropped` an earlier logex left is kept as it stands and counts for
     nothing (provisional). The copy is written as every other write is, through the
     copies' one `.tmp`, `<store>.dropped.tmp`, limited the same, and renamed only where
-    nothing stands at its name, so that a file a host makes there while it is written
-    fails it, `:eexist` (provisional); its failure is reported as a failed write's,
-    `failed` in `status/1`, and the start goes on, the copy then owed (decision 416):
-    since RV-5's review every write over the store, the period's, a trip's, a stop's, a
-    shutdown's and a cold restart's, makes it first, under the next number then, and
-    writes the store only once it is made, each while it cannot be made a write that
-    fails, so that no write replaces the store before its copy is made; a start that drops
+    nothing stands at its name as it looks, raw, just before its rename, so that a file a
+    host makes there while it is written, before that look, fails it, `:eexist`
+    (provisional); one made between the look and the rename, which goes through the VM's
+    file server and on a stalled disk waits in its queue, is replaced (provisional). A
+    store's copies are its name read whole, so that `plant.dropped`'s are
+    `plant.dropped.dropped.<n>`; and each start that drops makes a copy of its own, the
+    same bytes as the highest copy's where the store has not changed since, a start that
+    failed after its copy and is started again among them (provisional). A copy's
+    failure is reported as a failed write's, `failed` in `status/1`, and the start goes
+    on, the copy then owed (decision 416): since RV-5's review every write over the
+    store, the period's, a trip's, a stop's, a shutdown's and a cold restart's, makes it
+    first, under the next number then, and writes the store only once it is made, each
+    while it cannot be made a write that fails, so that no write replaces the store
+    before its copy is made; a start that drops
     nothing makes none, and `status/1`'s `retain` names the copy the start made, `copy`,
     `plant.retain.dropped.2`; a file that does not exist none, written at once; and one
     that cannot be read, that is no store, a line of no store's shape, an image
@@ -4114,8 +4121,8 @@ defmodule Logex.Runner do
   defp named_entry(named, path), do: named_or_copy(List.keyfind(named, path, 0), named, path)
 
   defp named_or_copy(nil, named, path) do
-    {store, _n} = Paths.copy_of(path)
-    {^store, :retain, :retain, given} = List.keyfind(named, store, 0)
+    {store, :retain, :retain, given} = List.keyfind(named, :retain, 1)
+    true = is_integer(Paths.copy_of(path, store))
 
     {path,
      {:copy, given <> binary_part(path, byte_size(store), byte_size(path) - byte_size(store))},
@@ -4296,12 +4303,14 @@ defmodule Logex.Runner do
   # Decision 360 (RV-5): nor is the forces file the store's copy or the `.tmp` the copy is
   # written through, which a start that copies would write over with the store's text,
   # decision 325's rule for the copy; since decision 418 (RV-13) any of the store's
-  # numbered copies, `<store>.dropped.<n>`, a copy's name, and `<store>.dropped`, which is
-  # no copy's name but is written through the copies' `.tmp`, `<store>.dropped.tmp`.
+  # numbered copies, `<store>.dropped.<n>`, a copy's name, the store's name read whole
+  # (`Logex.Runner.Paths.copy_of/2`), and `<store>.dropped`, which is no copy's name but
+  # is written through the copies' `.tmp`, `<store>.dropped.tmp`; and since decision 417 a
+  # cold start over a store a fresh start would refuse copies it too.
   defp copied_over(:apart, forces, path),
     do:
       copy_met(
-        forces == path <> ".dropped.tmp" or match?({^path, _n}, Paths.copy_of(forces)),
+        forces == path <> ".dropped.tmp" or is_integer(Paths.copy_of(forces, path)),
         forces == path <> ".dropped"
       )
 
@@ -4335,8 +4344,9 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's forces: #{inspect(forces)} is a copy its retain: #{inspect(path)} " <>
-          "is copied to by a start that drops from it, `.dropped.<n>`, or the `.tmp` the " <>
-          "copies are written through: the store's copies and the forces file are apart"
+          "is copied to, `.dropped.<n>`, by a start that drops from it or a cold start " <>
+          "over it where a fresh start would refuse it, or the `.tmp` the copies are " <>
+          "written through: the store's copies and the forces file are apart"
       )
 
   defp apart!(:forces_through_copies, path, forces),
@@ -4345,8 +4355,8 @@ defmodule Logex.Runner do
         ArgumentError,
         "the runner's forces: #{inspect(forces)} is written through " <>
           "#{inspect(forces <> ".tmp")}, the `.tmp` its retain: #{inspect(path)} is copied " <>
-          "through by a start that drops from it: the store's copies and the forces file " <>
-          "are apart"
+          "through by a start that drops from it or a cold start over it where a fresh " <>
+          "start would refuse it: the store's copies and the forces file are apart"
       )
 
   defp apart!(:forces_through, path, forces),
