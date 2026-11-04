@@ -15010,6 +15010,117 @@ and CI checked; each fix with a test that fails when it is reverted.
      card fills it at a megabyte a restart. (a) As built, a copy every start that drops;
      (b) no new copy where the highest-numbered copy already holds the same bytes,
      `status/1`'s `copy` naming that one, at the cost of reading it at each such start.
+  **RV-13's review** (2026-11-04, an adversarial review of `1e6718a`, every finding with
+  its repro under `scratchpad/rv/rev13p/`), and what each became (`57195e3`):
+
+  1. *A store whose name ends in `.dropped` never counted its own copies* (medium–high).
+     `Logex.Runner.Paths.copy_of/1` found a copy's number after the path's last
+     `.dropped.`, by `:binary.matches/2`, whose matches never overlap: in
+     `plant.dropped.dropped.1` the second `.dropped.` overlaps the first, and the name
+     read as no copy. Every copy of `plant.dropped` was numbered 1, each start after the
+     first that dropped failed its copy, `:eexist`, and owed it, every write over the
+     store failing behind it for the run, the stop `{:error, {:retain, :eexist}}`; a
+     forces file at `plant.dropped.dropped.1` was taken, and runners on `x.dropped` and
+     `x.dropped.dropped.1` both started. Fixed: `copy_of/2` reads a path as a copy of a
+     store given, the store's name a prefix compared whole, then `.dropped.` and decimal
+     digits and nothing more, as the walk's `copies_standing/1` reads it; the numbering
+     (`Logex.Runner.Writer`), the crossing claims both ways (`Paths`), the refusal's
+     naming of another's copy and decision 325's refusal each give it the store they
+     mean. Tests: `retain_store_test.exs`'s "a store whose name ends in `.dropped`
+     numbers its copies past its own" (three starts that drop, `.dropped.dropped.1` to
+     `.3`, each period's write made); the forces refusals at `plant.dropped.dropped.1`
+     and `.30`; `runner_paths_test.exs`'s store at `v.dropped`'s first copy's name and
+     `z.dropped` whose copy's name another holds, each refused. Each is red at
+     `1e6718a`'s code.
+  2. *A copy could replace a host's file at its number* (medium). The copy looks at its
+     name raw and then renames through the VM's file server: a file a host makes between
+     the two, as the rename waits in a held server's queue, is replaced. Decision 418
+     says none is replaced; Logix and IEC are silent; the three ways to close it each
+     change what an operator sees, so it is the maintainer's: question 1 above, its
+     second half. The documents now say what is built: `Logex.Retain`'s comment at
+     `written/2`, `Logex.Runner.Writer.copy/3`'s, the runner's moduledoc, README, §4.13
+     and decisions 416's and 418's notes, a file made before the look failing the copy,
+     `:eexist`, and one made between the look and the rename replaced (provisional).
+     `stalled_disk_test.exs`'s "… while it is written is never replaced" is named for
+     what it shows, "… while it is written, before the copy looks at its name, is never
+     replaced", its assertions as they were; and a test beside it pins the window as
+     built, "… after the copy looked, as its rename waits, is replaced (provisional)",
+     the review's repro.
+  3. *Five rules RV-13 states survived the full suite* (medium–low), each now red by a
+     test of its own (the table below): r4, a cold start judged by `decode!/2` alone, by
+     `retain_store_test.exs`'s "a cold start copies a store whose text reads but whose
+     image a start refuses" (an element line for an instance with no array, a trigger's
+     sample of 2, each read by `decode!/2` and refused by a warm start, copied by a cold
+     one); r6, the write limit counted from after the write's process is made, by
+     `stalled_disk_test.exs`'s traced "the caller reads the clock before it makes the
+     write's process and after"; r10, a dead holder's rows counted in the crossing check,
+     by `runner_paths_test.exs`'s killed runner on `y` and on `w.dropped.3`, whose rows
+     stand, then a start on `y.dropped.1` and on `w`, each started; r14b, a directory at a
+     copy's number uncounted, by a directory at `.dropped.20`, past every copy, in the
+     numbering test, the next copy `.dropped.21`; and r13, the first `.dropped.` match,
+     which `copy_of/2` no longer searches for, by finding 1's tests
+     (`rv13r_copy_of_searched` below).
+  4. *Every failed start copies the store again* (low, a question): question 8 above. The
+     documents say so (the runner's moduledoc, `Writer.copy/3`'s comment, README,
+     §4.13), provisional.
+  5. *The life walk's model forgot an owed copy* (low). `copy_told/5` gave a copy killed
+     before it took a number, and one past its limit under its number, no copy owed,
+     where the runner owes each, so the next write's copy went unchecked and
+     `owed_made!/1` never ran. Both are owed now, and `owing/1` holds every write over
+     the store failing only where the walk put a directory at the copies' `.tmp`. Neither
+     is reached but on a loaded machine; a probe that held the file server through each
+     changed start past the write limit (`scratchpad/rv/mut13r/probe_life.log`, seeds 1 to
+     8) met the copy unknown four times and `owed_made!/1` checked the copy the next write
+     made each time, every assertion holding; the probe is not in the suite.
+  6. *Flakes under load* (low). `stalled_disk_test.exs`'s "an owed copy's: …" waited
+     without bound for the cold restart's store's rename, which a write killed at its
+     1,010 ms limit before the rename never asks: both waits now end when the restart
+     answers, the copy's then a failed assertion, the store's the same outcome, the store
+     unknown and the copy made (`called_or_answered/3`). The input-check walk has the
+     other walks' 300 s limit, where it had ExUnit's 60 s. `retain_image_test.exs`'s cost
+     bound is RV-7's.
+  7. *Docs and messages* (low). The forces refusals of a copy and of `<store>.dropped`
+     name a cold start's copy too, "by a start that drops from it or a cold start over it
+     where a fresh start would refuse it", their pins with them; README's forces passage
+     names `<store>.dropped`.
+
+  *The mutation table*, each judged by the full suite (`scripts/mutate.sh`,
+  `scratchpad/rv/mut13r/`, nine patches on `57195e3`):
+
+  | Mutant | What it does | Full suite | Red by |
+  |---|---|---|---|
+  | rv13r_copy_of_searched | `copy_of/2` by a search for the last `.dropped.`, the review's r13 | red | "a store whose name ends in `.dropped` numbers its copies past its own", the forces refusals, `runner_paths_test.exs`'s refusals of a store another runner copies to |
+  | rv13r_writer_searched | the numbering alone by the search | red | "a store whose name ends in `.dropped` …" |
+  | rv13r_cross_searched | the crossing claims alone by the search | red | `runner_paths_test.exs`'s refusals of a store another runner copies to |
+  | rv13r_forces_searched | decision 325's refusal alone by the search | red | "each checked in the caller, a pinned message each" |
+  | rv13r_forces_message_old | the forces refusal's words before the review | red | "each checked in the caller, a pinned message each" |
+  | r4 | a cold start judged by `decode!/2` alone | red | "a cold start copies a store whose text reads but whose image a start refuses" |
+  | r6 | the write limit counted from after the write's process is made | red | "the caller reads the clock before it makes the write's process and after" |
+  | r10 | a dead holder's rows counted in the crossing check | red | "a path is free again once its holder stops, crashes or is killed" |
+  | r14b | a directory at a copy's number uncounted, by a raw stat | red | "a copy numbered one past the highest that stands, none replaced" |
+
+  *The cost*, held against `1e6718a`, each the least of several runs in reductions
+  (`scratchpad/rv/p13/cost/`): a round of three devices on the manual clock 2043.37 with
+  its outputs changing and 1742.25 with none, against 2045.52 and 1742.06; a round with a
+  store and a long period 7.78 more than with none, against 8.16, the test's bound 10; a
+  period's write 447,205 at both; a fresh start from a store of 1,000 retained counters
+  4,618,133 in its caller against 4,613,524 (+0.1%), the runner's own 155,672 against
+  155,678; a cold start over it 4,639,608 against 4,661,481 (−0.5%), the runner's own
+  710,632 at both. The copy's name is read by a prefix compared once an entry, where it
+  was a search of the name.
+
+  *Load runs* (`scripts/load.sh`, four busy loops on four cores): the ten new and changed
+  runner tests, in `retain_store_test.exs` (4), `runner_paths_test.exs` (2) and
+  `stalled_disk_test.exs` (4), by line, 50 runs at `57195e3`: none failed
+  (`scratchpad/rv/load13r/tests50.txt`). The input-check walk and the life walk, each
+  changed, with the module's third test the line filter takes, 4 runs: none failed, each
+  run 150 to 165 s.
+
+  *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
+  full suite at a time: `57195e3` 2,833 (11 doctests, 2,822 tests), the four tests more
+  than `1e6718a`'s 2,829 the review's (a store named `.dropped`, the image a cold start
+  copies for, the window pinned, the clock read before the write's process); this
+  entry's commit, which changes no rule, 2,833. CI was green at once on `57195e3`.
 - **RV-14 — the answers to RV-10's questions** (decisions 420–428). Each as built: every
   provisional mark RV-10 left on a reading they settle made the decision's number, in
   `lib/`, `test/` names and comments, README and PLAN's RV-10 entry, save those in the
