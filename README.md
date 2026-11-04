@@ -4347,11 +4347,15 @@ stage: nil
   `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
   of it lands or a restart reads it (decision 390); with no such file to name,
   `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
-  that reads the file takes what it holds, as every start does, so after a fresh start
-  that could not read it the next restart takes the forces the file held, which no one
-  forced since and `status/1` did not list (provisional); and a relative `forces:` whose
+  that reads the file takes what it holds, as every start does; but while
+  `forces_unread` stands a restart keeps the forces the runner holds and takes none from
+  the file, and the next force's or unforce's write writes the runner's set over it
+  (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
+  that could not read the file, the disk back, a trip and a restart, and the level reads
+  its input, never the 7 no one has forced since; and a relative `forces:` whose
   working directory the disk does not answer for in time refuses the start, the file
-  "cannot be located", as a relative store's does (provisional). A
+  "cannot be located", as a relative store's does (decision 446), an absolute path the
+  advice. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every

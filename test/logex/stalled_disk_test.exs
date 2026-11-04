@@ -1671,6 +1671,64 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # Decision 445 (RV-16): while `forces_unread` stands a restart keeps the forces the
+  # runner holds and takes none from the file, and the next write of the file, a force's
+  # or an unforce's, writes the runner's set over it, so that no force comes back that the
+  # HMI was not showing, where a restart that read the file took what it held.
+  describe "a restart while the forces file is named unread (decision 445)" do
+    test "the level forced to 7, a crash, a start on a stalled disk, the disk back, a trip " <>
+           "and a restart: level reads its input, not 7",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      assert Runner.force(runner, "level", 7) == :ok
+      assert File.read!(rig.forces) == "level 7\n"
+      ref = Process.monitor(runner)
+      Process.exit(runner, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :killed}, @answers
+
+      # The next start finds the disk stalled at the forces file, its raw read waiting on a
+      # FIFO in its place past its limit, and starts with no force, the file named.
+      File.rm!(rig.forces)
+      {_, 0} = System.cmd("mkfifo", [rig.forces])
+      on_exit(fn -> let_go(rig.forces) end)
+      next = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(next.opts)
+      forces = next.forces
+      assert %{forces: %{}, forces_unread: {^forces, :timeout}} = Runner.status(runner)
+
+      # The disk back, the file as the crash left it, `level 7`; the level reads its input.
+      let_go(forces)
+      File.rm!(forces)
+      File.write!(forces, "level 7\n")
+      Sim.set(next.panel, [1], 3)
+      Manual.advance(next.clock, 10)
+      assert Runner.get!(runner, "level") == 3
+
+      # A trip and a restart: the file named still, the restart takes none of it, and the
+      # level reads its input, 3, never the 7 no one has forced since the start.
+      Sim.fail(next.panel, :read, {:error, :eio})
+      Manual.advance(next.clock, 10)
+      assert %{status: :tripped} = Runner.status(runner)
+      assert Runner.restart(runner, :warm) == :ok
+
+      assert %{status: :running, forces: %{}, forces_unread: {^forces, :timeout}} =
+               Runner.status(runner)
+
+      assert Runner.get!(runner, "level") == 3
+      Manual.advance(next.clock, 10)
+      assert Runner.get!(runner, "level") == 3
+
+      # The next force's write writes the runner's set over the file, `level 7` gone with
+      # it, and the file is named no more.
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      assert File.read!(forces) == "eye_1 1\n"
+      assert %{forces: %{"eye_1" => 1}, forces_unread: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
   # The status once a round has run past `before`, polled until `deadline`.
   defp rounds_past(runner, before, deadline),
     do: past(Runner.status(runner), runner, before, deadline)

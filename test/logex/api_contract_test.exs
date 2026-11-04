@@ -14422,12 +14422,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 439 (RV-16): a device up a restart read again late, within its own `open:`.
     :late_reread,
     # Decision 390 (RV-11): a fresh start and a restart whose forces file cannot be read;
-    # since RV-11's review a fresh start that could not read a file holding forces, and a
-    # restart after it that reads the file and takes them.
+    # since RV-11's review a fresh start that could not read a file holding forces, and
+    # since decision 445 a restart after it that keeps the runner's set, where it read
+    # the file and took them.
     :start_forces_unread,
     :restart_forces_unread,
     :start_unread_forces_held,
-    :restart_took_unread_forces,
+    # Decision 445 (RV-16): a restart while the file is named, which takes none of it.
+    :restart_kept_unread_forces,
     # Decision 400 (RV-11): a runner given `write_limit:`.
     :write_limit_given,
     # Decision 396 (RV-11): with no untimed program, a periodic round due as a host's call
@@ -15927,7 +15929,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert Runner.restart(w.runner, mode) == :ok
     reach(:late_reread, late)
     reach(:restart_forces_unread, unreadable)
-    w = restart_took(unreadable, %{w | unread: unread_after(unreadable, w)})
+    w = restart_took(unreadable, w.unread, %{w | unread: unread_after(unreadable, w)})
     reach(:"restart_#{mode}", true)
 
     # Its first round ran before it returned.
@@ -15963,13 +15965,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Every device up released and written its 0 again, which each takes but the one drawn,
     # so that status/1 names the devices down and that one, until its poll's 0 is taken
     # (decision 262). The restart read the file before it released anything, and took
-    # what it holds (decision 127; RV-11's review, where a fresh start could not).
+    # what it holds (decision 127), and since decision 445 read none of it while it was
+    # named, keeping the runner's set and the file named.
     checked(%{
-      w
+      refused_read(w)
       | zeroed: %{},
-        unread: nil,
-        forces: on_file(w),
-        file_forces: nil,
         unzeroed: w.down,
         maybe: unzero,
         sure: true,
@@ -16243,15 +16243,25 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp held_on_file(held) when map_size(held) == 0, do: nil
   defp held_on_file(held), do: held
 
-  # A restart that reads the file takes what it holds, the forces a fresh start before it
-  # could not read among them (decision 127, provisional since RV-11's review); one that
-  # cannot keeps the runner's set, the file as it was.
-  defp restart_took(true, w), do: w
-
-  defp restart_took(false, w) do
-    reach(:restart_took_unread_forces, w.file_forces != nil)
-    %{w | forces: on_file(w), file_forces: nil}
+  # Decision 445 (RV-16), restated: while the file a start or a restart could not read is
+  # named, a restart reads none of it and keeps the runner's own set, the file named still
+  # and holding what it held, the forces a fresh start before it could not read among
+  # them, until a force's write writes the runner's set over it, where a restart that read
+  # the file took them (RV-11's review); otherwise a restart that reads the file takes
+  # what it holds (decision 127), and one that cannot keeps the runner's set, the file as
+  # it was.
+  defp restart_took(_unreadable, {_file, _reason} = unread, w) do
+    reach(:restart_kept_unread_forces, w.file_forces != nil)
+    %{w | unread: unread}
   end
+
+  defp restart_took(true, nil, w), do: w
+  defp restart_took(false, nil, w), do: %{w | forces: on_file(w), file_forces: nil}
+
+  # A refused restart reads the file as a restart that goes on does, before it releases
+  # anything, and while the file is named reads none of it (decision 445).
+  defp refused_read(%{unread: nil} = w), do: %{w | forces: on_file(w), file_forces: nil}
+  defp refused_read(w), do: w
 
   defp limit_option(nil), do: []
   defp limit_option(ms), do: [write_limit: ms]

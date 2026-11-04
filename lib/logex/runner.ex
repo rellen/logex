@@ -509,11 +509,14 @@ defmodule Logex.Runner do
   no force and keeps at a restart the forces the runner holds, the start or the restart
   going on, the line coming back, and `status/1` names the file, `forces_unread: {path,
   reason}`, the path as the host spelled it and `reason` `:timeout` or the file system's
-  own, until a force's or an unforce's write of the file lands or a restart reads it,
-  and since decision 440 the key always there, nil while the file reads; a restart that reads the file once it reads again takes what it holds, as every
-  start does (decision 127), so that a fresh start that could not read it, which started
-  with no force, takes at its next restart the forces the file held, ones no one forced
-  since and `status/1` did not show (provisional, RV-11's review); a line that is no force, a point forced twice, and a force the configuration
+  own, until a force's or an unforce's write of the file lands, since decision 445 no
+  restart reading it meanwhile, and since decision 440 the key always there, nil while the file reads; since
+  decision 445, while `forces_unread` stands, a restart keeps the forces the runner
+  holds and takes none from the file, which stays named, and the next write of the file,
+  a force's or an unforce's, writes the runner's set over it, so that a fresh start that
+  could not read the file, which started with no force, never takes at a later restart
+  the forces the file held, ones no one forced since and `status/1` did not show, where
+  RV-11's review found a restart that read the file once it read again took them; a line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
   `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file
@@ -992,8 +995,9 @@ defmodule Logex.Runner do
   (`Logex.Runtime.overlaps/1`);
   `forces`, every force, by its point's name, with its value; since decision 390
   `forces_unread`, where the last start or restart could not read the forces file,
-  `{path, reason}`, until a force's or an unforce's write of it lands or a restart reads
-  it, and since decision 440 always there, nil where the file was read; since decision
+  `{path, reason}`, until a force's or an unforce's write of it lands, which since
+  decision 445 no restart reads meanwhile, and since decision 440 always there, nil where
+  the file was read; since decision
   391 `forces_unknown`, where a force's write ran past its limit and may yet land, the set
   it held, until a later write of the file lands or fails or a restart reads it, and since
   decision 440 always there, nil where no such write stands; `edit`, the stage of the
@@ -1157,7 +1161,9 @@ defmodule Logex.Runner do
   has not finished within the write limit of real time (decisions 353 and 400) or one the
   file system refuses, keeps the forces the runner holds and goes on, `status/1` naming
   the file, `forces_unread`, where it answered `{:error, {:forces, :timeout}}` and left
-  the runner tripped. Since M6-5 a cold restart of a
+  the runner tripped; and since decision 445, while `forces_unread` stands, it keeps the
+  forces the runner holds and reads none from the file, which a force's or an unforce's
+  write then writes the runner's set over. Since M6-5 a cold restart of a
   runner given `retain:` then writes its store, of the resource
   as it restarts it, before it releases or reads any device, so that a crash right after
   it brings back none of what it discarded (decisions 271 and 291): a write that fails
@@ -1648,6 +1654,15 @@ defmodule Logex.Runner do
 
   defp forces_at_restart(%{file: nil}), do: {%{}, nil}
 
+  # Decision 445 (RV-16): while `forces_unread` stands, the file not the runner's set since
+  # a start or a restart could not read it, a restart keeps the forces the runner holds and
+  # takes none from the file, the file named still, so that no force comes back that the
+  # HMI was not showing; the next write of the file, a force's or an unforce's, writes the
+  # runner's set over it (taken/4) and names it no more. Where a fresh start could not read
+  # the file and started with none, the file's forces stay its own, never the runner's.
+  defp forces_at_restart(%{forces_unread: {_path, _reason} = unread} = state),
+    do: {state.forces, unread}
+
   defp forces_at_restart(%{forces_at: path} = state),
     do:
       forces_text(
@@ -1659,8 +1674,9 @@ defmodule Logex.Runner do
   # found none: a read made, the file's forces; a file that does not exist, none; and a
   # read that failed, the forces the runner holds (decision 390). A read made takes the
   # file's whatever the runner held, the file being what is forced at each start
-  # (decision 127), so that after a fresh start that could not read it the next restart
-  # that can takes the forces the file held then (provisional, RV-11's review).
+  # (decision 127); since decision 445 a restart reads it only where the last start or
+  # restart read it, `forces_unread` nil, so that after a fresh start that could not read
+  # it no restart takes the forces the file held then, which RV-11's review found.
   defp forces_text({:ok, _text} = read, state), do: {forces_read(read, state.file, state), nil}
   defp forces_text({:error, :enoent}, _state), do: {%{}, nil}
   defp forces_text({:error, reason}, state), do: {state.forces, {state.file, reason}}
@@ -2489,8 +2505,10 @@ defmodule Logex.Runner do
   # (RV-11): `forces_unread`, the forces file the start could not read, or nil, set again
   # by each restart that reads it, one a device then refuses among them, as such a restart
   # takes the file's forces, nil where it read the file or found none, and nil once a
-  # force's or an unforce's write of the file lands; a round, a trip, a restart its cold
-  # write refuses, a stop and an edit's step leave it as it is. Decision 391 (RV-11):
+  # force's or an unforce's write of the file lands; since decision 445 (RV-16) a restart
+  # made while it stands reads no file and leaves it as it is, keeping the runner's set;
+  # a round, a trip, a restart its cold write refuses, a stop and an edit's step leave it
+  # as it is. Decision 391 (RV-11):
   # `forces_unknown`, the set a force's write past its limit held, or nil, set by such a
   # write, nil once a later write of the file lands or fails, nil at a start and at a
   # restart that reads the file or finds none, kept by one whose read fails; and the
