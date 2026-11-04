@@ -37,41 +37,40 @@ defmodule Logex.Retain do
   # The end line (decision 355): a store's last line is `end <count> lines`, its count of
   # lines, the header and the end line among them, as `wc -l` counts a file whose last
   # line ends with a newline (the words decision 409's), and since decision 410 however
-  # each line ends, LF, CRLF or a lone CR. A store of version 2 whose last
-  # line is no end line, or whose end line counts other than the lines it has, is refused
-  # at a fresh start, naming the file and the line, so that a store is read whole or not
-  # at all. Why a count of lines catches both kinds of cut: a cut keeps a file's first
-  # bytes, and the end line, which holds the count, is the last of them. A cut at a line
-  # boundary, or inside a line before the end line, a value's number cut in its digits
-  # among them, takes the end line with it, and the line that is then last counts
-  # nothing; a cut inside the end line cuts its count or the word after it, and a count
-  # cut in its digits is smaller than the lines before it and it, which the cut did not
-  # change. Only a cut of the last newline alone keeps every line whole, and that store is
-  # read. The count catches, too, a line lost or doubled inside the file, and a line a hand
-  # edit added or removed without changing it. A store of version 1, which has no end
-  # line, is read as it was, a cut one among it; every store written since is of version
-  # 2.
+  # each line ends, LF, CRLF or a lone CR. A store of version 2 whose last line is no end
+  # line, or whose end line counts other than the lines it has, is refused at a fresh
+  # start, naming the file and the line, so that a store is read whole or not at all. Why
+  # a count of lines catches both kinds of cut: a cut keeps a file's first bytes, and the
+  # end line, which holds the count, is the last of them. A cut at a line boundary, or
+  # inside a line before the end line, a value's number cut in its digits among them,
+  # takes the end line with it, and the line that is then last counts nothing; a cut
+  # inside the end line cuts its count or the word after it, and a count cut in its digits
+  # is smaller than the lines before it and it, which the cut did not change. Only a cut
+  # of the last newline alone keeps every line whole, and that store is read. The count
+  # catches, too, a line lost or doubled inside the file, and a line a hand edit added or
+  # removed without changing it. A store of version 1, which has no end line, is read as
+  # it was, a cut one among it; every store written since is of version 2.
   #
-  # A store's lines end with LF, as the runner writes them, and since decision 410
-  # (RV-13) a line ended by CRLF or a lone CR is read alike, as B8 has the source's and a
+  # A store's lines end with LF, as the runner writes them, and since decision 410 (RV-13)
+  # a line ended by CRLF or a lone CR is read alike, as B8 has the source's and a
   # configuration file's readers read it, so that a store a hand edit saved with CRLF line
-  # ends starts, where RV-5 (a7-docs-1, c2-runner-persist-10) refused it at its first
-  # line holding a carriage return; a store saved so and cut short is refused as any cut
-  # store is, its last line no end line or its count cut. A refusal names the file and each line,
-  # bounded and printable as `Logex.Refusal` has it, the forces file's and the image's
-  # too (b3-store-image-11); and a comment, a tab and a byte no store holds are each told
-  # as what it is (b3-store-image-10), where a line holding one was told as a line of no
-  # shape, or one before any instance's lines, and an empty line after the end line as
-  # one, where it would be told as a store cut short. Since RV-5's review a store that
-  # begins with a byte-order mark, as an editor that saves UTF-8 with one writes it, is
-  # told so in plain words and the rest read as if it were not there; a store cut after
+  # ends starts, where RV-5 (a7-docs-1, c2-runner-persist-10) refused it at its first line
+  # holding a carriage return; a store saved so and cut short is refused as any cut store
+  # is, its last line no end line or its count cut. A refusal names the file and each
+  # line, bounded and printable as `Logex.Refusal` has it, the forces file's and the
+  # image's too (b3-store-image-11); and a comment, a tab and a byte no store holds are
+  # each told as what it is (b3-store-image-10), where a line holding one was told as a
+  # line of no shape, or one before any instance's lines, and an empty line after the end
+  # line as one, where it would be told as a store cut short. Since RV-5's review a store
+  # that begins with a byte-order mark, as an editor that saves UTF-8 with one writes it,
+  # is told so in plain words and the rest read as if it were not there; a store cut after
   # its header, inside its second line or at its end, is told once, at the line the cut
   # left last; an end line in a store whose header is not `logex retain 2`, which only
   # version 2's rule reads, is told as one that header does not take, never as one before
-  # the store's last; and the message for a store cut short says that `start: :cold`
-  # writes over it at once, and since decision 417 (RV-13) that it copies it first, to the
-  # next of its numbered copies (decision 418), as a cold start over any store a fresh
-  # start would refuse does (`Logex.Runner`).
+  # the store's last; and the message for a store cut short said that `start: :cold`
+  # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
+  # to the next of its numbered copies (decision 418), and then writes over it, as a cold
+  # start over any store a fresh start would refuse does (`Logex.Runner`).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 

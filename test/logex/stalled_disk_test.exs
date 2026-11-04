@@ -565,7 +565,7 @@ defmodule Logex.StalledDiskTest do
   end
 
   # RV-5: the store's read at a fresh start raw and limited as the forces file's is
-  # (provisional), and decision 360's copy of a store the start dropped from a write as
+  # (decision 415), and decision 360's copy of a store the start dropped from a write as
   # every other, limited the same, its failure reported and the start going on.
   describe "a fresh start's store on a stalled disk (RV-5, decision 360)" do
     test "a start whose store's read does not end within its limit is refused, naming the " <>

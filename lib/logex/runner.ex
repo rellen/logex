@@ -289,7 +289,7 @@ defmodule Logex.Runner do
     holds every retained value in memory, a warm restart starts from what it holds and a
     stop writes it over the edit. A store or a forces file that is a symbolic link is the
     host's mistake at start, every write being a new file renamed over the old, which
-    would put a file in the link's place (provisional).
+    would put a file in the link's place (decision 413).
   - *Its writes*: at every trip, of the resource as the trip left it, after every output
     is 0; at every `stop/2`, and since decisions 316 and 328 at every orderly exit, a
     parent's shutdown or `:normal`, after every output is 0 and every device closed; at every cold restart, of the
@@ -378,51 +378,50 @@ defmodule Logex.Runner do
     then changed, which no write takes until a restart.
   - *A fresh start* reads the store in the caller, after the forces file, warm unless
     `start: :cold`, since RV-5 raw and limited to the write limit of real time, as the
-    forces file's read is, so that a FIFO or a stalled disk in its place
-    refuses the start as a store that cannot be read (provisional), and since RV-5's
-    review so is the look at each file for a symbolic link before either is read, neither
-    file looked at nor read in the caller itself: a store laid over the
-    resource by decision 277's matching (`Logex.Runtime.start/2`), each value kept only
-    where the configuration retains its path, of exactly its type, and it fits, the rest
-    dropped and reported in `status/1`'s `retain`, and since decision 360 the store, as
-    the start read it, copied before its first write over it, in the runner's own process
-    once its files are claimed and before any device is opened, so that a mistaken
-    deploy's drops can be taken back from the copy once the next write has made the store
-    the new configuration's: since decision 418 each copy is a name of its own,
-    `<store>.dropped.<n>`, n one past the highest number standing beside the store, every
-    file or directory named so counting, 1 where none does, and none is replaced, a copy
-    staying until the host deletes it; an unnumbered `<store>.dropped` an earlier logex
-    left is kept as it stands and counts for nothing (provisional). The copy is written as
-    every other write is, through the copies' one `.tmp`, `<store>.dropped.tmp`, limited
-    the same, and renamed only where nothing stands at its name, so that a file a host
-    makes there while it is written fails it, `:eexist` (provisional); its failure is
-    reported as a failed write's, `failed` in `status/1`, and the start goes on, the copy
-    then owed (decision 416): since RV-5's review every write over the store, the
-    period's, a trip's, a stop's, a shutdown's and a cold restart's, makes it first, under
-    the next number then, and writes the store only once it is made, each while it cannot
-    be made a write that fails, so that no write replaces the store before its copy is
-    made; a start that drops nothing makes none, and `status/1`'s `retain` names the copy
-    the start made, `copy`, `plant.retain.dropped.2`; a file that does not exist none,
-    written at once; and one
-    that cannot be
-    read, that is no store, a line of no store's shape, an image `Logex.Runtime.start/2`
-    refuses, a store of another configuration, which a renamed configuration's is, or
-    since decision 355 one of `logex retain 2` cut short, its last line no end line or its
-    end line's count not its lines', the host's mistake, one `ArgumentError`, a line each,
-    `<path>: line <n>: ...`, the runner not started and no device opened. `start: :cold`
-    starts from none of it, a broken one among them, and writes a new store at once; since
-    decision 417 it reads the store first, as a warm start does, and one that stands and
-    that a warm start would refuse, cut short or refused by any line of it or its image,
-    it copies first, under the next of its numbered copies, `status/1` naming the copy,
-    and writes the new store only once the copy is made, so that the readable part of a
-    store the refusal's remedy starts over is kept; a copy that cannot be made is judged as
-    decision 291 judges a cold start whose first write fails, the runner not started,
-    `{:error, {:retain, reason}}`, the store as it was, and so is a store that stands but
-    cannot be read, a FIFO's read past the write limit or a directory in its place, which
-    no copy can be made of (provisional). A store that reads whole needs no copy and gets
-    none. A cold `restart/2` reads no store, starting from the resource the runner holds,
-    and copies none (provisional): the store is its own last write, a hand edit made while
-    the runner runs being lost anyway (decision 284).
+    forces file's read is, so that a FIFO or a stalled disk in its place refuses the start
+    as a store that cannot be read (decision 415), and since RV-5's review so is the look
+    at each file for a symbolic link before either is read, neither file looked at nor
+    read in the caller itself: a store laid over the resource by decision 277's matching
+    (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
+    path, of exactly its type, and it fits, the rest dropped and reported in `status/1`'s
+    `retain`, and since decision 360 the store, as the start read it, copied before its
+    first write over it, in the runner's own process once its files are claimed and before
+    any device is opened, so that a mistaken deploy's drops can be taken back from the
+    copy once the next write has made the store the new configuration's: since decision
+    418 each copy is a name of its own, `<store>.dropped.<n>`, n one past the highest
+    number standing beside the store, every file or directory named so counting, 1 where
+    none does, and none is replaced, a copy staying until the host deletes it; an
+    unnumbered `<store>.dropped` an earlier logex left is kept as it stands and counts for
+    nothing (provisional). The copy is written as every other write is, through the
+    copies' one `.tmp`, `<store>.dropped.tmp`, limited the same, and renamed only where
+    nothing stands at its name, so that a file a host makes there while it is written
+    fails it, `:eexist` (provisional); its failure is reported as a failed write's,
+    `failed` in `status/1`, and the start goes on, the copy then owed (decision 416):
+    since RV-5's review every write over the store, the period's, a trip's, a stop's, a
+    shutdown's and a cold restart's, makes it first, under the next number then, and
+    writes the store only once it is made, each while it cannot be made a write that
+    fails, so that no write replaces the store before its copy is made; a start that drops
+    nothing makes none, and `status/1`'s `retain` names the copy the start made, `copy`,
+    `plant.retain.dropped.2`; a file that does not exist none, written at once; and one
+    that cannot be read, that is no store, a line of no store's shape, an image
+    `Logex.Runtime.start/2` refuses, a store of another configuration, which a renamed
+    configuration's is, or since decision 355 one of `logex retain 2` cut short, its last
+    line no end line or its end line's count not its lines', the host's mistake, one
+    `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
+    device opened. `start: :cold` starts from none of it, a broken one among them, and
+    writes a new store at once; since decision 417 it reads the store first, as a warm
+    start does, and one that stands and that a warm start would refuse, cut short or
+    refused by any line of it or its image, it copies first, under the next of its
+    numbered copies, `status/1` naming the copy, and writes the new store only once the
+    copy is made, so that the readable part of a store the refusal's remedy starts over is
+    kept; a copy that cannot be made is judged as decision 291 judges a cold start whose
+    first write fails, the runner not started, `{:error, {:retain, reason}}`, the store as
+    it was, and so is a store that stands but cannot be read, a FIFO's read past the write
+    limit or a directory in its place, which no copy can be made of (provisional). A store
+    that reads whole needs no copy and gets none. A cold `restart/2` reads no store,
+    starting from the resource the runner holds, and copies none (provisional): the store
+    is its own last write, a hand edit made while the runner runs being lost anyway
+    (decision 284).
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
     keeps retained values in memory, and `status/1`'s `retain` is nil. `start:` without
     `retain:` is the host's mistake (decision 323), as are `retain:` naming the forces
@@ -430,9 +429,10 @@ defmodule Logex.Runner do
     since decision 360 `forces:` naming the store's copy or the `.tmp` the copy is written
     through, since decision 418 any of its numbered copies' names, `<store>.dropped.<n>`,
     whatever the number's digits, the copies' `.tmp` and `<store>.dropped`, which is
-    written through it, and a clock with no `wall_ms/1` (decision 322). The first round's `{:retain, ...}`
-    news, the store's age and its drops, reaches no subscriber, since none can exist
-    before `start_link/1` returns: `status/1`'s `retain` carries both (decision 324).
+    written through it, and a clock with no `wall_ms/1` (decision 322). The first round's
+    `{:retain, ...}` news, the store's age and its drops, reaches no subscriber, since
+    none can exist before `start_link/1` returns: `status/1`'s `retain` carries both
+    (decision 324).
 
   **Forcing** (M4-5; decisions 117 and 127). `force(runner, point, value)` makes the
   runner read an input point, by its name, at `value`, whatever its device says: every
@@ -487,12 +487,14 @@ defmodule Logex.Runner do
   since and `status/1` did not show (provisional, RV-11's review); a line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
-  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file is read exactly as the runner writes it, a last line with no line end
-  read, and since decision 410 a line ended by LF, CRLF or a lone CR read alike, the
-  runner writing LF, so that `hz 1.5` saved with CRLF line ends forces 1.5, where its
-  carriage return was no force (M5-11's review), and an unforce of a point not forced is accepted, writing the set again
-  (decision 140), but for a point's value, which since decision 218 for a real point and
-  decision 226 for every other is any number the lexer reads as one literal and the
+  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file
+  is read exactly as the runner writes it, a last line with no line end read, and since
+  decision 410 a line ended by LF, CRLF or a lone CR read alike, the runner writing LF, so
+  that `hz 1.5` saved with CRLF line ends forces 1.5, where its carriage return was no
+  force (M5-11's review), and an unforce of a point not forced is accepted, writing the
+  set again (decision 140), but for a point's value, which since decision 218 for a real
+  point and decision 226 for every other is any number the lexer reads as one literal and
+  the
   point's type holds, `fan_hz 37.50`, `3.75e1` or `37`, `eye_1 01` or `level 16#ff`, held
   at the type's nearest value as `force/3` holds one, the next force or unforce writing
   the whole file again in the runner's spelling, `fan_hz 37.5` and `level 255`. A point a restart's file no longer forces reads its device's last value
@@ -889,9 +891,10 @@ defmodule Logex.Runner do
   the stop's own, unknown; and since decision 414 the stop's write makes the store's text
   within the write limit too, the retained image taken out and written in the write's own
   process, so that a store too big to make within the limit answers `{:error, {:retain,
-  :timeout}}` at it, the store keeping its last write. The stop is still a system message, served when the runner reaches it,
-  never held for a slot and served by a runner suspended too: its caller names itself to
-  the runner first, and the runner answers it as it terminates, a call in effect only,
+  :timeout}}` at it, the store keeping its last write. The stop is still a system
+  message, served when the runner reaches it, never held for a slot and served by a
+  runner suspended too: its caller names itself to the runner first, and the runner
+  answers it as it terminates, a call in effect only,
   since a call would wait on a suspended runner for ever (decision 321). A clock gone by
   the time the store is written names no time, so that write is none and the stop answers
   `{:error, {:retain, {:clock, reason}}}`, the runner stopped by the stop's reason all the
@@ -4194,7 +4197,7 @@ defmodule Logex.Runner do
   # renamed over it (`Logex.Retain.written/2`), which would put a file in the link's place
   # and leave the file it names as it was, so the next start from the place the link
   # pointed meets an old store. Looked at raw, off the VM's file server, as the files are
-  # read (provisional: refused, where the review found the link replaced at the first
+  # read (decision 413: refused, where the review found the link replaced at the first
   # write; one put there after the start is replaced so, as the documents say). A link at
   # either's `.tmp` or at the store's copy is logex's own name, and replaced. Since RV-5's
   # review the look is made as each file's read is, in a process of its own limited to
@@ -4427,7 +4430,7 @@ defmodule Logex.Runner do
   # the read is raw and limited to the write limit of real time (decision 400), as
   # the forces file's is since RV-4's review, so that a FIFO or a stalled disk in the
   # store's place refuses the start as a file that cannot be read where it hung the
-  # caller for good (provisional). Decision 360: a store it dropped anything from is kept
+  # caller for good (decision 415). Decision 360: a store it dropped anything from is kept
   # as it was read, the text the start copies, since decision 418 to the next of the
   # store's numbered copies, `<store>.dropped.<n>` (dropped_copy/1).
   defp store_read!({nil, nil}, _mode, _configuration, runtime, _clock, _ms),

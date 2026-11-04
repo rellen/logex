@@ -19,8 +19,8 @@ Milestone 6's decisions 347–360, for RV-2 to RV-8, and the answers to RV-1's a
 questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV-10, to
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
-420–432, landed on 2026-11-03, and to RV-15's, decisions 433–436, each as built, their
-marks made in RV-13.)*
+420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
+RV-15's, decisions 433–436, each as built, their marks made in RV-13.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -12532,7 +12532,7 @@ and CI checked; each fix with a test that fails when it is reverted.
   - *Decision 355, the end line* (b3-store-image-6, c7-premortem-plant-7;
     `retain_store_test.exs`, "a store cut short (decision 355)"): a store's first line is
     `logex retain 2` and its last its count of lines, `end <count> lines`, the header and
-    the end line among them, as `wc -l` counts them (the words provisional):
+    the end line among them, as `wc -l` counts them (the words decision 409's):
 
     ```
     logex retain 2
@@ -12585,11 +12585,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     not answer in time, the VM's file server held, is `failed` in `status/1` as any failed
     write's, and the start goes on. `status/1`'s `retain` names it, `copy:
     "plant.retain.dropped"` as the host spelled the store, nil where its write failed,
-    where the start dropped anything, and has no `copy` otherwise (provisional: a key of
-    its own beside `dropped`, so that every pin of a start that drops nothing holds). The
+    where the start dropped anything, and has no `copy` otherwise (a key of its own beside
+    `dropped`, so that every pin of a start that drops nothing holds; decision 412 since
+    made it always present, nil where nothing was dropped, RV-13). The
     runner holds the copy and its `.tmp` as its own files (decision 356), a store another
     runner copies to refused as any file it holds, and a forces file naming either is
-    refused at start, decision 325's rule (provisional). Tests: the copy made before the
+    refused at start, decision 325's rule (decision 418, which numbers the copies, every
+    copy's name so refused since RV-13). Tests: the copy made before the
     first device read (a device that reads the copy at its open), named, the store as it
     was until the period's write; kept through a start that drops nothing (warm, cold,
     from no store) and replaced by the next that drops; a drop of an instance and of a
@@ -12601,7 +12603,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     the copy unlimited, a failed copy ending the start, a failed copy unreported, the
     copy's files unclaimed, the forces file on the copy taken, `copy` named at every
     start, each red.
-  - *Met on the way* (provisional): the store's read at a fresh start raw and limited to
+  - *Met on the way* (decision 415): the store's read at a fresh start raw and limited to
     the idle watchdog and a poll period, as the forces file's is since RV-4's review, so
     that a FIFO or a stalled disk in its place refuses the start as a store that cannot be
     read, where it hung the caller for good, and the copy's stall can be acted out with
@@ -12618,9 +12620,10 @@ and CI checked; each fix with a test that fails when it is reverted.
       LF alone, as the runner writes them, so save it so", and nothing else of it told,
       where every line was told as the line it seemed and was not, "the store is of
       version 1\r, which this logex does not read: it reads `logex retain 1`"
-      (provisional: refused, not read as LF as the source's and a configuration file's
-      readers read it, since `real_test.exs` pins a carriage return after a forces file's
-      value as no force, M5-11's review, and the store's numbers are read by the forces
+      (refused, decision 410 since reading it as LF, RV-13: not read as LF as the source's
+      and a configuration file's readers read it, since `real_test.exs` pins a carriage
+      return after a forces file's value as no force, M5-11's review, and the store's
+      numbers are read by the forces
       file's rule). The forces file keeps that rule, its message pinned, and is kept: a
       plainer word for a CRLF forces file changes that pin, put to the maintainer below.
       And a byte past ASCII, or a control byte but a tab or a carriage return, is shown as
@@ -12645,7 +12648,7 @@ and CI checked; each fix with a test that fails when it is reverted.
       symbolic link, to a file or to nothing, is the host's mistake at start, the host
       told to name the file it links to, before either file is read, since every write is
       a new file renamed over the old, which put a file in the link's place and left the
-      file it named behind (provisional); a link put there after the start is replaced at
+      file it named behind (decision 413); a link put there after the start is replaced at
       the next write, as the documents say. RV-4's M10 closed the `.tmp`'s half: a link
       there is removed and the file it names untouched.
     - a7-docs-2 (`retain_store_test.exs`, "a hand edit, with the runner stopped"):
@@ -12724,15 +12727,18 @@ and CI checked; each fix with a test that fails when it is reverted.
     file's write past the walk's limit (decision 353; decision 400's `write_limit:`, which
     RV-11 builds, is the answer), no rule of this item's.
   - *Provisional readings*: the end line's words, `end <count> lines`, and its count of
-    every line; the trailing empty line refused, told as one; a store holding a carriage
-    return refused at its first, in plain words, the forces file's rule kept; the bounds,
-    50 problems, 60 bytes a quoted text, 1,000 a line; a tab and a carriage return quoted
-    as they are, every other byte no line holds escaped; the copy's `status/1` key,
-    present only where the start dropped; the forces file on the copy refused; the
-    store's read at start limited; a store or forces file that is a link refused.
+    every line (decision 409); the trailing empty line refused, told as one (decision
+    411); a store holding a carriage return refused at its first, in plain words, the
+    forces file's rule kept (decision 410: both read as LF, RV-13); the bounds, 50
+    problems, 60 bytes a quoted text, 1,000 a line; a tab and a carriage return quoted as
+    they are, every other byte no line holds escaped; the copy's `status/1` key, present
+    only where the start dropped (decision 412: always present, RV-13); the forces file
+    on the copy refused (decision 418, every numbered copy, RV-13); the store's read at
+    start limited (decision 415); a store or forces file that is a link refused (decision
+    413). The bounds and the bytes quoted no decision took up; they stay provisional.
   - *Questions for the maintainer*, by what an operator sees *(all eleven answered on
     2026-11-02, decisions 409 to 419: 1, 3, 5, 7, 8 and 11 as built, 2, 4, 6, 9 and 10
-    changed, to build in RV-13)*:
+    changed, built in RV-13 on 2026-11-04, each mark the decision's number)*:
     1. *A store's end line.* A store now ends `end 13 lines`; one cut short by a full disk
        or a lost tail is refused at start, naming the file and its last line, and the
        operator starts cold or restores a copy. A hand edit that adds or takes away a line
@@ -12796,7 +12802,7 @@ and CI checked; each fix with a test that fails when it is reverted.
      the failure, and a stop that could not make it leaves the store as the start read
      it, so the next start drops from it again and copies it. The start still goes on, as
      built, decision 275's rule for a failed write, where decision 291's for a cold
-     start's write would refuse it (provisional, question 8 below). The test that pinned
+     start's write would refuse it (decision 416, question 8 below). The test that pinned
      the loss, this item's "a copy that fails is reported, and the start goes on", is
      replaced by the first above. The life walk restates it: a changed start in two, by
      the store's text so that no draw is taken, meets a directory at the copy's `.tmp`,
@@ -12836,7 +12842,7 @@ and CI checked; each fix with a test that fails when it is reverted.
      shown printable (`Logex.Refusal.path/1`), a control byte, DEL and a byte of no UTF-8
      character as its escape, a character past ASCII as it is, and one past 4,096 bytes,
      the most a path Linux opens holds, as `…` and its last 4,096 cut at a character's
-     boundary (provisional bound), in every refusal of the store and the forces file and
+     boundary (decision 419), in every refusal of the store and the forces file and
      every "cannot be read" (`retain_store_test.exs`, "the store's path in a refusal
      printable, and every line naming its line"); a first try that cut the path at 200
      bytes changed every pinned message whose test directory is longer, and was dropped;
@@ -12974,7 +12980,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   trigger sample copies the store" pins at the merge.
 
   *Questions for the maintainer*, continued, by what an operator sees *(answered on
-  2026-11-02 with 1 to 7, decisions 416 to 419)*:
+  2026-11-02 with 1 to 7, decisions 416 to 419; 9 and 10 built in RV-13, 8 and 11 as
+  built, each mark the decision's number)*:
   8. *A copy that cannot be made.* A changed configuration that drops a counter starts on
      a full disk, or with a directory where `plant.retain.dropped` goes: the copy fails,
      `status/1` shows `failed: :enospc` and `copy: nil`, and the plant runs; until the
@@ -14687,6 +14694,294 @@ and CI checked; each fix with a test that fails when it is reverted.
   every one RV-15 left on a reading decisions 433–436 settle, each as built, with
   RV-10's in the runner's files (decisions 420–428). It runs after RV-11, whose
   `write_limit:` decision 414 reads, and before RV-6, whose runner code it touches.
+
+  **RV-13 as built** (2026-11-04, branch `rv13` over `7222266`). Each decision that changes
+  something has a test that fails when it is reverted, judged by the full suite (the
+  mutation table below); the leave each used, a test that pinned the reading it changes,
+  changed there and only as it says, each changed line citing the decision, is named with
+  it. No test, walk or oracle was deleted or weakened; the tests renamed are the leave's,
+  and the four whose names carried a mark RV-15 left, each now the decision's number.
+
+  - *Decision 410, CRLF and a lone CR read as LF* (`bbd5ced`; `retain_store_test.exs`'s
+    "a store saved with CRLF or a lone CR is read as the runner wrote it" and "… and cut
+    short is refused, as one of LF is"; `force_test.exs`'s "a line ended by CRLF or a lone
+    CR is a line, as one ended by LF is"; `real_test.exs`'s forces of a real point).
+    `Logex.Retain` and the runner's forces reader each split a file's text at `\r\n`, `\r`
+    or `\n`, the longest where they meet, as `Logex.Lexer` reads a newline (B8): a lone CR
+    before a CRLF is two line ends, the line between them empty. A store saved with CRLF,
+    with lone CRs, or with every kind mixed, starts with every value the stop wrote, its
+    lines counted however they end (decision 409), and its next write is LF's; a CRLF or
+    CR store cut at every byte offset is refused naming a line, but the cuts of its last
+    line end, the CR, the LF or both, which keep every line whole; a byte-order mark is
+    told as RV-5 told it. `hz 1.5\r` forces 1.5, and `hz 1.5\r\r\n` is told its empty
+    second line is no force, as any empty line is. The leave: `retain_store_test.exs`'s
+    store refused at its first carriage return, three stores, now each read; and
+    `real_test.exs`'s `hz 1.5\r`, one of the list of values that are no force, now its
+    own assertion that it forces 1.5. The walks restate it: before each warm fresh start
+    the runner and life walks save the store, and a forces file that holds a force, with
+    the line end the store's own text chooses, LF, CRLF or a lone CR, the model reading
+    each as it was (`line_ended!/2`, `on_disk/1`), reaching `:store_crlf_read`,
+    `:store_cr_read` and `:forces_crlf_read`. Docs: `Logex.Retain`'s and
+    `Logex.Refusal`'s heads, `Logex.Runner`'s moduledoc ("Its store", "Forcing"), README's
+    "The store on disk" and forcing, §4.13.
+  - *Decision 412, `copy` always in the retain report* (`7d9fc7c`). `copy: nil` from every
+    start, `status/1`'s doc saying so, `dropped` and `failed` telling the two nils apart.
+    The leave: `retain_store_test.exs`'s start with no store file, a stop and fresh start,
+    and the copy kept through a warm, a cold and a storeless start, each a report with no
+    `copy`, now `copy: nil`; the walks' `copy_told/5` asserts the key there and nil. RV-11's
+    comments that compared its own keys with `copy` "as `copy` is" now say "as `copy` was
+    until decision 412", RV-11's marks left as they are (its question 4).
+  - *Decision 418, a copy a name of its own, none replaced* (`b96a4df`;
+    `retain_store_test.exs`'s "a copy numbered one past the highest that stands, none
+    replaced" and "every copy kept, the next that drops numbered past it";
+    `stalled_disk_test.exs`'s "a file a host makes at the copy's number while it is
+    written is never replaced"; `runner_paths_test.exs`'s "a store another runner copies
+    its store to, and the copy's `.tmp`, are refused" and "of two starts at once, a store
+    and a file at its copy's name, never both start"). Each copy is
+    `<store>.dropped.<n>`, n one past the highest number standing beside the store, every
+    entry named the store's name, `.dropped.` and a whole number in decimal digits
+    counting by its value, a file or a directory a host made among them
+    (`Logex.Runner.Writer.copy/3`, the directory read raw by `:prim_file.list_dir_all/1`
+    inside the copy's own limited write); written through the copies' one `.tmp`,
+    `<store>.dropped.tmp`, decision 392's unchanged, and renamed only where nothing stands
+    at its name (`Logex.Retain.written/2` given `{path, beside}`, no new function in its
+    pinned surface), so a file a host makes there while the copy is written fails it,
+    `:eexist`, owed as decision 416 has a copy that cannot be made, its next try numbered
+    past it (provisional, question 1). `status/1`'s `copy` names the copy the start made,
+    and an owed copy its own number when a later write makes it. An unnumbered
+    `<store>.dropped` an earlier logex left is kept as it stands and counts for nothing
+    (provisional, question 2). Decision 356's claim covers every copy's name:
+    `Logex.Runner.Paths`, once a claim's rows are in, checks them against every other
+    live runner's files, a runner's file at another store's copy's name refused with the
+    role `:dropped`, and a store one of whose copies' names another runner holds refused
+    naming that runner's file; two starts at once that cross so never both run, each
+    checking after its rows are in (both may be refused, provisional, question 3). The
+    one `<store>.dropped` row is gone; `<store>.dropped.tmp` stays a row. Decision 325's
+    refusal of a forces file on a copy covers every number, whatever its digits, the
+    copies' `.tmp`, and `<store>.dropped`, which would write through that `.tmp`, a
+    message of its own. A copy killed at its limit is unknown under its number, its write
+    telling the runner the number once chosen, and one killed before it chose a number,
+    which lands nowhere, a copy that failed, `:timeout` (provisional, question 4); an
+    owed copy's write killed in the copy is unknown under the copy's number, in the store
+    the store, the copy named (RV-11's reading kept). The leave, every pin of the one
+    `.dropped` and its replacement: `retain_store_test.exs`'s copy tests read `.dropped.1`
+    where they read `.dropped`, the next drop `.dropped.2` beside the first kept where it
+    replaced it, the copies' `.tmp` named as itself where it was `copy <> ".tmp"`, and the
+    forces refusals every number and `.dropped`; `runner_paths_test.exs`'s copy claims
+    numbered, a forces file at a copy's name and another's forces file at one added;
+    `stalled_disk_test.exs`'s stalled copies `.dropped.1`, the owed copy after a late
+    landing `.dropped.2`. Met on the way: a first build looked for the copy made after the
+    number's note in one receive, so a write killed in the store's write was told as one
+    killed in the copy's; "an owed copy's …" in `stalled_disk_test.exs` caught it, and
+    the copy made is looked for first; and the mutation table asked for two pins more
+    (`5fa9e00`): the numbering's test meets `.dropped.011` beside `.dropped.07`, the next
+    copy `.dropped.12`, and `runner_paths_test.exs`'s refusals of a store another runner
+    copies to meet the caller's check before the read both ways a claim crosses, a store
+    at another's copy's name and a store whose copy's name another holds, each told as
+    held. The walks restate it: before and after each start they read the copies from the
+    store's directory themselves (`copies_standing/1`), every copy that stood standing
+    after it byte for byte, the copy made, where one is, under one past the highest that
+    stood, reaching `:store_copy_numbered_past`; the owed copy made late under the next
+    number, every earlier one as it was. Docs: `Logex.Runner`'s moduledoc ("Its files",
+    "Its store"), `status/1`'s doc, the heads of `Logex.Runner.Paths` and
+    `Logex.Runner.Writer`, README's "The store on disk" and its rollback, §4.13.
+    CLAUDE.md: `Logex.Runner.Paths`'s line says the store's copies where it said its copy.
+  - *Decision 417, a cold start copies a store a fresh start would refuse* (`29fec98`;
+    `retain_store_test.exs`'s "start: :cold copies a store a fresh start would refuse,
+    then writes a new one", "a cold start copies what a fresh start would refuse, and
+    nothing else" and "a cold start whose copy cannot be made starts nothing, the store as
+    it was"; `stalled_disk_test.exs`'s "a cold start whose copy does not end within its
+    limit starts nothing, the store as it was" and "a cold start over a store whose read
+    does not end within its limit starts nothing"). `start: :cold` reads the store raw
+    and within the write limit, as a warm start does, and judges it as one would, by
+    `Logex.Retain.decode!/2` and `Logex.Runtime.start/2`, every refusal of either; a store
+    so refused, cut short, a line of no store's shape, another configuration's, is copied
+    in the runner's init/1, once its files are claimed, under decision 418's next number,
+    and the new store is written only once the copy is made, `status/1`'s `copy` naming
+    it, `dropped` empty. A copy that cannot be made, a directory at the copies' `.tmp` or
+    a copy past its limit, refuses the start as decision 291 refuses a cold start whose
+    first write fails, `{:error, {:retain, reason}}`, the store as it was and no device
+    opened; so does a store that stands but cannot be read, a directory or a FIFO in its
+    place, which no copy can be made of (provisional, question 5). A store that reads
+    whole gets no copy, decision 360 copying only what a start drops. A cold `restart/2`
+    reads no store and copies none (provisional, question 6). The cut store's refusal now
+    says "start it with start: :cold to start over it, which copies it first to the next
+    `.dropped.<n>` beside it and then writes a new store over it". The leave:
+    `retain_store_test.exs`'s "start: :cold ignores the store and writes a new one at
+    once", a cold start over a store a fresh start refused, now pins its copy too, its
+    name with it; and the five pins of the warning, two of them RV-13's own decision-410
+    test, now the new words. The life walk restates it: one cold start in two, by the
+    store's text so that no draw is taken, meets the store cut at a byte that text
+    chooses, and the model reads the cut bytes under the next number, the store written
+    over (`cold_cut!/1`, `:cold_copied_cut`). Docs: `Logex.Runner`'s moduledoc, the
+    comment at `Logex.Retain`'s cut message, README's "The store on disk", §4.13.
+  - *Decision 414, the shutdown's write within the write limit* (`addea97`;
+    `stalled_disk_test.exs`'s "the end's write makes the store's text in the write's own
+    process"). The child spec's deadline was already decision 414's formula, `devices *
+    (idle + poll) + 2 * write_limit`, never less than 5000 (decision 400), the time the
+    runner's own end gives each device's 0 and close and the write limit the period's
+    write and the store's own; but the end's write took the retained image out and made
+    the store's text in the runner, with no limit, before the write the limit bounds.
+    Every orderly exit's write, a stop's, a parent's shutdown and a `:normal` exit, now
+    hands `Logex.Runner.Writer.written/3` a function that makes the text, called in the
+    write's own process within the write limit, the limit counted from before that
+    process is made so that the copy of the resource into it is within it too. The test
+    traces the runner through a stop and a `GenServer.stop/3` shutdown: neither
+    `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2` called by the runner, each once
+    by one process it started, the store written. b3-store-image-4 reproduced
+    (`scratchpad/rv/p13/shutdown414.exs`, two arrays of 65,536 retained timers, one
+    device): at the parent the take-out took 7.9 s and the text 7.4 s, the child spec
+    10,510 ms, and the supervisor killed the runner at 10,842 ms, the store its start's
+    write and no one told; at the tip the shutdown's write is cut off at 5,000 ms and
+    reported, `{:retain, {:error, :timeout}}`, the runner ending `:shutdown` at 5,150 ms,
+    the store its last write; and given `write_limit: 30_000`, the spec 60,510 ms, the
+    shutdown writes the store in 15.8 s. A trip's, a cold restart's and a fresh start's
+    write make the text in the runner as before (provisional, question 7: RV-6's
+    decision 352). A host's own `shutdown:` still wins, as pinned. Docs: `child_spec/1`'s
+    and `stop/2`'s docs, `Logex.Runner`'s moduledoc, README's child spec, §4.13.
+  - *RV-15's marks* (decisions 433–436), each made the decision's number, no rule
+    changed: `Logex.Warnings`' moduledoc (decisions 433, 434 and 435) and its comments at
+    decided/2 and virtual_write/4 (433); `Logex.Compiler`'s recompiled/4 doc and its
+    comment at the loader and `Logex.FbType.check/2`'s doc (436); in the tests,
+    `tag_subscript_test.exs`'s three tests' names and comments and the comment on "every
+    form a tag reaches" (433, 434, 435), and `function_block_test.exs`'s test name and
+    comment (436); this file's RV-15 entry; decisions 433–436's notes.
+  - *RV-5's marks* (decisions 409–419) on the readings they settle, each the decision's
+    number: the end line's words (409) in `Logex.Retain`'s head, the runner's moduledoc,
+    §4.13 and decision 355's note; the link refused (413) in the runner's moduledoc, its
+    comment at link!/3 and README; the store's read at start limited (415) in the
+    moduledoc, the comment at store_read!/6, `stalled_disk_test.exs`'s describe, README
+    and decision 360's note; the start going on with the copy owed (416) in the runner's
+    comment at dropped_copy/1, README, §4.13 and decision 360's notes; the forces file on
+    the copy refused (418) and the copy's key (412) in the runner's moduledoc and
+    comments, each rewritten with its decision, §4.13 and decision 360's note; the
+    carriage return refused (410) in `Logex.Retain`'s head, the runner's moduledoc and
+    `retain_store_test.exs`'s comment, each rewritten with decision 410; the path's bound
+    (419) in `Logex.Refusal`'s head; and this file's RV-5 entry, each mark and its
+    provisional readings' list. The refusal's bounds, 50 problems, 60 bytes and 1,000 a
+    line, and the bytes quoted as they are, no decision took up, and they stay
+    provisional. RV-11's marks are left as they are (its questions are with the
+    maintainer); RV-10's in the runner's files, which this item was to make, are none,
+    as RV-14's entry records ("Left to RV-13").
+
+  *The mutation table*, each mutant judged by the full suite (`scripts/mutate.sh`,
+  `scratchpad/rv/mut13/`, 19 patches on `addea97`, the code's tip), each with
+  `5fa9e00`'s numbering past `.dropped.011`, and m418_no_cross, m418_one_number,
+  m418_replaces, m418_unknown_failed and m418_zeros_uncounted with its caller's check of
+  crossing names too. † marks the one that survived its first run, before the caller's
+  check was pinned, and was red when run again with it. None survives.
+
+  | Mutant | What it does | Full suite | Red by |
+  |---|---|---|---|
+  | m410_store_lf | the store split at LF alone, the parent's | red | `retain_store_test.exs`'s two CRLF stores, the runner walk, its input-check walk and the life walk |
+  | m410_store_no_lone_cr | the store split at CRLF and LF, a lone CR no line end | red | the same |
+  | m410_forces_lf | the forces file split at LF alone, the parent's | red | `force_test.exs`'s "a line ended by CRLF or a lone CR is a line …", `real_test.exs`'s forces of a real point, the runner and life walks |
+  | m412_copy_absent | `copy` absent where nothing was dropped, the parent's | red | six of `retain_store_test.exs`, the three walks |
+  | m414_text_in_runner | the end's store text made in the runner, unlimited, the parent's | red | `stalled_disk_test.exs`'s "the end's write makes the store's text in the write's own process" |
+  | m417_no_cold_copy | a cold start over a store a fresh start would refuse copies nothing, the parent's | red | three of `retain_store_test.exs`, `stalled_disk_test.exs`'s cold copy past its limit, the life walk |
+  | m417_copy_failure_ignored | a cold copy that cannot be made ignored, the store written | red | "a cold start whose copy cannot be made starts nothing, the store as it was" |
+  | m417_unread_written | a store a cold start cannot read written over | red | "a cold start over a store whose read does not end within its limit starts nothing" |
+  | m417_whole_copied | a store that reads whole copied too | red | "a cold start copies what a fresh start would refuse, and nothing else", "every copy kept …", the life walk |
+  | m417_old_message | the cut refusal's old warning to copy the store aside | red | five of `retain_store_test.exs` |
+  | m418_one_number | every copy numbered 1 | red | four of `retain_store_test.exs`, three of `stalled_disk_test.exs`, the life walk |
+  | m418_zeros_uncounted | a number with a leading zero not a copy's, `.dropped.07` uncounted | red | "a copy numbered one past the highest that stands …" at `.dropped.011`, the forces file on `.dropped.007` and a claim on `.dropped.007` |
+  | m418_replaces | a copy renamed over a file standing at its number | red | "a file a host makes at the copy's number while it is written is never replaced" |
+  | m418_unknown_failed | a copy past its limit reported failed, never unknown | red | `stalled_disk_test.exs`'s start's copy past its limit |
+  | m418_no_cross | a claim not checked against other runners' copies' names | red | "of two starts at once, a store and a file at its copy's name, never both start" |
+  | m418_cross_one_way | a store's copies' names not checked against another runner's files | red | `runner_paths_test.exs` (2) |
+  | m418_caller_uncrossed † | the caller's check before the read not crossing | survived at `addea97`; red at `5fa9e00` | "a store another runner copies its store to, and the copy's `.tmp`, are refused", its caller's check |
+  | m418_forces_numbered | `forces:` at a numbered copy taken | red | "each checked in the caller, a pinned message each" |
+  | m418_in_flight_order | a write killed in the store's told as killed in the copy's | red | "an owed copy's: a write killed in the copy names the copy, …" |
+
+  *The cost*, held against the parent `7222266` at `addea97`, the code's tip, each the
+  least of several runs in reductions (`scratchpad/rv/p13/cost/`, RV-5's and RV-11's
+  measures): a round of three devices of a 10 ms task on the manual clock (seven runs)
+  2043.83 with its outputs changing and 1741.72 with none, where the parent cost 2041.42
+  and 1739.60 (+0.1%); a round of a runner with a store and a long period (nine runs)
+  1706.76, the parent 1706.04, 7.85 more than with no store against the parent's 7.79,
+  the test's bound 10; a period's write, the text made and written, of a store of 1,000
+  retained counters and a global, 447,205 at both, and the whole VM's over the advance
+  that makes it through the runner 8,642,450 against 8,637,872 (+0.05%); and a fresh
+  start from that store 4,653,267 in its caller against 4,668,489 (−0.3%) and 4,810,199
+  the whole VM's against 4,825,350, the runner's own to the end of its first round
+  155,678 against 155,607. A cold start over that store, which decision 417 makes read
+  and judge the store as a warm start does, costs what a warm start's read does: 4,687,793
+  in its caller against the parent's 709,177, and 5,399,932 the whole VM's against
+  1,421,286, the runner's own 710,632 against 710,623: the read and its judgement are
+  the decision's own price, paid once a cold start.
+
+  *Load runs* (`scripts/load.sh`, four busy loops on four cores, `scratchpad/rv/load13/`).
+  The 30 new and changed runner tests of this item, in `retain_store_test.exs` (19),
+  `stalled_disk_test.exs` (6), `runner_paths_test.exs` (3), `force_test.exs` and
+  `real_test.exs`'s forces file's real point, by line, 50 runs at `5fa9e00`: none failed,
+  each run 23 to 36 s. The runner walk, the input-check walk and the life walk, each
+  restating this item's rules, 6 runs at `5fa9e00` and 6 at the parent: none failed at
+  either, a run of the four tests 146 to 176 s at the tip and 124 to 137 s at the parent,
+  the more the walks' own reads of the store's directory and saves of its line ends.
+
+  *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
+  full suite at a time: the parent `7222266` 2,819 (11 doctests, 2,808 tests); `bbd5ced`
+  and `7d9fc7c` 2,821; `b96a4df` 2,824; `29fec98` 2,828; `addea97` and `5fa9e00` 2,829;
+  and this entry's commit, which changes no rule, 2,829. CI was green at once on every
+  commit before it, `bbd5ced` to `5fa9e00`. The machine restarted once under the mutation
+  table, which was run again from the patch it was in.
+
+  *Provisional readings, put to the maintainer*, by what an operator sees. The record is
+  silent on each; the reading taken is the closest to it, IEC and Logix. Logix keeps no
+  copy of a project's values across a download, and IEC 61131-3 leaves retention's medium
+  to the implementer, so neither speaks to any of them.
+
+  1. *A file made at the copy's number while the copy is written* (decision 418). A
+     changed deploy's start numbers its copy `plant.retain.dropped.4`, one past the
+     highest standing; in the moment it writes, a backup script drops its own
+     `plant.retain.dropped.4` there. The copy is not renamed over it: the copy fails,
+     `status/1` shows `failed: :eexist` and `copy: nil`, the store is held, and the next
+     write over the store makes the copy as `plant.retain.dropped.5`. (a) As built,
+     failed and owed, as decision 416 has a copy that cannot be made; (b) the next free
+     number at once, the copy made in the same start. (A host's file named so before the
+     start counts as standing and is never at the next number.)
+  2. *An unnumbered `plant.retain.dropped` an earlier logex left* (decision 418). An
+     operator upgrading finds the one copy RV-5 made beside the store. It is kept as it
+     stands and counts for nothing: the first numbered copy is `plant.retain.dropped.1`.
+     (a) As built; (b) taken as copy 0, so that `ls` sorts it first, nothing renamed;
+     (c) renamed `plant.retain.dropped.1` by the first start that copies, its own
+     numbered past it.
+  3. *Two runners started at once on files that cross* (decisions 356 and 418). A
+     supervisor starts line A on `a.retain` and, at the same instant, line B on
+     `a.retain.dropped.2`, a name A's copies are made under. Never both run; but each
+     checks the other only after its own claims are in, so both may be refused, each
+     told the other's file, and the operator starts one again. (a) As built; (b)
+     exactly one starts, a lock taken for every copy's name, at the cost of a second
+     table the claims go through.
+  4. *A copy killed before it took its number* (decisions 391 and 418). On a disk that
+     stalls before the store's directory is read, a dropping start's copy is cut at the
+     write limit before it chose a number: no copy can land anywhere, so `status/1` shows
+     `failed: :timeout`, no `unknown`, the copy owed. One cut after it chose its number,
+     in its write or rename, shows `unknown: "plant.retain.dropped.3"`. (a) As built; (b)
+     `unknown` in both, naming the store's copies with no number,
+     `"plant.retain.dropped.<n>"`.
+  5. *A cold start over a store it cannot read* (decision 417). A store left unreadable,
+     a directory in its place or a card that answers no read within the write limit:
+     `start: :cold` cannot copy it, so it is refused, `{:error, {:retain, :eisdir}}` or
+     `:timeout`, as a cold start whose first write fails, where it wrote a new store over
+     it before (a directory refused it then too). (a) As built; (b) written over as
+     before, nothing readable being lost; (c) the host's mistake, raised in the caller as
+     a warm start's "the store cannot be read" is.
+  6. *A cold restart over a store edited while the runner runs* (decision 417). A
+     technician edits `plant.retain` by hand while the plant is tripped and then asks
+     `restart(runner, :cold)`: the restart reads no store, so it copies none, and its
+     write replaces the edit, as decision 284 says a hand edit made while the runner runs
+     is lost. (a) As built, the copy only a start's; (b) every cold restart reads the
+     store first and copies one a fresh start would refuse, at the cost of a read a
+     restart.
+  7. *A trip's or a cold restart's write of a very large store* (decision 414). A plant
+     retaining 131,072 timers trips: the runner takes the image out and makes its text,
+     some 15 s here, before the write the limit bounds, every host call waiting, and then
+     writes it; only the end's write, which a supervisor's deadline bounds, makes its text
+     within the write limit and is cut at it. (a) As built, the rest RV-6's (decision
+     352); (b) every write's text within the limit, so that such a plant's trip, cold
+     restart and `start: :cold` write fails at 5 s unless `write_limit:` is raised, a cold
+     start then refused.
 - **RV-14 — the answers to RV-10's questions** (decisions 420–428). Each as built: every
   provisional mark RV-10 left on a reading they settle made the decision's number, in
   `lib/`, `test/` names and comments, README and PLAN's RV-10 entry, save those in the
@@ -14756,7 +15051,8 @@ and CI checked; each fix with a test that fails when it is reverted.
     `Logex.FbType.check/2`, public for the check, take what they are given as checked, as
     their docs said, and nothing either gives holds a type it trusted: pinned as built
     and marked provisional (`function_block_test.exs`, "recompiled/4 and check/2 trust
-    what they are given and hold none of it (provisional)", question 4 below). RV-12's
+    what they are given and hold none of it", question 4 below; decision 436, the mark
+    its number since RV-13). RV-12's
     review's forge again (`p15/forge432.exs`):
     a load traced hands `loaded/2` no closure, the types it hands its own compile, which a
     trace reads, compile when handed in only after their texts are compiled again, and the
@@ -14975,7 +15271,8 @@ and CI checked; each fix with a test that fails when it is reverted.
      beside `ote lanes[i].pv.[n]` and quiet beside `ote lanes[1].pv.[n]`, the likelier to
      set its bit; a word array's latch is quiet beside both. Question 1 now says so, with
      a third option, and "a literal bit's latch beside a coil a tag numbers of its own
-     element is quiet (provisional)" pins it, alone and where a write through a tag
+     element is quiet" pins it (decision 433, the mark its number since RV-13), alone and
+     where a write through a tag
      subscript makes the member's word one judged as a word array.
   5. *Marks and records* (Low): this file's RV-12 entry's two marks, "(question 1 below,
      decision 429)" and "(question 2 below, decision 430)"; the runtime's `"steps[16#3]"`,
@@ -15047,7 +15344,16 @@ and CI checked; each fix with a test that fails when it is reverted.
   under a load average of 7.5, is RV-11's code and did not recur here.
 
   *Provisional readings, put to the maintainer* *(RV-15's four answered on 2026-11-03,
-  decisions 433 to 436, each as built; RV-13 makes each mark the decision's number)*.
+  decisions 433 to 436, each as built; RV-13 made each mark the decision's number on
+  2026-11-04: question 1 decision 433, `Logex.Warnings`' moduledoc and its comments at
+  decided/2 and virtual_write/4, `tag_subscript_test.exs`'s "every form a tag reaches"
+  comment and "a literal bit's latch … is quiet (decision 433)"; question 2 decision 434,
+  the moduledoc's three firsts and "a write a member rule warns is told too of a pair a
+  tag reaches (decision 434)"; question 3 decision 435, the moduledoc and "a bit a tag
+  numbers beside its word written whole through the very tags is warned (decision
+  435)"; question 4 decision 436, `Logex.Compiler`'s recompiled/4 doc and its comment at
+  the loader, `Logex.FbType.check/2`'s doc and `function_block_test.exs`'s "… hold none
+  of it (decision 436)")*.
   RV-14 leaves none: decisions 420 to 428 took each reading as built. RV-15's, each pinned as built and marked provisional where
   the code states it:
 

@@ -1537,7 +1537,7 @@ defmodule Logex.TagSubscriptTest do
     # may meet. RV-12's question 3's forms first, in one dimension, each both ways; then two
     # dimensions and three, a timer's members, the coil through the very tags, another
     # write through a tag subscript, a literal bit's latch, which decision 257 compares
-    # with a coil through a tag subscript (provisional, beside a bit a tag numbers), and a
+    # with a coil through a tag subscript (decision 433, beside a bit a tag numbers), and a
     # literal bit beside a word written whole through a tag subscript, the one pair beyond
     # question 3's list a tag subscript reaches.
     test "every form a tag reaches is warned where the pair may meet, either way" do
@@ -1720,9 +1720,9 @@ defmodule Logex.TagSubscriptTest do
     end
 
     # A bit a tag numbers beside its word written whole through the very tags is warned,
-    # either first, as a word array's is (provisional), where a literal bit beside it stays
+    # either first, as a word array's is (decision 435), where a literal bit beside it stays
     # quiet, as decision 288 has it and a word array's does not.
-    test "a bit a tag numbers beside its word written whole through the very tags is warned (provisional)" do
+    test "a bit a tag numbers beside its word written whole through the very tags is warned (decision 435)" do
       assert shared("xic a ote l1[i].pv.[n]\nmove 5 l1[i].pv") == [
                {19,
                 "`l1[i].pv` is in `l1`, which the `ote` on line 18 may write through a tag " <>
@@ -1744,10 +1744,10 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    # Each pair is told on its own (provisional): a write a member rule warns of a literal
+    # Each pair is told on its own (decision 434): a write a member rule warns of a literal
     # element's bit is told too of a write through a tag subscript that numbers a bit, two
     # warnings on its line, where a word array's write is told of one.
-    test "a write a member rule warns is told too of a pair a tag reaches (provisional)" do
+    test "a write a member rule warns is told too of a pair a tag reaches (decision 434)" do
       assert shared("xic a ote l1[1].pv.3\nxic a ote l1[i].pv.[n]\nxic a ote l1[i].pv.3") == [
                {19,
                 "`l1[i].pv.[n]` is in `l1`, as `l1[1].pv.3` is, which already has an `ote` on " <>
@@ -2006,8 +2006,8 @@ defmodule Logex.TagSubscriptTest do
     # own literal element, `otl l1[1].pv.3` beside `ote l1[1].pv.[n]`, either first, is
     # quiet, as a word array's is, where beside one through a tag subscript, `ote
     # l1[i].pv.[n]`, it is warned, as decision 257 warns it beside `ote l1[i].pv.3`
-    # (provisional, question 1).
-    test "a literal bit's latch beside a coil a tag numbers of its own element is quiet (provisional)" do
+    # (decision 433, question 1).
+    test "a literal bit's latch beside a coil a tag numbers of its own element is quiet (decision 433)" do
       for rungs <- [
             "xic a otl l1[1].pv.3\nxic a ote l1[1].pv.[n]",
             "xic a ote l1[1].pv.[n]\nxic a otl l1[1].pv.3",
