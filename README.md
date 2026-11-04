@@ -3975,7 +3975,8 @@ closed: true
   apart from the heartbeat, decision 400), `open:` (how long each device's opening, its
   adapter's `init/3` and first read, may take in real time, 5000 ms, for every device or
   by name, `open: %{"drive" => 2000}`, so a drive whose connect takes 600 ms opens with
-  the heartbeat left as it is, decision 398), `forces:` (the file its forces are kept
+  the heartbeat left as it is, decision 398, and how long a restart's read of each device
+  may take, one that stayed up among them, decision 439), `forces:` (the file its forces are kept
   in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
@@ -4124,7 +4125,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   itself is killed and named, and every device that answers takes the trip's 0.
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
   release killed, reads every device once, as a start does, opening again each device
-  that went down, those among them (decision 142), restarts the resource, which keeps its
+  that went down, those among them (decision 142), each read or opened within its own
+  `open:`, so that a gateway that stayed up and answers its reread in 700 ms lets the
+  restart through (decision 439), restarts the resource, which keeps its
   input image and puts every other global back to its initial value, a warm restart
   keeping what each program marks `retain` (M6-2), and runs the first
   round at once, on what was read, the stopped time not counted: the conveyor stays off
@@ -4461,7 +4464,8 @@ closed: true
   poll meanwhile, and a bad reading of a device released at a restart trips nothing; and
   the contract walk, on the manual clock, waits in real time where the runner waits for
   its devices, a device's open made late by 700 ms, past the walk's idle watchdog and a
-  poll period and within its opening limit (decision 398), tripping nothing. Every timing rule is
+  poll period and within its opening limit (decision 398), and a restart's read of a
+  device up as late (decision 439), tripping and refusing nothing. Every timing rule is
   tested on the manual clock.
 
 ### A located array

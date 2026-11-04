@@ -1265,6 +1265,48 @@ defmodule Logex.RunnerTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 439 (RV-16): a device up that a restart reads again is limited by its own
+    # opening limit, as one it opens again is, where it was given the idle watchdog and a
+    # poll period, 510 ms here: a gateway that stayed up and answers its reread in 700 ms
+    # lets the restart through, read again and not opened, and one hung in its reread is
+    # killed at its own limit, refusing the restart `:timeout`.
+    test "a device up that a restart reads again is given its own opening limit " <>
+           "(decision 439)" do
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, gateway} = Sim.start_link()
+
+      opts =
+        Keyword.put(opts, :io, %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: gateway}})
+
+      {:ok, runner} = Runner.start_link(opts)
+      pid = devices(runner)["drive"]
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+
+      Sim.fail(gateway, :read, {:delay, 700})
+      {us, restarted} = :timer.tc(fn -> Runner.restart(runner, :cold) end)
+      assert restarted == :ok
+      assert div(us, 1000) >= 700
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert devices(runner)["drive"] == pid
+      assert Runner.stop(runner) == :ok
+
+      # Its own limit by name, 1500 ms: a reread that hangs is cut there, not at 510.
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, gateway} = Sim.start_link()
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: gateway}}
+      {:ok, runner} = Runner.start_link(Keyword.merge(opts, io: io, open: %{"drive" => 1500}))
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      Sim.fail(gateway, :read, :hang)
+      {us, refused} = :timer.tc(fn -> Runner.restart(runner, :cold) end)
+      assert refused == {:error, {:io_init, "drive", :timeout}}
+      assert div(us, 1000) >= 1500 and div(us, 1000) < 5000
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
     test "a device that cannot be opened is {:error, {:io_init, device, reason}}, every " <>
            "device opened before it closed and zeroed, and the runner gone" do
       {opts, %{panel: panel, drive: drive}} = plant_rig()

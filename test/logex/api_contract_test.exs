@@ -13995,7 +13995,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   the crash may leave forces in the file, which the start does not take and the next
   restart that reads it does (decisions 127 and 390); half the walks give
   `write_limit:` (decision 400), and no write passes it, so `status/1` names no force's
-  set unknown (decision 391).
+  set unknown (decision 391). Since RV-16 every round's forces are the ones the forces
+  file holds as it begins, a force in effect only once its write has landed (decision
+  437), and a restart now and then reads a device up 700 ms late in real time, past the
+  idle watchdog and a poll period and within its opening limit (decision 439).
 
   It is checked against two models that know nothing of the runner's code.
 
@@ -14400,6 +14403,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :get_mistake,
     :crash,
     :late_open,
+    # Decision 439 (RV-16): a device up a restart read again late, within its own `open:`.
+    :late_reread,
     # Decision 390 (RV-11): a fresh start and a restart whose forces file cannot be read;
     # since RV-11's review a fresh start that could not read a file holding forces, and a
     # restart after it that reads the file and takes them.
@@ -15872,7 +15877,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp restart(nil, mode, w) do
     w = period_restarted(w)
     unreadable = restart_unreadable(w)
+    late = late_reread(w)
     assert Runner.restart(w.runner, mode) == :ok
+    reach(:late_reread, late)
     reach(:restart_forces_unread, unreadable)
     w = restart_took(unreadable, %{w | unread: unread_after(unreadable, w)})
     reach(:"restart_#{mode}", true)
@@ -15925,6 +15932,34 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         tripped_at: now(w)
     })
   end
+
+  # Decision 439 (RV-16), restated: every device a restart reads again is limited by its
+  # own opening limit, `open:`, 2000 ms where the walk gives it and 5000 unless set, the
+  # heartbeat by the idle watchdog and a poll period as before: now and then, by the
+  # walk's own time, the first device up and not hung is read again 700 ms late in real
+  # time, its sim held meanwhile and let go by a process of the walk's, past the walk's
+  # idle watchdog and a poll period and within its opening limit, which must refuse
+  # nothing. Its release, which reaches no adapter, is answered at once.
+  defp late_reread(%{logical: now} = w) when rem(now, 4) == 1,
+    do: reread_late(Enum.reject(Enum.sort(Map.keys(w.sims)), &held_back?(&1, w)), w)
+
+  defp late_reread(_w), do: false
+
+  defp held_back?(name, w), do: MapSet.member?(w.down, name) or Map.has_key?(w.hung, name)
+
+  defp reread_late([name | _up], w) do
+    sim = w.sims[name]
+    :sys.suspend(sim)
+
+    spawn(fn ->
+      Process.sleep(700)
+      :sys.resume(sim)
+    end)
+
+    true
+  end
+
+  defp reread_late([], _w), do: false
 
   defp zero_fails(nil, _w), do: :ok
   defp zero_fails(name, w), do: Sim.fail(w.sims[name], :write, {:error, :eio})

@@ -98,8 +98,12 @@ defmodule Logex.Runner do
   killed and `:timeout`, so that a drive whose connect takes 600 ms opens beside the idle
   watchdog's 500, the heartbeat left as it is, and a hung card refuses the start at the
   time its limit gives (decision 398, provisional: the option, its map form and its
-  default); a device a restart opens again is given the same limit, one up read again
-  the idle watchdog and a poll period, as every other device call is (decision 128). It
+  default); a device a restart opens again is given the same limit, and since decision 439
+  so is one up that a restart reads again, every device a restart opens or reads limited
+  by its own `open:`, so that a gateway that stayed up and answers its reread in 700 ms
+  lets the restart through, the heartbeat left the idle watchdog and a poll period, a
+  restart's release of each device and every other device call limited so (decision
+  128). It
   does so before it handles anything sent to it, so a call or a stop by its name that
   comes first waits until its devices are open and its first round has run.
   - Each device reads its adapter every poll period on the runner's clock, from the time
@@ -634,8 +638,9 @@ defmodule Logex.Runner do
   every latch, in device-name order, a device that does not answer within the idle
   watchdog and a poll period killed, as one that hung while the runner was tripped; reads
   every device once, in device-name order, as a start does (decision 142), opening again
-  each device that went down, those among them, and checking each value read as a start's
-  first reads are; `{:error, {:io_init, device, reason}}` for the first that cannot be
+  each device that went down, those among them, each read or opened within its own
+  `open:` since decision 439, and checking each value read as a start's first reads are;
+  `{:error, {:io_init, device, reason}}` for the first that cannot be
   opened or whose read fails, an error, a raise, a throw, an exit, a value that does not
   fit, an address that is no input point's, no answer in time (the device killed, and
   opened again at the next restart) or a process gone down, the runner left tripped with
@@ -1115,7 +1120,8 @@ defmodule Logex.Runner do
   its last scan's, so the time it stood tripped is not counted, the clock not counting it
   either (decisions 113, 271 and 273): every device's latch released, every device read once, as a
   start reads it (decision 142), each device that went down, or does not answer its
-  release, opened again, the resource restarted
+  release, opened again, each read or opened within its own `open:` (decisions 398 and
+  439), the resource restarted
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
   round run at once, on what was read, before it returns, the clock not counting the time
@@ -3464,8 +3470,11 @@ defmodule Logex.Runner do
 
   # Decision 398: a device opened again at a restart limited by its own `open:`, as at a
   # start, every device released then hearing no deadline until the restart's first
-  # round; one up is read again within the idle watchdog and a poll period, a read and
-  # no opening (provisional).
+  # round; and since decision 439 (RV-16) one up read again limited by its own `open:`
+  # too, where it was given the idle watchdog and a poll period, so that a gateway that
+  # stayed up and answers its reread in 700 ms lets the restart through as it would its
+  # opening. The heartbeat stays the idle watchdog and a poll period: the release, which
+  # comes first, is limited so, and no device hears a deadline until the first round.
   defp read_device(true, {name, _old, points}, rest, state) do
     {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state, state.restarts)
     timeout = Map.fetch!(state.opens, name)
@@ -3473,7 +3482,7 @@ defmodule Logex.Runner do
   end
 
   defp read_device(false, {name, pid, _points}, rest, state) do
-    timeout = state.idle + state.poll
+    timeout = Map.fetch!(state.opens, name)
     reread(asked(pid, &Device.reread/2, timeout), name, pid, rest, state)
   end
 
