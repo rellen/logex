@@ -337,11 +337,17 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
-a force is written, a round whose clock reads wrong abandoned before it writes, and a
-restart after a start that could not read the forces file keeping the forces the runner
-holds, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+items RV-6 to RV-8 build ("The review after Milestone 6"). Its answers to the
+questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
+while a force's write of the forces file is out, the force in effect from the first
+round after it lands (decision 437), every device a restart opens or reads again
+limited by its own `open:` (decision 439), `status/1`'s `forces_unread`,
+`forces_unknown` and the store's `unknown` always there, nil where nothing stands
+(decision 440), a round whose clock reads wrong stopping there, its outputs never
+written (decision 441), a slot of the share that finds nothing waiting kept open until a
+request takes it (decision 442) and a restart while `forces_unread` stands keeping the
+forces the runner holds (decision 445), the other five as built (decisions 438, 443,
+444, 446 and 447). Its answers to the questions RV-5 left, decisions 409–419, have
 landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
 CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
 nothing was copied (decision 412), the shutdown's write making the store's text within
@@ -3975,9 +3981,9 @@ closed: true
   apart from the heartbeat, decision 400), `open:` (how long each device's opening, its
   adapter's `init/3` and first read, may take in real time, 5000 ms, for every device or
   by name, `open: %{"drive" => 2000}`, so a drive whose connect takes 600 ms opens with
-  the heartbeat left as it is, decision 398, and how long a restart's read of each device
-  may take, one that stayed up among them, decision 439), `forces:` (the file its forces are kept
-  in, below) and `name:`.
+  the heartbeat left as it is, decision 398, and how long a restart's read of each
+  device may take, one that stayed up among them, decision 439), `forces:` (the file its
+  forces are kept in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -4330,15 +4336,15 @@ stage: nil
   :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
   land once the disk answers, so `status/1` names the set it held meanwhile,
   `forces_unknown`, until a later write of the file lands or fails or a restart reads it,
-  nil otherwise, the key always there (decisions 391 and 440). The rounds run on while the write is out, in a
-  process of its own, and the force takes effect at the first round after it lands, its
-  call answered then (decision 437): so on a slow disk the logic keeps the plant under
-  control, every round reading the forces as they were and `status/1` listing those, and
-  no force is in effect before the file holds it. A force asked while another's write is
-  out waits behind it, in order, built on the set it leaves; a trip, a restart or an
-  edit's step meanwhile leaves the write as it is, the force taken onto the set the runner
-  then holds once it lands; and a stop waits for it to its limit and answers its caller
-  (provisional). A start reads the file raw, off the
+  nil otherwise, the key always there (decisions 391 and 440). The rounds run on while
+  the write is out, in a process of its own, and the force takes effect at the first
+  round after it lands, its call answered then (decision 437): so on a slow disk the
+  logic keeps the plant under control, every round reading the forces as they were and
+  `status/1` listing those, and no force is in effect before the file holds it. A force
+  asked while another's write is out waits behind it, in order, built on the set it
+  leaves; a trip, a restart or an edit's step meanwhile leaves the write as it is, the
+  force taken onto the set the runner then holds once it lands; and a stop waits for it
+  to its limit and answers its caller (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls. A file that cannot be read, one the disk has not answered
   within the write limit or one the file system refuses, a directory in its place among
