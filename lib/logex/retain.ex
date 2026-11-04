@@ -69,7 +69,9 @@ defmodule Logex.Retain do
   # left last; an end line in a store whose header is not `logex retain 2`, which only
   # version 2's rule reads, is told as one that header does not take, never as one before
   # the store's last; and the message for a store cut short says that `start: :cold`
-  # writes over it at once.
+  # writes over it at once, and since decision 417 (RV-13) that it copies it first, to the
+  # next of its numbered copies (decision 418), as a cold start over any store a fresh
+  # start would refuse does (`Logex.Runner`).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -307,14 +309,17 @@ defmodule Logex.Retain do
 
   defp ending(["end", count, "lines"], text, n), do: counted(number(count), text, n)
 
+  # Decision 417 (RV-13): the remedy says that a cold start copies the store first, under
+  # the next of its numbered copies (decision 418), and then writes over it, where it
+  # warned the operator to copy it aside first.
   defp ending(_other, text, n),
     do: [
       {n,
        "#{quoted(text)} is the store's last line, and no end line: a store of " <>
          "`#{@header}` ends with `end <count> lines`, its count of lines, so this one was " <>
          "cut short, and a store cut short is not read: start it with start: :cold to " <>
-         "start over it, which writes a new store over it at once, so copy it aside first " <>
-         "to keep what it holds"}
+         "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
+         "then writes a new store over it"}
     ]
 
   defp counted({:ok, n}, _text, n), do: []

@@ -4699,7 +4699,16 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   for nothing (provisional); decision 356's claim covers every copy's name, a runner's
   file at another's copy's name refused both ways, and decision 325's refusal of a forces
   file on a copy covers every number and `<store>.dropped`, written through the copies'
-  `.tmp`.)*
+  `.tmp`.)* *(Decision 417, RV-13, 2026-11-03: a cold start, `start: :cold`, reads the
+  store as a warm start does, and one that stands and that a warm start would refuse,
+  cut short, refused by any line of it or by its image, it copies first under decision
+  418's next number, writing the new store only once the copy is made; a copy that
+  cannot be made, past its limit among them, and a store that stands but cannot be read,
+  which no copy can be made of (provisional), refuse the start as decision 291 refuses a
+  cold start whose first write fails, the store as it was; a store that reads whole gets
+  no copy; the cut store's refusal says the cold start copies it first, where it warned
+  the operator to copy it aside; and a cold `restart/2` reads no store and copies none
+  (provisional).)*
   *(RV-5's review, 2026-11-02: a copy that fails is owed, every write over the store, the
   period's and every event's, making it first and writing the store only once it is made,
   so that no write replaces the store before its copy is made, where the period's write

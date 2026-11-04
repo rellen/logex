@@ -961,6 +961,47 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # Decision 417 (RV-13): a cold start over a store a fresh start would refuse copies it
+  # first and writes the store only once the copy is made, so a copy the disk does not
+  # finish within the write limit is judged as decision 291 judges a cold start whose
+  # first write fails: the start refused, `{:error, {:retain, :timeout}}`, no device read
+  # and the store as it was, the copy's rename alone left to land once the disk answers;
+  # and a store that stands but whose read does not end within its limit, a FIFO in its
+  # place, can be copied by no start, the same (provisional).
+  describe "a cold start's copy (decision 417)" do
+    test "a cold start whose copy does not end within its limit starts nothing, the store " <>
+           "as it was",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil, start: :cold)
+      cut = "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\nglobal tot"
+      File.write!(rig.store, cut)
+      server = held()
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+      assert Sim.reads(rig.panel) == 0
+      assert :file.read_file(rig.store, [:raw]) == {:ok, cut}
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.store <> ".dropped.tmp")
+      assert File.read!(rig.store) == cut
+      assert File.read(rig.store <> ".dropped.1") in [{:ok, cut}, {:error, :enoent}]
+      refute File.exists?(rig.store <> ".tmp")
+    end
+
+    test "a cold start over a store whose read does not end within its limit starts nothing",
+         %{tmp_dir: dir} do
+      rig = rig(dir, forces: nil, start: :cold)
+      {_, 0} = System.cmd("mkfifo", [rig.store])
+      on_exit(fn -> let_go(rig.store) end)
+      {took, answer} = timed(fn -> Runner.start_link(rig.opts) end)
+      assert answer == {:error, {:retain, :timeout}}
+      assert took >= @limit and took < @answers
+      assert Sim.reads(rig.panel) == 0
+      assert {:ok, %File.Stat{type: :other}} = File.lstat(rig.store)
+      let_go(rig.store)
+    end
+  end
+
   # The runner's status once a trip's write has been made or found past its limit.
   defp written_or_unknown(runner), do: tripped_status(Runner.status(runner), runner)
 

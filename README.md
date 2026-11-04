@@ -3572,9 +3572,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   store's path, the time its header names and what the start dropped. A store of another
   configuration, a line of no store's shape, a store cut short (decision 355), or a store
   `Logex.Runtime.start/2` refuses is the host's mistake, every problem a line, the runner
-  not started (decision 285); `start: :cold` reads none of it and writes a new store at
-  once, so a store refused as cut short whose readable part is wanted is copied aside
-  first, as its refusal says. The read is limited to the write limit of real time, as
+  not started (decision 285); `start: :cold` starts from none of it and writes a new
+  store at once, and since decision 417 copies such a store first, under the next of its
+  numbered copies, `tally.retain.dropped.1` (below), writing the new store only once the
+  copy is made, so that a store refused as cut short keeps its readable part, as its
+  refusal says; a copy that cannot be made, or a store that stands but cannot be read,
+  refuses the cold start as a failed write does, `{:error, {:retain, reason}}`, the store
+  as it was (provisional for the store that cannot be read), and a store that reads whole
+  gets no copy. A cold `restart/2` reads no store and copies none (provisional). The read is limited to the write limit of real time, as
   every write is, and so is the look at the store and the forces file
   for a link before either is read, so that a store on a stalled disk, or a FIFO in its
   place, refuses the start as a store that cannot be read.

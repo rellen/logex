@@ -14954,12 +14954,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # write limit: on a loaded machine one past it is named unknown under its number, and
   # may land after, so the model then reads that number as the copy or no file; and one
   # killed before it took a number is a copy that failed, `:timeout`, which lands nowhere.
-  defp copied_at(%{store: nil} = w, _text, _standing), do: w
+  defp copied_at(%{store: nil} = w, _text, _standing, _cold), do: w
 
-  defp copied_at(w, text, standing) do
+  defp copied_at(w, text, standing, cold) do
     drops = drops_restated(w)
     next = 1 + Enum.max([0 | Map.keys(standing)])
-    {made, owed} = copy_told(drops, Runner.status(w.runner).retain, text, w, next)
+    {made, owed} = told_copy(cold, drops, Runner.status(w.runner).retain, text, w, next)
     copies = copies_standing(w)
     assert Map.take(copies, Map.keys(standing)) == standing
     copy_landed!(made, copies)
@@ -14981,6 +14981,37 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         [_name, digits] <- [Regex.run(~r/\A#{Regex.escape(base)}\.dropped\.(\d+)\z/, name)],
         into: %{},
         do: {String.to_integer(digits), File.read!(Path.join(Path.dirname(w.store), name))}
+  end
+
+  # Decision 417, restated (RV-13): a cold start over a store a fresh start would refuse
+  # copies it first, under the next number, and writes the store only once the copy is
+  # made; one over a store that reads whole makes none. One cold start in two, by the
+  # store's own text so that no draw is taken, meets the store cut at a byte that text
+  # chooses, short of its last newline, which decision 355 refuses, the copy then the cut
+  # bytes; the store is written over at once, as every cold start writes it.
+  defp cold_cut!(%{start: :cold, store: store, stored: stored} = w)
+       when store != nil and stored != nil,
+       do: cold_cut(rem(:erlang.phash2({on_disk(w), :cold}), 2), w, on_disk(w))
+
+  defp cold_cut!(_w), do: nil
+
+  defp cold_cut(0, w, text) do
+    cut = binary_part(text, 0, rem(:erlang.phash2(text), byte_size(text) - 1))
+    File.write!(w.store, cut)
+    cut
+  end
+
+  defp cold_cut(_whole, _w, _text), do: nil
+
+  defp told_copy(nil, drops, retain, text, w, next), do: copy_told(drops, retain, text, w, next)
+
+  # The cold start's copy of the cut store, made in the walk's limit, or past it unknown
+  # (decision 391), in which case the start was refused and no runner would be here.
+  defp told_copy(cut, _drops, retain, _text, w, next) do
+    assert retain.copy == copy_named(w, next), inspect(retain)
+    assert retain.dropped == []
+    reach(:cold_copied_cut, true)
+    {{next, [cut]}, nil}
   end
 
   defp copy_landed!(nil, _copies), do: :ok
@@ -15236,6 +15267,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     cut_refused!(w, text, opts)
     saved = line_ended!(w, text)
     w = %{w | saved: saved_as(saved, text)}
+    cold = cold_cut!(w)
     standing = copies_standing(w)
     late = late_open()
     unreadable = start_unreadable(w)
@@ -15280,7 +15312,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
-    w = copied_at(w, saved, standing)
+    w = copied_at(w, saved, standing, cold)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
     # (`pa` and `pd` forced), it trips, the runner's status naming the reason.
@@ -15998,8 +16030,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_crlf_read,
     :store_cr_read,
     :forces_crlf_read,
-    # Decision 418 (RV-13): a start that dropped made a copy numbered past one that stood.
+    # Decision 418 (RV-13): a start that dropped made a copy numbered past one that stood;
+    # and decision 417: a cold start over a store cut short copied it first.
     :store_copy_numbered_past,
+    :cold_copied_cut,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip

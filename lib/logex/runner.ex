@@ -409,7 +409,19 @@ defmodule Logex.Runner do
     since decision 355 one of `logex retain 2` cut short, its last line no end line or its
     end line's count not its lines', the host's mistake, one `ArgumentError`, a line each,
     `<path>: line <n>: ...`, the runner not started and no device opened. `start: :cold`
-    reads none, a broken one among them, and writes a new store at once.
+    starts from none of it, a broken one among them, and writes a new store at once; since
+    decision 417 it reads the store first, as a warm start does, and one that stands and
+    that a warm start would refuse, cut short or refused by any line of it or its image,
+    it copies first, under the next of its numbered copies, `status/1` naming the copy,
+    and writes the new store only once the copy is made, so that the readable part of a
+    store the refusal's remedy starts over is kept; a copy that cannot be made is judged as
+    decision 291 judges a cold start whose first write fails, the runner not started,
+    `{:error, {:retain, reason}}`, the store as it was, and so is a store that stands but
+    cannot be read, a FIFO's read past the write limit or a directory in its place, which
+    no copy can be made of (provisional). A store that reads whole needs no copy and gets
+    none. A cold `restart/2` reads no store, starting from the resource the runner holds,
+    and copies none (provisional): the store is its own last write, a hand edit made while
+    the runner runs being lost anyway (decision 284).
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
     keeps retained values in memory, and `status/1`'s `retain` is nil. `start:` without
     `retain:` is the host's mistake (decision 323), as are `retain:` naming the forces
@@ -1170,11 +1182,38 @@ defmodule Logex.Runner do
   defp held({:held, path, holder, role}, start),
     do: {:error, {:held, held_told(named_entry(start.named, path), holder, role)}}
 
-  defp held(:ok, start),
-    do: given_up(first_begun(first_write(start), dropped_copy(start)), start)
+  defp held(:ok, start), do: given_up(cold_begun(cold_copy(start)), start)
+
+  defp cold_begun({:ok, start}), do: first_begun(first_write(start), dropped_copy(start))
+  defp cold_begun({:error, reason}), do: {:error, {:retain, reason}}
 
   defp first_begun(:ok, start), do: opening(start.devices, [], [], first_written(start))
   defp first_begun({:error, reason}, _start), do: {:error, {:retain, reason}}
+
+  # Decision 417 (RV-13): a cold start, `start: :cold`, over a store that stands and that
+  # a fresh start would refuse, cut short (decision 355) or refused by any of the store's
+  # refusals or the image's (`Logex.Retain.decode!/2`, `Logex.Runtime.start/2`), copies it
+  # first, as decision 360 copies a store a fresh start drops from, under decision 418's
+  # next number, here in its init/1 once its files are claimed, and writes the store only
+  # once the copy is made, so that the readable part of a store a cut left is never lost
+  # to the start the refusal's remedy names; a copy that cannot be made is judged as
+  # decision 291 judges a cold start whose first write fails, the runner not started,
+  # `{:error, {:retain, reason}}`, the store as it was and no device opened, a copy past
+  # its limit among them, `:timeout`, and a store that stands but cannot be read, which no
+  # copy can be made of, the read's reason (provisional). `status/1`'s `copy` names the
+  # copy, `dropped` empty. A store that reads whole needs none: decision 360 copies only
+  # what a start drops, and a cold start over a whole store makes no copy, as before.
+  defp cold_copy(%{copy: {:cold, text}, retain: retain} = start),
+    do: cold_copied(Writer.copied(retain.at, text, start.write_limit), start)
+
+  defp cold_copy(%{copy: {:unread, reason}}), do: {:error, reason}
+  defp cold_copy(start), do: {:ok, start}
+
+  defp cold_copied({:ok, n}, %{retain: retain} = start),
+    do: {:ok, %{start | copy: nil, retain: %{retain | copy: Paths.copy(retain.path, n)}}}
+
+  defp cold_copied({:unknown, _n}, _start), do: {:error, :timeout}
+  defp cold_copied({:error, reason}, _start), do: {:error, reason}
 
   defp given_up({:ok, _state} = opened, _start), do: opened
 
@@ -4368,8 +4407,15 @@ defmodule Logex.Runner do
   defp store_read!({nil, nil}, _mode, _configuration, runtime, _clock, _ms),
     do: {runtime, nil, nil, nil}
 
-  defp store_read!(path, :cold, _configuration, runtime, clock, _ms),
-    do: {runtime, retained(path, nil, []), wall!(clock), nil}
+  # Decision 417 (RV-13): `start: :cold` reads the store as a warm start does, raw and
+  # limited, and judges it, so that one a fresh start would refuse is copied before it is
+  # written over (cold_copy/1): none, or one that reads whole, nothing to copy; one a
+  # fresh start refuses, its text, `{:cold, text}`; one that stands but cannot be read,
+  # its reason, `{:unread, reason}`, which no copy can be made of.
+  defp store_read!({_given, at} = path, :cold, configuration, runtime, clock, ms),
+    do:
+      {runtime, retained(path, nil, []), wall!(clock),
+       cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration)}
 
   defp store_read!({_given, at} = path, :warm, configuration, runtime, clock, ms),
     do:
@@ -4380,6 +4426,26 @@ defmodule Logex.Runner do
         runtime,
         clock
       )
+
+  defp cold_read({:error, :enoent}, _path, _configuration), do: nil
+
+  defp cold_read({:ok, text}, {given, _at}, configuration),
+    do: cold_judged(refused?(text, given, configuration), text)
+
+  defp cold_read({:error, reason}, _path, _configuration), do: {:unread, reason}
+
+  defp cold_judged(true, text), do: {:cold, text}
+  defp cold_judged(false, _text), do: nil
+
+  # A store's text judged as a warm fresh start judges it, its refusal caught: refused or
+  # not.
+  defp refused?(text, given, configuration) do
+    {image, _written_at} = Logex.Retain.decode!(text, {given, configuration.name})
+    _started = Runtime.start(configuration, image)
+    false
+  rescue
+    ArgumentError -> true
+  end
 
   defp store_text!({:error, :enoent}, path, _configuration, runtime, clock),
     do: {runtime, retained(path, nil, []), wall!(clock), nil}
