@@ -2427,9 +2427,11 @@ defmodule Logex.InstanceArrayTest do
   end
 
   describe "growth, in reductions" do
-    # Counted in a process of its own with a heap the collector never visits, so each count
-    # is the same on every run: a scan's reductions for each rung, the difference of 200
-    # rungs and 100 over 100.
+    # Counted in a process of its own with a heap the collector never visits, so that no
+    # collection's work is in a count: a scan's reductions for each rung, the difference of
+    # 200 rungs and 100 over 100, the same from run to run but for the hundredths a map of
+    # more than 32 keys or the VM's own state moves (`CONTRIBUTING.md`, "A count moves with
+    # the VM's own state").
     defp per_rung(head, rung) do
       cost = fn n ->
         source = head.(n) <> Enum.map_join(1..n, "\n", rung)
@@ -2535,7 +2537,12 @@ defmodule Logex.InstanceArrayTest do
     # than a scalar instance of its type, its read from its array's tuple and its write back,
     # and the state's check of the array, one element's map a rung; a member through a tag
     # subscript 5 more than a literal one, the subscript's read, its check and the
-    # instruction's catch.
+    # instruction's catch, held at those 5, which the read measured exactly, until RV-7's
+    # review, and since then with half a reduction a rung for the hundredths a rung's count
+    # moves, decision 357's allowance. The subscript's read is a read the literal element
+    # does not make, and an element's run reads its element from its array and writes it
+    # back, reads and writes a scalar's run does not make, so a read or a write made dearer
+    # moves these bounds.
     test "an element runs in a bounded few reductions more than a scalar instance of its type, linear in the elements" do
       for {kind, scalar_rung, element_rung} <- [
             {"ton", &"xic a ton t#{&1} 100", &"xic a ton t[#{&1 - 1}] 100"},
@@ -2555,10 +2562,10 @@ defmodule Logex.InstanceArrayTest do
 
       literal = per_rung(arrayed("ton"), &"xic t[#{&1 - 1}].dn ote q")
       tagged = per_rung(arrayed("ton"), fn _ -> "xic t[k].dn ote q" end)
-      assert tagged <= literal + 5, "#{tagged} against #{literal}"
+      assert tagged <= literal + 5 + 0.5, "#{tagged} against #{literal}"
       write = per_rung(arrayed("ctu"), &"move d t[#{&1 - 1}].pv")
       tagged_write = per_rung(arrayed("ctu"), fn _ -> "move d t[k].pv" end)
-      assert tagged_write <= write + 5, "#{tagged_write} against #{write}"
+      assert tagged_write <= write + 5 + 0.5, "#{tagged_write} against #{write}"
     end
   end
 

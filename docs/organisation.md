@@ -12393,21 +12393,26 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `nil` clause the program of none takes; a compile's same rungs reordered, over plain
      tags or scalars, or beside the coil or one-shot a gated warning looks for; three
      equalities of same-run figures made bounds in the guarded direction. Each bound is the
-     twin's figure, what the two measured apart, and an allowance under the guarded change,
-     half a reduction a rung for a scan, half the guarded work or the parent's 8 or 16 a
-     rung; each red on a mutant of the regression its pin was there to catch, judged by the
-     full suite, and green under a probe that charges two reductions more for a call both
-     twins make, each instruction scanned, lowered or warned of, each global restarted, each
-     round, where the old pins went red in six, two and four files. A twin that does the
-     guarded work itself gives a lower bound, which a cheaper version of that work can
-     break; a regression that makes both twins dearer no twin catches, M5-8's name split
-     twice among them, which RV-2's and RV-12's recorded ceilings caught; both provisional,
-     `PLAN.md`'s RV-7 questions. `CONTRIBUTING.md` states the rule, how to write a new one,
+     twin's figure, what the two measured apart, and an allowance under the least
+     regression it is for, half a reduction a rung, a key, a point or an instance, a
+     reduction a group, or the parent's 8 or 16 a rung, where RV-7 first took half the
+     guarded work, which its review found passed regressions under that half; and where
+     every program takes the guarded clause, the twin takes another that makes the same
+     calls, an `add` against a `div`, a copy-out of plain points against a located array's
+     (RV-7's review). Each is red on a mutant of the regression its pin was there to catch
+     and on those of the review, judged by the full suite, and green under a probe that
+     charges two reductions more for a call both twins make as often, each instruction
+     scanned, lowered or warned of, each global restarted, each round, each read or write
+     where both make as many, where the old pins went red in six, two and four files. A
+     twin that does the guarded work itself gives a lower bound, which a cheaper version of
+     that work breaks; a regression in what both twins share as often no twin catches;
+     both provisional, `PLAN.md`'s RV-7 questions. `CONTRIBUTING.md` states the rule, how to write a new one,
      and that a count moves with the VM's own state (a map of more than 32 keys built is
      charged a few reductions more or less from one call to the next, and a VM-wide event
      moves every later call's count), so that two counts compared are measured in turn, and
      that a runner's count holds each message a `receive` passes over and each it sends, the
-     manual clock's synchronisation among them.)*
+     manual clock's synchronisation among them; since RV-7's review two counts compared are
+     counted in pairs, the least of their differences held.)*
 
 358. **CLAUDE.md (the review after Milestone 6),** question 12: CLAUDE.md, which every
      agent session loads whole, is 237 KB, grew 46% in eight days and reads as replayed

@@ -859,9 +859,11 @@ defmodule Logex.TagBitTest do
   end
 
   describe "growth, in reductions" do
-    # Counted in a process of its own with a heap the collector never visits, so each count
-    # is the same on every run: a scan's reductions for each rung, the difference of 200
-    # rungs and 100 over 100.
+    # Counted in a process of its own with a heap the collector never visits, so that no
+    # collection's work is in a count: a scan's reductions for each rung, the difference of
+    # 200 rungs and 100 over 100, the same from run to run but for the hundredths a map of
+    # more than 32 keys or the VM's own state moves (`CONTRIBUTING.md`, "A count moves with
+    # the VM's own state").
     defp per_rung(head, rung) do
       cost = fn n ->
         source = head.(n) <> Enum.map_join(1..n, "\n", rung)
@@ -902,7 +904,11 @@ defmodule Logex.TagBitTest do
 
     # PLAN M5-9's Done-when: a bit read through a tag stays within a measured bound of a
     # literal bit's and a bool's. Measured: 35 reductions a rung against a literal bit's 27
-    # and a bool's 24, the number's read, its mask and the instruction's catch.
+    # and a bool's 24, the number's read, its mask and the instruction's catch. Held at those
+    # 8, which it measured exactly, until RV-7's review; since then with half a reduction a
+    # rung for the hundredths a rung's count moves, decision 357's allowance. The number's
+    # read is a read the literal bit does not make, so a read made dearer moves the bound,
+    # as any change to the number's read, its mask or its catch does.
     test "a bit read through a tag costs a bounded few reductions more than a literal bit" do
       tag_bit =
         per_rung(fixed("var_input w word\nvar_input n int\nvar_output q bool\n"), fn _ ->
@@ -914,7 +920,7 @@ defmodule Logex.TagBitTest do
 
       bool = per_rung(fixed("var_input a bool\nvar_output q bool\n"), fn _ -> "xic a ote q" end)
 
-      assert tag_bit <= literal + 8,
+      assert tag_bit <= literal + 8 + 0.5,
              "a tag's bit took #{tag_bit} a rung, a literal one #{literal}"
 
       assert tag_bit / bool < 1.5, "a tag's bit took #{Float.round(tag_bit / bool, 2)}x a bool's"
@@ -930,12 +936,18 @@ defmodule Logex.TagBitTest do
     # a bool, and a `cal` costs what such a contact does. A catch where none is due makes a
     # pair cost the same; a reduction more for a call both rungs of a pair make moves both.
     # Each bound leaves half a reduction a rung for the hundredths by which a rung's count
-    # moves as the bigger program's maps grow, under the one a catch costs.
+    # moves as the bigger program's maps grow, under the one a catch costs. The pairs cover
+    # every shape of instruction a scan dispatches, one operand, two and three (RV-7's
+    # review: a `move` and an `add` caught where none is due passed the contacts' and coils'
+    # pairs alone): each two-instruction rung de-energised, whose second instruction does
+    # nothing, against a latch on a bit a tag numbers, which a de-energised rung leaves as
+    # it is and the catch alone makes dearer, 21 reductions a rung against 22.
     test "a program of none is caught nowhere, as before M5-9, and a `cal` once" do
       head =
         fixed(
           "var off bool\nvar_input a bool\nvar_input w word\nvar_input n int\n" <>
-            "var_output q bool\n"
+            "var_output q bool\nvar ww word\nvar_input u uint\nvar_output d dint\n" <>
+            "var_input k dint\nvar z dint\nvar t word\n"
         )
 
       caught = per_rung(head, fn _ -> "xic off xic w.[n] ote q" end)
@@ -943,6 +955,20 @@ defmodule Logex.TagBitTest do
       for rung <- ["xic off xic a ote q", "xic off xio a ote q", "xic off xic w.3 ote q"] do
         plain = per_rung(head, fn _ -> rung end)
         assert plain <= caught - 0.5, "`#{rung}` took #{plain} a rung, as caught as #{caught}"
+      end
+
+      latch = per_rung(head, fn _ -> "xic off otl ww.[n]" end)
+
+      for rung <- [
+            "xic off otl q",
+            "xic off otl ww.3",
+            "xic off move u d",
+            "xic off add k k z",
+            "xic off not w t",
+            "xic off shl w 1 t"
+          ] do
+        plain = per_rung(head, fn _ -> rung end)
+        assert plain <= latch - 0.5, "`#{rung}` took #{plain} a rung, as caught as #{latch}"
       end
 
       cals = fn n ->

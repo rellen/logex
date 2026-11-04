@@ -440,11 +440,19 @@ defmodule Logex.StalledDiskTest do
 
     # Decision 390 (RV-11), the leave for a fresh start refused when the forces file cannot
     # be read: the read past its limit starts the runner with no force, the file named in
-    # status/1, where the start was refused, an ArgumentError naming the file.
+    # status/1, where the start was refused, an ArgumentError naming the file. The runner
+    # keeps no store (RV-7's review): the test's write limit, short so that the FIFO's read
+    # ends soon, held the start's write of a store to it too, which on the loaded machine
+    # of that review's ten suites took past it once, `{:error, {:retain, :timeout}}` at
+    # 2037 ms, the forces read's 1010 and the write's own, where the test is of the forces
+    # file alone. So the first file the start reads raw is the FIFO, which the call waits
+    # for: up to the test's own wait, `@answers`, since a loaded machine took the start past
+    # a limit's time before it, twice in 30 runs under the busy loops, where the store's
+    # read, raw too, came first and was taken for the FIFO's.
     test "a start whose forces file's read does not end within its limit starts with no " <>
            "force, naming the file, and every other file call answers meanwhile (decision 390)",
          %{tmp_dir: dir} do
-      rig = rig(dir)
+      rig = rig(dir, retain: nil, retain_period: nil)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
       on_exit(fn -> let_go(rig.forces) end)
 
@@ -456,7 +464,7 @@ defmodule Logex.StalledDiskTest do
 
       call =
         Task.async(fn ->
-          reading_raw()
+          reading_raw(System.monotonic_time(:millisecond) + @answers)
           File.write!(other, "answered\n")
           {File.read!(other), System.monotonic_time(:millisecond)}
         end)

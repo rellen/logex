@@ -84,6 +84,34 @@ defmodule Logex.TripTest do
     defp passed(_clock, _ms), do: :ok
   end
 
+  # The machine's clock, `Logex.Runner.Clock.Monotonic`, every callback its own, which counts
+  # each poll a device arms on it, `{Logex.Runner.Device, :poll, at}`, in its term's counter
+  # of this module's table: so that `Sleeps`, below, sees how many polls a device ran.
+  defmodule Counted do
+    @behaviour Logex.Runner.Clock
+
+    alias Logex.Runner.Clock.Monotonic
+
+    def polls(counter), do: :ets.lookup_element(Logex.TripTest, {counter, :polls}, 2, 0)
+
+    @impl true
+    def now_ms(_counter), do: Monotonic.now_ms(nil)
+
+    @impl true
+    def wake_at(counter, pid, {Logex.Runner.Device, :poll, _at} = message, at_ms) do
+      :ets.update_counter(Logex.TripTest, {counter, :polls}, 1, {{counter, :polls}, 0})
+      Monotonic.wake_at(nil, pid, message, at_ms)
+    end
+
+    def wake_at(_counter, pid, message, at_ms), do: Monotonic.wake_at(nil, pid, message, at_ms)
+
+    @impl true
+    def cancel(_counter, timer), do: Monotonic.cancel(nil, timer)
+
+    @impl true
+    def wall_ms(_counter), do: Monotonic.wall_ms(nil)
+  end
+
   # A stand-in whose step of the task `e1` sleeps 200 ms on the real clock, and then lasts
   # until the panel has told the runner, within its last poll period, that it is back
   # (RV-7): on a loaded machine the panel's process may not run for the whole sleep, its
@@ -92,18 +120,37 @@ defmodule Logex.TripTest do
   # round, 286 ms in, past the idle watchdog and a poll period, and tripped). The step
   # reads the mailbox of its own process, the runner's, and takes nothing from it; a panel
   # that tells nothing in 5 s ends the wait, its trip the test's failure.
+  #
+  # And the step counts what the rule is about, each poll the panel ran while it waited
+  # (RV-7's review): the polls the panel armed on its clock, `Counted`, from the step's
+  # start to its end, and the `back`s it sent the runner meanwhile, which stay in the
+  # runner's mailbox while the step runs, recorded as `{runner, :step}` for the test. A
+  # poll tells the runner and then arms the next, so each poll the panel ran in the step
+  # sent a `back` in it, but the one running as the step began, whose `back` may have gone
+  # before it: so the polls are at most one more than the `back`s, however few the machine
+  # let the panel run, where a poll that tells nothing makes them more.
   defmodule Sleeps do
     def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
 
     def cycle_step(runtime, {:timed, "e1", _run} = step) do
+      [{_key, counter}] = :ets.lookup(Logex.TripTest, {self(), :counted})
+      backs = backs()
+      polls = Counted.polls(counter)
       Process.sleep(200)
       now = System.monotonic_time(:millisecond)
       heard_since(now - 10, now + 5000)
+      polled = Counted.polls(counter) - polls
+      :ets.insert(Logex.TripTest, {{self(), :step}, polled, backs() - backs})
       Runtime.cycle_step(runtime, step)
     end
 
     def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+
+    defp backs do
+      {:messages, messages} = Process.info(self(), :messages)
+      Enum.count(messages, &back?/1)
+    end
 
     defp heard_since(at, until) do
       {:messages, messages} = Process.info(self(), :messages)
@@ -114,6 +161,9 @@ defmodule Logex.TripTest do
       do: raised >= at
 
     defp back_since?(_message, _at), do: false
+
+    defp back?({Logex.Runner.Device, _pid, _restarts, _raised, {:back, "panel", nil}}), do: true
+    defp back?(_message), do: false
 
     defp waited(true, _at, _until), do: :ok
 
@@ -2169,6 +2219,7 @@ defmodule Logex.TripTest do
           "program a count with e1\n  a.n hits\nprogram b relay with e2\n  b.in t2\n  b.out y\n"
 
       {:ok, panel} = Sim.start_link(reports: true)
+      counter = make_ref()
 
       {:ok, runner} =
         Runner.start_link(
@@ -2176,14 +2227,26 @@ defmodule Logex.TripTest do
           io: %{"panel" => {Sim, sim: panel}},
           poll: 10,
           idle: 50,
-          steps: Sleeps
+          steps: Sleeps,
+          clock: {Counted, counter}
         )
+
+      :ets.insert(Logex.TripTest, {{runner, :counted}, counter})
 
       # One report changes both triggers: e1's round sleeps 200 ms while the panel waits,
       # and e2's round, at once after it, finds the panel heard.
       Sim.set(panel, %{[0] => 1, [1] => 1})
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 1
+
+      # And each poll the panel ran while it waited told the runner (RV-7's review): a
+      # device that told it at only some would pass the step's wait for one `back` and
+      # its trip, but not this.
+      assert [{_key, polled, backs}] = :ets.lookup(Logex.TripTest, {runner, :step})
+
+      assert polled <= backs + 1,
+             "the panel ran #{polled} polls in e1's step and told the runner #{backs} times"
+
       Runner.stop(runner)
     end
 

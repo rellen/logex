@@ -1301,11 +1301,13 @@ defmodule Logex.ArrayTest do
     # A program of no array checks no key for an element, so a call costs what it did: it
     # was pinned at 76 reductions a call of one key, measured at e60cc0a, before decision
     # 222, and after it. Since decision 357 a key's cost is held against the same program's
-    # beside an array, measured in the same run: 38 reductions a key of 64 var_inputs
-    # against 61, where each key is looked for among the elements and merged as an array's
-    # input is. A program of none that took the element path would cost what that does, so
-    # the bound is half the difference, 11 a key, which a call both make the dearer moves in
-    # neither.
+    # beside an array, measured in the same run: 37.875 reductions a key of 64 var_inputs
+    # against 60.97, where each key is looked for among the elements and merged as an
+    # array's input is, 23 a key more, the same in every run. The bound is the twin's
+    # figure less those 23, and half a reduction a key, under the one reduction a key a
+    # walk of the keys costs (RV-7's review: half the difference, 11 a key, passed a
+    # program of none that walked its keys, 39 a key); a call both make the dearer moves
+    # both, and the element path made cheaper restates it.
     test "a program of no array pays nothing for the rule" do
       per_key = fn beside ->
         {:ok, p} =
@@ -1344,14 +1346,49 @@ defmodule Logex.ArrayTest do
 
       none = per_key.("")
       beside = per_key.("var x bool[1]\n")
-      assert none <= beside - 11, "a key took #{none} reductions, #{beside} beside an array"
+
+      assert none <= beside - 23 + 0.5,
+             "a key took #{none} reductions, #{beside} beside an array, 23 apart"
     end
   end
 
   describe "growth, in reductions" do
-    # Counted in a process of its own with a heap the collector never visits, so each count
-    # is the same on every run: a scan's reductions for each rung, the difference of 200
-    # rungs and 100 over 100.
+    # A walk over a tuple of `n` ints, each judged by one guard with no function called, as
+    # an int array's state check judges its elements, counted as a scan is.
+    defp guarded_walk(n) do
+      tuple = :erlang.make_tuple(n, 0)
+      parent = self()
+
+      {_pid, ref} =
+        :erlang.spawn_opt(
+          fn ->
+            {:reductions, before} = Process.info(self(), :reductions)
+            true = int_guarded(tuple, n)
+            {:reductions, later} = Process.info(self(), :reductions)
+            send(parent, {:reductions, later - before})
+          end,
+          [:monitor, min_heap_size: 8_000_000]
+        )
+
+      assert_receive {:reductions, r}, 10_000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+      r
+    end
+
+    defp int_guarded(_tuple, 0), do: true
+
+    defp int_guarded(tuple, i)
+         when is_integer(:erlang.element(i, tuple)) and :erlang.element(i, tuple) >= -32_768 and
+                :erlang.element(i, tuple) <= 32_767,
+         do: int_guarded(tuple, i - 1)
+
+    defp int_guarded(_tuple, _i), do: false
+
+    # Counted in a process of its own with a heap the collector never visits, so that no
+    # collection's work is in a count: a scan's reductions for each rung, the difference of
+    # 200 rungs and 100 over 100, the same from run to run but for the hundredths a map of
+    # more than 32 keys or the VM's own state moves (`CONTRIBUTING.md`, "A count moves with
+    # the VM's own state").
     defp per_rung(head, rung) do
       cost = fn n ->
         {:ok, p} = Logex.compile(head <> Enum.map_join(1..n, "\n", fn _ -> rung end), name: "p")
@@ -1498,8 +1535,15 @@ defmodule Logex.ArrayTest do
       # twice through a function; a real's about eight, through its rule. Each was held
       # under a figure, 1.5 and 12, until decision 357; since then each is held against the
       # other, measured in the same run: an int element at most a quarter of a real's, and
-      # a real's under twelve of an int's.
+      # a real's under twelve of an int's; and since RV-7's review an int element's held,
+      # as `< 1.5` held it, to the cost of one guard with no function called, measured in
+      # the same run by a walk of the test's own over a tuple of the same size, the same
+      # guard on each element: 1 reduction an element each, half a reduction more a
+      # function called an element would pass, where a quarter of a real's, 2.05, passed
+      # one call more.
       per_element = (check.(16_000) - check.(8_000)) / 8_000
+      guard = (guarded_walk(16_000) - guarded_walk(8_000)) / 8_000
+      assert per_element <= guard + 0.5, "an int element took #{per_element}, a guard #{guard}"
 
       real = fn n ->
         {:ok, p} = Logex.compile("var a real[#{n}]\nvar d real\nmove a[0] d", name: "p")

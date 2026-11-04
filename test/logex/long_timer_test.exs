@@ -1022,10 +1022,14 @@ defmodule Logex.LongTimerTest do
     end
 
     # Decision 197: a plain timer's run in a routine of plain timers, whose `units` are nil,
-    # pays nothing for its unit. Its energised run, the one that reads its clock, costs
-    # exactly 19 reductions more than its de-energised one, which reads none, with no
-    # collection, as before long timers (`6a15701`), where a look-up of each timer's tag
-    # cost about 3 more (M5-6's review), and a walk of its type's rules about 8 (M5-6).
+    # pays nothing for its unit. Its energised run, the one that reads its clock, costs 19
+    # reductions more than its de-energised one, which reads none, with no collection, as
+    # before long timers (`6a15701`), where a look-up of each timer's tag cost about 3 more
+    # (M5-6's review), and a walk of its type's rules about 8 (M5-6). Held at those 19,
+    # which it measured exactly, until RV-7's review; since then with half a reduction a run
+    # for the hundredths a count moves, decision 357's allowance: that review's probe of
+    # each read three reductions dearer, which the two runs make as often, turned it red by
+    # its hundredths at the limit, and reads 19 with the half.
     test "a plain timer's energised run costs what it did before long timers" do
       cost = fn e ->
         text =
@@ -1041,13 +1045,17 @@ defmodule Logex.LongTimerTest do
       end
 
       clock = (cost.(1) - cost.(0)) / 400
-      assert clock <= 19, "a plain timer's clock cost #{Float.round(clock, 1)} reductions a run"
+
+      assert clock <= 19 + 0.5,
+             "a plain timer's clock cost #{Float.round(clock, 1)} reductions a run"
     end
   end
 
   # The reductions `fun` takes in a process of its own whose heap is large enough that the
-  # garbage collector, whose work the reductions count, never runs: the same count on every
-  # run, so a bound may be tight.
+  # garbage collector, whose work the reductions count, never runs: the same count from run
+  # to run but for the hundredths a map of more than 32 keys or the VM's own state moves
+  # (`CONTRIBUTING.md`, "A count moves with the VM's own state"), so a bound leaves half a
+  # reduction a run for them.
   defp collected_nothing(fun) do
     parent = self()
 
@@ -1075,7 +1083,9 @@ defmodule Logex.LongTimerTest do
     # seen to take the plain path. Until RV-7 the saving was held at 2, the look-up's
     # whole cost, which it read exactly, 2.0 to 2.0025, and so 1.9975 under a probe that
     # made each instruction scanned two reductions dearer for both programs: since then at
-    # half of it, decision 357's margin for a twin that does the guarded work itself.
+    # those 2 less half a reduction a run for the hundredths a count moves, decision 357's
+    # allowance (RV-7's review: half the look-up, 1, passed a plain path made a reduction a
+    # run dearer). The look-up made cheaper restates it.
     test "a plain routine's timers pay nothing for their units, each clause that reads a " <>
            "clock" do
       for {kind, go} <- [{"ton", 1}, {"tof", 0}, {"tp", 1}, {"tp", 0}, {"rto", 1}, {"rto", 0}] do
@@ -1093,7 +1103,9 @@ defmodule Logex.LongTimerTest do
         cost = fn program -> collected_nothing(fn -> Runtime.scan(program, state, 1) end) end
 
         saved = (cost.(%{p | units: %{}}) - cost.(p)) / 400
-        assert saved >= 1, "#{kind} at #{go} saved #{Float.round(saved, 1)} reductions a run"
+
+        assert saved >= 2 - 0.5,
+               "#{kind} at #{go} saved #{Float.round(saved, 4)} reductions a run"
       end
     end
   end

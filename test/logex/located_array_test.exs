@@ -1580,31 +1580,53 @@ defmodule Logex.LocatedArrayTest do
     # arrays are nil, which the input image, the copy-out and a restart match in their
     # heads. Each was held within half a reduction a point of what it measured there,
     # 105.625 a pair of an input and an output point, 4.53 an output point's copy-out and
-    # 38.45 a restart's group of four globals. Since decision 357 each is held against the
-    # same configuration beside a located array of inputs and one of outputs, measured in
-    # the same run: beside them an input point is laid over the arrays' elements first, 22
-    # reductions a group more, and a restart looks each global up among the located
-    # arrays, 5 more, each bound half of that, and an output point is copied out as it is
-    # beside none, the bound the half reduction one more call a point would pass. Each count
+    # 38.45 a restart's group of four globals. Since decision 357 each is held against a
+    # twin measured in the same run: the same configuration beside a located array of
+    # inputs and one of outputs, where an input point is laid over the arrays' elements
+    # first, 22 reductions a group more, and a restart looks each global up among the
+    # located arrays, 5 more, and an output point is copied out as it is beside none; and
+    # the same configuration with each group's output point an element of a located array
+    # of outputs, whose copy-out reads its array, 2 a point more, and passes no plain point
+    # (RV-7's review: an output point's copy-out made a call dearer, located or not, cost
+    # the twin beside the arrays the same). Each bound is the twin's figure and what the
+    # two measured apart, the same in every run but for a restart's hundredths, and an
+    # allowance under the least regression it is there for: a call more an input point,
+    # two a group, a call an output point, one, a call a global, four a group; so a cycle's
+    # 1 a group, a copy-out's half a reduction a point, and a restart's 1 a group. The
+    # look-ups made cheaper restate them, and a call both twins make moves both. Each count
     # is the least of five: building a map of more than 32 keys, as a restart does, is
-    # charged a few reductions more or less from one call to the next, a quarter of one a
-    # group here, where the counts were single and moved by up to 0.7 a group.
+    # charged a few reductions more or less from one call to the next, a tenth of one a
+    # group here (43.375 to 43.47 a restart beside the arrays in four runs), where the
+    # counts were single and moved by up to 0.7 a group.
     test "a configuration of no located array cycles as before M5-13" do
       {:ok, relay} =
         Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out\n", name: "relay")
 
       least = fn fun -> Enum.min(for _ <- 1..5, do: reductions(fun)) end
 
-      measure = fn n, beside ->
+      # Each group's output point a plain global, `y<i>`, or, `located`, an element of one
+      # located array of outputs, `ys`.
+      output = fn
+        i, :plain -> "var_global y#{i} bool at panel.q.#{i}\n"
+        _i, :located -> ""
+      end
+
+      outputs = fn
+        _n, :plain -> ""
+        n, :located -> "var_global ys bool[#{n}] at panel.q.1\n"
+      end
+
+      measure = fn n, beside, kind ->
         globals =
           Enum.map_join(1..n, "", fn i ->
             "var_global x#{i} bool at panel.i.#{i}\nvar_global f#{i} real at drive.i.#{i}\n" <>
-              "var_global y#{i} bool at panel.q.#{i}\nvar_global w#{i} int[4]\n"
+              output.(i, kind) <> "var_global w#{i} int[4]\n"
           end)
 
         text =
           "task fast interval 10 priority 1\nvar_global a bool at panel.i.0\nvar_global b bool at panel.q.0\n" <>
-            beside <> globals <> "program r relay with fast\nr.in a\nr.out b\n"
+            beside <>
+            outputs.(n, kind) <> globals <> "program r relay with fast\nr.in a\nr.out b\n"
 
         {:ok, c} = Configuration.compile("plant", text, %{"relay" => relay})
         inputs = Map.merge(Map.new(1..n, &{"x#{&1}", 1}), Map.new(1..n, &{"f#{&1}", 1.5}))
@@ -1615,22 +1637,31 @@ defmodule Logex.LocatedArrayTest do
          least.(fn -> Runtime.restart(runtime, :cold) end)}
       end
 
-      per_group = fn beside ->
-        {c32, o32, r32} = measure.(32, beside)
-        {c64, o64, r64} = measure.(64, beside)
+      per_group = fn beside, kind ->
+        {c32, o32, r32} = measure.(32, beside, kind)
+        {c64, o64, r64} = measure.(64, beside, kind)
         {(c64 - c32) / 32, (o64 - o32) / 32, (r64 - r32) / 32}
       end
 
-      {cycle, out, restart} = none = per_group.("")
+      {cycle, out, restart} = none = per_group.("", :plain)
 
       {cycle_beside, out_beside, restart_beside} =
         beside =
-        per_group.("var_global li bool[2] at card.i.0\nvar_global lo bool[2] at card.q.0\n")
+        per_group.(
+          "var_global li bool[2] at card.i.0\nvar_global lo bool[2] at card.q.0\n",
+          :plain
+        )
 
-      message = "none #{inspect(none)}, beside located arrays #{inspect(beside)}"
-      assert cycle <= cycle_beside - 11, message
+      {_cycle, out_located, _restart} = located = per_group.("", :located)
+
+      message =
+        "none #{inspect(none)}, beside located arrays #{inspect(beside)}, its outputs " <>
+          "located #{inspect(located)}"
+
+      assert cycle <= cycle_beside - 22 + 1, message
       assert out <= out_beside + 0.5, message
-      assert restart <= restart_beside - 2.5, message
+      assert out <= out_located - 2 + 0.5, message
+      assert restart <= restart_beside - 5 + 1, message
     end
   end
 end

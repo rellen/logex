@@ -174,7 +174,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   gives, from source.
 - `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
   name readers, a number's bounds, a rung that writes nothing, the compile's cost against
-  recorded figures, and a seeded mutation walk that nothing escapes.
+  twins compiled in the same run, and a seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
 - `test/logex/diagnostic_test.exs` — what each stage stamps on a diagnostic, and

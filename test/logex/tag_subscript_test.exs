@@ -2309,9 +2309,11 @@ defmodule Logex.TagSubscriptTest do
   end
 
   describe "growth, in reductions" do
-    # Counted in a process of its own with a heap the collector never visits, so each count
-    # is the same on every run: a scan's reductions for each rung, the difference of 200
-    # rungs and 100 over 100.
+    # Counted in a process of its own with a heap the collector never visits, so that no
+    # collection's work is in a count: a scan's reductions for each rung, the difference of
+    # 200 rungs and 100 over 100, the same from run to run but for the hundredths a map of
+    # more than 32 keys or the VM's own state moves (`CONTRIBUTING.md`, "A count moves with
+    # the VM's own state").
     defp per_rung(head, rung) do
       cost = fn n ->
         source = head.(n) <> Enum.map_join(1..n, "\n", rung)
@@ -2373,9 +2375,6 @@ defmodule Logex.TagSubscriptTest do
       assert grid <= literal_grid + 18, "#{grid} against #{literal_grid}"
     end
 
-    # A program with no tag subscript scans, rung for rung, in exactly the reductions it
-    # took at e00ae03, before M5-12: an instruction is caught only where its clause's head
-    # sees such an element among its operands. A `cal` is caught as it was.
     # The type an arithmetic, bitwise or root instruction computes in is read from an
     # element's array in the scan's table, with no rule asked (`Logex.Program.destination/3`).
     test "an element a tag subscripts as a destination costs what a literal one does, and its read" do
@@ -2410,12 +2409,18 @@ defmodule Logex.TagSubscriptTest do
     # is due makes a pair cost the same; a reduction more for a call both rungs of a pair
     # make moves both. Each bound leaves half a reduction a rung for the hundredths by which
     # a rung's count moves as the bigger program's maps grow, under the one a catch costs.
+    # The pairs cover every shape of instruction a scan dispatches, one operand, two and
+    # three (RV-7's review: an `add` caught where none is due passed the pairs of contacts,
+    # coils and moves alone): an `add` on a literal element against one on an element a
+    # tag subscripts, and each two-instruction rung de-energised, whose second instruction
+    # does nothing, against a latch on an element a tag subscripts, which a de-energised
+    # rung leaves as it is and the catch alone makes dearer, 21 reductions a rung against 22.
     test "a program of none is caught nowhere, as before M5-12, a tag's bit and a `cal` once" do
       head =
         fixed(
           "var off bool\nvar_input a bool\nvar_input i int\nvar_input k int\n" <>
             "var_input w word\nvar_input n int\nvar e bool[8]\nvar v int[8]\nvar g int[4,8]\n" <>
-            "var h word[8]\nvar_output q bool\nvar_output d int\n"
+            "var h word[8]\nvar_output q bool\nvar_output d int\nvar z int\nvar t word\n"
         )
 
       caught = per_rung(head, fixed("xic off xic e[i] ote q"))
@@ -2426,10 +2431,25 @@ defmodule Logex.TagSubscriptTest do
             {"xic off move v[3] d", "xic off move v[i] d"},
             {"xic off move k v[3]", "xic off move k v[i]"},
             {"xic off move g[1,3] d", "xic off move g[1,i] d"},
-            {"xic off xic h[1].3 ote q", "xic off xic h[i].3 ote q"}
+            {"xic off xic h[1].3 ote q", "xic off xic h[i].3 ote q"},
+            {"xic off add k k v[3]", "xic off add k k v[i]"}
           ] do
         {p, t} = {per_rung(head, fixed(plain)), per_rung(head, fixed(tagged))}
         assert p <= t - 0.5, "`#{plain}` took #{p} a rung, as caught as `#{tagged}`, #{t}"
+      end
+
+      latch = per_rung(head, fixed("xic off otl e[i]"))
+
+      for rung <- [
+            "xic off otl q",
+            "xic off otl e[3]",
+            "xic off move k z",
+            "xic off add k k z",
+            "xic off not w t",
+            "xic off shl w 1 t"
+          ] do
+        plain = per_rung(head, fixed(rung))
+        assert plain <= latch - 0.5, "`#{rung}` took #{plain} a rung, as caught as #{latch}"
       end
 
       tag_bit = per_rung(head, fixed("xic off xic w.[n] ote q"))
