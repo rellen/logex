@@ -218,6 +218,29 @@ defmodule Logex.RunnerPathsTest do
         fn -> Runner.start_link(opts(retain: Path.join(dir, "y"))) end
       )
 
+      # Each told in the caller before either file is read, as a row another runner holds
+      # is: a store at a copy's name that holds no store, and a store whose copy's name
+      # another holds, which holds none, are each told what they meet, never what they
+      # hold.
+      File.write!(store <> ".dropped.5", "no store\n")
+
+      raises(
+        held(:retain, store <> ".dropped.5", "names the store's copy, `.dropped.<n>`,", first),
+        fn ->
+          Runner.start_link(opts(retain: store <> ".dropped.5"))
+        end
+      )
+
+      File.write!(Path.join(dir, "x"), "no store\n")
+
+      raises(
+        "the runner's retain: #{inspect(Path.join(dir, "x"))} is copied to " <>
+          "#{inspect(Path.join(dir, "x.dropped.3"))}, the store of another runner of this " <>
+          "VM, #{inspect(other)}, which holds it until it stops: two runners on one file " <>
+          "write each over the other's",
+        fn -> Runner.start_link(opts(retain: Path.join(dir, "x"))) end
+      )
+
       # A name that only looks like a copy's is none: started beside them.
       for apart <- ~w(.dropped .dropped.1.tmp .dropped.x .dropped.) do
         {:ok, beside} = Runner.start_link(opts(forces: Path.join(dir, "x" <> apart)))

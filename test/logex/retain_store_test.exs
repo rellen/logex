@@ -1267,10 +1267,10 @@ defmodule Logex.RetainStoreTest do
   # Decision 418 (RV-13), the leave for the one `<store>.dropped` and its replacement:
   # each copy a name of its own, `<store>.dropped.<n>`, n one past the highest that
   # stands, none replaced, where one `<store>.dropped` was replaced at each start that
-  # dropped; each test's copy below is `.dropped.1`, its first, where it was `.dropped`. Each runner here is
-  # given a write limit of 5,000 ms, which covers a loaded machine's disk, none reading
-  # the limit: since decision 400 (RV-11) `write_limit:`, where an idle watchdog of 5,000
-  # stood for it (RV-4's question 12).
+  # dropped; each test's copy below is `.dropped.1`, its first, where it was `.dropped`.
+  # Each runner here is given a write limit of 5,000 ms, which covers a loaded machine's
+  # disk, none reading the limit: since decision 400 (RV-11) `write_limit:`, where an idle
+  # watchdog of 5,000 stood for it (RV-4's question 12).
   describe "a store a fresh start drops from (decision 360)" do
     defp retyped,
       do:
@@ -1408,13 +1408,14 @@ defmodule Logex.RetainStoreTest do
       File.write!(at.(".dropped.3"), "a host's file")
       File.write!(at.(".dropped.07"), "a host's seventh")
       File.mkdir!(at.(".dropped.9"))
+      File.write!(at.(".dropped.011"), "a host's eleventh")
       File.write!(at.(".dropped.12.tmp"), "no copy's name")
       File.write!(at.(".dropped.x"), "nor this")
       before = for name <- File.ls!(dir), into: %{}, do: {name, File.read(Path.join(dir, name))}
 
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
       assert %{dropped: [_drop], copy: copy} = Runner.status(runner).retain
-      assert copy == at.(".dropped.10")
+      assert copy == at.(".dropped.12")
       assert File.read!(copy) == read
       assert Runner.stop(runner) == :ok
       opener_down(rig.panel)
@@ -1427,7 +1428,7 @@ defmodule Logex.RetainStoreTest do
       File.write!(rig.store, read)
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
       assert %{copy: next} = Runner.status(runner).retain
-      assert next == at.(".dropped.11")
+      assert next == at.(".dropped.13")
       assert File.read!(next) == read
       assert File.read!(copy) == read
       assert File.read!(at.(".dropped")) == "an earlier logex's copy"
