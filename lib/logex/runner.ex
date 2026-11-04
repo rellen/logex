@@ -98,14 +98,13 @@ defmodule Logex.Runner do
   killed and `:timeout`, so that a drive whose connect takes 600 ms opens beside the idle
   watchdog's 500, the heartbeat left as it is, and a hung card refuses the start at the
   time its limit gives (decision 398; the option, its map form and its default as built,
-  decision 438); a device a restart opens again is given the same limit, and since decision 439
-  so is one up that a restart reads again, every device a restart opens or reads limited
-  by its own `open:`, so that a gateway that stayed up and answers its reread in 700 ms
-  lets the restart through, the heartbeat left the idle watchdog and a poll period, a
-  restart's release of each device and every other device call limited so (decision
-  128). It
-  does so before it handles anything sent to it, so a call or a stop by its name that
-  comes first waits until its devices are open and its first round has run.
+  decision 438); a device a restart opens again is given the same limit, and since
+  decision 439 so is one up that a restart reads again, every device a restart opens or
+  reads limited by its own `open:`, so that a gateway that stayed up and answers its
+  reread in 700 ms lets the restart through, the heartbeat left the idle watchdog and a
+  poll period, a restart's release of each device and every other device call limited so
+  (decision 128). It does so before it handles anything sent to it, so a call or a stop by
+  its name that comes first waits until its devices are open and its first round has run.
   - Each device reads its adapter every poll period on the runner's clock, from the time
     it was opened, on a grid that never drifts, and gives each other message its process
     receives to the adapter's `report/2`, where it has one: so a device that reports
@@ -487,9 +486,9 @@ defmodule Logex.Runner do
   silent); a trip, a restart and an edit's step made meanwhile leave the write as it is,
   the force taken, or not, onto the set the runner then holds as its answer says, a
   restart reading the file as it stands, the old set or the new, as every start does; and
-  a stop waits for it to its own limit, after its zeros and its closes, answers its
-  caller as it ends and gives the file up only after it, a force waiting behind it
-  answered as to a runner that is not running (provisional). A write that fails changes nothing and gives
+  a stop waits for it to its own limit, after its zeros and its closes, answers its caller
+  as it ends and gives the file up only after it, a force waiting behind it answered as to
+  a runner that is not running (provisional). A write that fails changes nothing and gives
   `{:error, {:forces, reason}}`, and since decision 353 one the disk has not finished
   within the write limit of real time, since decision 400 `write_limit:`, is killed and
   gives `{:error, {:forces, :timeout}}`, the force not taken and the runner answering on: a
@@ -510,13 +509,14 @@ defmodule Logex.Runner do
   going on, the line coming back, and `status/1` names the file, `forces_unread: {path,
   reason}`, the path as the host spelled it and `reason` `:timeout` or the file system's
   own, until a force's or an unforce's write of the file lands, since decision 445 no
-  restart reading it meanwhile, and since decision 440 the key always there, nil while the file reads; since
-  decision 445, while `forces_unread` stands, a restart keeps the forces the runner
-  holds and takes none from the file, which stays named, and the next write of the file,
-  a force's or an unforce's, writes the runner's set over it, so that a fresh start that
-  could not read the file, which started with no force, never takes at a later restart
-  the forces the file held, ones no one forced since and `status/1` did not show, where
-  RV-11's review found a restart that read the file once it read again took them; a line that is no force, a point forced twice, and a force the configuration
+  restart reading it meanwhile, and since decision 440 the key always there, nil while the
+  file reads; since decision 445, while `forces_unread` stands, a restart keeps the forces
+  the runner holds and takes none from the file, which stays named, and the next write of
+  the file, a force's or an unforce's, writes the runner's set over it, so that a fresh
+  start that could not read the file, which started with no force, never takes at a later
+  restart the forces the file held, ones no one forced since and `status/1` did not show,
+  where RV-11's review found a restart that read the file once it read again took them; a
+  line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
   `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file
@@ -607,7 +607,8 @@ defmodule Logex.Runner do
     value}` and an address that is no input point's `{:unknown_address, at}`, `at` the
     address as the configuration writes it since decision 399, `"panel.i.7"`, a text,
     where an adapter gives a list of whole numbers, and as the adapter gave it otherwise,
-    `:pump` or `[-1]`, which no configuration writes (decision 443); a device that does not answer a round's write within its own deadline, the
+    `:pump` or `[-1]`, which no configuration writes (decision 443); a device that does
+    not answer a round's write within its own deadline, the
     idle watchdog and a poll period from the start of its own write (decision 348), in
     real time, is `:timeout`, and is killed, its outputs left to what it does on losing
     its master, and named, every device written before it having answered in time and

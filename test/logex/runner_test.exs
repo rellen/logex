@@ -730,9 +730,9 @@ defmodule Logex.RunnerTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # Decision 441 (RV-16), the leave for a round run on with no time passed: a reading of
-    # the runner's clock gone wrong halfway through a round, after its step, stops the
-    # round there, its outputs never written, so that the trip's 0 is the first write the
+    # Decision 441 (RV-16), where a round ran on with no time passed: a reading of the
+    # runner's clock gone wrong halfway through a round, after its step, stops the round
+    # there, its outputs never written, so that the trip's 0 is the first write the
     # panel is given after it, where the round ran on and wrote its 1 before the trip
     # zeroed it; mended, a restart brings the line back.
     test "a round whose clock reading goes wrong halfway through stops there, its outputs " <>

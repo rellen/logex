@@ -1473,11 +1473,18 @@ defmodule Logex.StalledDiskTest do
   # lands, so that the logic keeps the plant under control on a slow disk and no force is
   # in effect before the file holds it (decision 117); the caller waits for the write as
   # it did. Each write is stalled at its rename, the held file server's one call of it.
+  # The limit is no part of what these read but where a test says so: each runner is
+  # given @out, so that a write a loaded machine's disk is slow over before it comes to
+  # its rename, or one held while the test steps the runner, is never cut at the limit,
+  # where at 1010 ms one in ten runs under scripts/load.sh beside another suite's syncs
+  # was cut before its rename, and the test waited for a rename that never came.
+  @out 20_000
+
   describe "the rounds run on while a force's write is out (decision 437)" do
     test "rounds run, status/1 answers and the force is in effect from the first round " <>
            "after the write lands, none before",
          %{tmp_dir: dir} do
-      rig = rig(dir, retain: nil, retain_period: nil)
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 0)
       %{rounds: before} = Runner.status(runner)
@@ -1513,7 +1520,7 @@ defmodule Logex.StalledDiskTest do
     test "a force asked while another's write is out waits behind it, its write built on " <>
            "the set the first left",
          %{tmp_dir: dir} do
-      rig = rig(dir, retain: nil, retain_period: nil)
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
       {:ok, runner} = Runner.start_link(rig.opts)
       server = held()
       first = Task.async(fn -> Runner.force(runner, "level", 7) end)
@@ -1544,7 +1551,7 @@ defmodule Logex.StalledDiskTest do
     # start does, among them where it came first.
     test "a trip, a restart and an edit's step made while it is out leave it as it was",
          %{tmp_dir: dir} do
-      rig = rig(dir, retain: nil, retain_period: nil)
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 0)
 
@@ -1601,7 +1608,7 @@ defmodule Logex.StalledDiskTest do
     # waited behind it is answered as to a runner that is not running (provisional).
     test "a stop made while it is out waits for it and answers its caller, every output 0",
          %{tmp_dir: dir} do
-      rig = rig(dir, retain: nil, retain_period: nil)
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
       {:ok, runner} = Runner.start_link(rig.opts)
       eye(rig, 1)
       server = held()
@@ -1622,13 +1629,14 @@ defmodule Logex.StalledDiskTest do
       assert Task.await(behind, @answers) == gone_told(runner)
       assert File.read!(rig.forces) == "level 7\n"
 
-      # Past its limit, the stop answers the force's caller at that limit.
+      # Past its limit, @limit here, the stop answers the force's caller at that limit;
+      # a write a loaded disk cuts at it before its rename is answered so too.
       rig = rig(Path.join(dir, "late"), retain: nil, retain_period: nil)
       File.mkdir_p!(Path.dirname(rig.forces))
       {:ok, runner} = Runner.start_link(rig.opts)
       server = held()
       force = Task.async(fn -> timed(fn -> Runner.force(runner, "level", 7) end) end)
-      _writing = waiting_call(server, :rename)
+      _writing = called_or_answered(server, :rename, force)
       assert Runner.stop(runner) == :ok
       assert {took, {:error, {:forces, :timeout}}} = Task.await(force, @answers)
       assert took >= @limit and took < @answers
