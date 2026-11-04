@@ -891,7 +891,21 @@ defmodule Logex.RetainPeriodCostTest do
   end
 
   # The runner's reductions a round over 200 rounds of the fast task, the eye toggled.
-  defp per_round(config, extra, dir) do
+  defp per_round(config, extra, dir), do: elem(costs(config, extra, dir), 0)
+
+  # The same less what the manual clock's synchronisation costs the runner a round (RV-7).
+  # `Manual.advance/2` follows each timer it delivers with `:sys.get_state/2`, one a wake
+  # and so one a round here, whose answer copies the runner's whole state, at about a
+  # reduction a 100 words and not evenly: a store's 200 words more made it 48.0 a reply
+  # with none and 50.1 to 50.5 with one in one CI run, two of the 8 the bound's test read
+  # apart, the rest the round's own. That copy is the test's, never a round's, and is
+  # measured on the same runner just after, the mean of 200 replies, and taken off.
+  defp own_round(config, extra, dir) do
+    {per_round, synced} = costs(config, extra, dir)
+    per_round - synced
+  end
+
+  defp costs(config, extra, dir) do
     {:ok, clock} = Manual.start_link()
     {:ok, panel} = Sim.start_link(clock: clock)
     File.rm(Path.join(dir, "s"))
@@ -913,10 +927,13 @@ defmodule Logex.RetainPeriodCostTest do
 
     {:reductions, b} = Process.info(runner, :reductions)
     rounds = Runner.status(runner).rounds - rounds
+    {:reductions, c} = Process.info(runner, :reductions)
+    for _ <- 1..200, do: :sys.get_state(runner)
+    {:reductions, d} = Process.info(runner, :reductions)
     assert Runner.stop(runner) == :ok
     GenServer.stop(panel)
     GenServer.stop(clock)
-    (b - a) / rounds
+    {(b - a) / rounds, (d - c) / 200}
   end
 
   # The least of several runs' costs a round. The devices' messages a round depend on how
@@ -927,11 +944,19 @@ defmodule Logex.RetainPeriodCostTest do
   defp least(config, extra, dir, runs),
     do: Enum.min(for _ <- 1..runs, do: per_round(config, extra, dir))
 
+  # Since RV-7 the bound's test reads each round's own cost, the clock's synchronisation
+  # taken off, the two measured in turn, nine of each, the least of each: CI read 10.3,
+  # 10.4 and 10.1 apart on `cb18575`, `57260e1` and `6e3b6a6` and 8.1 on RV-7's probe,
+  # where runs here read 8.0 to 9.0, the copy 2.0 to 2.5 of it and the rest 5.8 to 6.1.
   test "a round with a store and a long period costs within a few reductions of none",
        %{tmp_dir: dir} do
     config = counters(4)
-    none = least(config, [], dir, 9)
-    long = least(config, [retain: Path.join(dir, "s"), retain_period: 3_600_000], dir, 9)
+    store = [retain: Path.join(dir, "s"), retain_period: 3_600_000]
+
+    {none, long} =
+      Enum.unzip(for _ <- 1..9, do: {own_round(config, [], dir), own_round(config, store, dir)})
+
+    {none, long} = {Enum.min(none), Enum.min(long)}
     assert long - none >= 0 and long - none <= 10, inspect({none, long})
   end
 

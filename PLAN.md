@@ -12490,36 +12490,34 @@ and CI checked; each fix with a test that fails when it is reverted.
     process's file call answers. Mutant: the read through the file server, red within the
     limit (the test waits for the raw read a limit's time and lets the FIFO go however it
     ends).
-  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at
-    `29e2aa3`, eighteen patches): sixteen red, each by the test named above. Two survived:
-    the review's B, killed since by the one-process race test (remade on `Paths`'s new
-    shape and run through the full suite at `ba81f68`: red, two tests of
-    `runner_paths_test.exs`); and the renewal not read at
-    a device's poll, kept: a poll past the deadline the device holds comes, in every case
-    a test makes, after its wake at that deadline, set before the poll's timer and so
-    delivered first on the manual clock, which takes the renewal; the read is kept for the
-    poll whose timer was set before the wake's, a wake re-armed within a poll period of
-    the deadline it moved to, and for a clock that delivers two wakes of one millisecond
-    in either order, where the poll's write again would stop at a deadline the renewal
-    had moved on (decision 130). Three clauses of the renewal's first form, a refresh older
-    than a renewal passed over, a release's deadline forgotten and a latched device taking
-    none, were found unobservable before the table, every decision of the device's going
-    through its wake or its poll, and were removed rather than kept untested.
-  - *The cost* of a round of three devices on the manual clock, writes taking no time, the
-    least of seven runs: 2036.5 reductions with its outputs changing and 1736.5 with none
-    at `ba81f68`, where `5208e60` cost 2038.0 and 1735.6 and `d7a1290` 2014.5 and 1725.4,
-    as before the review; with writes that take time, as the review's probe above.
-  - *Load runs* of every new or changed real-clock and runner test under
-    `scripts/load.sh`, four busy loops on four cores beside other suites, a load average
-    of 9 to 12: a first run stopped at 21 runs, one failed, the dead-holder race test's
-    100 ms wait for a claimer's answer, given 5,000 ms since; at `ba81f68`, 32 tests a run
-    (`stalled_disk_test.exs` and `runner_paths_test.exs` whole, the six new or changed
-    tests of `trip_test.exs`, the mid-write kill of `retain_period_test.exs` and the three
-    of `runner_test.exs`), 0 of 50 runs failed.
-  - *Merged*: `origin/main`'s `b67de5f`, decisions 374–389 recorded for RV-10, which runs
-    after this item; no conflict, nothing of it this item's to build.
-- **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
-  `.dropped` copy; the report's store and file lows.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at `29e2aa3`,
+    eighteen patches): sixteen red, each by the test named above. Two survived: the review's
+    B, killed since by the one-process race test (remade on `Paths`'s new shape and run
+    through the full suite at `ba81f68`: red, two tests of `runner_paths_test.exs`); and the
+    renewal not read at a device's poll, kept: a poll past the deadline the device holds
+    comes, in every case a test makes, after its wake at that deadline, set before the
+    poll's timer and so delivered first on the manual clock, which takes the renewal; the
+    read is kept for the poll whose timer was set before the wake's, a wake re-armed within
+    a poll period of the deadline it moved to, and for a clock that delivers two wakes of
+    one millisecond in either order, where the poll's write again would stop at a deadline
+    the renewal had moved on (decision 130). Three clauses of the renewal's first form, a
+    refresh older than a renewal passed over, a release's deadline forgotten and a latched
+    device taking none, were found unobservable before the table, every decision of the
+    device's going through its wake or its poll, and were removed rather than kept untested.
+    - *The cost* of a round of three devices on the manual clock, writes taking no time, the
+    least of seven runs: 2036.5 reductions with its outputs changing and 1736.5 with none at
+    `ba81f68`, where `5208e60` cost 2038.0 and 1735.6 and `d7a1290` 2014.5 and 1725.4, as
+    before the review; with writes that take time, as the review's probe above. - *Load
+    runs* of every new or changed real-clock and runner test under `scripts/load.sh`, four
+    busy loops on four cores beside other suites, a load average of 9 to 12: a first run
+    stopped at 21 runs, one failed, the dead-holder race test's 100 ms wait for a claimer's
+    answer, given 5,000 ms since; at `ba81f68`, 32 tests a run (`stalled_disk_test.exs` and
+    `runner_paths_test.exs` whole, the six new or changed tests of `trip_test.exs`, the
+    mid-write kill of `retain_period_test.exs` and the three of `runner_test.exs`), 0 of 50
+    runs failed. - *Merged*: `origin/main`'s `b67de5f`, decisions 374–389 recorded for
+    RV-10, which runs after this item; no conflict, nothing of it this item's to build. -
+    **RV-5 — the store** (decisions 355 and 360). `logex retain 2` with its end line; the
+    `.dropped` copy; the report's store and file lows.
 
   **RV-5 as built** (2026-11-02, branch `rv5`, five commits over `f29458b` and a merge of
   `57260e1`). Each change has a test that fails when it is reverted, each revert a mutant
@@ -13056,6 +13054,441 @@ and CI checked; each fix with a test that fails when it is reverted.
   CI ran the merge `6e3b6a6` red at `retain_period_test.exs:930`, 10.115 against 10, and
   a mutant's suite failed `retain_configuration_test.exs:1327` once, warm 16251 against
   cold 16246, neither touched by the code under test: the cost bounds above.)*
+
+  **RV-7's census** (2026-11-04, at `0b026e5`): every test that pinned a scan's, a
+  restart's, a cycle's, a round's or a compile's reductions exactly, or within a delta of
+  a figure recorded at some commit, with what its comment says it guards, and what it
+  became (decision 357). Lines are those at `0b026e5`.
+
+  *Exact pins of a figure* (the review's "about 27", c5-tests-6, b7-premortem-project-1
+  and -5, c6-pmi-8):
+
+  1. `tag_bit_test.exs:927`, "a program of none scans as it did before M5-9, a `cal` one
+     reduction more": 34, 27 and 17 a rung `==`, a `cal` 178.01 within 0.001 (`1ee676b`):
+     an instruction caught only where its clause's head sees a bit a tag numbers, a `cal`
+     once. Now each de-energised rung, which reads no operand, against the same rung on a
+     bit a tag numbers, a catch apart, `plain <= caught - 0.5`, and a de-energised `cal`
+     in a caught contact's place, `<= +0.5`.
+  2. `tag_subscript_test.exs:2398`, "a program of none scans as it did before M5-12": 34,
+     16, 17, 18, 23, 27 and 35 `==`, a `cal` 178.01 (`e00ae03`): the same for an element
+     a tag subscripts. Now six de-energised pairs, a literal element or a bool against an
+     element a tag subscripts, a tag's bit against such an element, a `cal` as above.
+  3. `tag_subscript_test.exs:2381`, `t == l + 5`: a destination through a tag subscript
+     costs its subscript's read, check and catch and no more (R14 and R15 of M5-12's
+     table, the type asked of the one rule). Now `t <= l + 5.5`.
+  4. `array_test.exs:1416`, "a program of none scans as it did before M5-11": 29, 17, 27,
+     34 and 32 `==` (`f43d82a`): an element told from a tag by its operand's shape in the
+     clause head. Now each rung against the same rung over literal elements, measured
+     apart (+1, +1, 0, 0, -3) and half a reduction.
+  5. `array_test.exs:1302`, put_inputs/3 `r == 76` (`e60cc0a`, decision 222): a program of
+     no array checks no key for an element. Now a key's cost over 64 var_inputs against
+     the same program's beside an array, 38 against 61 a key, `none <= beside - 11`.
+  6. `element_bit_test.exs:459`, `tag == 27.0` and `element == tag` twice: a bit of an
+     element costs a tag's bit. Now the tag's bit `<= bool + 3.5` and each element's
+     `<= tag + 0.5`.
+  7. `instance_array_test.exs:2487`, "a program of none scans as it did before M5-14":
+     eight figures `==` (`aa41f4d`): an element's clauses told by their heads. Now each
+     scalar rung against the same rung on a literal element over one table holding both,
+     measured apart (+1 to -4) and half a reduction, and a de-energised contact on a
+     scalar's member against one on an element a tag subscripts, a catch apart.
+  8. `real_test.exs:1546`, "a program of no reals scans as it did before M5-10": 17, 34 and
+     27 `==` (`5eac41f`): `reals: nil` matched in `move`'s head. Now each rung against the
+     same beside a real, `move` at least half a reduction less, `add` and `gt` no more.
+  9. `real_test.exs:1900`, "a program of no real literal pays nothing for it": 113.09,
+     187.34, 221.34 and 104.09 `==` (`a8a4f8f`): the warnings told an instruction that
+     holds a real literal by a guard. Now each rung against the same rung with one
+     instruction holding a real literal held exactly, at least the difference measured
+     less 8 (a lower bound: the guarded look is 17 to 26 a rung, the literal's 167 to 204).
+
+  *Within a delta, a ratio or a factor of a figure recorded at a commit*:
+
+  10. `compile_total_test.exs:770`, nine programs within 8 or 16 reductions a rung of
+      `e365fa4`'s compile, restated through the parse (RV-2's review: decision 351's look
+      from the first instruction, 12 a rung of ten contacts, and `Logex.Name.element/1`'s
+      15 to 18 an element's name). Now each against a twin compiled in the same run: the
+      rungs with the doing instruction first, a `cal` against a `cal` of a literal
+      element, the array programs over plain tags, `apart` and the same 8 or 16 a rung.
+  11. `tag_subscript_test.exs:2571`, seven programs within 8 a rung of `9a9a48c`, a word
+      array's within 1 (RV-15's review, decision 431). Now members' bits against a word
+      array's bits, and a word array's against scalar words' over the same declarations
+      and reads, `apart` and 8, a word array's half of one.
+  12. `tag_subscript_test.exs:2650`, eight programs within 16 a rung of `f31bf70` (RV-12's
+      review, decision 405's index). Now each against the same one-shots on scalar
+      storage bits, `apart` and 16.
+  13. `tag_subscript_test.exs:2729`, two within 16 a write of `f31bf70` (a bool element
+      written whole keeps no bit's place). Now each against the same writes into scalar
+      ints, `apart` and 16.
+  14. `bit_string_test.exs:1659`, six programs' compile against their parse no more than
+      the ratio at `ebf44ee` (M5-8's review), which b7-premortem-project-5 found within
+      about 5% of its figure. Now each beside a coil on a bit, and beside a one-shot,
+      against the same beside a plain rung of the same size: at least 20 and 29
+      reductions a rung less, half the warnings' gated looks.
+  15. `located_array_test.exs:1583`, `assert_in_delta` 105.625, 4.53 and 38.45 within 0.5
+      (`a8af419`, M5-13). Now the resource against the same beside a located array of
+      inputs and one of outputs, each count the least of five: a cycle at least 11 a
+      group less, a copy-out no more than half a reduction a point more, a restart at
+      least 2.5 a group less.
+  16. `retain_test.exs:674`, slopes no more than `c963cab`'s, 24 and 21 a check, 139 and
+      257 an instance/1 (M6-2's review). Now against the same instances `non_retain`,
+      which no guard passes over, at least half the walk less, 6 and 7.
+  17. `real_test.exs:1554`, a real's `add` and `sqrt` `<= 1.5 * 34`, a dint `add`'s figure.
+      Now `<= 1.5 * add`, the dint `add` measured in the same run.
+  18. `array_test.exs:1425`, an int element's check `< 1.5` a scan and a real's `< 12`
+      (M5-11's review). Now each against the other, an int's at most a quarter of a
+      real's and a real's under twelve of an int's.
+  19. `tag_subscript_test.exs:2781`, a two-dimensional element of two tag subscripts
+      `< 60` a rung. Now under the same share of a literal one's, `< 60 / 18 * literal`.
+  20. `long_timer_test.exs:1076`, a plain routine's timers against the same program handed
+      an empty table of units, `saved >= 2` a run: a twin in the same run, but held at the
+      look-up's whole cost, which it read exactly, 2.0 to 2.0025, so that the first probe
+      below read 1.9975 for a `tof` at 0 and turned it red. Now `saved >= 1`, half the
+      guarded work, the rule's margin for a twin that does it.
+
+  *Equalities of two figures measured in the same run*: `retain_test.exs:1127` (decision
+  385: the first scan after a warm restart costs what another does),
+  `retain_edit_test.exs:515` (an edit of programs that retain nothing pays nothing for
+  `non_retain`) and `retain_configuration_test.exs:1327`'s cycles (a retained global costs a
+  cycle nothing): each now a bound in the guarded direction, the last two measured in turn;
+  that test's warm restart against a cold one (`<= cold + 4`, RV-7's load list) is measured
+  in turn too.
+
+  *Left as they are*, each already a bound against a twin in the same run, decision 357's
+  form: `array_test.exs:1360`, the `<=` lines of `element_bit_test.exs:459`,
+  `tag_bit_test.exs:906`, `tag_subscript_test.exs:1255` and `2356`,
+  `instance_array_test.exs:2507`, `bit_string_test.exs:865`, `1432` and `2007`,
+  `long_timer_test.exs:997` and `1029` (a plain timer's energised run within 19 of its
+  de-energised one), `typed_counter_test.exs:543`, `frontend_test.exs:612`,
+  `integer_width_test.exs:634`, `retain_configuration_test.exs:514`, `retain_test.exs:789`,
+  `retain_image_test.exs:1470` and `1537`, `retain_period_test.exs:930` (a round with a
+  store and a long period within 10 of one with none, its measurement since mended, the
+  load failures below), `end_to_end_test.exs:4262` and
+  `jump_test.exs:902` (ratios of the same instructions in two shapes). Absolute, with a
+  margin no toolchain's reduction or two reaches: `typed_counter_test.exs:582`, a type
+  word's look-up under 200 reductions, measured in tens, where building the table on each
+  call cost over a thousand. Growth tests at two sizes, which bound a ratio, are not pins
+  and are left: every "linear" test of `arithmetic`, `array`, `bit_string`, `clock`,
+  `config_edit`, `configuration`, `edit`, `fault`, `function_block`, `integer_width`,
+  `io`, `jump`, `located_array`, `long_timer`, `real`, `retain_edit`, `retain_image`,
+  `retain_store`, `review_lows`, `runner`, `runner_edit`, `runtime`, `scheduler`,
+  `tag_bit`, `tag_subscript`, `trip`, `typed_counter`, `walk` and `logex_test.exs`
+  (`retain_image_test.exs:1482`'s measurement since mended, the load failures below).
+
+  **RV-7 as built** (2026-11-04, branch `rv7` over `0b026e5`). Decision 357 for every pin of
+  the census above, each bound against a twin measured in the same run, in the same VM, each
+  count in a process of its own whose heap no collection visits; and the load failures, each
+  run under `scripts/load.sh` and root-caused, four fixed in the tests' measurement, two in
+  their synchronisation, two shown closed by RV-11's decisions 398 and 400, and the rest the
+  machine's starving the VM, none a fault of the runner's code. The rule and how to write a
+  new one are `CONTRIBUTING.md`'s "Hold a cost against a twin measured in the same run" and
+  "A count moves with the VM's own state"; what a runner test's count holds besides a round,
+  and the orders a real-clock test may not assume, are added to its "A cost a scheduler's
+  interleaving moves" and "Wait for a process's `DOWN`". No test, walk or oracle was deleted
+  or weakened: each pin's line became a bound in the same test, and
+  `retain_test.exs:1127`'s, `retain_edit_test.exs:515`'s and
+  `retain_configuration_test.exs:1327`'s equalities bounds in the guarded direction,
+  decision 357's leave. The load failures' changes replace a measurement or add a
+  synchronisation, the lines they remove `retain_period_test.exs`'s two least-of-nine reads,
+  `retain_image_test.exs`'s single counts and `trip_test.exs`'s bare monitors, each read
+  again as the load failures below say, every assertion as it was.
+
+  - *The twins.* For a choice a clause's head makes, the dispatch of an instruction to the
+    clause that catches it (M5-9, M5-12, M5-14, a `cal`): the same rung de-energised,
+    which reads no operand, beside the one whose operand's shape takes the catching
+    clause; every such pair measured 29 against 30 reductions a rung, or 87.01 against
+    87.99 beside a `cal`, one catch apart. For a path an operand's shape picks (M5-11's
+    tag against element, M5-14's scalar instance against element): the same rungs over
+    the other shape, over one table holding both, each pair's difference as measured
+    (+1 to -4 a rung) and half a reduction for the hundredths by which a rung's count
+    moves as the bigger program's maps grow. For a `nil` a program or a resource holds
+    where it has no feature (M5-10's reals, decision 222's arrays, M5-13's located
+    arrays, M6-2's blocks that retain nothing): the same program beside the feature,
+    which takes the other clause; this gives a lower bound, the feature's own work at
+    least half of what it measured. For a compile: the same rungs with the instruction
+    that does something first, over plain tags, over a word array's bits, over scalar
+    storage bits or scalar ints, beside a coil on a bit or a one-shot, each `apart` as
+    measured and the parent's allowance, 8 or 16 a rung, a word array's half of one.
+  - *The probes* (`scratchpad/rv/rv7work/probes/`), each a call both sides of every bound
+    make charged `:erlang.bump_reductions(2)` more: p1 each instruction a scan runs
+    (`series/3`), p2 each instruction lowered (`lower/4`), p3 each instruction the
+    warnings walk and each global a restart keeps or makes cold, p4 each round
+    (`rounded/1`). At `0b026e5` p1 turned six of the old pins red, p2 two and p3 four
+    (the named files, 579, 583 and 581 of 585); with the new forms each passes the full
+    suite (the table below).
+
+  - *Each pin's bound* (the census's numbers; the mutants are
+    `scratchpad/rv/rv7work/mut/`, each a regression of the size its pin was there for,
+    red by the full suite on the test named; every bound green under p1 to p4):
+
+    | # | the bound now | red on |
+    |---|---|---|
+    | 1 | a de-energised contact, coil or `cal` `<=` the same on a bit a tag numbers `- 0.5`, a `cal` `<=` a caught contact `+ 0.5` | k1 every instruction caught, k1b a literal bit caught, k1c a `cal` caught twice |
+    | 2 | six de-energised pairs, a literal element or a bool against an element a tag subscripts, `- 0.5`; a tag's bit and a `cal` `+ 0.5` | k1, k1c, k1e a literal element caught |
+    | 3 | a destination through a tag subscript `<= l + 5.5` | k7 the element's type asked through a call |
+    | 4 | each rung `<=` the same over literal elements `+ apart + 0.5` | k3 a tag read through a call, k1b |
+    | 5 | a key's cost over 64 inputs `<=` the same beside an array `- 11` | k6 every key checked as an element's |
+    | 6 | a tag's bit `<= bool + 3.5`, each element's `<= tag + 0.5` | k1b |
+    | 7 | each scalar rung `<=` the same on a literal element `+ apart + 0.5`; a de-energised member contact `- 0.5` | k1m a scalar member caught, k3c a scalar `cal` through a call, k1, k3, k6 |
+    | 8 | a `move` `<=` the same beside a real `- 1 + 0.5`, `add` and `gt` `+ 0.5` | k4 the reals looked up |
+    | 9 | each rung `<=` the same with one instruction holding a real literal `- (apart - 8)` | k5 every instruction's literal looked at |
+    | 10 | each program `<=` its twin compiled in the same run `+ (apart + 8 or 16) * 200` | c1 decision 351's look from the first instruction, c1 a name read in parts, c5 M5-8 as landed, c5 storage writes looked at, c5 whole writes looked at |
+    | 11 | members' bits `<=` a word array's `+ apart + 8` a rung, a word array's `<=` scalar words' `+ 201.5 + 0.5` | c2 every member's word marked, c2b word arrays marked |
+    | 12 | each one-shot program `<=` the same on scalar storage bits `+ apart + 16` | c3 decision 405's index everywhere |
+    | 13 | each write `<=` the same into scalar ints `+ apart + 16` | c4 a bool element's bit place kept |
+    | 14 | beside a coil on a bit `<=` beside a plain rung `- 20 * 200`, beside a one-shot `- 29 * 200` | c5 M5-8 as landed, c5 storage writes looked at, c5 whole writes looked at; survived: c5 a name split twice, c5 one class's operands grouped (question 2) |
+    | 15 | a cycle `<=` beside a located array `- 11` a group, a copy-out `+ 0.5` a point, a restart `- 2.5` a group, each the least of five | l1 inputs through elements, l2 an output one call more, l3 a restart through the located |
+    | 16 | each check's and `instance/1`'s slope `<=` the same instances `non_retain`'s `- walk` | r1 unmarked instances walked |
+    | 17 | a real's `add` and `sqrt` `<= 1.5 *` a dint `add` in the same run | a17 a real result stored three times |
+    | 18 | an int element's check `<=` a real's `/ 4`, a real's `< 12 *` an int's | a18 int elements checked through the real's rule |
+    | 19 | two tag subscripts' element `< 60 / 18 *` a literal one's | a19 a subscript's tag searched for |
+    | 20 | a plain routine's timers save `>= 1` a run against the same handed an empty table of units | u1 a plain `tof` at rest looks its unit up |
+    | eq | the first scan after a warm restart `<=` another; an edit with no `non_retain` `<=` one with; a retained global's cycle `<=` a plain one's, a warm restart `<= cold + 4`, measured in turn | t1 a `tof` reads `first`, w1 a warm restart walks what is not retained; the edit's none (question 6) |
+
+  - *The mutation table* (`scripts/mutate.sh`, each patch applied over the tip and judged by
+    the full suite; the old pins' column the named files alone, `-N`, at `0b026e5`, for the
+    mutants made by then). A test red beyond the one a mutant was made for reads the same
+    cost, or is one the machine's load failed, marked so: `runner_test.exs`'s opening limit,
+    `function_block_test.exs`'s body growth, `configuration_test.exs`'s 60 s and the old
+    form of `retain_image_test.exs`'s growth, the load failures below, each such row red by
+    its own test besides. `long_timer_test.exs`'s units twin, pin 20, went red under k1, k3
+    and p1 before it had its margin, the first two red by their own tests besides and p1 run
+    again since. The old pins caught every mutant of the census but one class's operands
+    grouped, and went red under every probe; the new bounds catch every one but that and a
+    name split twice (question 2), and pass under every probe. The mutants of the load
+    failures' tests, rp1, ri1 and t2 to t4, have no old column, their tests' old forms not
+    pins, nor has u1, made for pin 20 after the old pins' run.
+
+    | mutant | what it does | the old pins, `0b026e5`, the named files | the new bounds, the full suite |
+    |---|---|---|---|
+    | a17_real_result_stored_thrice | a real result stored three times | red: real 1 | red: real 1; the machine's: configuration 1 |
+    | a18_int_elements_through_rule | an int array's elements checked through the real's rule | red: array 1 | red: array 1; the machine's: configuration 1 |
+    | a19_subscript_tag_searched | a subscript's tag searched for in the env | red: tag_subscript 2 | red: tag_subscript 2 |
+    | c1_351_walks_from_first | decision 351's look walks a rung from its first instruction | red: compile_total 1, tag_subscript 1 | red: compile_total 1 |
+    | c1_name_read_in_parts | an element's name read in parts, `Logex.Name.element/1` as before RV-2 | red: compile_total 1, tag_subscript 2 | red: compile_total 1, tag_subscript 3; the machine's: retain_image 1, runner 1 |
+    | c2_431_every_member_word | decision 431: every member's word marked, a tag subscript or none | red: tag_subscript 1 | red: tag_subscript 1 |
+    | c2b_431_word_arrays_marked | decision 431: a word array's coil marks members' words too | red: tag_subscript 1 | red: tag_subscript 1; the machine's: runner 1 |
+    | c3_405_indexed_everywhere | decision 405's storage index for every array | red: tag_subscript 1 | red: tag_subscript 1 |
+    | c4_bool_element_bit_place | a bool element written whole keeps a bit's place | red: tag_subscript 1 | red: tag_subscript 1; the machine's: function_block 1 |
+    | c5_m58_as_landed | M5-8's four mechanisms as they landed | red: bit_string 1, compile_total 1, real 1, tag_subscript 4 | red: bit_string 1, compile_total 1, tag_subscript 3 |
+    | c5_names_split_twice | M5-8: every name split twice | red: compile_total 1, tag_subscript 2 | green (2819 passed) |
+    | c5_operands_grouped | M5-8: one class's operands grouped | green (453 passed) | green (2819 passed) |
+    | c5_storage_writes_looked | M5-8: storage writes looked for with no owner | red: bit_string 1, compile_total 1, real 1, tag_subscript 3 | red: bit_string 1, compile_total 1, tag_subscript 3 |
+    | c5_whole_writes_looked | M5-8: whole writes looked for with no word | red: bit_string 1, compile_total 1, real 1 | red: bit_string 1, compile_total 1 |
+    | k1_fallback_caught | every instruction a scan runs caught (M5-9's fallback) | red: array 1, element_bit 1, instance_array 1, real 1, tag_bit 1, tag_subscript 2 | red: instance_array 1, long_timer 1, tag_bit 1, tag_subscript 1 |
+    | k1b_literal_bit_caught | an instruction on a literal bit caught | red: array 1, element_bit 1, tag_bit 1 | red: array 1, element_bit 1, tag_bit 1 |
+    | k1c_cal_caught_twice | a `cal` caught twice | red: instance_array 1, tag_bit 1, tag_subscript 1 | red: tag_bit 1, tag_subscript 1 |
+    | k1e_literal_element_caught | an instruction on a literal element caught | red: array 1, tag_subscript 2 | red: array 1, tag_subscript 1 |
+    | k1m_scalar_member_caught | an instruction on a scalar's member caught | red: instance_array 1 | red: instance_array 1 |
+    | k3_tag_told_by_call | a tag read and written through a call | red: array 1, element_bit 1, instance_array 1, real 2, tag_bit 1, tag_subscript 1 | red: array 1, instance_array 1, long_timer 1 |
+    | k3c_scalar_cal_by_call | a scalar `cal`'s type through a call | red: instance_array 1, tag_bit 1, tag_subscript 1 | red: instance_array 1 |
+    | k4_reals_looked_up | a `move`'s destination looked up in the reals with none | red: array 1, instance_array 1, real 1, tag_bit 1, tag_subscript 1 | red: real 1 |
+    | k5_real_literal_looked | every instruction's literal looked at by the warnings | red: compile_total 1, real 1, tag_subscript 3 | red: real 1 |
+    | k6_inputs_checked | every input key checked as an element's with no array | red: array 1, instance_array 1 | red: array 1 |
+    | k7_element_type_asked | a destination element's type asked through a call | red: tag_subscript 1 | red: tag_subscript 1 |
+    | l1_inputs_through_elements | a resource's inputs taken through the located with none | red: located_array 1 | red: located_array 1 |
+    | l2_output_one_call_more | an output's copy-out one call more a point | red: located_array 1 | red: located_array 1 |
+    | l3_restart_through_located | a restart's input through the located with none | red: located_array 1 | red: located_array 1 |
+    | r1_unmarked_instances_walked | an unmarked block instance walked for retained values | red: compile_total 1, retain 1 | red: retain 1 |
+    | ri1_values_searched | the matching searches the image's values for each | — | red: retain_image 1 |
+    | rp1_take_out_every_round | the period takes the image out every round | — | red: api_contract's life walk 1, api_contract's runner walk 2, retain_period 6, retain_store 1 |
+    | t1_tof_reads_first | a `tof` reads `first` at every scan | red: retain 1 | red: retain 1 |
+    | t2_waiting_poll_tells_nothing | a device's poll while it waits tells the runner nothing | — | red: trip 1 |
+    | t3_silence_before_notices | a round judges silence before it takes the notices | — | red: api_contract's life walk 1, api_contract's runner walk 2, trip 5 |
+    | t4_released_passes_on | a released device passes its readings on | — | red: trip 6 |
+    | u1_plain_tof_looks_up | a plain `tof` at rest looks its unit up | — | red: long_timer 1 |
+    | w1_warm_walks_nothing_retained | a warm restart walks what nothing retains | red: retain 1, retain_configuration 1 | red: retain 1, retain_configuration 1 |
+    | p1_every_instruction_dearer | probe: each instruction scanned two reductions dearer | red: array 1, element_bit 1, instance_array 1, real 1, tag_bit 1, tag_subscript 1 | green but the machine's: runner 1; before pin 20's margin, red: long_timer 1 |
+    | p2_every_instruction_lowered_dearer | probe: each instruction lowered two dearer | red: compile_total 1, tag_subscript 1 | green (2819 passed) |
+    | p3_every_global_and_warning_dearer | probe: each warned-of instruction and kept or cold global two dearer | red: compile_total 1, located_array 1, real 1, tag_subscript 1 | green (2819 passed) |
+    | p4_every_round_dearer | probe: each round two dearer | — | green (2819 passed) |
+
+  - *The load failures* (each run under `scripts/load.sh`, four busy loops on four cores,
+    at the tip, the runner's code traced in a copy where a trace is said, never landed;
+    the machine also ran this item's mutation table and another workflow's suites, a
+    load average of 12 to 35 and the kernel's CPU pressure at 89 to 91%, harder than the
+    busy loops alone):
+    - `trip_test.exs`'s "a device waiting on the runner for its change is heard at each poll
+      meanwhile, on the real clock, short" (idle 50 ms). Three causes, each traced. (a) The
+      panel did not run during e1's 200 ms step: one `back` 9 ms in and none until the
+      runner's next round at 286 ms, so it was found silent (run 24 of 50 at `ff7be44`);
+      traced closer in a later run, the panel polled 10.5 and 15.2 ms in and then nothing,
+      the runner's sleep ended at 216.6 ms and found the panel silent at 216.7, both timers
+      coming due when the VM's scheduler came back and the runner running first, which no
+      rule of the runner's is about. Fixed in the test's synchronisation: the step,
+      `Sleeps`, sleeps its 200 ms and then lasts until the panel has told the runner, within
+      its last poll period, that it is back, read from the runner's mailbox and left there,
+      a 5 s cap ending the wait for a panel that tells nothing; red on a device whose
+      waiting poll tells nothing and on a runner that judges silence before taking its
+      notices (t2 and t3 below), and met in none of the fix's 100 runs, where the old form
+      met it in one of 50 and one of the traced 30. (b) The panel not scheduled for 60 ms at
+      another moment, before any round: no `back` since the runner's start for 99 to 156 ms,
+      the runner itself idle 50 to 136 ms between two lines of `rounded/1` (six of 30 of a
+      traced run at a load of 35, and one in each 50 of the new forms below, `rounds: 0`).
+      (c) The runner not scheduled: e1's 200 ms sleep took 1120 ms, past its task watchdog
+      of 1000 (run 11 of 50 at `ff7be44`; twice in the traced 30, 1060 and 1164 ms, and once
+      in the new forms' first 50, 1363). (b) and (c) are the machine's starving the VM past
+      the test's own times, its idle watchdog and its task watchdog, which stay: by decision
+      114 a device unheard for the idle watchdog and a poll period is hung, whatever kept it
+      from running. Recorded for RV-16 as a question below.
+    - `trip_test.exs`'s "a killed runner's devices write every output 0 once and close"
+      (CI attempt 1 of `399d7f6`, `{:DOWN, ref, :process, pid, :noproc}` for a monitor
+      set before the runner was killed, the device's log showing it alive until the
+      runner's exit). The monitor reaches the device from the test and the runner's exit
+      from the runner, two senders, in no order: a loop that monitors a linked process
+      and kills its parent read `:noproc` 7 times in 60,000, none in 60,000 with a
+      `:sys.get_state/1` between, whose answer comes after the monitor, both from one
+      process (`scratchpad/rv/rv7work/probe/noproc2.exs`). Fixed in the test,
+      `monitored/1`, the test's assertions as they were; not met in 50 runs at `ff7be44`
+      nor in 50 of the fix.
+    - `trip_test.exs`'s "on the real clock, a bad reading of a device released while the
+      one before it is read again trips nothing" (RV-11's review, one in 50): three in 100
+      here, none in the first 50 and three in the second, `{:error, {:io_init, "panel",
+      {:bad_value, "panel.i.0", 2}}}`, the panel's own reread meeting the bad value no poll
+      had taken in the 700 ms the drive's reread slept: cause (a) above, the panel's poll
+      timers late. Not fixed: a first fix, the test sending the released panel its next
+      poll itself once it saw the panel released, passed 50 of 50 and then hung 3 times in
+      21, for the drive's 800 ms delay lands on whichever of its reads comes first, its
+      reread or a poll before it, a tripped device polling too; where a poll takes it the
+      panel is released and read again within a millisecond, a window the test's look
+      missed. The test as it was passes either way but for cause (a), and is left so; the
+      fix it needs is question 5. Its mutant, a released device that passes its readings on
+      rather than hold them (t4), is red by it and by the manual-clock tests of decision
+      142.
+    - `retain_period_test.exs`'s bound at its line 930, a round with a store and a long
+      period within 10 of one with none (CI 10.3 on `cb18575`, 10.4 on `57260e1`, 10.1 on
+      `6e3b6a6`; runs here 8.0 to 9.0). The figure counted more than a round: the manual
+      clock follows each timer it delivers with `:sys.get_state/2`, whose answer copies
+      the runner's whole state, and a send costs about a reduction a hundred words copied
+      (a list of 1,000 sent cost 34.6, of 10,000, 305), so that a store's 200 words more of
+      state made the copy 48.0 a round with none and 50.1 to 50.5 with one in a CI run
+      of this item's probe (`c9dad8c` on `backup/rv7-probe`), 2.0 to 2.5 of the 8 apart,
+      unevenly; and every message a selective `receive` passes over costs a reduction too
+      (a mailbox of 100 others cost 106.6 a `receive ... after 0` against 8.6), so that
+      how the devices' messages interleave adds to either side (on one scheduler a side
+      read exactly 1.0 a round more in two VMs of three). The round's own work apart is
+      four calls, `after_round/2`, `period/2` and two of `earliest/2`, 200 each over the
+      200 rounds (`:cprof`), 5.8 to 6.1 with the rest. Fixed in the measurement: the copy
+      measured on the same runner just after, the mean of 200 answers, and taken off; the
+      two sides read in turn, the least of nine each. The bound stays 10; the figure reads
+      5.8 to 6.1 here, red at 514.99 on a period that takes the image out every round (rp1)
+      and green with a round two reductions dearer for both (p4).
+    - `retain_image_test.exs`'s growth bound at its line 1482, the matching linear in the
+      image (4.79 against 4.6 under load, RV-9; 4.72 at RV-5's base): a start over an image
+      updates maps of more than 32 keys, whose count moves by a few per cent of their work
+      from one call to the next, 512 timers' start over their image 1,290,508 to 1,339,464
+      in twelve runs of one VM and 2,048's 5,256,833 to 5,566,125, the ratio 3.93 to 4.27,
+      each a single run. Fixed in the measurement: each figure the least of five, the
+      start over the image and the bare one in turn, 4.076 to 4.094 in six; red at 14.6 on
+      a matching that searches the image's values for each (ri1).
+    - `located_array_test.exs`'s restart growth (its line 1583) and
+      `retain_configuration_test.exs`'s warm restart against a cold one (its line 1327):
+      the census's 15 and its equalities, `ff7be44`; green in each of the 100 runs below
+      that held them.
+    - `{:io_init, _, :timeout}` at a start under load (RV-3's review, RV-5's walks): closed
+      by decision 398, a device's opening limited by `open:`, 5 s unless set, where it had
+      the idle watchdog and a poll period. Shown by
+      `scratchpad/rv/rv7work/probe/p398_400.exs`, a drive whose open takes 600 ms beside
+      the default idle watchdog of 500: `{:error, {:io_init, "drive", :timeout}}` at
+      RV-11's base `ed817b1` and at `026e49f` (decision 400 alone), `{:ok, pid}` at the
+      tip.
+    - A force's or a store's write past its limit under load (`{:forces, :timeout}`,
+      `{:retain, :timeout}`, the seven of `ed817b1`'s landing gate,
+      `retain_store_test.exs`'s fresh-start write at idle 500): closed by decision 400,
+      `write_limit:`, 5 s unless set, where each write had 510 ms. Shown by the same probe,
+      a force written while the VM's file server is held 800 ms of real time: `{:error,
+      {:forces, :timeout}}` at `ed817b1`, `:ok` at `026e49f` and at the tip; and by RV-11's
+      busy-disk runs, the parent 3 of 10 failed and the tip none.
+    - A runner call's own 5 s timeout and the runner-death test's 5 s wait: the second is
+      the `:noproc` above; a call's own timeout was not met here, and is the class of (b)
+      and (c), the machine's.
+
+    - Met under this item's mutation table's load and not in RV-7's list, recorded for the
+      next item, neither changed: `runner_test.exs`'s "an opening limit out of its range,
+      or naming no device bound (decision 398)", red in three of the full suites, whose
+      `open: 1` start admits only the drive's opening timing out, where every device has
+      1 ms and the panel's, opened after the drive's, may miss it too (twelve runs here at
+      the mutation table's load and fifteen under the busy loops alone gave `{:ok, pid}`
+      each time, so the value it met is not known);
+      and `function_block_test.exs`'s "accept reads a block's body once, however many
+      instances run it", 1.71 against 1.57 in one full suite, a ratio of four single
+      counts, which read 1.05 to 1.21 here in ten runs under the same load and 1.005 to
+      1.115 as the least of five each. And `configuration_test.exs`'s "any text in a
+      configuration file gives a result" and "loading stays linear in the program types a
+      file names" ran past ExUnit's 60 s under that load, one each in two full suites: their
+      time, which stays.
+
+    *The load runs* (`scratchpad/rv/rv7work/loadA_trip.txt` to `loadD.txt`, each
+    `scripts/load.sh`): at `ff7be44` the three trip tests, the runner traced, 2 of 50
+    failed, the heard-at-each-poll test both times, (a) once and (c) once; that test alone
+    at the extra load of 35, traced, 9 of 30, (a) once, (b) six times and (c) twice; the
+    seven tests above with the step's synchronisation and the cost fixes, the runner-death
+    and reread tests as they were, 5 of 50, (b) once, (c) once and the reread three
+    times; the seven with the runner-death test's fix and the reread's first fix, 1 of 50,
+    (b) once, at a load average of 11 to 24, the store's round reading 5.77 to 6.09 apart,
+    the image's matching 3.97 to 4.38 and 4.029 to 4.036, the located array's and the warm
+    restart's bounds green throughout; and the heard-at-each-poll test with the reread's
+    first fix at a load average of 6 to 25, the heard test passing 21 of 21 and the
+    reread hanging in 3, which undid that fix.
+
+  *Provisional readings, and questions for the maintainer*:
+
+  1. *A twin that does the guarded work itself gives a lower bound.* Where a program of
+     none takes a `nil` clause, its twin is the same program beside the feature, which
+     does the feature's work: `put_inputs/3` over 64 inputs costs 38 reductions a key
+     with no array and 61 beside one, and the bound is `none <= beside - 11`, half the
+     work apart. Made cheaper, the feature's own work can turn the bound red with no
+     regression: an array's key check brought down by 13 a key leaves 10 apart. (a) As
+     built: half the work as the margin, the bound restated when the feature is made
+     cheaper, said beside each such test; (b) a seam that runs the same program with the
+     guarded clause skipped, a twin differing only there, which no module has; (c) hold
+     only `none <= beside`, which catches the guarded regression only when it costs as
+     much as the feature.
+  2. *A regression that makes both twins dearer is caught by no twin.* By the rule's own
+     probe a call both make dearer leaves the bound green, so a change that charges every
+     compile a reduction a name more is invisible to every twin: M5-8's "a name split
+     twice" (c5_names_split_twice) was caught by RV-2's and RV-12's recorded ceilings and
+     is caught by none since, and "one class's operands grouped" (c5_operands_grouped) by
+     none before or since. (a) As built, such a regression left to the growth tests and
+     to review; (b) one ceiling a stage kept against a recorded figure, with a margin no
+     toolchain's reduction reaches, twice the figure, which catches a doubling and not a
+     reduction a name; (c) a twin that holds no name, which no rung can be.
+  3. *Half a reduction a rung.* A scan's pair is allowed half a reduction a rung over what
+     the two measured apart, since a rung's count moves by hundredths as the larger
+     program's maps grow (58.02 against 58.0 in one pair); a regression of less than half
+     a reduction a rung passes. (a) As built; (b) the pairs over larger programs, which
+     only moves the hundredths further; (c) no allowance, red on the hundredths.
+  4. *A device the machine did not schedule is a hung one* (for RV-16). By decision 114 a
+     device unheard for the idle watchdog and a poll period is hung, whatever kept it
+     from running: under this item's load (a load average of 25 to 35 on four cores)
+     `trip_test.exs`'s idle of 50 ms found the panel silent before any round, its process
+     not scheduled for 99 to 156 ms, the runner idle for 50 to 136 ms between two lines of
+     its own. When the VM's scheduler comes back, the runner's wake and the device's
+     overdue poll come due together, and the runner, run first, judges the device before
+     it has polled: in one traced run the panel polled 10.5 and 15.2 ms into the runner's
+     200 ms step and then nothing, the runner's sleep ended at 216.6 ms, 16 ms late, and
+     it found the panel silent at 216.7, the panel's overdue poll not yet run. A plant on
+     an overloaded host would trip `{:io, "panel", :timeout}` with its panel well. (a) As
+     built, the idle watchdog sized by the operator for the host; (b) the runner, back
+     from a wake late by more than a poll period, lets its devices run before it judges
+     them, or renews their heard times as decision 348 does while it waits on its disk;
+     (c) a device judged silent only at two checks a poll period apart.
+  5. *The real-clock reread test cannot hold the one read it needs.* `trip_test.exs`'s
+     "on the real clock, a bad reading of a device released while the one before it is
+     read again trips nothing" needs a panel poll within the 700 ms the drive's reread
+     sleeps; under load none came and the panel's own reread met the bad value (one in 50
+     in RV-11's review, three in 100 here). A sim held, `:sys.suspend/1` or a `{:delay,
+     ms}` of its own, holds whichever of the drive's reads comes first, a tripped device
+     polling too, so the test cannot say its reread is the one held, nor wait for the
+     panel's release without missing it. (a) As built, a real-clock twin of the
+     manual-clock tests, exposed to the machine; (b) `Logex.IO.Sim` given a hold of the
+     device's next reread alone, released by the test, a seam in `lib/` (RV-16's or
+     RV-13's to give); (c) a tripped device that reads nothing at its polls, writing only
+     its 0 again (decision 262), so that a sim's next read after a trip is its reread, a
+     rule of the device's.
+  6. *An edit's bound no mutant parts.* `retain_edit_test.exs`'s "an edit of programs
+     that retain nothing pays nothing for `non_retain`", `==` before and `marked <=
+     unmarked` since, met no mutant that moves one side and not the other; kept, read as
+     a statement of the rule more than a guard, as M6-6's review read its `status:
+     :running`.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.

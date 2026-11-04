@@ -12340,7 +12340,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: same-run bounds (a)** (the maintainer, 2026-11-01): each exact pin becomes
      a bound against a reference program measured in the same run, with the maintainer's
-     leave to change the pinned tests. To build in RV-7.
+     leave to change the pinned tests. To build in RV-7. *(Landed with RV-7, 2026-11-04,
+     `ff7be44` and the commit after it: each of the census's 20 pins, `PLAN.md`'s RV-7
+     entry, held against a twin measured in the same run, in the same VM, each count in a
+     process of its own whose heap no collection visits: a scan's de-energised rung beside
+     the same rung whose operand's shape takes the catching clause, one catch apart; the
+     same rungs over the other operand shape; the same program beside the feature whose
+     `nil` clause the program of none takes; a compile's same rungs reordered, over plain
+     tags or scalars, or beside the coil or one-shot a gated warning looks for; three
+     equalities of same-run figures made bounds in the guarded direction. Each bound is the
+     twin's figure, what the two measured apart, and an allowance under the guarded change,
+     half a reduction a rung for a scan, half the guarded work or the parent's 8 or 16 a
+     rung; each red on a mutant of the regression its pin was there to catch, judged by the
+     full suite, and green under a probe that charges two reductions more for a call both
+     twins make, each instruction scanned, lowered or warned of, each global restarted, each
+     round, where the old pins went red in six, two and four files. A twin that does the
+     guarded work itself gives a lower bound, which a cheaper version of that work can
+     break; a regression that makes both twins dearer no twin catches, M5-8's name split
+     twice among them, which RV-2's and RV-12's recorded ceilings caught; both provisional,
+     `PLAN.md`'s RV-7 questions. `CONTRIBUTING.md` states the rule, how to write a new one,
+     and that a count moves with the VM's own state (a map of more than 32 keys built is
+     charged a few reductions more or less from one call to the next, and a VM-wide event
+     moves every later call's count), so that two counts compared are measured in turn, and
+     that a runner's count holds each message a `receive` passes over and each it sends, the
+     manual clock's synchronisation among them.)*
 
 358. **CLAUDE.md (the review after Milestone 6),** question 12: CLAUDE.md, which every
      agent session loads whole, is 237 KB, grew 46% in eight days and reads as replayed

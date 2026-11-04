@@ -84,17 +84,46 @@ defmodule Logex.TripTest do
     defp passed(_clock, _ms), do: :ok
   end
 
-  # A stand-in whose step of the task `e1` sleeps 200 ms on the real clock.
+  # A stand-in whose step of the task `e1` sleeps 200 ms on the real clock, and then lasts
+  # until the panel has told the runner, within its last poll period, that it is back
+  # (RV-7): on a loaded machine the panel's process may not run for the whole sleep, its
+  # poll timers late, which no rule of the runner's is about (under `scripts/load.sh` one
+  # run in 50 heard the panel 9 ms into the step and not again until the runner's next
+  # round, 286 ms in, past the idle watchdog and a poll period, and tripped). The step
+  # reads the mailbox of its own process, the runner's, and takes nothing from it; a panel
+  # that tells nothing in 5 s ends the wait, its trip the test's failure.
   defmodule Sleeps do
     def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
 
     def cycle_step(runtime, {:timed, "e1", _run} = step) do
       Process.sleep(200)
+      now = System.monotonic_time(:millisecond)
+      heard_since(now - 10, now + 5000)
       Runtime.cycle_step(runtime, step)
     end
 
     def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+
+    defp heard_since(at, until) do
+      {:messages, messages} = Process.info(self(), :messages)
+      waited(Enum.any?(messages, &back_since?(&1, at)), at, until)
+    end
+
+    defp back_since?({Logex.Runner.Device, _pid, _restarts, raised, {:back, "panel", nil}}, at),
+      do: raised >= at
+
+    defp back_since?(_message, _at), do: false
+
+    defp waited(true, _at, _until), do: :ok
+
+    defp waited(false, at, until) do
+      Process.sleep(1)
+      gave_up(System.monotonic_time(:millisecond) >= until, at, until)
+    end
+
+    defp gave_up(true, _at, _until), do: :ok
+    defp gave_up(false, at, until), do: heard_since(at, until)
   end
 
   # A clock whose every reading takes `ms`, the manual clock's: so that the runner's own
@@ -1614,6 +1643,18 @@ defmodule Logex.TripTest do
   defp device_pid(runner, name),
     do: :sys.get_state(runner).devices |> List.keyfind(name, 0) |> elem(1)
 
+  # A device monitored, and then called, so that its monitor is in place before anything
+  # this process does next (RV-7): a monitor and the runner's exit reach the device from
+  # two processes, in no order, so that one set before the runner is killed can come after
+  # its exit and read `:noproc` (CI on `399d7f6`; 7 in 60,000 of a device's monitor and
+  # its runner's kill in a loop, none in 60,000 with the call between), where a call's
+  # answer comes after the monitor, the two from one process.
+  defp monitored(pid) do
+    ref = Process.monitor(pid)
+    :sys.get_state(pid)
+    ref
+  end
+
   # A device killed and its death waited for, then status/1 read, so that the runner's
   # exit signal from it is not overtaken by the status call under load (as e60866a).
   defp killed(runner, name) do
@@ -2528,7 +2569,7 @@ defmodule Logex.TripTest do
 
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 10)
-      devices = for name <- ["drive", "panel"], do: Process.monitor(device_pid(runner, name))
+      devices = for name <- ["drive", "panel"], do: monitored(device_pid(runner, name))
       Process.flag(:trap_exit, true)
       Process.exit(runner, :kill)
       assert_receive {:EXIT, ^runner, :killed}, 5000

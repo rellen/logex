@@ -4983,9 +4983,9 @@ end
 # false`), since ExUnit runs such a module only once every async one is done: the trace
 # patterns it sets on every function of the modules a load runs through, `Enum`'s and
 # `:maps`' among them, are met by every process that calls one, traced or not, and move
-# the reductions a scan another test counts exactly (in CI on `12fef7d`,
-# `tag_subscript_test.exs`'s "a program of none scans as it did before M5-12" read 33 a
-# rung against its 34 while they were set).
+# the reductions a scan another test counts (in CI on `12fef7d`, `tag_subscript_test.exs`'s
+# "a program of none scans as it did before M5-12", an exact pin until decision 357, read 33
+# a rung against its 34 while they were set).
 defmodule Logex.FunctionBlockTest.Traced do
   use ExUnit.Case, async: false
 

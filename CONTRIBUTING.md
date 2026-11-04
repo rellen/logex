@@ -363,22 +363,73 @@ choice, not an oversight to fix.
   is pending. The review of OE-1 found both, and two more tests now count that scan and
   that edit. A growth test reaches only the passes its program and its steps reach: list
   each pass the work adds, and check that some growth test gives it a large input.
+- **Hold a cost against a twin measured in the same run, never a figure recorded at a
+  commit** (decision 357). About 27 tests pinned a scan's or a compile's reductions exactly,
+  `== 27.0`, or within a delta of a parent's figure, so that a toolchain release that moved
+  code generation by one reduction would have turned them red with no change to logex, as
+  would making logex cheaper: a probe that charges two reductions more for each instruction
+  scanned, each lowered or each warned of turns six, two and four of their files red. Since
+  RV-7 each measures the program it is about and a twin, in the same run and VM, each in a
+  process of its own whose heap no collection visits: the same rungs, the same size,
+  different only where the guarded change would add cost, so that a call both make costs
+  both alike. Three twins serve. For a choice a clause's head makes, the same rung
+  de-energised, which reads no operand, beside the one whose operand's shape takes the other
+  clause: a contact on a literal bit and one on a bit a tag numbers cost 29 and 30
+  reductions a rung, one catch apart (`tag_bit_test.exs`). For a path an operand's shape
+  picks, the same rungs over the other shape, over one table: a tag against a literal
+  element, a scalar instance against an element (`array_test.exs`,
+  `instance_array_test.exs`). For a `nil` a program or a resource holds when it has no
+  feature, the same program beside the feature, which takes the other clause: a `move`
+  beside a real, a resource beside a located array, instances beside `non_retain` ones
+  (`real_test.exs`, `located_array_test.exs`, `retain_test.exs`). A compile's twin is the
+  same rungs reordered or over plain tags or scalars, or beside the coil or one-shot a gated
+  warning looks for (`compile_total_test.exs`, `tag_subscript_test.exs`,
+  `bit_string_test.exs`). The bound is the twin's figure, plus what the two measured apart
+  when the test was written, plus an allowance under the guarded change: half a reduction a
+  rung for a scan, whose count moves by hundredths as a bigger program's maps grow, or half
+  the guarded work, or the parent's allowance where it was smaller than that. Write a new
+  one so: make the regression first, as a mutant of the size the change would bring; choose
+  the twin it cannot reach; show the bound red on the mutant and green under a probe that
+  makes a call both twins make dearer (`:erlang.bump_reductions(2)` in it), each judged by
+  the full suite, and keep the table (`PLAN.md`'s RV-7). A twin that does the guarded work
+  itself, as a beside twin does, gives a lower bound, which a cheaper version of that work
+  can break: say so beside it, and take half the work as the margin.
+- **A count moves with the VM's own state, so compare two counts measured in turn.**
+  Building a map of more than 32 keys, `Map.new/1,2`, `:maps.from_list/1` or a
+  comprehension into a map, is charged a few reductions more or less from one call to the
+  next, in a fresh process with no collection: 146 to 163 for 256 keys on OTP 28, where 64
+  keys cost the same every time. And a VM-wide event moves the count of every later call
+  until the next: one resource restart read 16253 reductions, 16248 once thirty modules
+  were compiled and 16253 again after a persistent term was put and erased, with no
+  change to the restart, so that two least-of-nine figures read one after the other
+  differed by six in CI, warm 16252 against cold 16246, past a bound of four
+  (`retain_configuration_test.exs`, RV-12's `38fbc8e`). A figure that builds large maps is
+  the least of five runs or more, and two figures compared are measured in turn, so that
+  each least comes from the states both saw (`interleaved/2` there).
 - **A cost a scheduler's interleaving moves is read as the least of several runs.** A
   runner test's reductions a round count the messages its devices exchange with it, and
   how the scheduler interleaves them only ever adds to them: `retain_period_test.exs`'s
   cost a round of a store with a long period over none read 3.5 to 7.6 in twelve runs
   here and 15.6 in CI on `8f92723`, over its bound of 10. Since `eae603f` each side is
   the least of five runs, 5.8 to 7.4 over eight runs, and the bound stayed where it was.
-  Read such a figure as the least of several runs; never widen its bound to pass.
+  Read such a figure as the least of several runs; never widen its bound to pass. And
+  count only what the guarded change would add: a process's reductions count each message
+  a selective `receive` passes over, one each, and each message it sends, about one for a
+  hundred words copied, so that the manual clock's `:sys.get_state/2` after every timer
+  it delivers charges the runner a copy of its whole state a round, two of the eight that
+  test read apart, a store's state being 200 words more, unevenly from run to run, and CI
+  read 10.1 to 10.4 three times. Since RV-7 it takes that copy off, measured on the same
+  runner, and reads the two sides in turn: 5.8 to 6.1.
 - **A trace pattern moves every process's reductions, traced or not.** A pattern set
   with `:erlang.trace_pattern/3` is met by every process that calls the function, so
   while one test traces `Enum`, `:lists` or `:maps` another test's count of reductions
   moves: decision 432's traced load, a test of an async module, set patterns on every
   function of the modules a compile runs through, and in CI on `12fef7d`
-  `tag_subscript_test.exs`'s exact pin of a scan read 33 reductions a rung against its 34
-  (with the patterns set for another process 33 here too, 34 once cleared). A test that
-  traces a module another test's cost reaches runs in a module of its own with `async:
-  false`, which ExUnit runs only once every async module is done, as
+  `tag_subscript_test.exs`'s exact pin of a scan, as it was until RV-7, read 33
+  reductions a rung against its 34 (with the patterns set for another process 33 here
+  too, 34 once cleared). A test that traces a module another test's cost reaches runs in
+  a module of its own with `async: false`, which ExUnit runs only once every async module
+  is done, as
   `Logex.FunctionBlockTest.Traced` and `Logex.RuntimeTest.Traced` do;
   `function_block_test.exs` reads every test file's syntax tree and holds each module
   that sets a pattern to it, the runner's two that still run async
@@ -393,7 +444,16 @@ choice, not an oversight to fix.
   process `Logex.IO.Sim` names as holding it, to go down first, since the killed runner's
   device tries its 0 once more as it closes and a fresh runner's check finds the sim
   still held (`2adf13a`); and a new runner test runs 50 times with every core busy before
-  it lands (`scripts/load.sh -n 50 <file>`).
+  it lands (`scripts/load.sh -n 50 <file>`). A monitor is no different: set on a device
+  just before its runner is killed, it reaches the device from the test and the runner's
+  exit from the runner, in no order, and read `:noproc` in CI on `399d7f6` (7 times in
+  60,000 of a loop that monitors a linked process and kills its parent), so the test
+  calls the device once it has monitored it, which orders the two (RV-7). Nor is a real
+  clock's step a promise that another process ran meanwhile: under the busy loops a
+  device told the runner nothing from 9 ms into a runner's 200 ms step until 286 ms, its
+  poll timers late, and was taken for hung. Such a test waits for the message it relies
+  on, read from the mailbox and left there, never for more time (`trip_test.exs`'s
+  `Sleeps`, RV-7).
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input

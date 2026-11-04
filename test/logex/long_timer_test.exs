@@ -1072,7 +1072,10 @@ defmodule Logex.LongTimerTest do
     # in its clause's head, paying no look-up; the same program handed an empty table, which
     # a routine holding a long timer has, pays the look-up on every run that reads a clock,
     # 2 reductions a run with no collection. So each clause that reads a clock, energised or not, is
-    # seen to take the plain path.
+    # seen to take the plain path. Until RV-7 the saving was held at 2, the look-up's
+    # whole cost, which it read exactly, 2.0 to 2.0025, and so 1.9975 under a probe that
+    # made each instruction scanned two reductions dearer for both programs: since then at
+    # half of it, decision 357's margin for a twin that does the guarded work itself.
     test "a plain routine's timers pay nothing for their units, each clause that reads a " <>
            "clock" do
       for {kind, go} <- [{"ton", 1}, {"tof", 0}, {"tp", 1}, {"tp", 0}, {"rto", 1}, {"rto", 0}] do
@@ -1090,7 +1093,7 @@ defmodule Logex.LongTimerTest do
         cost = fn program -> collected_nothing(fn -> Runtime.scan(program, state, 1) end) end
 
         saved = (cost.(%{p | units: %{}}) - cost.(p)) / 400
-        assert saved >= 2, "#{kind} at #{go} saved #{Float.round(saved, 1)} reductions a run"
+        assert saved >= 1, "#{kind} at #{go} saved #{Float.round(saved, 1)} reductions a run"
       end
     end
   end
