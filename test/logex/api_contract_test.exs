@@ -13997,7 +13997,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   `write_limit:` (decision 400), and no write passes it, so `status/1` names no force's
   set unknown (decision 391). Since RV-16 every round's forces are the ones the forces
   file holds as it begins, a force in effect only once its write has landed (decision
-  437), and a restart now and then reads a device up 700 ms late in real time, past the
+  437), and since RV-16's review forces asked together, each before the last is
+  answered, are written in the order asked, the last asked the last written; a restart
+  now and then reads a device up 700 ms late in real time, past the
   idle watchdog and a poll period and within its opening limit (decision 439); a round
   whose clock goes wrong halfway through stops there, nothing written (decision 441);
   and the share's count with no untimed program is restated, a call made while a
@@ -14468,8 +14470,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :store_crlf_read,
     :store_cr_read,
     :forces_crlf_read,
-    # Decision 437 (RV-16): a round that read a force the file held as it began.
-    :forces_on_file
+    # Decision 437 (RV-16): a round that read a force the file held as it began; and,
+    # since RV-16's review, forces asked together, written in the order asked.
+    :forces_on_file,
+    :forces_together
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14718,6 +14722,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp walk(programs, dir, seed, steps, life \\ false) do
+    Process.put(:rw_together, :rand.seed_s(:exsss, {seed, 437, 278}))
     # M6-7: a walk in three, by its own stream, starts with `keep`'s count unretained.
     d = %{draw() | keep: own(3) > 1, shelf: life}
     config = configured(d, programs)
@@ -15561,7 +15566,55 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp forcing(w) do
     w = %{settled(w) | doing: :force}
-    forcing_drawn(:rand.uniform(6), w)
+    together(paired(4), forcing_drawn(:rand.uniform(6), w))
+  end
+
+  # RV-16's review, decision 437 restated: two to four forces asked together, each sent
+  # before the one before it is answered, so that those after the first come while a
+  # write is out and wait their turn behind it: they are written in the order asked, each
+  # built on the set the one before it left, the last asked the last written, the first
+  # point asked again last holding its second value. Plain inputs only, no trigger and
+  # no array, so that no round runs meanwhile; drawn by a stream of their own, so that no
+  # other draw moves.
+  defp together(1, w) do
+    w = settled(w)
+    plain = Enum.sort(Map.keys(@inputs)) -- (["pt[0]", "pt[1]", "pt[2]"] ++ triggers(w.config))
+    [{first, _value} | _] = drawn = for _ <- 1..paired(3), do: paired_force(plain)
+    asked = drawn ++ [paired_force([first])]
+
+    for(
+      request <- for({name, value} <- asked, do: send_force(w.runner, name, value)),
+      do: assert(:gen_server.wait_response(request, 60_000) == {:reply, :ok})
+    )
+
+    reach(:forces_together, true)
+    forced(%{w | forces: Enum.into(asked, w.forces)})
+  end
+
+  defp together(_n, w), do: w
+
+  defp send_force(runner, name, value),
+    do: :gen_server.send_request(runner, {:force, name, value})
+
+  defp paired_force(names) do
+    name = paired_pick(names)
+    {_device, _address, type} = @inputs[name]
+    {name, paired_pick(paired_values(type))}
+  end
+
+  defp paired_pick(list), do: Enum.at(list, paired(length(list)) - 1)
+
+  defp paired_values(:bool), do: [0, 1]
+  defp paired_values(:dint), do: [0, 3, 7, -4]
+  defp paired_values(:real), do: [0.0, 2.5, -1.25, 37.5]
+  defp paired_values(:word), do: [0, 8, 65_535, 3]
+
+  # RV-16's review: the stream of the forces asked together, seeded by each walk from its
+  # seed, so that every other draw of every walk is as it was before it.
+  defp paired(n) do
+    {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_together))
+    Process.put(:rw_together, stream)
+    drawn
   end
 
   defp forcing_drawn(n, w) when n <= 3 do

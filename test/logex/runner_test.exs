@@ -209,6 +209,38 @@ defmodule Logex.RunnerTest do
     defp wrong([]), do: :ok
   end
 
+  # Decision 441 (RV-16's review): the manual clock, whose answer to the runner's next
+  # reading made inside the function the test names, `{clock, :wrong_in}` => `{function,
+  # answer}`, is the test's, once, read off the reading's stack: a clock gone wrong as a
+  # round begins, at its look for a device not heard or at its start, before any step.
+  defmodule WrongIn do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock), do: wrong(:ets.lookup(Logex.RunnerTest, {clock, :wrong_in}), clock)
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+
+    defp wrong([{key, {function, answer}}], clock), do: within(in?(function), key, answer, clock)
+    defp wrong([], clock), do: Manual.now_ms(clock)
+
+    defp in?(function) do
+      {:current_stacktrace, frames} = Process.info(self(), :current_stacktrace)
+      Enum.any?(frames, &match?({Logex.Runner, ^function, _arity, _at}, &1))
+    end
+
+    defp within(true, key, answer, _clock) do
+      :ets.delete(Logex.RunnerTest, key)
+      answer
+    end
+
+    defp within(false, _key, _answer, clock), do: Manual.now_ms(clock)
+  end
+
   defmodule NoCancelClock do
     @behaviour Logex.Runner.Clock
 
@@ -764,6 +796,72 @@ defmodule Logex.RunnerTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 441 (RV-16's review): a clock that reads wrong as the round begins, at its
+    # look for a device not heard or at the start's reading that gives the timers their
+    # `now`, before any step has run, stops the round as one halfway through does, nothing
+    # run and nothing written, the trip naming the clock.
+    test "a round whose clock reads wrong as it begins stops there, its outputs never " <>
+           "written (decision 441)" do
+      for function <- [:silent, :a_round] do
+        {opts, %{panel: panel}} = rig()
+        {:ok, clock} = Manual.start_link()
+        {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {WrongIn, clock}))
+        :ok = Runner.subscribe(runner, [:trip, :round])
+        Manual.advance(clock, 10)
+        assert_receive {Runner, ^runner, {:round, 10, _outputs}}, 5000
+        Sim.set(panel, [0], 1)
+        :ets.insert(__MODULE__, {{clock, :wrong_in}, {function, :late}})
+        Manual.advance(clock, 10)
+
+        assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
+        assert :ets.lookup(__MODULE__, {clock, :wrong_in}) == []
+        refute_received {Runner, ^runner, {:round, _now, _outputs}}
+        refute %{[0] => 1} in Sim.writes(panel)
+        assert Sim.outputs(panel) == %{[0] => 0}
+
+        assert Runner.restart(runner, :warm) == :ok
+        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Runner.stop(runner) == :ok
+      end
+    end
+
+    # Decision 441 (RV-16's review): a round that trips, its task's step past its watchdog,
+    # leaves no round open behind it, so that a clock that reads wrong afterwards, out of
+    # any round, is decision 394's, the request in hand answered and the runner alive, the
+    # first trip kept, where the reading was thrown out of the round's reach and took the
+    # runner down.
+    test "a round that trips leaves none open: a clock that reads wrong after it is " <>
+           "decision 394's, the runner answering on (decision 441)" do
+      {opts, %{panel: panel}} = rig()
+      {:ok, clock} = Manual.start_link()
+
+      opts =
+        opts
+        |> Keyword.put(:clock, {RunnerOddClock, clock})
+        |> Keyword.put(:steps, StepTakes)
+
+      {:ok, runner} = Runner.start_link(opts)
+      Sim.set(panel, [0], 1)
+      :ets.insert(__MODULE__, {{runner, :step_ms}, {clock, 600}})
+      Manual.advance(clock, 10)
+
+      assert %{status: :tripped, trip: {:watchdog, {:task, "fast", 600, 500}}} =
+               Runner.status(runner)
+
+      :ets.insert(__MODULE__, {{clock, :runner_now_ms}, :late})
+
+      assert %{status: :tripped, trip: {:watchdog, {:task, "fast", 600, 500}}} =
+               Runner.status(runner)
+
+      assert Runner.restart(runner, :warm) == {:error, {:clock, {:now_ms, :late}}}
+      assert %{status: :tripped, trip: {:watchdog, _}} = Runner.status(runner)
+
+      :ets.delete(__MODULE__, {clock, :runner_now_ms})
+      :ets.delete(__MODULE__, {runner, :step_ms})
+      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 441 (RV-16): a device gone down by its own read of a bad clock, its exit
     # waiting in the runner's mailbox behind a round's wake, stops the round as it comes to
     # its writes: the drive, written before the panel in device-name order, is never given
@@ -787,6 +885,43 @@ defmodule Logex.RunnerTest do
       :sys.suspend(runner)
       {_timer, token, _at} = :sys.get_state(runner).wake
       send(runner, {Runner, :wake, token})
+      :ets.insert(__MODULE__, {{clock, :device_now_ms, device}, :late})
+      Manual.advance(clock, 10)
+
+      assert_receive {:DOWN, ^ref, :process, ^device, {:shutdown, {:clock, {:now_ms, :late}}}},
+                     5000
+
+      :sys.resume(runner)
+      assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
+      refute %{[0] => 1} in Sim.writes(drive)
+      assert Sim.outputs(drive) == %{[0] => 0}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 441 (RV-16's review): a clock's exit from a process that is no device of the
+    # runner's now, as a device replaced at a restart leaves one, waiting ahead of a device's
+    # own is passed over, and the device's behind it still stops the round before its
+    # writes: the drive never given the round's 1.
+    test "a round that finds a stale clock exit ahead of a device's own still writes no " <>
+           "device (decision 441)" do
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global y bool at drive.q.0\nprogram r relay with fast\n  r.in x\n  r.out y\n"
+
+      {:ok, config} = Configuration.compile("plant", text, %{"relay" => program(@relay, "relay")})
+      {opts, %{clock: clock, panel: panel, drive: drive}} = plant_rig(config)
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
+      :ok = Runner.subscribe(runner)
+      Manual.advance(clock, 10)
+      Sim.set(panel, [0], 1)
+
+      %{"panel" => device} = devices(runner)
+      ref = Process.monitor(device)
+      stale = spawn(fn -> :ok end)
+      :sys.suspend(runner)
+      {_timer, token, _at} = :sys.get_state(runner).wake
+      send(runner, {Runner, :wake, token})
+      send(runner, {:EXIT, stale, {:shutdown, {:clock, {:now_ms, :late}}}})
       :ets.insert(__MODULE__, {{clock, :device_now_ms, device}, :late})
       Manual.advance(clock, 10)
 
@@ -1402,6 +1537,43 @@ defmodule Logex.RunnerTest do
       assert refused == {:error, {:io_init, "drive", :timeout}}
       assert div(us, 1000) >= 1500 and div(us, 1000) < 5000
       assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 439 (RV-16's review): each device a restart reads again is limited by its
+    # own `open:` and no other figure: a gateway given 200 ms, below the idle watchdog and a
+    # poll period, 510 ms here, that answers its reread in 350 refuses the restart at its
+    # 200, `:timeout`; and one given 4000 that answers in 1500 lets the restart through
+    # beside a panel given 1000, the least of the two never the gateway's.
+    test "each device a restart reads again is limited by its own open:, below the idle " <>
+           "watchdog and a poll period and beside another's (decision 439)" do
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, gateway} = Sim.start_link()
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: gateway}}
+      {:ok, runner} = Runner.start_link(Keyword.merge(opts, io: io, open: %{"drive" => 200}))
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      Sim.fail(gateway, :read, {:delay, 350})
+      {us, refused} = :timer.tc(fn -> Runner.restart(runner, :cold) end)
+      assert refused == {:error, {:io_init, "drive", :timeout}}
+      assert div(us, 1000) >= 200
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, gateway} = Sim.start_link()
+      io = %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: gateway}}
+      opens = %{"panel" => 1000, "drive" => 4000}
+      {:ok, runner} = Runner.start_link(Keyword.merge(opts, io: io, open: opens))
+      pid = devices(runner)["drive"]
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      Sim.fail(gateway, :read, {:delay, 1500})
+      {us, restarted} = :timer.tc(fn -> Runner.restart(runner, :cold) end)
+      assert restarted == :ok
+      assert div(us, 1000) >= 1500
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert devices(runner)["drive"] == pid
       assert Runner.stop(runner) == :ok
     end
 
@@ -2202,9 +2374,14 @@ defmodule Logex.RunnerTest do
       # 442 (RV-16), the leave for a slot that finds nothing queued gone: the first round's
       # 15 ms brought a slot that found nothing waiting, which stays open, and a call made
       # now takes it, served at once ahead of the round, `t.q` the first round's 1, the
-      # slot closed behind it; the next call waits.
+      # slot closed behind it; the next call waits. Served so, it is served as one served
+      # in a slot is, every device refreshed first with the idle watchdog's deadline, 15 +
+      # 500 + 10 (RV-16's review).
       assert Manual.now_ms(clock) == 15
+      %{"slow" => slow} = devices(runner)
+      traced(slow)
       assert Runner.get!(runner, "t.q") == 1
+      assert refreshes(slow) == [15 + 510]
       request = :gen_server.send_request(runner, {:get!, "t.q"})
       assert :gen_server.wait_response(request, 100) == :timeout
       assert waited(request, clock) == 0
@@ -2312,6 +2489,53 @@ defmodule Logex.RunnerTest do
       end
 
       assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 442 (RV-16): the same on a plant with an untimed program, whose slot comes in
+    # the continuous task's count, with no store and with one, which takes a period due
+    # out first in the slot: a call that comes behind each round's wake is served at once,
+    # after every round, where with a store the slot was gone and the call waited a round
+    # (RV-16's review). Each round's write takes 3 ms; at 50% every round brings its slot.
+    test "an open slot of the continuous task's serves the poller's call that comes " <>
+           "behind the round at once, with a store and with none (decision 442)" do
+      dir = Path.join(System.tmp_dir!(), "logex-rv16-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      config =
+        configured(
+          "task fast interval 2 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "var_global retain r dint 0\n" <>
+            "program t toggle with fast\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      for store <- [[], [retain: Path.join(dir, "plant.retain"), retain_period: 3_600_000]] do
+        {:ok, clock} = Manual.start_link()
+
+        {:ok, runner} =
+          Runner.start_link(
+            [
+              configuration: config,
+              io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+              clock: {Manual, clock},
+              poll: 100_000,
+              overhead: 50
+            ] ++ store
+          )
+
+        for _ <- 1..5 do
+          :sys.suspend(runner)
+          %{wake: {_timer, token, _at}, rounds: before} = :sys.get_state(runner)
+          send(runner, {Runner, :wake, token})
+          request = :gen_server.send_request(runner, {:get!, "b.n"})
+          :sys.resume(runner)
+          assert :gen_server.wait_response(request, 1000) == {:reply, before + 1}
+          assert rounds(runner) == before + 1
+        end
+
+        assert Runner.stop(runner) == :ok
+      end
     end
 
     # Decision 396 (RV-11): a round counts whole with no untimed program, its timed tasks'

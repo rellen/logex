@@ -2999,8 +2999,8 @@ out, the force in effect from the first round after it lands (decision 437); eve
 a restart opens or reads again is limited by its own `open:` (decision 439);
 `status/1`'s `forces_unread`, `forces_unknown` and the store's `unknown` are always
 there, nil where nothing stands (decision 440); a round whose clock reading is found
-wrong stops there, its outputs never written, the trip's 0 the first the devices are
-given after it (decision 441); a slot of the share that finds nothing queued stays open
+wrong stops there, nothing written after the reading, the trip's 0 the first the devices
+are given after it where the reading came before the round's writes (decision 441); a slot of the share that finds nothing queued stays open
 until a request takes it (decision 442); and while `forces_unread` stands a restart keeps
 the runner's own forces and reads none from the file (decision 445); the other five as
 built (decisions 438, 443, 444, 446 and 447).)*
@@ -13548,7 +13548,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      (provisional); `status/1` lists the forces in effect, the one written not among them
      until it lands (provisional). The write lets go of its link once its file call has
      answered, so that its exit never reaches the runner as a message. The walks assert at
-     every round that the file holds the forces the round reads.)*
+     every round that the file holds the forces the round reads.)* *(RV-16's review,
+     2026-11-07: a force that waited for the share's slot was served by a forced trigger's
+     rounds as its write landed, ahead of the forces behind it, and the older force won;
+     now a forces request waits behind while any waits, the last asked the last written,
+     an unforce_all among them. "Taken onto the set the runner then holds" said less than
+     the code does: the set the write holds, built on the forces held as it began, becomes
+     the runner's as it lands, in place of any a restart read from the file meanwhile
+     (provisional). And a write a stop cuts at its limit may still land after the runner
+     has given the file up, as any cut write may (decision 391) (provisional).)*
 
 438. **`open:`'s form and its default (the review after Milestone 6),** RV-11's question 2
      (decision 398): one number for every device or a map by device's name, 5 s unless
@@ -13599,6 +13607,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      no device written, one gone down during the writes found by its write as before. Out
      of a round decision 394's rule stands; the range and the restart's look at both
      clocks as built. The runner walk stops a round by its clock halfway through.)*
+     *(RV-16's review, 2026-11-07: nothing is written after the reading, but a reading
+     found wrong at a device's write or at the round's end comes once that device and
+     those before it, or every device, have the round's outputs, the trip's 0 following;
+     the round's own event is published where the period's wall clock reads wrong and not
+     where the end's does (provisional). A round tripped otherwise leaves `in_round` nil,
+     so that a later reading out of a round is decision 394's.)*
 
 442. **The share with no continuous task (the review after Milestone 6),** RV-11's
      question 6 (decision 396): a slot that finds nothing queued is gone, so an HMI

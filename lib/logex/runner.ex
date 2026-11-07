@@ -480,15 +480,23 @@ defmodule Logex.Runner do
   first, so that the logic keeps the plant under control on a slow disk and no force is
   in effect before the file holds it (decision 117): meanwhile every round reads the
   forces as they were and `status/1` lists those, the force not among them until its
-  write lands. A force, an unforce or an unforce_all asked while a write is out waits
-  behind it, in order, each served once the one before it is answered, its write built on
-  the set that one left, so that no two writes are out at once (provisional, the record
-  silent); a trip, a restart and an edit's step made meanwhile leave the write as it is,
-  the force taken, or not, onto the set the runner then holds as its answer says, a
-  restart reading the file as it stands, the old set or the new, as every start does; and
-  a stop waits for it to its own limit, after its zeros and its closes, answers its caller
-  as it ends and gives the file up only after it, a force waiting behind it answered as to
-  a runner that is not running (provisional). A write that fails changes nothing and gives
+  write lands. A force, an unforce or an unforce_all asked while a write is out, or while
+  one asked so still waits, waits behind it, in the order asked, each served once the one
+  before it is answered, its write built on the set that one left, so that no two writes
+  are out at once and the last asked is the last written, one that waited for the share's
+  slot among them (provisional, the record silent); a host's mistake among them is raised
+  in its caller as its turn comes. A trip, a restart and an edit's step made meanwhile
+  leave the write as it is, a restart reading the file as it stands, the old set or the
+  new, as every start does; and the set the write holds, built on the forces the runner
+  held as it was begun, becomes the runner's set as it lands, or not, as its answer says,
+  in place of whatever a restart read from the file meanwhile, so that the file and the
+  forces in effect agree (provisional). A stop waits for it to its own limit, after its
+  zeros and its closes, answers its caller as it ends and gives the file up only after
+  it, a force waiting behind it answered as to a runner that is not running
+  (provisional); one it cuts at that limit may still land once the disk answers, as any
+  cut write may (below), after the file is given up, the next runner on it reading the
+  file as it then stands or, already started, not knowing of it (provisional). A write
+  that fails changes nothing and gives
   `{:error, {:forces, reason}}`, and since decision 353 one the disk has not finished
   within the write limit of real time, since decision 400 `write_limit:`, is killed and
   gives `{:error, {:forces, :timeout}}`, the force not taken and the runner answering on: a
@@ -636,7 +644,8 @@ defmodule Logex.Runner do
     published with the round's, then the trip. A minor fault, a zero divisor, trips nothing;
   - `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`: since decision 394, the
     clock gave the runner, or a device, no time it can hold, once the runner runs, a round
-    that read it so stopped there, since decision 441, its outputs never written (below);
+    that read it so stopped there, since decision 441, nothing written after the reading
+    (below);
   - `{:internal, message}`: an exception out of the core, which the host contract says
     cannot happen; tripping rather than crashing keeps the state for diagnosis. No host
     can cause it: a test reaches it through one hidden option of `start_link/1`, which
@@ -679,10 +688,17 @@ defmodule Logex.Runner do
   where a bad `now_ms/1` stopped it as a shutdown: since decision 441 a round whose
   reading of the runner's clock is found so, its start's, which gives the timers their
   `now`, a step's, a write's, its end's or, with no untimed program, the period's wall
-  clock at its end, stops there, its outputs never written, published as far as it ran,
-  its steps' runs kept in the resource, and trips at once, so that the trip's 0 is the
-  first the devices are given after it, where the round ran on as if no time had passed
-  and wrote its outputs first; out of a round the runner's own read of `now_ms/1` tells it
+  clock at its end, stops there, nothing written after the reading, published as far as
+  it ran, its steps' runs kept in the resource, and trips at once, where the round ran on
+  as if no time had passed and wrote its outputs first: a reading found wrong before the
+  round's writes, as it begins, as a step is timed or as the writes are prepared, leaves
+  every output unwritten, so that the trip's 0 is the first the devices are given after
+  it; one found wrong at a device's write, before it or after it, leaves the devices
+  written before it, and that device where its write came first, with the round's
+  outputs, and the rest unwritten; and one found wrong at the round's end, or at the
+  period's wall clock, comes once every device has the round's outputs, the round's own
+  event published at the period's and not at the end's, the trip's 0 following
+  (provisional, RV-16's review); out of a round the runner's own read of `now_ms/1` tells it
   so, the work in hand finished with the last time it refreshed its devices at, and it
   trips as it next takes a message; a device's read of it takes the device down, every
   output 0 as it closes, and the runner trips naming the clock, however it finds the
@@ -1056,7 +1072,7 @@ defmodule Logex.Runner do
   where the disk has not finished the write within the write limit of real time,
   `write_limit:` (decisions 353 and 400), the rounds running on meanwhile on the forces
   as they were (decision 437), a force asked while another's write is out waiting behind
-  it. A
+  it, in the order asked. A
   force that changes what an event task's trigger reads is a change of it, and makes its
   round at once, before it returns (decisions 120 and 138). A runner started without
   `forces:`, an output point, a name that is no input point and a value that does not fit
@@ -1492,17 +1508,26 @@ defmodule Logex.Runner do
   end
 
   # Decision 437 (RV-16): a force, an unforce or an unforce_all that comes while a write of
-  # the forces file is out waits behind it, in order, each served once the one before it
-  # is answered (forces_landed/2), so that each write builds on the set the last one left
-  # and no two are out at once (provisional, the record silent on a second force).
-  defp answered({_from, request} = asked, %{writing: %{}} = state) when forcing?(request),
-    do: %{state | behind: :queue.in(asked, state.behind)}
+  # the forces file is out, or while one that came so still waits, waits behind it, in
+  # order, each served once the one before it is answered (forces_landed/2), so that each
+  # write builds on the set the last one left, no two are out at once, and the last asked
+  # is the last written: a forced trigger's rounds, run as its write lands and before the
+  # next behind it is served, serve the share's slot, and a force that waited there for it
+  # goes behind the ones that came first, where it was served ahead of them and the older
+  # force won (RV-16's review) (provisional, the record silent on a second force).
+  defp answered({_from, request} = asked, state) when forcing?(request),
+    do: in_turn(state.writing == nil and :queue.is_empty(state.behind), asked, state)
+
+  defp answered(asked, state), do: answered_now(asked, state)
+
+  defp in_turn(true, asked, state), do: answered_now(asked, state)
+  defp in_turn(false, asked, state), do: %{state | behind: :queue.in(asked, state.behind)}
 
   # Decision 437 (RV-16): a force's request is served once its write is begun, the rounds
   # running on while it is out, and answered when the write is (forces_landed/2): its
   # time, the idle watchdog's, is its own work alone, the disk's never among it, where
   # since decision 400 the runner waited on the disk inside it and left the wait out.
-  defp answered({from, request}, state) do
+  defp answered_now({from, request}, state) do
     begun = now(state)
     {reply, state} = served(request, state)
     took = now(state) - begun
@@ -2022,8 +2047,11 @@ defmodule Logex.Runner do
   # changed each making its round first (kicked/1), so that a force is in effect from the
   # first round after its write lands and in none before, the file holding it first
   # (decision 117); and the next request that waited behind it served, in order. A trip,
-  # a restart and an edit's step made while it was out leave it as it was: it is taken,
-  # or not, as its answer says, onto the set the runner then holds.
+  # a restart and an edit's step made while it was out leave it as it was: the set it
+  # wrote, built on the forces the runner held as it was begun, becomes the runner's set
+  # as it lands, or not, as its answer says, in place of whatever a restart read from the
+  # file meanwhile, so that the file and the forces in effect agree (provisional, RV-16's
+  # review).
   defp forces_landed(result, %{writing: writing} = state) do
     Process.cancel_timer(writing.timer)
     {reply, state} = taken(result, writing.forces, writing.names, %{state | writing: nil})
@@ -2035,7 +2063,7 @@ defmodule Logex.Runner do
   defp behind({:empty, _behind}, state), do: state
 
   defp behind({{:value, asked}, rest}, state),
-    do: behind_served(answered(asked, %{state | behind: rest}))
+    do: behind_served(answered_now(asked, %{state | behind: rest}))
 
   # One served behind whose write is not out, a host's mistake raised in its caller, lets
   # the next be served.
@@ -2044,9 +2072,12 @@ defmodule Logex.Runner do
 
   # Decision 437 (RV-16): a runner that stops while a force's write is out waits for it to
   # its own limit, which began before the stop, and answers its caller as the write ends,
-  # so that no write is renamed into a file once the runner has given it up (decision
-  # 356); the forces' requests that waited behind it are answered as to a runner that is
-  # not running, as the requests waiting for the share's slot are (provisional).
+  # so that no write it answered as landed or failed is still out as it gives the file up
+  # (decision 356); one it cuts at the limit may still land once the disk answers, as any
+  # cut write may (decision 391), after the file is given up, which the next runner on it
+  # does not know of (provisional, RV-16's review). The forces' requests that waited
+  # behind it are answered as to a runner that is not running, as the requests waiting
+  # for the share's slot are (provisional).
   defp forces_ended(%{writing: nil}), do: :ok
 
   defp forces_ended(%{writing: writing} = state) do
@@ -2487,10 +2518,11 @@ defmodule Logex.Runner do
   # the force's write of the forces file that is out, its process, its timer, its limit's
   # end, its caller and the set it holds, or nil, set by a force's, an unforce's or an
   # unforce_all's request and nil once its answer is taken or it is cut at its limit; a
-  # round, a trip, a restart and an edit's step leave it as it is, the force taken onto the
-  # set the runner then holds as its answer says, and a stop waits for it to its limit and
-  # answers its caller; and `behind`, the forces' requests that came while one was out, in
-  # order, each served once the one before it is answered, a round, a trip, a restart and
+  # round, a trip, a restart and an edit's step leave it as it is, the set it holds
+  # becoming the runner's as it lands, as its answer says, and a stop waits for it to its
+  # limit and answers its caller; and `behind`, the forces' requests that came while one
+  # was out or while one waited, in the order asked, each served once the one before it is
+  # answered, a round, a trip, a restart and
   # an edit's step leaving them waiting, and a stop answering each as a runner that is not
   # running. Decision 442 (RV-16): `slot_open`, whether the share's last slot found
   # nothing queued and no request has taken it since, false from the start; set by a slot
@@ -2833,10 +2865,12 @@ defmodule Logex.Runner do
   end
 
   # Decision 441 (RV-16): a round whose reading of the clock is found wrong (decision 394)
-  # stops there, its outputs never written, and trips naming the clock, so that the
-  # trip's 0 is the first the devices are given after it, as a Logix major fault stops the
-  # logic at once, where the round ran on as if no time had passed and wrote its outputs
-  # before the trip zeroed them. A round is so from its look for a device not heard, as it
+  # stops there, nothing written after the reading, and trips naming the clock, so that,
+  # for a reading before its writes, the trip's 0 is the first the devices are given after
+  # it, as a Logix major fault stops the logic at once, where the round ran on as if no
+  # time had passed and wrote its outputs before the trip zeroed them; a reading at a
+  # write or at the round's end comes once some devices, or all, have the round's outputs
+  # (provisional, RV-16's review). A round is so from its look for a device not heard, as it
   # begins, to its plan of the next, every reading of the runner's clock in it, its
   # start's, which gives the timers their `now`, each step's, each write's, its end's and
   # the period's wall clock with no untimed program: the reading is thrown with the state

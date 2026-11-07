@@ -4107,8 +4107,12 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`, a host's clock that
   gave the runner or a device no time it can hold once the plant runs, a restart refused
   until the clock is mended, where a start's own read of it is the host's mistake, and
-  since decision 441 a round that reads it so stops there and trips at once, its outputs
-  never written, so the trip's 0 is the first the devices are given after it; and
+  since decision 441 a round that reads it so stops there and trips at once, nothing
+  written after the reading: found wrong before the round's writes, as it begins or as a
+  step is timed, every output is left unwritten, so the trip's 0 is the first the devices
+  are given after it, and found wrong at a device's write, or at the round's end, the
+  devices written by then keep the round's outputs until the trip's 0 follows
+  (provisional); and
   `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
@@ -4326,7 +4330,8 @@ stage: nil
 ```
 
 - `force(runner, point, value)` makes the runner read an input point at `value`, whatever
-  its device says, from the next round until `unforce/2` or `unforce_all/1`: the eye
+  its device says, from the first round after its write of the forces file lands (below)
+  until `unforce/2` or `unforce_all/1`: the eye
   moved and no box was counted. It holds across a restart and, kept in the file, across
   a crash: every start reads the file, so the fresh runner came back with the eye forced
   and listed in `status/1`, its first round reading it, and counting nothing, since no
@@ -4343,18 +4348,24 @@ stage: nil
   the write is out, in a process of its own, and the force takes effect at the first
   round after it lands, its call answered then (decision 437): so on a slow disk the
   logic keeps the plant under control, every round reading the forces as they were and
-  `status/1` listing those, and no force is in effect before the file holds it. A force
-  asked while another's write is out waits behind it, in order, built on the set it
-  leaves; a trip, a restart or an edit's step meanwhile leaves the write as it is, the
-  force taken onto the set the runner then holds once it lands; and a stop waits for it
-  to its limit and answers its caller (provisional). A start reads the file raw, off the
+  `status/1` listing those, and no force is in effect before the file holds it. A force,
+  an unforce or an unforce_all asked while another's write is out, or while one asked so
+  waits, waits its turn behind it, in the order asked, each built on the set the one
+  before leaves, so the last asked is the last written; a trip, a restart or an edit's
+  step meanwhile leaves the write as it is, and the set it writes, built on the forces
+  held as it began, becomes the runner's once it lands, in place of any a restart read
+  from the file meanwhile; and a stop waits for it to its limit and answers its caller
+  (provisional). A write cut at its limit, at a stop as at any time, may still land once
+  the disk answers, after the runner that made it is gone, so the next start reads
+  whichever set the file then holds, and one already started does not know of it
+  (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls. A file that cannot be read, one the disk has not answered
   within the write limit or one the file system refuses, a directory in its place among
   them, starts a fresh start with no force and keeps at a restart the forces the runner
   holds, the restart going on and the line coming back, and `status/1` names it,
   `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
-  of it lands or a restart reads it (decision 390); with no such file to name,
+  of it lands, no restart reading it meanwhile (decisions 390 and 445); with no such file to name,
   `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
   that reads the file takes what it holds, as every start does; but while
   `forces_unread` stands a restart keeps the forces the runner holds and takes none from
