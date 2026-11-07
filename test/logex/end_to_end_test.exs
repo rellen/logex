@@ -4856,9 +4856,15 @@ defmodule Logex.EndToEndTest do
       assert through_runner(plant, steps) == runner_log
     end
 
-    # On the real clock, liveness only, with bounds far from what load can reach: CI
+    # On the real clock, liveness only, with bounds far from what CI's load has reached: CI
     # shares its cores (§4.11, "Risks"). Both conveyors started, the plant runs for 2 s,
-    # rounding and keeping its clock, and then stops in order, every output zeroed once.
+    # rounding and keeping its clock, and then stops in order, every output zeroed once. A
+    # machine that holds the VM off its cores for longer than the default idle watchdog
+    # and a poll period, 510 ms, trips it, by decision 114, as a device that is not heard
+    # is hung, whatever kept it from running, and one that rounds fewer than 20 times in
+    # 2 s fails it: RV-7's review met each once, the first in its ten full suites under the
+    # busy loops and the second in a suite run beside them, and both stay (`PLAN.md`'s
+    # RV-7, question 4).
     test "on the real clock the plant runs for 2 s and stops in order", %{tmp_dir: dir} do
       plant = plant_on_disk(dir)
       {:ok, panel} = Sim.start_link(reports: true)

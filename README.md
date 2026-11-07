@@ -343,11 +343,14 @@ while a force's write of the forces file is out, the force in effect from the fi
 round after it lands (decision 437), every device a restart opens or reads again
 limited by its own `open:` (decision 439), `status/1`'s `forces_unread`,
 `forces_unknown` and the store's `unknown` always there, nil where nothing stands
-(decision 440), a round whose clock reads wrong stopping there, its outputs never
-written (decision 441), a slot of the share that finds nothing waiting kept open until a
+(decision 440), a round whose clock reads wrong stopping there, writing nothing after the
+reading (decision 441), a slot of the share that finds nothing waiting kept open until a
 request takes it (decision 442) and a restart while `forces_unread` stands keeping the
 forces the runner holds (decision 445), the other five as built (decisions 438, 443,
-444, 446 and 447). Its answers to the questions RV-5 left, decisions 409–419, have
+444, 446 and 447). Its answers to the questions RV-13 and RV-7 left, decisions 448–464,
+RV-6 and RV-17 build: a copy the same as the last one skipped, every write of the store
+limited, a late runner letting its devices run before judging them, and the loader
+reading its files raw, among them. Its answers to the questions RV-5 left, decisions 409–419, have
 landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
 CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
 nothing was copied (decision 412), the shutdown's write making the store's text within

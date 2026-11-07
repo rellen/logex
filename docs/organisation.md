@@ -12395,7 +12395,35 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: same-run bounds (a)** (the maintainer, 2026-11-01): each exact pin becomes
      a bound against a reference program measured in the same run, with the maintainer's
-     leave to change the pinned tests. To build in RV-7.
+     leave to change the pinned tests. To build in RV-7. *(Landed with RV-7, 2026-11-04,
+     `ff7be44` and the commit after it: each of the census's 20 pins, `PLAN.md`'s RV-7
+     entry, held against a twin measured in the same run, in the same VM, each count in a
+     process of its own whose heap no collection visits: a scan's de-energised rung beside
+     the same rung whose operand's shape takes the catching clause, one catch apart; the
+     same rungs over the other operand shape; the same program beside the feature whose
+     `nil` clause the program of none takes; a compile's same rungs reordered, over plain
+     tags or scalars, or beside the coil or one-shot a gated warning looks for; three
+     equalities of same-run figures made bounds in the guarded direction. Each bound is the
+     twin's figure, what the two measured apart, and an allowance under the least
+     regression it is for, half a reduction a rung, a key, a point or an instance, a
+     reduction a group, or the parent's 8 or 16 a rung, where RV-7 first took half the
+     guarded work, which its review found passed regressions under that half; and where
+     every program takes the guarded clause, the twin takes another that makes the same
+     calls, an `add` against a `div`, a copy-out of plain points against a located array's
+     (RV-7's review). Each is red on a mutant of the regression its pin was there to catch
+     and on those of the review, judged by the full suite, and green under a probe that
+     charges two reductions more for a call both twins make as often, each instruction
+     scanned, lowered or warned of, each global restarted, each round, each read or write
+     where both make as many, where the old pins went red in six, two and four files. A
+     twin that does the guarded work itself gives a lower bound, which a cheaper version of
+     that work breaks; a regression in what both twins share as often no twin catches;
+     both provisional, `PLAN.md`'s RV-7 questions. `CONTRIBUTING.md` states the rule, how to write a new one,
+     and that a count moves with the VM's own state (a map of more than 32 keys built is
+     charged a few reductions more or less from one call to the next, and a VM-wide event
+     moves every later call's count), so that two counts compared are measured in turn, and
+     that a runner's count holds each message a `receive` passes over and each it sends, the
+     manual clock's synchronisation among them; since RV-7's review two counts compared are
+     counted in pairs, the least of their differences held.)*
 
 358. **CLAUDE.md (the review after Milestone 6),** question 12: CLAUDE.md, which every
      agent session loads whole, is 237 KB, grew 46% in eight days and reads as replayed
@@ -13638,6 +13666,150 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: as built (a)** (the maintainer, 2026-11-04), with the copy's name as
      decision 418 numbers it. RV-16 makes the mark the decision's number. *(RV-16,
      2026-11-04, `efffdb2`: done.)*
+
+448. **A host's file at the copy's number (the review after Milestone 6),** RV-13's
+     question 1, its first half (decision 418): a file a host made at the number a copy
+     is to take before the copy looks at its name makes the copy fail, `failed: :eexist,
+     copy: nil`, the copy owed, and the next write makes it at the next number.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): the host's file is untouched,
+     and `status/1` shows that something writes among logex's copies. RV-17 makes the
+     mark the decision's number.
+
+449. **A file that appears as a copy is renamed into place (the review after Milestone
+     6),** RV-13's question 1, its second half (decision 418): a file a host makes at the
+     copy's number between the copy's look at its name and its rename is replaced.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): only a host writing among
+     logex's own copies' names at that moment meets it, and the documents say so. RV-17
+     makes the mark the decision's number.
+
+450. **An unnumbered `<store>.dropped` an earlier logex left (the review after Milestone
+     6),** RV-13's question 2 (decision 418): kept as it stands and not counted, so the
+     first numbered copy is `.dropped.1`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
+     decision's number.
+
+451. **Two runners started at once on files that cross (the review after Milestone 6),**
+     RV-13's question 3 (decisions 356 and 418): two runners of one VM started at the
+     same instant on files that cross may both be refused; never both run.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): the operator starts one again,
+     and no lock is taken. RV-17 makes the mark the decision's number.
+
+452. **A copy cut off before it took its number (the review after Milestone 6),** RV-13's
+     question 4 (decisions 391 and 418): `failed: :timeout`, where one cut off after it
+     took its number is `unknown`, named by its number.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): `status/1` says what can be on
+     disk. RV-17 makes the mark the decision's number.
+
+453. **A cold start over a store it cannot read (the review after Milestone 6),** RV-13's
+     question 5 (decision 417): a store that is a directory, or on a card that never
+     answers, refuses the cold start, `{:error, {:retain, :eisdir | :timeout}}`, and
+     nothing is written.
+
+     **Taken: refused, as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark
+     the decision's number.
+
+454. **A cold restart over a store edited while the runner runs (the review after
+     Milestone 6),** RV-13's question 6 (decisions 284 and 417): a running plant's cold
+     `restart/2` reads no store, so copies none, and a hand edit made while it ran is
+     lost, as decision 284 says.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): a hand edit is made with the
+     runner stopped. RV-17 makes the mark the decision's number.
+
+455. **A trip's or a cold restart's write of a very large store (the review after
+     Milestone 6),** RV-13's question 7 (decisions 352, 400 and 414): only the shutdown's
+     write makes the store's text within its limit; a trip's, a cold restart's and the
+     rest make it in the runner, which answers no one meanwhile.
+
+     **Taken: every write limited (b)** (the maintainer, 2026-11-07): every write of the
+     store makes its text within `write_limit:`, in the write's own limited process, as
+     the shutdown's does since decision 414, so the runner answers on, and a store too big
+     for the limit is reported as any write cut off at it (decision 391), the host raising
+     `write_limit:`. To build in RV-6, with decision 352.
+
+456. **A start that fails after its copy, started again (the review after Milestone 6),**
+     RV-13's question 8 (decisions 360 and 418): each start that drops makes a new copy,
+     so a supervisor's restarts of a start that fails after its copy leave copies the
+     same byte for byte, a card filled a store's size a restart.
+
+     **Taken: a copy the same as the last skipped (b)** (the maintainer, 2026-11-07): before
+     it copies, a start compares the store with the highest-numbered copy standing, and
+     where they hold the same bytes it makes no new copy and `status/1`'s `copy` names
+     that one. To build in RV-6.
+
+457. **A refusal's bounds (the review after Milestone 6),** RV-5's provisional reading,
+     carried by RV-13 (decision 355): a refusal of the store or the forces file tells at
+     most 50 problems and the count of the rest, quotes a text in at most 60 bytes, cuts a
+     line at 1,000 bytes, and shows a byte that is not printable escaped, `\x07`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
+     decision's number.
+
+458. **A twin that does the guarded work itself gives a lower bound (the review after
+     Milestone 6),** RV-7's question 1 (decision 357): a bound beside the feature holds
+     the whole difference its twins measured, so a commit that makes the feature cheaper
+     turns it red with nothing regressed.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07): such a commit restates the
+     bound, and its diff shows the saving. RV-17 makes the mark the decision's number.
+
+459. **A regression both twins share (the review after Milestone 6),** RV-7's question 2
+     (decision 357): a cost both twins of a bound pay alike cancels out, so every
+     instruction dispatched one call dearer turns no bound red.
+
+     **Taken: a ceiling a stage (b)** (the maintainer, 2026-11-07): one test a stage, the
+     compile, a scan, a cycle and a round, holds a standard program's cost under twice a
+     figure recorded with it, so a gross slowdown both twins share is caught, and neither
+     a toolchain's shift nor a saving turns it red; CONTRIBUTING.md says how a ceiling is
+     recorded and raised. To build in RV-17.
+
+460. **Half a reduction a rung (the review after Milestone 6),** RV-7's question 3
+     (decision 357): each bound allows half a reduction a rung, a key or a group beyond
+     the difference its twins measured.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
+     decision's number.
+
+461. **A device the machine did not schedule (the review after Milestone 6),** RV-7's
+     question 4 (decisions 114, 128 and 348): a device whose process the host's
+     operating system starved past idle + poll trips the runner as a hung one, `{:io,
+     "panel", :timeout}`, though it is healthy.
+
+     **Taken: the devices let run first (b)** (the maintainer, 2026-11-07): a runner that
+     wakes late, its own wake past its time by more than the idle watchdog, lets its
+     devices run before it judges them, so only a device still silent after it has had
+     its turn trips the line; a hung device still trips, and the runner's own lateness
+     shows in `status/1`. To build in RV-6.
+
+462. **The real-clock reread test (the review after Milestone 6),** RV-7's question 5: a
+     test on the real clock cannot hold a simulated card's next reread at a restart, so
+     it is left to the machine's timing.
+
+     **Taken: a hold in `Logex.IO.Sim` (b)** (the maintainer, 2026-11-07): the simulated
+     device gains a way to hold its next reread until the test lets it go, and the test
+     proves its rule on any machine. To build in RV-17.
+
+463. **An edit's bound no mutant parts (the review after Milestone 6),** RV-7's question
+     6 (decision 357): the bound that an online edit's switch costs no more than a fresh
+     start of the program has no mutant that moves one side alone.
+
+     **Taken: kept (a)** (the maintainer, 2026-11-07), as a statement of the rule, its
+     comment saying so. RV-17 makes the mark the decision's number.
+
+464. **A load waits on every other file call of the VM (the review after Milestone 6),**
+     RV-7's question 7: `Logex.SourceFile` reads and looks at files through the VM's file
+     server, which serves one call at a time, so a compile waits behind every other
+     file call the VM makes.
+
+     **Taken: the loader reads raw (b)** (the maintainer, 2026-11-07): `Logex.SourceFile`
+     reads and looks at a source file raw, as the runner's store and forces reads do, so
+     a host's compile waits on no other file call; its refusals of a FIFO, a device and a
+     link stay as they are. To build in RV-17.
 
 ---
 

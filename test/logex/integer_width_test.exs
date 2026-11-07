@@ -629,8 +629,9 @@ defmodule Logex.IntegerWidthTest do
   describe "growth: a literal's spelling (decision 202)" do
     # A plain decimal compiles at the cost it did, its leaf the three-element one; a spelled
     # literal costs its spelling's one lex more, in Logex.Parser.well_formed!/1, linear in
-    # the literals. Counted where the collector never runs, after a warm-up compile, so each
-    # count is the same on every run.
+    # the literals. Counted where the collector never runs, after a warm-up compile, so that
+    # no collection's work is in a count, which moves from run to run by the hundredths the
+    # VM's own state moves.
     test "a spelled literal costs a bounded amount more than a plain one, linearly" do
       program = fn word, n ->
         "var hh dint\nvar aa dint\nvar bb bool\n" <>

@@ -1650,12 +1650,26 @@ defmodule Logex.BitStringTest do
       assert scan(p, %{"a" => 0x8001}) == %{"w" => 0x8001, "q" => 1}
     end
 
-    # A program of no bit strings compiles, against its own parse, in no more reductions than
-    # it did before M5-8 (`ebf44ee`), whose ratios these are, measured in a process of its
-    # own with a heap the collector never visits, so exact: each name is split once, an
-    # instruction of one class holds its operands with no grouping, and the warnings look
-    # for no whole write where no coil names a bit, nor for a storage bit's writes where no
-    # one-shot keeps one. M5-8 as it landed made them 1.13x to 1.18x dearer.
+    # A program of no bit strings compiles as it did before M5-8 (`ebf44ee`): each name is
+    # split once, an instruction of one class holds its operands with no grouping, and the
+    # warnings look for no whole write where no coil names a bit, nor for a storage bit's
+    # writes where no one-shot keeps one. M5-8 as it landed made them 1.13x to 1.18x dearer.
+    # Each was held, against its own parse, to the ratio measured at `ebf44ee`. Since
+    # decision 357 each is held against a twin compiled in the same run that takes the path
+    # the guarded change would add, the two the same in every other call: each program
+    # beside one rung more, a coil on a bit or a one-shot, against the same beside a rung of
+    # the same size that holds neither, the warnings looking for whole writes, 42 to 63
+    # reductions a rung, and for a storage bit's writes, 59 to 103, only beside the first;
+    # contacts and a coil on bools against the same on a word's bits, whose names are read
+    # in their parts, 413 a rung more; and an `add`, whose operands are of one class,
+    # against a `shl`, whose are of two and grouped, 69 more. Each bound is the twin's
+    # figure less what the two measured apart, the same in every run, and half a reduction
+    # a rung, under the least a look, a split or a grouping made where none is due costs
+    # (RV-7's review: half the least look, 20 and 29 a rung, passed a storage bit's look made
+    # through every instruction, 9 a rung, and no twin held a name split twice, 33 a rung,
+    # or one class grouped, 44); a call both programs make moves both, and the looked-for
+    # path made cheaper restates its bound. Each count is the least of three in a process of
+    # its own with a heap the collector never visits.
     test "a program of no bit strings compiles in what it did before M5-8" do
       cost = fn f ->
         parent = self()
@@ -1676,30 +1690,55 @@ defmodule Logex.BitStringTest do
         n
       end
 
+      compiled = fn source ->
+        {:ok, _program} = Logex.compile(source, name: "p")
+        Enum.min(for _ <- 1..3, do: cost.(fn -> Logex.compile(source, name: "p") end))
+      end
+
       rungs = fn rung -> Enum.map_join(1..200, "\n", fn _ -> rung end) end
 
-      for {source, before} <- [
-            {"var_input a dint\nvar_output d dint\n" <> rungs.("add a 1234 d"), 15.32},
-            {"var_input a uint\nvar_output d uint\n" <> rungs.("move a d"), 16.84},
-            {"var_input a dint\nvar_output q bool\n" <> rungs.("gt a 5 ote q"), 16.32},
-            {"var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
-               rungs.("xic a xio b ote q"), 17.02},
-            {"var_input a dint\nvar_output d int\n" <> rungs.("dint_to_int a d"), 14.26},
-            {"var t ton\nvar_input a bool\nvar_output d dint\nxic a ton t 100\n" <>
-               rungs.("move t.acc d"), 16.13}
+      # {the head, the rung, a coil's look apart, a one-shot's look apart}, a rung's
+      for {head, rung, whole, storage} <- [
+            {"var_input a dint\nvar_output d dint\n", "add a 1234 d", 51.9, 63.9},
+            {"var_input a uint\nvar_output d uint\n", "move a d", 46.9, 58.9},
+            {"var_input a dint\nvar_output q bool\n", "gt a 5 ote q", 41.9, 82.9},
+            {"var_input a bool\nvar_input b bool\nvar_output q bool\n", "xic a xio b ote q", 62.9,
+             102.8},
+            {"var_input a dint\nvar_output d int\n", "dint_to_int a d", 46.9, 58.9},
+            {"var t ton\nvar_input a bool\nvar_output d dint\nxic a ton t 100\n", "move t.acc d",
+             47.2, 59.1}
           ] do
-        {:ok, _program} = Logex.compile(source, name: "p")
-        compiled = cost.(fn -> Logex.compile(source, name: "p") end)
+        beside = fn decls, extra ->
+          "var_input zz bool\n" <> decls <> head <> extra <> rungs.(rung)
+        end
 
-        parsed =
-          cost.(fn ->
-            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
-            Logex.Compiler.parse(tokens)
-          end)
+        bit = compiled.(beside.("var zw word\n", "xic zz ote zw.3\n"))
+        coil = compiled.(beside.("var zb bool\n", "xic zz ote zb\n"))
+        shot = compiled.(beside.("var zs bool\nvar zp bool\n", "xic zz ons zs ote zp\n"))
+        contact = compiled.(beside.("var zs bool\nvar zp bool\n", "xic zz xic zs ote zp\n"))
 
-        assert compiled / parsed <= before,
-               "#{String.slice(source, -20, 20)} compiled in #{Float.round(compiled / parsed, 2)}x " <>
-                 "its parse, #{before}x before M5-8"
+        assert coil <= bit - (whole - 0.5) * 200,
+               "`#{rung}` beside a coil took #{coil}, beside a coil on a bit #{bit}, " <>
+                 "#{whole} a rung apart"
+
+        assert contact <= shot - (storage - 0.5) * 200,
+               "`#{rung}` beside a contact took #{contact}, beside a one-shot #{shot}, " <>
+                 "#{storage} a rung apart"
+      end
+
+      # A name with no part is split no more, and an instruction of one class's operands
+      # are grouped no more, than a twin's that are: the same contacts and coil on a word's
+      # bits, and a `shl`.
+      for {head, rung, twin, apart} <- [
+            {"var_input a bool\nvar_input b bool\nvar_output q bool\nvar w word\n",
+             "xic a xio b ote q", "xic w.0 xio w.1 ote w.2", 413},
+            {"var_input a dint\nvar_input b dint\nvar_output d dint\nvar_input v word\n" <>
+               "var_input n int\nvar_output t word\n", "add a b d", "shl v n t", 68.9}
+          ] do
+        {one, other} = {compiled.(head <> rungs.(rung)), compiled.(head <> rungs.(twin))}
+
+        assert one <= other - (apart - 0.5) * 200,
+               "`#{rung}` took #{one}, `#{twin}` #{other}, #{apart} a rung apart"
       end
     end
 
@@ -2003,7 +2042,11 @@ defmodule Logex.BitStringTest do
     # One lookup of the source's type more than before decision 214: a `not` or a shift of
     # a tag costs 4 reductions more than at `a281a15`, 15 and 27 more than a `move` where
     # it took 11 and 23, and a narrower source, which a second read brings into the
-    # destination, 3 more again.
+    # destination, 3 more again. The narrower source's 3 were held exactly until RV-7's
+    # review, where a change to put_inputs/3, which no scan calls, moved a count by its
+    # hundredths and turned it red; since then with half a reduction for them, decision
+    # 357's allowance. A shift reads its count, a read a `move` does not make, so a read
+    # made dearer moves its bound.
     test "a `not` or a shift costs a bounded few reductions more than a `move`" do
       # Since M5-11 counted where the collector never runs, whose work the reductions count,
       # and as the scan of 800 rungs less the scan of 400, so that neither a heap laid out
@@ -2047,7 +2090,7 @@ defmodule Logex.BitStringTest do
         same = (cost.(line, :word) - move) / 400
         narrow = (cost.(line, :byte) - widening) / 400
         assert same <= bound, "`#{line}` took #{same} reductions more than a `move`"
-        assert narrow <= same + 3, "`#{line}` of a byte took #{narrow} against #{same}"
+        assert narrow <= same + 3 + 0.5, "`#{line}` of a byte took #{narrow} against #{same}"
       end
     end
   end
