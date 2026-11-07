@@ -16221,6 +16221,207 @@ and CI checked; each fix with a test that fails when it is reverted.
   every provisional mark RV-13 and RV-7 left on a reading decisions 448–464 settle made
   the decision's number. It touches no runner code and runs beside RV-6.
 
+  **RV-17 as built** (2026-11-07, branch `rv17` over `e31a456`). Each decision has a test
+  that fails when it is reverted, judged by the full suite (the mutation table below). No
+  test, walk or oracle was deleted or weakened; the one test a decision changes,
+  `trip_test.exs`'s real-clock reread, changed as decision 462 says, its assertions kept
+  and three added; `runtime_test.exs`'s pin of `Logex.IO.Sim`'s surface grew by the three
+  functions decision 462 adds.
+
+  - *Decision 464, the loaders read raw* (`b490245`; `logex_test.exs`'s
+    `LogexTest.HeldFileServer`, "a compile finishes while the VM's file server is held, as
+    it does with it free"). `Logex.SourceFile` looks at a file with
+    `:file.read_file_info/2` and reads it with `:file.read_file/2`, each `[:raw]`, and
+    looks at a name beside a file with `:file.read_link_info/2`, raw, which finds a link
+    to nothing and one that loops as the old look through the link and beside it did; and
+    the loaders' two other calls through the server, the configuration's listing of the
+    `.ld` files beside it for a did-you-mean (`File.ls/1`) and the working directory a
+    relative path is expanded against for the memo's key (`Path.expand/1`'s
+    `File.cwd!/0`), are `:prim_file.list_dir/1` and `:prim_file.get_cwd/0`, so that a
+    compile makes no call through the server. Each answers as its call through the
+    server did, a directory's read `:eisdir`, a link to nothing `:enoent`, a loop
+    `:eloop`, a FIFO `:other`, a device `:device`, so the refusals and their messages are
+    as they were. The test, `async: false`, compiles a program with a block beside it,
+    the same by a relative path, four programs naming a FIFO, a device (`/dev/null`
+    through a link, a refusal no test pinned before), a link to nothing and a link that
+    loops, and a configuration naming a type that is absent, first with the server free
+    and then while it is held (`:sys.suspend/1`, as `stalled_disk_test.exs` holds it),
+    the results equal and each refusal's message pinned; each mutant that puts one call
+    back through the server is red, the call waiting the test's 5 s on the held server.
+    Docs: `Logex.compile_file/1`'s and `Logex.Configuration.compile_file/1`'s,
+    `Logex.SourceFile`'s head, README's dialect bullet and CLAUDE.md's two lines;
+    `review_lows_test.exs`'s FIFO comment made true.
+
+    *RV-7's question 7, measured* (`scratchpad/rv/rv17work/q7_probe.exs`: the loader over
+    250 program types, `configuration_test.exs`'s "loading stays linear" work, 200 types
+    and 50, each loaded three times, timed in real time; four processes beside it keep the
+    file server busy, each a loop of a write and a rename through it, as the swapper did
+    before RV-7's review). Alone: `e31a456` 166 to 227 ms, the tip 195 to 220. Beside the
+    four: 1,459 to 1,699 ms against 342 to 406. Beside the four under four busy loops, the
+    machine also running another workflow's suites at a load average of 16: 58,292 to
+    67,289 ms against 6,347 to 12,439, the parent's past ExUnit's 60 s, as RV-7's review
+    met it beside a full suite.
+  - *Decision 462, a hold on the simulated device's next reread* (`e86963d`;
+    `io_test.exs`'s "holds its next reread alone, until let go, a poll's read passing the
+    hold by"; `trip_test.exs`'s "on the real clock, a bad reading of a device released
+    while the one before it is read again trips nothing"). `Logex.IO.Sim.hold/1` arms a
+    hold: the device's next reread, a restart's read of a device that stayed up (decision
+    142), waits in it until `let_go/1`, and `holding?/1` says whether one waits. A reread
+    is told from a poll's read by the fence `Logex.Runner.Device` sends itself just before
+    it reads again, which waits in the device's mailbox, the adapter's own process, while
+    the adapter reads, so that a poll, a tripped device's or a released one's, passes the
+    hold by and does not spend it. The held read then goes on as usual, a failure told to
+    `:read` meanwhile acted out in it, and `reads/1` counts it only then; a hold let go
+    before any reread came is taken back; `hold/1` on a sim that holds already and
+    `let_go/1` on one that holds nothing raise, each message pinned, and the three take a
+    sim as every other call does, its mistakes pinned with theirs. The real-clock test
+    holds the drive's reread, waits until it is held (every device released by then),
+    tells the panel its bad reading, waits until a poll of the panel has taken it, sees
+    the restart still waiting, and lets the drive go; the restart answers `:ok`, the
+    runner running untripped then and two panel polls later, `x` the panel's 1. Its idle
+    watchdog is 5000 ms, so that the drive's reread, held, has 5010 before the runner
+    gives it up, where it was 2000 with the reread asleep 800. Red on a released device
+    that passes its readings on (t4, RV-7's), on every run of three alone.
+  - *Decision 459, a ceiling a stage* (`01b4afe`; `ceiling_test.exs`). One test a stage,
+    each on README's motor and plant restated: the compile of `motor.ld` by
+    `Logex.compile/2`; 100 scans of the motor, its start button toggled before each
+    (`put_inputs/3` and `scan/3`); 100 cycles of the plant 10 ms apart, both start buttons
+    toggled; and a round of the plant on the runner on the manual clock, a panel and a
+    drive simulated, 200 rounds, the runner's own reductions a round less the clock's
+    synchronisation (`retain_period_test.exs`'s way). Each count in a process of its own
+    whose heap no collection visits, the least of five; each held under twice its figure,
+    recorded with the test: compile 8,649, scans 44,606, cycles 83,262, a round 1,662
+    (1,662 to 1,672 in two runs). `CONTRIBUTING.md`'s "Hold each stage under a ceiling
+    twice its recorded figure" says how a figure is recorded, the least of five on the
+    pinned toolchain at the commit that adds or raises it, written beside the test with
+    the item and the date, and that a ceiling is raised only for a change that makes its
+    stage dearer on purpose, the figure measured anew and replaced, never the factor, the
+    commit saying what made it dearer; a saving may lower it.
+
+    *The probes* (`scratchpad/rv/rv17work/probes/`, each stage's ratio to its figure):
+
+    The G rows' ratios are `ceiling_test.exs`'s own counts; the rest are
+    `scratchpad/rv/rv17work/stages.exs`'s, the same programs counted with no heap set.
+
+    | probe | what it does | compile | scans | cycles | round |
+    |---|---|---|---|---|---|
+    | G_compile_tripled | each rung lowered two calls dearer, each as dear as a rung of the motor's compile, 1,730 | 3.00, red | — | — | — |
+    | G_scan_tripled | each element a scan runs two calls dearer, 34 each | — | 3.02, red | 2.32, red | 1.65 |
+    | G_cycle_tripled | each cycle step two calls dearer, 694 each | — | — | 2.91, red | — |
+    | G_round_tripled | each round step two calls dearer, 1,385 each | — | — | — | 3.00, red |
+    | g_compile_1, _2 | each rung's lowering made once, twice again | 1.24, 1.47 | — | — | — |
+    | g_scan_1, _2 | each element a scan runs made once, twice again | — | 1.33, 1.56 | — | — |
+    | g_cycle_1, _2 | each cycle step made once, twice again | — | — | 1.75, 2.51 red | — |
+    | g_round_1, _2 | each round's cycle step made once, twice again | — | — | — | 1.38, 1.75 |
+    | p1 (RV-7's) | each element a scan runs two reductions dearer | — | 1.09 | 1.06 | 1.03 |
+    | p2 (RV-7's) | each instruction lowered two dearer | 1.004 | — | — | — |
+    | p4 (RV-7's) | each round two dearer | — | — | — | 1.00 |
+    | p5 | each cycle step two dearer | — | — | 1.003 | 1.00 |
+    | s_compile_no_warnings | the warnings not made | 0.87 | — | — | — |
+    | s_scan_checks_once | `scan/3` checks its program and state once | — | 0.92 | — | — |
+    | s_cycle_checks_once | a cycle's instance scanned with no second check | — | — | 0.95 | 0.98 |
+    | s_round_no_refresh | a round's devices not refreshed before each step | — | — | — | 0.96 |
+
+    So a ceiling catches a stage made about three times as dear across the board, and a
+    cycle step made twice again; a step's own call made once again everywhere, 1.24 to
+    1.75, passes it, as RV-7's question 2 said of option (b) ("catches a doubling and not
+    a call"), and RV-7's probes, a toolchain's size, move a stage by 9 in a hundred at
+    most; every saving tried reads less. The G probes, p1, p2, p4 and p5 are judged by the
+    full suite (the mutation table); the g and s probes by `ceiling_test.exs` alone
+    (`scratchpad/rv/rv17work/named_probes.md`): each green but g_cycle_2, red on the
+    cycles' ceiling.
+  - *The marks* (`a4a3f94`). RV-13's provisional marks on the readings decisions 448–457
+    settle are each the decision's number outside the runner's files: `Logex.Refusal`'s
+    head (457), `Logex.Retain.written/2`'s comment (448, 449), README's store and rollback
+    (448, 449, 450, 453, 454; 456 told as RV-6's to build), §4.13's account of the store,
+    this file's RV-13 entry, and decisions 357's, 414's, 416's, 417's and 418's notes.
+    RV-7's are each the decision's number in `CONTRIBUTING.md` (458, 460, with `01b4afe`),
+    this file's RV-7 entry, every question and every reference to one, and the tests that
+    state the readings: the beside twins' comments in `real_test.exs`, `array_test.exs`,
+    `located_array_test.exs` and `retain_test.exs` (458, 460), `retain_edit_test.exs`'s
+    bound kept as a statement of the rule (463), and `end_to_end_test.exs`'s real-clock
+    plant (461, RV-6's to build). Left to RV-6, in the runner's files: `Logex.Runner`'s
+    moduledoc (its store: 448, 449, 450, 453, 454, 456), its comments at `copy_made/3`
+    (452), `cold_copy/1` (453), `text_of/2` (455) and `noted/3` (452);
+    `Logex.Runner.Paths`' head (450); `Logex.Runner.Writer.copy/3`'s comment (448, 449,
+    450, 456); `retain_store_test.exs`'s comments at its numbering test (450) and its cold
+    start whose copy cannot be made (453); and `stalled_disk_test.exs`'s window test, its
+    comment and its name "… is replaced (provisional)" (449), and its cold start's
+    describe (453).
+
+  - *The mutation table* (`scripts/mutate.sh` over `a4a3f94`, each judged by the full
+    suite; the patches `scratchpad/rv/rv17work/mt/`):
+
+    | mutant | what it does | the full suite at the tip |
+    |---|---|---|
+    | m464a_read_through_server | a source file looked at and read through the VM's file server, as before | red: logex 1 |
+    | m464b_look_through_server | the look alone through the server | red: logex 1 |
+    | m464c_present_through_server | the look at a name beside a file through the server | red: logex 1 |
+    | m464d_listing_through_server | the configuration's directory listed through the server | red: logex 1 |
+    | m464e_cwd_through_server | a relative path expanded against the working directory read through the server | red: logex 1 |
+    | m464f_fifo_opened | a FIFO or a device read as a file is, its refusal gone | red: logex 1, review_lows 1 |
+    | m462a_never_held | the hold never holds a reread | red: io 1, trip 1; the machine's: trip 1, the runner-death test's 5 s wait (RV-7's list), `trip_test.exs` alone under the mutant twice the reread test alone red |
+    | m462b_every_read_held | every read held while a hold is armed, a poll's among them | red: io 1 |
+    | m462c_hold_not_spent | the hold armed again once let go | red: io 1 |
+    | m462d_failure_taken_before_hold | a held reread takes its failure before the hold, not after | red: io 1 |
+    | m462e_let_go_before_any_holds_next | a let-go before any reread keeps the hold | red: io 1 |
+    | t4_released_passes_on (RV-7's) | a released device passes its readings on | red: trip 6 |
+    | G_compile_tripled | each rung lowered two calls dearer, 1,730 each | red: ceiling 1; besides, bit_string 1, compile_total 1, integer_width 1, tag_subscript 2, typed_counter 1 |
+    | G_scan_tripled | each element a scan runs two calls dearer, 34 each | red: ceiling 2 (scans and cycles); besides, instance_array 2, long_timer 1, tag_subscript 1 |
+    | G_cycle_tripled | each cycle step two calls dearer, 694 each | red: ceiling 1; besides, located_array 1 |
+    | G_round_tripled | each round step two calls dearer, 1,385 each | red: ceiling 1 |
+    | p1_every_instruction_dearer (RV-7's) | each element a scan runs two reductions dearer | green (2839 passed) |
+    | p2_every_instruction_lowered_dearer (RV-7's) | each instruction lowered two dearer | green (2839 passed) |
+    | p4_every_round_dearer (RV-7's) | each round two dearer | green (2839 passed) |
+    | p5_every_cycle_step_dearer | each cycle step two dearer, in a cycle and in a round | green (2839 passed) |
+
+    The same-run bounds the G probes turn red besides the ceilings are the probe's, not a
+    rule's: a charge past what is left of a process's slice of a scheduler is cut there
+    (`:erlang.bump_reductions(1730)` ten times counts 12,845 here, not 17,300), so two
+    twins charged as often are charged unequally, by a scheduler's whim; each ceiling's
+    ratio is the one its test counts.
+
+  - *The load runs* (`scripts/load.sh`, four busy loops on four cores, the machine also
+    running another workflow's suites, a load average of 10 to 17): `trip_test.exs`'s
+    real-clock reread test, 0 of 50 failed (`scratchpad/rv/rv17work/load_reread.txt`);
+    and `configuration_test.exs`'s two loader tests, "any text in a configuration file
+    gives a result" and "loading stays linear in the program types a file names", with
+    `review_lows_test.exs`'s 300 loads beside the swapper and the whole of
+    `logex_test.exs`, `LogexTest.HeldFileServer` among it, 0 of 20 failed, each run 18.9
+    to 63.5 s, the three loader tests of one run timed 9.5, 7.5 and 4.0 s
+    (`scratchpad/rv/rv17work/load_loader.txt`). No loader test failed in the mutation
+    table's 20 full suites but under the mutants made for it.
+
+  - *Provisional readings, and questions for the maintainer*, by what a maintainer or an
+    operator sees. The record is silent on each; the reading taken is the closest to it.
+
+    1. *How the simulated device tells a restart's read* (decision 462). A test that wants
+       the drive's restart read held tells its sim `hold/1`, and the sim knows that read
+       by a private marker the runner's device process puts in its own mailbox just
+       before a restart's read, the fence of decision 142. If the runner's code changes
+       that marker (RV-6 works there), the hold never holds, and the one test that uses
+       it fails after 5 s, "no reread came to the sim's hold in 5 s", though nothing in
+       the plant is wrong. (a) As built, the sim reading the device's fence, its moduledoc
+       saying so; (b) the device telling its adapter that a read is a restart's, an
+       optional callback of `Logex.IO` or a field the adapter is given, a change to the
+       runner's code (RV-6's) and to the adapter contract; (c) a hold on the device's
+       next read whatever it is, armed by the test only once it has seen the devices
+       released, which a poll may still take first, the objection RV-7's question 5
+       raised.
+    2. *Letting go of a hold no reread came to* (decision 462). A test that calls
+       `hold(drive)` and then `let_go(drive)` before any restart has read the drive gets
+       `:ok`, and the hold is taken back; `hold/1` twice and `let_go/1` with nothing held
+       raise. (a) As built; (b) raise there too, as the test's mistake, since a hold no
+       reread came to is a test that did not do what it meant.
+    3. *A working directory that cannot be read* (decision 464). A host whose working
+       directory was deleted under it compiles `"lines/motor.ld"`, a relative path: the
+       loader cannot make the path absolute for its memo, and raises `File.Error`,
+       "could not get current working directory", as `Path.expand/1` raised it before,
+       the one exception the loader lets out; an absolute path compiles as ever. (a) As
+       built, the raise as before; (b) a `:file` diagnostic on the path, "cannot be
+       located: the working directory cannot be read", as the runner tells a relative
+       store whose directory it cannot resolve.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
