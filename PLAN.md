@@ -20,8 +20,9 @@ questions, decisions 361–373, for RV-9, to RV-3's, decisions 374–389, for RV
 RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-10's and
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
-RV-15's, decisions 433–436, each as built, their marks made in RV-13, and to RV-11's,
-decisions 437–447, for RV-16.)*
+RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
+decisions 437–447, for RV-16, and to RV-13's and RV-7's, decisions 448–464, for RV-6 and
+RV-17.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -13018,7 +13019,11 @@ and CI checked; each fix with a test that fails when it is reverted.
      whole, however long.
 - **RV-6 — the runner's own long work** (decision 352). The scan of an array of instances,
   the period's take-out and an edit's switch made cheaper, the bound measured and
-  documented, a trip during the runner's own work naming it (M7).
+  documented, a trip during the runner's own work naming it (M7). And, since the answers
+  of 2026-11-07: every write of the store making its text within `write_limit:` (decision
+  455); a start whose store is the same as its highest copy making no new copy (decision
+  456); and a runner that wakes late letting its devices run before it judges them
+  (decision 461). It runs after RV-16.
 - **RV-7 — same-run cost bounds** (decision 357). And the tests a loaded machine fails,
   each root-caused, never given time: `trip_test.exs`'s "a device waiting on the runner for
   its change is heard at each poll meanwhile, on the real clock, short" (idle 50 ms), red in
@@ -13631,7 +13636,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     | p_read_5 | probe (the review's): each read five dearer | red: bit_string 1, element_bit 1, instance_array 1, tag_bit 1 |
     | p_write_3 | probe (the review's): each write three dearer | red: element_bit 1, instance_array 1 |
 
-  *Provisional readings, and questions for the maintainer*:
+  *Provisional readings, and questions for the maintainer* *(all seven answered on
+  2026-11-07, decisions 458 to 464: 1, 3 and 6 as built; 2, 5 and 7 changed, to build in
+  RV-17; 4 changed, to build in RV-6)*:
 
   1. *A twin that does the guarded work itself gives a lower bound.* Where a program of
      none takes a `nil` clause, its twin is the same program beside the feature, which
@@ -15589,7 +15596,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   commit before this entry's, `bbd5ced` to `5fa9e00`. The machine restarted once under
   the mutation table, which was run again from the patch it was in.
 
-  *Provisional readings, put to the maintainer*, by what an operator sees. The record is
+  *Provisional readings, put to the maintainer* *(all eight answered on 2026-11-07, decisions
+  448 to 456, question 1 in two: 1 to 6 as built, 7 and 8 changed, to build in RV-6; and the
+  refusal's bounds, decision 457, as built)*, by what an operator sees. The record is
   silent on each; the reading taken is the closest to it, IEC and Logix. Logix keeps no
   copy of a project's values across a download, and IEC 61131-3 leaves retention's medium
   to the implementer, so neither speaks to any of them.
@@ -16197,6 +16206,12 @@ and CI checked; each fix with a test that fails when it is reverted.
   `forces_unread` stands, a restart keeping the runner's own forces. And every provisional
   mark RV-11 left on a reading decisions 437–447 settle made the decision's number. It
   runs after RV-13 and before RV-6, whose runner code both touch.
+- **RV-17 — the answers to RV-13's and RV-7's questions** (decisions 459, 462 and 464).
+  A ceiling a stage, the compile, a scan, a cycle and a round, under twice a figure
+  recorded with it; a hold in `Logex.IO.Sim` on its next reread, and the real-clock
+  reread test made to use it; `Logex.SourceFile` reading and looking at files raw. And
+  every provisional mark RV-13 and RV-7 left on a reading decisions 448–464 settle made
+  the decision's number. It touches no runner code and runs beside RV-6.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

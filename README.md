@@ -341,7 +341,10 @@ items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to th
 questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
 a force is written, a round whose clock reads wrong abandoned before it writes, and a
 restart after a start that could not read the forces file keeping the forces the runner
-holds, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+holds, among them, and its answers to the questions RV-13 and RV-7 left, decisions
+448–464, which RV-6 and RV-17 build: a copy the same as the last one skipped, every write
+of the store limited, a late runner letting its devices run before judging them, and the
+loader reading its files raw, among them. Its answers to the questions RV-5 left, decisions 409–419, have
 landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
 CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
 nothing was copied (decision 412), the shutdown's write making the store's text within
