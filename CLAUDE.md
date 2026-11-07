@@ -187,6 +187,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   disk, against oracles that know nothing of logex; its assertions name no IR tag.
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
   surface and the checks made where a program is first handed in.
+- `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
+  scan, a cycle and a round, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.
 - `test/logex/counter_test.exs` — the counters `ctu`, `ctd` and `ctud`.
 - `test/logex/typed_counter_test.exs` — the typed counters at every width.
