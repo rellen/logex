@@ -2604,6 +2604,7 @@ add e i y",
 
       assert Logex.IO.Point.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
+      # Decision 462 (RV-17): hold/1, let_go/1 and holding?/1, a hold on the next reread.
       assert Enum.sort(Logex.IO.Sim.__info__(:functions)) == [
                check: 3,
                child_spec: 1,
@@ -2614,8 +2615,11 @@ add e i y",
                handle_call: 3,
                handle_cast: 2,
                handle_info: 2,
+               hold: 1,
+               holding?: 1,
                init: 1,
                init: 3,
+               let_go: 1,
                outputs: 1,
                read: 1,
                reads: 1,
