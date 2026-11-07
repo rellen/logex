@@ -1306,8 +1306,8 @@ defmodule Logex.ArrayTest do
     # array's input is, 23 a key more, the same in every run. The bound is the twin's
     # figure less those 23, and half a reduction a key, under the one reduction a key a
     # walk of the keys costs (RV-7's review: half the difference, 11 a key, passed a
-    # program of none that walked its keys, 39 a key); a call both make the dearer moves
-    # both, and the element path made cheaper restates it.
+    # program of none that walked its keys, 39 a key; decision 460); a call both make the
+    # dearer moves both, and the element path made cheaper restates it (decision 458).
     test "a program of no array pays nothing for the rule" do
       per_key = fn beside ->
         {:ok, p} =

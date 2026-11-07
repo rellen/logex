@@ -22,7 +22,7 @@ RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, deci
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
 decisions 437–447, for RV-16, and to RV-13's and RV-7's, decisions 448–464, for RV-6 and
-RV-17.)*
+RV-17, of which RV-17's landed on 2026-11-07.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -13282,7 +13282,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     | 18 | an int element's check `<=` a real's `/ 4` and `<=` the test's own guarded walk `+ 0.5` (RV-7's review), a real's `< 12 *` an int's | a18 int elements checked through the real's rule; a18b an int element a call dearer |
     | 19 | two tag subscripts' element `< 60 / 18 *` a literal one's | a19 a subscript's tag searched for |
     | 20 | a plain routine's timers save `>= 2 - 0.5` a run against the same handed an empty table of units (RV-7's review; `>= 1` before) | u1 a plain `tof` at rest looks its unit up |
-    | eq | the first scan after a warm restart `<=` another; an edit of programs marked `non_retain` `<=` one of unmarked programs; a retained global's cycle `<=` a plain one's, a warm restart `<= cold + 4`; each pair counted nine times one after the other, the least difference held (RV-7's review; the least of nine of each side before) | t1 a `tof` reads `first`, w1 a warm restart walks what is not retained; the edit's none (question 6) |
+    | eq | the first scan after a warm restart `<=` another; an edit of programs marked `non_retain` `<=` one of unmarked programs; a retained global's cycle `<=` a plain one's, a warm restart `<= cold + 4`; each pair counted nine times one after the other, the least difference held (RV-7's review; the least of nine of each side before) | t1 a `tof` reads `first`, w1 a warm restart walks what is not retained; the edit's none (question 6, decision 463) |
 
   - *The mutation table* (`scripts/mutate.sh`, each patch applied over the tip and judged by
     the full suite; the old pins' column the named files alone, `-N`, at `0b026e5`, for the
@@ -13294,9 +13294,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     and p1 before it had its margin, the first two red by their own tests besides and p1 run
     again since. The old pins caught every mutant of the census but one class's operands
     grouped, and went red under every probe; the new bounds catch every one but that and a
-    name split twice (question 2), and pass under every probe. The mutants of the load
-    failures' tests, rp1, ri1 and t2 to t4, have no old column, their tests' old forms not
-    pins, nor has u1, made for pin 20 after the old pins' run.
+    name split twice (question 2, decision 459), and pass under every probe. The mutants
+    of the load failures' tests, rp1, ri1 and t2 to t4, have no old column, their tests'
+    old forms not pins, nor has u1, made for pin 20 after the old pins' run.
 
     | mutant | what it does | the old pins, `0b026e5`, the named files | the new bounds, the full suite |
     |---|---|---|---|
@@ -13391,9 +13391,9 @@ and CI checked; each fix with a test that fails when it is reverted.
       reread or a poll before it, a tripped device polling too; where a poll takes it the
       panel is released and read again within a millisecond, a window the test's look
       missed. The test as it was passes either way but for cause (a), and is left so; the
-      fix it needs is question 5. Its mutant, a released device that passes its readings on
-      rather than hold them (t4), is red by it and by the manual-clock tests of decision
-      142.
+      fix it needs is question 5 (decision 462). Its mutant, a released device that passes
+      its readings on rather than hold them (t4), is red by it and by the manual-clock
+      tests of decision 142.
     - `retain_period_test.exs`'s bound at its line 930, a round with a store and a long
       period within 10 of one with none (CI 10.3 on `cb18575`, 10.4 on `57260e1`, 10.1 on
       `6e3b6a6`; runs here 8.0 to 9.0). The figure counted more than a round: the manual
@@ -13487,8 +13487,8 @@ and CI checked; each fix with a test that fails when it is reverted.
      three each; under `scripts/load.sh -n 50`, 2 of 50 failed, each a trip `{:io, "panel",
      :timeout}` after e1's step ran long, 488 and 662 ms, the panel not scheduled for 288
      and 462 ms of its wait, and then not heard again within the idle watchdog after it:
-     cause (b) above, the machine's, question 4. The count's assertion passed in every run
-     that reached it.
+     cause (b) above, the machine's, question 4 (decision 461). The count's assertion
+     passed in every run that reached it.
   2. *The converted bounds missed regressions the old pins caught* (high). Every bound is
      now the twin's figure and what the two measured apart, the guarded path's own cost,
      with an allowance under the least regression the bound is for, half a reduction a
@@ -13551,19 +13551,20 @@ and CI checked; each fix with a test that fails when it is reverted.
      with `[:raw]` and `:prim_file.rename/2`, as `review_lows_test.exs`'s FIFO test renames),
      which meets the loader's race more often than before, 196 loads of 300 told the file
      is a program against 159. The loads' own calls are `Logex.SourceFile`'s, through the
-     server (question 7): the two modules alone under the busy loops passed with either
-     swapper (10 of 10, 5 of 5), so the timeouts need a full suite's traffic, and of three
-     full suites under the busy loops beside this round's mutation table,
+     server (question 7, decision 464): the two modules alone under the busy loops passed
+     with either swapper (10 of 10, 5 of 5), so the timeouts need a full suite's traffic,
+     and of three full suites under the busy loops beside this round's mutation table,
      `review_lows_test.exs:672` passed all three and `configuration_test.exs`'s loader ran
      past 60 s in one; the second suite met `api_contract_test.exs`'s life walk past its
      300 s and the real-clock plant's 15 rounds in 2 s, the first green.
      `stalled_disk_test.exs`'s forces-read test keeps no store, whose start's write its
      short write limit held too (`{:retain, :timeout}` at 2037 ms, 1010 the forces read's
-     and the write's own past it); with no store the FIFO is the first file the start reads
-     raw, which the test's call waited for a limit's time and missed twice in 35 runs under
-     the busy loops, the start slower than that before it, so the call now waits up to the
-     test's own wait, `@answers`: 0 of 50 since. `end_to_end_test.exs`'s real-clock plant:
-     cause (b) and (c) above, its comment made true, question 4.
+     and the write's own past it); with no store the FIFO is the first file the start
+     reads raw, which the test's call waited for a limit's time and missed twice in 35
+     runs under the busy loops, the start slower than that before it, so the call now
+     waits up to the test's own wait, `@answers`: 0 of 50 since. `end_to_end_test.exs`'s
+     real-clock plant: cause (b) and (c) above, its comment made true, question 4
+     (decision 461).
   7. *Bounds widened* (low). `long_timer_test.exs`'s saving `>= 2 - 0.5`; an int element's
      check against the guarded walk `+ 0.5`; a `move` beside a real `- 4 + 0.5`.
   8. *Documents untrue* (low). CLAUDE.md's `compile_total_test.exs` line; the stale "exactly"
@@ -13586,8 +13587,8 @@ and CI checked; each fix with a test that fails when it is reverted.
     bounds whose twins read or write unequally (finding 4). A test red beside a mutant's
     own and marked the machine's is one the load failed: `runner_test.exs`'s opening limit
     of 1 ms (RV-11's, recorded above), the heard-at-each-poll test's cause (b), and
-    `configuration_test.exs`'s loader past 60 s (question 7), the trees holding the
-    swapper as it was.
+    `configuration_test.exs`'s loader past 60 s (question 7, decision 464), the trees
+    holding the swapper as it was.
 
     | mutant | what it does | the full suite at the tip |
     |---|---|---|
@@ -13640,23 +13641,24 @@ and CI checked; each fix with a test that fails when it is reverted.
   2026-11-07, decisions 458 to 464: 1, 3 and 6 as built; 2, 5 and 7 changed, to build in
   RV-17; 4 changed, to build in RV-6)*:
 
-  1. *A twin that does the guarded work itself gives a lower bound.* Where a program of
-     none takes a `nil` clause, its twin is the same program beside the feature, which
-     does the feature's work: `put_inputs/3` over 64 inputs costs 37.875 reductions a key
-     with no array and 60.97 beside one. As RV-7 first built it the bound was half that
-     work apart, `none <= beside - 11`, which passed a program of none that walked its
-     keys, 39 a key (RV-7's review); since then it holds the whole difference, 23, and half
-     a reduction a key, `none <= beside - 23 + 0.5`, which catches a call a key. Made
-     cheaper, the feature's own work now turns the bound red with no regression: an
-     array's key check brought down by 2 a key puts the bound at 36.47, and a program of
-     none, still 37.875, fails it by 1.4. (a) As built: the difference held, so a
-     maintainer who makes a feature cheaper sees its bound go red in the same commit and
-     restates it there, said so beside each such test; (b) half the work as the margin,
-     as RV-7 first built it, which a maintainer never needs to restate and which passes
-     every regression of a program of none under half the feature's work; (c) a seam in
-     `lib/` that runs the same program with the guarded clause skipped, a twin differing
-     only there, which no module has, `lib/` being RV-16's and RV-6's now.
-  2. *A regression that makes both twins dearer is caught by no twin.* By the rule's own
+  1. *A twin that does the guarded work itself gives a lower bound* (decision 458, as
+     built). Where a program of none takes a `nil` clause, its twin is the same program
+     beside the feature, which does the feature's work: `put_inputs/3` over 64 inputs
+     costs 37.875 reductions a key with no array and 60.97 beside one. As RV-7 first built
+     it the bound was half that work apart, `none <= beside - 11`, which passed a program
+     of none that walked its keys, 39 a key (RV-7's review); since then it holds the whole
+     difference, 23, and half a reduction a key, `none <= beside - 23 + 0.5`, which
+     catches a call a key. Made cheaper, the feature's own work now turns the bound red
+     with no regression: an array's key check brought down by 2 a key puts the bound at
+     36.47, and a program of none, still 37.875, fails it by 1.4. (a) As built: the
+     difference held, so a maintainer who makes a feature cheaper sees its bound go red in
+     the same commit and restates it there, said so beside each such test; (b) half the
+     work as the margin, as RV-7 first built it, which a maintainer never needs to restate
+     and which passes every regression of a program of none under half the feature's work;
+     (c) a seam in `lib/` that runs the same program with the guarded clause skipped, a
+     twin differing only there, which no module has, `lib/` being RV-16's and RV-6's now.
+  2. *A regression that makes both twins dearer is caught by no twin* (decision 459, (b),
+     RV-17). By the rule's own
      probe a call both twins make as often, dearer, leaves the bound green: so is a
      regression there. RV-7's review's survivors are each caught now by a twin that takes
      another clause making the same calls (M5-8's "a name split twice" and "one class's
@@ -13671,12 +13673,14 @@ and CI checked; each fix with a test that fails when it is reverted.
      each scan a pin measures, by `:erlang.trace_pattern/3` with `call_count` in a module
      of its own run `async: false`, which a toolchain's code generation does not move and
      a call added anywhere does, held to the count measured at a commit.
-  3. *Half a reduction a rung.* A scan's pair is allowed half a reduction a rung over what
-     the two measured apart, since a rung's count moves by hundredths as the larger
-     program's maps grow (58.02 against 58.0 in one pair); a regression of less than half
-     a reduction a rung passes. (a) As built; (b) the pairs over larger programs, which
-     only moves the hundredths further; (c) no allowance, red on the hundredths.
-  4. *A device the machine did not schedule is a hung one* (for RV-16). By decision 114 a
+  3. *Half a reduction a rung* (decision 460, as built). A scan's pair is allowed half a
+     reduction a rung over what the two measured apart, since a rung's count moves by
+     hundredths as the larger program's maps grow (58.02 against 58.0 in one pair); a
+     regression of less than half a reduction a rung passes. (a) As built; (b) the pairs
+     over larger programs, which only moves the hundredths further; (c) no allowance, red
+     on the hundredths.
+  4. *A device the machine did not schedule is a hung one* (for RV-16; decision 461, (b),
+     RV-6). By decision 114 a
      device unheard for the idle watchdog and a poll period is hung, whatever kept it
      from running: under this item's load (a load average of 25 to 35 on four cores)
      `trip_test.exs`'s idle of 50 ms found the panel silent before any round, its process
@@ -13695,7 +13699,8 @@ and CI checked; each fix with a test that fails when it is reverted.
      loops, each after a step whose wait for the panel ran 288 and 462 ms, and in
      `end_to_end_test.exs`'s real-clock plant at its default idle watchdog of 500 ms, once
      a trip and once fewer than 20 rounds in 2 s.
-  5. *The real-clock reread test cannot hold the one read it needs.* `trip_test.exs`'s
+  5. *The real-clock reread test cannot hold the one read it needs* (decision 462, (b),
+     RV-17). `trip_test.exs`'s
      "on the real clock, a bad reading of a device released while the one before it is
      read again trips nothing" needs a panel poll within the 700 ms the drive's reread
      sleeps; under load none came and the panel's own reread met the bad value (one in 50
@@ -13708,26 +13713,27 @@ and CI checked; each fix with a test that fails when it is reverted.
      RV-13's to give); (c) a tripped device that reads nothing at its polls, writing only
      its 0 again (decision 262), so that a sim's next read after a trip is its reread, a
      rule of the device's.
-  6. *An edit's bound no mutant parts.* `retain_edit_test.exs`'s "an edit of programs
-     that retain nothing pays nothing for `non_retain`", `==` before and `marked <=
-     unmarked` since, met no mutant that moves one side and not the other; kept, read as
-     a statement of the rule more than a guard, as M6-6's review read its `status:
-     :running`.
-  7. *A load waits on every other file call of the VM* (RV-7's review). `Logex.SourceFile`
-     stats and reads a program's files through the VM's file server, `File.stat/2` and
-     `File.read/1`, which serves every file call of the VM one at a time; a sampler of its
-     queue through a loaded suite found 2 to 9 calls waiting and none holding it, and two
-     tests of thousands of loads, `configuration_test.exs`'s loader over 250 program types
-     and `review_lows_test.exs`'s 300 loads beside a swapper, ran past ExUnit's 60 s where
-     alone under the busy loops they take 0.5 s and 2 s. A host that compiles a plant's
-     files in a VM that also writes many files, a logger or a store, waits behind each of
-     those writes for each file its plant names. (a) As built: the swapper's writes made
-     raw, the loader's calls through the server, so those two tests stay exposed on a
-     machine as loaded as the review's; (b) `Logex.SourceFile` stats and reads raw,
-     `[:raw]`, as the runner's store and forces reads do since decision 390, so that a load
-     waits on no other process's file calls, a change to `lib/` (RV-16's or RV-6's); (c)
-     the tests of many loads in a module of their own, `async: false`, run when no other
-     test's calls share the server, which leaves a host's load as it is.
+  6. *An edit's bound no mutant parts* (decision 463, as built). `retain_edit_test.exs`'s
+     "an edit of programs that retain nothing pays nothing for `non_retain`", `==` before
+     and `marked <= unmarked` since, met no mutant that moves one side and not the other;
+     kept, read as a statement of the rule more than a guard, as M6-6's review read its
+     `status: :running`.
+  7. *A load waits on every other file call of the VM* (RV-7's review; decision 464, (b),
+     RV-17). `Logex.SourceFile` stats and reads a program's files through the VM's file
+     server, `File.stat/2` and `File.read/1`, which serves every file call of the VM one
+     at a time; a sampler of its queue through a loaded suite found 2 to 9 calls waiting
+     and none holding it, and two tests of thousands of loads, `configuration_test.exs`'s
+     loader over 250 program types and `review_lows_test.exs`'s 300 loads beside a
+     swapper, ran past ExUnit's 60 s where alone under the busy loops they take 0.5 s and
+     2 s. A host that compiles a plant's files in a VM that also writes many files, a
+     logger or a store, waits behind each of those writes for each file its plant names.
+     (a) As built: the swapper's writes made raw, the loader's calls through the server,
+     so those two tests stay exposed on a machine as loaded as the review's; (b)
+     `Logex.SourceFile` stats and reads raw, `[:raw]`, as the runner's store and forces
+     reads do since decision 390, so that a load waits on no other process's file calls, a
+     change to `lib/` (RV-16's or RV-6's); (c) the tests of many loads in a module of
+     their own, `async: false`, run when no other test's calls share the server, which
+     leaves a host's load as it is.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer.
@@ -15415,21 +15421,21 @@ and CI checked; each fix with a test that fails when it is reverted.
     at its name (`Logex.Retain.written/2` given `{path, beside}`, no new function in its
     pinned surface), so a file a host makes there while the copy is written fails it,
     `:eexist`, owed as decision 416 has a copy that cannot be made, its next try numbered
-    past it (provisional, question 1). `status/1`'s `copy` names the copy the start made,
+    past it (decision 448, question 1). `status/1`'s `copy` names the copy the start made,
     and an owed copy its own number when a later write makes it. An unnumbered
     `<store>.dropped` an earlier logex left is kept as it stands and counts for nothing
-    (provisional, question 2). Decision 356's claim covers every copy's name:
+    (decision 450, question 2). Decision 356's claim covers every copy's name:
     `Logex.Runner.Paths`, once a claim's rows are in, checks them against every other
     live runner's files, a runner's file at another store's copy's name refused with the
     role `:dropped`, and a store one of whose copies' names another runner holds refused
     naming that runner's file; two starts at once that cross so never both run, each
-    checking after its rows are in (both may be refused, provisional, question 3). The
+    checking after its rows are in (both may be refused, decision 451, question 3). The
     one `<store>.dropped` row is gone; `<store>.dropped.tmp` stays a row. Decision 325's
     refusal of a forces file on a copy covers every number, whatever its digits, the
     copies' `.tmp`, and `<store>.dropped`, which would write through that `.tmp`, a
     message of its own. A copy killed at its limit is unknown under its number, its write
     telling the runner the number once chosen, and one killed before it chose a number,
-    which lands nowhere, a copy that failed, `:timeout` (provisional, question 4); an
+    which lands nowhere, a copy that failed, `:timeout` (decision 452, question 4); an
     owed copy's write killed in the copy is unknown under the copy's number, in the store
     the store, the copy named (RV-11's reading kept). The leave, every pin of the one
     `.dropped` and its replacement: `retain_store_test.exs`'s copy tests read `.dropped.1`
@@ -15470,9 +15476,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     a copy past its limit, refuses the start as decision 291 refuses a cold start whose
     first write fails, `{:error, {:retain, reason}}`, the store as it was and no device
     opened; so does a store that stands but cannot be read, a directory or a FIFO in its
-    place, which no copy can be made of (provisional, question 5). A store that reads
+    place, which no copy can be made of (decision 453, question 5). A store that reads
     whole gets no copy, decision 360 copying only what a start drops. A cold `restart/2`
-    reads no store and copies none (provisional, question 6). The cut store's refusal now
+    reads no store and copies none (decision 454, question 6). The cut store's refusal now
     says "start it with start: :cold to start over it, which copies it first to the next
     `.dropped.<n>` beside it and then writes a new store over it". The leave:
     `retain_store_test.exs`'s "start: :cold ignores the store and writes a new one at
@@ -15504,9 +15510,10 @@ and CI checked; each fix with a test that fails when it is reverted.
     reported, `{:retain, {:error, :timeout}}`, the runner ending `:shutdown` at 5,150 ms,
     the store its last write; and given `write_limit: 30_000`, the spec 60,510 ms, the
     shutdown writes the store in 15.8 s. A trip's, a cold restart's and a fresh start's
-    write make the text in the runner as before (provisional, question 7: RV-6's
-    decision 352). A host's own `shutdown:` still wins, as pinned. Docs: `child_spec/1`'s
-    and `stop/2`'s docs, `Logex.Runner`'s moduledoc, README's child spec, §4.13.
+    write make the text in the runner as before (question 7: decision 455 makes every
+    write's text within the write limit, to build in RV-6 with decision 352). A host's own
+    `shutdown:` still wins, as pinned. Docs: `child_spec/1`'s and `stop/2`'s docs,
+    `Logex.Runner`'s moduledoc, README's child spec, §4.13.
   - *RV-15's marks* (decisions 433–436), each made the decision's number, no rule
     changed: `Logex.Warnings`' moduledoc (decisions 433, 434 and 435) and its comments at
     decided/2 and virtual_write/4 (433); `Logex.Compiler`'s recompiled/4 doc and its
@@ -15528,10 +15535,10 @@ and CI checked; each fix with a test that fails when it is reverted.
     (419) in `Logex.Refusal`'s head; and this file's RV-5 entry, each mark and its
     provisional readings' list. The refusal's bounds, 50 problems, 60 bytes and 1,000 a
     line, and the bytes quoted as they are, no decision took up, and they stay
-    provisional. RV-11's marks are left as they are, its questions with the maintainer
-    as this was built and answered since, decisions 437–447, which RV-16 builds and whose
-    marks it makes; RV-10's in the runner's files, which this item was to make, are none,
-    as RV-14's entry records ("Left to RV-13").
+    provisional *(decision 457 since, as built)*. RV-11's marks are left as they are, its
+    questions with the maintainer as this was built and answered since, decisions 437–447,
+    which RV-16 builds and whose marks it makes; RV-10's in the runner's files, which this
+    item was to make, are none, as RV-14's entry records ("Left to RV-13").
 
   *The mutation table*, each mutant judged by the full suite (`scripts/mutate.sh`,
   `scratchpad/rv/mut13/`, 19 patches on `addea97`, the code's tip), each with
@@ -15617,14 +15624,14 @@ and CI checked; each fix with a test that fails when it is reverted.
      holds it in its queue; a backup script's `plant.retain.dropped.4` dropped there in
      that moment is replaced by the copy, `status/1` showing `copy:
      "plant.retain.dropped.4"`, `failed: nil`, the script's file gone (pinned as
-     provisional, `stalled_disk_test.exs`'s "… after the copy looked, as its rename
-     waits, is replaced"). (a) As built, the documents saying so; (b) a hard link to the
-     name, which fails `:eexist` in one call where anything stands there, then the `.tmp`
-     unlinked: none ever replaced, but a FAT or exFAT card, which has no hard links,
-     refuses every copy, so (b) needs a fallback there, (a)'s window or (c); (c) the copy
-     written straight to its name, opened exclusively, which fails where anything stands:
-     none replaced, but a copy cut short by a crash is left under its number, a partial
-     `plant.retain.dropped.4` an operator could put back.
+     provisional, decision 449 since, `stalled_disk_test.exs`'s "… after the copy looked,
+     as its rename waits, is replaced"). (a) As built, the documents saying so; (b) a hard
+     link to the name, which fails `:eexist` in one call where anything stands there, then
+     the `.tmp` unlinked: none ever replaced, but a FAT or exFAT card, which has no hard
+     links, refuses every copy, so (b) needs a fallback there, (a)'s window or (c); (c)
+     the copy written straight to its name, opened exclusively, which fails where anything
+     stands: none replaced, but a copy cut short by a crash is left under its number, a
+     partial `plant.retain.dropped.4` an operator could put back.
   2. *An unnumbered `plant.retain.dropped` an earlier logex left* (decision 418). An
      operator upgrading finds the one copy RV-5 made beside the store. It is kept as it
      stands and counts for nothing: the first numbered copy is `plant.retain.dropped.1`.
@@ -15706,7 +15713,7 @@ and CI checked; each fix with a test that fails when it is reverted.
      second half. The documents now say what is built: `Logex.Retain`'s comment at
      `written/2`, `Logex.Runner.Writer.copy/3`'s, the runner's moduledoc, README, §4.13
      and decisions 416's and 418's notes, a file made before the look failing the copy,
-     `:eexist`, and one made between the look and the rename replaced (provisional).
+     `:eexist`, and one made between the look and the rename replaced (decision 449).
      `stalled_disk_test.exs`'s "… while it is written is never replaced" is named for
      what it shows, "… while it is written, before the copy looks at its name, is never
      replaced", its assertions as they were; and a test beside it pins the window as
@@ -15728,7 +15735,8 @@ and CI checked; each fix with a test that fails when it is reverted.
      (`rv13r_copy_of_searched` below).
   4. *Every failed start copies the store again* (low, a question): question 8 above. The
      documents say so (the runner's moduledoc, `Writer.copy/3`'s comment, README,
-     §4.13), provisional.
+     §4.13), provisional *(decision 456 since: a copy the same as the highest skipped, to
+     build in RV-6)*.
   5. *The life walk's model forgot an owed copy* (low). `copy_told/5` gave a copy killed
      before it took a number, and one past its limit under its number, no copy owed,
      where the runner owes each, so the next write's copy went unchecked and

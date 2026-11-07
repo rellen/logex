@@ -515,7 +515,8 @@ defmodule Logex.RetainEditTest do
     # costs no more than the unmarked one's. Since RV-7's review the two are counted one
     # after the other nine times and the least of their differences held, the difference
     # within one state of the VM's, which moves a count by a few reductions as other tests
-    # run (`retain_configuration_test.exs`'s paired/2).
+    # run (`retain_configuration_test.exs`'s paired/2). No mutant moves one side alone: the
+    # bound states the rule more than it guards it, and is kept so (decision 463).
     test "an edit of programs that retain nothing pays nothing for the qualifiers" do
       state = scanned(sized(16, ""), 1)
       {:ok, edit, _} = Edit.accept(sized(16, ""), sized(16, ""), state)

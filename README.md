@@ -343,10 +343,14 @@ items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to th
 questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
 a force is written, a round whose clock reads wrong abandoned before it writes, and a
 restart after a start that could not read the forces file keeping the forces the runner
-holds, among them, and its answers to the questions RV-13 and RV-7 left, decisions
-448–464, which RV-6 and RV-17 build: a copy the same as the last one skipped, every write
-of the store limited, a late runner letting its devices run before judging them, and the
-loader reading its files raw, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+holds, among them, and three of its answers to the questions RV-13 and RV-7 left, which
+RV-6 builds: every write of the store limited, a copy the same as the last one skipped
+and a late runner letting its devices run before judging them (decisions 455, 456 and
+461). The rest of those answers, decisions 448–464, have landed with RV-17: the loaders
+reading and looking at their files raw, off the VM's file server (decision 464), a hold
+in the simulated device on its next reread (decision 462) and a ceiling a stage, the
+compile, a scan, a cycle and a round, twice a figure recorded with it (decision 459), the
+others as built. Its answers to the questions RV-5 left, decisions 409–419, have
 landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
 CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
 nothing was copied (decision 412), the shutdown's write making the store's text within
@@ -3597,8 +3601,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   copy is made, so that a store refused as cut short keeps its readable part, as its
   refusal says; a copy that cannot be made, or a store that stands but cannot be read,
   refuses the cold start as a failed write does, `{:error, {:retain, reason}}`, the store
-  as it was (provisional for the store that cannot be read), and a store that reads whole
-  gets no copy. A cold `restart/2` reads no store and copies none (provisional). The
+  as it was (decision 453 for the store that cannot be read), and a store that reads whole
+  gets no copy. A cold `restart/2` reads no store and copies none (decision 454). The
   read is limited to the write limit of real time, as every write is, and so is the look
   at the store and the forces file for a link before either is read, so that a store on a
   stalled disk, or a FIFO in its place, refuses the start as a store that cannot be read
@@ -3623,26 +3627,28 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   mistaken deploy wrote and copies that one to the next number, `tally.retain.dropped.3`,
   the good values staying in `tally.retain.dropped.2`, to be put back as above. An
   unnumbered `tally.retain.dropped`, which an earlier logex made and replaced at each
-  start that dropped, is kept as it stands and counts for nothing (provisional). The copy
+  start that dropped, is kept as it stands and counts for nothing (decision 450). The copy
   is written as every other write is, through the copies' own `.tmp`,
   `tally.retain.dropped.tmp`, and within the same limit, and not renamed over a file
   that stands at its number as it looks, just before its rename: one a host makes there
-  while it is written, before that look, fails it, `:eexist`, and one made between the
-  look and the rename, which goes through the VM's file server and waits in its queue on
-  a stalled disk, is replaced (provisional). A store's copies are its name read whole: a
-  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each start that drops
-  makes a copy of its own, even where the highest copy holds the same bytes, as a start
-  that fails after its copy, a device that cannot be opened, and is started again makes
-  one each time (provisional). One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
-  the start goes on with the copy owed (decision 416): every write over the store, the
-  period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the copy first,
-  under the next number then, and writes the store only once the copy is made, so that
-  while it cannot be made, a full disk or a directory at its `.tmp`, the store stays as
-  the start read it, every write fails as above, and a crash or a stop meanwhile loses
-  what changed since the start, the next start dropping from the same store and copying it
-  again. `status/1`'s `retain` names the copy once made, `copy: "tally.retain.dropped.1"`,
-  beside `dropped`, and always has a `copy`, nil while the copy is owed and where nothing
-  was dropped, `dropped` and `failed` telling the two apart (decision 412).
+  while it is written, before that look, fails it, `:eexist` (decision 448), and one made
+  between the look and the rename, which goes through the VM's file server and waits in
+  its queue on a stalled disk, is replaced (decision 449). A store's copies are its name
+  read whole: a store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each
+  start that drops makes a copy of its own, even where the highest copy holds the same
+  bytes, as a start that fails after its copy, a device that cannot be opened, and is
+  started again makes one each time, until RV-6 builds decision 456, which makes no copy
+  where the highest holds the same bytes. One that fails is reported as a failed write is,
+  `failed` in `status/1`'s `retain`, and the start goes on with the copy owed (decision
+  416): every write over the store, the period's, a trip's, a stop's, a shutdown's or a
+  cold restart's, makes the copy first, under the next number then, and writes the store
+  only once the copy is made, so that while it cannot be made, a full disk or a directory
+  at its `.tmp`, the store stays as the start read it, every write fails as above, and a
+  crash or a stop meanwhile loses what changed since the start, the next start dropping
+  from the same store and copying it again. `status/1`'s `retain` names the copy once
+  made, `copy: "tally.retain.dropped.1"`, beside `dropped`, and always has a `copy`, nil
+  while the copy is owed and where nothing was dropped, `dropped` and `failed` telling the
+  two apart (decision 412).
 
 ### An event task
 
