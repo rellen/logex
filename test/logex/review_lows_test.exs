@@ -579,10 +579,11 @@ defmodule Logex.ReviewLowsTest do
 
         task = Task.async(fn -> Logex.compile_file(main) end)
         result = Task.yield(task, 5_000)
-        # A load that opens the FIFO through File.read/1 holds the VM's file server in the
-        # open, waiting for a writer, so that no test's file call, nor the suite, could end:
-        # without the file server, the FIFO is put aside for an empty file, which a later
-        # open reads, and a writer lets the waiting open go, before the test fails.
+        # A load that opens the FIFO waits in the open for a writer, and one that opens it
+        # through the VM's file server, as File.read/1 did until decision 464, holds the
+        # server there, so that no test's file call, nor the suite, could end: without the
+        # file server, the FIFO is put aside for an empty file, which a later open reads,
+        # and a writer lets the waiting open go, before the test fails.
         if result == nil do
           aside = fifo <> ".aside"
           :ok = :prim_file.rename(fifo, aside)
@@ -683,7 +684,7 @@ defmodule Logex.ReviewLowsTest do
       # rename queued there at every moment, so that every other call waited behind one,
       # and under the busy loops beside a full suite this test's 300 loads, and
       # `configuration_test.exs`'s loader's beside it, ran past ExUnit's 60 s, where alone
-      # under the loops they took 2 s and 0.5 s.
+      # under the loops they took 2 s and 0.5 s. Since decision 464 the loads read raw too.
       swapper =
         spawn_link(fn ->
           Stream.cycle([block, program])

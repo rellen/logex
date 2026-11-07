@@ -178,7 +178,9 @@ Source syntax today:
   no instance of itself, at any depth
 - `Logex.compile_file/1` takes a `.ld` file only, exactly: any other name is a `:file`
   diagnostic. `Logex.compile_files/1` compiles several, each as `compile_file/1` does,
-  through one memo, so a block several of them hold is compiled once
+  through one memo, so a block several of them hold is compiled once. Each file is read
+  raw, off the VM's file server, so a compile waits on no other file call the VM makes
+  (decision 464)
 
 A configuration file (`.logex`, "A configuration", below) has lines of its own, one
 element each, its keywords in any case, `//` comments, and a line ending as a `.ld`

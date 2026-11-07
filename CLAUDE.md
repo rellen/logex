@@ -101,8 +101,8 @@ own documentation holds:
   in brackets (`bracketed/1`), a type word's base (`base/1`) and a host key's word
   (`word/1`), each total on a text.
 - `lib/logex/source_file.ex` — `Logex.SourceFile`, internal: how both loaders read a
-  source file, a FIFO or a device refused before it is read, and tell what is beside one,
-  a link to nothing or one that loops among it.
+  source file, raw, off the VM's file server, a FIFO or a device refused before it is
+  read, and tell what is beside one, a link to nothing or one that loops among it.
 - `lib/logex/runtime.ex` — `Logex.Runtime`, the core: a program run as an instance
   (`instance/1,2`, `call/4`, `put_inputs/3`, `scan/2,3`, `restart/3`, `retained/2`) and a
   configuration as an opaque resource (`start/1,2`, `cycle/3`, `next_due_in/1`,
@@ -157,8 +157,8 @@ Each file holds the rules of its part, a host mistake's message pinned whole; a 
 asserts its reach, and a growth test compares reductions at two sizes, never time.
 
 - `test/test_helper.exs` — starts ExUnit.
-- `test/logex_test.exs` — `Logex`'s API and loader, and Milestones 1 to 3's done
-  sentences from files on disk.
+- `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
+  file server is held, and Milestones 1 to 3's done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded
