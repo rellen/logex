@@ -23,7 +23,7 @@ RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, deci
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
 decisions 448–464, for RV-6 and RV-17, of which RV-17's landed on 2026-11-07, and to
-RV-16's, decisions 465–475, for RV-18.)*
+RV-16's and RV-17's, decisions 465–481, for RV-18.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -17049,8 +17049,10 @@ and CI checked; each fix with a test that fails when it is reverted.
     (`scratchpad/rv/rv17work/fix/load_hold50.txt`). The loader test of finding 6 was not
     run again beside full suites: the review's ten are the record, and the base no better.
 
-  - *Provisional readings, and questions for the maintainer*, by what a maintainer or an
-    operator sees. The record is silent on each; the reading taken is the closest to it.
+  - *Provisional readings, and questions for the maintainer* *(all six answered on
+    2026-11-08, decisions 476 to 481: 1, 4 and 6 as built, 2, 3 and 5 changed, to build in
+    RV-18)*, by what a maintainer or an operator sees. The record is silent on each; the
+    reading taken is the closest to it.
 
     1. *How the simulated device tells a restart's read* (decision 462). A test that wants
        the drive's restart read held tells its sim `hold/1`, and the sim knows that read
@@ -17110,14 +17112,18 @@ and CI checked; each fix with a test that fails when it is reverted.
        standard program long enough that its rungs are most of it, the motor's rungs
        written sixteen times over, one figure a stage.
 
-- **RV-18 — the answers to RV-16's questions** (decisions 465, 466, 468, 472, 473, 474 and
-  475). Forcing requests waiting behind a write joined into the next; `status/1`'s
+- **RV-18 — the answers to RV-16's and RV-17's questions** (decisions 465, 466, 468, 472,
+  473, 474, 475, 477, 478 and 480). Forcing requests waiting behind a write joined into the next; `status/1`'s
   `forcing`, the set a write that is out holds; a restart waiting for a write of the
   forces file before it reads it; an orderly stop while `forces_unread` stands writing the
   runner's own set; a host's mistake in a forcing request raised at once; a round's event
   published with the outputs the devices took; and a runner's claim on its files held
   until every write of them it began has ended. And every provisional mark RV-16 left on
-  a reading decisions 465–475 settle made the decision's number. It runs after RV-6,
+  a reading decisions 465–475 settle made the decision's number. And RV-17's answers
+  (decisions 477, 478 and 480): `Logex.IO.Sim`'s `let_go/1` of a hold no read came to
+  raised; a relative path compiled where the working directory is gone a `:file`
+  diagnostic; the loader tests in a module of their own, `async: false`; and RV-17's
+  marks of 476–481. It runs after RV-6,
   whose runner code it touches.
 
 ### Milestones 6 to 13 — proposed 2026-10-27

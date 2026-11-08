@@ -357,10 +357,11 @@ and 461); the rest have landed with RV-17: the loaders reading and looking at th
 raw, off the VM's file server (decision 464), a hold in the simulated device on its next
 reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
 whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
-answers to the questions RV-16 left, decisions 465–475, RV-18 builds: forces waiting
-behind a write joined into one, `status/1`'s `forcing`, a restart waiting for a force's
-write, and a runner's claim on its files held until its last write of them has ended,
-among them. Its answers to the questions RV-5 left, decisions 409–419, have landed with
+answers to the questions RV-16 and RV-17 left, decisions 465–481, RV-18 builds:
+forces waiting behind a write joined into one, `status/1`'s `forcing`, a restart
+waiting for a force's write, a runner's claim on its files held until its last write of
+them has ended, and a relative path compiled where the working directory is gone told
+as a diagnostic, among them. Its answers to the questions RV-5 left, decisions 409–419, have landed with
 RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
 ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
 (decision 412), the shutdown's write making the store's text within the write limit, which

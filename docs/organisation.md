@@ -14026,6 +14026,54 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      runner began has ended, so no runner of the VM starts on the file meanwhile, a start
      then refused naming the file held. To build in RV-18.
 
+476. **How the simulated device knows a restart's read (the review after Milestone 6),**
+     RV-17's question 1 (decision 462): `Logex.IO.Sim` tells a restart's read by the fence
+     the runner's device process puts in its own mailbox before one, so a change to that
+     fence leaves the hold unengaged and its test red after 5 s.
+
+     **Taken: the fence read, as built (a)** (the maintainer, 2026-11-08): both are logex's
+     own, the sim's documentation names the coupling, and a broken fence fails its test.
+     RV-18 makes the mark the decision's number.
+
+477. **Letting go of a hold no read came to (the review after Milestone 6),** RV-17's
+     question 2 (decision 462): `let_go/1` before any restart has read the device answers
+     `:ok` and takes the hold back.
+
+     **Taken: raised (b)** (the maintainer, 2026-11-08): it raises as the test's mistake,
+     its message pinned, as a hold set twice or a let-go of nothing does, so a test whose
+     hold never engaged fails. To build in RV-18.
+
+478. **A working directory that cannot be read (the review after Milestone 6),** RV-17's
+     question 3 (decision 464): a relative path compiled where the working directory is
+     gone raises `File.Error`, the one exception the loader lets out.
+
+     **Taken: a diagnostic (b)** (the maintainer, 2026-11-08): the loaders return a `:file`
+     diagnostic, "cannot be located: the working directory cannot be read", as the runner
+     tells a relative store, so nothing escapes the public API but a diagnostic or a host's
+     pinned `ArgumentError`. To build in RV-18.
+
+479. **A held reread the runner gave up (the review after Milestone 6),** RV-17's question 4
+     (decision 462): the hold is spent with the read it held, `holding?/1` false, `hold/1`
+     arming it again and `let_go/1` raising.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
+     decision's number.
+
+480. **The loader test on a crowded machine (the review after Milestone 6),** RV-17's
+     question 5 (decision 464): a loader test of 250 program types can pass ExUnit's 60 s
+     on a machine at a load of 17 to 32, its raw reads sharing the VM's dirty I/O
+     schedulers with every other test.
+
+     **Taken: run alone (c)** (the maintainer, 2026-11-08): the loader tests move to a
+     module of their own, `async: false`, so no other test shares the dirty I/O schedulers
+     with them, and no test is given more time. To build in RV-18.
+
+481. **What a ceiling holds (the review after Milestone 6),** RV-17's question 6 (decision
+     459): each stage is held whole and a rung, each under twice its own figure.
+
+     **Taken: both, as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
+     decision's number.
+
 ---
 
 ## 8. Sources, and what is unverified
