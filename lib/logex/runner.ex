@@ -2870,10 +2870,6 @@ defmodule Logex.Runner do
   # (decision 131). A configuration with no untimed program served its requests whenever
   # it waited (decision 108); since decision 396 it is served so while no round is due,
   # and in the slot after C ms of its periodic rounds (below).
-  # A runner the round's own work tripped serves no slot of the share: every request is
-  # served at once while tripped (decision 113).
-  defp slot(%{status: :tripped} = state), do: state
-
   defp slot(%{untimed: true, used: used, slots: {c, s}, retain: nil} = state) when used >= c do
     state = refresh(state, :idle)
     %{popped(:queue.out(state.queue), now(state) + s, opened(state)) | used: 0}

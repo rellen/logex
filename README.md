@@ -340,7 +340,11 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"). Its answers to the
+item RV-8 closes ("The review after Milestone 6"), RV-7's and RV-6's having landed, RV-6's the
+runner's own long work cheaper and bounded, a scan of a large array of instances linear
+in its elements, an edit's switch and the period's take-out cheaper, the size of plant
+the defaults carry measured and stated below, and a trip met in that work naming it
+(decision 352). Its answers to the
 questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
 while a force's write of the forces file is out, the force in effect from the first
 round after it lands (decision 437), every device a restart opens or reads again
@@ -351,9 +355,9 @@ reading (decision 441), a slot of the share that finds nothing waiting kept open
 request takes it (decision 442) and a restart while `forces_unread` stands keeping the
 forces the runner holds (decision 445), the other five as built (decisions 438, 443,
 444, 446 and 447). Three of its answers to the questions RV-13 and RV-7 left, decisions
-448–464, RV-6 builds: every write of the store limited, a copy the same as the last one
-skipped and a late runner letting its devices run before judging them (decisions 455, 456
-and 461); the rest have landed with RV-17: the loaders reading and looking at their files
+448–464, have landed with RV-6: every write of the store making its text within the
+write limit, a copy the same as the last one skipped and a late runner letting its
+devices run before judging them (decisions 455, 456 and 461); the rest with RV-17: the loaders reading and looking at their files
 raw, off the VM's file server (decision 464), a hold in the simulated device on its next
 reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
 whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its

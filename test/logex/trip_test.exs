@@ -1634,6 +1634,11 @@ defmodule Logex.TripTest do
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 600, :period}}}}, 5000
       assert Runner.status(runner).trip == {:watchdog, {:idle, 600, :period}}
       assert Sim.outputs(panel) == %{[0] => 0}
+
+      # The trip, met after the round, cancels the runner's wake, and none is scheduled
+      # after it (decision 113), where the round's plan of its next wake came after the
+      # period's hand-off and woke the tripped runner on.
+      refute Enum.any?(Manual.pending(clock), fn {_at, pid, _message} -> pid == runner end)
     end
   end
 

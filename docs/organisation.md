@@ -3003,7 +3003,15 @@ wrong stops there, nothing written after the reading, the trip's 0 the first the
 are given after it where the reading came before the round's writes (decision 441); a slot of the share that finds nothing queued stays open
 until a request takes it (decision 442); and while `forces_unread` stands a restart keeps
 the runner's own forces and reads none from the file (decision 445); the other five as
-built (decisions 438, 443, 444, 446 and 447).)*
+built (decisions 438, 443, 444, 446 and 447).)* *(Since RV-6, 2026-11-08, the review's M7
+and the answers of 2026-11-07: the runner's own long work cheaper and bounded, a scan of
+a large array of instances linear in its elements, an edit's switch reading each element
+once, the period's take-out the writer's, the size of plant the default idle and poll
+carry measured and stated in `Logex.Runner`'s moduledoc and README, and an idle
+watchdog's trip naming the work it was met in, `{:watchdog, {:idle, ms, work}}`
+(decision 352); and a runner that wakes late by more than the idle watchdog judges no
+device for a poll period, each device's turn, a hung one still tripping once the runner
+is on time, the lateness in `status/1`'s `latest_wake`, every wake's (decision 461).)*
 
 **What fails, and what happens.**
 
@@ -4737,8 +4745,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   its rename, which goes through the VM's file server, so a file a host makes there
   before that look fails it, `:eexist`, and one made between the look and the rename is
   replaced (decision 449); each start that drops makes a copy, though the highest hold
-  the same bytes, until RV-6 builds decision 456; and the forces
+  the same bytes, until decision 456 (RV-6); and the forces
   refusals name a cold start's copy too.)*
+  *(RV-6, 2026-11-08: every write of the store makes its text, and the period's its
+  take-out of the image, in the write's own limited process, a store too big for
+  `write_limit:` cut off at it and reported as any write cut off (decision 455); and a
+  start compares the store with the highest-numbered copy standing before it copies,
+  making none where they hold the same bytes, `copy` naming that one, so that a start
+  that fails after its copy and is started again leaves one copy (decision 456).)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
@@ -12302,7 +12316,25 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: cheaper and bounded (a)** (the maintainer, 2026-11-01): each made cheaper,
      the size of plant the default idle carries measured and documented, and a trip met
      during the runner's own work naming that work. A plant past the bound still trips
-     with its outputs at 0. To build in RV-6.
+     with its outputs at 0. To build in RV-6. *(Landed with RV-6, 2026-11-08, `bc0fe13` and
+     `08b5006`: a routine's write of an element of an array of more than 256 elements is
+     kept in its record of the arrays it opened, `:open`, a runtime key, and each such
+     array built again once as the routine ends, so that a scan of every element of
+     `ton[16000]` takes 84 ms where it took 1.8 s, as many scalar timers 56 ms, an array
+     of 256 or fewer written into its tuple as before; an edit's switch reads each
+     element's name once, a test over 3 x `ton[16384]` 4.3M reductions where it took 9.4M;
+     the check of a state handed in builds no element's name but for a message; the
+     period's take-out the store's writer's (decision 455). A trip of the idle watchdog
+     names the runner's own work, `{:watchdog, {:idle, ms, work}}`, a host's request by
+     the function it called, an edit's step `{:edit, step}`, the period's hand-off
+     `:period`, now timed (provisional, the names); a runner such work tripped schedules
+     no wake after it. The bound, measured on the real clock with the
+     defaults on a loaded four-core machine and stated in `Logex.Runner`'s moduledoc and
+     README: `ton[n]` element by element 367 ms at 65,536, a declaration's most; a block's
+     instances 348 ms at 32,768; a retained `ton[32768]` written every period, `ton[65536]`
+     past the write limit, `unknown`; an edit's test over `ton[65536]` 355 ms, over a
+     block's instances past the idle watchdog some 20,000 on, `{:watchdog, {:idle, 644,
+     {:edit, :test}}}` at 32,768, every output 0.)*
 
 353. **A stalled disk (the review after Milestone 6),** question 7: a force's write of
      the forces file and the store's writes at a trip, a stop and a cold restart run in
@@ -13775,7 +13807,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      for the limit is reported as any write cut off at it (decision 391), the host raising
      `write_limit:`. To build in RV-6, with decision 352. *(RV-17, 2026-11-07: decision
      414's note and `PLAN.md`'s RV-13 entry name it; `Logex.Runner`'s comment at
-     `text_of/2` is RV-6's to change as it builds it.)*
+     `text_of/2` is RV-6's to change as it builds it.)* *(Landed with RV-6, 2026-11-08,
+     `e37f3f8`: `Logex.Runner.Writer.written/3` takes the text or a function that makes
+     it, called inside the write's own process and its limit, for a trip's, a stop's, a
+     cold restart's, `start: :cold`'s and a fresh start's first write as for the
+     shutdown's; the period's writer is handed the resource and takes the image out
+     itself, a test's seam's take-out, `steps:`, still the runner's (provisional).
+     RV-13's question 7 reproduced, 131,072 retained timers tripped by a read fault, the
+     time real: at the parent `status/1` answered 11.3 s after the fault, the store
+     rewritten; at the tip 5.2 s, `{:retain, {:error, :timeout}}` reported, the store named
+     `unknown` and as before.)*
 
 456. **A start that fails after its copy, started again (the review after Milestone 6),**
      RV-13's question 8 (decisions 360 and 418): each start that drops makes a new copy,
@@ -13788,7 +13829,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      that one. To build in RV-6. *(RV-17, 2026-11-07: README's rollback and §4.13 say each
      start copies until RV-6 builds it, and `PLAN.md`'s RV-13 entry and decision 418's
      note name it; `Logex.Runner`'s moduledoc and `Logex.Runner.Writer.copy/3`'s comment
-     are RV-6's to change as it builds it.)*
+     are RV-6's to change as it builds it.)* *(Landed with RV-6, 2026-11-08, `af90bb6`:
+     `Logex.Runner.Writer.copy/3` reads the highest-numbered entry standing raw, inside
+     the copy's own limited process, where it is a regular file of the text's size, and
+     makes no copy where the bytes are the same, `{:ok, n}` that number; a directory, a
+     FIFO or anything it cannot read is no match, the copy made past it; nothing is told
+     before the copy is chosen to be made, so that a comparison cut off at the limit is a
+     copy that failed, `:timeout` (decision 452). A fresh start that drops, a cold start
+     over a store it would refuse (decision 417) and an owed copy made by a later write
+     compare alike (provisional, the owed copy); five starts that fail after their copy
+     leave `.dropped.1` alone, where they left `.1` to `.5`.)*
 
 457. **A refusal's bounds (the review after Milestone 6),** RV-5's provisional reading,
      carried by RV-13 (decision 355): a refusal of the store or the forces file tells at
@@ -13864,7 +13914,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      devices run before it judges them, so only a device still silent after it has had
      its turn trips the line; a hung device still trips, and the runner's own lateness
      shows in `status/1`. To build in RV-6. *(RV-17, 2026-11-07: `end_to_end_test.exs`'s
-     real-clock plant and `PLAN.md`'s RV-7 entry name it.)*
+     real-clock plant and `PLAN.md`'s RV-7 entry name it.)* *(Landed with RV-6, 2026-11-08, `af90bb6`: a wake, a
+     round's or a refresh's, later than its time by more than the idle watchdog while
+     running sets the runner's `turn`, and the look for a device not heard judges none
+     within a poll period of it, each device's next poll, a device's word that it is back
+     taken from then on heard no earlier than the wake, its reply in the mailbox its turn;
+     a hung device trips at the first look after its turn. `status/1`'s `latest_wake` is
+     every wake's lateness, a refresh's as a round's (provisional), where it was a round's
+     alone. Each late wake gives a turn of its own, so that while every wake is late by
+     more than the idle watchdog no device is judged (provisional). RV-7's question 4
+     reproduced under `scripts/load.sh`: the heard-at-each-poll test tripped `{:io,
+     "panel", :timeout}` before any round 2 runs of 50 at the parent; at the tip, see RV-6
+     as built in PLAN.md.)*
 
 462. **The real-clock reread test (the review after Milestone 6),** RV-7's question 5: a
      test on the real clock cannot hold a simulated card's next reread at a restart, so
