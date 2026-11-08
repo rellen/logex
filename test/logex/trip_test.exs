@@ -2353,7 +2353,7 @@ defmodule Logex.TripTest do
     # Decision 399 (RV-11): an address a fault names is shown as the configuration writes
     # it, its device, `i` and its fields, a text, where the adapter's list printed as a
     # charlist, `{:unknown_address, ~c"\a"}`; a key that is no list of whole numbers, which
-    # no configuration writes, as the adapter gave it (provisional). At a start, at a
+    # no configuration writes, as the adapter gave it (decision 443). At a start, at a
     # poll's read and at a restart's.
     test "an address a fault names is shown as the configuration writes it (decision 399)" do
       config =
@@ -3000,9 +3000,12 @@ defmodule Logex.TripTest do
       assert %{status: :running, unzeroed: []} = Runner.status(runner)
     end
 
+    # Decision 439 (RV-16), the leave for a reread limited by the idle watchdog and a poll
+    # period: the hung read is cut at the drive's own opening limit, given the 300 ms the
+    # idle watchdog gave it here, where it was cut at 310.
     test "a card hung in a restart's read is killed, the restart answered :timeout, and " <>
            "opened again at the next restart" do
-      %{runner: runner, drive: drive} = tripped_on_speed([idle: 300], 1)
+      %{runner: runner, drive: drive} = tripped_on_speed([idle: 300, open: 300], 1)
       old = device_pid(runner, "drive")
       Sim.fail(drive, :read, :hang)
       assert Runner.restart(runner, :warm) == {:error, {:io_init, "drive", :timeout}}
@@ -3155,7 +3158,8 @@ defmodule Logex.TripTest do
       # The drive's reread sleeps 800 ms, the panel's polls going on meanwhile, the bad
       # reading 100 ms in: wide margins on both sides for a busy machine, within the idle
       # watchdog and a poll period (M5-5's review: a 300 ms sleep within 510 failed now and
-      # then under load).
+      # then under load), and since decision 439 (RV-16) within the drive's own opening
+      # limit, 5000 ms unless set, which limits a restart's reread.
       Sim.fail(drive, :read, {:delay, 800})
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
       Process.sleep(100)
