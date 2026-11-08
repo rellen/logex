@@ -192,7 +192,7 @@ defmodule Logex.Runner.Writer do
   # counts as standing, by its number's value, whatever it is, a copy, a file or a
   # directory a host made there, so that the copy's name is free as the copy begins; an
   # unnumbered `<store>.dropped` an earlier logex left counts for nothing and is left as it
-  # stands (provisional). The store's name is read whole, so that a store whose own name
+  # stands (decision 450). The store's name is read whole, so that a store whose own name
   # ends in `.dropped` counts its own copies (`Logex.Runner.Paths.copy_of/2`). The
   # directory is read raw, off the VM's file server, as the files are, inside the write's
   # own process and its limit; the copy is written through the one `.tmp` of the store's
@@ -200,33 +200,65 @@ defmodule Logex.Runner.Writer do
   # looks, raw, just before the rename (`Logex.Retain.written/2`), so that one a host
   # made there since the directory was read and before that look is not replaced: the
   # copy then fails, `:eexist`, and is owed as one that fails is, its next try numbered
-  # past it (provisional, decision 416's rule); one made between the look and the rename,
+  # past it (decision 448, decision 416's rule); one made between the look and the rename,
   # which goes through the VM's file server and on a stalled disk waits in its queue, is
-  # replaced (provisional, the review of RV-13). Each start that drops copies the store
-  # as it read it, though the highest copy hold the same bytes, a start that fails after
-  # its copy and is started again among them (provisional). `told`, `{caller, tag}`, is
-  # told `{tag, n}` once the number is chosen, and nil, the period's writer, nothing.
-  # `{:ok, n}` or `{:error, reason}`.
+  # replaced (decision 449).
+  #
+  # Decision 456 (RV-6): before it copies, the copy compares the store's text with the
+  # highest-numbered copy that stands, and where they hold the same bytes it makes no new
+  # copy and is that one, `{:ok, n}` its number, so that a start that fails after its copy
+  # and is started again, a supervisor's restarts among them, leaves one copy where it
+  # left one a start, and so does an owed copy made by a later write over one that landed
+  # late (decision 391), the copy a start owes compared as the start's own is
+  # (provisional). The comparison is a read, raw and inside the copy's own process and
+  # its limit, `write_limit:`: of the highest number's entry only where it is a regular
+  # file, so that a FIFO or a device a host put there is never read; and an entry that is
+  # none, or that cannot be read, a directory among them, is no match, the new copy made
+  # one past it, as before. Nothing is told before the copy is chosen to be made, so that
+  # a comparison cut off at its limit is a copy killed before it took a number, which can
+  # land nowhere, `:timeout` (decision 452). `told`, `{caller, tag}`, is told `{tag, n}`
+  # once the number is chosen, and nil, the period's writer, nothing. `{:ok, n}` or
+  # `{:error, reason}`.
   def copy(store, text, told),
-    do: copy_numbered(next_copy(store), store, text, told)
+    do: copy_numbered(highest_copy(store), store, text, told)
 
-  defp copy_numbered({:ok, n}, store, text, told) do
+  defp copy_numbered({:ok, highest}, store, text, told),
+    do: copy_matched(same_copy?(highest, store, text), highest, store, text, told)
+
+  defp copy_numbered(error, _store, _text, _told), do: error
+
+  defp copy_matched(true, highest, _store, _text, _told), do: {:ok, highest}
+
+  defp copy_matched(false, highest, store, text, told) do
+    n = highest + 1
     tell(told, n)
     copy_written(Logex.Retain.written({Paths.copy(store, n), store <> ".dropped.tmp"}, text), n)
   end
 
-  defp copy_numbered(error, _store, _text, _told), do: error
-
   defp copy_written(:ok, n), do: {:ok, n}
   defp copy_written(error, _n), do: error
 
-  defp next_copy(store),
-    do: past_highest(:prim_file.list_dir_all(Path.dirname(store)), Path.basename(store))
+  # Decision 456 (RV-6): the highest copy holds the store's text byte for byte; none
+  # standing, 0, is no match.
+  defp same_copy?(0, _store, _text), do: false
 
-  defp past_highest({:ok, names}, base),
-    do: {:ok, 1 + Enum.max([0 | for(name <- names, n <- copy_number(name, base), do: n)])}
+  defp same_copy?(highest, store, text),
+    do:
+      same_bytes?(:file.read_link_info(Paths.copy(store, highest), [:raw]), store, highest, text)
 
-  defp past_highest(error, _base), do: error
+  defp same_bytes?({:ok, info}, store, n, text)
+       when elem(info, 2) == :regular and elem(info, 1) == byte_size(text),
+       do: :prim_file.read_file(Paths.copy(store, n)) == {:ok, text}
+
+  defp same_bytes?(_other, _store, _n, _text), do: false
+
+  defp highest_copy(store),
+    do: highest(:prim_file.list_dir_all(Path.dirname(store)), Path.basename(store))
+
+  defp highest({:ok, names}, base),
+    do: {:ok, Enum.max([0 | for(name <- names, n <- copy_number(name, base), do: n)])}
+
+  defp highest(error, _base), do: error
 
   defp copy_number(name, base), do: listed(Paths.copy_of(named(name), base))
 

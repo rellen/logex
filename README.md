@@ -3645,10 +3645,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   while it is written, before that look, fails it, `:eexist`, and one made between the
   look and the rename, which goes through the VM's file server and waits in its queue on
   a stalled disk, is replaced (provisional). A store's copies are its name read whole: a
-  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each start that drops
-  makes a copy of its own, even where the highest copy holds the same bytes, as a start
-  that fails after its copy, a device that cannot be opened, and is started again makes
-  one each time (provisional). One that fails is reported as a failed write is, `failed` in `status/1`'s `retain`, and
+  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Before it copies, a
+  start compares the store with the highest-numbered copy that stands, and where they
+  hold the same bytes makes no new copy, `status/1`'s `copy` naming that one (decision
+  456): a start that fails after its copy, a device that cannot be opened, and is
+  started again five times by a supervisor leaves one copy, not five, and a copy it
+  cannot read, a directory a host put at the highest number, is no match. One that fails
+  is reported as a failed write is, `failed` in `status/1`'s `retain`, and
   the start goes on with the copy owed (decision 416): every write over the store, the
   period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the copy first,
   under the next number then, and writes the store only once the copy is made, so that
@@ -4138,7 +4141,14 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   adapter, a message a device a poll period; one the runner has not heard from within
   `idle:` and a poll period, checked as each round begins and at each wait's refresh, is
   hung, and is killed and trips the runner, so a stop pressed on a card stuck inside its
-  read is never taken for "not pressed" for longer than that (decision 134). One that
+  read is never taken for "not pressed" for longer than that (decision 134). A runner
+  that wakes late, its wake past its time by more than `idle:`, as on a host so busy it
+  did not run the runner, and so perhaps not its devices either, judges no device for a
+  poll period, each device's turn, so that a healthy card the host starved beside it
+  does not trip the line as hung, while a hung one still trips at the first look once
+  the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
+  461). As a Logix controller faults a module's connection only after four missed
+  packets at its RPI, never on one late look. One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4496,8 +4506,9 @@ closed: true
   it missed, `{:overlap, task, missed}`; it never runs early, and its due times stay on
   their grid.
 - `status/1`'s `runs` is each task's longest run against its watchdog, and
-  `latest_wake` the most any round's wake came after its time, in ms, so a soak on the
-  target machine gives what to set each `watchdog` to. The same spike measured `cycle/3` at 9 to 26 µs
+  `latest_wake` the most any of the runner's wakes, a round's or a refresh's, came after
+  its time, in ms (since decision 461, where it was a round's alone), so a soak on the
+  target machine gives what to set each `watchdog` and `idle:` to. The same spike measured `cycle/3` at 9 to 26 µs
   an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
   27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
   round at the median.

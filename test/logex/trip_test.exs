@@ -216,6 +216,39 @@ defmodule Logex.TripTest do
     def wall_ms({_clock, _ticks}), do: 1_793_368_800_000
   end
 
+  # The manual clock, as a machine that stops its processes sees it (decision 461): the
+  # runner's next reading passes the milliseconds `stall` holds, once, so that its wake is
+  # read that late and the devices' polls due meanwhile are not yet run; and while `lag`
+  # holds some, every other process's reading, a device's, is that much behind, as a
+  # device that read its clock before the machine stopped it and told the runner after.
+  defmodule Stalled do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, agent}) do
+      reader = self()
+      read(Agent.get_and_update(agent, &taken(&1, reader)), clock)
+    end
+
+    defp taken(%{runner: runner, stall: stall} = state, runner),
+      do: {{:pass, stall}, %{state | stall: 0}}
+
+    defp taken(%{lag: lag} = state, _other), do: {{:lag, lag}, state}
+
+    defp read({:pass, ms}, clock) do
+      Manual.pass(clock, ms)
+      Manual.now_ms(clock)
+    end
+
+    defp read({:lag, ms}, clock), do: Manual.now_ms(clock) - ms
+
+    @impl true
+    def wake_at({clock, _agent}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _agent}, timer), do: Manual.cancel(clock, timer)
+  end
+
   # The hidden seam's steps, Logex.Runtime's, and a period's take-out that passes the time
   # the test sets on the manual clock, the runner's own work at a period where a seam takes
   # it out (decision 455).
@@ -1435,6 +1468,87 @@ defmodule Logex.TripTest do
   # `{:watchdog, {:idle, ms, work}}`, the request a host made by the function it called,
   # an edit's step, or the period's hand-off to its writer, where it was `{:watchdog,
   # {:idle, ms}}`; and a plant past the bound still trips, every output 0.
+  # Decision 461 (RV-6): a runner that wakes late, its own wake past its time by more than
+  # the idle watchdog, lets its devices run before it judges them, a poll period, their
+  # word taken after the wake heard no earlier than it, so that only a device still silent
+  # after its turn trips the line; a hung device still trips, at once once the runner is
+  # on time; and the wake's lateness shows in `status/1`'s `latest_wake`, a refresh's as a
+  # round's. The task runs once a second, so that the wakes are the refreshes'.
+  describe "a runner that wakes late lets its devices run first (decision 461)" do
+    defp stalled do
+      {:ok, clock} = Manual.start_link()
+      {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(String.replace(@relayed, "interval 10", "interval 1000")),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Stalled, {clock, agent}},
+          poll: 10,
+          idle: 50
+        )
+
+      Agent.update(agent, &%{&1 | runner: runner})
+      :ok = Runner.subscribe(runner, [:trip])
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 1000)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      %{runner: runner, clock: clock, agent: agent, panel: panel}
+    end
+
+    defp stall(agent, ms, lag \\ 0), do: Agent.update(agent, &%{&1 | stall: ms, lag: lag})
+
+    test "a wake late by more than the idle watchdog trips no device that then polls" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled()
+      assert Runner.status(runner).latest_wake == 0
+
+      # The runner's next wake read 100 ms late, the panel's polls not yet run: where the
+      # runner judged the panel at once, 100 ms unheard against 50 + 10, and tripped
+      # `{:io, "panel", :timeout}`, it waits a poll period for it.
+      stall(agent, 100)
+      Manual.advance(clock, 10)
+      Manual.advance(clock, 200)
+      refute_received {Runner, ^runner, {:trip, _reason}}
+      assert %{status: :running, trip: nil, latest_wake: late} = Runner.status(runner)
+      assert late >= 100
+      assert Sim.outputs(panel) == %{[0] => 1}
+      Sim.set(panel, [0], 0)
+      Manual.advance(clock, 1000)
+      assert Sim.outputs(panel) == %{[0] => 0}
+    end
+
+    test "a device's word taken after the late wake is heard no earlier than the wake" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+
+      # The panel's readings 100 ms behind the runner's as it polls after the wake, as a
+      # device that read its clock before the machine stopped it: its word counts from the
+      # wake, where it was 100 ms old and the runner tripped once its turn was over.
+      stall(agent, 100, 100)
+      Manual.advance(clock, 10)
+      Manual.advance(clock, 30)
+      stall(agent, 0, 0)
+      Manual.advance(clock, 200)
+      refute_received {Runner, ^runner, {:trip, _reason}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+    end
+
+    test "a hung device still trips once its turn is over, every output 0" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled()
+      :sys.suspend(device_pid(runner, "panel"))
+
+      # The late wake judges no device; the next on time, a poll period on, finds the
+      # panel silent after its turn and trips.
+      stall(agent, 100)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).status == :running
+      Manual.advance(clock, 20)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+    end
+  end
+
   describe "a trip met during the runner's own work names that work (decision 352)" do
     defp ticking(extra \\ []) do
       {:ok, clock} = Manual.start_link()

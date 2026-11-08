@@ -409,16 +409,22 @@ defmodule Logex.Runner do
     number standing beside the store, every file or directory named so counting, 1 where
     none does, and none is replaced, a copy staying until the host deletes it; an
     unnumbered `<store>.dropped` an earlier logex left is kept as it stands and counts for
-    nothing (provisional). The copy is written as every other write is, through the
+    nothing (decision 450). The copy is written as every other write is, through the
     copies' one `.tmp`, `<store>.dropped.tmp`, limited the same, and renamed only where
     nothing stands at its name as it looks, raw, just before its rename, so that a file a
     host makes there while it is written, before that look, fails it, `:eexist`
-    (provisional); one made between the look and the rename, which goes through the VM's
-    file server and on a stalled disk waits in its queue, is replaced (provisional). A
+    (decision 448); one made between the look and the rename, which goes through the VM's
+    file server and on a stalled disk waits in its queue, is replaced (decision 449). A
     store's copies are its name read whole, so that `plant.dropped`'s are
-    `plant.dropped.dropped.<n>`; and each start that drops makes a copy of its own, the
-    same bytes as the highest copy's where the store has not changed since, a start that
-    failed after its copy and is started again among them (provisional). A copy's
+    `plant.dropped.dropped.<n>`; and since decision 456 (RV-6) a start compares the store
+    with the highest-numbered copy that stands before it copies, and where they hold the
+    same bytes makes no new copy, `copy` naming that one, so that a start that fails
+    after its copy and is started again, five times by a supervisor, leaves one copy where
+    it left five, and so does a cold start (decision 417) and an owed copy made over one
+    that landed late (provisional): the comparison a raw read inside the copy's own
+    process and its limit, of a regular file of the store's size alone, and a copy it
+    cannot read, a directory or a FIFO a host put there among them, no match, the new
+    copy made past it. A copy's
     failure is reported as a failed write's, `failed` in `status/1`, and the start goes
     on, the copy then owed (decision 416): since RV-5's review every write over the
     store, the period's, a trip's, a stop's, a shutdown's and a cold restart's, makes it
@@ -642,7 +648,14 @@ defmodule Logex.Runner do
     at a poll while it waits on the runner or by answering a round's write in time, within
     the idle watchdog and a poll period, seen as each round begins and at each wait's
     refresh, at the cost of a message to the runner a device a poll period (decision
-    134); and a device's process that goes down, which the runner traps, is `{:down,
+    134), and since decision 461 (RV-6) judged by a runner on time: one that wakes late,
+    its wake past its time by more than the idle watchdog, as a machine that did not run
+    it, and so may not have run its devices either, sees it, judges no device for a poll
+    period, each device's turn, its next poll, and takes a device's word that it is back,
+    from then on, as heard no earlier than that wake, so that only a device still silent
+    after its turn trips the line, a hung one at the first look once the runner is on
+    time, and a device the machine starved beside the runner does not (provisional: each
+    late wake gives a turn of its own); and a device's process that goes down, which the runner traps, is `{:down,
     reason}`. A device whose own read, report or write again fails tells the runner and
     latches, its 0 written where its adapter still takes it (decision 135);
     a round's write that fails trips at once, the devices after it not written;
@@ -1066,7 +1079,7 @@ defmodule Logex.Runner do
   decision 440 always there, nil where no such write stands; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
-  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms;
+  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a wake came after its time, in ms, since RV-6 a refresh's as a round's, so that the runner's own lateness shows (decision 461), where it was a round's alone;
   `refresh_gap`, the longest wait between two refreshes of the devices, in ms; and since
   decision 262 `unzeroed`, the names, in device-name order, of the devices whose outputs
   are not known to be 0 since the trip: one whose adapter did not take the trip's 0,
@@ -2614,7 +2627,13 @@ defmodule Logex.Runner do
   # store's `unknown`, under `retain`, set by a write over the store or its copy past its
   # limit and gone once a later write lands or fails, a start having none; a round, an
   # edit's step and a restart refused write nothing of their own, and a trip's, a stop's
-  # and a cold restart's write each set or clear it as any write does.
+  # and a cold restart's write each set or clear it as any write does. Decision 461 (RV-6):
+  # `turn`, the time on the runner's clock of its last wake late by more than the idle
+  # watchdog while running, or nil, none yet; set by such a wake, a round's or a
+  # refresh's, and read only by the look for a device not heard, which judges none within
+  # a poll period of it, and by a device's word that it is back, heard no earlier than
+  # it; a round, a trip, a restart, a stop and an edit's step leave it as it is, a time
+  # past by then, which judges nothing once a poll period has gone.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -2702,6 +2721,7 @@ defmodule Logex.Runner do
       refreshed: state.anchor,
       refresh_gap: 0,
       latest_wake: 0,
+      turn: nil,
       last: nil,
       edit: nil,
       edits: 0
@@ -2802,21 +2822,45 @@ defmodule Logex.Runner do
   # ---- the rounds ------------------------------------------------------------------------
 
   # A wake: a round where one is due, and otherwise the refresh a wait makes at least once
-  # a poll period. A round's wake that came late is kept in the status, the latest.
+  # a poll period. A wake that came late is kept in the status, the latest: since RV-6
+  # every wake's, a refresh's as a round's, so that the runner's own lateness shows
+  # (decision 461), where it was a round's wake's alone.
   defp woken(state, at) do
     now = now(state)
-    wake(due?(state.next_round, now), now - at, state)
+    late = now - at
+    state = turned(late, now, %{state | latest_wake: max(state.latest_wake, late)})
+    wake(due?(state.next_round, now), state)
   end
 
   defp due?(nil, _now), do: false
   defp due?(at, now), do: now >= at
 
-  defp wake(true, late, state), do: rounded(%{state | latest_wake: max(state.latest_wake, late)})
+  # Decision 461 (RV-6): a runner that wakes late, its own wake past its time by more than
+  # the idle watchdog, was not run by the machine for that long, and its devices, which
+  # the same machine runs, may not have been run either: their polls overdue and come due
+  # with its wake, which it would run first. So it gives them their turn, `turn` the time
+  # it woke, and judges none of them silent until a poll period has passed since (silent/1),
+  # each device having then had its next poll; and a device's word that it is back, taken
+  # after the wake, counts as heard no earlier than the wake (notice/2), its reply in the
+  # runner's mailbox its turn taken, though it read its clock before the machine stopped
+  # it. Only a device still silent after its turn trips the line, and a device hung in its
+  # adapter still trips, at once once the runner wakes on time (provisional: each late
+  # wake gives a turn of its own, so that while every wake is late by more than the idle
+  # watchdog no device is judged). As IEC 61131-3 leaves a controller's I/O faults to the
+  # implementer, so Logix faults a module's connection only after it has missed four of
+  # its requested packet intervals, never on one late reading of a controller that was
+  # itself held up.
+  defp turned(late, now, %{idle: idle, status: :running} = state) when late > idle,
+    do: %{state | turn: now}
 
-  defp wake(false, _late, %{retain: nil} = state),
+  defp turned(_late, _now, state), do: state
+
+  defp wake(true, state), do: rounded(state)
+
+  defp wake(false, %{retain: nil} = state),
     do: heard_from(silent(state), state, &scheduled(refresh(&1, :idle)))
 
-  defp wake(false, _late, state),
+  defp wake(false, state),
     do: heard_from(silent(state), state, &scheduled(waited(refresh(&1, :idle))))
 
   # Decision 122's slots: after C ms of the continuous task's rounds, at the end of the
@@ -3175,9 +3219,11 @@ defmodule Logex.Runner do
     end
   end
 
+  # Decision 461 (RV-6): a "back" taken once the runner has woken late is heard no earlier
+  # than that wake, the device having run since it was sent (turned/3).
   defp notice({Device, pid, _restarts, at, {:back, name, nil}}, {%{pids: pids} = state, trip})
        when :erlang.map_get(name, pids) == pid,
-       do: {%{state | heard: Map.put(state.heard, name, at)}, trip}
+       do: {%{state | heard: Map.put(state.heard, name, heard_at(at, state.turn))}, trip}
 
   # Decision 262: a latched device's 0 taken at last, by a poll's write of it.
   defp notice(
@@ -3208,13 +3254,20 @@ defmodule Logex.Runner do
   # as a round begins and at each wait's refresh, both while running, when no device is
   # down, is killed, its outputs left to what it does on losing its master, and trips the
   # runner `{:io, device, :timeout}`, the trip's zero finding it down.
-  defp silent(%{devices: devices, heard: heard, idle: idle, poll: poll} = state) do
-    now = now(state)
+  defp silent(%{turn: turn, poll: poll} = state), do: judged(now(state), turn, poll, state)
 
+  # Decision 461 (RV-6): no device is judged within a poll period of a late wake, its turn
+  # (turned/3).
+  defp judged(now, turn, poll, _state) when is_integer(turn) and now - turn < poll, do: nil
+
+  defp judged(now, _turn, poll, %{devices: devices, heard: heard, idle: idle}) do
     Enum.find_value(devices, fn {name, pid, _points} ->
       now - Map.fetch!(heard, name) > idle + poll && {name, pid}
     end)
   end
+
+  defp heard_at(at, nil), do: at
+  defp heard_at(at, turn), do: max(at, turn)
 
   defp heard_from(nil, state, go), do: go.(state)
 

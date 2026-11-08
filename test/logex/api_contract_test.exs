@@ -15005,10 +15005,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # killed before it took a number is a copy that failed, `:timeout`, which lands nowhere.
   defp copied_at(%{store: nil} = w, _text, _standing, _cold), do: w
 
+  # Decision 456, restated (RV-6): before it copies, a start, warm or cold, compares the
+  # bytes it would copy with the highest-numbered copy standing, and where they are the
+  # same makes no copy, `copy` naming that one (same_copy/7).
   defp copied_at(w, text, standing, cold) do
     drops = drops_restated(w)
-    next = 1 + Enum.max([0 | Map.keys(standing)])
-    {made, owed} = told_copy(cold, drops, Runner.status(w.runner).retain, text, w, next)
+    highest = Enum.max([0 | Map.keys(standing)])
+    same = Map.get(standing, highest, :none) == copied_bytes(cold, text)
+    retain = Runner.status(w.runner).retain
+    {made, owed} = same_copy(same, cold, drops, retain, text, w, highest)
     copies = copies_standing(w)
     assert Map.take(copies, Map.keys(standing)) == standing
     copy_landed!(made, copies)
@@ -15051,6 +15056,32 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp cold_cut(_whole, _w, _text), do: nil
+
+  defp copied_bytes(nil, text), do: text
+  defp copied_bytes(cut, _text), do: cut
+
+  # A start that copies nothing, warm and dropping nothing, is told as before whatever
+  # stands; one that copies, the highest copy's bytes its own, names that copy, made with
+  # no write, the copies' `.tmp` never touched, so owed by none, a directory there among
+  # them; or, its comparison killed at its limit on a loaded machine before any number
+  # was told, a copy that failed, `:timeout`, owed, which a cold start is refused for.
+  defp same_copy(false, cold, drops, retain, text, w, highest),
+    do: told_copy(cold, drops, retain, text, w, highest + 1)
+
+  defp same_copy(true, nil, [], retain, text, w, highest),
+    do: told_copy(nil, [], retain, text, w, highest + 1)
+
+  defp same_copy(true, nil, _drops, %{copy: nil, failed: :timeout} = retain, text, _w, _highest) do
+    assert Map.fetch!(retain, :unknown) == nil
+    {nil, text}
+  end
+
+  defp same_copy(true, cold, _drops, retain, text, w, highest) do
+    assert %{copy: copy, failed: nil} = retain
+    assert copy == copy_named(w, highest), inspect(retain)
+    reach(:store_copy_same_kept, true)
+    {{highest, [copied_bytes(cold, text)]}, nil}
+  end
 
   defp told_copy(nil, drops, retain, text, w, next), do: copy_told(drops, retain, text, w, next)
 
@@ -16188,6 +16219,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # and decision 417: a cold start over a store cut short copied it first.
     :store_copy_numbered_past,
     :cold_copied_cut,
+    # Decision 456 (RV-6): a start whose copy's bytes the highest copy standing held made
+    # none and named that one.
+    :store_copy_same_kept,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -16378,15 +16412,24 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp owed_made!(%{owed: nil} = w), do: w
 
   # Since decision 418 (RV-13) under the next number past those that stood, every one
-  # of them as it was, and one past its limit that landed late beside it holding the same.
+  # of them as it was, and one past its limit that landed late beside it holding the same;
+  # and since decision 456 (RV-6) none where the highest that stood, one that landed late
+  # and was read before, holds the copy's bytes, that one the copy.
   defp owed_made!(w) do
     copies = copies_standing(w)
     assert Map.take(copies, Map.keys(w.copies)) == w.copies
     made = Map.drop(copies, Map.keys(w.copies))
-    assert Enum.min(Map.keys(made)) == 1 + Enum.max([0 | Map.keys(w.copies)]), inspect(made)
-    assert Enum.uniq(Map.values(made)) == [w.owed]
+    owed_numbered!(made, w)
     reach(:life_copy_made_late, true)
     %{w | copies: copies, owed: nil}
+  end
+
+  defp owed_numbered!(made, w) when made == %{},
+    do: assert(Map.fetch!(w.copies, Enum.max(Map.keys(w.copies))) == w.owed)
+
+  defp owed_numbered!(made, w) do
+    assert Enum.min(Map.keys(made)) == 1 + Enum.max([0 | Map.keys(w.copies)]), inspect(made)
+    assert Enum.uniq(Map.values(made)) == [w.owed]
   end
 
   defp life_end(:stop, runner), do: assert(Runner.stop(runner) == :ok)

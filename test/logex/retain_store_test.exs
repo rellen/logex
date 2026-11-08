@@ -1446,12 +1446,15 @@ defmodule Logex.RetainStoreTest do
           name != "plant.retain",
           do: assert(File.read(Path.join(dir, name)) == was, name)
 
-      # The next start that drops, the next number past it, the copy before it kept.
+      # The next start that drops the same store makes no copy: since decision 456 (RV-6),
+      # the leave for the next number past it, `.dropped.13`, the highest that stands,
+      # `.dropped.12`, holds its bytes, and `status/1` names that one, the copy before it
+      # kept.
       File.write!(rig.store, read)
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
-      assert %{copy: next} = Runner.status(runner).retain
-      assert next == at.(".dropped.13")
-      assert File.read!(next) == read
+      assert %{copy: next, failed: nil} = Runner.status(runner).retain
+      assert next == copy
+      refute File.exists?(at.(".dropped.13"))
       assert File.read!(copy) == read
       assert File.read!(at.(".dropped")) == "an earlier logex's copy"
       refute File.exists?(at.(".dropped.tmp"))
@@ -1460,7 +1463,8 @@ defmodule Logex.RetainStoreTest do
 
       # A directory a host made past the highest copy counts as standing too, the highest
       # then (the review of RV-13): the next copy is numbered past it, where a count of
-      # files alone would take its number and fail, `:eexist`.
+      # files alone would take its number and fail, `:eexist`; and the directory, which no
+      # comparison reads, is no match for the store (decision 456).
       File.mkdir!(at.(".dropped.20"))
       File.write!(rig.store, read)
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
@@ -1487,12 +1491,19 @@ defmodule Logex.RetainStoreTest do
       opener_down(rig.panel)
       read = File.read!(store)
 
+      # Each start's store its own bytes, a total of its own, so that each makes a copy:
+      # since decision 456 (RV-6) a start whose store holds the bytes of the highest copy
+      # makes none.
+      read =
+        &String.replace(read, ~r/global total_boxes dint \d+/, "global total_boxes dint 10#{&1}")
+
       for n <- 1..3 do
-        File.write!(store, read)
+        File.write!(store, read.(n))
         {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
         copy = store <> ".dropped.#{n}"
         assert %{copy: ^copy, failed: nil, dropped: [_drop]} = Runner.status(runner).retain
-        assert File.read!(copy) == read
+        assert File.read!(copy) == read.(n)
+        refute read.(n) == read.(n + 1)
         Manual.advance(rig.clock, 1000)
         period_written(runner)
         assert File.read!(store) =~ "\nt1.boxes ctu_int\n"
@@ -1501,8 +1512,42 @@ defmodule Logex.RetainStoreTest do
         opener_down(rig.panel)
       end
 
-      for n <- 1..3, do: assert(File.read!(store <> ".dropped.#{n}") == read)
+      for n <- 1..3, do: assert(File.read!(store <> ".dropped.#{n}") == read.(n))
       refute File.exists?(store <> ".dropped.4")
+    end
+
+    # Decision 456 (RV-6), RV-13's question 8: a deploy that drops from the store copies
+    # it, and then its device cannot be opened, and a supervisor starts it again while the
+    # device boots, five times. Before it copies, each start compares the store with the
+    # highest-numbered copy that stands, and where they hold the same bytes makes no new
+    # copy, so that the five leave one copy, `.dropped.1`, where each made one of its own,
+    # `.dropped.1` to `.dropped.5`, a card filled a store's size a restart; and the start
+    # that opens its device names that one in `status/1`'s `copy`.
+    test "five starts that fail after their copy leave one copy", %{tmp_dir: dir} do
+      rig = rig(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      copy = rig.store <> ".dropped.1"
+      opts = Keyword.put(rig.opts, :configuration, retyped())
+
+      for _start <- 1..5 do
+        Sim.fail(rig.panel, :init, {:error, :unplugged})
+        assert Runner.start_link(opts) == {:error, {:io_init, "panel", :unplugged}}
+        assert File.read!(rig.store) == read
+        assert File.read!(copy) == read
+        assert Enum.sort(File.ls!(dir)) == ["plant.retain", "plant.retain.dropped.1"]
+      end
+
+      {:ok, runner} = Runner.start_link(opts)
+
+      assert %{copy: ^copy, failed: nil, dropped: [{"t1.boxes", _retyped}]} =
+               Runner.status(runner).retain
+
+      assert Enum.sort(File.ls!(dir)) == ["plant.retain", "plant.retain.dropped.1"]
+      assert Runner.stop(runner) == :ok
     end
 
     # A drop of any kind is copied for, the report itself the trigger: an instance the
@@ -2179,6 +2224,35 @@ defmodule Logex.RetainStoreTest do
       copy = rig.store <> ".dropped.1"
       assert %{copy: ^copy, dropped: [], failed: nil} = Runner.status(runner).retain
       assert File.read!(copy) == old
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 456 (RV-6): a cold start compares the store it would copy with the highest
+    # copy that stands, as a start that drops does, before it copies: one whose first write
+    # fails after its copy is refused, the store as it was (decision 291), and each cold
+    # start made again over it, its bytes the highest copy's, makes no new copy, where each
+    # made one of its own; the one that writes names that copy.
+    test "a cold start refused after its copy, started again, makes no second copy",
+         %{tmp_dir: dir} do
+      rig = rig(dir, start: :cold, write_limit: 5000)
+      old = "logex retain 1\nconfiguration line2 written 2026-10-30T14:00:00Z\n"
+      File.write!(rig.store, old)
+      File.mkdir!(rig.store <> ".tmp")
+      copy = rig.store <> ".dropped.1"
+
+      for _start <- 1..3 do
+        assert Runner.start_link(rig.opts) == {:error, {:retain, :eisdir}}
+        assert File.read!(rig.store) == old
+        assert File.read!(copy) == old
+
+        assert Enum.sort(File.ls!(dir)) ==
+                 ["plant.retain", "plant.retain.dropped.1", "plant.retain.tmp"]
+      end
+
+      File.rmdir!(rig.store <> ".tmp")
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{copy: ^copy, dropped: [], failed: nil} = Runner.status(runner).retain
+      assert Enum.sort(File.ls!(dir)) == ["plant.retain", "plant.retain.dropped.1"]
       assert Runner.stop(runner) == :ok
     end
 

@@ -710,7 +710,8 @@ defmodule Logex.StalledDiskTest do
       # The killed copy's rename may land once the disk answers, the copy whole; the store
       # is as the start read it until its first write, which since RV-5's review makes the
       # copy owed first, the stop's here, since decision 418 under the next number past
-      # the killed copy where that landed, none replaced.
+      # the killed copy where that landed, none replaced, and since decision 456 (RV-6)
+      # none where it landed, the same bytes: the copy that landed is the one made.
       :sys.resume(server)
       assert File.read!(rig.store) == read
       landed = File.read(copy)
@@ -719,6 +720,7 @@ defmodule Logex.StalledDiskTest do
       owed = owed_copy(landed, rig.store)
       assert File.read!(owed) == read
       assert File.read(copy) == {:ok, read}
+      refute File.exists?(rig.store <> ".dropped.2")
       refute File.read!(rig.store) == read
     end
 
@@ -760,9 +762,22 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
-  # Decision 418: the copy a stop made of a copy owed, past one that landed late.
-  defp owed_copy({:ok, _read}, store), do: store <> ".dropped.2"
+  # Decision 418: the copy a stop made of a copy owed, past one that landed late; since
+  # decision 456 (RV-6), the leave for the next number past it, the one that landed, the
+  # same bytes as the store the start read, so that no copy the same as the last is made.
+  defp owed_copy({:ok, _read}, store), do: store <> ".dropped.1"
   defp owed_copy({:error, :enoent}, store), do: store <> ".dropped.1"
+
+  # Decision 456 (RV-6): an owed copy over a killed one that landed, the same bytes, makes
+  # no write of its own, so the first rename the held server takes is the store's; over
+  # one that did not land it is written, its rename let through first.
+  defp copy_let_through({:ok, _read}, _server, _restart), do: :ok
+
+  defp copy_let_through({:error, :enoent}, server, restart) do
+    assert {:called, _copying} = called_or_answered(server, :rename, restart)
+    :sys.resume(server)
+    :sys.suspend(server)
+  end
 
   # The VM's file server held for `ms` of real time and then let go, as a disk slow over a
   # write, healthy, is.
@@ -973,13 +988,13 @@ defmodule Logex.StalledDiskTest do
       # A cold restart's, the copy still owed: the copy's rename let through and the
       # store's held, killed at the limit: the copy made, the store unknown. Since
       # decision 418 the copy is numbered past the killed one where that landed, none
-      # replaced.
-      made = owed_copy(File.read(copy), rig.store)
+      # replaced, and since decision 456 (RV-6) it is the killed one where that landed,
+      # the same bytes, with no write of its own.
+      landed = File.read(copy)
+      made = owed_copy(landed, rig.store)
       server = held()
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
-      assert {:called, _copying} = called_or_answered(server, :rename, restart)
-      :sys.resume(server)
-      :sys.suspend(server)
+      copy_let_through(landed, server, restart)
       # The store's write killed at its limit in its rename, or, on a machine loaded past
       # the limit's 1,010 ms, in its raw calls before it, which tells the same: the store
       # unknown, the copy made. The wait ends either way, where it waited for a rename that
