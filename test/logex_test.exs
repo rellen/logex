@@ -1277,3 +1277,172 @@ defmodule LogexTest do
     end
   end
 end
+
+defmodule LogexTest.HeldFileServer do
+  @moduledoc """
+  Decision 464 (RV-17): the loaders, `Logex.compile_file/1`, `Logex.compile_files/1` and
+  `Logex.Configuration.compile_file/1`, read and look at their files raw, off the VM's
+  file server, which serves every other file call of the VM one at a time, and so do
+  their listing of a configuration's directory and the working directory a relative path
+  is taken from: a compile finishes while another process holds the server, as
+  `stalled_disk_test.exs` holds it (`:sys.suspend/1`), with what it gives while the server
+  is free, the refusals of a FIFO, a device, a link to nothing and a link that loops among
+  them, their messages as they were. Not async: the file server is the VM's, and the test
+  holds it.
+  """
+  use ExUnit.Case, async: false
+
+  @moduletag :tmp_dir
+
+  alias Logex.{Configuration, Diagnostic, Program}
+
+  @seal "function_block seal\nvar_input x bool\nvar_output y bool\nxic x ote y\n"
+
+  defp uses(block), do: "var_input a bool\nvar_output b bool\nvar s #{block}\ncal s a b\n"
+
+  # A call's result, or `:waited` where it had not answered within 5 s of real time, the
+  # file server held all along.
+  defp finished(task), do: answered(Task.yield(task, 5_000), task)
+
+  defp answered({:ok, result}, _task), do: result
+
+  defp answered(nil, task) do
+    Task.shutdown(task, :brutal_kill)
+    :waited
+  end
+
+  test "a compile finishes while the VM's file server is held, as it does with it free",
+       %{tmp_dir: dir} do
+    write = fn name, text ->
+      path = Path.join(dir, name)
+      File.write!(path, text)
+      path
+    end
+
+    write.("seal.ld", @seal)
+    main = write.("main.ld", uses("seal"))
+    {_, 0} = System.cmd("mkfifo", [Path.join(dir, "fifo.ld")])
+    File.ln_s!("/dev/null", Path.join(dir, "dev.ld"))
+    File.ln_s!(Path.join(dir, "nowhere.ld"), Path.join(dir, "gone.ld"))
+    File.ln_s!(Path.join(dir, "loop.ld"), Path.join(dir, "loop.ld"))
+    users = for block <- ~w(fifo dev gone loop), do: write.("on_#{block}.ld", uses(block))
+
+    plant =
+      write.(
+        "plant.logex",
+        "task fast interval 10 priority 1\nvar_global a1 bool at panel.i.0\n" <>
+          "var_global b1 bool at panel.q.0\nprogram m1 main with fast\nm1.a a1\nm1.b b1\n" <>
+          "program m2 mian with fast\n"
+      )
+
+    relative = Path.relative_to_cwd(main)
+    assert Path.type(relative) == :relative
+
+    calls = [
+      main: fn -> Logex.compile_file(main) end,
+      relative: fn -> Logex.compile_file(relative) end,
+      refused: fn -> Logex.compile_files(users) end,
+      plant: fn -> Configuration.compile_file(plant) end
+    ]
+
+    free = for {name, call} <- calls, do: {name, call.()}
+
+    assert {:ok, %Program{name: "main", file: ^main}} = free[:main]
+    assert {:ok, %Program{name: "main", file: ^relative}} = free[:relative]
+
+    assert for(
+             {:error, [%Diagnostic{stage: :file, file: file, message: message}]} <-
+               free[:refused],
+             do: {Path.basename(file), message}
+           ) == [
+             {"fifo.ld",
+              "cannot be read: it is no regular file but a FIFO, a socket or another special " <>
+                "file, and logex reads a file"},
+             {"dev.ld",
+              "cannot be read: it is no regular file but a device, and logex reads a file"},
+             {"gone.ld", "cannot be read: no such file or directory"},
+             {"loop.ld", "cannot be read: too many levels of symbolic links"}
+           ]
+
+    assert {:error, [%Diagnostic{line: 7, message: absent}]} = free[:plant]
+
+    assert absent ==
+             "unknown program type `mian`: there is no `mian.ld` beside `plant.logex` — did " <>
+               "you mean `main`?"
+
+    server = Process.whereis(:file_server_2)
+    :sys.suspend(server)
+    on_exit(fn -> :sys.resume(server) end)
+    held = for {name, call} <- calls, do: {name, finished(Task.async(call))}
+    :sys.resume(server)
+
+    assert held == free
+  end
+end
+
+defmodule LogexTest.GoneWorkingDirectory do
+  @moduledoc """
+  RV-17's review (decision 464): the loaders read the working directory only for a path
+  still relative once a leading `~` is the user's home, as `Path.expand/1` read it, so
+  that an absolute path, and one from home, compile with a working directory that cannot
+  be read, as a release directory replaced under a running VM leaves it, each giving what
+  it gives with the directory there; a relative path raises `File.Error` as
+  `Path.expand/1` raised it (provisional, `PLAN.md`'s RV-17 question 3). Not async: the
+  working directory is the VM's, and the test deletes it.
+  """
+  use ExUnit.Case, async: false
+
+  @moduletag :tmp_dir
+
+  @seal "function_block seal\nvar_input x bool\nvar_output y bool\nxic x ote y\n"
+
+  test "an absolute path, or one from home, compiles with the working directory deleted, " <>
+         "and a relative path raises as Path.expand/1 raised",
+       %{tmp_dir: dir} do
+    File.write!(Path.join(dir, "seal.ld"), @seal)
+    main = Path.join(dir, "main.ld")
+    File.write!(main, "var_input a bool\nvar_output b bool\nvar s seal\ncal s a b\n")
+    plant = Path.join(dir, "plant.logex")
+
+    File.write!(
+      plant,
+      "task fast interval 10 priority 1\nvar_global a1 bool at panel.i.0\n" <>
+        "var_global b1 bool at panel.q.0\nprogram m1 main with fast\nm1.a a1\nm1.b b1\n"
+    )
+
+    home = "~/logex-absent-#{System.unique_integer([:positive])}.ld"
+
+    calls = [
+      main: fn -> Logex.compile_file(main) end,
+      files: fn -> Logex.compile_files([main, main]) end,
+      plant: fn -> Logex.Configuration.compile_file(plant) end,
+      home: fn -> Logex.compile_file(home) end
+    ]
+
+    there = for {name, call} <- calls, do: {name, call.()}
+    assert {:ok, %Logex.Program{name: "main"}} = there[:main]
+    assert {:ok, %Logex.Configuration{}} = there[:plant]
+
+    assert {:error, [%Logex.Diagnostic{stage: :file, file: ^home, message: absent}]} =
+             there[:home]
+
+    assert absent == "cannot be read: no such file or directory"
+
+    here = File.cwd!()
+    gone = Path.join(dir, "gone")
+    File.mkdir!(gone)
+    File.cd!(gone)
+    on_exit(fn -> File.cd!(here) end)
+    File.rmdir!(gone)
+    assert :prim_file.get_cwd() == {:error, :enoent}
+
+    deleted = for {name, call} <- calls, do: {name, call.()}
+
+    assert_raise File.Error,
+                 "could not get current working directory nil: no such file or directory",
+                 fn -> Logex.compile_file("main.ld") end
+
+    File.cd!(here)
+    assert deleted == there
+  end
+end

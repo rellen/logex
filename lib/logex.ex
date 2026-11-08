@@ -107,8 +107,20 @@ defmodule Logex do
   names no program, below.
 
   A file that cannot be read, or whose name cannot name a program, is a `:file`
-  diagnostic, not an exception. After a refused name the source is still compiled, with
-  the blocks beside it, so its own mistakes are listed too.
+  diagnostic, not an exception: a FIFO, a device or another special file is refused before
+  it is opened, and so is a link to nothing or one that loops. After a refused name the
+  source is still compiled, with the blocks beside it, so its own mistakes are listed too.
+
+  Every file the loader reads or looks at, and the working directory a relative path is
+  taken from, it reaches raw, off the VM's file server (decision 464), which serves every
+  other file call of the VM one at a time: so a compile waits on no file call the VM makes
+  through the server, a logger's or a store's write among them, and finishes while another
+  process holds the server. A raw call takes one of the VM's dirty I/O schedulers, which
+  every raw file call of the VM shares, so a compile still waits where all of them are
+  taken, by ten raw opens of FIFOs that no process writes, say, as every raw call does.
+  The working directory is read only for a path still relative once a leading `~/` is the
+  user's home, so an absolute path compiles while it cannot be read; a relative one then
+  raises `File.Error`, as `Path.expand/1` raises it (provisional).
   """
   defdelegate compile_file(path), to: Logex.Compiler
 

@@ -4710,8 +4710,8 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   their one `.tmp`, `<store>.dropped.tmp`, decision 392's one `.tmp` unchanged, renamed
   only where nothing stands at the copy's name, a file a host makes there meanwhile
   failing the copy, `:eexist`, owed as decision 416 has a copy that cannot be made
-  (provisional); an unnumbered `<store>.dropped` an earlier logex left is kept and counts
-  for nothing (provisional); decision 356's claim covers every copy's name, a runner's
+  (decision 448); an unnumbered `<store>.dropped` an earlier logex left is kept and counts
+  for nothing (decision 450); decision 356's claim covers every copy's name, a runner's
   file at another's copy's name refused both ways, and decision 325's refusal of a forces
   file on a copy covers every number and `<store>.dropped`, written through the copies'
   `.tmp`.)* *(Decision 417, RV-13, 2026-11-04: a cold start, `start: :cold`, reads the
@@ -4719,11 +4719,11 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   cut short, refused by any line of it or by its image, it copies first under decision
   418's next number, writing the new store only once the copy is made; a copy that
   cannot be made, past its limit among them, and a store that stands but cannot be read,
-  which no copy can be made of (provisional), refuse the start as decision 291 refuses a
+  which no copy can be made of (decision 453), refuse the start as decision 291 refuses a
   cold start whose first write fails, the store as it was; a store that reads whole gets
   no copy; the cut store's refusal says the cold start copies it first, where it warned
   the operator to copy it aside; and a cold `restart/2` reads no store and copies none
-  (provisional).)*
+  (decision 454).)*
   *(RV-5's review, 2026-11-02: a copy that fails is owed, every write over the store, the
   period's and every event's, making it first and writing the store only once it is made,
   so that no write replaces the store before its copy is made, where the period's write
@@ -4736,8 +4736,8 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   read none of them and numbered every copy 1; the copy looks at its name raw just before
   its rename, which goes through the VM's file server, so a file a host makes there
   before that look fails it, `:eexist`, and one made between the look and the rename is
-  replaced (provisional, a question to the maintainer); each start that drops makes a
-  copy, though the highest hold the same bytes (provisional, a question); and the forces
+  replaced (decision 449); each start that drops makes a copy, though the highest hold
+  the same bytes, until RV-6 builds decision 456; and the forces
   refusals name a cold start's copy too.)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
@@ -12416,8 +12416,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      scanned, lowered or warned of, each global restarted, each round, each read or write
      where both make as many, where the old pins went red in six, two and four files. A
      twin that does the guarded work itself gives a lower bound, which a cheaper version of
-     that work breaks; a regression in what both twins share as often no twin catches;
-     both provisional, `PLAN.md`'s RV-7 questions. `CONTRIBUTING.md` states the rule, how to write a new one,
+     that work breaks, which decision 458 keeps; a regression in what both twins share as
+     often no twin catches, which decision 459's ceilings catch once it makes a stage, or
+     since RV-17's review a rung of it, more than twice as dear. `CONTRIBUTING.md` states
+     the rule, how to write a new one,
      and that a count moves with the VM's own state (a map of more than 32 keys built is
      charged a few reductions more or less from one call to the next, and a VM-wide event
      moves every later call's count), so that two counts compared are measured in turn, and
@@ -13225,8 +13227,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      write and no one told; at the tip the write is cut off at 5,000 ms and reported,
      `{:retain, {:error, :timeout}}`, the runner ending `:shutdown` at 5,150 ms, and with
      `write_limit: 30_000` the shutdown writes the store in 15.8 s. A trip's, a cold
-     restart's and a fresh start's write make the text in the runner as before
-     (provisional, decision 352's RV-6). A host's own `shutdown:` still wins.)*
+     restart's and a fresh start's write make the text in the runner as before, which
+     decision 455 limits too, to build in RV-6 with decision 352. A host's own `shutdown:`
+     still wins.)*
 
 415. **A store's read at start on a stalled disk (the review after Milestone 6),** RV-5's
      question 7: a fresh start whose store cannot be read within its limit is refused.
@@ -13246,9 +13249,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision 275 runs on past a failed write; the drops are never lost. *(RV-13,
      2026-11-04: RV-5's marks on it are this decision's number; since decision 418 the
      owed copy is numbered as it is made, and a file a host makes at its number while it
-     is written fails it, `:eexist`, owed so (provisional); since RV-13's review, one made
+     is written fails it, `:eexist`, owed so (decision 448); since RV-13's review, one made
      before the copy's look at its name, raw, just before the rename, one made between
-     that look and the rename, through the VM's file server, replaced (provisional).)*
+     that look and the rename, through the VM's file server, replaced (decision 449).)*
 
 417. **A cold start over a store refused as cut (the review after Milestone 6),** RV-5's
      question 9: `start: :cold` writes a new store at once over one a fresh start refused,
@@ -13267,11 +13270,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      init/1, under decision 418's next number, before the new store is written, the copy
      named in `status/1`; a copy that cannot be made, past its limit among them, and a store
      that stands but cannot be read, a FIFO or a directory in its place, of which no copy
-     can be made (provisional), refuse the start, `{:error, {:retain, reason}}`, the store
+     can be made (decision 453), refuse the start, `{:error, {:retain, reason}}`, the store
      as it was and no device opened; a store that reads whole gets none. The cut store's
      refusal says "start it with start: :cold to start over it, which copies it first to
      the next `.dropped.<n>` beside it and then writes a new store over it". A cold
-     `restart/2` reads no store and copies none (provisional). The leave: the cold start's
+     `restart/2` reads no store and copies none (decision 454). The leave: the cold start's
      pin over a store a fresh start refused, and the five pins of the warning.)*
 
 418. **Rolling back a mistaken deploy (the review after Milestone 6),** RV-5's question 10:
@@ -13290,14 +13293,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      its number's value, a file or a directory a host made among them, read raw inside the
      copy's own limited write; the copy is written through `<store>.dropped.tmp`, the
      copies' one `.tmp`, and renamed only where nothing stands at its name, a file made
-     there meanwhile failing it, `:eexist`, owed (provisional); an unnumbered
-     `<store>.dropped` is kept as it stands and counts for nothing (provisional);
+     there meanwhile failing it, `:eexist`, owed (decision 448); an unnumbered
+     `<store>.dropped` is kept as it stands and counts for nothing (decision 450);
      `Logex.Runner.Paths` checks a claim, once its rows are in, against every other live
      runner's files both ways, a file at another store's copy's name and a store whose
      copy's name another holds refused; decision 325's refusal covers every number, the
      copies' `.tmp` and `<store>.dropped`, written through it; a copy killed at its limit
      is unknown by its number, one killed before it took one a copy that failed,
-     `:timeout` (provisional). The leave: every pin of the one `.dropped` and its
+     `:timeout` (decision 452). The leave: every pin of the one `.dropped` and its
      replacement, numbered. The walks read the copies from the directory before and after
      each start.)* *(RV-13's review, 2026-11-04: a store's copies are told by its name
      read whole, never by a search for `.dropped.` in an entry's name, so that a store
@@ -13307,10 +13310,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the first, `:eexist`, every write after it held; "a file made there meanwhile failing
      it" holds only for one made before the copy's raw look at its name, one made between
      that look and the rename, which waits in the file server's queue on a stalled disk,
-     replaced (provisional, a question to the maintainer: a hard link refuses a name that
-     stands, and a FAT card has none); and each start that drops copies the store though
-     the highest copy hold the same bytes, a start failing after its copy and started
-     again among them (provisional, a question).)*
+     replaced (decision 449, as built: a hard link refuses a name that stands, and a FAT
+     card has none); and each start that drops copies the store though the highest copy
+     hold the same bytes, a start failing after its copy and started again among them,
+     which decision 456 changes, to build in RV-6.)*
 
 419. **A long path in a refusal (the review after Milestone 6),** RV-5's question 11: a
      refusal shows a path past 4,096 bytes as `…` and its last 4,096 bytes.
@@ -13689,6 +13692,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: as built (a)** (the maintainer, 2026-11-07): the host's file is untouched,
      and `status/1` shows that something writes among logex's copies. RV-17 makes the
      mark the decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in `Logex.Retain.written/2`'s
+     comment, README's rollback, §4.13, `PLAN.md`'s RV-13 entry and decisions 416's and
+     418's notes; those in `Logex.Runner`'s moduledoc and `Logex.Runner.Writer.copy/3`'s
+     comment are RV-6's to make.)*
 
 449. **A file that appears as a copy is renamed into place (the review after Milestone
      6),** RV-13's question 1, its second half (decision 418): a file a host makes at the
@@ -13697,6 +13704,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: as built (a)** (the maintainer, 2026-11-07): only a host writing among
      logex's own copies' names at that moment meets it, and the documents say so. RV-17
      makes the mark the decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in `Logex.Retain.written/2`'s
+     comment, README's rollback, §4.13, `PLAN.md`'s RV-13 entry and decisions 416's and
+     418's notes; those in `Logex.Runner`'s moduledoc, `Logex.Runner.Writer.copy/3`'s
+     comment and `stalled_disk_test.exs`'s test that pins the window, named
+     "(provisional)", are RV-6's to make.)*
 
 450. **An unnumbered `<store>.dropped` an earlier logex left (the review after Milestone
      6),** RV-13's question 2 (decision 418): kept as it stands and not counted, so the
@@ -13704,6 +13716,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
      decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in README's rollback, §4.13,
+     `PLAN.md`'s RV-13 entry and decision 418's note; those in `Logex.Runner`'s moduledoc,
+     `Logex.Runner.Paths`' head, `Logex.Runner.Writer.copy/3`'s comment and
+     `retain_store_test.exs`'s numbering test are RV-6's to make.)*
 
 451. **Two runners started at once on files that cross (the review after Milestone 6),**
      RV-13's question 3 (decisions 356 and 418): two runners of one VM started at the
@@ -13711,6 +13727,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07): the operator starts one again,
      and no lock is taken. RV-17 makes the mark the decision's number.
+     *(RV-17, 2026-11-07: its mark is this number in `PLAN.md`'s RV-13 entry, the one
+     place it was marked; `Logex.Runner.Paths` and `runner_paths_test.exs` state it
+     unmarked.)*
 
 452. **A copy cut off before it took its number (the review after Milestone 6),** RV-13's
      question 4 (decisions 391 and 418): `failed: :timeout`, where one cut off after it
@@ -13718,6 +13737,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07): `status/1` says what can be on
      disk. RV-17 makes the mark the decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in `PLAN.md`'s RV-13 entry and
+     decision 418's note; those at `Logex.Runner`'s `copy_made/3` and `noted/3` are RV-6's
+     to make.)*
 
 453. **A cold start over a store it cannot read (the review after Milestone 6),** RV-13's
      question 5 (decision 417): a store that is a directory, or on a card that never
@@ -13726,6 +13748,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: refused, as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark
      the decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in README's store, §4.13, `PLAN.md`'s
+     RV-13 entry and decision 417's note; those in `Logex.Runner`'s moduledoc and its
+     `cold_copy/1` comment, `retain_store_test.exs`'s and `stalled_disk_test.exs`'s cold
+     starts are RV-6's to make.)*
 
 454. **A cold restart over a store edited while the runner runs (the review after
      Milestone 6),** RV-13's question 6 (decisions 284 and 417): a running plant's cold
@@ -13734,6 +13760,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07): a hand edit is made with the
      runner stopped. RV-17 makes the mark the decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in README's store, §4.13, `PLAN.md`'s
+     RV-13 entry and decision 417's note; the one in `Logex.Runner`'s moduledoc is RV-6's
+     to make.)*
 
 455. **A trip's or a cold restart's write of a very large store (the review after
      Milestone 6),** RV-13's question 7 (decisions 352, 400 and 414): only the shutdown's
@@ -13744,7 +13773,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      store makes its text within `write_limit:`, in the write's own limited process, as
      the shutdown's does since decision 414, so the runner answers on, and a store too big
      for the limit is reported as any write cut off at it (decision 391), the host raising
-     `write_limit:`. To build in RV-6, with decision 352.
+     `write_limit:`. To build in RV-6, with decision 352. *(RV-17, 2026-11-07: decision
+     414's note and `PLAN.md`'s RV-13 entry name it; `Logex.Runner`'s comment at
+     `text_of/2` is RV-6's to change as it builds it.)*
 
 456. **A start that fails after its copy, started again (the review after Milestone 6),**
      RV-13's question 8 (decisions 360 and 418): each start that drops makes a new copy,
@@ -13754,7 +13785,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a copy the same as the last skipped (b)** (the maintainer, 2026-11-07): before
      it copies, a start compares the store with the highest-numbered copy standing, and
      where they hold the same bytes it makes no new copy and `status/1`'s `copy` names
-     that one. To build in RV-6.
+     that one. To build in RV-6. *(RV-17, 2026-11-07: README's rollback and §4.13 say each
+     start copies until RV-6 builds it, and `PLAN.md`'s RV-13 entry and decision 418's
+     note name it; `Logex.Runner`'s moduledoc and `Logex.Runner.Writer.copy/3`'s comment
+     are RV-6's to change as it builds it.)*
 
 457. **A refusal's bounds (the review after Milestone 6),** RV-5's provisional reading,
      carried by RV-13 (decision 355): a refusal of the store or the forces file tells at
@@ -13763,6 +13797,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
      decision's number.
+     *(RV-17, 2026-11-07: its mark is this number in `Logex.Refusal`'s head and
+     `PLAN.md`'s RV-13 entry.)*
 
 458. **A twin that does the guarded work itself gives a lower bound (the review after
      Milestone 6),** RV-7's question 1 (decision 357): a bound beside the feature holds
@@ -13770,7 +13806,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      turns it red with nothing regressed.
 
      **Taken: as built (a)** (the maintainer, 2026-11-07): such a commit restates the
-     bound, and its diff shows the saving. RV-17 makes the mark the decision's number.
+     bound, and its diff shows the saving. *(RV-17, 2026-11-07: its marks are this number
+     in `CONTRIBUTING.md`'s cost practice, which says to restate such a bound in the commit
+     that makes the work cheaper, in the beside twins' comments of `real_test.exs`,
+     `array_test.exs`, `located_array_test.exs` and `retain_test.exs`, in decision 357's
+     note and in `PLAN.md`'s RV-7 entry.)*
 
 459. **A regression both twins share (the review after Milestone 6),** RV-7's question 2
      (decision 357): a cost both twins of a bound pay alike cancels out, so every
@@ -13780,7 +13820,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      compile, a scan, a cycle and a round, holds a standard program's cost under twice a
      figure recorded with it, so a gross slowdown both twins share is caught, and neither
      a toolchain's shift nor a saving turns it red; CONTRIBUTING.md says how a ceiling is
-     recorded and raised. To build in RV-17.
+     recorded and raised. To build in RV-17. *(Landed with RV-17, 2026-11-07, `01b4afe`:
+     `ceiling_test.exs` holds the compile of README's `motor.ld`, 100 scans of the motor,
+     100 cycles of README's plant and a round of the plant on the runner, each count the
+     least of five in a process of its own, a round's less the manual clock's
+     synchronisation, under twice its figure: 8,649, 44,606, 83,262 and 1,662. Each goes
+     red with its stage made about three times as dear across the board, two calls a step
+     each as dear as a step (2.9 to 3.0 its figure), judged by the full suite, and the
+     cycles' with a cycle step made twice again (2.51); a step's own call made once again
+     everywhere reads 1.24 to 1.75, under it, and RV-7's probes, a reduction or two a
+     step, at most 1.09, green by the full suite; each saving tried reads less.
+     CONTRIBUTING.md's "Hold each stage under a ceiling twice its recorded figure" says
+     how a figure is recorded and when and how it is raised; `PLAN.md`'s RV-17 entry has
+     the probes.)* *(Changed with RV-17's review, 2026-11-08, the commit after `6c6897d`:
+     a whole stage on README's motor is mostly what it pays a call and a tag, a rung's
+     evaluation a sixth of a scan, so every instruction evaluated four times over read
+     1.44 of the scans' figure, 1.28 of the cycles' and 1.15 of the round's, under each.
+     Each test now also holds its stage a rung, over the motor's five rungs written
+     sixteen times over less over eight, its tags the same at both, a rung of the forty
+     between, the least of five differences counted in pairs, under twice a figure of its
+     own: 999.2, 3,110, 3,762.9 and 37.5 (provisional, `PLAN.md`'s RV-17 question 6). The
+     same probe reads 2.25 a rung of each, red, and each element 20 reductions dearer
+     2.75; each element or cycle step run once again reads 1.96 to 2.0 a rung, on the
+     line; RV-7's probes 1.25 a rung at most; each saving less. A ceiling is under twice
+     its figure, `<`, as the decision says, where it was `<=`.)*
 
 460. **Half a reduction a rung (the review after Milestone 6),** RV-7's question 3
      (decision 357): each bound allows half a reduction a rung, a key or a group beyond
@@ -13788,6 +13851,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-07). RV-17 makes the mark the
      decision's number.
+     *(RV-17, 2026-11-07: its marks are this number in `CONTRIBUTING.md`'s cost practice,
+     the same four tests' comments and `PLAN.md`'s RV-7 entry.)*
 
 461. **A device the machine did not schedule (the review after Milestone 6),** RV-7's
      question 4 (decisions 114, 128 and 348): a device whose process the host's
@@ -13798,7 +13863,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      wakes late, its own wake past its time by more than the idle watchdog, lets its
      devices run before it judges them, so only a device still silent after it has had
      its turn trips the line; a hung device still trips, and the runner's own lateness
-     shows in `status/1`. To build in RV-6.
+     shows in `status/1`. To build in RV-6. *(RV-17, 2026-11-07: `end_to_end_test.exs`'s
+     real-clock plant and `PLAN.md`'s RV-7 entry name it.)*
 
 462. **The real-clock reread test (the review after Milestone 6),** RV-7's question 5: a
      test on the real clock cannot hold a simulated card's next reread at a restart, so
@@ -13806,14 +13872,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: a hold in `Logex.IO.Sim` (b)** (the maintainer, 2026-11-07): the simulated
      device gains a way to hold its next reread until the test lets it go, and the test
-     proves its rule on any machine. To build in RV-17.
+     proves its rule on any machine. To build in RV-17. *(Landed with RV-17, 2026-11-07,
+     `e86963d`: `Logex.IO.Sim.hold/1`, `let_go/1` and `holding?/1`, the reread told from a
+     poll's read by the fence `Logex.Runner.Device` sends itself just before it, which
+     waits in the device's mailbox while the adapter reads, so that a poll passes the hold
+     by; the held read goes on as usual once let go, a failure told meanwhile acted out in
+     it, and is counted only then; a hold let go before any reread came is taken back, and
+     a hold twice or a let-go of nothing raises (provisional, `PLAN.md`'s RV-17 questions
+     1 and 2). *(RV-17's review, 2026-11-08, `6c6897d`: a poll queued behind a reread
+     reads with the reread's fence still in the mailbox, which the hold took for a reread,
+     so the sim now tells a reread by the newest fence in the mailbox, one no read of the
+     sim found before, and a held reread whose process goes down, killed by a runner that
+     gave it up, spends the hold, `holding?/1` false (provisional, question 4).)*
+     `trip_test.exs`'s real-clock test holds the drive's reread until a poll of
+     the released panel has taken the bad reading, sees the restart still waiting, and
+     lets it go: 0 of 50 failed under the busy loops, and red on a released device that
+     passes its readings on.)*
 
 463. **An edit's bound no mutant parts (the review after Milestone 6),** RV-7's question
      6 (decision 357): the bound that an online edit's switch costs no more than a fresh
      start of the program has no mutant that moves one side alone.
 
      **Taken: kept (a)** (the maintainer, 2026-11-07), as a statement of the rule, its
-     comment saying so. RV-17 makes the mark the decision's number.
+     comment saying so. *(RV-17, 2026-11-07: `retain_edit_test.exs`'s comment says so, with
+     this number, and `PLAN.md`'s RV-7 entry names it.)*
 
 464. **A load waits on every other file call of the VM (the review after Milestone 6),**
      RV-7's question 7: `Logex.SourceFile` reads and looks at files through the VM's file
@@ -13823,7 +13905,27 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: the loader reads raw (b)** (the maintainer, 2026-11-07): `Logex.SourceFile`
      reads and looks at a source file raw, as the runner's store and forces reads do, so
      a host's compile waits on no other file call; its refusals of a FIFO, a device and a
-     link stay as they are. To build in RV-17.
+     link stay as they are. To build in RV-17. *(Landed with RV-17, 2026-11-07, `b490245`:
+     `Logex.SourceFile` looks at and reads a file, looks at a name beside one, lists a
+     configuration's directory and takes the working directory a relative path is
+     expanded against, each raw, so that a compile makes no call through the server; each
+     answers as its call through the server did, the refusals and their messages as they
+     were. `LogexTest.HeldFileServer` compiles programs, every refusal and a configuration
+     while the server is held and holds each result to the one given with it free; a
+     working directory that cannot be read raises `File.Error` as `Path.expand/1` did
+     (provisional, `PLAN.md`'s RV-17 question 3). The loader over 250 program types beside
+     four processes that keep the server busy, under the busy loops, took 58 to 67 s at
+     `e31a456` and 6 to 12 s at the tip.)* *(Changed with RV-17's review, 2026-11-08,
+     `6c6897d`: the working directory is read only for a path still relative once a
+     leading `~/` is the user's home, as `Path.expand/1` read it, so that an absolute path
+     compiles while it cannot be read, where every load raised `File.Error`;
+     `LogexTest.GoneWorkingDirectory` deletes it. A raw call takes one of the VM's dirty I/O
+     schedulers, which every raw file call shares, so a compile waits where all ten are
+     taken, by raw opens of FIFOs no process writes, which hold theirs once their
+     processes are killed, the VM wedged; the docs say so. `configuration_test.exs`'s
+     "loading stays linear" still ran past ExUnit's 60 s in four of the review's ten
+     loaded full suites, a load average of 17 to 32, as it did at `e31a456`
+     (provisional, question 5).)*
 
 465. **A second force while the first is written (the review after Milestone 6),** RV-16's
      question 1 (decision 437): forcing requests asked while a write of the forces file is

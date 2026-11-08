@@ -1592,8 +1592,9 @@ defmodule Logex.LocatedArrayTest do
     # two measured apart, the same in every run but for a restart's hundredths, and an
     # allowance under the least regression it is there for: a call more an input point,
     # two a group, a call an output point, one, a call a global, four a group; so a cycle's
-    # 1 a group, a copy-out's half a reduction a point, and a restart's 1 a group. The
-    # look-ups made cheaper restate them, and a call both twins make moves both. Each count
+    # 1 a group, a copy-out's half a reduction a point, and a restart's 1 a group (decision
+    # 460). The look-ups made cheaper restate them (decision 458), and a call both twins
+    # make moves both. Each count
     # is the least of five: building a map of more than 32 keys, as a restart does, is
     # charged a few reductions more or less from one call to the next, a tenth of one a
     # group here (43.375 to 43.47 a restart beside the arrays in four runs), where the
