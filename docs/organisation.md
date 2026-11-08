@@ -13927,6 +13927,105 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      loaded full suites, a load average of 17 to 32, as it did at `e31a456`
      (provisional, question 5).)*
 
+465. **A second force while the first is written (the review after Milestone 6),** RV-16's
+     question 1 (decision 437): forcing requests asked while a write of the forces file is
+     out wait in the order asked, each written in a write of its own, so ten an HMI
+     scripts on a disk that takes 3 s a write take 30 s.
+
+     **Taken: the waiting joined (c)** (the maintainer, 2026-11-08): every forcing request
+     waiting behind the write that is out goes into the next write together, applied in
+     the order asked, and each caller is answered when that write lands; ten such take two
+     writes. To build in RV-18.
+
+466. **What `status/1` shows while a force is written (the review after Milestone 6),**
+     RV-16's question 2 (decisions 437 and 440): only the forces in effect, so a force
+     being written reads as not forced until its write lands.
+
+     **Taken: a `forcing` key (b)** (the maintainer, 2026-11-08): `status/1` carries
+     `forcing`, the set the write that is out holds, nil where none is out, always there
+     as decision 440 has the other keys, so an HMI can show the force as on its way. To
+     build in RV-18.
+
+467. **A stop while a force is written (the review after Milestone 6),** RV-16's question
+     3 (decision 437): the stop writes every device's 0 and closes them at once, then
+     waits up to the write limit for the write and answers its caller with what came of
+     it; a request queued behind is answered as to a runner not running.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-08): the plant is safe at once, and
+     the force's caller is told the truth. RV-18 makes the mark the decision's number.
+
+468. **A force's write that lands after a restart (the review after Milestone 6),**
+     RV-16's question 4, as its review restated it (decision 437): a restart reads the
+     forces file while a force's write is out, so the HMI shows what the file held, and
+     the write then lands and replaces it, a force shown a moment and gone.
+
+     **Taken: the restart waits (c)** (the maintainer, 2026-11-08): a restart asked while a
+     write of the forces file is out waits for that write, up to the write limit, before
+     it reads the file, so the HMI never shows a force that then vanishes; what a cut
+     write leaves is decision 391's and 475's. To build in RV-18.
+
+469. **What an abandoned round keeps (the review after Milestone 6),** RV-16's question 5
+     (decision 441): what the round's steps before the bad clock reading wrote stays in
+     the resource, a box counted, though no output of the round was written.
+
+     **Taken: kept, as built (a)** (the maintainer, 2026-11-08), as a Logix major fault
+     keeps what the rungs before it wrote. RV-18 makes the mark the decision's number.
+
+470. **Where a round's clock rule reaches (the review after Milestone 6),** RV-16's
+     question 6 (decision 441): an untimed plant's period write, outside any round, trips
+     one message later by decision 394's rule; a device gone down by its own clock is
+     found at its write, the devices written before it keeping the round's outputs until
+     the trip's 0.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
+     decision's number.
+
+471. **The share's count when a slot stays open (the review after Milestone 6),** RV-16's
+     question 7 (decisions 396 and 442): the count begins again at the slot, whoever takes
+     it and when, so a slot comes every so many rounds.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-08): a host's share stays its share on
+     average, and a late taker keeps its next turn. RV-18 makes the mark the decision's
+     number.
+
+472. **A stop and a fresh start while `forces_unread` stands (the review after Milestone
+     6),** RV-16's question 8 (decisions 390 and 445): a stop leaves the forces file as it
+     stands, so the next fresh start takes a force the HMI was not showing.
+
+     **Taken: the stop writes the runner's set (b)** (the maintainer, 2026-11-08): an
+     orderly stop while `forces_unread` stands writes the runner's own set to the forces
+     file before it ends, within the write limit, so the next start brings back nothing
+     the HMI was not showing, as decision 445 has a restart; a stop whose write fails or
+     is cut says so, as any write. To build in RV-18.
+
+473. **A host's mistake behind a force's write (the review after Milestone 6),** RV-16's
+     question 9 (decision 437): a forcing request naming no point, or a value its point
+     cannot take, is judged in its turn, so its caller learns of the mistake only after
+     the write ahead of it.
+
+     **Taken: raised at once (b)** (the maintainer, 2026-11-08): a host's mistake in a
+     forcing request is raised at its caller as it is asked, as every host mistake is,
+     whatever write is out. To build in RV-18.
+
+474. **The clock gone wrong during a round's writes (the review after Milestone 6),**
+     RV-16's question 10 (decision 441): the devices written before the bad reading keep
+     the round's outputs until the trip's 0, and a round cut at its end publishes no
+     event though the devices took its outputs.
+
+     **Taken: what was sent published (b)** (the maintainer, 2026-11-08): the round's
+     `{:round, now, outputs}` event is published with the outputs the devices took, so a
+     log or an HMI that follows the rounds matches the plant. To build in RV-18.
+
+475. **A cut force write that lands after its runner has gone (the review after Milestone
+     6),** RV-16's question 11 (decisions 356, 391 and 437): a write of the forces file
+     cut off at its limit may land after its runner has ended, and the next runner then
+     takes a force its operator was told had failed.
+
+     **Taken: the file held (b)** (the maintainer, 2026-11-08): a runner's claim on its
+     forces file (decision 356), and on its store, is held until every write of it the
+     runner began has ended, so no runner of the VM starts on the file meanwhile, a start
+     then refused naming the file held. To build in RV-18.
+
 ---
 
 ## 8. Sources, and what is unverified
