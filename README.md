@@ -350,23 +350,22 @@ and a late runner letting its devices run before judging them (decisions 455, 45
 461). The rest of those answers, decisions 448–464, have landed with RV-17: the loaders
 reading and looking at their files raw, off the VM's file server (decision 464), a hold
 in the simulated device on its next reread (decision 462) and a ceiling a stage, the
-compile, a scan, a cycle and a round, twice a figure recorded with it (decision 459), the
-others as built. Its answers to the questions RV-5 left, decisions 409–419, have
-landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
-CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
-nothing was copied (decision 412), the shutdown's write making the store's text within
-the write limit, which the child spec's deadline counts (decision 414), a cold start
-over a store a fresh start would refuse copying it first (decision 417) and each copy of
-the store a name of its own, `<store>.dropped.1` and on, none replaced (decision 418),
-the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to the
-four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13. Its
-answers to the questions
-RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
-runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
-heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
-forces file a start or a restart cannot read carried on and named in `status/1`
-(decision 390), a write past its limit named unknown until a later one lands or fails
-(decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
+compile, a scan, a cycle and a round, whole and a rung, twice a figure recorded with it
+(decision 459), the others as built. Its answers to the questions RV-5 left, decisions
+409–419, have landed with RV-13: the store and the forces file reading a line ended by
+CRLF or a lone CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil
+where nothing was copied (decision 412), the shutdown's write making the store's text
+within the write limit, which the child spec's deadline counts (decision 414), a cold
+start over a store a fresh start would refuse copying it first (decision 417) and each
+copy of the store a name of its own, `<store>.dropped.1` and on, none replaced (decision
+418), the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to
+the four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13.
+Its answers to the questions RV-4 left, decisions 390–401, have landed with RV-11: every
+file write and read the runner makes limited by a `write_limit:` of its own, 5 s unless
+set, apart from the heartbeat (decision 400), a device's opening by an `open:` of its own
+(decision 398), a forces file a start or a restart cannot read carried on and named in
+`status/1` (decision 390), a write past its limit named unknown until a later one lands or
+fails (decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
 their share against a due periodic round (decision 396) and a misread address shown as
 the configuration writes it, `panel.i.7` (decision 399), the other five as built
 (decisions 392, 393, 395, 397 and 401). Its answers to the questions

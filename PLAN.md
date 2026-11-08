@@ -16392,13 +16392,135 @@ and CI checked; each fix with a test that fails when it is reverted.
     (`scratchpad/rv/rv17work/load_loader.txt`). No loader test failed in the mutation
     table's 20 full suites but under the mutants made for it.
 
+  **RV-17's review** (2026-11-08, of `aa17a15`; the review's evidence under
+  `scratchpad/rv/rev17work/`, this round's under `scratchpad/rv/rv17work/fix/`). Each
+  finding and what it became:
+
+  1. *A new exception out of every loader* (high, decision 464). `SourceFile.expanded/1`
+     read the working directory for every path, where `Path.expand/1` read it only for a
+     relative one, so with the directory deleted, as a release directory replaced under
+     a running VM leaves it, every load raised `File.Error`, an absolute path's among
+     them. It now reads it only for a path still relative once a leading `~/` is the
+     user's home (`6c6897d`). `logex_test.exs`'s `LogexTest.GoneWorkingDirectory`, `async:
+     false`, deletes the directory and holds an absolute path's compile, `compile_files/1`,
+     a configuration's load and a path from home to the results given with it there, and
+     pins the relative path's `File.Error` (provisional, question 3): red on the read for
+     every path, on the read for a path from home and on the review's r4, an unreadable
+     directory read as `/`.
+  2. *Ceilings that miss a slowdown both twins share* (medium-high, decision 459). A whole
+     stage on README's motor is mostly what it pays a call and a tag: every instruction
+     evaluated four times over read 1.44 of the scans' figure, 1.28 of the cycles' and
+     1.15 of the round's, each under its ceiling. A rung's cost counted over README's
+     motors written apart, sixteen against eight, each motor its own tags, left the same
+     share, a scan's checks of its state growing with the tags (72 reductions a rung, of
+     which evaluation is 12). So each test now also holds its stage a rung over the
+     motor's five rungs written sixteen times over less over eight, its declarations as
+     they are, so that what the stage pays a call or a tag cancels: the least of five
+     differences counted in pairs, a rung of the forty between them, under twice a figure
+     recorded with it, compile 999.2, scans 3,110, cycles 3,762.9 and a round 37.5 (the
+     same on six runs, the round's 37.49 to 37.57; provisional, question 6). The
+     compile's too, which pays 3,654 of its 8,649 for its declarations and its call. Each
+     ceiling is now under twice its figure, `<`, as the decision says, where it was `<=`;
+     each test's name says it holds a rung too, its whole assertion as it was. The probes
+     (`scratchpad/rv/rv17work/fix/probes_rung.txt`, `ceiling_test.exs`'s own counts, each
+     a ratio to its figure, a rung's beside the whole's):
+
+     | probe | what it does | compile | scans | cycles | round |
+     |---|---|---|---|---|---|
+     | q1 (the review's) | each element's dispatch a call dearer | — | 1.05, 1.15 | 1.03, 1.15 | 1.02, 1.16 |
+     | q2 (the review's) | each instruction evaluated twice | — | 1.15, 1.42 | 1.09, 1.42 | 1.06, 1.41 |
+     | q3 (the review's) | each instruction evaluated four times | — | 1.44, 2.25 red | 1.28, 2.25 red | 1.15, 2.25 red |
+     | q4 (the review's) | each rung a call dearer | — | 1.03, 1.10 | 1.02, 1.10 | 1.02, 1.10 |
+     | q5 (the review's) | each element 20 reductions dearer | — | 1.61, 2.75 red | 1.40, 2.75 red | 1.20, 2.74 red |
+     | g_scan_1 | each element run once again | — | 1.34, 1.96 | 1.22, 1.96 | 1.12, 1.96 |
+     | g_scan_2 | each element run twice again | — | 1.56, 2.61 red | 1.36, 2.61 red | 1.19, 2.61 red |
+     | g_cycle_1, _2 | each cycle step run once, twice again | — | — | 1.76, 2.00 red; 2.51 red, 3.00 red | — |
+     | g_round_1, _2 | each round's cycle step run once, twice again | — | — | — | 1.39, 1.99; 1.76, 2.98 red |
+     | g_compile_1, _2 | each rung's lowering made once, twice again | 1.25, 1.43; 1.50, 1.86 | — | — | — |
+     | G_compile_tripled | each rung lowered two calls dearer, 1,730 each | 3.00 red, 4.12 red | — | — | — |
+     | G_scan_tripled | each element two calls dearer, 34 each | — | 3.02 red, 6.82 red | 2.32 red, 6.83 red | 1.67, 6.80 red |
+     | G_cycle_tripled | each cycle step two calls dearer, 694 each | — | — | 2.91 red, 0.78 | — |
+     | G_round_tripled | each round step two calls dearer, 1,385 each | — | — | — | 3.01 red, 1.00 |
+     | p1 (RV-7's) | each element two reductions dearer | — | 1.09, 1.25 | 1.06, 1.25 | 1.03, 1.25 |
+     | p2 (RV-7's) | each instruction lowered two dearer | 1.004, 1.007 | — | — | — |
+     | p4, p5 (RV-7's, RV-17's) | each round, each cycle step two dearer | — | — | 1.004, 1.00 | 1.01, 1.00 |
+     | s_compile_no_warnings | the warnings not made | 0.86, 0.81 | — | — | — |
+     | s_scan_checks_once | `scan/3` checks its program and state once | — | 0.92, 1.00 | — | — |
+     | s_cycle_checks_once | a cycle's instance scanned with no second check | — | — | 0.95, 1.00 | 0.98, 1.00 |
+     | s_round_no_refresh | a round's devices not refreshed before each step | — | — | — | 0.96, 1.00 |
+
+     The whole round reads 1,673 to 1,676 on this tree against its figure of 1,662. A G
+     probe's charge per cycle or round step falls on the call and not on a rung, so its
+     rung reads 1.00 or less (a charge past a slice of the scheduler is cut, the cycles'
+     0.78): the whole stage catches it.
+
+     So a rung's work made more than twice as dear is red, the review's four-times probe
+     at 2.25 and its 20 reductions an element at 2.75, where the whole stages read 1.15 to
+     1.61; each element or cycle step run once again sits on the line, 1.96 to 2.00 (the
+     cycles' red by a fifth of a reduction); a rung's lowering made three times over,
+     1.86, green, its lowering four in ten of a rung's compile; RV-7's toolchain-sized
+     probes move a rung by a quarter, green. The review's threshold for the scans' ceiling, 34
+     reductions more an element, is now 8 a rung's element, the rung's own cost. The
+     decision's note, decision 357's and `CONTRIBUTING.md`'s ceiling practice say so;
+     "catches a doubling" is gone, a doubling sitting on the line.
+  3. *The hold took a poll for a reread* (medium, decision 462). The sim told a reread by
+     any fence in the device's mailbox, so a poll queued behind a reread, read with the
+     reread's fence still there, was held and the hold spent on it (the review's
+     `zz_stale_fence_test.exs`, red three of three). Each read's take now names the
+     newest fence in its process's mailbox and the sim notes it: a read is a reread where
+     that fence is one no read of the sim found before (`6c6897d`, in `Logex.IO.Sim`, the
+     runner's files untouched); the review's test green three of three on it.
+     `io_test.exs`'s "a poll's read passes the hold by with other messages and an earlier
+     reread's fence in its mailbox, its failure acted out in it" reads a reread, then a
+     poll with that fence, a cast and a poll's wake queued, the hold armed and a failure
+     told, which the poll acts out, and then the next reread, its own fence behind them
+     all, held.
+  4. *Three survivors* (medium-low). r4 is finding 1's; r6 (any message a fence) and r13
+     (a poll past the hold loses its failure) are killed by finding 3's test; each mutant
+     of this round's code is in the table below.
+  5. *A hold whose reread was abandoned stays held* (low). A held reread whose process
+     goes down, killed by a runner that gave it up at the reread's limit, now spends the
+     hold: the sim monitors the reread it holds, `holding?/1` is false once it is down,
+     `hold/1` arms again and `let_go/1` holds nothing (provisional, question 4).
+     `io_test.exs`'s "a held reread whose process goes down spends the hold"; the review's
+     `hold_never2.exs` now reads `holding after: false`, `hold again: :ok`. Any other
+     message the sim is sent is passed over, as GenServer's default passed it.
+  6. *The loader test past 60 s under heavy load* (low). Decision 464's raw calls run on
+     the VM's dirty I/O schedulers, ten, which every raw file call shares: ten raw opens
+     of FIFOs no process writes held them all here, the compile and the VM's own exit
+     waiting with them (`scratchpad/rv/rv17work/fix/dirty.exs`). `Logex.compile_file/1`'s,
+     `Logex.Configuration.compile_file/1`'s and `Logex.SourceFile`'s docs, README's
+     bullet and decision 464's note now say a compile waits on no call through the
+     server, not on no call. The test itself is as it was: four of the review's ten loaded
+     full suites took it past ExUnit's 60 s, as `e31a456` did (question 5).
+  7. *Two broken wraps* (nit). `CONTRIBUTING.md`'s cost bullet rewrapped, its words the
+     same.
+
+  - *The review round's mutation table* (`scripts/mutate.sh`, each patch over the tip of
+    its fix and judged by the full suite; the patches `scratchpad/rv/rv17work/fix/mt/`
+    and the review's `scratchpad/rv/rev17work/probes/`):
+
+    | mutant | what it does | the full suite at `6c6897d` |
+    |---|---|---|
+    | n464a_cwd_always_read | the working directory read for every path, as at `aa17a15` | red: logex 1 |
+    | n464b_home_reads_cwd | a path from home read against the working directory | red: logex 1 |
+    | n464c_cwd_error_swallowed | an unreadable working directory read as `/` (the review's r4) | red: logex 1 |
+    | n462a_any_fence_a_reread | any fence in the mailbox a reread's, found or not, as at `aa17a15` | red: io 1 |
+    | n462b_any_message_a_fence | any message in the mailbox a fence (the review's r6) | red: io 1 |
+    | n462c_fence_not_noted | a reread's fence never noted as found | red: io 1 |
+    | n462d_poll_past_hold_loses_failure | a poll past an armed hold takes no failure (the review's r13) | red: io 1 |
+    | n462e_down_not_spent | a held reread's process going down spends nothing | red: io 1 |
+    | n462f_stray_message_crashes | no clause for any other message | red: io 1 |
+    | n462g_newest_fence_first | the oldest fence in the mailbox taken for the newest | red: io 1 |
+
   - *Provisional readings, and questions for the maintainer*, by what a maintainer or an
     operator sees. The record is silent on each; the reading taken is the closest to it.
 
     1. *How the simulated device tells a restart's read* (decision 462). A test that wants
        the drive's restart read held tells its sim `hold/1`, and the sim knows that read
        by a private marker the runner's device process puts in its own mailbox just
-       before a restart's read, the fence of decision 142. If the runner's code changes
+       before a restart's read, the fence of decision 142, the newest in the mailbox and
+       one no read found before since RV-17's review. If the runner's code changes
        that marker (RV-6 works there), the hold never holds, and the one test that uses
        it fails after 5 s, "no reread came to the sim's hold in 5 s", though nothing in
        the plant is wrong. (a) As built, the sim reading the device's fence, its moduledoc
@@ -16417,10 +16539,40 @@ and CI checked; each fix with a test that fails when it is reverted.
        directory was deleted under it compiles `"lines/motor.ld"`, a relative path: the
        loader cannot make the path absolute for its memo, and raises `File.Error`,
        "could not get current working directory", as `Path.expand/1` raised it before,
-       the one exception the loader lets out; an absolute path compiles as ever. (a) As
-       built, the raise as before; (b) a `:file` diagnostic on the path, "cannot be
-       located: the working directory cannot be read", as the runner tells a relative
-       store whose directory it cannot resolve.
+       the one exception the loader lets out; an absolute path, and one from home,
+       compiles as ever, since RV-17's review. (a) As built, the raise as before, its
+       message `could not get current working directory nil: no such file or directory`
+       pinned; (b) a `:file` diagnostic on the path, "cannot be located: the working
+       directory cannot be read", as the runner tells a relative store whose directory it
+       cannot resolve.
+    4. *A held reread the runner gave up* (decision 462, RV-17's review). A test holds the
+       drive's reread and never lets it go; at the reread's limit (the drive's `open:`
+       since decision 439, 5000 ms unless set) the runner kills the drive's process and
+       the restart answers `{:error, {:io_init, "drive", :timeout}}`. The
+       sim then says `holding?(drive)` is false, `hold(drive)` arms again, and
+       `let_go(drive)` raises "holds no reread", the hold spent on the read that died.
+       (a) As built; (b) the hold armed again by itself, so that the next restart's
+       reread of the drive, opened anew, would be held without a second `hold/1`; (c) as
+       built, but `let_go/1` answering `:ok` once, so that a test that lets go after a
+       timeout it expected is not told it made a mistake.
+    5. *The loader test on a loaded machine* (decision 464, RV-17's review).
+       `configuration_test.exs`'s "loading stays linear in the program types a file
+       names", 250 program types loaded six times, still ran past ExUnit's 60 s in four of
+       the review's ten full suites at a load average of 17 to 32, as it did before the
+       loader read raw; it holds a reduction ratio, which load does not move. A
+       maintainer sees one red test on a crowded CI runner and nothing wrong in logex.
+       (a) As is, the record noting it; (b) its own timeout, 300 s, as the walks have;
+       (c) the loader tests in a module of their own, `async: false`, run when no other
+       test shares the dirty I/O schedulers (decision 464's (c)).
+    6. *What a ceiling holds* (decision 459, RV-17's review). Each stage is now held
+       whole, on README's motor and plant, and a rung, over the motor's five rungs written
+       sixteen times over less over eight, each under twice its own figure; the decision
+       names a standard program's cost alone. A maintainer whose change makes every rung's
+       evaluation more than twice as dear sees `ceiling_test.exs` red on the rung, where
+       the whole stage stays under its ceiling. (a) As built, both; (b) the rung alone,
+       the whole stage left to the same-run bounds; (c) the whole stage alone, on a
+       standard program long enough that its rungs are most of it, the motor's rungs
+       written sixteen times over, one figure a stage.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

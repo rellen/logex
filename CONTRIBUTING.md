@@ -421,16 +421,26 @@ choice, not an oversight to fix.
   turns none red, however gross. `ceiling_test.exs` holds each stage on a standard
   program, README's motor and plant: the compile, 100 scans, 100 cycles and a round, each
   under twice a figure recorded with it, the one bound of logex's against a figure alone,
-  and wide on purpose. A toolchain's shift of a reduction or two a step moves a stage by a
-  few per cent (RV-7's probes, two reductions a step, at most 9 in a hundred), and a saving
-  lowers it: neither turns it red. A stage made three times as dear, two calls a step each
-  as dear as a step, reads 2.9 to 3.0 times its figure, red; a step's own call made once
-  again, 1.2 to 1.8, green (`PLAN.md`'s RV-17): a ceiling catches a doubling, not a call,
-  which the twins' bounds are for. Record a figure so: the stage on its standard program,
-  each count in a process of its own whose heap no collection visits, the least of five,
-  a round's less the manual clock's synchronisation, on the toolchain `mix.exs` pins, at
-  the commit that adds the ceiling or raises it, written beside the test with the item,
-  the date and the toolchain. Raise a ceiling only for a change that makes its stage
+  and wide on purpose; and, since RV-17's review, each stage a rung, the same over the
+  motor's five rungs written sixteen times over less over eight, a rung of the forty
+  between, under twice a figure of its own (provisional). The whole stage is mostly what
+  it pays a call and a tag, a scan's checks of its state or a round's devices, so a rung's
+  work made four times as dear read 1.44 of a whole scan's figure; a rung's cost cancels
+  those, the tags the same at both sizes, and holds a rung's lowering or evaluation at its
+  own size. A toolchain's shift of a reduction or two a step moves a whole stage by a few
+  per cent and a rung by a quarter (RV-7's probes, two reductions a step: at most 9 in a
+  hundred whole and 25 a rung), and a saving lowers both: neither turns one red. A stage
+  made three times as dear, two calls a step each as dear as a step, reads 2.9 to 3.0
+  times its figure, red; a rung's evaluation made four times over, 2.25 a rung, red; each
+  element or cycle step run once again, 1.96 to 2.0 a rung, on the line, which a ceiling
+  under twice its figure may pass or not; a step's own call made once again, 1.2 to 1.8
+  whole, green (`PLAN.md`'s RV-17): a ceiling catches a stage or a rung made more than
+  twice as dear, not a call, which the twins' bounds are for. Record a figure so: the
+  stage on its standard program, each count in a process of its own whose heap no
+  collection visits, the least of five, a rung's the least of five differences counted in
+  pairs, a round's less the manual clock's synchronisation, on the toolchain `mix.exs`
+  pins, at the commit that adds the ceiling or raises it, written beside the test with the
+  item, the date and the toolchain. Raise a ceiling only for a change that makes its stage
   dearer on purpose, a feature every scan pays for or a toolchain that moves a figure past
   it, never to pass a slowdown no one meant: measure the figure anew at that commit as
   above and replace it, never the factor, and say in the commit what made the stage dearer

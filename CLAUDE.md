@@ -158,7 +158,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 
 - `test/test_helper.exs` — starts ExUnit.
 - `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
-  file server is held, and Milestones 1 to 3's done sentences from files on disk.
+  file server is held and with the working directory deleted, and Milestones 1 to 3's
+  done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded
@@ -188,7 +189,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
   surface and the checks made where a program is first handed in.
 - `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
-  scan, a cycle and a round, under twice a figure recorded with it.
+  scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.
 - `test/logex/counter_test.exs` — the counters `ctu`, `ctd` and `ctud`.
 - `test/logex/typed_counter_test.exs` — the typed counters at every width.

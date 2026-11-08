@@ -12406,7 +12406,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      where both make as many, where the old pins went red in six, two and four files. A
      twin that does the guarded work itself gives a lower bound, which a cheaper version of
      that work breaks, which decision 458 keeps; a regression in what both twins share as
-     often no twin catches, which decision 459's ceilings catch once it is gross. `CONTRIBUTING.md` states the rule, how to write a new one,
+     often no twin catches, which decision 459's ceilings catch once it makes a stage, or
+     since RV-17's review a rung of it, more than twice as dear. `CONTRIBUTING.md` states
+     the rule, how to write a new one,
      and that a count moves with the VM's own state (a map of more than 32 keys built is
      charged a few reductions more or less from one call to the next, and a VM-wide event
      moves every later call's count), so that two counts compared are measured in turn, and
@@ -13759,7 +13761,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      step, at most 1.09, green by the full suite; each saving tried reads less.
      CONTRIBUTING.md's "Hold each stage under a ceiling twice its recorded figure" says
      how a figure is recorded and when and how it is raised; `PLAN.md`'s RV-17 entry has
-     the probes.)*
+     the probes.)* *(Changed with RV-17's review, 2026-11-08, the commit after `6c6897d`:
+     a whole stage on README's motor is mostly what it pays a call and a tag, a rung's
+     evaluation a sixth of a scan, so every instruction evaluated four times over read
+     1.44 of the scans' figure, 1.28 of the cycles' and 1.15 of the round's, under each.
+     Each test now also holds its stage a rung, over the motor's five rungs written
+     sixteen times over less over eight, its tags the same at both, a rung of the forty
+     between, the least of five differences counted in pairs, under twice a figure of its
+     own: 999.2, 3,110, 3,762.9 and 37.5 (provisional, `PLAN.md`'s RV-17 question 6). The
+     same probe reads 2.25 a rung of each, red, and each element 20 reductions dearer
+     2.75; each element or cycle step run once again reads 1.96 to 2.0 a rung, on the
+     line; RV-7's probes 1.25 a rung at most; each saving less. A ceiling is under twice
+     its figure, `<`, as the decision says, where it was `<=`.)*
 
 460. **Half a reduction a rung (the review after Milestone 6),** RV-7's question 3
      (decision 357): each bound allows half a reduction a rung, a key or a group beyond
@@ -13795,7 +13808,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      by; the held read goes on as usual once let go, a failure told meanwhile acted out in
      it, and is counted only then; a hold let go before any reread came is taken back, and
      a hold twice or a let-go of nothing raises (provisional, `PLAN.md`'s RV-17 questions
-     1 and 2). `trip_test.exs`'s real-clock test holds the drive's reread until a poll of
+     1 and 2). *(RV-17's review, 2026-11-08, `6c6897d`: a poll queued behind a reread
+     reads with the reread's fence still in the mailbox, which the hold took for a reread,
+     so the sim now tells a reread by the newest fence in the mailbox, one no read of the
+     sim found before, and a held reread whose process goes down, killed by a runner that
+     gave it up, spends the hold, `holding?/1` false (provisional, question 4).)*
+     `trip_test.exs`'s real-clock test holds the drive's reread until a poll of
      the released panel has taken the bad reading, sees the restart still waiting, and
      lets it go: 0 of 50 failed under the busy loops, and red on a released device that
      passes its readings on.)*
@@ -13826,7 +13844,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      working directory that cannot be read raises `File.Error` as `Path.expand/1` did
      (provisional, `PLAN.md`'s RV-17 question 3). The loader over 250 program types beside
      four processes that keep the server busy, under the busy loops, took 58 to 67 s at
-     `e31a456` and 6 to 12 s at the tip.)*
+     `e31a456` and 6 to 12 s at the tip.)* *(Changed with RV-17's review, 2026-11-08,
+     `6c6897d`: the working directory is read only for a path still relative once a
+     leading `~/` is the user's home, as `Path.expand/1` read it, so that an absolute path
+     compiles while it cannot be read, where every load raised `File.Error`;
+     `LogexTest.GoneWorkingDirectory` deletes it. A raw call takes one of the VM's dirty I/O
+     schedulers, which every raw file call shares, so a compile waits where all ten are
+     taken, by raw opens of FIFOs no process writes, which hold theirs once their
+     processes are killed, the VM wedged; the docs say so. `configuration_test.exs`'s
+     "loading stays linear" still ran past ExUnit's 60 s in four of the review's ten
+     loaded full suites, a load average of 17 to 32, as it did at `e31a456`
+     (provisional, question 5).)*
 
 ---
 
