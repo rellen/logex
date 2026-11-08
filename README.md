@@ -4394,17 +4394,30 @@ stage: nil
   the write is out, in a process of its own, and the force takes effect at the first
   round after it lands, its call answered then (decision 437): so on a slow disk the
   logic keeps the plant under control, every round reading the forces as they were and
-  `status/1` listing those, and no force is in effect before the file holds it. A force,
-  an unforce or an unforce_all asked while another's write is out, or while one asked so
-  waits, waits its turn behind it, in the order asked, each built on the set the one
-  before leaves, so the last asked is the last written; a trip, a restart or an edit's
-  step meanwhile leaves the write as it is, and the set it writes, built on the forces
-  held as it began, becomes the runner's once it lands, in place of any a restart read
-  from the file meanwhile; and a stop waits for it to its limit and answers its caller
-  (provisional). A write cut at its limit, at a stop as at any time, may still land once
-  the disk answers, after the runner that made it is gone, so the next start reads
-  whichever set the file then holds, and one already started does not know of it
-  (provisional). A start reads the file raw, off the
+  `status/1` listing those in `forces`, and no force is in effect before the file holds
+  it; meanwhile `status/1`'s `forcing` shows the set the write that is out holds, the
+  forces as they will be once it lands, nil where no write is out, the key always there,
+  so an HMI shows a force on its way (decision 466). A force, an unforce or an
+  unforce_all asked while another's write is out, or while one asked so waits, is served
+  as it is asked, a host's mistake in it, a point that is no input or a value that does
+  not fit, raised in its caller at once, whatever write is out (decision 473); its change
+  waits its turn behind the write, and every change that waited is joined into the next
+  write, applied in the order asked, so the last asked is the last applied, each caller
+  answered when that write lands, or as it fails or is cut, the same answer to each: ten
+  forces an HMI scripts on a disk that takes 3 s a write take two writes, 6 s, where each
+  had a write of its own (decision 465). A trip or an edit's step meanwhile leaves the
+  write as it is, the set it writes, built on the forces held as it began, becoming the
+  runner's once it lands; a restart waits for it, to its limit, before it reads the file,
+  so it reads what the write leaves and the HMI never shows a force that then vanishes
+  (decision 468); and a stop waits for it to its limit and answers its caller (decision
+  467). A write cut at its limit, at a stop as at any time, may still land once the disk
+  answers, so a runner that ends gives the file up only once every write of it it began
+  has ended: the file is held for it until the cut write's last call of the file system
+  is answered, and a start on it meanwhile is refused, naming the file, the runner that
+  ended and the process holding the file, so no runner starts on a file a late write then
+  changes under it (decision 475). On a disk that never answers the hold lasts as long,
+  until the host kills the holder the refusal names, or the VM stops (provisional). A
+  runner killed or crashed holds nothing, its writes going down with it. A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls. A file that cannot be read, one the disk has not answered
   within the write limit or one the file system refuses, a directory in its place among
@@ -4418,7 +4431,11 @@ stage: nil
   the file, and the next force's or unforce's write writes the runner's set over it
   (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
   that could not read the file, the disk back, a trip and a restart, and the level reads
-  its input, never the 7 no one has forced since; and a relative `forces:` whose
+  its input, never the 7 no one has forced since; an orderly stop while `forces_unread`
+  stands, `stop/2` or a supervisor's shutdown, writes the runner's own set over the file
+  before it ends, so the next start brings back no force the HMI was not showing either,
+  a `stop/2` whose write fails or is cut answering `{:error, {:forces, reason}}`, and a
+  crash writes nothing (decision 472); and a relative `forces:` whose
   working directory the disk does not answer for in time refuses the start, the file
   "cannot be located", as a relative store's does (decision 446), an absolute path the
   advice. A

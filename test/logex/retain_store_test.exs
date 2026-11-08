@@ -2649,6 +2649,11 @@ defmodule Logex.RetainStoreTest do
       assert spec.(io: io.(9), idle: 0, poll: :fast).shutdown == 14_590
       assert spec.(io: io.(9), write_limit: 0).shutdown == 14_590
       assert spec.(io: :none, idle: 3000).shutdown == 10_000
+      # Decision 472 (RV-18): a forces file gives two write limits more, the force's write
+      # that may be out and the write of the runner's set an orderly end makes.
+      assert spec.(io: io.(1), forces: "x.forces").shutdown == 20_510
+      assert spec.(io: io.(2), forces: "x.forces", write_limit: 400).shutdown == 5000
+      assert spec.(io: io.(9), forces: "x.forces", write_limit: 400).shutdown == 6190
       assert Runner.child_spec(:nonsense).shutdown == 5000
       assert Runner.child_spec([{"io", 1}]).shutdown == 5000
       assert Supervisor.child_spec({Runner, base}, shutdown: 900).shutdown == 900

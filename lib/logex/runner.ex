@@ -58,7 +58,20 @@ defmodule Logex.Runner do
   `ArgumentError` naming the option, the path as the host spelled it, what the file is to
   the other runner and that runner's pid, told before either file is read and nothing
   written or opened; once the holder is gone, stopped, crashed or killed, the file is free
-  again, and the next start takes it. A start under a name already registered is
+  again, and the next start takes it. Since decision 475 a runner that ends, its
+  terminate run, a stop, a shutdown or a start that fails, gives a file up only once every
+  write of it the runner began has ended: a write cut at its write limit, its process
+  killed, may still have its rename waiting in the VM's file server's queue, which lands
+  once the disk answers, so the file whose last write was cut, the forces file's two or
+  the store's three with its copies' names, is held for the ended runner by a process of
+  logex's own until the file server has answered a call made after the cut, the cut
+  write's calls answered before it, a start meanwhile refused naming the file, the
+  runner that ended and the holder; a later write of the file that ended by itself frees
+  it at once, every call before its own answered. A file server that never answers holds
+  the file for as long, the holder ending only once its call is answered, or when the host
+  kills it, the pid the refusal names, or with the VM (provisional: no limit of its own,
+  the record saying however long the disk takes); a runner killed or crashed holds
+  nothing, its writes going down with it, as before. A start under a name already registered is
   `{:error, {:already_started, pid}}` first, OTP's, and claims nothing. Two VMs on one
   file are the host's to avoid: nothing in one VM sees another, nor one file reached by
   two paths through a linked directory, a store or forces file that is itself a link
@@ -503,23 +516,34 @@ defmodule Logex.Runner do
   after the write lands, its caller answered then, a trigger it changes making its round
   first, so that the logic keeps the plant under control on a slow disk and no force is
   in effect before the file holds it (decision 117): meanwhile every round reads the
-  forces as they were and `status/1` lists those, the force not among them until its
-  write lands. A force, an unforce or an unforce_all asked while a write is out, or while
-  one asked so still waits, waits behind it, in the order asked, each served once the one
-  before it is answered, its write built on the set that one left, so that no two writes
-  are out at once and the last asked is the last written, one that waited for the share's
-  slot among them (provisional, the record silent); a host's mistake among them is raised
-  in its caller as its turn comes. A trip, a restart and an edit's step made meanwhile
-  leave the write as it is, a restart reading the file as it stands, the old set or the
-  new, as every start does; and the set the write holds, built on the forces the runner
-  held as it was begun, becomes the runner's set as it lands, or not, as its answer says,
-  in place of whatever a restart read from the file meanwhile, so that the file and the
-  forces in effect agree (provisional). A stop waits for it to its own limit, after its
-  zeros and its closes, answers its caller as it ends and gives the file up only after
-  it, a force waiting behind it answered as to a runner that is not running
-  (provisional); one it cuts at that limit may still land once the disk answers, as any
-  cut write may (below), after the file is given up, the next runner on it reading the
-  file as it then stands or, already started, not knowing of it (provisional). A write
+  forces as they were and `status/1` lists those in `forces`, the force not among them
+  until its write lands, and since decision 466 names the set the write that is out
+  holds, `forcing`, the runner's set as it will be once that write lands, nil where none
+  is out, so that an HMI shows the force on its way. A force, an unforce or an
+  unforce_all asked while a write is out, or while one asked so still waits, is served as
+  it is asked, as every host's request is, so that since decision 473 a host's mistake in
+  it is raised in its caller at once, whatever write is out, where it waited its turn
+  behind the write; and its change waits behind the write, in the order asked, and since
+  decision 465 every change that waited is joined into the next write, applied in the
+  order asked, each on the set the one before it left, the last asked the last applied,
+  one that waited for the share's slot among them, each caller answered when that write
+  lands, or as it fails or is cut, the same answer to each, so that no two writes are out
+  at once and ten asked on a disk that takes 3 s a write take two writes, where each was
+  written in a write of its own and ten took 30 s. A trip and an edit's step made meanwhile
+  leave the write as it is, and the set the write holds, built on the forces the runner
+  held as it was begun, becomes the runner's set as it lands, or not, as its answer says
+  (decision 437). Since decision 468 a restart asked meanwhile, warm or cold, waits for
+  the write, to its own limit, before it reads the file, so that it reads what the write
+  leaves and the HMI never shows a force the write then takes away, where it read the
+  file as it stood and the write landed after it; the requests behind the write are
+  joined into the next once the restart is answered, and a write cut at its limit leaves
+  what decisions 391 and 475 say, the restart reading the file as it then stands. A stop
+  waits for it to its own limit, after its zeros and its closes, and answers its callers
+  as it ends, a force waiting behind it answered as to a runner that is not running
+  (decision 467); one it cuts at that limit may still land once the disk answers, as any
+  cut write may (below), and since decision 475 the stop gives the file up only once it
+  has (above, "Its files"), so that no runner of the VM starts on the file meanwhile and
+  takes, at a later restart, a force its operator was told had failed. A write
   that fails changes nothing and gives
   `{:error, {:forces, reason}}`, and since decision 353 one the disk has not finished
   within the write limit of real time, since decision 400 `write_limit:`, is killed and
@@ -547,7 +571,12 @@ defmodule Logex.Runner do
   the file, a force's or an unforce's, writes the runner's set over it, so that a fresh
   start that could not read the file, which started with no force, never takes at a later
   restart the forces the file held, ones no one forced since and `status/1` did not show,
-  where RV-11's review found a restart that read the file once it read again took them; a
+  where RV-11's review found a restart that read the file once it read again took them;
+  and since decision 472 an orderly stop, `stop/2` or a parent's shutdown, made while it
+  stands writes the runner's own set over the file before it ends, within the write
+  limit, so that the next fresh start, which reads the file, brings back nothing the HMI
+  was not showing either, a stop whose write fails or is cut answering so, `{:error,
+  {:forces, reason}}` (`stop/2`), and a crash writing nothing; a
   line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
@@ -816,12 +845,6 @@ defmodule Logex.Runner do
             when is_pid(pid) and is_integer(restarts) and is_integer(at) and
                    kind in [:back, :zeroed, :latched, :fault] and is_binary(name)
 
-  # Decision 437 (RV-16): a host's request that writes the forces file, a force's, an
-  # unforce's or an unforce_all's.
-  defguardp forcing?(request)
-            when request == :unforce_all or
-                   (is_tuple(request) and elem(request, 0) in [:force, :unforce])
-
   # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
   # steps, the one seam through which a test reaches a fault no host can cause, an
   # exception out of the core, `{:internal, message}` (docs/organisation.md §4.11).
@@ -919,7 +942,11 @@ defmodule Logex.Runner do
   makes its text so, a trip's, a cold restart's, `start: :cold`'s, a fresh start's with no
   store file and the period's, the writer's, so that the runner answers on once the write
   limit has passed: a store too big for the limit is reported as any write cut off at
-  it, the host raising `write_limit:`.
+  it, the host raising `write_limit:`. Since decision 472 a runner given `forces:` is
+  given two write limits more, the force's write that may be out, waited for to its own
+  limit, and the write of the runner's set an orderly end makes while `forces_unread`
+  stands, so that a supervisor waits for the store's write after both (provisional: the
+  record names no deadline), `devices * (idle + poll) + 4 * write_limit` ms.
   """
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
@@ -936,11 +963,17 @@ defmodule Logex.Runner do
   # 353's limit on them, where each was given the idle watchdog and a poll period.
   defp shutdown_ms(true, opts) do
     each = within(Keyword.get(opts, :idle), 500) + within(Keyword.get(opts, :poll), 10)
-    writes = 2 * within(Keyword.get(opts, :write_limit), @write_limit)
+    limit = within(Keyword.get(opts, :write_limit), @write_limit)
+    writes = (2 + forced_writes(Keyword.get(opts, :forces))) * limit
     min(@longest, max(@shutdown, bound(Keyword.get(opts, :io)) * each + writes))
   end
 
   defp shutdown_ms(false, _opts), do: @shutdown
+
+  # Decision 472 (RV-18): a runner with a forces file may end with a force's write out and
+  # a write of its own set to make, each within the write limit.
+  defp forced_writes(nil), do: 0
+  defp forced_writes(_forces), do: 2
 
   defp within(ms, _default) when is_integer(ms) and ms in @interval, do: ms
   defp within(_ms, default), do: default
@@ -1050,6 +1083,18 @@ defmodule Logex.Runner do
   the time the store is written names no time, so that write is none and the stop answers
   `{:error, {:retain, {:clock, reason}}}`, the runner stopped by the stop's reason all the
   same (c1-runner-rounds-5).
+
+  A force's write of the forces file that is out is waited for to its own limit, after
+  the zeros and the closes, its callers answered (decisions 437 and 467); since decision
+  472 a stop made while `forces_unread` stands then writes the runner's own set of forces
+  over the file, within the write limit, before the store, so that the next start brings
+  back nothing the HMI was not showing, and answers `{:error, {:forces, reason}}` where
+  that write fails, `:timeout` where it is cut at its limit, and the store's write did
+  not fail (provisional: the store's failure answered first where both fail), a parent's
+  shutdown making the same write and telling its failure to no one (provisional). Since
+  decision 475 a file whose last write the runner cut at its limit, the stop's own among
+  them, is held for the stopped runner until that write has ended (the moduledoc's "Its
+  files"), so that a start on it meanwhile is refused, naming it.
   """
   def stop(runner, reason \\ :normal) do
     pid = runner!(runner)
@@ -1103,7 +1148,11 @@ defmodule Logex.Runner do
   the file was read; since decision
   391 `forces_unknown`, where a force's write ran past its limit and may yet land, the set
   it held, until a later write of the file lands or fails or a restart reads it, and since
-  decision 440 always there, nil where no such write stands; `edit`, the stage of the
+  decision 440 always there, nil where no such write stands; since decision 466
+  `forcing`, the set the write of the forces file that is out holds, the forces as they
+  will be once it lands, the requests joined into it among them (decision 465), always
+  there as the other keys are, nil where no write is out, so that a force on its way
+  shows before it is in effect; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most the runner found itself past its wake's time, in ms, since RV-6 at a refresh's look as a round's, so that the runner's own lateness shows (decision 461), where it was a round's wake's alone, and since RV-6's review at a round a device's change, a force or an edit's step made before an overdue wake (provisional);
@@ -1158,7 +1207,9 @@ defmodule Logex.Runner do
   where the disk has not finished the write within the write limit of real time,
   `write_limit:` (decisions 353 and 400), the rounds running on meanwhile on the forces
   as they were (decision 437), a force asked while another's write is out waiting behind
-  it, in the order asked. A
+  it, in the order asked, joined with every request behind it into the next write and
+  answered when that write is (decision 465), a mistake in it raised at once whatever
+  write is out (decision 473). A
   force that changes what an event task's trigger reads is a change of it, and makes its
   round at once, before it returns (decisions 120 and 138). A runner started without
   `forces:`, an output point, a name that is no input point and a value that does not fit
@@ -1356,10 +1407,21 @@ defmodule Logex.Runner do
   defp held(:ok, start), do: given_up(cold_begun(cold_copy(start)), start)
 
   defp cold_begun({:ok, start}), do: first_begun(first_write(start), dropped_copy(start))
+  defp cold_begun({:cut, reason}), do: {:cut, {:error, {:retain, reason}}}
   defp cold_begun({:error, reason}), do: {:error, {:retain, reason}}
 
-  defp first_begun(:ok, start), do: opening(start.devices, [], [], first_written(start))
+  defp first_begun(:ok, start),
+    do: opened_or_cut(opening(start.devices, [], [], first_written(start)), start)
+
+  defp first_begun({:error, :timeout}, _start), do: {:cut, {:error, {:retain, :timeout}}}
   defp first_begun({:error, reason}, _start), do: {:error, {:retain, reason}}
+
+  # Decision 475 (RV-18): a start that ends with a write of its store cut at its limit, its
+  # first write, its cold copy or its dropped copy (decision 391's `unknown`), and so
+  # starts nothing, holds the store until that write has ended (given_up/2).
+  defp opened_or_cut({:ok, _state} = opened, _start), do: opened
+  defp opened_or_cut(failed, %{retain: %{unknown: at}}) when is_binary(at), do: {:cut, failed}
+  defp opened_or_cut(failed, _start), do: failed
 
   # Decision 417 (RV-13): a cold start, `start: :cold`, over a store that stands and that
   # a fresh start would refuse, cut short (decision 355) or refused by any of the store's
@@ -1383,10 +1445,15 @@ defmodule Logex.Runner do
   defp cold_copied({:ok, n}, %{retain: retain} = start),
     do: {:ok, %{start | copy: nil, retain: %{retain | copy: Paths.copy(retain.path, n)}}}
 
-  defp cold_copied({:unknown, _n}, _start), do: {:error, :timeout}
+  defp cold_copied({:unknown, _n}, _start), do: {:cut, :timeout}
   defp cold_copied({:error, reason}, _start), do: {:error, reason}
 
   defp given_up({:ok, _state} = opened, _start), do: opened
+
+  defp given_up({:cut, failed}, start) do
+    ended_files(start.files, [:retain])
+    failed
+  end
 
   defp given_up(failed, start) do
     Paths.release(start.files, self())
@@ -1510,18 +1577,76 @@ defmodule Logex.Runner do
   # runner that terminates for any other reason writes none, as one that crashes or is
   # killed (decision 292), its clock gone among them, the runner's own exit,
   # `{:shutdown, {:clock, reason}}`, told by its reason.
+  # Since decision 472 (RV-18) an orderly one, the reasons that write the store, writes
+  # the runner's own set of forces to the forces file first where the file stands unread
+  # (`forces_unread`), after the write of it that is out, if any, has ended (decision
+  # 437), so that the next start brings back no force the HMI was not showing, as
+  # decision 445 has a restart: a stop/2 answers that write's failure, `{:error, {:forces,
+  # reason}}`, where the store's write answered `:ok` (provisional, the store's failure
+  # first where both fail), and a shutdown, which no caller waits on, tells it to no one
+  # (provisional); a crash writes nothing. And since decision 475 (RV-18) the files are
+  # given up only where every write of them the runner began has ended: a file whose last
+  # write was cut at its limit is handed to a holder of logex's own until that write's
+  # call of the file system has ended (ended_files/2).
   @impl GenServer
   def terminate(reason, %{queue: queue, behind: behind} = state) do
     for {from, _request} <- :queue.to_list(queue) ++ :queue.to_list(behind),
         do: GenServer.reply(from, gone(self()))
 
     state = each_live(state, &Device.close/2)
-    answered_stop(stoppers(state.stoppers), reason, state)
-    writer_stopped(state)
-    forces_ended(state)
-    Paths.release(state.files, self())
+    state = forces_ended(state)
+    {forced, state} = forces_kept(orderly?(reason), state)
+    state = answered_stop(stoppers(state.stoppers), reason, forced, state)
+    state = writer_stopped(state)
+    ended_files(state.files, cut_groups(state))
     :ok
   end
+
+  # Decisions 316, 327 and 328: the reasons that write the store, and since decision 472
+  # the forces file where it stands unread; the clock gone and every other reason, a
+  # crash's, write none (decision 292).
+  defp orderly?({:shutdown, {:clock, _reason}}), do: false
+  defp orderly?(:normal), do: true
+  defp orderly?(:shutdown), do: true
+  defp orderly?({:shutdown, _term}), do: true
+  defp orderly?(_crash), do: false
+
+  # Decision 472 (RV-18): an orderly end while `forces_unread` stands writes the runner's
+  # own set over the file, within the write limit, taken as any write of the file is.
+  defp forces_kept(true, %{forces_unread: {_path, _reason}} = state) do
+    text = file_text(state.forces, state.types)
+    taken(Writer.written(state.forces_at, text, state.write_limit), state.forces, [], state)
+  end
+
+  defp forces_kept(_orderly, state), do: {:ok, state}
+
+  # Decision 475 (RV-18): the groups of files whose last write was cut at its limit and may
+  # yet land: the forces file's, a force's write cut (`forces_cut`), and the store's, a
+  # write of it or its copy unknown (decision 391), the period's among them where its
+  # writer was stopped in it.
+  defp cut_groups(state), do: forces_group(state) ++ store_group(state)
+
+  defp forces_group(%{forces_cut: true}), do: [:forces]
+  defp forces_group(_state), do: []
+
+  defp store_group(%{retain: %{unknown: at}}) when is_binary(at), do: [:retain]
+  defp store_group(_state), do: []
+
+  # Each file of a group cut handed to a holder of logex's own, which holds it until every
+  # call of the file system the cut write made has been answered, and every other file
+  # given up at once (decision 356).
+  defp ended_files(files, groups) do
+    cut = for {_at, role} = file <- files, group_of(role) in groups, do: file
+    Paths.held_on(cut, self(), held_path(cut))
+    Paths.release(files -- cut, self())
+  end
+
+  defp group_of(:forces), do: :forces
+  defp group_of({:tmp, :forces}), do: :forces
+  defp group_of(_store), do: :retain
+
+  defp held_path([{at, _role} | _rest]), do: at
+  defp held_path([]), do: nil
 
   defp stoppers(named) do
     receive do
@@ -1531,21 +1656,27 @@ defmodule Logex.Runner do
     end
   end
 
-  defp answered_stop([], reason, state), do: shut_down(reason, state)
+  defp answered_stop([], reason, _forced, state), do: shut_down(reason, state)
 
-  defp answered_stop(stoppers, _reason, state) do
-    reply = stop_written(state)
+  defp answered_stop(stoppers, _reason, forced, state) do
+    {reply, state} = stop_written(state)
+    reply = stop_answer(reply, forced)
     for {pid, ref} <- stoppers, do: send(pid, {ref, reply})
+    state
   end
+
+  # Decision 472 (RV-18): the stop's answer the store's write's, and where that landed the
+  # forces file's, `{:error, {:forces, reason}}` (provisional).
+  defp stop_answer(:ok, forced), do: forced
+  defp stop_answer(failed, _forced), do: failed
 
   # c1-runner-rounds-5, c2-runner-persist-2 (RV-4): a clock gone as the stop writes names
   # no time, so the stop's write is none, answered as a write that failed, the runner
   # stopped by its stop's reason all the same, where the clock's exit escaped to the caller.
   defp stop_written(state) do
-    {reply, _state} = kept_store(state, state.runtime, :end)
-    reply
+    kept_store(state, state.runtime, :end)
   catch
-    :exit, {:shutdown, {:clock, reason}} -> {:error, {:retain, {:clock, reason}}}
+    :exit, {:shutdown, {:clock, reason}} -> {{:error, {:retain, {:clock, reason}}}, state}
   end
 
   # Decisions 316, 327 and 328: every orderly exit writes the store as stop/2 does, a
@@ -1556,17 +1687,15 @@ defmodule Logex.Runner do
   # while the shutdown writes names no time, so that write is none too. A runner whose
   # devices cannot be opened never reaches here: its init/1 gives `{:error, reason}`, on
   # which a GenServer calls no terminate/2, so it writes nothing.
-  defp shut_down({:shutdown, {:clock, _reason}}, _state), do: :ok
-  defp shut_down(:normal, state), do: shutdown_store(state)
-  defp shut_down(:shutdown, state), do: shutdown_store(state)
-  defp shut_down({:shutdown, _term}, state), do: shutdown_store(state)
-  defp shut_down(_crash, _state), do: :ok
+  defp shut_down(reason, state), do: shut(orderly?(reason), state)
 
-  defp shutdown_store(state) do
-    kept_store(state, state.runtime, :end)
-    :ok
+  defp shut(false, state), do: state
+
+  defp shut(true, state) do
+    {_written, state} = kept_store(state, state.runtime, :end)
+    state
   catch
-    :exit, {:shutdown, {:clock, _reason}} -> :ok
+    :exit, {:shutdown, {:clock, _reason}} -> state
   end
 
   # A request served at once is refreshed at the time owed/1 read, where it read one, so
@@ -1588,27 +1717,23 @@ defmodule Logex.Runner do
   # trips the runner once it is answered, `{:watchdog, {:idle, ms, work}}` (decision 128,
   # the work named since decision 352). A
   # restart is the tripped runner's own, its first round timed by its steps' watchdogs.
-  defp answered({from, {:restart, _mode, _asked} = request}, state) do
+  defp answered({from, {:restart, _mode, :tripped} = request}, state) do
+    {reply, state} = served(request, forces_awaited(state))
+    GenServer.reply(from, reply)
+    forces_joined(state)
+  end
+
+  defp answered({from, {:restart, _mode, :running} = request}, state) do
     {reply, state} = served(request, state)
     GenServer.reply(from, reply)
     state
   end
 
-  # Decision 437 (RV-16): a force, an unforce or an unforce_all that comes while a write of
-  # the forces file is out, or while one that came so still waits, waits behind it, in
-  # order, each served once the one before it is answered (forces_landed/2), so that each
-  # write builds on the set the last one left, no two are out at once, and the last asked
-  # is the last written: a forced trigger's rounds, run as its write lands and before the
-  # next behind it is served, serve the share's slot, and a force that waited there for it
-  # goes behind the ones that came first, where it was served ahead of them and the older
-  # force won (RV-16's review) (provisional, the record silent on a second force).
-  defp answered({_from, request} = asked, state) when forcing?(request),
-    do: in_turn(state.writing == nil and :queue.is_empty(state.behind), asked, state)
-
+  # Decision 473 (RV-18): a force, an unforce or an unforce_all is served as it is asked,
+  # as every host's request is, whatever write of the forces file is out, so that a host's
+  # mistake in it is raised in its caller at once, where it waited behind the write and
+  # was raised only once the write ahead of it had ended (decision 437's queue, RV-16).
   defp answered(asked, state), do: answered_now(asked, state)
-
-  defp in_turn(true, asked, state), do: answered_now(asked, state)
-  defp in_turn(false, asked, state), do: %{state | behind: :queue.in(asked, state.behind)}
 
   # Decision 437 (RV-16): a force's request is served once its write is begun, the rounds
   # running on while it is out, and answered when the write is (forces_landed/2): its
@@ -1621,8 +1746,16 @@ defmodule Logex.Runner do
     idled(took, work_of(request), replied(reply, from, state))
   end
 
-  defp replied({__MODULE__, :writing, forces, names}, from, state),
-    do: writing(forces, names, from, state)
+  # Decision 465 (RV-18): a well-formed forcing request, its change to the set, begun in a
+  # write of its own where no write of the forces file is out and none waits, and
+  # otherwise put behind the write that is out, in the order asked, every request behind
+  # it joined into the next write (forces_joined/1), so that ten asked on a disk that
+  # takes 3 s a write take two writes, where each was written in a write of its own and
+  # ten took ten (decision 437's queue, RV-16). The order of decision 437's queue holds
+  # within the joined write: each change applied in the order asked, the last asked the
+  # last applied.
+  defp replied({__MODULE__, :forcing, change}, from, state),
+    do: in_turn(state.writing == nil and :queue.is_empty(state.behind), {from, change}, state)
 
   defp replied(reply, from, state) do
     GenServer.reply(from, reply)
@@ -1640,6 +1773,9 @@ defmodule Logex.Runner do
 
   defp kick(name, state),
     do: rounded(%{state | pending: Enum.into(Map.take(state.values, [name]), state.pending)})
+
+  defp in_turn(true, asked, state), do: writing([asked], state)
+  defp in_turn(false, asked, state), do: %{state | behind: :queue.in(asked, state.behind)}
 
   # Decision 352 (RV-6): a trip met during the runner's own work names that work, the
   # request the host made, by the function it called, `:status`, `:get` or `:force` among
@@ -1704,7 +1840,7 @@ defmodule Logex.Runner do
 
   defp serve(:unforce_all, state) do
     filed!(state)
-    kept(state, %{}, Map.keys(state.forces))
+    kept(state, :clear)
   end
 
   # Decision 133: a restart asked while the runner runs is the host's mistake, judged as it
@@ -1884,7 +2020,7 @@ defmodule Logex.Runner do
 
   defp forcing({:ok, type}, name, value, state) do
     fits!(Declarations.fits?(type, value), name, type, value)
-    kept(state, Map.put(state.forces, name, forced(type, value)), [name])
+    kept(state, {:put, %{name => forced(type, value)}})
   end
 
   # Decision 241: a located array of input points forced whole, a list of its shape in
@@ -1892,18 +2028,17 @@ defmodule Logex.Runner do
   # every misfit told, ten and then a count, and nothing forced where one is.
   defp forcing({:array, {_type, _dims, names} = array}, name, value, state) do
     values = elements!(array, name, value)
-    kept(state, Map.merge(state.forces, Map.new(Enum.zip(names, values))), names)
+    kept(state, {:put, Map.new(Enum.zip(names, values))})
   end
 
   defp forcing({:error, message}, _name, _value, _state), do: raise(ArgumentError, message)
 
-  defp unforcing({:ok, _type}, name, state),
-    do: kept(state, Map.delete(state.forces, name), [name])
+  defp unforcing({:ok, _type}, name, state), do: kept(state, {:drop, [name]})
 
   # Decision 241: the array named whole unforces every element, forced or not, each
   # reading its device's last value again.
   defp unforcing({:array, {_type, _dims, names}}, _name, state),
-    do: kept(state, Map.drop(state.forces, names), names)
+    do: kept(state, {:drop, names})
 
   defp unforcing({:error, message}, _name, _state), do: raise(ArgumentError, message)
 
@@ -2101,12 +2236,22 @@ defmodule Logex.Runner do
       "`#{name}` is #{Declarations.a_type(type)}, forced to #{Declarations.values(type)}, " <>
         "got: " <> spelling
 
-  # The new set of forces, written whole to the file before it is taken (decision 127):
-  # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point
-  # unforced reads its device's last value again; each trigger whose reading changed makes
-  # its own round (decision 120), in kicked/1. Since decision 437 (RV-16) the write is
-  # begun here and the request answered once it is (replied/3, forces_landed/2).
-  defp kept(state, forces, names), do: {{__MODULE__, :writing, forces, names}, state}
+  # The change a request makes to the set of forces, written whole to the file before it
+  # is taken (decision 127): a write that fails changes nothing, `{:error, {:forces,
+  # reason}}`. Each input point unforced reads its device's last value again; each trigger
+  # whose reading changed makes its own round (decision 120), in kicked/1. Since decision
+  # 437 (RV-16) the write is begun once the request is served and the request answered
+  # once it is (replied/3, forces_landed/2); since decision 465 (RV-18) the request names
+  # its change alone, `{:put, forces}`, `{:drop, names}` or `:clear`, applied to the set
+  # its write begins from (changed/2), so that the changes behind a write are joined into
+  # one write in the order asked, each on the set the one before it left.
+  defp kept(state, change), do: {{__MODULE__, :forcing, change}, state}
+
+  # Each change applied to the set, and the input points whose reading it may change,
+  # every one forced before an unforce_all's among them.
+  defp changed({:put, forces}, set), do: {Map.merge(set, forces), Map.keys(forces)}
+  defp changed({:drop, names}, set), do: {Map.drop(set, names), names}
+  defp changed(:clear, set), do: {%{}, Map.keys(set)}
 
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
@@ -2123,14 +2268,15 @@ defmodule Logex.Runner do
   # caller waits for it as it did while the runner waited (forces_landed/2). Every device
   # is refreshed by the rounds and the waits as ever meanwhile, so that the write needs
   # none of decision 400's renewals, and no time of the disk's is any request's.
-  defp writing(forces, names, from, %{forces_at: path, types: types} = state) do
-    text =
-      IO.iodata_to_binary(
-        for(
-          {name, value} <- Enum.sort(forces),
-          do: [name, ?\s, spelled_force(Map.fetch!(types, name), value), ?\n]
-        )
-      )
+  defp writing(asked, %{forces_at: path, types: types} = state) do
+    {forces, names} =
+      Enum.reduce(asked, {state.forces, []}, fn {_from, change}, {set, names} ->
+        {set, more} = changed(change, set)
+        {set, names ++ more}
+      end)
+
+    names = Enum.uniq(names)
+    text = file_text(forces, types)
 
     until = div(System.monotonic_time(:microsecond) + 1000 * state.write_limit + 999, 1000)
     {_pid, ref} = write = Writer.begun(path, text)
@@ -2142,12 +2288,22 @@ defmodule Logex.Runner do
           write: write,
           timer: timer,
           until: until,
-          from: from,
+          froms: for({from, _change} <- asked, do: from),
           forces: forces,
           names: names
         }
     }
   end
+
+  # The forces file's text: one force a line, `name value`, in name order (decision 140).
+  defp file_text(forces, types),
+    do:
+      IO.iodata_to_binary(
+        for(
+          {name, value} <- Enum.sort(forces),
+          do: [name, ?\s, spelled_force(Map.fetch!(types, name), value), ?\n]
+        )
+      )
 
   # Decision 437 (RV-16): the write's answer taken, or the write cut at its limit, and the
   # force taken or not as the answer says (taken/4), its caller answered, the triggers it
@@ -2159,23 +2315,42 @@ defmodule Logex.Runner do
   # as it lands, or not, as its answer says, in place of whatever a restart read from the
   # file meanwhile, so that the file and the forces in effect agree (provisional, RV-16's
   # review).
-  defp forces_landed(result, %{writing: writing} = state) do
+  defp forces_landed(result, state), do: forces_joined(forces_taken(result, state))
+
+  defp forces_taken(result, %{writing: writing} = state) do
     Process.cancel_timer(writing.timer)
     {reply, state} = taken(result, writing.forces, writing.names, %{state | writing: nil})
     state = kicked(state)
-    GenServer.reply(writing.from, reply)
-    behind(:queue.out(state.behind), state)
+    for from <- writing.froms, do: GenServer.reply(from, reply)
+    state
   end
 
-  defp behind({:empty, _behind}, state), do: state
+  # Decision 468 (RV-18): a restart asked while a write of the forces file is out waits
+  # for that write, to its own limit, which began before the restart, before it reads the
+  # file, so that the HMI never shows a force the restart read that the write then takes
+  # away, nor misses one the write was landing: the write's answer taken as any, its
+  # callers answered, and the restart reads the file the write left. A write cut at its
+  # limit leaves what decisions 391 and 475 say: its set unknown until the restart reads
+  # the file, as it is then, and the file held by the runner until the cut write's call
+  # has ended. The wait comes before the restart is served (answered/2), so that a restart
+  # its forces file or its clock refuses keeps the write's answer taken; the requests that
+  # waited behind it are joined into the next write once the restart is answered, on the
+  # set it leaves. A trip meanwhile leaves the write as it is, as ever.
+  defp forces_awaited(%{writing: nil} = state), do: state
 
-  defp behind({{:value, asked}, rest}, state),
-    do: behind_served(answered_now(asked, %{state | behind: rest}))
+  defp forces_awaited(%{writing: writing} = state),
+    do: forces_taken(Writer.awaited(writing.write, writing.until), state)
 
-  # One served behind whose write is not out, a host's mistake raised in its caller, lets
-  # the next be served.
-  defp behind_served(%{writing: nil} = state), do: behind(:queue.out(state.behind), state)
-  defp behind_served(state), do: state
+  # Decision 465 (RV-18): every request that waited behind the write, joined into the
+  # next, begun on the set the write left, each caller answered when that write is, the
+  # same answer to each; one a forced trigger's round served as the write landed among
+  # them, behind the ones that came first. A write begun meanwhile, where none waited,
+  # holds the requests behind it in turn.
+  defp forces_joined(%{writing: nil} = state), do: joined(:queue.to_list(state.behind), state)
+  defp forces_joined(state), do: state
+
+  defp joined([], state), do: state
+  defp joined(asked, state), do: writing(asked, %{state | behind: :queue.new()})
 
   # Decision 437 (RV-16): a runner that stops while a force's write is out waits for it to
   # its own limit, which began before the stop, and answers its caller as the write ends,
@@ -2185,23 +2360,28 @@ defmodule Logex.Runner do
   # does not know of (provisional, RV-16's review). The forces' requests that waited
   # behind it are answered as to a runner that is not running, as the requests waiting
   # for the share's slot are (provisional).
-  defp forces_ended(%{writing: nil}), do: :ok
+  defp forces_ended(%{writing: nil} = state), do: state
 
   defp forces_ended(%{writing: writing} = state) do
     result = Writer.awaited(writing.write, writing.until)
-    {reply, _state} = taken(result, writing.forces, writing.names, state)
-    GenServer.reply(writing.from, reply)
+    {reply, state} = taken(result, writing.forces, writing.names, %{state | writing: nil})
+    for from <- writing.froms, do: GenServer.reply(from, reply)
+    state
   end
 
   # Decision 391 (RV-11): a force's write past its limit may yet land once the disk
   # answers, the file the old set or the new: `status/1` names the set it held,
   # `forces_unknown`, the force not taken, until a later write of the file lands or fails
   # or a restart reads it; one that failed changed nothing, and is known.
+  # Decision 475 (RV-18): a write cut at its limit, its process killed, leaves the file's
+  # claim to be held at the runner's end until its calls have ended (`forces_cut`); a
+  # later write that ends by itself, landed or failed, has had every call of the file
+  # system made before its own answered, the cut one's among them, and clears it.
   defp taken({:error, :timeout}, forces, _names, state),
-    do: {{:error, {:forces, :timeout}}, %{state | forces_unknown: forces}}
+    do: {{:error, {:forces, :timeout}}, %{state | forces_unknown: forces, forces_cut: true}}
 
   defp taken({:error, reason}, _forces, _names, state),
-    do: {{:error, {:forces, reason}}, %{state | forces_unknown: nil}}
+    do: {{:error, {:forces, reason}}, %{state | forces_unknown: nil, forces_cut: false}}
 
   defp taken(:ok, forces, names, state) do
     before = Enum.map(names, &seen(&1, state))
@@ -2214,6 +2394,7 @@ defmodule Logex.Runner do
       | forces: forces,
         forces_unread: nil,
         forces_unknown: nil,
+        forces_cut: false,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     }
 
@@ -2507,6 +2688,7 @@ defmodule Logex.Runner do
       forces: state.forces,
       forces_unread: state.forces_unread,
       forces_unknown: state.forces_unknown,
+      forcing: forcing_of(state.writing),
       edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
       latest_wake: state.latest_wake,
@@ -2514,6 +2696,11 @@ defmodule Logex.Runner do
       unzeroed: Enum.sort(state.unzeroed),
       retain: shown_store(state.retain)
     }
+
+  # Decision 466 (RV-18): the set the write of the forces file that is out holds, the
+  # runner's set as it will be once that write lands, nil where none is out.
+  defp forcing_of(nil), do: nil
+  defp forcing_of(%{forces: forces}), do: forces
 
   # Each event of a kind its subscriber named, sent, never awaited.
   defp published(%{subscribers: subscribers}, events),
@@ -2623,15 +2810,17 @@ defmodule Logex.Runner do
   # (RV-11): `write_limit`, the option, kept for the runner's life, every round, trip,
   # restart/2, stop and edit's step leaving it as it is. Decision 437 (RV-16): `writing`,
   # the force's write of the forces file that is out, its process, its timer, its limit's
-  # end, its caller and the set it holds, or nil, set by a force's, an unforce's or an
-  # unforce_all's request and nil once its answer is taken or it is cut at its limit; a
-  # round, a trip, a restart and an edit's step leave it as it is, the set it holds
-  # becoming the runner's as it lands, as its answer says, and a stop waits for it to its
-  # limit and answers its caller; and `behind`, the forces' requests that came while one
-  # was out or while one waited, in the order asked, each served once the one before it is
-  # answered, a round, a trip, a restart and
-  # an edit's step leaving them waiting, and a stop answering each as a runner that is not
-  # running. Decision 442 (RV-16): `slot_open`, whether the share's last slot found
+  # end, its callers, since decision 465 (RV-18) every request joined into it, and the set
+  # it holds, or nil, set by a force's, an unforce's or an unforce_all's request and nil
+  # once its answer is taken or it is cut at its limit; a round, a trip and an edit's step
+  # leave it as it is, the set it holds becoming the runner's as it lands, as its answer
+  # says, a restart waits for it since decision 468 (RV-18), and a stop waits for it to
+  # its limit and answers its callers; and `behind`, each forcing request that came while
+  # one was out or while one waited, its caller and its change, in the order asked, every
+  # one joined into the next write once the one out is answered (decision 465), a round,
+  # a trip and an edit's step leaving them waiting, a restart joining them once it has
+  # read the file, and a stop answering each as a runner that is not running. Since
+  # decision 466 (RV-18) `status/1`'s `forcing` reads the set `writing` holds. Decision 442 (RV-16): `slot_open`, whether the share's last slot found
   # nothing queued and no request has taken it since, false from the start; set by a slot
   # that finds nothing queued, cleared by the request that takes it and by a slot that
   # serves its queue; a trip and a restart leave it as they leave the share's count, an
@@ -2708,6 +2897,7 @@ defmodule Logex.Runner do
       in_round: nil,
       writing: nil,
       behind: :queue.new(),
+      forces_cut: false,
       written: %{},
       stoppers: [],
       retain: periodic(start.retain, start.retain_period, start.taker, at)
@@ -3787,8 +3977,19 @@ defmodule Logex.Runner do
   # The writer stopped as the runner terminates, after the stop's or the shutdown's write,
   # which waited for it, or at once where the runner crashed: its write, if any, leaves
   # the old store or the new.
-  defp writer_stopped(%{retain: %{period: %{writer: pid}}}), do: killed_writer(pid)
-  defp writer_stopped(_state), do: :ok
+  # Decision 475 (RV-18): a writer stopped in its write, the period's write it held
+  # unknown, holds the store at the runner's end as any write cut at its limit does.
+  defp writer_stopped(%{retain: %{period: %{writer: pid, busy: true}} = retain} = state) do
+    killed_writer(pid)
+    %{state | retain: unknown(retain, retain.path)}
+  end
+
+  defp writer_stopped(%{retain: %{period: %{writer: pid}}} = state) do
+    killed_writer(pid)
+    state
+  end
+
+  defp writer_stopped(state), do: state
 
   # A restart (decision 113): every latch released, a device that does not answer its
   # release killed and marked down, as one that hung or went down while the runner was
@@ -4651,15 +4852,34 @@ defmodule Logex.Runner do
   defp meets({:tmp, _role}, given), do: "is written through #{inspect(given <> ".tmp")}, "
   defp meets(_role, _given), do: "names "
 
-  defp theirs({:tmp, role}, holder),
+  defp theirs(role, holder), do: theirs(Paths.ended_runner(holder), role, holder)
+
+  defp theirs(nil, {:tmp, role}, holder),
     do:
       "the `.tmp` another runner of this VM, #{inspect(holder)}, writes its " <>
         "#{file_of(role)} through, which it holds until it stops"
 
-  defp theirs(role, holder),
+  defp theirs(nil, role, holder),
     do:
       "the #{file_of(role)} of another runner of this VM, #{inspect(holder)}, which holds " <>
         "it until it stops"
+
+  # Decision 475 (RV-18): a file a runner that has ended still holds, a write of it cut at
+  # its write limit not yet known to have ended, held for it by a process of logex's own.
+  defp theirs(runner, {:tmp, role}, holder),
+    do:
+      "the `.tmp` a runner of this VM that has stopped, #{inspect(runner)}, writes its " <>
+        "#{file_of(role)} through, #{ended_hold(holder)}"
+
+  defp theirs(runner, role, holder),
+    do:
+      "the #{file_of(role)} of a runner of this VM that has stopped, #{inspect(runner)}, " <>
+        ended_hold(holder)
+
+  defp ended_hold(holder),
+    do:
+      "held by #{inspect(holder)} until a write of it that runner cut at its write limit " <>
+        "has ended, which may yet land"
 
   # RV-5 (b3-store-image-5): a store or forces file that is a symbolic link is the host's
   # mistake at start, told before either file is read: every write of either is a new file

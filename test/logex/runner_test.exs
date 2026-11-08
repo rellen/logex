@@ -1867,6 +1867,17 @@ defmodule Logex.RunnerTest do
   defp looped(0, loop, calls), do: loop.(loop, calls)
   defp looped(_stop, _loop, calls), do: calls
 
+  # The processes a traced runner made, each a write of the forces file where it has no
+  # store (decision 465's count).
+  defp spawned(runner) do
+    receive do
+      {:trace, ^runner, :spawn, _pid, _mfa} -> 1 + spawned(runner)
+      {:trace, ^runner, _event, _pid, _detail} -> spawned(runner)
+    after
+      0 -> 0
+    end
+  end
+
   # The rounds run when a request is answered, with its answer, the clock moved one wake
   # at a time and at most ten times, so that one never answered fails rather than waits.
   defp answered_in(request, clock, tries) when tries <= 10,
@@ -2618,7 +2629,14 @@ defmodule Logex.RunnerTest do
     # one request at most and the requests between two rounds are those the time no round
     # needs holds, a dozen at the tip. Judged by the requests served a round, at most half
     # the callers, which a loaded machine only lowers, the requests slower and the rounds
-    # still each behind one, and never by a round's lateness or the rounds a second. The
+    # still each behind one, and never by a round's lateness or the rounds a second.
+    # Decision 465 (RV-18): the requests that wait behind a write of the forces file are
+    # joined into the next, so the writes are what each round's requests cost, at most
+    # half the callers' a round, each write answering at most every caller once, where
+    # each request was a write of its own and the calls were the writes (some 1,600 calls
+    # and 1,600 writes in a second at the parent, some 50,000 calls in 1,000 writes at the
+    # tip, each a hundred rounds). The writes are counted as the processes the runner
+    # makes, each a write of the forces file, the runner given no store. The
     # task's watchdog and the idle watchdog are 5 s, so that a machine whose every core is
     # busy trips nothing: at a second the review's load runs latched the panel once in 50
     # beside the rest of the runner tests, and an instrumented run of them showed the
@@ -2657,14 +2675,18 @@ defmodule Logex.RunnerTest do
       end
 
       before = Runner.status(runner).rounds
+      :erlang.trace(runner, true, [:procs])
       callers = for _ <- 1..100, do: Task.async(fn -> loop.(loop, 0) end)
       Process.sleep(1000)
       :atomics.put(stop, 1, 1)
       calls = Enum.sum(Enum.map(callers, &Task.await(&1, 60_000)))
       status = Runner.status(runner)
+      :erlang.trace(runner, false, [:procs])
+      writes = spawned(runner)
 
       assert %{status: :running, trip: nil} = status
-      assert calls <= 50 * (status.rounds - before)
+      assert writes <= 50 * (status.rounds - before)
+      assert calls <= 100 * writes
       Runner.stop(runner)
     end
 
@@ -3228,7 +3250,8 @@ defmodule Logex.RunnerTest do
     end
 
     # Decision 440 (RV-16), the leave for `forces_unread` and `forces_unknown` absent:
-    # each always there, nil where nothing stands.
+    # each always there, nil where nothing stands; and decision 466 (RV-18) `forcing`,
+    # nil where no write of the forces file is out.
     test "status/1 at start" do
       {opts, _rig} = plant_rig(counted(), poll: 4)
       {:ok, runner} = Runner.start_link(opts)
@@ -3242,6 +3265,7 @@ defmodule Logex.RunnerTest do
                forces: %{},
                forces_unread: nil,
                forces_unknown: nil,
+               forcing: nil,
                edit: nil,
                runs: %{"fast" => {0, 500}, "trip" => {0, 500}},
                latest_wake: 0,

@@ -15621,23 +15621,44 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # built on the set the one before it left, the last asked the last written, the first
   # point asked again last holding its second value. Plain inputs only, no trigger and
   # no array, so that no round runs meanwhile; drawn by a stream of their own, so that no
-  # other draw moves.
+  # other draw moves. Decision 465 (RV-18) restated: every one sent while the runner is
+  # held, so that each after the first is in its mailbox before the first's write ends,
+  # and those are joined into one write, two writes for them all, each counted as the
+  # process the runner makes for it (`:procs` traced on the runner alone), every caller
+  # answered `:ok`.
   defp together(1, w) do
     w = settled(w)
     plain = Enum.sort(Map.keys(@inputs)) -- (["pt[0]", "pt[1]", "pt[2]"] ++ triggers(w.config))
     [{first, _value} | _] = drawn = for _ <- 1..paired(3), do: paired_force(plain)
     asked = drawn ++ [paired_force([first])]
+    :ok = :sys.suspend(w.runner)
+    requests = for {name, value} <- asked, do: send_force(w.runner, name, value)
+    :erlang.trace(w.runner, true, [:procs])
+    :ok = :sys.resume(w.runner)
 
     for(
-      request <- for({name, value} <- asked, do: send_force(w.runner, name, value)),
+      request <- requests,
       do: assert(:gen_server.wait_response(request, 60_000) == {:reply, :ok})
     )
 
+    :erlang.trace(w.runner, false, [:procs])
+    assert writes_made(w.runner) == 2
     reach(:forces_together, true)
     forced(%{w | forces: Enum.into(asked, w.forces)})
   end
 
   defp together(_n, w), do: w
+
+  # The processes the traced runner made, each a write of the forces file: no round runs
+  # in the together step, so none is the store's (decision 465's count).
+  defp writes_made(runner) do
+    receive do
+      {:trace, ^runner, :spawn, _pid, _mfa} -> 1 + writes_made(runner)
+      {:trace, ^runner, _event, _pid, _detail} -> writes_made(runner)
+    after
+      0 -> 0
+    end
+  end
 
   defp send_force(runner, name, value),
     do: :gen_server.send_request(runner, {:force, name, value})
@@ -16237,6 +16258,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 456 (RV-6): a start whose copy's bytes the highest copy standing held made
     # none and named that one.
     :store_copy_same_kept,
+    # Decision 472 (RV-18): an orderly end while the forces file was named unread, holding
+    # forces the runner did not, wrote the runner's set over it.
+    :life_end_wrote_unread_forces,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -16414,6 +16438,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_end_tripped, w.status == :tripped)
     reach(:"life_#{kind}_tripped", w.status == :tripped)
     reach(:life_end_cold, mode == :cold)
+    w = ended_unread(w)
     w = stored_at(w, w.rt)
     life_store!(w)
     w = owed_made!(w)
@@ -16421,6 +16446,19 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:"life_#{kind}_fresh", true)
     w
   end
+
+  # Decision 472 (RV-18), restated: an orderly end while the file a start or a restart
+  # could not read is named writes the runner's own set over the file, so that the next
+  # fresh start reads that and brings back nothing the HMI was not showing, where the file
+  # kept the forces no one had forced since and the next start took them.
+  defp ended_unread(%{unread: {_file, _reason}} = w) do
+    text = for {name, value} <- Enum.sort(w.forces), into: "", do: "#{name} #{value}\n"
+    assert File.read!(w.file) == text
+    reach(:life_end_wrote_unread_forces, w.file_forces != nil)
+    %{w | file_forces: nil, unread: nil}
+  end
+
+  defp ended_unread(w), do: w
 
   # Decision 360 since RV-5's review: a copy owed is made by the end's write, which wrote
   # the store after it, of the store as the start read it.
@@ -17988,9 +18026,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # force's write lands or a restart reads it. Decision 391: the set a force's write
     # past its limit held, which no walk's write is, the disk healthy and its limit of
     # real time, so none (RV-11's review). Decision 440 (RV-16): each key always there,
-    # nil where nothing stands, and the store's report's `unknown` so.
+    # nil where nothing stands, and the store's report's `unknown` so. Decision 466
+    # (RV-18): `forcing`, the set a write that is out holds, always there, nil at every
+    # check, every force the walk asks answered before it checks.
     assert Map.fetch!(status, :forces_unread) == w.unread
     assert Map.fetch!(status, :forces_unknown) == nil
+    assert Map.fetch!(status, :forcing) == nil
     retain_keys!(status.retain)
 
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))

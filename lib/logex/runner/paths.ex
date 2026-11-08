@@ -30,7 +30,21 @@ defmodule Logex.Runner.Paths do
   # - A file is held by a runner whose process is alive: one that crashed or was killed,
   #   whose terminate/2 never ran, holds nothing, its claims taken over by the next runner
   #   that claims the file. So a path is free again once its holder stops, crashes or is
-  #   killed.
+  #   killed. Since decision 475 (RV-18) a runner that ends, its terminate/2 run, with a
+  #   write of a file it began cut at its write limit and not yet known to have ended,
+  #   hands that file's claims to a process of logex's own (held_on/3), which holds them
+  #   until every call of the file system that write made has been answered, so that no
+  #   runner of the VM starts on the file meanwhile, a start then refused naming the file
+  #   held, the runner that ended and the holder. A cut write's process is killed at its
+  #   limit, and a killed process makes no call after the one it is in: its raw calls run
+  #   on in the kernel on its own `.tmp`, which every later write's exclusive open deletes
+  #   first, and its rename or delete, which go through the VM's file server, wait in that
+  #   server's queue, answered in the order asked, so that once the server has answered a
+  #   call the holder asks after the kill, every call of the cut write has been answered.
+  #   A server that never answers holds the claim for as long as it does not: the holder
+  #   ends only once its call is answered, or when it is killed, by the host, which the
+  #   refusal names it to, or with the VM (provisional: no limit, the record saying
+  #   "however long the disk takes").
   # - The claims live in a public table of the VM's own, `{path, pid, role}`, made by a
   #   process of its own that the first claim starts, unlinked, which holds the table as
   #   long as the VM runs and does nothing else. Since RV-4's review its group leader is
@@ -150,6 +164,57 @@ defmodule Logex.Runner.Paths do
 
   defp live(true, held, _rest, _table), do: held
   defp live(false, _held, rest, table), do: first_held(rest, table)
+
+  # Decision 475 (RV-18): the files of a runner that ends, `runner` the calling process,
+  # each still its own, handed to a holder of logex's own, made here and given the
+  # runner's pid as its label, `{Logex.Runner, :ended, runner}`, before any is handed,
+  # so that a refusal names both; the holder asks the VM's file server one call, a look at
+  # `path` through it, and ends once it is answered, every call the runner's cut writes
+  # left in the server's queue answered before it, the files then free. Its group leader
+  # is the VM's `init`, as the keeper's is, so that no application's stop takes the claim
+  # with it. `[]`, nothing to hold, makes none.
+  def held_on([], _runner, _path), do: :ok
+
+  def held_on(files, runner, path) do
+    table = table()
+    ref = make_ref()
+    holder = spawn(fn -> holding(runner, ref, path) end)
+
+    receive do
+      {^ref, :labelled} -> :ok
+    end
+
+    for {at, role} <- files,
+        do: :ets.select_replace(table, [{{at, runner, role}, [], [{:const, {at, holder, role}}]}])
+
+    send(holder, {ref, :held})
+    :ok
+  end
+
+  # A runner killed before it has handed every file, its supervisor's shutdown past, ends
+  # the holder, which holds nothing then, its rows the dead runner's and free.
+  defp holding(runner, ref, path) do
+    watched = Process.monitor(runner)
+    Process.group_leader(self(), Process.whereis(:init))
+    Process.set_label({Logex.Runner, :ended, runner})
+    send(runner, {ref, :labelled})
+
+    receive do
+      {^ref, :held} -> answered(path)
+      {:DOWN, ^watched, :process, ^runner, _reason} -> :ok
+    end
+  end
+
+  defp answered(path) do
+    _ = :file.read_link_info(path)
+    :ok
+  end
+
+  # The runner that handed a holder its files, or nil for a holder that is a runner.
+  def ended_runner(holder), do: ended_of(:proc_lib.get_label(holder))
+
+  defp ended_of({Logex.Runner, :ended, runner}), do: runner
+  defp ended_of(_label), do: nil
 
   # Every file of `pid`'s given up, where it is still `pid`'s.
   def release(files, pid) do
