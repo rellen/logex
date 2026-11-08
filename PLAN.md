@@ -22,7 +22,7 @@ RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, deci
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
-decisions 448–464, for RV-6 and RV-17.)*
+decisions 448–464, for RV-6 and RV-17, and to RV-16's, decisions 465–475, for RV-18.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -16206,13 +16206,6 @@ and CI checked; each fix with a test that fails when it is reverted.
   `forces_unread` stands, a restart keeping the runner's own forces. And every provisional
   mark RV-11 left on a reading decisions 437–447 settle made the decision's number. It
   runs after RV-13 and before RV-6, whose runner code both touch.
-- **RV-17 — the answers to RV-13's and RV-7's questions** (decisions 459, 462 and 464).
-  A ceiling a stage, the compile, a scan, a cycle and a round, under twice a figure
-  recorded with it; a hold in `Logex.IO.Sim` on its next reread, and the real-clock
-  reread test made to use it; `Logex.SourceFile` reading and looking at files raw. And
-  every provisional mark RV-13 and RV-7 left on a reading decisions 448–464 settle made
-  the decision's number. It touches no runner code and runs beside RV-6.
-
   **RV-16 as built** (2026-11-04, branch `rv16` over `da5e46e`). Each decision that
   changes something has a test that fails when it is reverted, every new test red at the
   parent's `lib/`, each judged by the full suite (the mutation table below); the leave
@@ -16589,7 +16582,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   tests), CI green (42426993579); and this entry's commit, the kill test's writer read
   from the runner and the documents, 2,853.
 
-  *Provisional readings, put to the maintainer*, by what an operator sees. The record is
+  *Provisional readings, put to the maintainer* *(all eleven answered on 2026-11-08,
+  decisions 465 to 475: 3, 5, 6 and 7 as built; 1, 2, 4, 8, 9, 10 and 11 changed, to build
+  in RV-18)*, by what an operator sees. The record is
   silent on each; the reading taken is the closest to it, IEC and Logix. IEC 61131-3
   leaves forcing and the runtime's faults to the implementer; Logix keeps forces in the
   controller's memory, a force taking effect at the next scan once enabled, and a major
@@ -16716,6 +16711,21 @@ and CI checked; each fix with a test that fails when it is reverted.
       refuses it), the stop still answering at the limit; (c) every fresh start naming
       the forces file's set unknown, `forces_unknown`, until its own first write of it,
       where the last runner left a write cut, so that the HMI warns.
+- **RV-17 — the answers to RV-13's and RV-7's questions** (decisions 459, 462 and 464).
+  A ceiling a stage, the compile, a scan, a cycle and a round, under twice a figure
+  recorded with it; a hold in `Logex.IO.Sim` on its next reread, and the real-clock
+  reread test made to use it; `Logex.SourceFile` reading and looking at files raw. And
+  every provisional mark RV-13 and RV-7 left on a reading decisions 448–464 settle made
+  the decision's number. It touches no runner code and runs beside RV-6.
+- **RV-18 — the answers to RV-16's questions** (decisions 465, 466, 468, 472, 473, 474 and
+  475). Forcing requests waiting behind a write joined into the next; `status/1`'s
+  `forcing`, the set a write that is out holds; a restart waiting for a write of the
+  forces file before it reads it; an orderly stop while `forces_unread` stands writing the
+  runner's own set; a host's mistake in a forcing request raised at once; a round's event
+  published with the outputs the devices took; and a runner's claim on its files held
+  until every write of them it began has ended. And every provisional mark RV-16 left on
+  a reading decisions 465–475 settle made the decision's number. It runs after RV-6,
+  whose runner code it touches.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

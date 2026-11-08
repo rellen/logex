@@ -348,9 +348,13 @@ reading (decision 441), a slot of the share that finds nothing waiting kept open
 request takes it (decision 442) and a restart while `forces_unread` stands keeping the
 forces the runner holds (decision 445), the other five as built (decisions 438, 443,
 444, 446 and 447). Its answers to the questions RV-13 and RV-7 left, decisions 448–464,
-RV-6 and RV-17 build: a copy the same as the last one skipped, every write of the store
-limited, a late runner letting its devices run before judging them, and the loader
-reading its files raw, among them. Its answers to the questions RV-5 left, decisions 409–419, have
+which RV-6 and RV-17 build: a copy the same as the last one skipped, every write of the
+store limited, a late runner letting its devices run before judging them, and the loader
+reading its files raw, among them; and its answers to the questions RV-16 left,
+decisions 465–475, which RV-18 builds: forces waiting behind a write joined into one,
+`status/1`'s `forcing`, a restart waiting for a force's write, and a runner's claim on
+its files held until its last write of them has ended, among them. Its answers to the
+questions RV-5 left, decisions 409–419, have
 landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
 CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
 nothing was copied (decision 412), the shutdown's write making the store's text within
