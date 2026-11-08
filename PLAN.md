@@ -22,8 +22,8 @@ RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, deci
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
-decisions 448–464, for RV-6 and RV-17, of which RV-17's landed on 2026-11-07, and to
-RV-16's and RV-17's, decisions 465–481, for RV-18.)*
+decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
+to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -13211,7 +13211,8 @@ and CI checked; each fix with a test that fails when it is reverted.
   *CLAUDE.md*: `lib/logex/name.ex`'s line names `spelled/1`, and the Conventions' evaluator
   paragraph `:open` among a scan's own keys (`bc0fe13`); no file was added.
 
-  *Provisional readings, put to the maintainer*, by what an operator sees. The record is
+  *Provisional readings, put to the maintainer* *(answered on 2026-11-08 as restated
+  after the review, below)*, by what an operator sees. The record is
   silent on each; the reading taken is the closest to it, IEC and Logix. IEC 61131-3
   leaves the runtime's faults and its I/O faults to the implementer; Logix names a major
   fault by its type and code and the task, faults a module's connection after four
@@ -13408,7 +13409,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   *The suite*: `9d5ad5a` 2,894 (11 doctests, 2,883 tests), `a3b0e10` 2,894. *CLAUDE.md*:
   no line changed, no file added.
 
-  *Questions after the review*, put to the maintainer, by what an operator sees; 1 and 2
+  *Questions after the review* *(all seven answered on 2026-11-08, decisions 482 to 488:
+  1, 2, 4 and 6 as built, 3, 5 and 7 changed, to build in RV-18)*, put to the
+  maintainer, by what an operator sees; 1 and 2
   above stand as they were put, 3, 4 and 5 restated with what the review found and built,
   6 and 7 new.
 
@@ -17549,8 +17552,8 @@ and CI checked; each fix with a test that fails when it is reverted.
        standard program long enough that its rungs are most of it, the motor's rungs
        written sixteen times over, one figure a stage.
 
-- **RV-18 — the answers to RV-16's and RV-17's questions** (decisions 465, 466, 468, 472,
-  473, 474, 475, 477, 478 and 480). Forcing requests waiting behind a write joined into the next; `status/1`'s
+- **RV-18 — the answers to RV-16's, RV-17's and RV-6's questions** (decisions 465, 466,
+  468, 472, 473, 474, 475, 477, 478, 480, 484, 486 and 488). Forcing requests waiting behind a write joined into the next; `status/1`'s
   `forcing`, the set a write that is out holds; a restart waiting for a write of the
   forces file before it reads it; an orderly stop while `forces_unread` stands writing the
   runner's own set; a host's mistake in a forcing request raised at once; a round's event
@@ -17560,8 +17563,11 @@ and CI checked; each fix with a test that fails when it is reverted.
   (decisions 477, 478 and 480): `Logex.IO.Sim`'s `let_go/1` of a hold no read came to
   raised; a relative path compiled where the working directory is gone a `:file`
   diagnostic; the loader tests in a module of their own, `async: false`; and RV-17's
-  marks of 476–481. It runs after RV-6,
-  whose runner code it touches.
+  marks of 476–481. And RV-6's answers (decisions 484, 486 and 488): a device unheard
+  for four times the idle watchdog and a poll period tripping the line however late the
+  runner; a step past the idle watchdog giving the devices a turn before the next round
+  judges them; the period's hand-off sending the retained values alone; and RV-6's marks
+  of 482–488. It runs after RV-6, whose runner code it touches.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

@@ -14158,6 +14158,74 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: both, as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
      decision's number.
 
+482. **What a trip names of the runner's own work (the review after Milestone 6),** RV-6's
+     question 1 (decision 352): an idle watchdog's trip met in the runner's own work names
+     it, `{:watchdog, {:idle, ms, work}}`, `work` the function the host called, an edit's
+     step `{:edit, step}`, or `:period` for the period's hand-off.
+
+     **Taken: the function's name, as built (a)** (the maintainer, 2026-11-08): the
+     operator sees which kind of call tripped the line in a short name, and a trip's reason
+     quotes no tag. RV-18 makes the mark the decision's number.
+
+483. **An owed copy compared (the review after Milestone 6),** RV-6's question 2 (decision
+     456): a copy the next period's write owes again, after one cut off at the write limit
+     landed late, is compared with the highest copy standing as a start's own is, so a late
+     `.dropped.1` of the same bytes makes no `.dropped.2`, `status/1` naming `.dropped.1`.
+
+     **Taken: compared, as built (a)** (the maintainer, 2026-11-08): copies the same do not
+     pile up on a slow disk. RV-18 makes the mark the decision's number.
+
+484. **A hung device while every wake is late (the review after Milestone 6),** RV-6's
+     question 3 (decision 461): each late look gives the devices a turn of its own, so on
+     a host that makes every wake late a hung card is judged only at a wake on time; in
+     the review's probe a conveyor ran some 6 s and 8 rounds on a hung card's last inputs,
+     `status: :running`.
+
+     **Taken: a cap (c)** (the maintainer, 2026-11-08): a device unheard for four times
+     the idle watchdog and a poll period trips the line whatever the runner's lateness, as
+     a Logix connection faults after four missed packets at its RPI; a turn still spares a
+     device starved for less. To build in RV-18.
+
+485. **The runner's lateness seen at any look (the review after Milestone 6),** RV-6's
+     question 4 (decision 461): the runner's lateness is read at every look for silent
+     devices, a round's, a refresh's or one a change brings before the wake it owed, and
+     `latest_wake` shows the latest of every wake, a refresh's among them.
+
+     **Taken: every look, one key, as built (a)** (the maintainer, 2026-11-08): a stall
+     that ends at a change trips no healthy device, and one figure says how late the
+     runner has been. RV-18 makes the mark the decision's number.
+
+486. **A device starved while the runner is in a step (the review after Milestone 6),**
+     RV-6's question 5 (decision 461, RV-7's question 4): only a late look gives a turn,
+     so a step that runs long on a loaded host, its panel starved meanwhile, has the
+     healthy panel judged at the next round's look and the line tripped
+     `{:io, "panel", :timeout}`.
+
+     **Taken: a long step gives a turn (b)** (the maintainer, 2026-11-08): a step that
+     runs past the idle watchdog gives the devices one poll period's turn before the next
+     round's look judges them, as a late wake does, within decision 484's cap. To build in
+     RV-18.
+
+487. **A copy spelled otherwise (the review after Milestone 6),** RV-6's question 6
+     (decision 456): an entry at the highest number spelled as logex does not,
+     `tally.retain.dropped.007`, counts for the number but is never compared, so a copy is
+     made at the next number though `.007` holds the same bytes.
+
+     **Taken: logex's own spelling alone, as built (a)** (the maintainer, 2026-11-08):
+     `status/1` names only a file logex wrote. RV-18 makes the mark the decision's number.
+
+488. **What the period's hand-off sends (the review after Milestone 6),** RV-6's question
+     7 (decisions 352 and 455): the runner sends its writer the whole resource each period,
+     the programs' code with it, so a fan program of 65,536 rungs retaining one bool costs
+     the runner 36 ms a period, 91 ms for ten instances, where taking the bool out cost
+     nothing.
+
+     **Taken: the retained values alone (c)** (the maintainer, 2026-11-08): the runner
+     picks out the retained values and sends them alone, their text made in the writer
+     within the write limit (decision 455), so the runner's cost follows what is retained,
+     not the plant's size, and a large retained array stays as cheap as decision 352 made
+     it. To build in RV-18.
+
 ---
 
 ## 8. Sources, and what is unverified
