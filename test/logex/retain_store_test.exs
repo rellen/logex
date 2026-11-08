@@ -1416,7 +1416,7 @@ defmodule Logex.RetainStoreTest do
     # store, every entry named the store's name, `.dropped.` and a whole number counting
     # by its number's value, whatever it is, a file or a directory a host made among them,
     # so that the copy's name is free; none is replaced; and an unnumbered `.dropped` an
-    # earlier logex left counts for nothing and is kept as it stands (provisional).
+    # earlier logex left counts for nothing and is kept as it stands (decision 450).
     test "a copy numbered one past the highest that stands, none replaced", %{tmp_dir: dir} do
       rig = rig(dir, write_limit: 5000)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -1547,6 +1547,28 @@ defmodule Logex.RetainStoreTest do
                Runner.status(runner).retain
 
       assert Enum.sort(File.ls!(dir)) == ["plant.retain", "plant.retain.dropped.1"]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 456 (RV-6): the comparison reads the highest copy only where it is a regular
+    # file of the store's size, so that a FIFO a host put at the highest number, which a
+    # read would wait on until the write limit cut the copy, is never read: it is no
+    # match, and the copy is made past it at once.
+    test "a FIFO at the highest copy's number is never read, the copy made past it",
+         %{tmp_dir: dir} do
+      rig = rig(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      {_out, 0} = System.cmd("mkfifo", [rig.store <> ".dropped.1"])
+      opts = Keyword.put(rig.opts, :configuration, retyped())
+      {took, {:ok, runner}} = :timer.tc(fn -> Runner.start_link(opts) end, :millisecond)
+      copy = rig.store <> ".dropped.2"
+      assert %{copy: ^copy, failed: nil, unknown: nil} = Runner.status(runner).retain
+      assert File.read!(copy) == read
+      assert took < 5000
       assert Runner.stop(runner) == :ok
     end
 
@@ -2355,7 +2377,7 @@ defmodule Logex.RetainStoreTest do
     # made is judged as decision 291 judges a cold start whose first write fails: the start
     # refused, `{:error, {:retain, reason}}`, the store as it was and no device opened, a
     # directory at the copies' `.tmp` here; and a store that stands but cannot be read, a
-    # directory in its place, of which no copy can be made (provisional), the same.
+    # directory in its place, of which no copy can be made (decision 453), the same.
     test "a cold start whose copy cannot be made starts nothing, the store as it was",
          %{tmp_dir: dir} do
       rig = rig(dir, write_limit: 5000, start: :cold)

@@ -1020,7 +1020,7 @@ defmodule Logex.StalledDiskTest do
   # the copies' `.tmp`, after it read the directory and before that look, is left as it
   # is, the copy failing `:eexist` and owed, as decision 416 has a copy that cannot be
   # made, the start going on; the next write over the store makes it under the next number
-  # past the host's file (provisional: failed and owed, where it could take the next free
+  # past the host's file (decision 448: failed and owed, where it could take the next free
   # number at once). The test's name said "while it is written", which the review of
   # RV-13 found true only before the look (below).
   describe "a copy's number (decision 418)" do
@@ -1072,11 +1072,10 @@ defmodule Logex.StalledDiskTest do
     # The review of RV-13: the look and the rename are two calls, the rename through the
     # VM's file server, so that a file a host makes at the copy's number between them, as
     # the rename waits in the held server's queue, is replaced by the copy, the copy made
-    # and named (provisional, a question to the maintainer: decision 418 has none
-    # replaced, and the rename that refuses a name that stands, a hard link, is not on
-    # every card's file system).
+    # and named (decision 449, as built: decision 418 has none replaced, and the rename
+    # that refuses a name that stands, a hard link, is not on every card's file system).
     test "a file a host makes at the copy's number after the copy looked, as its rename " <>
-           "waits, is replaced (provisional)",
+           "waits, is replaced (decision 449)",
          %{tmp_dir: dir} do
       rig = rig(dir, forces: nil)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -1121,7 +1120,7 @@ defmodule Logex.StalledDiskTest do
   # first write fails: the start refused, `{:error, {:retain, :timeout}}`, no device read
   # and the store as it was, the copy's rename alone left to land once the disk answers;
   # and a store that stands but whose read does not end within its limit, a FIFO in its
-  # place, can be copied by no start, the same (provisional).
+  # place, can be copied by no start, the same (decision 453).
   describe "a cold start's copy (decision 417)" do
     test "a cold start whose copy does not end within its limit starts nothing, the store " <>
            "as it was",

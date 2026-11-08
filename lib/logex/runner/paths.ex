@@ -24,7 +24,7 @@ defmodule Logex.Runner.Paths do
   #   another's copies are made under. Every row is put in before the check, so that of two
   #   starts at once whose files cross so, one at least sees the other's and is refused
   #   (crossed/3). An unnumbered `<store>.dropped` an earlier runner left is no copy's name
-  #   and no file a runner writes, kept as it stands (provisional); a store or forces file
+  #   and no file a runner writes, kept as it stands (decision 450); a store or forces file
   #   named so is written through `<store>.dropped.tmp`, the copies' `.tmp`, and refused
   #   as that `.tmp`'s.
   # - A file is held by a runner whose process is alive: one that crashed or was killed,

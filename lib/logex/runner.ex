@@ -447,9 +447,9 @@ defmodule Logex.Runner do
     kept; a copy that cannot be made is judged as decision 291 judges a cold start whose
     first write fails, the runner not started, `{:error, {:retain, reason}}`, the store as
     it was, and so is a store that stands but cannot be read, a FIFO's read past the write
-    limit or a directory in its place, which no copy can be made of (provisional). A store
+    limit or a directory in its place, which no copy can be made of (decision 453). A store
     that reads whole needs no copy and gets none. A cold `restart/2` reads no store,
-    starting from the resource the runner holds, and copies none (provisional): the store
+    starting from the resource the runner holds, and copies none (decision 454): the store
     is its own last write, a hand edit made while the runner runs being lost anyway
     (decision 284).
   - A runner with no `retain:` keeps nothing across a crash; a warm `restart/2` still
@@ -979,7 +979,7 @@ defmodule Logex.Runner do
   # Decision 391 (RV-11): a copy past its limit may yet land, so it is owed as one that
   # failed is and named `unknown`, neither failed nor made, until a later write makes it;
   # since decision 418 by the number it took, and one killed before it took a number,
-  # which can land nowhere, is a copy that failed, `:timeout` (provisional).
+  # which can land nowhere, is a copy that failed, `:timeout` (decision 452).
   defp copy_made({:unknown, n}, text, retain),
     do: unknown(Map.merge(retain, %{copy: nil, owed: text}), Paths.copy(retain.path, n))
 
@@ -1344,7 +1344,7 @@ defmodule Logex.Runner do
   # decision 291 judges a cold start whose first write fails, the runner not started,
   # `{:error, {:retain, reason}}`, the store as it was and no device opened, a copy past
   # its limit among them, `:timeout`, and a store that stands but cannot be read, which no
-  # copy can be made of, the read's reason (provisional). `status/1`'s `copy` names the
+  # copy can be made of, the read's reason (decision 453). `status/1`'s `copy` names the
   # copy, `dropped` empty. A store that reads whole needs none: decision 360 copies only
   # what a start drops, and a cold start over a whole store makes no copy, as before.
   defp cold_copy(%{copy: {:cold, text}, retain: retain} = start),
@@ -3466,7 +3466,7 @@ defmodule Logex.Runner do
   # the store, which it could not have reached (`Writer.stored/4`); one killed in the
   # store's write, the copy made, names the store, by the clause above (decision 447); and
   # one killed before its copy took a number, which can land nowhere, a write that failed,
-  # `:timeout`, the copy still owed (provisional).
+  # `:timeout`, the copy still owed (decision 452).
   defp noted({:uncopied, {:unknown, n}}, _at, %{retain: retain} = state) do
     published(state, [{:retain, {:error, :timeout}}])
 
