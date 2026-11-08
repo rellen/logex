@@ -1651,7 +1651,8 @@ defmodule Logex.StalledDiskTest do
 
       Agent.update(ticks, fn _ -> 3 end)
       assert Runner.get(runner, "total") == {:ok, 0}
-      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 3}}}}, @answers
+      # Decision 352 (RV-6): named by the work it was met in, the get.
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 3, :get}}}}, @answers
       assert Runner.stop(runner) == :ok
     end
   end

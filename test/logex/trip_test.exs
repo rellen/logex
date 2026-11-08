@@ -194,6 +194,45 @@ defmodule Logex.TripTest do
     def cancel({clock, _ms}, timer), do: Manual.cancel(clock, timer)
   end
 
+  # The manual clock, whose every reading takes the milliseconds an agent holds, none until
+  # the test sets some (stalled_disk_test.exs's): so that the runner's own work takes time
+  # once it does, and not before.
+  defmodule Ticking do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, ticks}) do
+      Manual.pass(clock, Agent.get(ticks, & &1))
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at({clock, _ticks}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _ticks}, timer), do: Manual.cancel(clock, timer)
+
+    @impl true
+    def wall_ms({_clock, _ticks}), do: 1_793_368_800_000
+  end
+
+  # The hidden seam's steps, Logex.Runtime's, and a period's take-out that passes the time
+  # the test sets on the manual clock, the runner's own work at a period where a seam takes
+  # it out (decision 455).
+  defmodule SlowTaker do
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    # The test that started the runner, the first of its ancestors, holds the clock and
+    # the time.
+    def retained(runtime) do
+      [{_key, clock, ms}] = :ets.lookup(Logex.TripTest, {hd(Process.get(:"$ancestors")), :slow})
+      Manual.pass(clock, ms)
+      Runtime.retained(runtime)
+    end
+  end
+
   # An adapter whose read gives what no callback of Logex.IO gives, and whose close raises.
   defmodule BadIO do
     @behaviour Logex.IO
@@ -1385,9 +1424,102 @@ defmodule Logex.TripTest do
 
       {runner, clock} = start.(2)
       assert called(fn -> Runner.get(runner, "x") end, clock) == {:ok, 0}
-      assert Runner.status(runner).trip == {:watchdog, {:idle, 3}}
+      # Decision 352 (RV-6): the trip names the runner's own work it was met in, the get.
+      assert Runner.status(runner).trip == {:watchdog, {:idle, 3, :get}}
       assert Runner.restart(runner, :cold) == :ok
       assert called(fn -> Runner.status(runner) end, clock).status == :running
+    end
+  end
+
+  # Decision 352 (RV-6): a trip met during the runner's own work names that work,
+  # `{:watchdog, {:idle, ms, work}}`, the request a host made by the function it called,
+  # an edit's step, or the period's hand-off to its writer, where it was `{:watchdog,
+  # {:idle, ms}}`; and a plant past the bound still trips, every output 0.
+  describe "a trip met during the runner's own work names that work (decision 352)" do
+    defp ticking(extra \\ []) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, ticks} = Agent.start_link(fn -> 0 end)
+      {:ok, panel} = Sim.start_link(clock: clock, reports: true)
+
+      {:ok, runner} =
+        Runner.start_link(
+          [
+            configuration: configured(),
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {Ticking, {clock, ticks}},
+            poll: 1_000_000,
+            idle: 2
+          ] ++ extra
+        )
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      %{runner: runner, clock: clock, ticks: ticks, panel: panel}
+    end
+
+    test "a host's request names its function" do
+      for {work, call} <- [
+            get: &Runner.get(&1, "runs"),
+            get!: &Runner.get!(&1, "runs"),
+            status: &Runner.status/1,
+            subscribe: &Runner.subscribe(&1, [:trip]),
+            unsubscribe: &Runner.unsubscribe/1
+          ] do
+        %{runner: runner, clock: clock, ticks: ticks, panel: panel} = ticking()
+        Agent.update(ticks, fn _ -> 3 end)
+        called(fn -> call.(runner) end, clock)
+        Agent.update(ticks, fn _ -> 0 end)
+        assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
+        assert took > 2
+        assert Sim.outputs(panel) == %{[0] => 0}
+      end
+    end
+
+    test "an edit's step names the step, the plant tripped with every output 0" do
+      %{runner: runner, clock: clock, ticks: ticks, panel: panel} = ticking()
+      :ok = Runner.subscribe(runner, [:trip])
+      candidate = configured(String.replace(@relayed, "interval 10", "interval 20"))
+      assert {:ok, _forecast} = Runner.accept(runner, candidate)
+      Agent.update(ticks, fn _ -> 3 end)
+      assert {:ok, _report} = called(fn -> Runner.test(runner) end, clock)
+      Agent.update(ticks, fn _ -> 0 end)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, took, {:edit, :test}}}}}
+      assert took > 2
+
+      assert %{status: :tripped, trip: {:watchdog, {:idle, ^took, {:edit, :test}}}} =
+               Runner.status(runner)
+
+      assert Sim.outputs(panel) == %{[0] => 0}
+    end
+
+    @tag :tmp_dir
+    test "the period's hand-off names the period, the plant tripped with every output 0",
+         %{tmp_dir: dir} do
+      {:ok, clock} = Manual.start_link(now: 1_793_368_800_000)
+      {:ok, panel} = Sim.start_link(clock: clock)
+      :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 0})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 10,
+          retain: Path.join(dir, "plant.retain"),
+          retain_period: 100,
+          steps: SlowTaker
+        )
+
+      :ok = Runner.subscribe(runner, [:trip])
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 600})
+      Manual.advance(clock, 90)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 600, :period}}}}, 5000
+      assert Runner.status(runner).trip == {:watchdog, {:idle, 600, :period}}
+      assert Sim.outputs(panel) == %{[0] => 0}
     end
   end
 

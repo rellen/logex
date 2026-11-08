@@ -16962,7 +16962,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     status = Runner.status(w.runner)
     :ets.insert(@table, {{self(), :lag}, 0})
     assert status.status == :running
-    w = %{w | fault: {:watchdog, {:idle, lag}}}
+    # Decision 352 (RV-6): the trip names the runner's own work it was met in, the status.
+    w = %{w | fault: {:watchdog, {:idle, lag, :status}}}
     w = consumed(w)
 
     # The time the request took passed inside it, the devices' polls on the way waiting

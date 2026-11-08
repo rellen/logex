@@ -4102,8 +4102,11 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   than its line's `watchdog`; `{:watchdog, {:round, task, took_ms, limit_ms, steps}}`, a
   round of the continuous task longer than its watchdog, counted from the inputs taken to
   its last program's scan, the timed tasks' runs in it included and each step named with
-  its time, so that the slow one is seen; `{:watchdog, {:idle, ms}}`, a host's request
-  served whole that took longer than `idle:`; `{:watchdog, {:device, device, ms}}`, a
+  its time, so that the slow one is seen; `{:watchdog, {:idle, ms, work}}`, the runner's
+  own work that took longer than `idle:`, named: a host's request served whole by the
+  function it called, `:status` or `:get`, an edit's step `{:edit, :test}`, or the
+  period's hand-off to the store's writer, `:period` (decision 352, where it was
+  `{:watchdog, {:idle, ms}}`); `{:watchdog, {:device, device, ms}}`, a
   device that heard nothing from the runner by the deadline its last refresh carried, and
   so latched itself, `ms` the heartbeat that refresh gave it, the time after which the
   plant went off (decision 137); `{:io, device, cause}`, an adapter's callback that gave
@@ -4498,6 +4501,18 @@ closed: true
   an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
   27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
   round at the median.
+- The size of plant the defaults carry (decision 352), `idle: 500`, `poll: 10` and
+  `write_limit: 5000`, measured on the real clock on a four-core machine another workload
+  kept busy: an array of timers run element by element scans in 167 ms at 32,768 and
+  367 ms at 65,536, a declaration's most, within a task's 500 ms watchdog, and a user
+  block's instances in 348 ms at 32,768, a scan linear in its elements since RV-6, where
+  `ton[16000]` took 1.8 s; an array of 32,768 timers retained is written every period,
+  its writer taking the image out (decision 455), and one of 65,536 is past the write
+  limit, `unknown`; and an edit's test step over 65,536 timers takes 355 ms, over a
+  block's instances some 20,000 within the idle watchdog. Past the bound the plant trips,
+  every output 0, named by the work it was met in, `{:watchdog, {:idle, 644, {:edit,
+  :test}}}`; a larger plant gives `idle:`, a task's `watchdog` or `write_limit:` more.
+  Each figure is that machine's: a soak on the target machine gives its own.
 - The suite's tests on the real clock are few and short, with generous bounds, and none
   times a round (§4.11's "Risks"): the plant runs for 2 s, rounds no more often than its
   clock's milliseconds, keeps its clock and stops in order, its devices' last writes all

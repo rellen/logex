@@ -603,10 +603,15 @@ defmodule Logex.Runner do
     runs in it included, longer than the continuous task's watchdog, `task` its name or
     `:none`, 500 ms, where none is declared, and `steps` each step the round ran, in
     order, `{task, ms}` (decisions 111 and 126);
-  - `{:watchdog, {:idle, ms}}`: a host's request served whole, from its start to its end,
-    longer than the idle watchdog, the trip made once it is answered (decision 128), a
+  - `{:watchdog, {:idle, ms, work}}`: the runner's own work longer than the idle
+    watchdog, the trip made once it is done (decision 128): a host's request served whole,
+    from its start to its end, named by the function the host called, `:get`, `:get!`,
+    `:status`, `:subscribe`, `:unsubscribe`, `:force`, `:unforce`, `:unforce_all` or
+    `:accept`, an edit's step `{:edit, step}`, `{:edit, :test}` among them, and since RV-6
+    the period's hand-off of the resource to its writer, `:period`, where it was
+    `{:watchdog, {:idle, ms}}` and named nothing (decision 352; the names provisional); a
     force's write of the forces file none of it, made off the runner's path since
-    decision 437;
+    decision 437, nor the store's take-out and text, its writer's since decision 455;
   - `{:watchdog, {:device, device, ms}}`: a device that heard nothing from the runner by
     the deadline its last refresh carried, `ms` from that refresh to it, the heartbeat it
     was given (decision 137), which writes every output 0 once and latches by itself and
@@ -720,6 +725,32 @@ defmodule Logex.Runner do
   refused, `{:error, {:clock, cause}}`, the runner left tripped, the wall clock asked
   where a store is named, and once it is mended a restart brings the line back (decision
   441: the range and the restart's look at both clocks as built).
+
+  **Its own work, and the plant it carries** (decision 352). Between rounds the runner
+  serves its own work, a host's request, an edit's step, the period's hand-off to its
+  writer, while every device waits on the idle watchdog and a poll period from the
+  refresh before it; a round's scan is bounded by its task's watchdog, every device
+  refreshed with that step's deadline. Since RV-6 the runner's own long work is cheaper:
+  a scan of every element of a large array of instances takes time linear in its
+  elements (`Logex.Runtime`'s "A large array"), an edit's switch reads each element it
+  moves once, and the period's take-out and every write's text are the writer's
+  (decision 455). Measured on the real clock with the defaults, `idle: 500`, `poll: 10`
+  and `write_limit: 5000`, a 100 ms task, on a four-core machine that another workload
+  kept busy, a load average of 9: an array of timers run element by element, `ton[n]` and
+  a rung each, scans in 67 ms at 16,384, 166 ms at 32,768 and 367 ms at 65,536, a
+  declaration's most (decision 403), within the 500 ms a task's watchdog is where none is
+  set, the 100 ms task missing periods past some 30,000; a user block's instances, each
+  called, in 119 ms at 10,922, 187 ms at 21,844 and 348 ms at 32,768; an array of timers
+  retained, with its period of 1000 ms, written every period at 32,768, the period's
+  hand-off a few ms, and at 65,536 past the write limit, the store `unknown` and reported
+  each period, its start's write 5.0 s; and an edit's test step over an array of timers
+  in 150 ms at 32,768 and 355 ms at 65,536, and over a user block's instances, which
+  moves each member, in 255 ms at 10,922 and 576 ms at 21,844, past the idle watchdog
+  some 20,000 on. A plant past the bound still trips, its outputs at 0, named by the work
+  it was met in, `{:watchdog, {:idle, 644, {:edit, :test}}}` for an edit's test over
+  32,768 instances of a block; a plant that needs more gives `idle:`, a task's
+  `watchdog` or `write_limit:` more. Each figure is the machine's, and a soak on the
+  target machine gives its own (`status/1`'s `runs`, `latest_wake` and `refresh_gap`).
 
   **What logex is not.** logex is not a safety controller, and must not implement a
   safety function: an emergency stop, a guard interlock, a light curtain, two-hand
@@ -1546,7 +1577,7 @@ defmodule Logex.Runner do
     begun = now(state)
     {reply, state} = served(request, state)
     took = now(state) - begun
-    idled(took, replied(reply, from, state))
+    idled(took, work_of(request), replied(reply, from, state))
   end
 
   defp replied({__MODULE__, :writing, forces, names}, from, state),
@@ -1569,10 +1600,30 @@ defmodule Logex.Runner do
   defp kick(name, state),
     do: rounded(%{state | pending: Enum.into(Map.take(state.values, [name]), state.pending)})
 
-  defp idled(took, %{status: :running, idle: idle} = state) when took > idle,
-    do: tripped(state, {:watchdog, {:idle, took}})
+  # Decision 352 (RV-6): a trip met during the runner's own work names that work, the
+  # request the host made, by the function it called, `:status`, `:get` or `:force` among
+  # them, an edit's step `{:edit, :test}`, or the period's hand-off of the resource to its
+  # writer, `:period` (period/2): `{:watchdog, {:idle, ms, work}}`, in the trip's event and
+  # `status/1`, where it was `{:watchdog, {:idle, ms}}` and named nothing; one met during a
+  # scan names its task already, `{:watchdog, {:task, ...}}` or `{:watchdog, {:round,
+  # ...}}` (decisions 110 and 111) (provisional: the work's names).
+  defp idled(took, work, %{status: :running, idle: idle} = state) when took > idle,
+    do: tripped(state, {:watchdog, {:idle, took, work}})
 
-  defp idled(_took, state), do: state
+  defp idled(_took, _work, state), do: state
+
+  defp work_of({:get, _path}), do: :get
+  defp work_of({:get!, _path}), do: :get!
+  defp work_of(:status), do: :status
+  defp work_of({:subscribe, _pid, _kinds}), do: :subscribe
+  defp work_of({:unsubscribe, _pid}), do: :unsubscribe
+  defp work_of({:force, _name, _value}), do: :force
+  defp work_of({:unforce, _name}), do: :unforce
+  defp work_of(:unforce_all), do: :unforce_all
+  defp work_of(:resource), do: :accept
+  defp work_of({:accept, _edits, _edit, _forecast}), do: :accept
+  defp work_of({:edit, step}), do: {:edit, step}
+  defp work_of(_other), do: :request
 
   # Each request, a host's mistake in it given back to be raised in the caller.
   defp served(request, state) do
@@ -2775,6 +2826,10 @@ defmodule Logex.Runner do
   # (decision 131). A configuration with no untimed program served its requests whenever
   # it waited (decision 108); since decision 396 it is served so while no round is due,
   # and in the slot after C ms of its periodic rounds (below).
+  # A runner the round's own work tripped serves no slot of the share: every request is
+  # served at once while tripped (decision 113).
+  defp slot(%{status: :tripped} = state), do: state
+
   defp slot(%{untimed: true, used: used, slots: {c, s}, retain: nil} = state) when used >= c do
     state = refresh(state, :idle)
     %{popped(:queue.out(state.queue), now(state) + s, opened(state)) | used: 0}
@@ -3457,11 +3512,15 @@ defmodule Logex.Runner do
   defp soonest(nil, refresh, _periodic, _untimed), do: refresh
   defp soonest(round, refresh, _periodic, _untimed), do: min(round, refresh)
 
+  # Decision 352 (RV-6): the hand-off timed, from the time the period was found due to its
+  # end, the idle watchdog's as any of the runner's own work, one longer tripping it named
+  # `:period` (idled/3).
   defp period(%{retain: %{period: %{next: next} = periodic}, status: :running} = state, now)
        when now >= next do
     image = taken_out(periodic.taker, state.runtime)
     state = put_period(state, %{periodic | next: next_due(periodic, now)})
-    period_stamped(wall(state.clock), image, state)
+    state = period_stamped(wall(state.clock), image, state)
+    idled(now(state) - now, :period, state)
   end
 
   defp period(state, _now), do: state
@@ -3828,6 +3887,11 @@ defmodule Logex.Runner do
 
   # The one wake: the next round, or sooner the refresh a wait makes a poll period after
   # the last, its token making any earlier wake stale.
+  # A trip cancels the wake and stops scheduling (decision 113): work that tripped the
+  # runner on its way to scheduling the next wake, the period's hand-off past the idle
+  # watchdog after a round (RV-6), schedules none.
+  defp scheduled(%{status: :tripped} = state), do: state
+
   defp scheduled(%{clock: {module, clock}, token: token} = state) do
     cancel(state.wake, state.clock)
     at = soonest(state.next_round, state.refreshed + state.poll, state.retain, state.untimed)
