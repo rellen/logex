@@ -4864,8 +4864,8 @@ defmodule Logex.EndToEndTest do
     # is hung, whatever kept it from running, and one that rounds fewer than 20 times in
     # 2 s fails it: RV-7's review met each once, the first in its ten full suites under the
     # busy loops and the second in a suite run beside them, and both stay (RV-7's question
-    # 4): decision 461, which RV-6 builds, lets a runner that wakes late let its devices
-    # run before it judges them, so that only a device still silent then trips the plant.
+    # 4): since decision 461 (RV-6) a runner that wakes late lets its devices run before
+    # it judges them, so that only a device still silent then trips the plant.
     test "on the real clock the plant runs for 2 s and stops in order", %{tmp_dir: dir} do
       plant = plant_on_disk(dir)
       {:ok, panel} = Sim.start_link(reports: true)

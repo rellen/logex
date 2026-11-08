@@ -189,6 +189,14 @@ defmodule Logex.RuntimeTest do
             {%{s | env: Map.merge(s.env, %{ran: nil, jump: nil, faults: nil})},
              "state.env holds :faults, :jump and :ran, the runtime's own keys for records a " <>
                "scan keeps and takes out before it ends: an env is keyed by tag names"},
+            # RV-6 (decision 352): the record of the elements a routine wrote of its large
+            # arrays, which it takes out as it ends.
+            {%{s | env: Map.put(s.env, :open, %{"t" => %{[0] => 1}})},
+             "state.env holds :open, the runtime's own key for a record a scan keeps and " <>
+               "takes out before it ends: an env is keyed by tag names"},
+            {%{s | env: Map.merge(s.env, %{ran: nil, jump: nil, faults: nil, open: nil})},
+             "state.env holds :faults, :jump, :ran and :open, the runtime's own keys for " <>
+               "records a scan keeps and takes out before it ends: an env is keyed by tag names"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},

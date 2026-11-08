@@ -340,7 +340,11 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"). Its answers to the
+item RV-8 closes ("The review after Milestone 6"), RV-7's and RV-6's having landed, RV-6's the
+runner's own long work cheaper and bounded, a scan of a large array of instances
+allocating words linear in its elements, an edit's switch and the period's take-out cheaper, the size of plant
+the defaults carry measured and stated below, and a trip met in that work naming it
+(decision 352). Its answers to the
 questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
 while a force's write of the forces file is out, the force in effect from the first
 round after it lands (decision 437), every device a restart opens or reads again
@@ -351,9 +355,9 @@ reading (decision 441), a slot of the share that finds nothing waiting kept open
 request takes it (decision 442) and a restart while `forces_unread` stands keeping the
 forces the runner holds (decision 445), the other five as built (decisions 438, 443,
 444, 446 and 447). Three of its answers to the questions RV-13 and RV-7 left, decisions
-448–464, RV-6 builds: every write of the store limited, a copy the same as the last one
-skipped and a late runner letting its devices run before judging them (decisions 455, 456
-and 461); the rest have landed with RV-17: the loaders reading and looking at their files
+448–464, have landed with RV-6: every write of the store making its text within the
+write limit, a copy the same as the last one skipped and a late runner letting its
+devices run before judging them (decisions 455, 456 and 461); the rest with RV-17: the loaders reading and looking at their files
 raw, off the VM's file server (decision 464), a hold in the simulated device on its next
 reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
 whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
@@ -3577,7 +3581,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   store too big to make and write within the limit is cut off at it and reported,
   `{:retain, {:error, :timeout}}`, the store keeping its last write, where a supervisor
   killed the runner in its write and told no one, and a plant that retains that many gives
-  a longer `write_limit:`, which the deadline follows.
+  a longer `write_limit:`, which the deadline follows. Since decision 455 every write of
+  the store makes its text so, in the write's own process within the write limit: a
+  trip's, a cold restart's, `start: :cold`'s, a fresh start's with no store file and the
+  period's, whose writer takes the retained image out of the resource the runner hands it,
+  so that the runner's own work at a period is that hand-off, a copy of the whole
+  resource, its programs' code and its instances' state, into the writer, some 10 ms for
+  16,384 retained timers and 36 ms for a program of 65,536 rungs that retains one bool,
+  and a store too big to make and write within the limit
+  is cut off at it and reported, `{:retain, {:error, :timeout}}`, its file `unknown` in
+  `status/1`, the runner answering on: a trip of 131,072 retained timers answers a host's
+  `status/1` 5 s after the fault, its write cut off, where the runner spent 11 s making
+  the text before the write and answered no one meanwhile; `start: :cold` over such a
+  plant is refused, `{:error, {:retain, :timeout}}`, and so is a fresh start with no store
+  file. A plant that retains that many gives a longer `write_limit:`.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, or the forces file naming one of the store's
@@ -3643,21 +3660,24 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   while it is written, before that look, fails it, `:eexist` (decision 448), and one made
   between the look and the rename, which goes through the VM's file server and waits in
   its queue on a stalled disk, is replaced (decision 449). A store's copies are its name
-  read whole: a store named `tally.dropped` has `tally.dropped.dropped.1` and on. Each
-  start that drops makes a copy of its own, even where the highest copy holds the same
-  bytes, as a start that fails after its copy, a device that cannot be opened, and is
-  started again makes one each time, until RV-6 builds decision 456, which makes no copy
-  where the highest holds the same bytes. One that fails is reported as a failed write is,
-  `failed` in `status/1`'s `retain`, and the start goes on with the copy owed (decision
-  416): every write over the store, the period's, a trip's, a stop's, a shutdown's or a
-  cold restart's, makes the copy first, under the next number then, and writes the store
-  only once the copy is made, so that while it cannot be made, a full disk or a directory
-  at its `.tmp`, the store stays as the start read it, every write fails as above, and a
-  crash or a stop meanwhile loses what changed since the start, the next start dropping
-  from the same store and copying it again. `status/1`'s `retain` names the copy once
-  made, `copy: "tally.retain.dropped.1"`, beside `dropped`, and always has a `copy`, nil
-  while the copy is owed and where nothing was dropped, `dropped` and `failed` telling the
-  two apart (decision 412).
+  read whole: a store named `tally.dropped` has `tally.dropped.dropped.1` and on. Before
+  it copies, a start compares the store with the highest-numbered copy that stands, and
+  where they hold the same bytes makes no new copy, `status/1`'s `copy` naming that one
+  (decision 456): a start that fails after its copy, a device that cannot be opened, and
+  is started again five times by a supervisor leaves one copy, not five, and a copy it
+  cannot read, a directory a host put at the highest number, is no match, nor is an
+  entry spelled otherwise at that number, `tally.retain.dropped.007`, which only the
+  number counts: the copy compared is the one at the name logex gives it. One that fails
+  is reported as a failed write is, `failed` in `status/1`'s `retain`, and the start goes
+  on with the copy owed (decision 416): every write over the store, the period's, a
+  trip's, a stop's, a shutdown's or a cold restart's, makes the copy first, under the
+  next number then, and writes the store only once the copy is made, so that while it
+  cannot be made, a full disk or a directory at its `.tmp`, the store stays as the start
+  read it, every write fails as above, and a crash or a stop meanwhile loses what changed
+  since the start, the next start dropping from the same store and copying it again.
+  `status/1`'s `retain` names the copy once made, `copy: "tally.retain.dropped.1"`,
+  beside `dropped`, and always has a `copy`, nil while the copy is owed and where nothing
+  was dropped, `dropped` and `failed` telling the two apart (decision 412).
 
 ### An event task
 
@@ -4102,8 +4122,11 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   than its line's `watchdog`; `{:watchdog, {:round, task, took_ms, limit_ms, steps}}`, a
   round of the continuous task longer than its watchdog, counted from the inputs taken to
   its last program's scan, the timed tasks' runs in it included and each step named with
-  its time, so that the slow one is seen; `{:watchdog, {:idle, ms}}`, a host's request
-  served whole that took longer than `idle:`; `{:watchdog, {:device, device, ms}}`, a
+  its time, so that the slow one is seen; `{:watchdog, {:idle, ms, work}}`, the runner's
+  own work that took longer than `idle:`, named: a host's request served whole by the
+  function it called, `:status` or `:get`, an edit's step `{:edit, :test}`, or the
+  period's hand-off to the store's writer, `:period` (decision 352, where it was
+  `{:watchdog, {:idle, ms}}`); `{:watchdog, {:device, device, ms}}`, a
   device that heard nothing from the runner by the deadline its last refresh carried, and
   so latched itself, `ms` the heartbeat that refresh gave it, the time after which the
   plant went off (decision 137); `{:io, device, cause}`, an adapter's callback that gave
@@ -4135,7 +4158,18 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   adapter, a message a device a poll period; one the runner has not heard from within
   `idle:` and a poll period, checked as each round begins and at each wait's refresh, is
   hung, and is killed and trips the runner, so a stop pressed on a card stuck inside its
-  read is never taken for "not pressed" for longer than that (decision 134). One that
+  read is never taken for "not pressed" for longer than that (decision 134). A runner
+  that wakes late, its wake past its time by more than `idle:`, as on a host so busy it
+  did not run the runner, and so perhaps not its devices either, judges no device for a
+  poll period, each device's turn, so that a healthy card the host starved beside it
+  does not trip the line as hung, while a hung one still trips at the first look once
+  the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
+  461). The look sees the lateness itself, whatever brought the runner to it, its wake
+  or a device's change taken first. Each late look gives a turn of its own, so on a host
+  late at every wake a hung input card trips only once a wake comes on time, the rounds
+  running on its last inputs meanwhile (provisional, `PLAN.md`'s RV-6 question 3). As a
+  Logix controller faults a module's connection only after four missed packets at its
+  RPI, never on one late look. One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4493,11 +4527,27 @@ closed: true
   it missed, `{:overlap, task, missed}`; it never runs early, and its due times stay on
   their grid.
 - `status/1`'s `runs` is each task's longest run against its watchdog, and
-  `latest_wake` the most any round's wake came after its time, in ms, so a soak on the
-  target machine gives what to set each `watchdog` to. The same spike measured `cycle/3` at 9 to 26 µs
+  `latest_wake` the most the runner found itself past its wake's time, at a round's look
+  or a refresh's, in ms (since decision 461, where it was a round's wake's alone), so a soak on the
+  target machine gives what to set each `watchdog` and `idle:` to. The same spike measured `cycle/3` at 9 to 26 µs
   an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
   27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
   round at the median.
+- The size of plant the defaults carry (decision 352), `idle: 500`, `poll: 10` and
+  `write_limit: 5000`, measured on the real clock on a four-core machine another workload
+  kept busy: an array of timers run element by element scans in 166 ms at 32,768 and
+  367 ms at 65,536, a declaration's most, within a task's 500 ms watchdog, and a user
+  block's instances in 348 ms at 32,768, a scan allocating words linear in its elements
+  since RV-6, where `ton[16000]` took 1.8 s; but an array of counters of 65,536, 487 ms on
+  a quiet machine, or of timers in two dimensions, at the watchdog or past it, so the
+  bound is some 32,768 elements a plant; an array of 32,768 timers retained is written
+  every period, its writer taking the image out (decision 455), and one of 65,536 is past
+  the write limit, `unknown`; and an edit's test step over 65,536 timers takes 355 to 412
+  ms, near the idle watchdog and once past it under load, over a block's instances some
+  20,000 within it. Past the bound the plant trips,
+  every output 0, named by the work it was met in, `{:watchdog, {:idle, 644, {:edit,
+  :test}}}`; a larger plant gives `idle:`, a task's `watchdog` or `write_limit:` more.
+  Each figure is that machine's: a soak on the target machine gives its own.
 - The suite's tests on the real clock are few and short, with generous bounds, and none
   times a round (§4.11's "Risks"): the plant runs for 2 s, rounds no more often than its
   clock's milliseconds, keeps its clock and stops in order, its devices' last writes all

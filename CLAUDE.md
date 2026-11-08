@@ -98,8 +98,8 @@ own documentation holds:
   read, rounded and spelled.
 - `lib/logex/name.ex` — `Logex.Name`, internal: the one reading of a lexed name's parts,
   an element's word and subscripts (`element/1`), a subscript (`subscript/1`), a bit number
-  in brackets (`bracketed/1`), a type word's base (`base/1`) and a host key's word
-  (`word/1`), each total on a text.
+  in brackets (`bracketed/1`), a type word's base (`base/1`), a host key's word (`word/1`)
+  and an element's name as logex spells it, by value (`spelled/1`), each total on a text.
 - `lib/logex/source_file.ex` — `Logex.SourceFile`, internal: how both loaders read a
   source file, raw, off the VM's file server, a FIFO or a device refused before it is
   read, and tell what is beside one, a link to nothing or one that loops among it.
@@ -280,8 +280,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   {power, env}, %Logex.Scan{})` and gives `{power, env}`. The scan is read-only and one for
   a routine's run; a clause that needs none of it takes `_scan`, and the clauses for
   `units: nil` and `reals: nil` come first, so a routine of neither pays no look-up. A
-  record a scan keeps in a routine's env lives under an atom key, `:faults`, `:jump` or
-  `:ran`, which no tag can be, and is taken out when the routine is done; a new key joins
+  record a scan keeps in a routine's env lives under an atom key, `:faults`, `:jump`, `:ran`
+  or `:open`, which no tag can be, and is taken out when the routine is done; a new key joins
   `Logex.Runtime`'s `@own_keys`, which a `cal`'s drop, the refusal of a host's env and its
   message read. No test calls the evaluator: a test runs a program through
   `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` where it needs an env.

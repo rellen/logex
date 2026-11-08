@@ -14031,9 +14031,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   - The watchdogs' and the trip's: a timed task's step longer than its watchdog trips
     `{:watchdog, {:task, ...}}` after it, the round longer than the continuous task's
     `{:watchdog, {:round, ...}}` with each step's time, a slow request `{:watchdog, {:idle,
-    ms}}`, a runner stuck past its devices' deadlines `{:watchdog, {:device, "drive", idle
-    + poll}}` (decision 137), each device fault `{:io, device, cause}` in its words, and
-    since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
+    ms, work}}`, named since decision 352 by the function the host called, a status, a
+    get or a get!, a runner stuck past its devices' deadlines `{:watchdog, {:device,
+    "drive", idle + poll}}` (decision 137), each device fault `{:io, device, cause}` in its
+    words, a hung device `{:io, device, :timeout}`, and since decision 461 one hung while
+    the runner's wake was read late by more than the idle watchdog, the devices' polls not
+    yet run, no device judged at the late look and the hung one tripped at the look a
+    poll period after it, and since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
     gives out of range, and since M5-12 an element whose subscript it gives outside its
     array, `{:fault, task, instance, fault}` at the step's end, no later step of its round
     run (decisions 153 and 160), as restated from the record; a fault that
@@ -14146,6 +14150,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # The manual clock, every reading the runner makes passing `{test, :lag}` ms first where
   # the walk has set it: a host's request that takes that long, for the idle watchdog.
+  # Decision 461 (RV-6's review): where the walk has set `{test, :stall}`, the runner's
+  # next reading alone passes that many ms, once, the devices' polls due meanwhile not yet
+  # run, as a machine that did not run the runner, nor its devices, reads at its wake.
   # Since decision 396 (RV-11) the runner reads the clock as a request comes, to judge
   # whether a round is due, which it then waits for: that first reading, `{test,
   # :lag_from}` set beside the lag, passes nothing, so that the request is judged as it
@@ -14197,7 +14204,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     defp wall_or([], clock), do: Manual.wall_ms(clock)
 
     defp lag({Logex.Runner, :init, 1}, clock, test),
-      do: lag_from(:ets.take(@table, {test, :lag_from}), clock, test)
+      do: stalled(:ets.take(@table, {test, :stall}), clock, test)
 
     defp lag({Logex.Runner.Device, :init, 1}, _clock, test),
       do: late(:ets.take(@table, {test, :late}))
@@ -14211,6 +14218,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       do: Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
 
     defp lagged(_none, _clock), do: :ok
+
+    defp stalled([{_key, ms}], clock, test),
+      do: Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
+
+    defp stalled([], clock, test), do: lag_from(:ets.take(@table, {test, :lag_from}), clock, test)
 
     defp lag_from([_arrival], _clock, _test), do: :ok
     defp lag_from([], clock, test), do: lagged(:ets.lookup(@table, {test, :lag}), clock)
@@ -14361,6 +14373,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {:trip, :task},
     {:trip, :round},
     {:trip, :idle},
+    # Decision 461 (RV-6's review): a hung device's turn after a late wake, and its trip
+    # once the turn is over.
+    :hang_late_turn,
     {:trip, :device},
     {:trip, :error},
     {:trip, :raised},
@@ -15005,10 +15020,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # killed before it took a number is a copy that failed, `:timeout`, which lands nowhere.
   defp copied_at(%{store: nil} = w, _text, _standing, _cold), do: w
 
+  # Decision 456, restated (RV-6): before it copies, a start, warm or cold, compares the
+  # bytes it would copy with the highest-numbered copy standing, and where they are the
+  # same makes no copy, `copy` naming that one (same_copy/7).
   defp copied_at(w, text, standing, cold) do
     drops = drops_restated(w)
-    next = 1 + Enum.max([0 | Map.keys(standing)])
-    {made, owed} = told_copy(cold, drops, Runner.status(w.runner).retain, text, w, next)
+    highest = Enum.max([0 | Map.keys(standing)])
+    same = Map.get(standing, highest, :none) == copied_bytes(cold, text)
+    retain = Runner.status(w.runner).retain
+    {made, owed} = same_copy(same, cold, drops, retain, text, w, highest)
     copies = copies_standing(w)
     assert Map.take(copies, Map.keys(standing)) == standing
     copy_landed!(made, copies)
@@ -15051,6 +15071,32 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp cold_cut(_whole, _w, _text), do: nil
+
+  defp copied_bytes(nil, text), do: text
+  defp copied_bytes(cut, _text), do: cut
+
+  # A start that copies nothing, warm and dropping nothing, is told as before whatever
+  # stands; one that copies, the highest copy's bytes its own, names that copy, made with
+  # no write, the copies' `.tmp` never touched, so owed by none, a directory there among
+  # them; or, its comparison killed at its limit on a loaded machine before any number
+  # was told, a copy that failed, `:timeout`, owed, which a cold start is refused for.
+  defp same_copy(false, cold, drops, retain, text, w, highest),
+    do: told_copy(cold, drops, retain, text, w, highest + 1)
+
+  defp same_copy(true, nil, [], retain, text, w, highest),
+    do: told_copy(nil, [], retain, text, w, highest + 1)
+
+  defp same_copy(true, nil, _drops, %{copy: nil, failed: :timeout} = retain, text, _w, _highest) do
+    assert Map.fetch!(retain, :unknown) == nil
+    {nil, text}
+  end
+
+  defp same_copy(true, cold, _drops, retain, text, w, highest) do
+    assert %{copy: copy, failed: nil} = retain
+    assert copy == copy_named(w, highest), inspect(retain)
+    reach(:store_copy_same_kept, true)
+    {{highest, [copied_bytes(cold, text)]}, nil}
+  end
 
   defp told_copy(nil, drops, retain, text, w, next), do: copy_told(drops, retain, text, w, next)
 
@@ -16188,6 +16234,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # and decision 417: a cold start over a store cut short copied it first.
     :store_copy_numbered_past,
     :cold_copied_cut,
+    # Decision 456 (RV-6): a start whose copy's bytes the highest copy standing held made
+    # none and named that one.
+    :store_copy_same_kept,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
     :rise_kept_by_trip
@@ -16378,15 +16427,24 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp owed_made!(%{owed: nil} = w), do: w
 
   # Since decision 418 (RV-13) under the next number past those that stood, every one
-  # of them as it was, and one past its limit that landed late beside it holding the same.
+  # of them as it was, and one past its limit that landed late beside it holding the same;
+  # and since decision 456 (RV-6) none where the highest that stood, one that landed late
+  # and was read before, holds the copy's bytes, that one the copy.
   defp owed_made!(w) do
     copies = copies_standing(w)
     assert Map.take(copies, Map.keys(w.copies)) == w.copies
     made = Map.drop(copies, Map.keys(w.copies))
-    assert Enum.min(Map.keys(made)) == 1 + Enum.max([0 | Map.keys(w.copies)]), inspect(made)
-    assert Enum.uniq(Map.values(made)) == [w.owed]
+    owed_numbered!(made, w)
     reach(:life_copy_made_late, true)
     %{w | copies: copies, owed: nil}
+  end
+
+  defp owed_numbered!(made, w) when made == %{},
+    do: assert(Map.fetch!(w.copies, Enum.max(Map.keys(w.copies))) == w.owed)
+
+  defp owed_numbered!(made, w) do
+    assert Enum.min(Map.keys(made)) == 1 + Enum.max([0 | Map.keys(w.copies)]), inspect(made)
+    assert Enum.uniq(Map.values(made)) == [w.owed]
   end
 
   defp life_end(:stop, runner), do: assert(Runner.stop(runner) == :ok)
@@ -16942,8 +17000,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         hung: Map.put(w.hung, device, now(w))
     }
 
-    :ok = Manual.advance(w.manual, w.idle + 2 * w.poll + 2)
-    tripped!(consumed(w))
+    hung(rem(div(w.logical, 3), 2), w)
   end
 
   defp injected({callback, device, how}, w) do
@@ -16953,22 +17010,75 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     fault_acted(callback, device, how, w)
   end
 
+  defp hung(0, w) do
+    :ok = Manual.advance(w.manual, w.idle + 2 * w.poll + 2)
+    tripped!(consumed(w))
+  end
+
+  # Decision 461 (RV-6), restated since its review, by the walk's own state so that no
+  # draw moves: the runner's next wake read late by the idle watchdog, a poll period and a
+  # millisecond, the devices' polls due meanwhile not yet run. The look at it judges no
+  # device, the hung one too, now past the idle watchdog and a poll period unheard, so
+  # the runner runs on; the next look, a poll period on, its turn over, trips it. The
+  # round the late wake runs, if any, comes at the stall's end (`floor`); one that writes
+  # the hung device meets it there, the same trip, and the turn is then not reached.
+  defp hung(1, w) do
+    k = w.idle + w.poll + 1
+    at = runner_wake(Manual.pending(w.manual), w.runner)
+    :ets.insert(@table, {{self(), :stall}, k})
+    :ok = Manual.advance(w.manual, at - now(w))
+    late_looked(consumed(%{w | floor: at + k}))
+  end
+
+  defp runner_wake(pending, runner),
+    do: hd(for {at, pid, {Runner, :wake, _token}} <- pending, pid == runner, do: at)
+
+  defp late_looked(%{status: :tripped} = w), do: tripped!(w)
+
+  defp late_looked(w) do
+    reach(:hang_late_turn, true)
+    assert Runner.status(w.runner).latest_wake > w.idle
+    :ok = Manual.advance(w.manual, w.poll)
+    tripped!(consumed(w))
+  end
+
   # Decision 394 (RV-11): one request in two of the idle watchdog's kind, by the lag it
   # drew, so that no draw moves, meets a clock gone wrong instead.
   defp idle_or_clock(1, _lag, w), do: clock_injected(w)
 
   defp idle_or_clock(_other, lag, w) do
     :ets.insert(@table, [{{self(), :lag}, lag}, {{self(), :lag_from}, :arrival}])
-    status = Runner.status(w.runner)
+    work = slow_request(rem(div(w.logical, 2), 3), w)
     :ets.insert(@table, {{self(), :lag}, 0})
-    assert status.status == :running
-    w = %{w | fault: {:watchdog, {:idle, lag}}}
+    # Decision 352 (RV-6): the trip names the runner's own work it was met in, by the
+    # function the host called, a status, a get or a get! (RV-6's review, where the walk
+    # asked a status alone); the walks meet the slow request too seldom to reach each, so
+    # each name is pinned in `trip_test.exs`, and the walk restates the one it makes.
+    w = %{w | fault: {:watchdog, {:idle, lag, work}}}
     w = consumed(w)
 
     # The time the request took passed inside it, the devices' polls on the way waiting
     # for the clock's next advance, which delivers them.
     :ok = Manual.advance(w.manual, 0)
     tripped!(consumed(w))
+  end
+
+  # The request slow by the lag, by the walk's own state, so that no draw moves: each is
+  # served whole before the trip it meets, so it answers as a running runner does.
+  defp slow_request(0, w) do
+    assert Runner.status(w.runner).status == :running
+    :status
+  end
+
+  defp slow_request(1, w) do
+    assert {:ok, value} = Runner.get(w.runner, "pa")
+    assert value in [0, 1]
+    :get
+  end
+
+  defp slow_request(2, w) do
+    assert Runner.get!(w.runner, "pa") in [0, 1]
+    :get!
   end
 
   # RV-11's review: by the walk's own state, so that no draw moves, one clock gone wrong

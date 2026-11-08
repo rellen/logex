@@ -1463,6 +1463,166 @@ defmodule Logex.InstanceArrayTest do
     end
   end
 
+  # RV-6 (decision 352): a routine that writes an element of an array of more than 256
+  # elements opens the array, each write a map's, and builds it again once as it ends, where
+  # a put into its tuple copied the whole array each write. Each rule is restated here by
+  # the same rungs over as many scalar instances, `t_0` to `t_299`, scanned alike, every
+  # element ending as its scalar twin does, at every scan; nothing here reads how.
+  describe "a large array (decision 352)" do
+    @large 300
+
+    defp twins(kind, rungs, extra \\ "", scans \\ nil) do
+      head = "var_input a bool\nvar_input b bool\nvar_input k dint\nvar_output e dint\n" <> extra
+      element = fn array -> &"#{array}[#{&1}]" end
+      scalar = fn array -> &"#{array}_#{&1}" end
+
+      arrayed =
+        program(
+          head <>
+            "var t #{kind}[#{@large}]\nvar q bool[#{@large}]\n" <>
+            Enum.map_join(
+              0..(@large - 1),
+              "\n",
+              &rungs.(element.("t").(&1), element.("q").(&1), &1)
+            ),
+          [seal()]
+        )
+
+      scalars =
+        program(
+          head <>
+            Enum.map_join(0..(@large - 1), "", &"var t_#{&1} #{kind}\nvar q_#{&1} bool\n") <>
+            Enum.map_join(
+              0..(@large - 1),
+              "\n",
+              &rungs.(scalar.("t").(&1), scalar.("q").(&1), &1)
+            ),
+          [seal()]
+        )
+
+      scans =
+        scans ||
+          for {now, a, b} <- [
+                {0, 1, 0},
+                {10, 1, 1},
+                {25, 0, 1},
+                {40, 1, 0},
+                {90, 1, 1},
+                {95, 0, 0}
+              ],
+              do: {now, %{"a" => a, "b" => b, "k" => 7}}
+
+      Enum.reduce(scans, {Runtime.instance(arrayed), Runtime.instance(scalars)}, fn {now, inputs},
+                                                                                    {sa, ss} ->
+        {oa, sa} = Runtime.call(arrayed, sa, inputs, %Scan{now: now, first: sa.first})
+        {os, ss} = Runtime.call(scalars, ss, inputs, %Scan{now: now, first: ss.first})
+        assert oa == os, "#{kind} at #{now}: outputs #{inspect(oa)} against #{inspect(os)}"
+        refute is_map_key(sa.env, :open)
+        assert tuple_size(sa.env["t"]) == @large and tuple_size(sa.env["q"]) == @large
+
+        for i <- 0..(@large - 1) do
+          assert {element(sa, "t", i), element(sa, "q", i)} ==
+                   {ss.env["t_#{i}"], ss.env["q_#{i}"]},
+                 "#{kind} at #{now}: element #{i}"
+        end
+
+        {sa, ss}
+      end)
+    end
+
+    # Each element's rungs, of its instance and its coil, whatever its index.
+    defp each(rungs), do: fn instance, coil, _i -> rungs.(instance, coil) end
+
+    test "each element of an array of timers, counters or blocks runs as a scalar instance does" do
+      twins("ton", each(&"xic a ton #{&1} 30\nxic #{&1}.dn ote #{&2}"))
+      twins("tof", each(&"xic a tof #{&1} 30\nxic #{&1}.dn ote #{&2}"))
+      twins("tp", each(&"xic a tp #{&1} 30\nxic #{&1}.dn ote #{&2}"))
+      twins("rto", each(&"xic a rto #{&1} 30\nxic #{&1}.dn ote #{&2}"))
+      twins("ctu", each(&"xic a ctu #{&1} 2\nxic #{&1}.q ote #{&2}"))
+      twins("ctd", each(&"xic a ctd #{&1} 2\nxic #{&1}.q ote #{&2}"))
+      twins("ctud", each(&"xic a ctu #{&1} 2\nxic b ctd #{&1} 2\nxic #{&1}.qu ote #{&2}"))
+      twins("seal", each(&"cal #{&1} a #{&2}"))
+    end
+
+    test "an element read after the routine wrote it, by literal subscripts or a tag's, reads what it wrote" do
+      # The array element `t[k]`, k 7, is the scalar `t_7`; each rung reads the element the
+      # rungs before it wrote, through the routine's record, within the one scan.
+      twins("ton", fn timer, coil, i ->
+        tagged = String.replace(timer, ~r/\[\d+\]$/, "[k]") |> String.replace(~r/_\d+$/, "_7")
+
+        "xic a ton #{timer} 30\nxic #{timer}.tt ote #{coil}\n" <>
+          "xic b move #{i} #{tagged}.pre\nmove #{tagged}.pre e\nxic #{coil} move #{timer}.acc e"
+      end)
+    end
+
+    test "a bit of an element and an element of more dimensions are written as a scalar's" do
+      twins("ton", fn timer, coil, _i -> "xic a ton #{timer} 30\nxic #{timer}.dn ote #{coil}" end)
+
+      grid =
+        "var_input a bool\nvar g ton[20,15]\nvar w word[20,15]\n" <>
+          Enum.map_join(for(i <- 0..19, j <- 0..14, do: {i, j}), "\n", fn {i, j} ->
+            "xic a ton g[#{i},#{j}] #{i + j}\nxic g[#{i},#{j}].tt ote w[#{i},#{j}].3"
+          end)
+
+      flat =
+        "var_input a bool\n" <>
+          Enum.map_join(for(i <- 0..19, j <- 0..14, do: {i, j}), "", fn {i, j} ->
+            "var g_#{i}_#{j} ton\nvar w_#{i}_#{j} word\n"
+          end) <>
+          Enum.map_join(for(i <- 0..19, j <- 0..14, do: {i, j}), "\n", fn {i, j} ->
+            "xic a ton g_#{i}_#{j} #{i + j}\nxic g_#{i}_#{j}.tt ote w_#{i}_#{j}.3"
+          end)
+
+      scans = [{0, %{"a" => 1}}, {5, %{"a" => 1}}, {12, %{"a" => 1}}, {40, %{"a" => 0}}]
+      {_, sg} = run(program(grid), scans)
+      {_, sf} = run(program(flat), scans)
+
+      for i <- 0..19, j <- 0..14 do
+        assert {elem(elem(sg.env["g"], i), j), elem(elem(sg.env["w"], i), j)} ==
+                 {sf.env["g_#{i}_#{j}"], sf.env["w_#{i}_#{j}"]}
+      end
+
+      refute is_map_key(sg.env, :open)
+    end
+
+    test "an element a tag subscripts outside its dimension faults, the elements written before it kept" do
+      p =
+        program(
+          "var_input a bool\nvar_input k dint\nvar t ton[#{@large}]\n" <>
+            "xic a ton t[0] 30\nxic a move 5 t[k].pre\nxic a ton t[1] 30"
+        )
+
+      {_, state} = run(p, [{0, %{"a" => 1, "k" => @large}}])
+      assert [%Fault{kind: :index_out_of_range, read: {@large}}] = state.faults
+      assert element(state, "t", 0)["en"] == 1 and element(state, "t", 1)["en"] == 1
+      refute is_map_key(state.env, :open)
+    end
+
+    # A program edited by hand to jump to a label no rung heads skips the rest of its
+    # routine, which then ends there, its array built again all the same.
+    test "a routine a jump ends builds its array again" do
+      p =
+        program(
+          "var_input a bool\nvar t ton[#{@large}]\n" <>
+            "xic a ton t[3] 30\nxic a jmp done\nxic a ton t[4] 30\nlbl done\nxic a ton t[5] 30"
+        )
+
+      hand = %{p | rungs: Enum.reject(p.rungs, &match?({:rung, [{:lbl, _, _} | _]}, &1))}
+      {_, state} = run(hand, [{0, %{"a" => 1}}])
+      assert {element(state, "t", 3)["en"], element(state, "t", 4)["en"]} == {1, 0}
+      assert element(state, "t", 5)["en"] == 0
+      refute is_map_key(state.env, :open)
+    end
+
+    test "a block instance's map holding the record's key has it dropped" do
+      p = program("var_input a bool\nvar_output q bool\nvar s seal\ncal s a q", [seal()])
+      fresh = Runtime.instance(p)
+      held = %{fresh | env: Map.update!(fresh.env, "s", &Map.put(&1, :open, %{"t" => %{}}))}
+      {_, state} = run(p, [{0, %{"a" => 1}}], held)
+      assert Enum.all?(Map.keys(state.env["s"]), &is_binary/1)
+    end
+  end
+
   describe "the long and typed variants (decisions 158 and 154)" do
     test "an element of an array of long timers times in nanoseconds, a millisecond adding 1,000,000" do
       p =
@@ -2569,6 +2729,110 @@ defmodule Logex.InstanceArrayTest do
     end
   end
 
+  describe "a scan's check and an edit's switch, in reductions (decision 352)" do
+    # Counted in a process of its own whose heap no collection visits, the least of three.
+    defp counted(step) do
+      parent = self()
+
+      for _ <- 1..3 do
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              step.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:counted, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:counted, r}, 60_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 60_000
+        r
+      end
+      |> Enum.min()
+    end
+
+    # RV-6 (decision 352): the check of a state handed in, which a cycle makes as each scan
+    # takes an instance (decision 174), built each element's name, `t[3]`, for a message it
+    # would give only were the element outside its type, so that an element of an array of
+    # timers cost some 67 reductions against a scalar timer's 57; it builds one only for a
+    # message, and an element now costs 49, 8 less, held so, half a reduction an element
+    # the allowance (decision 357). Each the difference of 600 and 300 over 300.
+    test "the check of a state builds no element's name where every element fits" do
+      checked = fn declared ->
+        cost = fn n ->
+          p = program("var_input a bool\nvar_output q bool\n" <> declared.(n) <> "xic a ote q")
+          state = Runtime.instance(p)
+          counted(fn -> Runtime.call(p, state, %{"a" => 1}, %Scan{now: 0, first: true}) end)
+        end
+
+        (cost.(600) - cost.(300)) / 300
+      end
+
+      array = checked.(&"var t ton[#{&1}]\n")
+      scalars = checked.(fn n -> Enum.map_join(0..(n - 1), "", &"var t#{&1} ton\n") end)
+      assert array <= scalars - 8 + 0.5, "#{array} an element against #{scalars} a scalar"
+    end
+
+    # A configuration edit whose candidate changes every timer's preset, over `n` timers
+    # declared by `declared` and each run by `rung`: each switch's reductions a timer, the
+    # difference of 600 and 300 over 300.
+    defp switched(declared, rung) do
+      cost = fn n ->
+        source = fn pre ->
+          "var_input in bool\n" <>
+            declared.(n) <> Enum.map_join(0..(n - 1), "\n", &rung.(&1, pre))
+        end
+
+        text =
+          "task fast interval 100 priority 1\nvar_global x bool at panel.i.0\n" <>
+            "program a1 big with fast\n  a1.in x\n"
+
+        {:ok, running} =
+          Configuration.compile("plant", text, %{"big" => program(source.(100), [], "big")})
+
+        {:ok, candidate} =
+          Configuration.compile("plant", text, %{"big" => program(source.(200), [], "big")})
+
+        {runtime, _, _} = Runtime.cycle(Runtime.start(running), 100, %{"x" => 1})
+        {:ok, edit, _} = Configuration.Edit.accept(runtime, candidate)
+        {tested, after_test, _} = Configuration.Edit.test(edit, runtime)
+
+        {counted(fn -> Configuration.Edit.test(edit, runtime) end),
+         counted(fn -> Configuration.Edit.untest(tested, after_test) end)}
+      end
+
+      {{test_300, untest_300}, {test_600, untest_600}} = {cost.(300), cost.(600)}
+      {(test_600 - test_300) / 300, (untest_600 - untest_300) / 300}
+    end
+
+    # RV-6 (decision 352): a switch read each element it moves by its name, `t[3]`, through
+    # the lexer and three times a timer, so that over an array of timers it cost some 197
+    # reductions a timer at the first test and 181 at an untest, against 136 and 120 over as
+    # many scalar timers; it reads each element's name once, with no lexer for a name logex
+    # spelled (Logex.Name.spelled/1), and moves an array's elements in a map beside it
+    # (M5-14's review), so that over the array it now costs 100 and 95 against 122 and 118
+    # over the scalars, 22 and 23 less: held so, half a reduction a timer the allowance
+    # (decision 357), so that a read of the element's name more a timer, some 20, is seen.
+    test "a switch over an array of timers costs no more a timer than over scalar timers" do
+      {test_array, untest_array} =
+        switched(&"var t ton[#{&1}]\n", &"xic in ton t[#{&1}] #{&2}")
+
+      {test_scalars, untest_scalars} =
+        switched(
+          fn n -> Enum.map_join(0..(n - 1), "", &"var t#{&1} ton\n") end,
+          &"xic in ton t#{&1} #{&2}"
+        )
+
+      assert test_array <= test_scalars - 22 + 0.5,
+             "a test: #{test_array} a timer of an array against #{test_scalars} of scalars"
+
+      assert untest_array <= untest_scalars - 23 + 0.5,
+             "an untest: #{untest_array} a timer of an array against #{untest_scalars} of scalars"
+    end
+  end
+
   describe "the code" do
     # CLAUDE.md: multiple function clauses, not conditionals. M5-14 brought seven `case`
     # expressions into `lib/`, which its review found; the four this test names are older,
@@ -2693,6 +2957,46 @@ defmodule Logex.InstanceArrayTest do
 
       [small, large] = words
       assert large < 6 * small, "untest: #{large} words at 2000, #{small} at 500"
+    end
+
+    # RV-6 (decision 352): a scan that runs each element of an array of instances, rung by
+    # rung, put each into the array's tuple, a copy of the whole array a rung, quadratic in
+    # wall time, `ton[16000]` scanned in 1.8 s against 54 ms for as many scalar timers
+    # (a2-compiler1-6, b4-edit-5). Measured at 1,000 and 4,000 elements, an array of timers,
+    # of a user block's instances and of timers in two dimensions, `ton[2,n/2]`: the words
+    # grow 4.2 to 4.3 times, as the elements do; with a put into the tuple an element they
+    # grew 15.0, 13.3 and 13.5 times. Since RV-6's review also a member of each element
+    # written through a tag subscript, `move 7 t[i].pre`, whose put into the tuple the
+    # write of a small array's member still makes (Logex.Runtime's write/3, its `@small`
+    # guard), and which a guard that let a large array through too made quadratic again.
+    test "a scan of every element of a large array of instances allocates linearly in its elements" do
+      for {kind, head, rung} <- [
+            {"ton", &"var t ton[#{&1}]\n", fn i, _n -> "xic a ton t[#{i}] 10" end},
+            {"seal", &"var_output q bool\nvar t seal[#{&1}]\n",
+             fn i, _n -> "cal t[#{i}] a q" end},
+            {"grid", &"var t ton[2,#{div(&1, 2)}]\n",
+             fn i, n -> "xic a ton t[#{div(i, div(n, 2))},#{rem(i, div(n, 2))}] 10" end},
+            {"member", &"var i int\nvar t ton[#{&1}]\n",
+             fn i, _n -> "xic a move #{i} i\nxic a move 7 t[i].pre" end}
+          ] do
+        words =
+          for n <- [1000, 4000] do
+            p =
+              program(
+                "var_input a bool\n" <> head.(n) <> Enum.map_join(0..(n - 1), "\n", &rung.(&1, n)),
+                [seal()]
+              )
+
+            prepare = fn -> elem(run(p, [{0, %{"a" => 1}}]), 1) end
+
+            allocated(prepare, fn state ->
+              Runtime.call(p, state, %{"a" => 1}, %Scan{now: 10, first: false})
+            end)
+          end
+
+        [small, large] = words
+        assert large < 5 * small, "#{kind}: #{large} words at 4000, #{small} at 1000"
+      end
     end
 
     # Measured, at 500 and 2,000 elements: each step's words grow some 4.1 times, as the

@@ -251,9 +251,16 @@ defmodule Logex.Runner.Device do
 
   defp cast({:refresh, deadline, at}, state), do: armed(%{state | deadline: deadline, heard: at})
 
+  # A poll: the adapter read, the runner told the device is back, the next poll armed, and
+  # then what the read gave passed on, which may wait on the runner, and the outputs
+  # written again. The next poll is armed before the change is passed on (RV-6's review),
+  # so that a device waiting on the runner for the change its own poll read polls on
+  # meanwhile, and tells the runner it is back at each poll, as one waiting for a
+  # report's change does: armed only once the runner had answered, it told nothing while
+  # it waited, and a round past the idle watchdog took it for hung.
   @impl GenServer
   def handle_info({__MODULE__, :poll, at}, %{next: at} = state),
-    do: waited(fn -> polled(read(back(adapted(:read, [state.adapter], state), state), state)) end)
+    do: waited(fn -> armed_read(back(adapted(:read, [state.adapter], state), state), state) end)
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
 
@@ -348,6 +355,10 @@ defmodule Logex.Runner.Device do
 
   defp read_again({{:fault, cause, adapter}, _fence, state}),
     do: {:reply, {:fault, cause}, %{state | adapter: adapter}}
+
+  # A poll's read given back: the next poll armed, on the clock's time once the read is
+  # back, and then the read taken (RV-6's review, handle_info/2).
+  defp armed_read(result, state), do: read(result, polled(state))
 
   # A poll's read: what changed passed on and the outputs written again, or the fault.
   defp read({:ok, values, adapter}, state),
