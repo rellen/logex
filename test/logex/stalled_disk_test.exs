@@ -162,6 +162,30 @@ defmodule Logex.StalledDiskTest do
   defp caller_found([pid | _], _server, _kind), do: pid
   defp caller_found([], server, kind), do: waiting_call(server, kind)
 
+  # The runner's own force's write once its rename waits in the held file server, its
+  # process read from the runner, so that a rename an earlier test's killed write left in
+  # the server's mailbox, which a resume had not yet served when this test held it again,
+  # is never taken for it (the review of RV-16: the first mutation table met one).
+  defp renaming(server, runner), do: renaming_of(:sys.get_state(runner).writing, server, runner)
+
+  defp renaming_of(%{write: {writer, _ref}}, server, runner),
+    do:
+      renamed_by(
+        writer in callers(Process.info(server, :messages), :rename),
+        writer,
+        server,
+        runner
+      )
+
+  defp renaming_of(nil, server, runner), do: renamed_by(false, nil, server, runner)
+
+  defp renamed_by(true, writer, _server, _runner), do: writer
+
+  defp renamed_by(false, _writer, server, runner) do
+    Process.sleep(1)
+    renaming(server, runner)
+  end
+
   # A call of `kind` waiting in the held file server, `{:called, pid}`, or `:answered`
   # where the task it was awaited from ended first, its write killed at its limit before
   # it made the call.
@@ -1659,7 +1683,7 @@ defmodule Logex.StalledDiskTest do
       Process.unlink(runner)
       server = held()
       force = Task.async(fn -> stop_answer_of(fn -> Runner.force(runner, "level", 7) end) end)
-      writer = waiting_call(server, :rename)
+      writer = renaming(server, runner)
       ref = Process.monitor(writer)
       Process.exit(runner, :kill)
       assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, @answers
