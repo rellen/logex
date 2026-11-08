@@ -13261,6 +13261,207 @@ and CI checked; each fix with a test that fails when it is reverted.
   the period's image out in the runner (decision 455); and the runner walk restates no
   rule of decision 461, its schedule model holding no wake the runner reads late (the
   manual-clock tests hold it; a walk that does is RV-8's to judge).
+
+  **RV-6's review** (2026-11-08, at `6a89a5e`; `scratchpad/rv/r6p/`): thirteen findings,
+  the code's behaviour unchanged from the parent's under a differential fuzz of 600
+  programs and 150 edits, 11 of 20 mutants surviving the full suite, two of them
+  equivalent, and a real-clock test failing 11 runs in 50 under `scripts/load.sh` at the
+  tip. Each became, at `9d5ad5a` and `a3b0e10` and this entry's commit:
+
+  1. *The heard-at-each-poll test under load* (high). The new form, `Logex.IO.Sim waited
+     5000 ms for … to handle its report`, was the device's, not the sim's: a device whose
+     own poll read the change passed it on and waited on the runner with no poll armed,
+     its next poll armed only once the runner answered, so it told the runner nothing
+     while it waited, and e1's step waited 5 s for a word that never came; the panel's
+     poll had read the set before the sim's report reached it, a race the parent has too,
+     which RV-17's sim, whose read reads its device's mailbox first (decision 462), made
+     likelier (a dump at the failure: the device in its wait from a poll's read,
+     the runner's mailbox holding no word of it, the panel latched at 1010 ms). Fixed in
+     `Logex.Runner.Device`: a poll arms its next once the adapter's read is back, before
+     what it read is passed on, so that a device waiting on the runner for its own poll's
+     change polls on and tells the runner at each poll, as one waiting for a report's
+     does. `trip_test.exs`'s "a device waiting on the runner for the change its own poll
+     read is heard at each poll meanwhile, on the real clock", a sim that reports
+     nothing, so that every change is a poll's, red at `6a89a5e` every run (the panel
+     never written, e1's step past its watchdog), its idle watchdog 1000 ms so that only
+     that wait fails it on a loaded machine. Under `scripts/load.sh -n 50`, four busy loops,
+     the heard-at-each-poll test alone failed none of 50 at `a3b0e10`, where the review
+     met 11 at `6a89a5e`, and so did both with the sixteen other new and changed tests
+     (`scratchpad/rv/p6/load_heard_fix.txt`, `load_fix.txt`); the twin at an idle
+     watchdog of 50 failed 9 of its first 17 runs, a runner the machine stopped for 60 ms
+     latching its panel by decision 125 or, its own step's word taken late, judging it,
+     the first test failing none of those 17, and was given 1000 before it landed.
+  2. *A late reading at a change-made round* (medium). Decision 461's lateness is now seen
+     by the look for a device not heard itself, against the runner's wake still to come,
+     whatever message brought the runner there (`Logex.Runner`'s `overdue/2`, called from
+     `silent/1`), where only a wake measured its own: the review's probe, a 100 ms stall
+     ended by the panel's change, now runs its round, the drive unjudged, and trips
+     nothing; "a round a device's change makes before the runner's overdue wake lets the
+     devices run first, as the wake would", red at `6a89a5e` with `{:io, "drive",
+     :timeout}`. `latest_wake` is the most the runner found itself past its wake's time at
+     a look (provisional, question 4 below). The look is made only while running, so the
+     running guard on the turn went (the review's r07, equivalent).
+  3. *The thresholds* (medium): "a wake late by no more than the idle watchdog judges the
+     devices at once" (late by 50 with idle 50: r05, the turn past a poll, and a turn at
+     the idle watchdog exactly, both red), "the devices' turn is one poll period: a hung
+     one trips at the look a poll period after the late wake" (r06 red) and "a device's
+     word taken in its turn counts from the late wake, and its silence after trips once
+     the idle watchdog and a poll period have passed since" (within at 60 ms, past at 70:
+     r20 red).
+  4. *The work names* (medium): "a forcing request names its function" (`:force`,
+     `:unforce`, `:unforce_all`: r01 and r04 red), "an accept and each edit step after it
+     name their own" (`:accept`, `{:edit, :untest}`, `{:edit, :assemble}`, `{:edit,
+     :cancel}`: r02 and r03 red), "an accept's hold of the edit names accept" (the second
+     of accept's two requests), and "the period's hand-off is timed from when the runner
+     found it due" (a period due at 100 found at 120: r09 red).
+  5. *Sustained lateness* (medium, question 3 below): as built, provisional and put to the
+     maintainer; the documents now say it, `Logex.Runner`'s moduledoc and README: while
+     every wake is late by more than the idle watchdog no device is judged, a hung input
+     card tripping only at the first look on time, the rounds meanwhile on its last inputs
+     (the review's probe: some 6 s and 8 rounds), and a wake the runner's own work made
+     late, an edit's step or a request of nearly the idle watchdog, or a round past its
+     period, gives a turn too.
+  6. *The hand-off's cost* (low). The documents say what it copies, the whole resource,
+     code and state: 10 ms for 16,384 retained timers, 36 ms for a program of 65,536 rungs
+     that retains one bool, 91 ms for ten instances of it (the review's figures), where
+     they tied it to the retained values (question 7 below). The hand-off of an image that
+     waited for a busy writer, made when the writer answers, is timed and named `:period`
+     as the first is: "the hand-off of a period's image that waited for the writer names
+     the period", the writer held by `:sys.suspend/1`, red with the hand-off untimed.
+  7. *The bound's gaps* (low). The moduledoc and README give the bound by kind: some
+     32,768 elements a plant, `ton[n]` 65,536 within the watchdog, `ctu[n]` 487 ms at
+     65,536 on a quiet machine and past the watchdog in the review (542 ms), timers in two
+     dimensions 255 ms at 32,768 and past it at 65,536 (504 ms), and an edit's test over
+     65,536 timers 355 to 412 ms, once 536 ms under load (`scratchpad/rv/p6/f7/`).
+  8. *r15* (low): the growth test "a scan of every element of a large array of instances
+     allocates linearly in its elements" holds a member written through a tag subscript,
+     `move 7 t[i].pre`, red without the `@small` guard. r17 and r07 equivalent, as the
+     review found; r07's guard is gone.
+  9. *The copy's name* (low): the comparison reads the highest number's copy at the name
+     logex gives it, `<store>.dropped.<n>`, so an entry spelled otherwise there,
+     `.dropped.007`, counts for the number and is never compared, the copy made past it,
+     and a host's own file at the name holding the same bytes is the copy (provisional,
+     question 6 below); `retain_store_test.exs`'s "a copy spelled otherwise at the highest
+     number is never compared, the copy made past it; one at logex's own name with the same
+     bytes is the copy", and the writer's comment, the runner's moduledoc and README say
+     so.
+  10. *The walks* (low). The runner walk's hang, half the time by the walk's own state,
+     reads the runner's next wake late by the idle watchdog, a poll period and a
+     millisecond, the devices' polls not yet run (`{test, :stall}`, a one-shot pass of
+     the runner's reading): the model judges no device at the late look, the round the
+     wake runs at the stall's end (`floor`), and trips the hung device a poll period on;
+     its reach `:hang_late_turn` asserted, and with the turn taken out the walk trips the
+     healthy drive instead. Its slow request is a status, a get or a get!, by the walk's
+     state, each trip named by the function called; the walks meet it once in 45 walks, so
+     each name's reach is `trip_test.exs`'s. Decision 455 is not restated in the life
+     walk: its stores' texts are made within any limit, and where the text is made is not
+     what a walk sees; `stalled_disk_test.exs`'s traced test pins it (a gap).
+  11. *The test's name* (low): "a hung device still trips once its turn is over, killed,
+      its outputs left to it", asserting the device killed and `unzeroed: ["panel"]`.
+  12. *"Linear time"* (low): `Logex.Runtime`'s "A large array", the runner's moduledoc and
+      README say the scan's words grow linearly, its time some 1.6 times as many scalar
+      instances' at 65,536 and more in a process holding the state (the review's 8, 37 and
+      218 ms against 7, 29 and 133, and 6, 66 and 401 held).
+  13. *Nits*: `Logex.Runner`'s comment at the request's answer names the work; README's
+      166 ms; the 4.3M and 9.4M reductions are three `ton[16384]`'s, as this entry says
+      above; the cost figures reproduce, as the review found.
+
+  *The review's mutation table*, each mutant a rule the fixes add reverted or bent, the
+  review's r-number where it is one, each judged by the full suite at `a3b0e10`
+  (`scripts/mutate.sh`, `scratchpad/rv/p6/mutfp/`): all sixteen red, none surviving.
+
+  | patch | what it does | full suite | red |
+  |---|---|---|---|
+  | f1_poll_after_read | the next poll armed once the change is taken, the parent's | red, and 3 of 3 alone | "a device waiting on the runner for the change its own poll read is heard at each poll meanwhile" |
+  | f2_lateness_at_wake_only | the lateness a wake's alone, `6a89a5e`'s | red | "a round a device's change makes before the runner's overdue wake lets the devices run first" |
+  | f3_turn_past_poll (r05) | a turn for a wake late by more than a poll period | red | "a wake late by no more than the idle watchdog judges the devices at once" |
+  | f3_turn_at_idle | a turn for a wake late by the idle watchdog exactly | red | the same |
+  | f3_turn_two_polls (r06) | the turn two poll periods | red | "the devices' turn is one poll period …", the runner walk |
+  | f3_heard_turn_plus_poll (r20) | a word in the turn heard at the turn and a poll | red | "a device's word taken in its turn counts from the late wake …" |
+  | f3_turn_never | no turn, the parent's | red | the six tests of decision 461, the runner walk and the life walk |
+  | f4_force_request (r01) | a force named `:request` | red | "a forcing request names its function" |
+  | f4_unforce_all (r04) | an unforce named `:unforce_all` | red | the same |
+  | f4_resource_request (r02) | accept's first request named `:request` | red | "an accept and each edit step after it name their own" |
+  | f4_edit_all_test (r03) | every edit step named `{:edit, :test}` | red | the same |
+  | f4_hold_request | accept's hold named `:request` | red | "an accept's hold of the edit names accept" |
+  | f4_get_bang_request | a get! named `:request` | red | "a host's request names its function", the runner walk and the life walk |
+  | f4_period_from_due (r09) | the hand-off timed from the period's due time | red | "the period's hand-off is timed from when the runner found it due" |
+  | f6_waited_untimed | the hand-off of an image that waited untimed, the parent's | red | "the hand-off of a period's image that waited for the writer names the period" |
+  | f8_member_small_any (r15) | a member written through a tag subscript into its tuple whatever the array's size | red | "a scan of every element of a large array of instances allocates linearly in its elements" |
+
+  *The load runs*, `scripts/load.sh -n 50 -l 4` at `a3b0e10`, load averages 5 to 8: the
+  heard-at-each-poll test alone, none failed of 50; and the eighteen tests of the two
+  describes this entry changes, the two heard-at-each-poll tests and the copy's name, 50
+  runs together, none failed.
+
+  *The cost*, each the least of several runs in reductions (`scratchpad/rv/p6/cost/`), at
+  `a3b0e10` against the as-built `6a89a5e` and the parent `40735fe`: a scan of the motor
+  847, a cycle of three 2,716, `ton[1000]` element by element 171,633 and an edit's test
+  over three motors 20,036, each as at `6a89a5e`; a round of three devices of a 10 ms
+  task on the manual clock 2,063.72 with its outputs changing and 1,761.32 with none,
+  against 2,060.48 and 1,759.32 as built and 2,051.91 and 1,750.43 at the parent (+3 a
+  round, the look's own reading of the runner's wake); a round with a store and a long
+  period 8.45 over one with none, 8.21 as built; a period's write of 1,000 retained
+  counters 447,205 as built; a fresh start's runner work 155,690 against 155,687; and
+  `status/1` 271.23 and `get/2` 279.07 against 271.12 and 278.82.
+
+  *The suite*: `9d5ad5a` 2,894 (11 doctests, 2,883 tests), `a3b0e10` 2,894. *CLAUDE.md*:
+  no line changed, no file added.
+
+  *Questions after the review*, put to the maintainer, by what an operator sees; 1 and 2
+  above stand as they were put, 3, 4 and 5 restated with what the review found and built,
+  6 and 7 new.
+
+  3. *Sustained lateness* (decision 461). A conveyor's host so loaded that the runner
+     wakes 100 ms late at every wake, idle 50, and the drive's input card hangs inside its
+     read: as built each late look gives the devices a turn of its own, so no device is
+     judged until a wake comes on time, and in the review's probe the line ran some 6 s
+     and 8 rounds on the hung card's last inputs, `status: :running`, before it tripped;
+     and a box counter whose test step over 21,844 instances of a block took nearly the
+     idle watchdog woke 510 ms late against 500, a turn though nothing starved it, as a
+     round past its period by more than the idle watchdog gives one at each round. (a) As
+     built; (b) one turn a lateness: a device silent through a whole turn trips at the
+     next look, late or not, which trips a healthy card the host keeps starving; (c) a cap,
+     a device unheard for four times the idle watchdog and a poll period tripping whatever
+     the runner's lateness, as a Logix connection faults after four missed packets at its
+     RPI; (d) the turn given only for a lateness the runner's own work did not cause.
+     IEC 61131-3 leaves I/O faults to the implementer.
+  4. *The runner's lateness, seen at its look* (decision 461). A fan plant's host stops
+     the runner for 100 ms, idle 50, and the panel's change reaches it before its overdue
+     wake: since the review the round the change makes looks at the runner's wake still to
+     come, finds it 90 ms late, gives the devices their turn and shows `latest_wake: 90`;
+     before, that round judged at once and tripped the healthy drive, `latest_wake: 0`; and
+     since RV-6 a refresh's wake counts as a round's. (a) As built, every look, a refresh's
+     or a round's, whatever brought the runner to it; (b) a wake's own lateness alone, the
+     change's round judging at once; (c) every look gives the turn, but `latest_wake` a
+     round's wake's alone and a key of its own for the rest, `latest_refresh`.
+  5. *A device starved while the runner is inside a step* (decision 461, RV-7's question
+     4). The form the as-built load runs met, e1's step 975 and 820 ms and the panel judged
+     at the next round's look, stands: a lamp test's step of 200 ms whose panel the host
+     starves for most of it trips `{:io, "panel", :timeout}` though healthy. The review's
+     11 in 50 were another cause, the device's own, fixed above; at `a3b0e10` under four
+     busy loops the test failed none of 50, so the step form, met at a load average of 14
+     to 27, was not met again here, and the question stands on the as-built's two. (a) As built, a
+     late look alone gives a turn; (b) a step that runs past the idle watchdog gives the
+     devices a turn before the next round's look; (c) a device's silence over a step
+     judged against the step's deadline, its task's watchdog and a poll period.
+  6. *A copy spelled otherwise* (decision 456). A box-counting line's store has a copy a
+     technician restored by hand as `tally.retain.dropped.007` beside logex's
+     `tally.retain.dropped.6`, the same bytes the store holds; a deploy drops a counter.
+     As built the comparison reads `tally.retain.dropped.7`, logex's own name, finds
+     nothing, and makes `tally.retain.dropped.8`, `status/1` naming it, the same bytes as
+     `.007`. (a) As built, the copy at logex's own name compared alone; (b) every entry at
+     the highest number compared, a match on `.007` making no copy, `status/1` naming
+     `.007`, a name logex never writes; (c) an entry spelled otherwise not counted for the
+     number either, the copy made at `.dropped.7` beside it. Logix keeps no copy.
+  7. *What the period's hand-off copies* (decisions 352 and 455). A fan plant's program
+     of 65,536 rungs retains one bool; each period the runner sends its writer the whole
+     resource, 36 ms of its own work, 91 ms for ten instances, where taking the one bool
+     out cost nothing. (a) As built, the whole resource, the cost following the plant's
+     size; (b) the programs' code left out of what is sent, about half for that plant;
+     (c) the retained values picked out in the runner and sent alone, their text made in
+     the writer, the cost following what is retained. IEC 61131-3 leaves retained data's
+     storage to the implementer; Logix writes no store.
 - **RV-7 — same-run cost bounds** (decision 357). And the tests a loaded machine fails,
   each root-caused, never given time: `trip_test.exs`'s "a device waiting on the runner for
   its change is heard at each poll meanwhile, on the real clock, short" (idle 50 ms), red in

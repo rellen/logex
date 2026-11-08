@@ -3005,13 +3005,16 @@ until a request takes it (decision 442); and while `forces_unread` stands a rest
 the runner's own forces and reads none from the file (decision 445); the other five as
 built (decisions 438, 443, 444, 446 and 447).)* *(Since RV-6, 2026-11-08, the review's M7
 and the answers of 2026-11-07: the runner's own long work cheaper and bounded, a scan of
-a large array of instances linear in its elements, an edit's switch reading each element
-once, the period's take-out the writer's, the size of plant the default idle and poll
+a large array of instances allocating words linear in its elements, an edit's switch
+reading each element once, the period's take-out the writer's, the size of plant the default idle and poll
 carry measured and stated in `Logex.Runner`'s moduledoc and README, and an idle
 watchdog's trip naming the work it was met in, `{:watchdog, {:idle, ms, work}}`
 (decision 352); and a runner that wakes late by more than the idle watchdog judges no
 device for a poll period, each device's turn, a hung one still tripping once the runner
-is on time, the lateness in `status/1`'s `latest_wake`, every wake's (decision 461).)*
+is on time, the lateness in `status/1`'s `latest_wake`, every wake's (decision 461),
+since RV-6's review seen by the look itself, whatever brought the runner there; and a
+device waiting on the runner for the change its own poll read polls on meanwhile, its
+next poll armed before it passes the change on.)*
 
 **What fails, and what happens.**
 
@@ -12334,7 +12337,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      instances 348 ms at 32,768; a retained `ton[32768]` written every period, `ton[65536]`
      past the write limit, `unknown`; an edit's test over `ton[65536]` 355 ms, over a
      block's instances past the idle watchdog some 20,000 on, `{:watchdog, {:idle, 644,
-     {:edit, :test}}}` at 32,768, every output 0.)*
+     {:edit, :test}}}` at 32,768, every output 0.)* *(RV-6's review, 2026-11-08: every
+     name pinned, the forcing requests', an accept's two requests' and each edit step's;
+     the period's hand-off timed from when it was found due, and the hand-off of an image
+     that waited for a busy writer timed and named `:period` too, where it went untimed;
+     the documents give the bound by kind, some 32,768 elements a plant, an array of
+     counters or of timers in two dimensions at or past the watchdog at 65,536, say what
+     the hand-off copies, the whole resource, 36 ms for a program of 65,536 rungs that
+     retains one bool, and say a large array's scan allocates words linearly, its time
+     some 1.6 times as many scalar instances'. `PLAN.md`'s RV-6 entry, "RV-6's review".)*
 
 353. **A stalled disk (the review after Milestone 6),** question 7: a force's write of
      the forces file and the store's writes at a trip, a stop and a cold restart run in
@@ -13838,7 +13849,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      copy that failed, `:timeout` (decision 452). A fresh start that drops, a cold start
      over a store it would refuse (decision 417) and an owed copy made by a later write
      compare alike (provisional, the owed copy); five starts that fail after their copy
-     leave `.dropped.1` alone, where they left `.1` to `.5`.)*
+     leave `.dropped.1` alone, where they left `.1` to `.5`.)* *(RV-6's review, 2026-11-08:
+     the copy compared is the highest number's at the name logex gives it, so an entry
+     spelled otherwise at that number, `.dropped.007`, counts for the number and is never
+     compared, the copy made past it (provisional, `PLAN.md`'s RV-6 question 6).)*
 
 457. **A refusal's bounds (the review after Milestone 6),** RV-5's provisional reading,
      carried by RV-13 (decision 355): a refusal of the store or the forces file tells at
@@ -13925,7 +13939,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      more than the idle watchdog no device is judged (provisional). RV-7's question 4
      reproduced under `scripts/load.sh`: the heard-at-each-poll test tripped `{:io,
      "panel", :timeout}` before any round 2 runs of 50 at the parent; at the tip, see RV-6
-     as built in PLAN.md.)*
+     as built in PLAN.md.)* *(RV-6's review, 2026-11-08: the lateness is seen by the look
+     itself, against the runner's wake still to come, whatever brought the runner there, a
+     device's change taken before an overdue wake among it, where it tripped a healthy
+     drive (provisional); the thresholds pinned, a wake late by the idle watchdog exactly
+     judging at once, the turn one poll period, a word in the turn counted from the late
+     look; the runner walk's hang restates it. The review's 11 failures in 50 of the
+     heard-at-each-poll test were a device's own: one whose poll read a change waited on
+     the runner with no poll armed and told it nothing, mended in `Logex.Runner.Device`.
+     Sustained lateness, a hung input card unjudged while every wake is late, stays
+     provisional, `PLAN.md`'s RV-6 question 3 restated.)*
 
 462. **The real-clock reread test (the review after Milestone 6),** RV-7's question 5: a
      test on the real clock cannot hold a simulated card's next reread at a restart, so
