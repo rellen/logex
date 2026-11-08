@@ -266,7 +266,8 @@ defmodule Logex.Runner do
     runner, event}`: the resource's `{:overlap, task, missed}` and `{:fault, task,
     instance, fault}` and the runner's `{:trip, reason}` and `{:restart, mode}` by
     default, with `{:edit, step, report}`, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
-    `{:round, now, outputs}`, each round's output points; and since M6-5, by default,
+    `{:round, now, outputs}`, each round's output points, since decision 474 those its
+    writes reached where the round is cut once they have begun; and since M6-5, by default,
     `{:retain, {:error, reason}}`, a store write that failed. A subscriber is monitored and
     dropped when it goes down. `unsubscribe/1` stops them.
   - `force/3`, `unforce/2` and `unforce_all/1` force an input point, below.
@@ -769,9 +770,16 @@ defmodule Logex.Runner do
   it; one found wrong at a device's write, before it or after it, leaves the devices
   written before it, and that device where its write came first, with the round's
   outputs, and the rest unwritten; and one found wrong at the round's end, or at the
-  period's wall clock, comes once every device has the round's outputs, the round's own
-  event published at the period's and not at the end's, the trip's 0 following
-  (provisional, RV-16's review); out of a round the runner's own read of `now_ms/1` tells it
+  period's wall clock, comes once every device has the round's outputs, the trip's 0
+  following (decision 474: what such a round keeps, decision 469, and where its rule
+  reaches, decision 470, as built). Since decision 474 a round cut once its writes have
+  begun, at a device's write, at its end or by a device's write that fails, publishes its
+  own event, `{:round, now, outputs}`, with the output points of every device its writes
+  reached, in device-name order up to the cut, each written or holding them already,
+  where it published none though the devices took its outputs, so that a log or an HMI
+  that follows the rounds matches the plant; one cut before any device was reached
+  publishes none, and the period's reading comes after the round's own event, published
+  as ever; out of a round the runner's own read of `now_ms/1` tells it
   so, the work in hand finished with the last time it refreshed its devices at, and it
   trips as it next takes a message; a device's read of it takes the device down, every
   output 0 as it closes, and the runner trips naming the clock, however it finds the
@@ -1188,7 +1196,9 @@ defmodule Logex.Runner do
   `:trip`, `:restart`, `:edit` and `:retain`, `{:retain, {:error, reason}}`, a store
   write that failed, by default; `:ran`, the resource's `{:ran, task,
   instance, now}`, and `:round`, the runner's `{:round, now, outputs}` after each round,
-  only where named, since a live display's events come at thousands a second. A
+  and since decision 474 after a round cut once its writes have begun, with the outputs
+  of the devices its writes reached, so that its outputs are what the devices took, only
+  where named, since a live display's events come at thousands a second. A
   subscriber is monitored, and dropped when it goes down; subscribing again replaces the
   kinds. Events are sent, never awaited.
   """
@@ -3225,9 +3235,38 @@ defmodule Logex.Runner do
     heard_from(silent(%{state | in_round: []}), &a_round(%{&1 | in_round: []}))
   catch
     {__MODULE__, :clock, cause, at} ->
-      published(at, Enum.reverse(at.in_round))
+      published(at, cut_round(at.in_round, at))
       tripped(%{at | in_round: nil}, {:clock, cause})
   end
+
+  # Decision 474 (RV-18): a round cut once its writes have begun, by a reading of the clock
+  # found wrong at or after a device's write or at its end (decision 441) or by a device's
+  # write that fails, publishes its own event, `{:round, now, outputs}`, with the output
+  # points of every device its writes reached, each written or holding them already, in
+  # device-name order up to the cut, so that a log or an HMI that follows the rounds
+  # matches the plant, where it published none though the devices took its outputs; one cut
+  # before any device was reached publishes none. `in_round` holds the writes' reach at
+  # its head, `{:reached, outputs, devices}`, from the refresh before the writes on.
+  defp cut_round([{:reached, _outputs, []} | events], _state), do: Enum.reverse(events)
+
+  defp cut_round([{:reached, outputs, devices} | events], state),
+    do: Enum.reverse(events, [{:round, state.logical, reached_outputs(outputs, devices, state)}])
+
+  defp cut_round(events, _state), do: Enum.reverse(events)
+
+  defp reached_outputs(outputs, devices, state),
+    do:
+      Map.take(
+        outputs,
+        for(
+          device <- devices,
+          {_address, global} <- Map.fetch!(state.outputs, device),
+          do: global
+        )
+      )
+
+  defp reached(%{in_round: [{:reached, outputs, devices} | events]} = state, name),
+    do: %{state | in_round: [{:reached, outputs, [name | devices]} | events]}
 
   defp a_round(%{anchor: anchor, logical: logical} = state) do
     start = now(state)
@@ -3356,7 +3395,8 @@ defmodule Logex.Runner do
   # does; one that goes down while the round writes is found so by its write, the devices
   # after it not written. Any other device's notice or exit is taken after the round, as
   # ever.
-  defp unwritten(nil, outputs, state), do: written(refresh(state, :idle), outputs)
+  defp unwritten(nil, outputs, state),
+    do: written(reaching(refresh(state, :idle), outputs), outputs)
 
   defp unwritten({pid, cause}, outputs, state),
     do: device_clocked(device_of(pid, state), cause, outputs, state)
@@ -3375,6 +3415,13 @@ defmodule Logex.Runner do
     after
       0 -> nil
     end
+  end
+
+  # Decision 474 (RV-18): a device's write that fails publishes the round as far as its
+  # writes reached (cut_round/2) and then its trip.
+  defp delivered({:trip, reason, %{in_round: [{:reached, _, _} | _]} = state}, _, _, _, _) do
+    published(state, cut_round(state.in_round, state))
+    tripped(state, reason)
   end
 
   defp delivered({:trip, reason, state}, _outputs, _start, _timed, events),
@@ -4280,6 +4327,11 @@ defmodule Logex.Runner do
         write(device, state, outputs)
       end)
 
+  # Decision 474 (RV-18): the writes' reach begun, `{:reached, outputs, []}` at the head of
+  # `in_round`, once the refresh before them has read the clock.
+  defp reaching(state, outputs),
+    do: %{state | in_round: [{:reached, outputs, []} | state.in_round]}
+
   defp write({name, pid, _points}, state, outputs) do
     values =
       Map.new(Map.fetch!(state.outputs, name), fn {address, global} ->
@@ -4295,7 +4347,7 @@ defmodule Logex.Runner do
     )
   end
 
-  defp wrote(false, _name, _pid, _values, state), do: {:cont, {:ok, state}}
+  defp wrote(false, name, _pid, _values, state), do: {:cont, {:ok, reached(state, name)}}
 
   # Decision 348: each device's write has the idle watchdog and a poll period from its own
   # start, on the runner's clock, and as long in real time, so that a device written after
@@ -4311,8 +4363,15 @@ defmodule Logex.Runner do
     begun = now(state)
     state = renewed(begun + state.idle + state.poll > state.deadline, begun, state)
     answer = asked(pid, &Device.write(&1, values, &2), max(state.deadline - begun, 0))
+    state = took_write(answer, name, state)
     in_time(answer, now(state), name, pid, values, state)
   end
+
+  # Decision 474 (RV-18): a device that answered its write took the round's outputs, in the
+  # writes' reach before the clock is read after it, so that a reading found wrong there
+  # publishes them with the round.
+  defp took_write(:ok, name, state), do: reached(state, name)
+  defp took_write(_failed, _name, state), do: state
 
   defp renewed(true, begun, state), do: renew(state, begun)
   defp renewed(false, _begun, state), do: state

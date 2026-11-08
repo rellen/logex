@@ -4146,8 +4146,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   written after the reading: found wrong before the round's writes, as it begins or as a
   step is timed, every output is left unwritten, so the trip's 0 is the first the devices
   are given after it, and found wrong at a device's write, or at the round's end, the
-  devices written by then keep the round's outputs until the trip's 0 follows
-  (provisional); and
+  devices written by then keep the round's outputs until the trip's 0 follows (decisions
+  469 and 470), the round's own `{:round, now, outputs}` event published with the outputs
+  of every device its writes reached, so a log that follows the rounds holds what the
+  plant was given (decision 474), as it is where a device's write fails; and
   `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
