@@ -311,7 +311,12 @@ defmodule Logex.Runner do
     crash at any moment leaves the old store or the new; since decision 353 each is made
     in a process of its own and limited to the write limit of real time, since decision
     400 `write_limit:`, where it was the idle watchdog and a poll period, as the period's
-    write is where the runner waits on it, one the disk has not
+    write is where the runner waits on it, since decision 455 the retained image's
+    take-out and the store's text made in that process within the limit too, as decision
+    414 had the end's write make them, so that a store too big to make and write within
+    the limit is cut off at it and reported, `:timeout`, and the runner answers on, where a
+    trip's write of 131,072 retained timers kept it from every host call some 11 s making
+    the text first (RV-13's question 7), one the disk has not
     finished by then killed and failed, `:timeout`, so that a stalled disk leaves the
     runner answering, its outputs 0 through the trip as ever, though one killed in its
     rename may land once the disk answers; since RV-4's review that process is linked to
@@ -358,15 +363,19 @@ defmodule Logex.Runner do
     grid from the runner's start on its clock, as a periodic task's due times are, a due
     time passed while the runner was busy skipped, never made up, and none while tripped,
     the trip's own write standing, a restart taking up the grid at its next due time
-    (provisional). The runner takes the retained image out between rounds, at a cost in
-    proportion to the retained values alone, as its own work: with untimed programs first
-    in the share's slot at or after the due time, out of its S ms and before the requests
-    that waited, and with none at a wake of its own, or just after the round due with it
-    or running then, so that the period never runs inside a round nor moves a round's
-    due time (decisions 108 and 122, provisional). A writer process of the runner's own,
-    linked to it, writes the image by the same rule as every write, so that a slow write
-    delays no round: while one is in progress the next waits, the newest replacing the
-    one before, latest wins. A write made is the store's age in `status/1`'s
+    (provisional). The runner hands the resource as it stands to its writer between
+    rounds, as its own work: with untimed programs first in the share's slot at or after
+    the due time, out of its S ms and before the requests that waited, and with none at a
+    wake of its own, or just after the round due with it or running then, so that the
+    period never runs inside a round nor moves a round's due time (decisions 108 and 122,
+    provisional). A writer process of the runner's own, linked to it, takes the retained
+    image out of it, makes the store's text and writes it by the same rule as every
+    write, so that a slow write delays no round: while one is in progress the next waits,
+    the newest replacing the one before, latest wins. Since decision 455 the take-out and
+    the text are the writer's, within the write limit from the hand-off, so that the
+    runner's own work at a period is the resource's copy into the writer, some 4 ms for
+    32,768 retained timers, where it took the image out itself, 0.9 s for those, and
+    tripped a healthy plant at its first period (M7). A write made is the store's age in `status/1`'s
     `written_at`; one that fails leaves the store as it was and is reported,
     `{:retain, {:error, reason}}` and `failed`, the plant running on; since RV-4's review
     one the disk has not finished within the write limit of real time is reported
@@ -835,8 +844,11 @@ defmodule Logex.Runner do
   :timeout}}`, the store keeping its last write (decision 391), where the supervisor
   killed the runner in its write and no one was told: a shutdown of two arrays of 65,536
   retained timers, some 15 s of work here, ends at the write limit, 5 s, reported, and
-  with `write_limit: 30_000` writes its store. RV-6 makes the write itself cheaper
-  (decision 352).
+  with `write_limit: 30_000` writes its store. Since decision 455 every write of the store
+  makes its text so, a trip's, a cold restart's, `start: :cold`'s, a fresh start's with no
+  store file and the period's, the writer's, so that the runner answers on once the write
+  limit has passed: a store too big for the limit is reported as any write cut off at
+  it, the host raising `write_limit:`.
   """
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
@@ -871,11 +883,14 @@ defmodule Logex.Runner do
   # runner's own, in its init/1, once its name is registered and its files claimed, so
   # that a start refused, `{:already_started, pid}` or another runner's file, writes
   # nothing over the running runner's store.
+  # Decision 455 (RV-6): its text, the retained image taken out and made the store's text,
+  # made in the write's own process within the write limit, as every write of the store's
+  # is (text_of/2), where the runner made it first, with no limit.
   defp first_write(%{retain: %{at: path}, at: %DateTime{} = at, runtime: runtime} = start),
     do:
       Writer.written(
         path,
-        Logex.Retain.encode(Runtime.retained(runtime), at),
+        fn -> Logex.Retain.encode(Runtime.retained(runtime), at) end,
         start.write_limit
       )
 
@@ -3306,14 +3321,16 @@ defmodule Logex.Runner do
   # limit, its text's making counted, as the child spec's shutdown deadline counts it, and
   # a store too big to make and write within it is cut off at it and reported as any write
   # past its limit (decision 391), `{:retain, {:error, :timeout}}` and a stop's answer,
-  # where a supervisor killed the runner in its write and no one was told. A trip's write,
-  # a cold restart's and a fresh start's make it in the runner as before, no deadline but
-  # the write limit on the file's own write waiting on them, the runner's own work
-  # decision 352 gives RV-6 to bound (provisional).
-  defp text_of({runtime, :end}, at),
+  # where a supervisor killed the runner in its write and no one was told. Since decision
+  # 455 (RV-6) every write of the store does so, a trip's, a cold restart's and its
+  # write-back where a device refuses it (decision 317) by this clause, `start: :cold`'s
+  # and a fresh start's with no store file (first_write/1), and the period's (handed/2),
+  # so that the runner answers on once the write limit has passed, a store too big for it
+  # cut off at it and reported, `{:retain, {:error, :timeout}}`, the host raising
+  # `write_limit:`, where a trip's write of 131,072 retained timers kept the runner some
+  # 15 s making its text before the write the limit bounds.
+  defp text_of({runtime, _ending}, at),
     do: fn -> Logex.Retain.encode(Runtime.retained(runtime), at) end
-
-  defp text_of({runtime, :event}, at), do: Logex.Retain.encode(Runtime.retained(runtime), at)
 
   # An event's write of the store, the owed copy first where one is (decision 360).
   defp store_written(%{owed: nil, at: path}, text, ms), do: Writer.written(path, text, ms)
@@ -3442,12 +3459,24 @@ defmodule Logex.Runner do
 
   defp period(%{retain: %{period: %{next: next} = periodic}, status: :running} = state, now)
        when now >= next do
-    image = periodic.taker.retained(state.runtime)
+    image = taken_out(periodic.taker, state.runtime)
     state = put_period(state, %{periodic | next: next_due(periodic, now)})
     period_stamped(wall(state.clock), image, state)
   end
 
   defp period(state, _now), do: state
+
+  # Decision 455 (RV-6): the period's take-out of the retained image, and its text, are the
+  # writer's, made in its own process within the write limit from the hand-off (handed/2),
+  # so that the runner's own work at a period is the hand-off alone, the resource as it
+  # stands sent to the writer, a copy of it, some 4 ms for 32,768 retained timers where the
+  # take-out took 0.9 s and the text 1.2 s and tripped a healthy plant at its first period
+  # (b3-store-image-1); the resource is plain data, so what the writer writes is the
+  # resource as the runner held it at the hand-off. The hidden seam's `retained/1`, where a
+  # test gives one, takes it out in the runner as before, so that a test sees when the
+  # hand-off comes.
+  defp taken_out(Runtime, runtime), do: {:runtime, runtime}
+  defp taken_out(taker, runtime), do: {:image, taker.retained(runtime)}
 
   # A period whose wall clock gives no time is a write that fails, reported as one.
   defp period_stamped({:ok, at}, image, state), do: handed(state, {at, image})

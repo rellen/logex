@@ -1181,6 +1181,141 @@ defmodule Logex.StalledDiskTest do
     end
   end
 
+  # Decision 455 (RV-6): every write of the store makes its text so, the end's since
+  # decision 414 and since RV-6 a trip's, a cold restart's, `start: :cold`'s, a fresh
+  # start's with no store file and the period's, where each but the period's made it in the
+  # runner, with no limit, and the period's took the image out there: so that a store too
+  # big to make and write within the limit is cut off at it and reported, the runner
+  # answering on, where a trip of 131,072 retained timers kept it some 11 s making the text
+  # (RV-13's question 7). Traced, each process the test and the runner start traced too:
+  # the runner calls neither `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2`, and
+  # one process calls both, each write's own, the period's the writer's.
+  describe "every write of the store makes its text in the write's own process (decision 455)" do
+    # The work traced in `traced`, the runner or the test that starts one, and every process
+    # either starts.
+    defp texts_made(traced, work) do
+      assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
+      assert :erlang.trace_pattern({Logex.Runtime, :retained, 1}, true, [:local]) == 1
+      :erlang.trace(traced, true, [:call, :set_on_spawn])
+      runner = work.()
+      :erlang.trace(traced, false, [:call, :set_on_spawn])
+      :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
+      :erlang.trace_pattern({Logex.Runtime, :retained, 1}, false, [:local])
+      ref = :erlang.trace_delivered(:all)
+      assert_receive {:trace_delivered, :all, ^ref}, @answers
+      calls = traced_all()
+      refute Enum.any?(calls, &match?({^runner, _mfa}, &1)), inspect(calls)
+      takers = for {pid, {Logex.Runtime, :retained, _}} <- calls, do: pid
+      makers = for {pid, {Logex.Retain, :encode, _}} <- calls, do: pid
+      assert [_ | _] = takers
+      assert takers == makers and self() not in takers
+      runner
+    end
+
+    test "a trip's, a cold restart's, a cold start's, a fresh start's and the period's",
+         %{tmp_dir: dir} do
+      rig = rig(Path.join(dir, "trip"), forces: nil, write_limit: 5000)
+      File.mkdir_p!(Path.join(dir, "trip"))
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+
+      texts_made(runner, fn ->
+        Sim.fail(rig.panel, :read, {:error, :eio})
+        Manual.advance(rig.clock, 10)
+        assert %{status: :tripped} = Runner.status(runner)
+        runner
+      end)
+
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
+      texts_made(runner, fn -> assert Runner.restart(runner, :cold) == :ok and runner end)
+      assert File.read!(rig.store) =~ "t1.boxes.cv dint 0\n"
+      assert Runner.stop(runner) == :ok
+
+      for {start, at} <- [{:cold, "cold"}, {:warm, "fresh"}] do
+        rig = rig(Path.join(dir, at), forces: nil, write_limit: 5000, start: start)
+        File.mkdir_p!(Path.join(dir, at))
+        runner = texts_made(self(), fn -> elem(Runner.start_link(rig.opts), 1) end)
+        assert File.read!(rig.store) =~ "t1.boxes.cv dint 0\n"
+        assert Runner.stop(runner) == :ok
+      end
+
+      rig = rig(Path.join(dir, "period"), forces: nil, write_limit: 5000, retain_period: 100)
+      File.mkdir_p!(Path.join(dir, "period"))
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 1)
+
+      texts_made(runner, fn ->
+        Manual.advance(rig.clock, 100)
+        holding(rig.store, "t1.boxes.cv dint 1\n")
+        runner
+      end)
+
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # Decision 455 (RV-6): a store too big to make and write within the limit, its text's
+  # making counted, is cut off at it and reported as any write past its limit (decision
+  # 391), and the runner answers on: 10,000 retained timers, whose take-out and text take
+  # some 300 ms here, against a write limit of 50 ms. Where the runner made the text first,
+  # with no limit, the trip's write and `start: :cold`'s landed after it.
+  describe "a store too big for its write limit (decision 455)" do
+    @timers """
+    var_input eye bool
+    var_output lamp bool
+    var retain boxes ctu
+    var retain tl ton[10000]
+
+    xic eye ctu boxes 1000
+    xic eye ton tl[0] 100
+    xic eye ote lamp
+    """
+
+    defp timers(dir, extra) do
+      {:ok, tally} = Logex.compile(@timers, name: "tally")
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+      rig(dir, [configuration: config, forces: nil] ++ extra)
+    end
+
+    test "a trip's write is cut off at the limit and reported, the runner answering",
+         %{tmp_dir: dir} do
+      made = timers(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(made.opts)
+      assert Runner.stop(runner) == :ok
+      stored = File.read!(made.store)
+
+      rig = timers(dir, write_limit: 50)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      :ok = Runner.subscribe(runner, [:trip, :retain])
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}, @answers
+      assert_receive {Runner, ^runner, {:retain, {:error, :timeout}}}, @answers
+      assert %{status: :tripped, retain: %{unknown: unknown, failed: nil}} = Runner.status(runner)
+      assert unknown == rig.store
+      assert File.read!(rig.store) == stored
+      assert Runner.stop(runner) == {:error, {:retain, :timeout}}
+    end
+
+    test "start: :cold's first write is cut off at the limit, and the start refused",
+         %{tmp_dir: dir} do
+      rig = timers(dir, write_limit: 50, start: :cold)
+      assert Runner.start_link(rig.opts) == {:error, {:retain, :timeout}}
+      assert Sim.reads(rig.panel) == 0
+    end
+  end
+
+  # Once the store holds `line`, the period's writer having written it.
+  defp holding(store, line), do: held_line(File.read!(store) =~ line, store, line)
+
+  defp held_line(true, _store, _line), do: :ok
+
+  defp held_line(false, store, line) do
+    Process.sleep(1)
+    holding(store, line)
+  end
+
   # Decision 414: the limit counted from before the write's process is made, so that the
   # copy into it of what its call holds, a large resource among it, is within the limit
   # and the shutdown's deadline counts it (`Logex.Runner.Writer.within/2`). Traced: the

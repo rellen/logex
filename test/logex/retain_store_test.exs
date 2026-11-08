@@ -3481,7 +3481,9 @@ defmodule Logex.RetainStoreTest do
   describe "a runner with no store costs as before" do
     # Traced: a runner given no `retain:` takes no image out at a trip, a cold restart or a
     # stop, and restarts its resource once a restart, as before M6-5; one given a store takes
-    # one out at each write, a cold restart's of the resource as it restarts it.
+    # one out at each write, a cold restart's of the resource as it restarts it. Since
+    # decision 455 (RV-6) each write takes its image out in the write's own process, which
+    # the trace follows (`:set_on_spawn`), where the runner took it out itself.
     test "no image is taken out without a store", %{tmp_dir: dir} do
       Code.ensure_loaded!(Runtime)
 
@@ -3492,11 +3494,11 @@ defmodule Logex.RetainStoreTest do
           {:ok, runner} = Runner.start_link(rig.opts)
           assert :erlang.trace_pattern({Runtime, :retained, 1}, true, [:global]) == 1
           assert :erlang.trace_pattern({Runtime, :restart, 2}, true, [:global]) == 1
-          :erlang.trace(runner, true, [:call])
+          :erlang.trace(runner, true, [:call, :set_on_spawn])
           pressed(rig, [1, 0])
           tripped(rig, runner)
           assert Runner.restart(runner, :cold) == :ok
-          :erlang.trace(runner, false, [:call])
+          :erlang.trace(runner, false, [:call, :set_on_spawn])
           assert Runner.stop(runner) == :ok
           traced([])
         end

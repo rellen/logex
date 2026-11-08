@@ -3568,7 +3568,18 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   store too big to make and write within the limit is cut off at it and reported,
   `{:retain, {:error, :timeout}}`, the store keeping its last write, where a supervisor
   killed the runner in its write and told no one, and a plant that retains that many gives
-  a longer `write_limit:`, which the deadline follows.
+  a longer `write_limit:`, which the deadline follows. Since decision 455 every write of
+  the store makes its text so, in the write's own process within the write limit: a
+  trip's, a cold restart's, `start: :cold`'s, a fresh start's with no store file and the
+  period's, whose writer takes the retained image out of the resource the runner hands it,
+  so that the runner's own work at a period is that hand-off, a few milliseconds for tens
+  of thousands of retained timers, and a store too big to make and write within the limit
+  is cut off at it and reported, `{:retain, {:error, :timeout}}`, its file `unknown` in
+  `status/1`, the runner answering on: a trip of 131,072 retained timers answers a host's
+  `status/1` 5 s after the fault, its write cut off, where the runner spent 11 s making
+  the text before the write and answered no one meanwhile; `start: :cold` over such a
+  plant is refused, `{:error, {:retain, :timeout}}`, and so is a fresh start with no store
+  file. A plant that retains that many gives a longer `write_limit:`.
 - The store and the forces file are two files: `retain:` naming the forces file, however
   each is spelled, `./tally.retain` and `tally.retain` one file, or either naming the
   `.tmp` the other is written through, or the forces file naming one of the store's
