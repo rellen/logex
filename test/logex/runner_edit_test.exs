@@ -418,7 +418,7 @@ defmodule Logex.RunnerEditTest do
     # their milliseconds and a host's request waits for the share's slot. The share counts
     # the continuous task's rounds (decision 122), and since decision 396 (RV-11) with no
     # untimed program the periodic rounds whole; a step that adds the first untimed
-    # program begins the count again (provisional, RV-11's review), so the timed task's
+    # program begins the count again (decision 442: as built), so the timed task's
     # rounds before the edit count none, and the first slot comes C = 4 rounds after the
     # edit, at 20%.
     test "an untimed program an edit adds is served its slots from its first round" do

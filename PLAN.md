@@ -21,8 +21,8 @@ RV-4's and RV-9's, decisions 390–408, for RV-11 and RV-12, and to RV-5's, RV-1
 RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, decisions
 420–432, landed on 2026-11-03, and RV-13, decisions 409–419, on 2026-11-04, and to
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
-decisions 437–447, for RV-16, and to RV-13's and RV-7's, decisions 448–464, for RV-6 and
-RV-17, of which RV-17's landed on 2026-11-07.)*
+decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
+decisions 448–464, for RV-6 and RV-17, of which RV-17's landed on 2026-11-07.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14547,7 +14547,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     made in a process of its own. A force's write, made while the runner runs, keeps the
     heartbeat: the runner renews every device's deadline each poll period of real time
     while it waits, leaves the wait out of the time the idle watchdog reads and takes the
-    devices' notices sent meanwhile (provisional, question 1). `child_spec/1`'s shutdown
+    devices' notices sent meanwhile (decision 437, RV-16). `child_spec/1`'s shutdown
     is `devices * (idle + poll) + 2 * write_limit`, never less than 5000 (decision 326
     with this limit; decision 414 is RV-13's). The leave, a write limited to idle + poll:
     the tests that gave a runner a long idle watchdog only to cover its disk give
@@ -14568,13 +14568,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     range, or naming no device bound"). `open:`, how long in ms of real time a device's
     opening, its adapter's `init/3` and its first read, may take: a whole number from 1
     to 2147483647 for every device, or a map of device names to one, each device it names
-    given its own and every other the default, 5000 ms (provisional, question 2). A bad
+    given its own and every other the default, 5000 ms (decision 438, RV-16). A bad
     value is the host's pinned `ArgumentError`, and a device it names that `io:` binds no
     adapter to is "the runner's open: names the device `drvie`, which io: binds no adapter
     to — did you mean `drive`?". The heartbeat stays the idle watchdog and a poll period:
     no device has heard a deadline while one opens. A device a restart opens again is
     given its own opening limit; one up is read again within the idle watchdog and a poll
-    period (provisional, question 3). CI's first run of `ee16f1b` was red, the range test
+    period (decision 439, RV-16). CI's first run of `ee16f1b` was red, the range test
     asserting that `open: 1` starts, where on CI the drive's opening took more than 1 ms
     and timed out as the limit says; `434ada2` asserts the least limit taken, the start
     made or timed out, never the host's mistake. No test pinned the reading changed. The
@@ -14592,7 +14592,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     disk does not answer in time, starts with no force. Each names the file in
     `status/1`, `forces_unread: {path, reason}`, the path as the host spelled it, until a
     force's or an unforce's write of the file lands or a restart reads it, the key absent
-    otherwise (provisional, question 4). A line that is no force, a point forced twice, a
+    otherwise (decision 440, RV-16). A line that is no force, a point forced twice, a
     force the configuration cannot take and a link stay the host's mistakes. The leave, a
     restart answered `{:error, {:forces, :timeout}}` and a fresh start refused: the
     stalled-disk FIFO tests, a restart's and a start's, and `force_test.exs`'s directory
@@ -14610,7 +14610,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     and `written_at` the last write known made, until a later write lands or fails; a
     force's write past its limit names the set it held, `forces_unknown`, until a later
     write of the file lands or fails or a restart reads it; each key absent otherwise
-    (provisional, question 4). The event and the caller's answer stay a failure's,
+    (decision 440, RV-16). The event and the caller's answer stay a failure's,
     `{:error, :timeout}`, a cold restart left tripped and a fresh start not started
     (decision 291); `stop/2`'s doc and README say a stop told `{:error, {:retain,
     :timeout}}` leaves the store unknown. The force's wait keeps its limit's end in
@@ -14636,7 +14636,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     clock still answers so, the wall clock asked where a store is named, is refused
     `{:error, {:clock, cause}}`, the runner left tripped; mended, a restart brings the
     line back, the clock's notices from while it stood tripped taken as nothing
-    (provisional, question 5). At start a bad or out-of-range time is the host's pinned
+    (decision 441, RV-16). At start a bad or out-of-range time is the host's pinned
     `ArgumentError`. A clock that goes down, raises or exits still stops the runner as a
     shutdown. The leave, a clock gone wrong a shutdown: `runner_test.exs`'s "a clock whose
     now_ms/1 gives no time later trips or stops the runner" is "… trips the runner,
@@ -14657,7 +14657,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     task needs; the periodic rounds are then the share's count, each whole from its start
     to its end, a millisecond at least, and the slot comes at the end of the round that
     completes C ms of them, S ms, so a plant whose rounds outrun their periods leaves the
-    host its S ms of every C + S, never none and never more (provisional, question 6).
+    host its S ms of every C + S, never none and never more (decision 442, RV-16).
     c1-runner-rounds-2, reproduced at the parent: 200 processes forcing and unforcing in a
     tight loop made 17 rounds of a 10 ms task in 2.5 s, 239 periods missed, `latest_wake`
     179 ms; at the tip 231 rounds in 3.1 s, 4 missed. The real-clock test counts the
@@ -14692,7 +14692,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     the configuration writes it, a text, `{:unknown_address, "panel.i.7"}` and
     `{:bad_value, "panel.i.0", 2}`, where the adapter's list printed as a charlist; a key
     an adapter gives that is no list of whole numbers, which no configuration writes, as
-    the adapter gave it, `:pump` or `[-1]` (provisional, question 7). The device is told
+    the adapter gave it, `:pump` or `[-1]` (decision 443, RV-16). The device is told
     its refusal by the adapter's own address, by which it drops the point. The leave:
     every trip reason and `io_init` refusal the suite pinned with a list address, in
     `trip_test.exs`, `end_to_end_test.exs`, `located_array_test.exs`, `real_test.exs`,
@@ -14911,12 +14911,12 @@ and CI checked; each fix with a test that fails when it is reverted.
   suite (below), or with a document made true; fixed in `20c9578`.
   - *1, a test's call on the manual clock while a periodic round is overdue*: as built,
     decision 131's rule, a call made while a round is owed waiting for the advance that
-    runs it, extended to a due periodic round; the reading is marked provisional where
+    runs it, extended to a due periodic round; the reading is marked, decision 444 since RV-16, where
     the moduledoc, `owed/1` and README's "Running a plant on the clock" state it, and put
     to the maintainer (question 8).
   - *2, forces the file held while a fresh start could not read it*: as built, a restart
     that reads the file takes what it holds, as decision 127 has every start take it;
-    marked provisional in the moduledoc's "Forcing", `forces_text/2` and README, and put
+    marked, decision 445 since RV-16, in the moduledoc's "Forcing", `forces_text/2` and README, and put
     to the maintainer (question 9). The runner walk now reaches it: a fresh start after a
     crash meets an unreadable file whatever forces the crash left in it
     (`:start_unread_forces_held`), the model holding what the file holds apart from the
@@ -14954,13 +14954,13 @@ and CI checked; each fix with a test that fails when it is reverted.
     working directory a relative path is read against did not answer within the write
     limit, 1010 ms (write_limit:)", and the store's "plant.retain: the store cannot be
     located: ...", each pinned in `stalled_disk_test.exs`; the comment that called it the
-    host's mistake as for the file itself, the moduledoc and README say so, provisional
+    host's mistake as for the file itself, the moduledoc and README say so, decision 446 since RV-16
     (question 10).
   - *6, the leave stretched in `runner_edit_test.exs`*: an edit's step that adds the first
     untimed program or takes away the last begins the share's count again
     (`recounted/2`), so that test's pin is the parent's again, `waited(request, clock) ==
     4`, the count of the timed rounds before the edit none of the continuous task's;
-    provisional, question 6.
+    decision 442 since RV-16.
   - *7, the walks*: the runner walk's clock gone wrong is in one injection of three a
     device's read alone (`Lagged`'s `{test, :bad_device}`), the device down, its own 0
     written as it closes, the trip naming the clock and the restart opening it again
@@ -14982,7 +14982,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     in the store's `{:copied, {:error, :timeout}}`, the copy shown made and the store
     unknown (`stalled_disk_test.exs`, "an owed copy's: a write killed in the copy names the
     copy, and one killed in the store's write names the store, the copy made", each
-    stalled at its rename); provisional, question 11. The period's write is left to finish,
+    stalled at its rename); decision 447 since RV-16. The period's write is left to finish,
     its answer telling both files, and still names the store.
   - *9, the cost of a request*: `owed/1`'s reading of the clock is the request's refresh's
     (`requested/3`), so a request served at once reads the clock as often as at the parent
@@ -14994,7 +14994,7 @@ and CI checked; each fix with a test that fails when it is reverted.
     program, for the round due, and that a tight loop holds a due round back by the
     request in hand or its slot, where it said it never makes a 10 ms task late.
   - *12, a lone caller every other slot*: as built, the continuous task's slot rule; the
-    moduledoc says so, provisional, and question 6 puts it.
+    moduledoc says so, and question 6 puts it, decision 442 since RV-16 the slot kept open.
 
   *The review's mutation table*, each mutant the full suite at `20c9578`
   (`scratchpad/rv/mut11r/`, `scripts/mutate.sh`), the review's five survivors first:
@@ -16573,6 +16573,510 @@ and CI checked; each fix with a test that fails when it is reverted.
        the whole stage left to the same-run bounds; (c) the whole stage alone, on a
        standard program long enough that its rungs are most of it, the motor's rungs
        written sixteen times over, one figure a stage.
+
+  **RV-16 as built** (2026-11-04, branch `rv16` over `da5e46e`). Each decision that
+  changes something has a test that fails when it is reverted, every new test red at the
+  parent's `lib/`, each judged by the full suite (the mutation table below); the leave
+  each used, a test that pinned the reading it changes, changed there and only as it says,
+  each changed line citing the decision, is named with it. No test, walk or oracle was
+  deleted or weakened: every test line taken out is one the leave rewrote, a `refute
+  Map.has_key?/2` now an assertion of nil, a value matched by `_` now the value itself, a
+  pattern clause now a guard, a comment rewritten with the decision, or a walk's model of
+  the reading a decision replaced, `restart_took/2` and its reach
+  `:restart_took_unread_forces` now `restart_took/3` and `:restart_kept_unread_forces`.
+
+  - *Decision 437, the rounds run on while a force's write is out* (`980904a`;
+    `stalled_disk_test.exs`'s "the rounds run on while a force's write is out (decision
+    437)": "rounds run, status/1 answers and the force is in effect from the first round
+    after the write lands, none before", "a force asked while another's write is out waits
+    behind it, its write built on the set the first left", "a trip, a restart and an
+    edit's step made while it is out leave it as it was", "a stop made while it is out
+    waits for it and answers its caller, every output 0", each on the manual clock with
+    the VM's file server held, each given a write limit of 20 s since its load runs
+    (`b2a4109`, below), the limit no part of what it reads but in the stop's second half,
+    and "on the real clock the rounds run on while a force's write is out"). A force's, an
+    unforce's or an unforce_all's write of the forces file is begun in a process of its
+    own, `Logex.Runner.Writer.begun/2`, linked and monitored, its text made in the runner
+    as before; the runner keeps `writing`, the write, the caller and the set it writes,
+    and a timer of the VM's own at the write limit, `write_limit:`, counted in
+    microseconds from before the process is made and rounded up to the millisecond, so
+    that the limit is never short; and it goes back to its rounds. The write's exit, a
+    `:DOWN`, takes the force or leaves it untaken as its answer says (`forces_landed/2`),
+    each trigger it changes making its round first, and answers the caller; the timer,
+    where it comes first, kills the write, `{:error, {:forces, :timeout}}`, and
+    `forces_unknown` names the set, decision 391's. The write lets go of its link to the
+    runner once its file call has answered, so that its exit never reaches the runner as a
+    message, and a runner killed takes the write with it. Decision 400's renewal of every
+    device's deadline while the runner waited on its disk is gone with the wait
+    (`Writer.written/4`, `ticking/3`, `ticked/4` and the request's `waited` time), the
+    rounds refreshing every device as ever; a force's request is timed against the idle
+    watchdog as its own work alone, the disk's time never among it. A forces request asked
+    while a write is out waits behind it, `behind`, in order, each served once the one
+    before it is answered, its write built on the set that one left, so that no two are
+    out at once (provisional, question 1); `status/1` lists the forces in effect, the one
+    written not among them until it lands (provisional, question 2); a stop waits for the
+    write to its own limit, after its zeros and its closes, answers its caller as it ends
+    and gives the file up only then, a force behind it answered as to a runner that is not
+    running (provisional, question 3); a trip, a restart and an edit's step leave the
+    write as it is, the force taken onto the set the runner then holds, a restart reading
+    the file as it stands (provisional, question 4). The walks restate it: the core's seam
+    sends the forces file as each round begins (`{:on_file, ...}`), and the model asserts
+    at every round that the file holds the forces the round reads (`on_file!/2`,
+    `:forces_on_file`). Docs: `Logex.Runner`'s moduledoc ("Its write limit", "Forcing",
+    the idle trip), `force/3`'s doc, `Logex.Runner.Writer`'s head, README's forcing,
+    §4.11.
+  - *Decision 439, a restart's reread limited by its device's `open:`* (`103d09e`;
+    `runner_test.exs`'s "a device up that a restart reads again is given its own opening
+    limit (decision 439)": a gateway that stayed up and answers its reread in 700 ms, past
+    the idle watchdog and a poll period, 510 ms there, restarts, read again and not
+    opened, where it was refused `:timeout`; and one hung in its reread, given `open:
+    %{"drive" => 1500}`, is cut there and not at 510). A device up that a restart reads
+    again is limited by its own `open:`, as one it opens again is, the release before it,
+    the heartbeat and every other device call by idle + poll as before. The leave:
+    `trip_test.exs`'s "a card hung in a restart's read is killed, …", which pinned the
+    hung read cut at idle + poll, now given `open: 300`, the 300 ms the idle watchdog gave
+    it there, so that the cut comes where it came. The runner walk restates it: at one
+    restart in four, by the walk's own time, the first device up and not hung is read
+    again 700 ms late in real time, its sim held, past the walk's idle watchdog and a poll
+    period and within its `open:`, which refuses nothing (`late_reread/1`,
+    `:late_reread`). Docs: the moduledoc ("Its devices"), `restart/2`'s doc, README's
+    `open:` and restart.
+  - *Decision 440, the three keys always there* (`8c94303`). `status/1` holds
+    `forces_unread` and `forces_unknown` always, and the store's `retain` report `unknown`
+    from every start, each nil where nothing stands, as decision 412 has `copy`. The
+    leave, every pin of a key absent: `force_test.exs` (2), `stalled_disk_test.exs` (13,
+    and its `written_status/2`, which waited for `unknown` to go and now for it to be
+    nil), `retain_store_test.exs`'s three exact reports and `runner_test.exs`'s "status/1
+    at start", each now nil; the two that matched a key present by `_` now match its
+    value, the store's path and the set `%{"eye_1" => 1, "level" => 7}`. The walks restate
+    it: each key read by `Map.fetch!/2`, the store's report's `unknown` asserted nil or a
+    path (`retain_keys!/1`), and `copy_told/5`'s clause for an unknown copy guarded on a
+    path. Docs: `status/1`'s doc, the moduledoc ("Forcing", "Its store"), README.
+  - *Decision 441, a round whose clock reading is found wrong abandoned* (`4a99887`;
+    `runner_test.exs`'s "a round whose clock reading goes wrong halfway through stops
+    there, its outputs never written (decision 441)" and "a round that finds a device gone
+    down by its own bad clock writes no device (decision 441)"; `retain_store_test.exs`'s
+    "a period's write whose wall clock gives no time trips the round due with it at once
+    (decision 441)"). The runner holds `in_round`, nil but inside a round, and there the
+    events of the steps it has run and not yet published; from its look for a device not
+    heard to its plan of the next, every reading of the runner's clock, its start's, a
+    step's, a write's, its end's and with no untimed program the period's wall clock at
+    its end, that gives no time the runner can hold throws the state it found (`whole/2`,
+    `period_stamped/3`), and `in_round/1` publishes the round as far as it ran, its steps'
+    runs kept in the resource (provisional, question 5), and trips at once, so that the
+    trip's 0 is the first the devices are given after it. A step's run is put in the state
+    before its time is read, so that one whose end reads wrong keeps it. A device's own
+    exit by its bad clock, waiting as the round comes to its writes (`device_clocked/4`),
+    stops the round there, no device written; one that goes down while the round writes is
+    found by its write as before, those after it not written (provisional, question 6).
+    Out of a round decision 394's rule stands, the work in hand finished and the trip
+    taken as the runner next takes a message, the untimed slot's period write among it.
+    The test's stand-in for the core, `WrongAfterStep`, makes the runner's next reading
+    after the round's first step wrong, once; `DeviceOddClock` reads a per-process answer,
+    so that one device's clock alone goes wrong. The leave: none, no test pinned the round
+    run on; the comments that said so rewritten. The runner walk restates it: half the
+    runner's own clock faults, by the walk's own time, come halfway through a round, after
+    its step, and the round stops there, published as far as it ran, the model holding its
+    steps as run (`stepped_all/2`), no device written its outputs, each device's every
+    write since the round began its last outputs, a poll's write again, or the trip's
+    zeros; a restart while the clock answers so refused (`runner_clock_injected/2`,
+    `clock_stopped/2`, `:clock_mid_round`). Docs: the moduledoc's trip reasons and clock
+    paragraph, README's trip.
+  - *Decision 442, a slot that finds nothing queued kept open* (`c0b655f`;
+    `runner_test.exs`'s "an open slot serves the poller's call that comes behind the round
+    at once (decision 442)"). RV-11's review's figure reproduced first
+    (`scratchpad/rv/p16/share.exs`, a lone poller calling `status/1` on a 2 ms plant whose
+    rounds took about 10 ms on a loaded machine, two seconds): before decision 396
+    (`bcab56b`) 199 to 200 calls served, at RV-16's parent 99, and after this commit 199
+    to 200; a hundred pollers on two tasks keep every period, no overlap. The share holds
+    `slot_open`: a slot, the continuous task's or the periodic rounds', that finds the
+    queue empty stays open (`opened/1`, `periodic_slot/3`), a request that comes while a
+    round is owed takes it, served at once, and the slot closes; a slot that serves its
+    queue closes it, and an edit's step that begins the count again (`recounted/2`) closes
+    an open one; the count begins again at each slot whether or not a request took it
+    (provisional, question 7). The leave, every pin of a slot gone: `runner_test.exs`'s
+    share tests, the slots' reduce, where the first of two requests sent together takes a
+    slot left open since the last that served and the second waits for the next, the forty
+    requests at 50%, 86% and 90%, the first now taking the first round's open slot and the
+    other 39 served 1, 2 and then 1, or 3 a slot, where 40 were, the refresh's taker,
+    decision 396's due wait and the outrun plant, each now taking the open slot first and
+    asserting the wait behind it; `force_test.exs`'s first call after a force's round. The
+    runner walk models the share, its count, its open slot and its queue, and asserts that
+    a call made while a periodic round is due takes an open slot at once and the next
+    waits (`shared/4`, `took_slot/3`, `:open_slot_taken`). Docs: the moduledoc's share and
+    manual clock, README's share, §4.11.
+  - *Decision 445, a restart while `forces_unread` stands keeps the runner's forces*
+    (`e799804`; `stalled_disk_test.exs`'s "a restart while the forces file is named unread
+    (decision 445)": "the level forced to 7, a crash, a start on a stalled disk, the disk
+    back, a trip and a restart: level reads its input, not 7"). A restart made while
+    `forces_unread` stands reads no file and keeps the runner's set, the file still named,
+    until a force's or an unforce's write lands, which writes the runner's set over it and
+    names it no more (`forces_at_restart/1`). The leave: `force_test.exs`'s directory in
+    the file's place, whose restart after the directory went found no file and named it no
+    more, now keeps `level` at 2 and names it still, and the next force's write lands
+    `level 2` and names it no more. The walks restate it: a restart while the model names
+    the file unread keeps the runner's set, a refused one too (`restart_took/3`,
+    `refused_read/1`, `:restart_kept_unread_forces`, where RV-11's review's model took the
+    file's, `:restart_took_unread_forces`). Docs: the moduledoc ("Forcing"), `restart/2`'s
+    and `status/1`'s docs, README's forcing, its story.
+  - *RV-11's marks* (`efffdb2`), each made the decision's number, no rule changed. In
+    `lib/`: the relative forces path that cannot be located (446), `open:`'s option, map
+    form and default (438), the manual clock's wait for a due periodic round (444), an
+    address no configuration writes (443), an owed copy's cut-off write (447, at
+    `Writer.stored/4`), the share's count (442), and the range of a time and a restart's
+    look at both clocks (441). In the tests, the same in `trip_test.exs`,
+    `runner_test.exs`, `runner_edit_test.exs` and `stalled_disk_test.exs`, whose
+    real-clock force's comment now says decision 437's write off the runner's path, and
+    the walk's forces file comment (445). README's relative forces path (446); this file's
+    RV-11 entry, each "(provisional, question n)" its decision; and §4.11's share note
+    (442). Decisions 437–447's notes in §7 each say how it landed, and §4.11 says what
+    RV-16 changed.
+
+  *The mutation table*, each mutant judged by the full suite (`scripts/mutate.sh`,
+  `scratchpad/rv/mut16/`, 18 patches on `efffdb2`, the code's tip), each a rule this item
+  adds reverted or bent, those marked "the parent's" the reading it replaced. None
+  survives. Two failures under the mutants were none of theirs, a cost and a race on
+  runner code no mutant touched: `retain_configuration_test.exs`'s M6-3 cost, a warm
+  restart 16,252 reductions against a cold one's 16,246, under m441_period_later, which
+  RV-7 has with it (decision 357), and `retain_store_test.exs`'s "a cold restart a device
+  refuses writes the store back", its zeros' write not yet received as the restart
+  answered, under m442_recount_open, which no edit reaches (its load runs below); each
+  mutant is red by the tests named without them.
+
+  | Mutant | What it does | Full suite | Red by |
+  |---|---|---|---|
+  | m437_taken_early | the force taken as its write is begun, before it lands | red | five of `force_test.exs` (a forced trigger's rounds and timing, a write and a rename that fail), four of `stalled_disk_test.exs` (the force in effect from the first round after it lands on both clocks, a write past its limit, the default limit), `end_to_end_test.exs`'s M4-5 Done-when, the runner and life walks |
+  | m437_no_behind | a force asked while a write is out begun at once, beside it | red | "a force asked while another's write is out waits behind it …", "a stop made while it is out …", `runner_test.exs`'s tight loop of forces on the real clock (decision 396) |
+  | m437_stop_unwaited | a stop neither waits for the write nor answers its caller | red | "a stop made while it is out waits for it and answers its caller, every output 0" |
+  | m437_link_kept | the write keeps its link to the runner as it exits | red | "a write's exit, its process linked to the runner, … never reaches the runner as a message of its own" |
+  | m437_limit_floor | the write's deadline in whole milliseconds from a truncated now | red | "a force whose write does not end within its limit is {:error, {:forces, :timeout}} …", "the write limit is 5000 ms unless set" |
+  | m439_reread_idle | a restart's reread limited by idle + poll, the parent's | red | "a device up that a restart reads again is given its own opening limit", the runner and life walks |
+  | m440_forces_absent | `forces_unread` and `forces_unknown` absent where nil, the parent's | red | "status/1 at start", two of `force_test.exs`, five of `stalled_disk_test.exs`, the runner walk, its input-check walk and the life walk |
+  | m440_unknown_absent | the store's `unknown` absent from a start | red | 123 tests, the report's update raising where the key is absent: `retain_store_test.exs` (58), `stalled_disk_test.exs` (24), `retain_period_test.exs` (22), `runner_paths_test.exs` (9) and others, the three walks |
+  | m441_round_on | a round runs on through a reading gone wrong, the parent's | red | "a round whose clock reading goes wrong halfway through stops there …", the runner walk and its input-check walk |
+  | m441_device_unlooked | a device gone down by its clock not looked for before the writes | red | "a round that finds a device gone down by its own bad clock writes no device" |
+  | m441_period_later | the period's wall clock read in a round trips as a message, the parent's | red | "a period's write whose wall clock gives no time trips the round due with it at once" |
+  | m441_unpublished | the abandoned round's steps' events not published | red | the runner walk and its input-check walk |
+  | m441_step_dropped | a step whose end reads wrong not kept in the resource | red | the runner walk and its input-check walk |
+  | m442_gone | a continuous task's slot that finds nothing queued gone, the parent's | red | three of `runner_test.exs`'s share tests |
+  | m442_periodic_gone | a periodic round's slot that finds nothing queued gone, the parent's | red | "an open slot serves the poller's call …", decision 396's due wait and outrun plant, `force_test.exs`'s forced trigger's round, the runner walk and its input-check walk |
+  | m442_kept_open | an open slot left open by the request that takes it | red | five of `runner_test.exs`, `force_test.exs`'s forced trigger's round, the runner walk and its input-check walk |
+  | m442_recount_open | an edit's step that begins the count again leaves an open slot open | red | `runner_edit_test.exs`'s "an untimed program an edit adds is served its slots from its first round" |
+  | m445_reads | a restart while `forces_unread` stands reads the file, the parent's | red | the level switch's story, `force_test.exs`'s restart that reads the file again, the runner and life walks |
+
+  *The cost*, held against the parent `da5e46e` at `efffdb2`, the code's tip, each the
+  least of several runs in reductions (`scratchpad/rv/p16/cost/`, RV-13's measures and a
+  force's and a request's): a round of three devices of a 10 ms task on the manual clock
+  (seven runs) 2,053.47 with its outputs changing and 1,750.44 with none, where the parent
+  cost 2,041.12 and 1,739.82 (+0.6%, a round's `in_round` set and cleared and its look for
+  a device's exit before its writes); a round of a runner with a store and a long period
+  (nine runs) 1,717.90 against 1,705.90, 8.93 more than with no store against the parent's
+  7.81, the test's bound 10, within the spread earlier items read, 6.9 to 8.05, by a
+  reduction; a period's write, the text made and written, of a store of 1,000 retained
+  counters and a global, 447,205 at both, and the whole VM's over the advance that makes
+  it through the runner 8,626,499 against 8,636,702 (−0.1%); a fresh start from that store
+  4,640,267 in its caller against 4,620,806 (+0.4%) and 4,797,205 the whole VM's against
+  4,777,732, the runner's own to the end of its first round 155,684 against 155,672. A
+  host's request, the runner's own over 500 (seven runs): `status/1` 267.83 and `get/2`
+  275.78 a request with no untimed program against 270.60 and 277.78, and 261.48 and
+  275.52 with one against 264.39 and 277.51 (−1%). A force, the runner's own over ten
+  forces of a plant of 50 forced inputs on the manual clock, each write made and its
+  answer taken (seven runs): 1,530.9 a force against 1,605.8 (−4.7%), the wait and its
+  renewal of the heartbeat gone; the write's own process, at both, not counted.
+
+  *Load runs* (`scripts/load.sh`, four busy loops on four cores, `scratchpad/rv/load16/`),
+  on a machine RV-7's two mutation tables shared, its load average 13 to 28. The first
+  set, the whole of `stalled_disk_test.exs` and every other new or changed runner test by
+  line, 58 tests, was stopped at its eleventh run: three runs had failed, two in decision
+  400's "a write the disk finishes past the idle watchdog and a poll period, within the
+  write limit, lands", which RV-16 does not touch, and one in decision 437's "a stop made
+  while it is out …", which waited 60 s for a rename that never came. Its write had been
+  cut at the 1,010 ms limit before it came to its rename, the disk slow over its sync
+  beside the other suites' (a probe of 3,000 raw writes and syncs beside them read up to
+  644 ms); so the four manual-clock tests of decision 437, which read no limit, are given
+  one of 20 s, `@out`, as the real-clock one is, and the stop's second half, which reads
+  the limit, takes a write cut before its rename as answered (`called_or_answered/3`).
+  Decision 400's test failed 7 of 30 runs alone at the parent and 10 of 30 at the tip
+  under the same load, at the same points, a write held 400 ms past its 1,010 ms limit,
+  RV-7's to take up with the rest of that file's load failures. The second set, the 35 new
+  and changed runner tests by line, decision 437's five, 439's, 441's three, 442's, 445's,
+  the leave's of decisions 439, 440 and 442, the tests that read `stalled_disk_test.exs`'s
+  changed helpers, and `retain_store_test.exs`'s cold restart a device refuses, which
+  failed once under m442_recount_open, 50 runs at the tip: 48 green, each run 34 to 74 s;
+  the two that failed, runs 27 and 45, failed `trip_test.exs`'s older real-clock reread,
+  "on the real clock, a bad reading of a device released while the one before it is read
+  again trips nothing", its panel's reread meeting the bad value its polls had not taken,
+  whose only change here is its comment; alone under load it passed 30 of 30 at the tip
+  and 30 of 30 at the parent, run in turns, as RV-11's review found it (refused once in 50
+  beside the rest), and it stays RV-7's to watch. The runner walk, its input-check walk
+  and the life walk, each restating this item's rules, five runs at the tip and five at
+  the parent, run in turns under the busy loops: none failed at either, a run of their
+  four tests 216 to 225 s at the tip and 154 to 171 s at the parent, and with no busy
+  loops 71.3 s against 63.8 s, the more the walks' new restatements, of which the 700 ms
+  hold of a device at one restart in four is 6 s.
+
+  *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
+  full suite at a time: the parent `da5e46e` 2,833 (11 doctests, 2,822 tests); `980904a`
+  2,838; `103d09e` and `8c94303` 2,839; `4a99887` 2,842; `c0b655f` 2,843; `e799804` and
+  `efffdb2` 2,844; `b2a4109`, the load runs' change to decision 437's tests, 2,844; and
+  this entry's commit, which changes no rule, 2,844. CI was green at once on every commit
+  to `b2a4109` (41878247651) but `103d09e`, whose first run (41822430867) was red in
+  `stalled_disk_test.exs`'s "a start whose store's read does not end within its limit is
+  refused, naming the file, …": the fresh start the test makes once the FIFO is let go,
+  its first write of the store past 1,010 ms on the runner's disk, `{:error, {:retain,
+  :timeout}}`, a test and a path RV-16 does not touch; run again (attempt 2) it was green.
+
+  **RV-16's review** (2026-11-07, of `4566855`; fixed on `rv16` in `2308f70`, over the
+  merge of main's RV-7 and decisions 448–464, `202a9e4`). The review found
+  decision 437's order broken where a forced trigger's force lands, fourteen mutants of
+  RV-16's rules alive under the full suite, the documents promising more than the code
+  does in three places, and main moved; each is fixed, every new test red at the fix's
+  parent or under the mutant it was written for, and no test, walk or oracle weakened:
+  every test line the fix takes out is one it rewrote, the 441 period test's
+  subscription widened to its default kinds and `:round`.
+
+  - *Decision 437's order* (`stalled_disk_test.exs`'s "the forces behind a write are
+    written in the order asked, a forced trigger's round between them", on a plant with
+    an event task on the panel's `e`, `@kicked`). A forced trigger's write landing runs
+    the trigger's round before the next force behind it is served, and that round's end
+    serves the share's slot: a force that waited there for the round was served while no
+    write was out, its write begun ahead of the ones behind, and the one behind it, put
+    back at the tail, was written last, the older force winning (`level` 3 where 5 was
+    asked last; red so at the parent). A force, an unforce or an unforce_all now waits
+    behind while a write is out or while one such waits (`in_turn/3`), and the one
+    behind is served by `answered_now/2`, never put back: the last asked is the last
+    written. "An unforce_all waits behind a write, and a force behind a host's mistake is
+    served after it" holds the unforce_all among them and the next served once a mistake
+    is raised. The runner walk restates it: at one forcing step in four, by a stream of
+    its own seeded by each walk (`:rw_together`, `paired/1`), so that no other draw
+    moves, two to four forces of plain inputs asked together, each before the last is
+    answered, the first point asked again last, and the file the order asked
+    (`together/2`, `:forces_together`), red under a queue made last-in-first-out.
+  - *The survivors*, each with a test that fails under it: the continuous task's open
+    slot with a store and with none, a poller's call behind each round served at once
+    (`runner_test.exs`, r11); the request that takes an open slot refreshes every device
+    first (decision 396's due-wait test, r10); a clock found wrong as a round begins, at
+    its look for a device not heard and at its start, stops it before any step (a clock
+    stand-in, `WrongIn`, that answers wrong once inside the runner function the test
+    names, read off the reading's stack; n50); a runner killed while a force's write is
+    out takes the write down (`stalled_disk_test.exs`, n22); each device a restart reads
+    again limited by its own `open:`, 200 ms below idle + poll refusing a 350 ms reread,
+    and 4,000 ms beside a panel's 1,000 letting a 1,500 ms one through (n17, r13); a round
+    tripped by its step's watchdog leaves `in_round` nil, so that a clock read wrong after
+    it, out of any round, is decision 394's and the runner answers on (n19); a stale
+    clock exit ahead of a device's own is passed over and the device's still stops the
+    round before its writes (r06); a stop that finds a force's write past its limit cuts
+    it at once and answers its caller cut (r14); and the period's wall clock read wrong in
+    a round is reported failed and then the trip's own write, two reports, its round
+    published once (`retain_store_test.exs`'s decision 441 test, r09, r07). The review's
+    two equivalents stay alive: n08, a device gone down by its clock not marked down by
+    the round that found it, which its exit, taken after the round, marks all the same,
+    and r02, a force behind a write left unanswered at a stop, whose caller's call exits
+    "not running" either way.
+  - *The documents.* Decision 441's "its outputs never written" holds for a reading
+    before the round's writes; a reading at a device's write leaves the devices written
+    before it, and that one where its write came first, with the round's outputs, and one
+    at the round's end, or the period's wall clock, comes once every device has them,
+    the round's own event published at the period's reading and not at the end's, the
+    trip's 0 following (provisional, question 10): the moduledoc's trip reasons and
+    clock paragraph, the round's comments, README's trip and "What has landed", §4.11's
+    note and decision 441's landed note now say so. "The force taken onto the set the
+    runner then holds" said less than the code: the set a write holds, built on the
+    forces held as it began, becomes the runner's as it lands, in place of any a restart
+    read from the file meanwhile, the file and the forces in effect agreeing (provisional,
+    question 4, restated). A write a stop cuts at its limit may still land after the
+    runner has given the file up, as any cut write may (decision 391), where the
+    comment and the moduledoc said none would (provisional, question 11). README's
+    `forces_unread` now stands until a force's or an unforce's write lands, no restart
+    reading it (decision 445), and its first forcing bullet has a force in effect from
+    the first round after its write lands.
+  - *Main moved* (`202a9e4`): RV-7's merge and decisions 448–464. The two met in
+    `PLAN.md`'s head and README's "What has landed", resolved by hand; the tests, among
+    them `stalled_disk_test.exs` and `trip_test.exs`, which both changed, merged on their
+    own; GATE-OK 2,844.
+
+  *The review's mutation table*, each mutant judged by the full suite (`scripts/mutate.sh`
+  in a worktree of `2308f70`, `scratchpad/rv/mut16r/`, 18 patches, `scratchpad/rv/p16fix/mt/`):
+  the review's fourteen survivors, made again where the fix moved their code, its two
+  equivalents, and two of the fix's own. Sixteen are red, each by the test written for
+  it; the two equivalents survive. Under r05 and r09 the kill test failed too, by a race
+  of its own, a rename an earlier test's killed write had left in the held file server's
+  mailbox taken for this test's writer, which was then gone (`:noproc`); the test now
+  reads its writer from the runner (`renaming/2`), and is red under n22 still.
+
+  | Mutant | What it does | Full suite | Red by |
+  |---|---|---|---|
+  | f1_writing_only | a forces request waits behind only while a write is out, the parent's | red | the order test |
+  | f1_behind_guarded | the one behind served through the guard, put back while any waits | red | the order test, "a force asked while another's write is out …", the unforce_all test, `runner_test.exs`'s tight loop of forces (decision 396), the runner and life walks |
+  | n20_behind_lifo | the forces behind a write served last-in-first-out | red | the order test, the unforce_all test, the runner and life walks |
+  | r04_mistake_blocks_behind | the next behind a host's mistake not served | red | the unforce_all test |
+  | r05_unforce_all_not_behind | an unforce_all served beside a write that is out | red | the unforce_all test |
+  | r11_store_slot_not_opened | the continuous task's slot with a store never left open | red | the continuous task's poller test |
+  | r10_open_slot_unrefreshed | the request that takes an open slot served without a refresh | red | decision 396's due-wait test |
+  | n50_round_start_reading_runs_on | a reading found wrong before a round's first step runs on | red | "a round whose clock reads wrong as it begins stops there …" |
+  | n22_write_unlinked_first | the write lets go of the runner before its file call | red | "a runner killed while a force's write is out takes the write down with it" |
+  | n17_reread_floor_idle_poll | a restart's reread given at least idle + poll | red | "each device a restart reads again is limited by its own open: …" |
+  | r13_reread_least_open | a restart's reread given the least `open:` of any device | red | the same |
+  | n19_trip_keeps_in_round | a trip leaves `in_round` set | red | "a round that trips leaves none open …" |
+  | r06_stale_clock_exit_ends_look | a clock exit of no device ends the look before the writes | red | "a round that finds a stale clock exit ahead of a device's own …" |
+  | r14_awaited_negative | a stop past a write's limit waits a negative time | red | "a stop that finds a force's write past its limit …" |
+  | r07_round_events_kept_into_plan | a round's events kept for its plan, published twice | red | `retain_store_test.exs`'s decision 441 test |
+  | r09_period_clock_unreported_in_round | the period's failed write in a round not reported | red | the same |
+  | n08_device_clock_not_down | equivalent: the device left marked up by the round | survives | — |
+  | r02_behind_unanswered_at_stop | equivalent: a force behind a write unanswered at a stop | survives | — |
+
+  *The cost*, held against the parent `202a9e4`, whose `lib/` is `4566855`'s, by the same
+  measures as RV-16's (`scratchpad/rv/p16fix/cost/`), each the least of two runs of the
+  least of several: a host's request one call dearer, the forcing guard's clause before
+  the one that serves, `status/1` 269.08 and `get/2` 276.83 a request with no untimed
+  program against 267.78 and 275.86, and 262.69 and 276.55 with one against 261.49 and
+  275.42 (+0.4%); a force 1,536.3 against 1,530.9 (+0.35%), its look at the queue
+  behind; a round of three devices 2,055.25 with its outputs changing and 1,752.35 with
+  none against 2,051.43 and 1,750.42, within the parent's own spread of two runs
+  (2,051.43 to 2,054.07), no round's code changed; a round with a store 8.03 more than
+  with none against 8.32; a period's write 447,205 at both, the whole VM's period
+  8,638,119 against 8,632,451; a fresh start 4,626,819 in its caller against 4,599,825
+  to 4,630,543 at the parent across its two runs.
+
+  *Load runs* (`scripts/load.sh`, four busy loops on four cores): the sixteen new and
+  changed tests, decision 437's nine of `stalled_disk_test.exs` (the kill test with its
+  writer read from the runner), `runner_test.exs`'s six and `retain_store_test.exs`'s
+  decision 441 test, 50 runs, none failed (`scratchpad/rv/p16fix/load50.txt`); the runner
+  walk, its input-check walk and the life walk, the together step among them, five
+  runs, none failed (`loadwalks.txt`).
+
+  *Gates and CI.* Each commit gated by `scripts/gate.sh`, GATE-OK by its exit code, one
+  full suite at a time: the merge `202a9e4` 2,844; `2308f70` 2,853 (11 doctests, 2,842
+  tests), CI green (42426993579); and this entry's commit, the kill test's writer read
+  from the runner and the documents, 2,853.
+
+  *Provisional readings, put to the maintainer*, by what an operator sees. The record is
+  silent on each; the reading taken is the closest to it, IEC and Logix. IEC 61131-3
+  leaves forcing and the runtime's faults to the implementer; Logix keeps forces in the
+  controller's memory, a force taking effect at the next scan once enabled, and a major
+  fault stops the logic at once, its outputs going to their fault state.
+
+  1. *A second force while the first's write is out* (decision 437). An operator forces
+     `eye_1` to 1 on a disk that takes 3 s to write the file; a second, a second later,
+     forces `level` to 7. As built the second waits behind the first: `eye_1` is in effect
+     from the first round after its write lands, at 3 s, and `level`'s write is begun
+     then, in effect from the round after it lands, at 6 s, the second HMI's call answered
+     then, up to two write limits after it was made. (a) As built, in order, each write on
+     the set the one before left; (b) the second refused at once while a write is out,
+     `{:error, {:forces, :busy}}`, the operator forcing again; (c) every request that
+     waits joined into the next write, `level`'s written with any others behind it in one
+     write begun at 3 s.
+  2. *What `status/1` shows while a force's write is out* (decision 437). As built
+     `forces` lists the forces in effect: for the 3 s the write takes, the HMI shows
+     `eye_1` unforced, as the logic reads it, and then forced. (a) As built; (b) a key of
+     its own, `forcing`, the set being written, nil otherwise, so that an HMI can show
+     "forcing…" beside the point.
+  3. *A stop while a force's write is out* (decision 437). As built a stop zeros and
+     closes every device first, then waits for the write to its own limit, answers the
+     force's caller as the write answers, and answers a force waiting behind it as a
+     runner that is not running; the stop returns up to the write limit later, every
+     output 0 from its start, the file holding the old set or the new. (a) As built; (b)
+     the write killed at once, the force answered `{:error, {:forces, :timeout}}` and the
+     stop not held, the file then unknown to the next start, which reads it as it is.
+  4. *A trip, a restart or an edit's step while a force's write is out* (decision 437). An
+     operator forces `level` to 7; the disk stalls; the line trips on a watchdog and the
+     operator restarts it while the write is still out. As built the restart reads the
+     file as it stands, the old set, `level` unforced, and runs; when the write lands the
+     set it wrote, built on the forces held as it began, becomes the runner's, `level` 7
+     from the next round, the caller told `:ok`, and a force the restart read from the
+     file that the write did not hold is dropped, the file and the forces in effect
+     agreeing. RV-16's review met it so: a write cut at its limit landed late and left
+     `x 1` in the file; a restart read it and `status/1` showed `x` forced; a force of
+     `level` asked before the restart then landed, and the forces became `level` alone,
+     `x` dropped without a word. (a) As built, the write's set the set in effect; (b) the
+     write's change, `level` 7, put onto the set the runner then holds, `x` kept, and the
+     file written again with that set; (c) a restart waits for the write first, so that
+     it reads what the write leaves; (d) a trip cuts the write and refuses the force, the
+     operator forcing again once the line runs.
+  5. *An abandoned round's own work* (decision 441). The round's first step counts a box,
+     `t1.boxes` 40 to 41; the runner's clock gives no time as the second step is timed,
+     and the round stops there, no output written, and trips. As built the steps the round
+     ran are published, `{:ran, ...}` and their events, and their runs kept in the
+     resource: the count stands at 41, as `get/2` reads it, though no output was written
+     of that round. (a) As built, as a Logix major fault keeps what the rungs before it
+     wrote; (b) the round's work thrown away with it, the resource as the round before
+     left it, `t1.boxes` 40, nothing of it published.
+  6. *Where a round's clock rule ends* (decision 441). As built a round runs from its look
+     for a device not heard to its plan of the next: its start's, its steps', its writes'
+     and its end's readings of the runner's clock, and with no untimed program the
+     period's wall clock read at its end, which trips at once. With an untimed program the
+     store's period write is made in the share's slot, out of any round, so a wall clock
+     gone wrong there trips as decision 394 has it, as the runner next takes a message, a
+     round or a request later. And a device that goes down by its own bad clock while the
+     round writes is found by its write, those written before it holding the round's
+     outputs until the trip's 0 follows, those after it not written. (a) As built; (b) the
+     period's write in an untimed program's slot under the same rule, tripping at once;
+     (c) the round's writes held until every device's exit has been looked for, at the
+     cost of a look each write.
+  7. *The share's count with a slot left open* (decision 442). A 10 ms task at 10%
+     overhead brings a slot every nine rounds; one finds nothing waiting and stays open;
+     an HMI's call comes three rounds later and takes it at once. As built the count began
+     again at the slot, so the next slot comes six rounds after the call, a second call
+     close behind the first served sooner than nine rounds. (a) As built, a slot every
+     nine rounds whatever takes it; (b) the count begun again when the open slot is taken,
+     nine full rounds of logic between any two requests served.
+
+  RV-16's review left four more, each where the record is silent; IEC 61131-3 says
+  nothing of either forcing or a runtime's own faults, and the reading taken is the
+  closest to the record and to Logix, which keeps forces in the controller's memory with
+  the project and stops the logic at a major fault, outputs to their fault state.
+
+  8. *A stop and a fresh start while `forces_unread` stands* (decisions 390 and 445). A
+     level switch is forced to 7; the runner crashes; the fresh start finds the disk
+     stalled, cannot read the forces file and starts with no force, `forces_unread`
+     named; the disk comes back; the operator stops the line in good order and starts it
+     again. As built the new start reads the file, which still holds `level 7`, and the 7
+     comes back, though no one has forced it since and `status/1` never showed it:
+     decision 445 keeps the runner's own set at a restart, and a stop and a start make a
+     new runner that knows nothing of the old one's `forces_unread`. (a) As built, every
+     fresh start reading the file as it stands, the 7 back; (b) an orderly stop while
+     `forces_unread` stands writes the runner's own set to the file first, so that the
+     next start finds what the HMI last showed, nothing forced; (c) as (b), and a crash's
+     next start, which cannot know, as built.
+  9. *A host's mistake behind a force's write* (decision 437). An HMI forces `level` to
+     7 on a disk that takes 3 s to write; meanwhile a second HMI asks to force `levle`, a
+     point the plant does not have. As built the mistake waits its turn behind the write,
+     in order, and is raised in its caller only once the write ends, up to the write
+     limit later (999 ms of a 1,000 ms limit in the review's probe); a force behind it is
+     then served. (a) As built, every forces request in the order asked; (b) a request
+     that is a host's mistake raised at once, as it comes, only the well-formed ones
+     waiting their turn, as Logix's software refuses a tag that does not exist when it is
+     typed.
+  10. *The runner's own clock found wrong during or after a round's writes* (decision
+      441). A conveyor's round turns its motor on, `qa` 1 to the panel, then `qb` 1 to
+      the drive; the runner's clock gives no time as the drive's write is timed. As built
+      nothing is written after the bad reading, the drive is never given the 1, but the
+      panel already has it, and holds it until the trip's 0 follows, a moment later; and
+      a clock found wrong at the round's end comes once every device has the round's
+      outputs, the round's own event, `{:round, ...}`, then not published, though the
+      devices got its outputs (it is published where the period's wall clock reads wrong,
+      which comes after). Question 6 covers a device's own clock; this is the runner's.
+      (a) As built, as a Logix major fault leaves what an output module already took
+      until its fault state is applied; (b) as built, and the round's event published
+      wherever any device was written, with the outputs the devices got, so that a
+      subscriber's record holds the 1 the panel was given; (c) the round's end read
+      before its first write, so that only a write's own reading can come once outputs
+      have gone out.
+  11. *A cut force write that lands after its runner has gone* (decisions 353, 356 and
+      391). An operator forces `level` to 7 on a stalled disk and stops the line; the
+      stop waits the write limit, cuts the write, tells the operator `{:error, {:forces,
+      :timeout}}` and gives the file up; a new runner starts on the file, reads the old
+      set and shows nothing forced, `forces_unknown` nil; then the disk answers and the
+      cut write's rename lands, the file now `level 7`, which the next restart reads and
+      puts in effect: a force the operator was told had failed (the review's probe T4).
+      An unforce's late rename after a crash and a fresh start does the reverse, a force
+      in effect that the file no longer holds (T5). (a) As built, documented: the file
+      stands as the disk leaves it, and the next restart takes what it holds; (b) the
+      file held by the runner that cut the write until the write's call has answered,
+      however long the disk takes, so that no runner starts on it meanwhile (decision 356
+      refuses it), the stop still answering at the limit; (c) every fresh start naming
+      the forces file's set unknown, `forces_unknown`, until its own first write of it,
+      where the last runner left a write cut, so that the HMI warns.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

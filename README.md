@@ -340,46 +340,51 @@ Every milestone decided has landed, retained values the last (the first bullet b
 the milestones newest first). What waits to land is the rest of the maintainer's answers to the
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-items RV-6 to RV-8 build ("The review after Milestone 6"), and its answers to the
-questions RV-11 left, decisions 437–447, which RV-16 builds: the rounds running on while
-a force is written, a round whose clock reads wrong abandoned before it writes, and a
-restart after a start that could not read the forces file keeping the forces the runner
-holds, among them, and three of its answers to the questions RV-13 and RV-7 left, which
-RV-6 builds: every write of the store limited, a copy the same as the last one skipped
-and a late runner letting its devices run before judging them (decisions 455, 456 and
-461). The rest of those answers, decisions 448–464, have landed with RV-17: the loaders
-reading and looking at their files raw, off the VM's file server (decision 464), a hold
-in the simulated device on its next reread (decision 462) and a ceiling a stage, the
-compile, a scan, a cycle and a round, whole and a rung, twice a figure recorded with it
-(decision 459), the others as built. Its answers to the questions RV-5 left, decisions
-409–419, have landed with RV-13: the store and the forces file reading a line ended by
-CRLF or a lone CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil
-where nothing was copied (decision 412), the shutdown's write making the store's text
-within the write limit, which the child spec's deadline counts (decision 414), a cold
-start over a store a fresh start would refuse copying it first (decision 417) and each
-copy of the store a name of its own, `<store>.dropped.1` and on, none replaced (decision
-418), the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to
-the four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13.
-Its answers to the questions RV-4 left, decisions 390–401, have landed with RV-11: every
-file write and read the runner makes limited by a `write_limit:` of its own, 5 s unless
-set, apart from the heartbeat (decision 400), a device's opening by an `open:` of its own
-(decision 398), a forces file a start or a restart cannot read carried on and named in
-`status/1` (decision 390), a write past its limit named unknown until a later one lands or
-fails (decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
-their share against a due periodic round (decision 396) and a misread address shown as
-the configuration writes it, `panel.i.7` (decision 399), the other five as built
-(decisions 392, 393, 395, 397 and 401). Its answers to the questions
-RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
-RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
-closure refused as built (decisions 429 and 430), a bit of a member of an element
-written through a tag subscript or numbered by a tag warned as a word array's bit is
-where the pair may meet (decision 431), and the loader's own compile private code that
-nothing a host hands in reaches, no token at all (decision 432). Its answers to the
-questions RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting
-every tag, element and instance it holds, at every depth (decision 403), the loader's
-trust in its own types one no host can borrow, so a type edited by hand is checked
-whether a host hands it to `Logex.compile/2` or to the compiler's internal entry
-(decision 404), which since RV-15 is no token at all but the loader's own compile,
+items RV-6 to RV-8 build ("The review after Milestone 6"). Its answers to the
+questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
+while a force's write of the forces file is out, the force in effect from the first
+round after it lands (decision 437), every device a restart opens or reads again
+limited by its own `open:` (decision 439), `status/1`'s `forces_unread`,
+`forces_unknown` and the store's `unknown` always there, nil where nothing stands
+(decision 440), a round whose clock reads wrong stopping there, writing nothing after the
+reading (decision 441), a slot of the share that finds nothing waiting kept open until a
+request takes it (decision 442) and a restart while `forces_unread` stands keeping the
+forces the runner holds (decision 445), the other five as built (decisions 438, 443,
+444, 446 and 447). Three of its answers to the questions RV-13 and RV-7 left, decisions
+448–464, RV-6 builds: every write of the store limited, a copy the same as the last one
+skipped and a late runner letting its devices run before judging them (decisions 455, 456
+and 461); the rest have landed with RV-17: the loaders reading and looking at their files
+raw, off the VM's file server (decision 464), a hold in the simulated device on its next
+reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
+whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
+answers to the questions RV-5 left, decisions 409–419, have landed with RV-13: the store
+and the forces file reading a line ended by CRLF or a lone CR as one ended by LF (decision
+410), `status/1`'s `copy` always there, nil where nothing was copied (decision 412), the
+shutdown's write making the store's text within the write limit, which the child spec's
+deadline counts (decision 414), a cold start over a store a fresh start would refuse
+copying it first (decision 417) and each copy of the store a name of its own,
+`<store>.dropped.1` and on, none replaced (decision 418), the other six as built
+(decisions 409, 411, 413, 415, 416 and 419); its answers to the four RV-15 left, decisions
+433–436, are each as built, their marks made with RV-13. Its answers to the questions RV-4
+left, decisions 390–401, have landed with RV-11: every file write and read the runner
+makes limited by a `write_limit:` of its own, 5 s unless set, apart from the heartbeat
+(decision 400), a device's opening by an `open:` of its own (decision 398), a forces file
+a start or a restart cannot read carried on and named in `status/1` (decision 390), a
+write past its limit named unknown until a later one lands or fails (decision 391), a
+clock gone wrong a trip (decision 394), a host's requests held to their share against a
+due periodic round (decision 396) and a misread address shown as the configuration writes
+it, `panel.i.7` (decision 399), the other five as built (decisions 392, 393, 395, 397 and
+401). Its answers to the questions RV-10 and RV-12 left, decisions 420–432, have landed
+with RV-14 and RV-15: each of RV-10's nine as built (decisions 420–428), an instance
+counting itself and a host's closure refused as built (decisions 429 and 430), a bit of a
+member of an element written through a tag subscript or numbered by a tag warned as a word
+array's bit is where the pair may meet (decision 431), and the loader's own compile
+private code that nothing a host hands in reaches, no token at all (decision 432). Its
+answers to the questions RV-9 left, decisions 402–408, have landed with RV-12: a
+declaration counting every tag, element and instance it holds, at every depth (decision
+403), the loader's trust in its own types one no host can borrow, so a type edited by hand
+is checked whether a host hands it to `Logex.compile/2` or to the compiler's internal
+entry (decision 404), which since RV-15 is no token at all but the loader's own compile,
 private code that no closure or term a host hands in reaches (decision 432), and two bits
 whose literal numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a
 write whose literal places differ from it, no warning (decision 405), the other four as
@@ -3524,11 +3529,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   then the old or the new: it is reported and its caller answered as one that fails is,
   `:timeout`, a stop's `{:error, {:retain, :timeout}}` among them, but `status/1`'s
   `retain` names it `unknown: "tally.retain"`, neither failed nor written, `failed` nil
-  and `written_at` the last write known made, until a later write lands or fails, and has
-  no `unknown` otherwise; so does a copy's, `unknown: "tally.retain.dropped.1"`, and a
-  write over the store that owes the copy first and is killed in the copy's own write,
-  the store as it was; one killed in the store's names the store, the copy made (decision
-  391; the key, how long it stands and the file named provisional).
+  and `written_at` the last write known made, until a later write lands or fails, and
+  `unknown: nil` otherwise, the key always there (decision 440); so does a copy's,
+  `unknown: "tally.retain.dropped.1"`, and a write over the store that owes the copy
+  first and is killed in the copy's own write, the store as it was; one killed in the
+  store's names the store, the copy made (decisions 391 and 447).
 - It is written every `retain_period:` ms too, 1000 unless set, 100 to 3,600,000, on a
   grid from the runner's start (M6-6, decision 275): the runner takes the retained values
   out between two rounds, as its own work, never inside a round and moving no round's
@@ -3986,8 +3991,9 @@ closed: true
   apart from the heartbeat, decision 400), `open:` (how long each device's opening, its
   adapter's `init/3` and first read, may take in real time, 5000 ms, for every device or
   by name, `open: %{"drive" => 2000}`, so a drive whose connect takes 600 ms opens with
-  the heartbeat left as it is, decision 398), `forces:` (the file its forces are kept
-  in, below) and `name:`.
+  the heartbeat left as it is, decision 398, and how long a restart's read of each
+  device may take, one that stayed up among them, decision 439), `forces:` (the file its
+  forces are kept in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -4013,13 +4019,18 @@ closed: true
   request that comes while one is due waits for it, and is served after it while no
   round is due, or in the slot after 4 ms of rounds where they outrun their periods, so
   that an HMI polling `status/1` in a tight loop holds a due round back by the request
-  in hand at most, or by its slot, never for as long as it polls. On the manual clock a
+  in hand at most, or by its slot, never for as long as it polls. A slot that finds
+  nothing waiting stays open until a request takes it (decision 442), so an HMI that
+  polls one call at a time, its next call still on its way as a round ends, is served at
+  once as it comes, after every round that brings a slot, where it was served every
+  other one; the share still holds requests to one a slot. On the manual clock a
   round takes no time unless something passes time inside it, so a
   request is served before the next round. One made while a round is owed, after a round
   that passed time, a slow drive's write, waits for its slot, as on the real clock
   (decision 131): it comes in the advance that runs the round completing those 4 ms, or
   with no untimed program in the advance that runs the round due, `advance(clock, 0)`
-  among them, and never later (provisional for a periodic round). So a
+  among them, and never later (decision 444), unless a slot left open takes it at once
+  (decision 442). So a
   test that would call from the process that moves the clock calls from another, and
   moves the clock on until the call is answered:
 
@@ -4102,7 +4113,13 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   end of the step that met it ("A bit number in a tag", above); since decision 394
   `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`, a host's clock that
   gave the runner or a device no time it can hold once the plant runs, a restart refused
-  until the clock is mended, where a start's own read of it is the host's mistake; and
+  until the clock is mended, where a start's own read of it is the host's mistake, and
+  since decision 441 a round that reads it so stops there and trips at once, nothing
+  written after the reading: found wrong before the round's writes, as it begins or as a
+  step is timed, every output is left unwritten, so the trip's 0 is the first the devices
+  are given after it, and found wrong at a device's write, or at the round's end, the
+  devices written by then keep the round's outputs until the trip's 0 follows
+  (provisional); and
   `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
@@ -4135,7 +4152,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   itself is killed and named, and every device that answers takes the trip's 0.
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
   release killed, reads every device once, as a start does, opening again each device
-  that went down, those among them (decision 142), restarts the resource, which keeps its
+  that went down, those among them (decision 142), each read or opened within its own
+  `open:`, so that a gateway that stayed up and answers its reread in 700 ms lets the
+  restart through (decision 439), restarts the resource, which keeps its
   input image and puts every other global back to its initial value, a warm restart
   keeping what each program marks `retain` (M6-2), and runs the first
   round at once, on what was read, the stopped time not counted: the conveyor stays off
@@ -4318,7 +4337,8 @@ stage: nil
 ```
 
 - `force(runner, point, value)` makes the runner read an input point at `value`, whatever
-  its device says, from the next round until `unforce/2` or `unforce_all/1`: the eye
+  its device says, from the first round after its write of the forces file lands (below)
+  until `unforce/2` or `unforce_all/1`: the eye
   moved and no box was counted. It holds across a restart and, kept in the file, across
   a crash: every start reads the file, so the fresh runner came back with the eye forced
   and listed in `status/1`, its first round reading it, and counting nothing, since no
@@ -4330,26 +4350,39 @@ stage: nil
   one the disk has not finished within the write limit of real time `{:error, {:forces,
   :timeout}}` (decisions 353 and 400), the force not taken, though the write may still
   land once the disk answers, so `status/1` names the set it held meanwhile,
-  `forces_unknown`, until a later write of the file lands or fails or a restart reads it
-  (decision 391, the key provisional). While it waits on its disk the runner keeps the
-  heartbeat, renewing every device's deadline each poll period, as it does while it
-  waits on a slow device's write, and leaves the wait out of the time the idle watchdog
-  reads, so a force on a slow disk latches no device and trips nothing; no round runs
-  meanwhile, every output held, and a periodic task's missed periods are reported as
-  overlaps (provisional). A start reads the file raw, off the
+  `forces_unknown`, until a later write of the file lands or fails or a restart reads it,
+  nil otherwise, the key always there (decisions 391 and 440). The rounds run on while
+  the write is out, in a process of its own, and the force takes effect at the first
+  round after it lands, its call answered then (decision 437): so on a slow disk the
+  logic keeps the plant under control, every round reading the forces as they were and
+  `status/1` listing those, and no force is in effect before the file holds it. A force,
+  an unforce or an unforce_all asked while another's write is out, or while one asked so
+  waits, waits its turn behind it, in the order asked, each built on the set the one
+  before leaves, so the last asked is the last written; a trip, a restart or an edit's
+  step meanwhile leaves the write as it is, and the set it writes, built on the forces
+  held as it began, becomes the runner's once it lands, in place of any a restart read
+  from the file meanwhile; and a stop waits for it to its limit and answers its caller
+  (provisional). A write cut at its limit, at a stop as at any time, may still land once
+  the disk answers, after the runner that made it is gone, so the next start reads
+  whichever set the file then holds, and one already started does not know of it
+  (provisional). A start reads the file raw, off the
   VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
   other process's file calls. A file that cannot be read, one the disk has not answered
   within the write limit or one the file system refuses, a directory in its place among
   them, starts a fresh start with no force and keeps at a restart the forces the runner
   holds, the restart going on and the line coming back, and `status/1` names it,
   `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
-  of it lands or a restart reads it (decision 390; the key and how long it stands
-  provisional); with no such file to name, `status/1` has no `forces_unread`. A restart
-  that reads the file takes what it holds, as every start does, so after a fresh start
-  that could not read it the next restart takes the forces the file held, which no one
-  forced since and `status/1` did not list (provisional); and a relative `forces:` whose
+  of it lands, no restart reading it meanwhile (decisions 390 and 445); with no such file to name,
+  `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
+  that reads the file takes what it holds, as every start does; but while
+  `forces_unread` stands a restart keeps the forces the runner holds and takes none from
+  the file, and the next force's or unforce's write writes the runner's set over it
+  (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
+  that could not read the file, the disk back, a trip and a restart, and the level reads
+  its input, never the 7 no one has forced since; and a relative `forces:` whose
   working directory the disk does not answer for in time refuses the start, the file
-  "cannot be located", as a relative store's does (provisional). A
+  "cannot be located", as a relative store's does (decision 446), an absolute path the
+  advice. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
@@ -4469,7 +4502,8 @@ closed: true
   poll meanwhile, and a bad reading of a device released at a restart trips nothing; and
   the contract walk, on the manual clock, waits in real time where the runner waits for
   its devices, a device's open made late by 700 ms, past the walk's idle watchdog and a
-  poll period and within its opening limit (decision 398), tripping nothing. Every timing rule is
+  poll period and within its opening limit (decision 398), and a restart's read of a
+  device up as late (decision 439), tripping and refusing nothing. Every timing rule is
   tested on the manual clock.
 
 ### A located array

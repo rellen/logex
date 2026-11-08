@@ -850,7 +850,8 @@ defmodule Logex.ForceTest do
       assert %{forces: %{}, forces_unread: {^file, :eisdir}} = Runner.status(runner)
       File.rmdir!(file)
       assert Runner.force(runner, "level", 2) == :ok
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
+      # Decision 440 (RV-16), the leave for the key absent: nil where the file reads.
+      assert Runner.status(runner).forces_unread == nil
       assert File.read!(file) == "level 2\n"
     end
 
@@ -898,14 +899,23 @@ defmodule Logex.ForceTest do
 
       assert Runner.get!(runner, "seen") == 2
 
-      # Gone again at the next restart, it is no force, and named no more.
+      # Decision 445 (RV-16), the leave for a restart that reads the file once it reads
+      # again: while it is named the next restart, the directory gone, takes none from the
+      # file and keeps the runner's own set, `level` at 2, the file named still, where it
+      # found no file, no force, and named it no more; the next force's write writes the
+      # runner's set over it, and names it no more (decision 440: nil).
       Sim.set(panel, [1], 5)
       Sim.set(panel, [1], 0)
       File.rmdir!(file)
       assert Runner.restart(runner, :cold) == :ok
-      refute Map.has_key?(Runner.status(runner), :forces_unread)
-      assert Runner.get!(runner, "seen") == 8
-      Runner.force(runner, "level", 2)
+
+      assert %{status: :running, forces: %{"level" => 2}, forces_unread: {^file, :eisdir}} =
+               Runner.status(runner)
+
+      assert Runner.get!(runner, "seen") == 2
+      assert Runner.force(runner, "level", 2) == :ok
+      assert Runner.status(runner).forces_unread == nil
+      assert File.read!(file) == "level 2\n"
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "seen") == 2
 
@@ -939,7 +949,10 @@ defmodule Logex.ForceTest do
 
       # Decision 396 (RV-11): the round due at 10 is owed once the force's round is done,
       # and the call waits for it, the third round, where it was served at once after the
-      # second.
+      # second. Decision 442 (RV-16), the leave for a slot that finds nothing queued gone:
+      # the force's round brought a slot that found nothing waiting, which stays open, and
+      # the first call takes it at once, after the second round; the next waits.
+      assert %{rounds: 2} = Runner.status(runner)
       task = Task.async(fn -> Runner.status(runner) end)
       assert Task.yield(task, 100) == nil
       Manual.advance(clock, 0)

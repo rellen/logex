@@ -2353,7 +2353,7 @@ defmodule Logex.TripTest do
     # Decision 399 (RV-11): an address a fault names is shown as the configuration writes
     # it, its device, `i` and its fields, a text, where the adapter's list printed as a
     # charlist, `{:unknown_address, ~c"\a"}`; a key that is no list of whole numbers, which
-    # no configuration writes, as the adapter gave it (provisional). At a start, at a
+    # no configuration writes, as the adapter gave it (decision 443). At a start, at a
     # poll's read and at a restart's.
     test "an address a fault names is shown as the configuration writes it (decision 399)" do
       config =
@@ -3000,9 +3000,12 @@ defmodule Logex.TripTest do
       assert %{status: :running, unzeroed: []} = Runner.status(runner)
     end
 
+    # Decision 439 (RV-16), the leave for a reread limited by the idle watchdog and a poll
+    # period: the hung read is cut at the drive's own opening limit, given the 300 ms the
+    # idle watchdog gave it here, where it was cut at 310.
     test "a card hung in a restart's read is killed, the restart answered :timeout, and " <>
            "opened again at the next restart" do
-      %{runner: runner, drive: drive} = tripped_on_speed([idle: 300], 1)
+      %{runner: runner, drive: drive} = tripped_on_speed([idle: 300, open: 300], 1)
       old = device_pid(runner, "drive")
       Sim.fail(drive, :read, :hang)
       assert Runner.restart(runner, :warm) == {:error, {:io_init, "drive", :timeout}}
@@ -3137,8 +3140,9 @@ defmodule Logex.TripTest do
     # the rule is proved on any machine. Until then the drive's reread slept 800 ms, the bad
     # reading told 100 ms in, and a loaded machine that ran no panel poll within the sleep
     # left the bad reading to the panel's own reread, which refused the restart (one in 50
-    # in RV-11's review, three in 100 in RV-7's; RV-7's question 5). The idle watchdog of
-    # 5000 ms bounds the drive's reread, held, at 5010.
+    # in RV-11's review, three in 100 in RV-7's; RV-7's question 5). The drive's own
+    # opening limit, 5000 ms unless set, bounds its reread, held, since decision 439 (RV-16),
+    # as the idle watchdog of 5000 ms and a poll period did before it.
     test "on the real clock, a bad reading of a device released while the one before " <>
            "it is read again trips nothing" do
       {:ok, panel} = Sim.start_link()

@@ -13995,7 +13995,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   the crash may leave forces in the file, which the start does not take and the next
   restart that reads it does (decisions 127 and 390); half the walks give
   `write_limit:` (decision 400), and no write passes it, so `status/1` names no force's
-  set unknown (decision 391).
+  set unknown (decision 391). Since RV-16 every round's forces are the ones the forces
+  file holds as it begins, a force in effect only once its write has landed (decision
+  437), and since RV-16's review forces asked together, each before the last is
+  answered, are written in the order asked, the last asked the last written; a restart
+  now and then reads a device up 700 ms late in real time, past the
+  idle watchdog and a poll period and within its opening limit (decision 439); a round
+  whose clock goes wrong halfway through stops there, nothing written (decision 441);
+  and the share's count with no untimed program is restated, a call made while a
+  periodic round is due taking a slot left open at once and the next waiting (decision
+  442).
 
   It is checked against two models that know nothing of the runner's code.
 
@@ -14081,18 +14090,34 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       {test, clock} = walk()
       now = Manual.now_ms(clock)
       inputs = Logex.ApiContractTest.RunnerWalk.delayed(test, now, inputs)
+      send(test, {:walked, self(), {:on_file, on_file(:ets.lookup(@table, {test, :file}))}})
       send(test, {:walked, self(), {:steps, elapsed, inputs, now}})
       Runtime.cycle_steps(runtime, elapsed, inputs)
     end
+
+    # Decision 437 (RV-16): the forces file as the round begins, read raw, so that the walk
+    # sees that every force the round reads is one the file holds (decision 117).
+    defp on_file([{_key, nil}]), do: nil
+    defp on_file([{_key, file}]), do: :file.read_file(file, [:raw])
 
     def cycle_step(runtime, {_kind, task, _run} = step) do
       result = Runtime.cycle_step(runtime, step)
       {test, clock} = walk()
       ms = slow(:ets.take(@table, {test, :slow, task}))
       passed(clock, ms)
-      send(test, {:walked, self(), {:step, task, ms}})
+      send(test, {:walked, self(), stepped(:ets.take(@table, {test, :wrong_after}), task, ms)})
       result
     end
+
+    # Decision 441 (RV-16): where the walk has set `{test, :wrong_after}`, the runner's
+    # readings of the clock give no time from the end of this step on, `{test, :bad_time}`,
+    # its round's next reading the first.
+    defp stepped([{{test, :wrong_after}, answer}], task, ms) do
+      :ets.insert(@table, {{test, :bad_time}, answer})
+      {:step, task, ms, :clock}
+    end
+
+    defp stepped([], task, ms), do: {:step, task, ms}
 
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
 
@@ -14351,6 +14376,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # RV-11's review a device's read's and a period's write's wall clock's.
     {:trip, :clock},
     :clock_device,
+    # Decision 441 (RV-16): a round stopped by its clock halfway through, nothing written.
+    :clock_mid_round,
     :round_first,
     :round_scheduled,
     :round_trigger,
@@ -14394,19 +14421,25 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :get_mistake,
     :crash,
     :late_open,
+    # Decision 439 (RV-16): a device up a restart read again late, within its own `open:`.
+    :late_reread,
     # Decision 390 (RV-11): a fresh start and a restart whose forces file cannot be read;
-    # since RV-11's review a fresh start that could not read a file holding forces, and a
-    # restart after it that reads the file and takes them.
+    # since RV-11's review a fresh start that could not read a file holding forces, and
+    # since decision 445 a restart after it that keeps the runner's set, where it read
+    # the file and took them.
     :start_forces_unread,
     :restart_forces_unread,
     :start_unread_forces_held,
-    :restart_took_unread_forces,
+    # Decision 445 (RV-16): a restart while the file is named, which takes none of it.
+    :restart_kept_unread_forces,
     # Decision 400 (RV-11): a runner given `write_limit:`.
     :write_limit_given,
     # Decision 396 (RV-11): with no untimed program, a periodic round due as a host's call
     # comes, which it waits for.
     :owed_periodic,
     :waited_periodic,
+    # Decision 442 (RV-16): a call made while a periodic round is due, taking the open slot.
+    :open_slot_taken,
     :element_pressed,
     :element_forced,
     :element_misfit,
@@ -14436,7 +14469,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # from one saved with a lone CR's, and a forces file saved with CRLF beside it.
     :store_crlf_read,
     :store_cr_read,
-    :forces_crlf_read
+    :forces_crlf_read,
+    # Decision 437 (RV-16): a round that read a force the file held as it began; and,
+    # since RV-16's review, forces asked together, written in the order asked.
+    :forces_on_file,
+    :forces_together
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing pt pt[1] qs qs[1] z1.t dr dw qu m2.q m2.c[0].cv m2.t[1].acc m2.v[1] kt k1.k)
@@ -14685,6 +14722,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   defp walk(programs, dir, seed, steps, life \\ false) do
+    Process.put(:rw_together, :rand.seed_s(:exsss, {seed, 437, 278}))
     # M6-7: a walk in three, by its own stream, starts with `keep`'s count unretained.
     d = %{draw() | keep: own(3) > 1, shelf: life}
     config = configured(d, programs)
@@ -14698,6 +14736,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     sims = Map.new(reports, fn {name, r} -> {name, sim(r, manual)} end)
     file = life_file(life, pick([nil, Path.join(dir, "forces-#{seed}")]), dir, seed)
     File.rm(file || Path.join(dir, "none"))
+    :ets.insert(@table, {{test, :file}, file})
     store = store_beside(file, dir, seed)
     File.rm(Path.join(dir, "retain-#{seed}"))
     for copy <- Path.wildcard(Path.join(dir, "retain-#{seed}.dropped*")), do: File.rm_rf!(copy)
@@ -14771,6 +14810,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # it, nil where it holds that set.
       unread: nil,
       file_forces: nil,
+      # Decision 437 (RV-16): the forces file as the round in hand began, as the seam read
+      # it (`on_file!/2`).
+      on_file: nil,
+      # Decisions 396 and 442 (RV-16): the share's count with no untimed program, the ms of
+      # rounds since the last slot, whether that slot is open, and whether the walk's
+      # waiting call is queued (`shared/4`).
+      share: %{used: 0, open: false, queued: false},
       # RV-11's review: the device a clock gone wrong for it alone took down, which wrote
       # its own 0 as it closed.
       clock_down: nil,
@@ -15063,13 +15109,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # :timeout`, no file named, a copy that lands nowhere. Each is owed, as the runner owes
   # it, so that the next write's copy is checked, its number and its bytes, by
   # `owed_made!/1` (the review of RV-13), where the model forgot it.
-  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next) do
+  defp copy_told(_drops, %{copy: nil, failed: nil, unknown: copy}, text, w, next)
+       when is_binary(copy) do
     assert copy == copy_named(w, next)
     {{next, [text, nil]}, text}
   end
 
+  # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil.
   defp copy_told(_drops, %{copy: nil, failed: :timeout} = retain, text, _w, _next) do
-    refute Map.has_key?(retain, :unknown)
+    assert Map.fetch!(retain, :unknown) == nil
     {nil, text}
   end
 
@@ -15083,8 +15131,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # The copy owed: the directory at its `.tmp` refused it, `failed: :eisdir`, known; or,
   # past its limit, it is unknown (decision 391), or, since decision 418, killed before it
   # took a number, `failed: :timeout`.
+  # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil.
   defp owed_told(%{copy: nil, failed: failed} = retain, _copy) when failed in [:eisdir, :timeout],
-    do: not Map.has_key?(retain, :unknown)
+    do: Map.fetch!(retain, :unknown) == nil
 
   defp owed_told(%{copy: nil, failed: nil, unknown: copy}, copy), do: true
   defp owed_told(_retain, _copy), do: false
@@ -15315,7 +15364,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         down: MapSet.new(),
         hung: %{},
         start: nil,
-        g_sample: sample_of(image)
+        g_sample: sample_of(image),
+        share: %{used: 0, open: false, queued: false}
       })
 
     w = shelved_at_start(image, w, rt)
@@ -15516,7 +15566,55 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp forcing(w) do
     w = %{settled(w) | doing: :force}
-    forcing_drawn(:rand.uniform(6), w)
+    together(paired(4), forcing_drawn(:rand.uniform(6), w))
+  end
+
+  # RV-16's review, decision 437 restated: two to four forces asked together, each sent
+  # before the one before it is answered, so that those after the first come while a
+  # write is out and wait their turn behind it: they are written in the order asked, each
+  # built on the set the one before it left, the last asked the last written, the first
+  # point asked again last holding its second value. Plain inputs only, no trigger and
+  # no array, so that no round runs meanwhile; drawn by a stream of their own, so that no
+  # other draw moves.
+  defp together(1, w) do
+    w = settled(w)
+    plain = Enum.sort(Map.keys(@inputs)) -- (["pt[0]", "pt[1]", "pt[2]"] ++ triggers(w.config))
+    [{first, _value} | _] = drawn = for _ <- 1..paired(3), do: paired_force(plain)
+    asked = drawn ++ [paired_force([first])]
+
+    for(
+      request <- for({name, value} <- asked, do: send_force(w.runner, name, value)),
+      do: assert(:gen_server.wait_response(request, 60_000) == {:reply, :ok})
+    )
+
+    reach(:forces_together, true)
+    forced(%{w | forces: Enum.into(asked, w.forces)})
+  end
+
+  defp together(_n, w), do: w
+
+  defp send_force(runner, name, value),
+    do: :gen_server.send_request(runner, {:force, name, value})
+
+  defp paired_force(names) do
+    name = paired_pick(names)
+    {_device, _address, type} = @inputs[name]
+    {name, paired_pick(paired_values(type))}
+  end
+
+  defp paired_pick(list), do: Enum.at(list, paired(length(list)) - 1)
+
+  defp paired_values(:bool), do: [0, 1]
+  defp paired_values(:dint), do: [0, 3, 7, -4]
+  defp paired_values(:real), do: [0.0, 2.5, -1.25, 37.5]
+  defp paired_values(:word), do: [0, 8, 65_535, 3]
+
+  # RV-16's review: the stream of the forces asked together, seeded by each walk from its
+  # seed, so that every other draw of every walk is as it was before it.
+  defp paired(n) do
+    {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_together))
+    Process.put(:rw_together, stream)
+    drawn
   end
 
   defp forcing_drawn(n, w) when n <= 3 do
@@ -15772,10 +15870,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp reconfigured(%{status: :running} = w, config) do
     reach(:untimed_added, untimed?(config) and not untimed?(w.config))
     reach(:untimed_taken, untimed?(w.config) and not untimed?(config))
-    %{w | config: config, longest: longest(w.longest, config), floor: now(w), late: 0}
+
+    %{
+      w
+      | config: config,
+        longest: longest(w.longest, config),
+        floor: now(w),
+        late: 0,
+        share: recounted(untimed?(config) == untimed?(w.config), w.share)
+    }
   end
 
-  defp reconfigured(w, config), do: %{w | config: config, longest: longest(w.longest, config)}
+  defp reconfigured(w, config),
+    do: %{
+      w
+      | config: config,
+        longest: longest(w.longest, config),
+        share: recounted(untimed?(config) == untimed?(w.config), w.share)
+    }
+
+  # Decision 396 (RV-11's review), restated: a step that adds the first untimed program or
+  # takes away the last begins the share's count again, and since decision 442 (RV-16)
+  # closes a slot left open.
+  defp recounted(true, share), do: share
+  defp recounted(false, _share), do: %{used: 0, open: false, queued: false}
 
   defp now(w), do: Manual.now_ms(w.manual)
 
@@ -15860,9 +15978,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp restart(nil, mode, w) do
     w = period_restarted(w)
     unreadable = restart_unreadable(w)
+    late = late_reread(w)
     assert Runner.restart(w.runner, mode) == :ok
+    reach(:late_reread, late)
     reach(:restart_forces_unread, unreadable)
-    w = restart_took(unreadable, %{w | unread: unread_after(unreadable, w)})
+    w = restart_took(unreadable, w.unread, %{w | unread: unread_after(unreadable, w)})
     reach(:"restart_#{mode}", true)
 
     # Its first round ran before it returned.
@@ -15898,13 +16018,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Every device up released and written its 0 again, which each takes but the one drawn,
     # so that status/1 names the devices down and that one, until its poll's 0 is taken
     # (decision 262). The restart read the file before it released anything, and took
-    # what it holds (decision 127; RV-11's review, where a fresh start could not).
+    # what it holds (decision 127), and since decision 445 read none of it while it was
+    # named, keeping the runner's set and the file named.
     checked(%{
-      w
+      refused_read(w)
       | zeroed: %{},
-        unread: nil,
-        forces: on_file(w),
-        file_forces: nil,
         unzeroed: w.down,
         maybe: unzero,
         sure: true,
@@ -15913,6 +16031,34 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         tripped_at: now(w)
     })
   end
+
+  # Decision 439 (RV-16), restated: every device a restart reads again is limited by its
+  # own opening limit, `open:`, 2000 ms where the walk gives it and 5000 unless set, the
+  # heartbeat by the idle watchdog and a poll period as before: now and then, by the
+  # walk's own time, the first device up and not hung is read again 700 ms late in real
+  # time, its sim held meanwhile and let go by a process of the walk's, past the walk's
+  # idle watchdog and a poll period and within its opening limit, which must refuse
+  # nothing. Its release, which reaches no adapter, is answered at once.
+  defp late_reread(%{logical: now} = w) when rem(now, 4) == 1,
+    do: reread_late(Enum.reject(Enum.sort(Map.keys(w.sims)), &held_back?(&1, w)), w)
+
+  defp late_reread(_w), do: false
+
+  defp held_back?(name, w), do: MapSet.member?(w.down, name) or Map.has_key?(w.hung, name)
+
+  defp reread_late([name | _up], w) do
+    sim = w.sims[name]
+    :sys.suspend(sim)
+
+    spawn(fn ->
+      Process.sleep(700)
+      :sys.resume(sim)
+    end)
+
+    true
+  end
+
+  defp reread_late([], _w), do: false
 
   defp zero_fails(nil, _w), do: :ok
   defp zero_fails(name, w), do: Sim.fail(w.sims[name], :write, {:error, :eio})
@@ -16098,11 +16244,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # fresh start after a crash meets a directory in the forces file's place, and starts
   # with none, naming the file in status/1, until a force's write; and a restart meets
   # one, and keeps the forces the runner holds, the restart going on, naming it until a
-  # force's write or a restart that reads it. The file is put back as it was, once the
-  # start or the restart has read it. Since RV-11's review the crash may leave forces in
-  # the file, which the fresh start that cannot read it does not take and the next
-  # restart that reads it takes, as every start takes the file (decision 127,
-  # provisional), unless a force's write first writes the runner's own set over them.
+  # force's write. The file is put back as it was, once the start or the restart has
+  # read it. Since RV-11's review the crash may leave forces in the file, which the fresh
+  # start that cannot read it does not take, and since decision 445 no restart takes them
+  # while the file is named, the runner's own set kept, until a force's write writes it
+  # over them.
   defp start_unreadable(%{file: file, crashed: true, logical: now})
        when is_binary(file) and rem(now, 2) == 0,
        do: unreadable(file)
@@ -16150,15 +16296,25 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp held_on_file(held) when map_size(held) == 0, do: nil
   defp held_on_file(held), do: held
 
-  # A restart that reads the file takes what it holds, the forces a fresh start before it
-  # could not read among them (decision 127, provisional since RV-11's review); one that
-  # cannot keeps the runner's set, the file as it was.
-  defp restart_took(true, w), do: w
-
-  defp restart_took(false, w) do
-    reach(:restart_took_unread_forces, w.file_forces != nil)
-    %{w | forces: on_file(w), file_forces: nil}
+  # Decision 445 (RV-16), restated: while the file a start or a restart could not read is
+  # named, a restart reads none of it and keeps the runner's own set, the file named still
+  # and holding what it held, the forces a fresh start before it could not read among
+  # them, until a force's write writes the runner's set over it, where a restart that read
+  # the file took them (RV-11's review); otherwise a restart that reads the file takes
+  # what it holds (decision 127), and one that cannot keeps the runner's set, the file as
+  # it was.
+  defp restart_took(_unreadable, {_file, _reason} = unread, w) do
+    reach(:restart_kept_unread_forces, w.file_forces != nil)
+    %{w | unread: unread}
   end
+
+  defp restart_took(true, nil, w), do: w
+  defp restart_took(false, nil, w), do: %{w | forces: on_file(w), file_forces: nil}
+
+  # A refused restart reads the file as a restart that goes on does, before it releases
+  # anything, and while the file is named reads none of it (decision 445).
+  defp refused_read(%{unread: nil} = w), do: %{w | forces: on_file(w), file_forces: nil}
+  defp refused_read(w), do: w
 
   defp limit_option(nil), do: []
   defp limit_option(ms), do: [write_limit: ms]
@@ -16859,6 +17015,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp clock_injected(_runner_read, w), do: runner_clock_injected(w)
 
+  # The clock moved on a millisecond at a time until a round's step comes and its clock
+  # trips the runner (decision 441).
+  defp clock_stopped(%{status: :tripped} = w, _left), do: w
+  defp clock_stopped(_w, 0), do: flunk("no round's step met the clock gone wrong")
+
+  defp clock_stopped(w, left) do
+    :ok = Manual.advance(w.manual, 1)
+    clock_stopped(consumed(w), left - 1)
+  end
+
   # The clock moved on a millisecond at a time until the period's write trips the runner.
   defp wall_tripped(%{status: :tripped} = w, _left), do: w
   defp wall_tripped(_w, 0), do: flunk("no period's write tripped the runner")
@@ -16872,7 +17038,33 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # it answers with the last time it refreshed at, and it trips naming the clock as it
   # takes its own notice; a restart while the clock answers so is refused, the runner
   # tripped as it was, and once it is mended the walk's restarts restart.
-  defp runner_clock_injected(w) do
+  defp runner_clock_injected(w), do: runner_clock_injected(rem(div(w.logical, 3), 2), w)
+
+  # Decision 441 (RV-16), restated: half the runner's own reads gone wrong, by the walk's
+  # own time, so that no draw moves, come halfway through a round, after its step: the
+  # round stops there, publishing as far as it ran, and no device is written its
+  # outputs, each device's every write since the round began its last outputs, a poll's
+  # write again, or the trip's zeros; a restart while the clock answers so is refused.
+  defp runner_clock_injected(1, w) do
+    :ets.insert(@table, {{self(), :wrong_after}, :late})
+    before = writes(w)
+    w = clock_stopped(%{w | fault: {:clock, {:now_ms, :late}}}, 200)
+
+    for {name, sim} <- w.sims do
+      zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+      last = List.last(before[name])
+
+      for write <- Enum.drop(Sim.writes(sim), length(before[name])),
+          do: assert(write in [last, zeros], "#{name} was written #{inspect(write)}")
+    end
+
+    reach(:clock_mid_round, true)
+    assert Runner.restart(w.runner, :warm) == {:error, {:clock, {:now_ms, :late}}}
+    :ets.delete(@table, {self(), :bad_time})
+    tripped!(consumed(w))
+  end
+
+  defp runner_clock_injected(0, w) do
     :ets.insert(@table, {{self(), :bad_time}, :late})
     w = %{w | fault: {:clock, {:now_ms, :late}}}
     assert %{status: :running} = Runner.status(w.runner)
@@ -17042,6 +17234,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp logged(w, entry), do: %{w | log: [entry | w.log]}
 
+  # Decision 437 (RV-16): the forces file as a round begins, read by the seam.
+  defp record(w, {:on_file, read}), do: %{w | on_file: read}
+
   # A round begins: the runner gave the core its elapsed time and inputs.
   defp record(w, {:steps, elapsed, inputs, at} = record) do
     assert w.status == :running, "a round ran while tripped: #{inspect(record)}"
@@ -17050,6 +17245,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     kind = round_kind(w, inputs)
     timed!(w, kind, elapsed, at)
     inputs!(w, inputs, at)
+    on_file!(w, w.on_file)
     {rt, steps} = Runtime.cycle_steps(w.rt, elapsed, inputs)
     {cycled, outputs, events} = Runtime.cycle(w.rt, elapsed, inputs)
     reach(:"round_#{kind}", true)
@@ -17091,6 +17287,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:period_own_wake, not untimed?(w.config) and own_wake?(w.last, at))
 
     %{period_stored(w) | due: grid_after(w, at), late: 0}
+  end
+
+  # Decision 441 (RV-16), restated: a step after which the runner's clock gives no time
+  # ends its round there: the step ran, its events and its resource kept, but its time is
+  # none the runner could read, so no task's longest run is moved by it, and the round
+  # trips naming the clock, no later step run and no output written.
+  defp record(w, {:step, task, _ms, :clock} = record) do
+    w = logged(w, record)
+    %{steps: [{_kind, ^task, _} = step | rest]} = round = w.round
+    assert round.trip == nil, "a step ran after #{inspect(round.trip)}"
+    {rt, events} = Runtime.cycle_step(round.rt, step)
+
+    %{
+      w
+      | g_sample: g_stood(task, round.g_rise, w.g_sample),
+        round:
+          Map.merge(round, %{
+            rt: rt,
+            steps: rest,
+            ran: round.ran ++ events,
+            trip: {:clock, {:now_ms, :late}},
+            clock: true
+          })
+    }
   end
 
   defp record(w, {:step, task, ms} = record) do
@@ -17161,7 +17381,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:trip, true)
     reach(trip_kind(reason), true)
     reach(:rise_kept_by_trip, round.g_rise and w.g_sample == 0)
-    w = all_steps(round.steps, w, round.took)
+    w = stepped_all(round, w)
     tripped(%{w | rt: round.rt, round: nil, fault: nil}, reason)
   end
 
@@ -17216,6 +17436,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # or a device's fault as the round's outputs were written.
   defp ended_trip([], w, round), do: round_trip(w, round) || w.fault
   defp ended_trip(_steps, _w, _round), do: nil
+
+  # Decision 441 (RV-16): a round its clock stopped never timed itself.
+  defp stepped_all(%{clock: true}, w), do: w
+  defp stepped_all(round, w), do: all_steps(round.steps, w, round.took)
 
   defp all_steps([], w, took), do: %{w | longest: continuous_ran(w, took)}
   defp all_steps(_steps, w, _took), do: w
@@ -17320,9 +17544,26 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         floor: nil,
         logic: logic,
         last: %{at: round.at, took: round.took, again: changed},
-        longest: continuous_ran(w, round.took)
+        longest: continuous_ran(w, round.took),
+        share: shared(untimed?(w.config), w.share, round.took, slots_of(w.overhead))
     }
   end
+
+  # Decisions 396 and 442, restated: with no untimed program each round counts whole, a
+  # millisecond at least, and the round that completes C ms of them brings the slot,
+  # which begins the count again; one that finds nothing queued stays open until a
+  # request takes it, and one that finds the walk's waiting request serves it and
+  # closes. A request queued is answered by the round it waited for in any case. With
+  # untimed programs the walk sends no call while a round is owed, and counts nothing.
+  defp shared(true, share, _took, _c), do: %{share | queued: false}
+
+  defp shared(false, %{used: used} = share, took, c) when used + max(took, 1) >= c,
+    do: %{used: 0, open: not share.queued, queued: false}
+
+  defp shared(false, share, took, _c),
+    do: %{share | used: share.used + max(took, 1), queued: false}
+
+  defp slots_of(p), do: max(1, round((100 - p) / p))
 
   defp round_trip(w, round), do: round_over(continuous(w.config), round, w)
 
@@ -17460,6 +17701,30 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     end
   end
 
+  # Decision 437 (RV-16), restated: a force is in effect from the first round after its
+  # write lands and in none before, so that every round reads a force only once the file
+  # holds it (decision 117): as each round begins the file holds exactly the forces the
+  # round reads, in its own words, a line each, however its lines end (decision 410). A
+  # file a start or a restart could not read is no set the runner holds (decision 390):
+  # while one stands nothing is asserted of it; with no forces file there is none.
+  defp on_file!(%{file: nil}, nil), do: :ok
+  defp on_file!(%{unread: {_file, _reason}}, _read), do: :ok
+
+  defp on_file!(w, {:ok, text}) do
+    held =
+      for line <- String.split(text, ["\r\n", "\r", "\n"], trim: true), into: %{} do
+        [name, value] = String.split(line, " ")
+        {name, value}
+      end
+
+    assert held == Map.new(w.forces, fn {name, value} -> {name, "#{value}"} end),
+           "a round read #{inspect(w.forces)}, the file holding #{inspect(text)}"
+
+    reach(:forces_on_file, map_size(w.forces) > 0)
+  end
+
+  defp on_file!(%{forces: forces}, {:error, :enoent}) when map_size(forces) == 0, do: :ok
+
   # A real point's reading by value, its device's 0 and the 0.0 the resource holds one
   # reading (M5-15); every other point's exactly, so that a float at an integer or a bool
   # point is no reading of it (M5-15's review).
@@ -17563,10 +17828,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp waiting(true, w) do
     request = :gen_server.send_request(w.runner, :status)
     :sys.get_state(w.runner)
+    took_slot(w.share.open, request, w)
+  end
+
+  # Decision 442 (RV-16), restated: a slot that found nothing queued is open, and the call
+  # made while the round is due takes it, answered at once, ahead of the round, the slot
+  # closed behind it, so that a second call made then waits for the round; with none open
+  # the call waits for the round, as decision 396 has it.
+  defp took_slot(true, request, w) do
+    assert {:reply, status} = :gen_server.wait_response(request, 0)
+    assert status.rounds == w.rounds
+    reach(:open_slot_taken, true)
+    second = :gen_server.send_request(w.runner, :status)
+    :sys.get_state(w.runner)
+    took_slot(false, second, %{w | share: %{w.share | open: false}})
+  end
+
+  defp took_slot(false, request, w) do
     assert :gen_server.wait_response(request, 0) == :timeout
     before = w.rounds
     :ok = Manual.advance(w.manual, 0)
-    w = settled(consumed(w))
+    w = settled(consumed(%{w | share: %{w.share | queued: true}}))
     assert {:reply, status} = :gen_server.wait_response(request, 5000)
     assert status.rounds > before and status.rounds <= w.rounds
     reach(:waited_periodic, true)
@@ -17595,9 +17877,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 390: the forces file a start or a restart could not read, named until a
     # force's write lands or a restart reads it. Decision 391: the set a force's write
     # past its limit held, which no walk's write is, the disk healthy and its limit of
-    # real time, so none (RV-11's review).
-    assert Map.get(status, :forces_unread) == w.unread
-    assert Map.get(status, :forces_unknown) == nil
+    # real time, so none (RV-11's review). Decision 440 (RV-16): each key always there,
+    # nil where nothing stands, and the store's report's `unknown` so.
+    assert Map.fetch!(status, :forces_unread) == w.unread
+    assert Map.fetch!(status, :forces_unknown) == nil
+    retain_keys!(status.retain)
 
     for path <- @paths, do: assert(Runner.get(w.runner, path) == Runtime.get(w.rt, path))
     life_paths!(w)
@@ -17613,6 +17897,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp outputs_of({:either, outputs}), do: outputs
   defp outputs_of(outputs), do: [outputs]
+
+  # Decision 440 (RV-16): a store's report holds `unknown` always, nil or a file's path.
+  defp retain_keys!(nil), do: :ok
+  defp retain_keys!(%{unknown: unknown}) when unknown == nil or is_binary(unknown), do: :ok
 
   # Decision 262: the devices status/1 names while tripped, none while running.
   defp unzeroed!(%{status: :running} = w, named) do

@@ -2727,7 +2727,8 @@ watchdog's rule across an online edit is decision 129's.)*
   no round is due, the periodic rounds then the share's count, each whole, and the slot
   after C ms of them, so that a tight loop of requests no longer makes a 10 ms task
   late; since RV-11's review a step that adds the first untimed program or takes away
-  the last begins the count again, provisional.)*
+  the last begins the count again, as built by decision 442, which since RV-16 also
+  keeps a slot that finds nothing queued open until a request takes it.)*
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
   says (decision 50).
   *(Landed with M4-3, 2026-10-18, as these bullets say, with two readings the record
@@ -2992,7 +2993,17 @@ its limit is named `unknown` until a later write lands or fails (decision 391); 
 that answers no time the runner can hold once it runs trips it, naming the clock, and a
 restart brings the line back once it is mended, one that goes down, raises or exits still
 a shutdown (decision 394); and an address a fault names is shown as the configuration
-writes it, `panel.i.7` (decision 399).)*
+writes it, `panel.i.7` (decision 399).)* *(Since RV-16, 2026-11-04, the answers to RV-11's
+questions: the rounds run on while a force's or an unforce's write of the forces file is
+out, the force in effect from the first round after it lands (decision 437); every device
+a restart opens or reads again is limited by its own `open:` (decision 439);
+`status/1`'s `forces_unread`, `forces_unknown` and the store's `unknown` are always
+there, nil where nothing stands (decision 440); a round whose clock reading is found
+wrong stops there, nothing written after the reading, the trip's 0 the first the devices
+are given after it where the reading came before the round's writes (decision 441); a slot of the share that finds nothing queued stays open
+until a request takes it (decision 442); and while `forces_unread` stands a restart keeps
+the runner's own forces and reads none from the file (decision 445); the other five as
+built (decisions 438, 443, 444, 446 and 447).)*
 
 **What fails, and what happens.**
 
@@ -13525,14 +13536,38 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      force's or an unforce's write of the forces file is made, and the force takes effect
      at the first round after the write lands, so the logic keeps the plant under control
      and no force is in effect before the file holds it (decision 117); a write that fails
-     or is cut off leaves the force not taken, as now. To build in RV-16.
+     or is cut off leaves the force not taken, as now. To build in RV-16. *(Landed with
+     RV-16, 2026-11-04, `980904a`: a force's, an unforce's or an unforce_all's write is
+     begun in a process of its own, `Logex.Runner.Writer.begun/2`, linked and monitored,
+     limited to `write_limit:` by a timer of the VM's own, and the runner goes back to its
+     rounds; its answer, a message, takes the force or leaves it untaken as before, the
+     triggers it changes each making its round first, and answers the caller; decision
+     400's renewal while the runner waited on the disk is gone with the wait. A forces
+     request asked while a write is out waits behind it, in order, its write built on the
+     set the one before left (provisional); a trip, a restart and an edit's step leave the
+     write as it is, the force taken onto the set the runner then holds, a restart reading
+     the file as it stands; a stop waits for it to its own limit, after its zeros and
+     closes, and answers its caller, a force behind it answered as to a runner not running
+     (provisional); `status/1` lists the forces in effect, the one written not among them
+     until it lands (provisional). The write lets go of its link once its file call has
+     answered, so that its exit never reaches the runner as a message. The walks assert at
+     every round that the file holds the forces the round reads.)* *(RV-16's review,
+     2026-11-07: a force that waited for the share's slot was served by a forced trigger's
+     rounds as its write landed, ahead of the forces behind it, and the older force won;
+     now a forces request waits behind while any waits, the last asked the last written,
+     an unforce_all among them. "Taken onto the set the runner then holds" said less than
+     the code does: the set the write holds, built on the forces held as it began, becomes
+     the runner's as it lands, in place of any a restart read from the file meanwhile
+     (provisional). And a write a stop cuts at its limit may still land after the runner
+     has given the file up, as any cut write may (decision 391) (provisional).)*
 
 438. **`open:`'s form and its default (the review after Milestone 6),** RV-11's question 2
      (decision 398): one number for every device or a map by device's name, 5 s unless
      set.
 
      **Taken: as built (a)** (the maintainer, 2026-11-04). RV-16 makes the mark the
-     decision's number.
+     decision's number. *(RV-16, 2026-11-04, `efffdb2`: the marks RV-11 left on the
+     option, its map form and its default are this decision's number.)*
 
 439. **A restart's reread of a card that stayed up (the review after Milestone 6),**
      RV-11's question 3 (decision 398): a restart gives its `open:` limit only to a device
@@ -13541,7 +13576,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: `open:` for every card a restart reads (b)** (the maintainer, 2026-11-04):
      every device a restart opens or reads again is limited by its own `open:`, the
-     heartbeat by idle + poll as before. To build in RV-16.
+     heartbeat by idle + poll as before. To build in RV-16. *(Landed with RV-16,
+     2026-11-04, `103d09e`: a device up that a restart reads again is given its own
+     `open:`, as one opened again is; the release before it stays idle + poll. The runner
+     walk reads a device up 700 ms late at a restart now and then, its sim held.)*
 
 440. **The keys that name a file not read or a write not known (the review after
      Milestone 6),** RV-11's question 4 (decisions 390 and 391): `status/1`'s
@@ -13550,7 +13588,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: always present (b)** (the maintainer, 2026-11-04): each is always in the
      report, nil where nothing stands, as decision 412 has the store's `copy`. To build in
-     RV-16.
+     RV-16. *(Landed with RV-16, 2026-11-04, `8c94303`: `forces_unread` and
+     `forces_unknown` in every `status/1`, the store's `unknown` in every `retain` report
+     from the start, each nil where nothing stands; the leave, every pin of a key absent,
+     now reads it nil.)*
 
 441. **A clock gone wrong in the middle of a round (the review after Milestone 6),**
      RV-11's question 5 (decision 394): the round finishes as if no time had passed and
@@ -13559,7 +13600,22 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: the round abandoned (b)** (the maintainer, 2026-11-04): a round whose clock
      reading is found wrong stops there, its outputs never written, and the trip's 0 is
-     the first the devices are given after it. To build in RV-16.
+     the first the devices are given after it. To build in RV-16. *(Landed with RV-16,
+     2026-11-04, `4a99887`: a round is so from its look for a device not heard to its plan
+     of the next, every reading of the runner's clock in it, its start's, a step's, a
+     write's, its end's and with no untimed program the period's wall clock at its end;
+     the reading is thrown with the state it found and the round trips at once, published
+     as far as it ran and its steps' runs kept in the resource (provisional); a device's
+     exit by its own bad clock waiting as the round comes to its writes stops it there,
+     no device written, one gone down during the writes found by its write as before. Out
+     of a round decision 394's rule stands; the range and the restart's look at both
+     clocks as built. The runner walk stops a round by its clock halfway through.)*
+     *(RV-16's review, 2026-11-07: nothing is written after the reading, but a reading
+     found wrong at a device's write or at the round's end comes once that device and
+     those before it, or every device, have the round's outputs, the trip's 0 following;
+     the round's own event is published where the period's wall clock reads wrong and not
+     where the end's does (provisional). A round tripped otherwise leaves `in_round` nil,
+     so that a later reading out of a round is decision 394's.)*
 
 442. **The share with no continuous task (the review after Milestone 6),** RV-11's
      question 6 (decision 396): a slot that finds nothing queued is gone, so an HMI
@@ -13570,14 +13626,22 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: an unused slot kept (c)** (the maintainer, 2026-11-04): a slot that finds
      nothing queued stays open until a request takes it, so a poller's next call is
      served at once, the share still holding requests to one a slot; the count's new
-     beginning at such an edit stays as built. To build in RV-16.
+     beginning at such an edit stays as built. To build in RV-16. *(Landed with RV-16,
+     2026-11-04, `c0b655f`: a slot, the continuous task's or the periodic rounds', that
+     finds the queue empty stays open; a request that comes while a round is owed takes it,
+     served at once, and the slot closes; the count begins again at each slot whether or
+     not a request took it (provisional), and an edit that begins it again closes an open
+     one. The review's probe, a lone poller on a 2 ms plant whose rounds took about 10 ms
+     on a loaded machine, served 199 calls in 2 s before decision 396, 99 at RV-16's
+     parent and 199 after. The runner walk models the count and asserts a call made while
+     a periodic round is due takes an open slot at once and the next waits.)*
 
 443. **An address the configuration does not write (the review after Milestone 6),**
      RV-11's question 7 (decision 399): a trip for an address the configuration has no
      point for names it as the adapter gave it, `{:unknown_address, :pump}`.
 
      **Taken: the adapter's term, as built (a)** (the maintainer, 2026-11-04). RV-16 makes
-     the mark the decision's number.
+     the mark the decision's number. *(RV-16, 2026-11-04, `efffdb2`: done.)*
 
 444. **A test's call on the manual clock while a periodic round is overdue (the review
      after Milestone 6),** RV-11's question 8 (decisions 131 and 396): a request waits for
@@ -13585,7 +13649,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-04): decision 131's rule on every
      clock; a test calls from another process. RV-16 makes the mark the decision's
-     number.
+     number. *(RV-16, 2026-11-04, `efffdb2`: done; since decision 442 a call that finds a
+     slot left open is served at once, the rest waiting so.)*
 
 445. **Forces the file held while a fresh start could not read it (the review after
      Milestone 6),** RV-11's question 9 (decisions 127 and 390): a restart after such a
@@ -13596,7 +13661,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `forces_unread` stands, a restart keeps the forces the runner holds and takes none
      from the file, and the next write of the forces file, a force's or an unforce's,
      writes the runner's set over it, so no force comes back that the HMI was not
-     showing. To build in RV-16.
+     showing. To build in RV-16. *(Landed with RV-16, 2026-11-04, `e799804`: a restart made
+     while `forces_unread` stands reads no file and keeps the runner's set, the file named
+     still, until a force's or an unforce's write lands; the level switch forced to 7, a
+     crash, a start on a stalled disk, the disk back, a trip and a restart, and the level
+     reads its input. The walks keep the runner's set at such a restart, or a refused
+     one.)*
 
 446. **A relative forces path whose directory does not answer (the review after Milestone
      6),** RV-11's question 10 (decisions 356, 390 and 400): such a start is refused,
@@ -13604,14 +13674,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: refused, as built (a)** (the maintainer, 2026-11-04): decision 356's check
      needs the whole path; README advises an absolute one. RV-16 makes the mark the
-     decision's number.
+     decision's number. *(RV-16, 2026-11-04, `efffdb2`: done.)*
 
 447. **Which file an owed copy's cut-off write names (the review after Milestone 6),**
      RV-11's question 11 (decisions 360 and 391): the file whose write was cut off, the
      copy or the store, the copy shown made where the cut came in the store's write.
 
      **Taken: as built (a)** (the maintainer, 2026-11-04), with the copy's name as
-     decision 418 numbers it. RV-16 makes the mark the decision's number.
+     decision 418 numbers it. RV-16 makes the mark the decision's number. *(RV-16,
+     2026-11-04, `efffdb2`: done.)*
 
 448. **A host's file at the copy's number (the review after Milestone 6),** RV-13's
      question 1, its first half (decision 418): a file a host made at the number a copy
