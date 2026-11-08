@@ -3381,6 +3381,14 @@ defmodule Logex.TripTest do
       end
     end
 
+    # Decision 462 (RV-17): the drive's reread held in its sim, `Sim.hold/1`, until the
+    # panel, released, has polled and taken the bad reading, and only then let go, so that
+    # the rule is proved on any machine. Until then the drive's reread slept 800 ms, the bad
+    # reading told 100 ms in, and a loaded machine that ran no panel poll within the sleep
+    # left the bad reading to the panel's own reread, which refused the restart (one in 50
+    # in RV-11's review, three in 100 in RV-7's; RV-7's question 5). The drive's own
+    # opening limit, 5000 ms unless set, bounds its reread, held, since decision 439 (RV-16),
+    # as the idle watchdog of 5000 ms and a poll period did before it.
     test "on the real clock, a bad reading of a device released while the one before " <>
            "it is read again trips nothing" do
       {:ok, panel} = Sim.start_link()
@@ -3394,25 +3402,30 @@ defmodule Logex.TripTest do
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
           clock: {Logex.Runner.Clock.Monotonic, nil},
           poll: 10,
-          idle: 2000
+          idle: 5000
         )
 
       Sim.fail(panel, :read, {:value, [0], 2})
       tripped(runner, 0)
       assert Runner.status(runner).trip == {:io, "panel", {:bad_value, "panel.i.0", 2}}
 
-      # The drive's reread sleeps 800 ms, the panel's polls going on meanwhile, the bad
-      # reading 100 ms in: wide margins on both sides for a busy machine, within the idle
-      # watchdog and a poll period (M5-5's review: a 300 ms sleep within 510 failed now and
-      # then under load), and since decision 439 (RV-16) within the drive's own opening
-      # limit, 5000 ms unless set, which limits a restart's reread.
-      Sim.fail(drive, :read, {:delay, 800})
+      # The drive, read first, held in its reread, every device released before it; the
+      # bad reading told the panel and taken by a poll of its own, its reread waiting
+      # behind the drive's.
+      Sim.hold(drive)
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
-      Process.sleep(100)
+      reread_held(drive, 0)
       Sim.fail(panel, :read, {:value, [0], 2})
+      read_since(panel, Sim.reads(panel))
+      assert Task.yield(restart, 0) == nil
+      Sim.let_go(drive)
+
       assert Task.await(restart) == :ok
-      Process.sleep(30)
       assert %{status: :running, trip: nil} = Runner.status(runner)
+      # And two polls of the panel later, nothing it held passed on.
+      read_since(panel, Sim.reads(panel) + 1)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "x") == 1
       Runner.stop(runner)
     end
 
@@ -4360,6 +4373,13 @@ defmodule Logex.TripTest do
 
   defp call_found({:messages, [{:"$gen_call", _, _} | _]}, _sim), do: :ok
   defp call_found({:messages, _}, sim), do: called(sim)
+
+  # Waits until a sim's reread waits in its hold (decision 462), 5 s at most.
+  defp reread_held(_sim, 5000), do: flunk("no reread came to the sim's hold in 5 s")
+  defp reread_held(sim, n), do: reread_found(Sim.holding?(sim), sim, n)
+
+  defp reread_found(true, _sim, _n), do: :ok
+  defp reread_found(false, sim, n), do: reread_held(Process.sleep(1) && sim, n + 1)
 
   # Waits until a sim has been read since it had been read `reads` times.
   defp read_since(sim, reads), do: read_found(Sim.reads(sim) > reads, sim, reads)

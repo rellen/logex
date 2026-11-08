@@ -796,6 +796,12 @@ defmodule Logex.Configuration do
   read, or a name that cannot name a configuration is a `:file` diagnostic, and only after
   a refused name is the file still compiled, so that its own mistakes are listed too. A
   path that is not a binary is the host's mistake, raised as `ArgumentError`.
+
+  The file, its program types' files and the listing of the `.ld` files beside it are
+  read raw, off the VM's file server, as `Logex.compile_file/1` reads its files (decision
+  464), so a load waits on no file call the VM makes through the server, and shares only
+  the VM's dirty I/O schedulers with its other raw file calls, as `Logex.compile_file/1`
+  says.
   """
   def compile_file(path) when is_binary(path),
     do: configuration_file(Path.extname(path), Path.basename(path), path)
@@ -877,7 +883,7 @@ defmodule Logex.Configuration do
       |> Enum.zip(results)
       |> Enum.reduce({%{}, [], []}, &type_loaded/2)
 
-    beside = beside(File.ls(Path.dirname(path)))
+    beside = beside(Logex.SourceFile.listed(Path.dirname(path)))
     absent = Enum.map(missing, &absent(&1, Path.basename(path), beside))
 
     uncited =
@@ -925,7 +931,8 @@ defmodule Logex.Configuration do
     {programs, [diagnostic(line, message) | cited], Enum.reverse(diagnostics, theirs)}
   end
 
-  # The program types a did-you-mean may offer: the `.ld` files beside the configuration.
+  # The program types a did-you-mean may offer: the `.ld` files beside the configuration,
+  # listed raw (decision 464).
   defp beside({:ok, files}),
     do: for(file <- files, Path.extname(file) == ".ld", do: Path.rootname(file))
 

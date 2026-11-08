@@ -5097,7 +5097,7 @@ defmodule Logex.Compiler do
   # compiled once and its warnings handed back once; a file is still cited as its first
   # path spells it. A directory reached through a link is another path (provisional).
   defp load(path, held, {memo, _cyclic} = state),
-    do: loading(Map.fetch(memo, Path.expand(path)), path, held, state)
+    do: loading(Map.fetch(memo, SourceFile.expanded(path)), path, held, state)
 
   defp loading({:ok, entry}, _path, _held, state), do: {entry, state}
 
@@ -5106,7 +5106,7 @@ defmodule Logex.Compiler do
       file_read(SourceFile.read(path), path, held, state)
 
     entry = {in_file(result, path), reached, cyclic}
-    key = Path.expand(path)
+    key = SourceFile.expanded(path)
     {entry, {Map.put(memo, key, entry), cyclics(cyclic, key, cyclics)}}
   end
 
@@ -5276,7 +5276,7 @@ defmodule Logex.Compiler do
 
   # The blocks a file reaches, newest first: those its block reaches, then the block.
   defp reached({reached, cyclic}, below, file, below_cyclic),
-    do: {[Path.expand(file) | Enum.reverse(below, reached)], cyclic or below_cyclic}
+    do: {[SourceFile.expanded(file) | Enum.reverse(below, reached)], cyclic or below_cyclic}
 
   defp dependent({:ok, %FbType{} = type}, _named, {types, problems, reach, state}),
     do: {[type | types], problems, reach, state}

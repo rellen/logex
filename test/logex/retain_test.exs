@@ -677,8 +677,9 @@ defmodule Logex.RetainTest do
     # instance/1's hundredths, and an unmarked instance walked so would cost what a
     # `non_retain` one does. The bound is the twin's slope less that walk, and half a
     # reduction an instance, under the one a call an instance more costs (RV-7's review:
-    # half the walk, 6 and 7, passed a guard made a call dearer); a call both make moves
-    # both, and the walk made cheaper restates it. Each count is the least of three.
+    # half the walk, 6 and 7, passed a guard made a call dearer; decision 460); a call both
+    # make moves both, and the walk made cheaper restates it (decision 458). Each count is
+    # the least of three.
     test "a program of unmarked block instances is checked as it was before M6-1" do
       plain = block!(@plain)
       least = fn fun -> Enum.min(for _ <- 1..3, do: reductions(fun)) end

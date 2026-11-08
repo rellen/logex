@@ -364,56 +364,88 @@ choice, not an oversight to fix.
   that edit. A growth test reaches only the passes its program and its steps reach: list
   each pass the work adds, and check that some growth test gives it a large input.
 - **Hold a cost against a twin measured in the same run, never against a figure alone**
-  (decision 357). About 27 tests pinned a scan's or a compile's reductions exactly,
-  `== 27.0`, or within a delta of a parent's figure, so that a toolchain release that moved
-  code generation by one reduction would have turned them red with no change to logex, as
-  would making logex cheaper: a probe that charges two reductions more for each instruction
-  scanned, each lowered or each warned of turns six, two and four of their files red. Since
-  RV-7 each measures the program it is about and a twin, in the same run and VM, each in a
-  process of its own whose heap no collection visits, the twin making every call the
-  program makes, as often, but in the path the guarded change would reach, so that a call
-  both make moves both. For a choice a clause's head makes, the same rung de-energised,
-  which reads no operand, beside one that differs in its catch alone: a contact on a
-  literal bit and one on a bit a tag numbers cost 29 and 30 reductions a rung, and every
-  two-instruction rung de-energised 21 against a latch on such a bit's 22, so that an
-  instruction of any shape caught where none is due is seen (`tag_bit_test.exs`). For a path
-  an operand's shape picks, the same rungs over the other shape, over one table: a tag
-  against a literal element, a scalar instance against an element (`array_test.exs`,
-  `instance_array_test.exs`). For a `nil` a program or a resource holds when it has no
-  feature, the same program beside the feature, which takes the other clause: a `move`
-  beside a real, a resource beside a located array, instances beside `non_retain` ones
-  (`real_test.exs`, `located_array_test.exs`, `retain_test.exs`). Where every program takes
-  the guarded clause, so that no program beside the feature can see a cost added to it, an
-  instruction whose clause makes the same calls: an `add` against a `div`, a comparison and
-  its coil against a contact and a `move`, a copy-out of plain points against one of a
-  located array's, an int array's check against the test's own guarded walk
-  (`real_test.exs`, `located_array_test.exs`, `array_test.exs`; RV-7's review, where a
-  reals look-up in `add`'s own clause cost the twin beside a real the same). A compile's
-  twin is the same rungs reordered or over plain tags, scalars or a word's bits, beside the
-  coil or one-shot a gated warning looks for, or an instruction whose operands are grouped
-  (`compile_total_test.exs`, `tag_subscript_test.exs`, `bit_string_test.exs`). The bound is
-  the twin's figure, plus what the two measured apart when the test was written, the
-  guarded path's own cost against the twin's, which is the same from run to run, plus an
-  allowance under the least regression the bound is there for: half a reduction a rung, a
-  key, a point or an instance, where a call more a rung is the least, for the hundredths a
-  count moves as a bigger program's maps grow, or a reduction a group where a group's
-  count moves by a tenth, or the parent's allowance where it was smaller; never half the
-  guarded work, which passed every regression under that half (RV-7's review: a key walk
-  of 1 a key under a margin of 11, a storage bit's look of 9 a rung under 29). So the
-  figure that stays in a test is a difference of the guarded path's, which a toolchain
-  change reaches only through that path's own calls, and which a change to that path moves
-  either way: made dearer, the regression; made cheaper, the bound restated in the same
-  commit, said so. A twin that makes a call more often than the program, as an element's
-  bit reads its element, a tag's bit its number or a shift its count, holds that call's
-  cost in its bound, which a read made dearer moves, and its test says so. Write a new one
-  so: make the regression first, as a mutant of the size the change would bring, the
-  least, a call a rung; choose the twin it cannot reach; show the bound red on the mutant
-  and green under a probe that makes a call both twins make as often dearer
-  (`:erlang.bump_reductions(2)` in it, each instruction dispatched, lowered or warned of, a
-  read or a write where both make as many), each judged by the full suite, and keep the
-  table (`PLAN.md`'s RV-7). A twin that does the guarded work itself, as a beside twin
-  does, gives a lower bound on that work, which a cheaper version of it breaks: say so
-  beside it.
+  (decision 357), but for a stage's ceiling, below. About 27 tests pinned a scan's or a
+  compile's reductions exactly, `== 27.0`, or within a delta of a parent's figure, so that
+  a toolchain release that moved code generation by one reduction would have turned them
+  red with no change to logex, as would making logex cheaper: a probe that charges two
+  reductions more for each instruction scanned, each lowered or each warned of turns six,
+  two and four of their files red. Since RV-7 each measures the program it is about and a
+  twin, in the same run and VM, each in a process of its own whose heap no collection
+  visits, the twin making every call the program makes, as often, but in the path the
+  guarded change would reach, so that a call both make moves both. For a choice a clause's
+  head makes, the same rung de-energised, which reads no operand, beside one that differs
+  in its catch alone: a contact on a literal bit and one on a bit a tag numbers cost 29
+  and 30 reductions a rung, and every two-instruction rung de-energised 21 against a latch
+  on such a bit's 22, so that an instruction of any shape caught where none is due is seen
+  (`tag_bit_test.exs`). For a path an operand's shape picks, the same rungs over the other
+  shape, over one table: a tag against a literal element, a scalar instance against an
+  element (`array_test.exs`, `instance_array_test.exs`). For a `nil` a program or a
+  resource holds when it has no feature, the same program beside the feature, which takes
+  the other clause: a `move` beside a real, a resource beside a located array, instances
+  beside `non_retain` ones (`real_test.exs`, `located_array_test.exs`, `retain_test.exs`).
+  Where every program takes the guarded clause, so that no program beside the feature can
+  see a cost added to it, an instruction whose clause makes the same calls: an `add`
+  against a `div`, a comparison and its coil against a contact and a `move`, a copy-out of
+  plain points against one of a located array's, an int array's check against the test's
+  own guarded walk (`real_test.exs`, `located_array_test.exs`, `array_test.exs`; RV-7's
+  review, where a reals look-up in `add`'s own clause cost the twin beside a real the
+  same). A compile's twin is the same rungs reordered or over plain tags, scalars or a
+  word's bits, beside the coil or one-shot a gated warning looks for, or an instruction
+  whose operands are grouped (`compile_total_test.exs`, `tag_subscript_test.exs`,
+  `bit_string_test.exs`). The bound is the twin's figure, plus what the two measured apart
+  when the test was written, the guarded path's own cost against the twin's, which is the
+  same from run to run, plus an allowance under the least regression the bound is there
+  for: half a reduction a rung, a key, a point or an instance, where a call more a rung is
+  the least, for the hundredths a count moves as a bigger program's maps grow, or a
+  reduction a group where a group's count moves by a tenth, or the parent's allowance
+  where it was smaller (decision 460); never half the guarded work, which passed every
+  regression under that half (RV-7's review: a key walk of 1 a key under a margin of 11, a
+  storage bit's look of 9 a rung under 29). So the figure that stays in a test is a
+  difference of the guarded path's, which a toolchain change reaches only through that
+  path's own calls, and which a change to that path moves either way: made dearer, the
+  regression; made cheaper, the bound restated in the same commit, said so. A twin that
+  makes a call more often than the program, as an element's bit reads its element, a tag's
+  bit its number or a shift its count, holds that call's cost in its bound, which a read
+  made dearer moves, and its test says so. Write a new one so: make the regression first,
+  as a mutant of the size the change would bring, the least, a call a rung; choose the
+  twin it cannot reach; show the bound red on the mutant and green under a probe that
+  makes a call both twins make as often dearer (`:erlang.bump_reductions(2)` in it, each
+  instruction dispatched, lowered or warned of, a read or a write where both make as
+  many), each judged by the full suite, and keep the table (`PLAN.md`'s RV-7). A twin that
+  does the guarded work itself, as a beside twin does, gives a lower bound on that work,
+  which a cheaper version of it breaks: say so beside it, and restate the bound in the
+  commit that makes the work cheaper, whose diff then shows the saving (decision 458).
+- **Hold each stage under a ceiling twice its recorded figure** (decision 459). A same-run
+  bound cancels what both its twins pay alike, so a slowdown across the board, each
+  instruction dispatched, read or lowered, each cycle step or round step made dearer,
+  turns none red, however gross. `ceiling_test.exs` holds each stage on a standard
+  program, README's motor and plant: the compile, 100 scans, 100 cycles and a round, each
+  under twice a figure recorded with it, the one bound of logex's against a figure alone,
+  and wide on purpose; and, since RV-17's review, each stage a rung, the same over the
+  motor's five rungs written sixteen times over less over eight, a rung of the forty
+  between, under twice a figure of its own (provisional). The whole stage is mostly what
+  it pays a call and a tag, a scan's checks of its state or a round's devices, so a rung's
+  work made four times as dear read 1.44 of a whole scan's figure; a rung's cost cancels
+  those, the tags the same at both sizes, and holds a rung's lowering or evaluation at its
+  own size. A toolchain's shift of a reduction or two a step moves a whole stage by a few
+  per cent and a rung by a quarter (RV-7's probes, two reductions a step: at most 9 in a
+  hundred whole and 25 a rung), and a saving lowers both: neither turns one red. A stage
+  made three times as dear, two calls a step each as dear as a step, reads 2.9 to 3.0
+  times its figure, red; a rung's evaluation made four times over, 2.25 a rung, red; each
+  element or cycle step run once again, 1.96 to 2.0 a rung, on the line, which a ceiling
+  under twice its figure may pass or not; a step's own call made once again, 1.2 to 1.8
+  whole, green (`PLAN.md`'s RV-17): a ceiling catches a stage or a rung made more than
+  twice as dear, not a call, which the twins' bounds are for. Record a figure so: the
+  stage on its standard program, each count in a process of its own whose heap no
+  collection visits, the least of five, a rung's the least of five differences counted in
+  pairs, a round's less the manual clock's synchronisation, on the toolchain `mix.exs`
+  pins, at the commit that adds the ceiling or raises it, written beside the test with the
+  item, the date and the toolchain. Raise a ceiling only for a change that makes its stage
+  dearer on purpose, a feature every scan pays for or a toolchain that moves a figure past
+  it, never to pass a slowdown no one meant: measure the figure anew at that commit as
+  above and replace it, never the factor, and say in the commit what made the stage dearer
+  and by how much. A commit that makes a stage cheaper may record its new figure the same
+  way, which tightens its ceiling, and need not.
 - **A count moves with the VM's own state, so compare two counts made one after the
   other, the least of their differences.** A call's count is the same from call to call
   while the VM's state holds, and moves by a few reductions when it changes: one resource
@@ -482,7 +514,12 @@ choice, not an oversight to fix.
   `Sleeps`, RV-7), and counts what the rule is about, since a wait for one message passes
   a process that sends it now and then: that test's wait for the device's `back` passed a
   device that told the runner at one poll in 30, until its step counted the polls the
-  device ran on its clock against the `back`s it sent (RV-7's review).
+  device ran on its clock against the `back`s it sent (RV-7's review). And a test that
+  needs one device's call to wait while another device runs, a restart's reread of one
+  while the next one polls, holds that call in its sim, `Logex.IO.Sim.hold/1`, until it
+  has seen what it waits for, and then lets it go, never a delay the machine may outlast:
+  a reread that slept 800 ms met no poll of the device after it in three runs of 100
+  under the busy loops (`trip_test.exs`, decision 462).
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input

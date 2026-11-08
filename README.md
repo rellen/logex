@@ -178,7 +178,10 @@ Source syntax today:
   no instance of itself, at any depth
 - `Logex.compile_file/1` takes a `.ld` file only, exactly: any other name is a `:file`
   diagnostic. `Logex.compile_files/1` compiles several, each as `compile_file/1` does,
-  through one memo, so a block several of them hold is compiled once
+  through one memo, so a block several of them hold is compiled once. Each file is read
+  raw, off the VM's file server, so a compile waits on no file call the VM makes through
+  the server (decision 464), though it shares the VM's dirty I/O schedulers with every
+  other raw file call
 
 A configuration file (`.logex`, "A configuration", below) has lines of its own, one
 element each, its keywords in any case, `//` comments, and a line ending as a `.ld`
@@ -347,39 +350,44 @@ limited by its own `open:` (decision 439), `status/1`'s `forces_unread`,
 reading (decision 441), a slot of the share that finds nothing waiting kept open until a
 request takes it (decision 442) and a restart while `forces_unread` stands keeping the
 forces the runner holds (decision 445), the other five as built (decisions 438, 443,
-444, 446 and 447). Its answers to the questions RV-13 and RV-7 left, decisions 448–464,
-RV-6 and RV-17 build: a copy the same as the last one skipped, every write of the store
-limited, a late runner letting its devices run before judging them, and the loader
-reading its files raw, among them. Its answers to the questions RV-5 left, decisions 409–419, have
-landed with RV-13: the store and the forces file reading a line ended by CRLF or a lone
-CR as one ended by LF (decision 410), `status/1`'s `copy` always there, nil where
-nothing was copied (decision 412), the shutdown's write making the store's text within
-the write limit, which the child spec's deadline counts (decision 414), a cold start
-over a store a fresh start would refuse copying it first (decision 417) and each copy of
-the store a name of its own, `<store>.dropped.1` and on, none replaced (decision 418),
-the other six as built (decisions 409, 411, 413, 415, 416 and 419); its answers to the
-four RV-15 left, decisions 433–436, are each as built, their marks made with RV-13. Its
-answers to the questions
-RV-4 left, decisions 390–401, have landed with RV-11: every file write and read the
-runner makes limited by a `write_limit:` of its own, 5 s unless set, apart from the
-heartbeat (decision 400), a device's opening by an `open:` of its own (decision 398), a
-forces file a start or a restart cannot read carried on and named in `status/1`
-(decision 390), a write past its limit named unknown until a later one lands or fails
-(decision 391), a clock gone wrong a trip (decision 394), a host's requests held to
-their share against a due periodic round (decision 396) and a misread address shown as
-the configuration writes it, `panel.i.7` (decision 399), the other five as built
-(decisions 392, 393, 395, 397 and 401). Its answers to the questions
-RV-10 and RV-12 left, decisions 420–432, have landed with RV-14 and RV-15: each of
-RV-10's nine as built (decisions 420–428), an instance counting itself and a host's
-closure refused as built (decisions 429 and 430), a bit of a member of an element
-written through a tag subscript or numbered by a tag warned as a word array's bit is
-where the pair may meet (decision 431), and the loader's own compile private code that
-nothing a host hands in reaches, no token at all (decision 432). Its answers to the
-questions RV-9 left, decisions 402–408, have landed with RV-12: a declaration counting
-every tag, element and instance it holds, at every depth (decision 403), the loader's
-trust in its own types one no host can borrow, so a type edited by hand is checked
-whether a host hands it to `Logex.compile/2` or to the compiler's internal entry
-(decision 404), which since RV-15 is no token at all but the loader's own compile,
+444, 446 and 447). Three of its answers to the questions RV-13 and RV-7 left, decisions
+448–464, RV-6 builds: every write of the store limited, a copy the same as the last one
+skipped and a late runner letting its devices run before judging them (decisions 455, 456
+and 461); the rest have landed with RV-17: the loaders reading and looking at their files
+raw, off the VM's file server (decision 464), a hold in the simulated device on its next
+reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
+whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
+answers to the questions RV-16 left, decisions 465–475, RV-18 builds: forces waiting
+behind a write joined into one, `status/1`'s `forcing`, a restart waiting for a force's
+write, and a runner's claim on its files held until its last write of them has ended,
+among them. Its answers to the questions RV-5 left, decisions 409–419, have landed with
+RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
+ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
+(decision 412), the shutdown's write making the store's text within the write limit, which
+the child spec's deadline counts (decision 414), a cold start over a store a fresh start
+would refuse copying it first (decision 417) and each copy of the store a name of its own,
+`<store>.dropped.1` and on, none replaced (decision 418), the other six as built
+(decisions 409, 411, 413, 415, 416 and 419); its answers to the four RV-15 left, decisions
+433–436, are each as built, their marks made with RV-13. Its answers to the questions RV-4
+left, decisions 390–401, have landed with RV-11: every file write and read the runner
+makes limited by a `write_limit:` of its own, 5 s unless set, apart from the heartbeat
+(decision 400), a device's opening by an `open:` of its own (decision 398), a forces file
+a start or a restart cannot read carried on and named in `status/1` (decision 390), a
+write past its limit named unknown until a later one lands or fails (decision 391), a
+clock gone wrong a trip (decision 394), a host's requests held to their share against a
+due periodic round (decision 396) and a misread address shown as the configuration writes
+it, `panel.i.7` (decision 399), the other five as built (decisions 392, 393, 395, 397 and
+401). Its answers to the questions RV-10 and RV-12 left, decisions 420–432, have landed
+with RV-14 and RV-15: each of RV-10's nine as built (decisions 420–428), an instance
+counting itself and a host's closure refused as built (decisions 429 and 430), a bit of a
+member of an element written through a tag subscript or numbered by a tag warned as a word
+array's bit is where the pair may meet (decision 431), and the loader's own compile
+private code that nothing a host hands in reaches, no token at all (decision 432). Its
+answers to the questions RV-9 left, decisions 402–408, have landed with RV-12: a
+declaration counting every tag, element and instance it holds, at every depth (decision
+403), the loader's trust in its own types one no host can borrow, so a type edited by hand
+is checked whether a host hands it to `Logex.compile/2` or to the compiler's internal
+entry (decision 404), which since RV-15 is no token at all but the loader's own compile,
 private code that no closure or term a host hands in reaches (decision 432), and two bits
 whose literal numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a
 write whose literal places differ from it, no warning (decision 405), the other four as
@@ -3612,8 +3620,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   copy is made, so that a store refused as cut short keeps its readable part, as its
   refusal says; a copy that cannot be made, or a store that stands but cannot be read,
   refuses the cold start as a failed write does, `{:error, {:retain, reason}}`, the store
-  as it was (provisional for the store that cannot be read), and a store that reads whole
-  gets no copy. A cold `restart/2` reads no store and copies none (provisional). The
+  as it was (decision 453 for the store that cannot be read), and a store that reads whole
+  gets no copy. A cold `restart/2` reads no store and copies none (decision 454). The
   read is limited to the write limit of real time, as every write is, and so is the look
   at the store and the forces file for a link before either is read, so that a store on a
   stalled disk, or a FIFO in its place, refuses the start as a store that cannot be read
@@ -3638,27 +3646,27 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   mistaken deploy wrote and copies that one to the next number, `tally.retain.dropped.3`,
   the good values staying in `tally.retain.dropped.2`, to be put back as above. An
   unnumbered `tally.retain.dropped`, which an earlier logex made and replaced at each
-  start that dropped, is kept as it stands and counts for nothing (provisional). The copy
+  start that dropped, is kept as it stands and counts for nothing (decision 450). The copy
   is written as every other write is, through the copies' own `.tmp`,
   `tally.retain.dropped.tmp`, and within the same limit, and not renamed over a file
   that stands at its number as it looks, just before its rename: one a host makes there
-  while it is written, before that look, fails it, `:eexist`, and one made between the
-  look and the rename, which goes through the VM's file server and waits in its queue on
-  a stalled disk, is replaced (provisional). A store's copies are its name read whole: a
-  store named `tally.dropped` has `tally.dropped.dropped.1` and on. Before it copies, a
-  start compares the store with the highest-numbered copy that stands, and where they
-  hold the same bytes makes no new copy, `status/1`'s `copy` naming that one (decision
-  456): a start that fails after its copy, a device that cannot be opened, and is
-  started again five times by a supervisor leaves one copy, not five, and a copy it
+  while it is written, before that look, fails it, `:eexist` (decision 448), and one made
+  between the look and the rename, which goes through the VM's file server and waits in
+  its queue on a stalled disk, is replaced (decision 449). A store's copies are its name
+  read whole: a store named `tally.dropped` has `tally.dropped.dropped.1` and on. Before
+  it copies, a start compares the store with the highest-numbered copy that stands, and
+  where they hold the same bytes makes no new copy, `status/1`'s `copy` naming that one
+  (decision 456): a start that fails after its copy, a device that cannot be opened, and
+  is started again five times by a supervisor leaves one copy, not five, and a copy it
   cannot read, a directory a host put at the highest number, is no match. One that fails
-  is reported as a failed write is, `failed` in `status/1`'s `retain`, and
-  the start goes on with the copy owed (decision 416): every write over the store, the
-  period's, a trip's, a stop's, a shutdown's or a cold restart's, makes the copy first,
-  under the next number then, and writes the store only once the copy is made, so that
-  while it cannot be made, a full disk or a directory at its `.tmp`, the store stays as
-  the start read it, every write fails as above, and a crash or a stop meanwhile loses
-  what changed since the start, the next start dropping from the same store and copying it
-  again. `status/1`'s `retain` names the copy once made, `copy: "tally.retain.dropped.1"`,
+  is reported as a failed write is, `failed` in `status/1`'s `retain`, and the start goes
+  on with the copy owed (decision 416): every write over the store, the period's, a
+  trip's, a stop's, a shutdown's or a cold restart's, makes the copy first, under the
+  next number then, and writes the store only once the copy is made, so that while it
+  cannot be made, a full disk or a directory at its `.tmp`, the store stays as the start
+  read it, every write fails as above, and a crash or a stop meanwhile loses what changed
+  since the start, the next start dropping from the same store and copying it again.
+  `status/1`'s `retain` names the copy once made, `copy: "tally.retain.dropped.1"`,
   beside `dropped`, and always has a `copy`, nil while the copy is owed and where nothing
   was dropped, `dropped` and `failed` telling the two apart (decision 412).
 

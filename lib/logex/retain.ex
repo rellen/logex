@@ -178,8 +178,9 @@ defmodule Logex.Retain do
   # was read, the write fails, `{:error, :eexist}`, its `.tmp` deleted, the file that
   # stands untouched. The look and the rename are two calls, the rename through the VM's
   # file server, whose queue on a stalled disk it waits in: a file a host makes at the
-  # copy's name between them is replaced by the copy (provisional, the review of RV-13: a
-  # rename that refuses a name that stands is a hard link, which a FAT card has not).
+  # copy's name between them is replaced by the copy (decision 449, as built: a rename
+  # that refuses a name that stands is a hard link, which a FAT card has not); one made
+  # before the look fails the copy, owed (decision 448).
   def written({path, beside}, text),
     do: unreplaced(written_out(made(beside), text), beside, path)
 

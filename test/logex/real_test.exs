@@ -1555,7 +1555,8 @@ defmodule Logex.RealTest do
     # dearer than its twin, and a reduction more for a call both make moves both. Each bound
     # is the twin's figure and what the two measured apart, `apart`, and leaves half a
     # reduction a rung for the hundredths by which a rung's count moves as the bigger
-    # program's maps grow, under a call more; the look-up made cheaper restates `move`'s.
+    # program's maps grow, under a call more (decision 460); the look-up made cheaper
+    # restates `move`'s (decision 458).
     test "a program of no reals scans as it did before M5-10" do
       head = "var_input a dint\nvar_input b dint\nvar_input c bool\nvar_output d dint\n"
 
@@ -1954,8 +1955,8 @@ defmodule Logex.RealTest do
     # signature read and its slots zipped, and the rung beside it no more, so each bound is
     # the difference measured less half a reduction a rung, under a call an instruction
     # more (RV-7's review: less 8, half the least look, passed a look made a call or two a
-    # rung dearer); a reduction more for a call both rungs make moves both, and the
-    # literal's look made cheaper restates it.
+    # rung dearer; decision 460); a reduction more for a call both rungs make moves both,
+    # and the literal's look made cheaper restates it (decision 458).
     test "a program of no real literal pays nothing for it" do
       for {head, rung, literal, apart} <- [
             {"var_input a dint\nvar_output d dint\nvar_input r real\nvar_output x real\n",

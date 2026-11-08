@@ -10,7 +10,7 @@ defmodule Logex.Refusal do
   #   line at most 1,000 bytes after its path, cut at a character's boundary and ended `…`,
   #   so that a file
   #   of a million bad lines is told in some 50 KB, where 10 MB of them were told in 48 MB
-  #   (provisional bounds).
+  #   (decision 457, the bounds as built).
   # - A text of the file a problem quotes is at most 60 bytes, a longer one cut there and
   #   ended `…`, each byte of it no store or forces file holds shown as its escape, `\xFF`,
   #   so that a refusal is printable, where a byte past ASCII made `IO.puts/1` of it raise;

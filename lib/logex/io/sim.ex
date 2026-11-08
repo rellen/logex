@@ -45,6 +45,23 @@ defmodule Logex.IO.Sim do
     a read or a report, `{:value, address, value}`, which the call gives beside the
     device's own, a value that need not fit its point at an address that need not be one.
     A close cannot give an error back, nor a value.
+  - `hold/1` holds the device's next reread, a restart's read of a device that stayed up
+    (decision 142), until `let_go/1` lets it go on, and `holding?/1` says whether one
+    waits in the hold (decision 462), so that a test on the real clock can let one device
+    poll, released, while the runner waits on the reread of the device before it. A
+    reread is told from a poll's read by the fence `Logex.Runner.Device` sends itself
+    just before it, which waits in the device's mailbox while the adapter reads: a read is
+    a restart's where the newest fence in its process's mailbox is one no read of the sim
+    found there before, so that a poll, a tripped device's or a released one's, passes the
+    hold by, whatever else waits in the mailbox, the fence of a reread the poll was queued
+    behind among them (RV-17's review). A poll passing the hold by goes on as usual, a
+    failure told to `:read` acted out in it. The held read then goes on as usual, a
+    failure told to `:read` meanwhile acted out in it, and `reads/1` counts it only then;
+    a hold let go before any reread came is taken back; and a held read whose process
+    goes down, a reread the runner gave up and killed (`{:io_init, device, :timeout}`),
+    spends the hold, `holding?/1` false, so that `let_go/1` then holds nothing
+    (provisional). `hold/1` on a sim that holds already, and `let_go/1` on one that holds
+    nothing, are the test's mistakes.
 
   **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the
   options it is bound with, which are `sim:` alone, a sim that is running and that no
@@ -120,6 +137,40 @@ defmodule Logex.IO.Sim do
     GenServer.call(sim, {:fail, callback!(callback), failure!(callback, how)})
   end
 
+  @doc "Holds the device's next reread, a restart's read, until `let_go/1` (decision 462)."
+  def hold(sim) do
+    sim = sim!(sim)
+    held!(GenServer.call(sim, :hold), sim)
+  end
+
+  @doc "Lets the held reread go on, or takes back a hold no reread has come to."
+  def let_go(sim) do
+    sim = sim!(sim)
+    let!(GenServer.call(sim, :let_go), sim)
+  end
+
+  @doc "Whether a reread waits in the hold."
+  def holding?(sim), do: GenServer.call(sim!(sim), :holding)
+
+  defp held!(:ok, _sim), do: :ok
+
+  defp held!(:held, sim),
+    do:
+      raise(
+        ArgumentError,
+        "the simulated device #{inspect(sim)} holds its next reread already: let_go/1 " <>
+          "lets it go"
+      )
+
+  defp let!(:ok, _sim), do: :ok
+
+  defp let!(:unheld, sim),
+    do:
+      raise(
+        ArgumentError,
+        "the simulated device #{inspect(sim)} holds no reread: hold/1 holds its next"
+      )
+
   # The inputs set, and, where they changed and the sim reports to a device, reported to
   # it from the caller, which then waits through `:sys` until the device has handled it.
   defp setting(sim, values), do: set!(GenServer.call(sim, {:set, values}), sim)
@@ -170,12 +221,33 @@ defmodule Logex.IO.Sim do
     act(take(sim, :init), :init, %{device: device}, fn _given -> opened(sim, device, points) end)
   end
 
+  # Decision 462: each read's take names the newest fence in its process's mailbox, the
+  # device's, so that the sim tells a restart's read from a poll's.
   @impl Logex.IO
-  def read(%{sim: sim, inputs: inputs} = state) do
-    act(take(sim, :read), :read, state, fn given ->
+  def read(%{sim: sim} = state),
+    do:
+      reading(GenServer.call(sim, {:take, :read, fence(Process.info(self(), :messages))}), state)
+
+  # Decision 462: a sim holding its next reread answers `:armed` to its take, taking
+  # nothing, and the read, a restart's, waits in the hold until the test lets it go; then
+  # it takes its failure past the hold and goes on as usual, as a poll's does at once.
+  defp reading(:armed, %{sim: sim} = state) do
+    GenServer.call(sim, :held, :infinity)
+    reading(GenServer.call(sim, {:take, :read, :past_hold}), state)
+  end
+
+  defp reading(taken, %{sim: sim, inputs: inputs} = state) do
+    act(taken, :read, state, fn given ->
       {:ok, Map.merge(GenServer.call(sim, {:inputs, inputs}), given), state}
     end)
   end
+
+  # The newest fence in the device's mailbox, this process's, nil where none waits: the
+  # one `Logex.Runner.Device` sends itself just before it reads again (decision 142's
+  # reread), which waits there while the adapter reads, and stays until the device
+  # handles it, so that a poll queued before the fence reads with it there still.
+  defp fence({:messages, messages}),
+    do: List.last(for {Logex.Runner.Device, :fence, fence} <- messages, do: fence)
 
   @impl Logex.IO
   def write(values, %{sim: sim} = state) do
@@ -265,7 +337,9 @@ defmodule Logex.IO.Sim do
        closed: false,
        reporter: nil,
        device: nil,
-       failures: %{}
+       failures: %{},
+       hold: nil,
+       found: nil
      })}
   end
 
@@ -291,12 +365,42 @@ defmodule Logex.IO.Sim do
       {:reply, :ok,
        %{state | failures: Map.update(state.failures, callback, [how], &(&1 ++ [how]))}}
 
-  def handle_call({:take, callback}, _from, state) do
-    {how, rest} = next(Map.get(state.failures, callback, []))
+  def handle_call({:take, :read, :past_hold}, _from, state), do: taken(:read, state)
 
-    {:reply, {how, state.clock},
-     counted(callback, %{state | failures: Map.put(state.failures, callback, rest)})}
+  # Decision 462: a read whose newest fence no read found before is a restart's, the fence
+  # noted as found, held where a hold is armed; any other is a poll's, which passes the
+  # hold by.
+  def handle_call({:take, :read, fence}, _from, %{found: found} = state)
+      when is_reference(fence) and fence != found,
+      do: reread(%{state | found: fence})
+
+  def handle_call({:take, :read, _polled}, _from, state), do: taken(:read, state)
+  def handle_call({:take, callback}, _from, state), do: taken(callback, state)
+
+  # Decision 462: the hold armed by hold/1, a reread waiting in it its caller, `{:holding,
+  # from, monitor}`, answered by let_go/1; a hold let go meanwhile answers a reread at
+  # once; a reread whose process goes down meanwhile spends it (handle_info/2).
+  def handle_call(:hold, _from, %{hold: nil} = state), do: {:reply, :ok, %{state | hold: :armed}}
+  def handle_call(:hold, _from, state), do: {:reply, :held, state}
+
+  def handle_call(:held, {pid, _tag} = from, %{hold: :armed} = state),
+    do: {:noreply, %{state | hold: {:holding, from, Process.monitor(pid)}}}
+
+  def handle_call(:held, _from, state), do: {:reply, :ok, state}
+
+  def handle_call(:let_go, _from, %{hold: {:holding, from, monitor}} = state) do
+    Process.demonitor(monitor, [:flush])
+    GenServer.reply(from, :ok)
+    {:reply, :ok, %{state | hold: nil}}
   end
+
+  def handle_call(:let_go, _from, %{hold: :armed} = state),
+    do: {:reply, :ok, %{state | hold: nil}}
+
+  def handle_call(:let_go, _from, state), do: {:reply, :unheld, state}
+
+  def handle_call(:holding, _from, state),
+    do: {:reply, match?({:holding, _from, _monitor}, state.hold), state}
 
   def handle_call({:opened, pid, device}, _from, state),
     do: opening(holder(state), pid, device, state)
@@ -319,6 +423,19 @@ defmodule Logex.IO.Sim do
 
   def handle_call(:close, _from, state), do: {:reply, :ok, %{state | closed: true}}
 
+  # Decision 462: a held reread whose process went down, killed by a runner that gave it up
+  # (provisional), spends the hold, which holds nothing then; `let_go/1` takes the monitor
+  # out, its message with it, so no other comes. Any other message, which nothing the sim
+  # is called by sends, is passed over, where GenServer's default logged it.
+  @impl GenServer
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{hold: {:holding, _, monitor}} = state
+      ),
+      do: {:noreply, %{state | hold: nil}}
+
+  def handle_info(_message, state), do: {:noreply, state}
+
   # The newest `kept` of the writes made, newest first, `count` of them held; the list cut
   # back to them only once it holds twice as many, so that a write costs a constant on the
   # whole.
@@ -326,6 +443,18 @@ defmodule Logex.IO.Sim do
     do: %{state | writes: Enum.take(state.writes, kept), count: kept}
 
   defp recorded(state), do: state
+
+  # A restart's read, held where a hold is armed, taken at once where none is.
+  defp reread(%{hold: :armed} = state), do: {:reply, :armed, state}
+  defp reread(state), do: taken(:read, state)
+
+  # The next failure told to a callback, taken, a read counted.
+  defp taken(callback, state) do
+    {how, rest} = next(Map.get(state.failures, callback, []))
+
+    {:reply, {how, state.clock},
+     counted(callback, %{state | failures: Map.put(state.failures, callback, rest)})}
+  end
 
   defp next([]), do: {:none, []}
   defp next([how | rest]), do: {how, rest}

@@ -3,18 +3,39 @@ defmodule Logex.SourceFile do
   # RV-2 (the review after Milestone 6): how the loaders, `Logex.compile_file/1`'s and
   # `Logex.Configuration.compile_file/1`'s, read a source file and tell what is beside a
   # file. Internal: its callers have checked their arguments.
+  #
+  # Decision 464 (RV-17): every call here is raw, off the VM's file server, which serves
+  # every other file call of the VM one at a time, so that a compile waits on no file call
+  # the VM makes through it, a logger's or a store's write among them, as the runner's
+  # store and forces reads do since decision 390: a file's look and its read, a name's look
+  # beside a file, the listing of a configuration's directory, and the working directory
+  # a relative path is taken from. Each answers as its call through the server does, so
+  # the refusals of a FIFO, a device, a link to nothing and a link that loops are as they
+  # were, their messages unchanged. A raw call runs on one of the VM's dirty I/O
+  # schedulers, ten unless the VM is started with another number (`+SDio`), which every
+  # raw file call of the VM shares: where each of them is taken, by ten raw opens of FIFOs
+  # no process writes, say, which hold theirs even once their processes are killed, a
+  # compile waits with every other raw call (RV-17's review).
 
-  # A file's text, read only where it is a regular file, or a directory, which File.read/1
+  require Record
+
+  Record.defrecordp(
+    :info,
+    :file_info,
+    Record.extract(:file_info, from_lib: "kernel/include/file.hrl")
+  )
+
+  # A file's text, read only where it is a regular file, or a directory, which a read
   # refuses, so that a FIFO or a device named `seal.ld` beside a program is refused where
   # its read hung the load for ever (a6-compile-scale-12).
   @doc false
-  def read(path), do: read_by(File.stat(path), path)
+  def read(path), do: read_by(:file.read_file_info(path, [:raw, time: :posix]), path)
 
-  defp read_by({:ok, %File.Stat{type: type}}, path) when type in [:regular, :directory],
-    do: File.read(path)
+  defp read_by({:ok, info(type: type)}, path) when type in [:regular, :directory],
+    do: :file.read_file(path, [:raw])
 
-  defp read_by({:ok, %File.Stat{type: type}}, _path), do: {:error, {:not_regular, type}}
-  defp read_by({:error, _reason}, path), do: File.read(path)
+  defp read_by({:ok, info(type: type)}, _path), do: {:error, {:not_regular, type}}
+  defp read_by({:error, _reason}, path), do: :file.read_file(path, [:raw])
 
   # How a file that cannot be read is told so, a FIFO's or a device's among them.
   @doc false
@@ -28,7 +49,38 @@ defmodule Logex.SourceFile do
 
   # A name beside a file, a link to nothing or a link that loops among them, so that it is
   # loaded and told it cannot be read, where it was an unknown type, and the configuration's
-  # loader a type with no file beside it, told to mean itself (a6-compile-scale-10).
+  # loader a type with no file beside it, told to mean itself (a6-compile-scale-10). The
+  # name's own look, which finds whatever a look through a link finds and the link besides.
   @doc false
-  def present?(file), do: File.exists?(file) or match?({:ok, _}, File.lstat(file))
+  def present?(file), do: match?({:ok, _info}, :file.read_link_info(file, [:raw]))
+
+  # The names in a directory, as `File.ls/1` gives them.
+  @doc false
+  def listed(dir), do: names(:prim_file.list_dir(dir))
+
+  defp names({:ok, names}), do: {:ok, Enum.map(names, &IO.chardata_to_string/1)}
+  defp names({:error, _reason} = error), do: error
+
+  # A path made absolute, as `Path.expand/1` makes it: the working directory read only for
+  # a path still relative once a leading `~/` is the user's home, as `Path.expand/1` reads
+  # it only then (a path the loaders expand names a file, so never `~` alone), so that an
+  # absolute path, or one from home, compiles with a working directory that cannot be
+  # read, a deleted one among them (RV-17's review); a relative path with one raises as
+  # `Path.expand/1` raised, `File.cwd!/0`'s error (provisional, `PLAN.md`'s RV-17
+  # question 3).
+  @doc false
+  def expanded(path), do: from(rooted?(path), path)
+
+  defp from(true, path), do: Path.expand(path)
+  defp from(false, path), do: Path.expand(path, cwd(:prim_file.get_cwd()))
+
+  defp rooted?("~/" <> _rest), do: absolute?(System.user_home!())
+  defp rooted?(path), do: absolute?(path)
+
+  defp absolute?(path), do: Path.type(path) == :absolute
+
+  defp cwd({:ok, dir}), do: IO.chardata_to_string(dir)
+
+  defp cwd({:error, reason}),
+    do: raise(File.Error, reason: reason, action: "get current working directory")
 end
