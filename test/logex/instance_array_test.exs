@@ -2965,14 +2965,19 @@ defmodule Logex.InstanceArrayTest do
     # (a2-compiler1-6, b4-edit-5). Measured at 1,000 and 4,000 elements, an array of timers,
     # of a user block's instances and of timers in two dimensions, `ton[2,n/2]`: the words
     # grow 4.2 to 4.3 times, as the elements do; with a put into the tuple an element they
-    # grew 15.0, 13.3 and 13.5 times.
+    # grew 15.0, 13.3 and 13.5 times. Since RV-6's review also a member of each element
+    # written through a tag subscript, `move 7 t[i].pre`, whose put into the tuple the
+    # write of a small array's member still makes (Logex.Runtime's write/3, its `@small`
+    # guard), and which a guard that let a large array through too made quadratic again.
     test "a scan of every element of a large array of instances allocates linearly in its elements" do
       for {kind, head, rung} <- [
             {"ton", &"var t ton[#{&1}]\n", fn i, _n -> "xic a ton t[#{i}] 10" end},
             {"seal", &"var_output q bool\nvar t seal[#{&1}]\n",
              fn i, _n -> "cal t[#{i}] a q" end},
             {"grid", &"var t ton[2,#{div(&1, 2)}]\n",
-             fn i, n -> "xic a ton t[#{div(i, div(n, 2))},#{rem(i, div(n, 2))}] 10" end}
+             fn i, n -> "xic a ton t[#{div(i, div(n, 2))},#{rem(i, div(n, 2))}] 10" end},
+            {"member", &"var i int\nvar t ton[#{&1}]\n",
+             fn i, _n -> "xic a move #{i} i\nxic a move 7 t[i].pre" end}
           ] do
         words =
           for n <- [1000, 4000] do

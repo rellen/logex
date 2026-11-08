@@ -1572,6 +1572,40 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # RV-6's review: the comparison reads the highest number's copy by the name logex
+    # gives it, `<store>.dropped.<n>`. An entry spelled otherwise, `.dropped.007`, counts
+    # for the number, so that the copy's name is free (decision 418), and is never
+    # compared, the same bytes or not: `status/1` names a copy that stands under its own
+    # name. A host's own regular file at that name holding the same bytes is the copy, as
+    # decision 456 reads.
+    test "a copy spelled otherwise at the highest number is never compared, the copy made " <>
+           "past it; one at logex's own name with the same bytes is the copy",
+         %{tmp_dir: dir} do
+      rig = rig(dir, write_limit: 5000)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      read = File.read!(rig.store)
+      opts = Keyword.put(rig.opts, :configuration, retyped())
+
+      File.write!(rig.store <> ".dropped.007", read)
+      {:ok, runner} = Runner.start_link(opts)
+      copy = rig.store <> ".dropped.8"
+      assert %{copy: ^copy, failed: nil, unknown: nil} = Runner.status(runner).retain
+      assert File.read!(copy) == read
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+
+      File.write!(rig.store, read)
+      File.write!(rig.store <> ".dropped.9", read)
+      {:ok, runner} = Runner.start_link(opts)
+      copy = rig.store <> ".dropped.9"
+      assert %{copy: ^copy, failed: nil, unknown: nil} = Runner.status(runner).retain
+      refute File.exists?(rig.store <> ".dropped.10")
+      assert Runner.stop(runner) == :ok
+    end
+
     # A drop of any kind is copied for, the report itself the trigger: an instance the
     # configuration no longer has, and a global it no longer retains, beside the retyped
     # counter above.

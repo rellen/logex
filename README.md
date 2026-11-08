@@ -341,8 +341,8 @@ the milestones newest first). What waits to land is the rest of the maintainer's
 review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
 decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
 item RV-8 closes ("The review after Milestone 6"), RV-7's and RV-6's having landed, RV-6's the
-runner's own long work cheaper and bounded, a scan of a large array of instances linear
-in its elements, an edit's switch and the period's take-out cheaper, the size of plant
+runner's own long work cheaper and bounded, a scan of a large array of instances
+allocating words linear in its elements, an edit's switch and the period's take-out cheaper, the size of plant
 the defaults carry measured and stated below, and a trip met in that work naming it
 (decision 352). Its answers to the
 questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
@@ -3585,8 +3585,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the store makes its text so, in the write's own process within the write limit: a
   trip's, a cold restart's, `start: :cold`'s, a fresh start's with no store file and the
   period's, whose writer takes the retained image out of the resource the runner hands it,
-  so that the runner's own work at a period is that hand-off, a few milliseconds for tens
-  of thousands of retained timers, and a store too big to make and write within the limit
+  so that the runner's own work at a period is that hand-off, a copy of the whole
+  resource, its programs' code and its instances' state, into the writer, some 10 ms for
+  16,384 retained timers and 36 ms for a program of 65,536 rungs that retains one bool,
+  and a store too big to make and write within the limit
   is cut off at it and reported, `{:retain, {:error, :timeout}}`, its file `unknown` in
   `status/1`, the runner answering on: a trip of 131,072 retained timers answers a host's
   `status/1` 5 s after the fault, its write cut off, where the runner spent 11 s making
@@ -3663,7 +3665,9 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   where they hold the same bytes makes no new copy, `status/1`'s `copy` naming that one
   (decision 456): a start that fails after its copy, a device that cannot be opened, and
   is started again five times by a supervisor leaves one copy, not five, and a copy it
-  cannot read, a directory a host put at the highest number, is no match. One that fails
+  cannot read, a directory a host put at the highest number, is no match, nor is an
+  entry spelled otherwise at that number, `tally.retain.dropped.007`, which only the
+  number counts: the copy compared is the one at the name logex gives it. One that fails
   is reported as a failed write is, `failed` in `status/1`'s `retain`, and the start goes
   on with the copy owed (decision 416): every write over the store, the period's, a
   trip's, a stop's, a shutdown's or a cold restart's, makes the copy first, under the
@@ -4160,8 +4164,12 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   poll period, each device's turn, so that a healthy card the host starved beside it
   does not trip the line as hung, while a hung one still trips at the first look once
   the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
-  461). As a Logix controller faults a module's connection only after four missed
-  packets at its RPI, never on one late look. One that
+  461). The look sees the lateness itself, whatever brought the runner to it, its wake
+  or a device's change taken first. Each late look gives a turn of its own, so on a host
+  late at every wake a hung input card trips only once a wake comes on time, the rounds
+  running on its last inputs meanwhile (provisional, `PLAN.md`'s RV-6 question 3). As a
+  Logix controller faults a module's connection only after four missed packets at its
+  RPI, never on one late look. One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4519,21 +4527,24 @@ closed: true
   it missed, `{:overlap, task, missed}`; it never runs early, and its due times stay on
   their grid.
 - `status/1`'s `runs` is each task's longest run against its watchdog, and
-  `latest_wake` the most any of the runner's wakes, a round's or a refresh's, came after
-  its time, in ms (since decision 461, where it was a round's alone), so a soak on the
+  `latest_wake` the most the runner found itself past its wake's time, at a round's look
+  or a refresh's, in ms (since decision 461, where it was a round's wake's alone), so a soak on the
   target machine gives what to set each `watchdog` and `idle:` to. The same spike measured `cycle/3` at 9 to 26 µs
   an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
   27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
   round at the median.
 - The size of plant the defaults carry (decision 352), `idle: 500`, `poll: 10` and
   `write_limit: 5000`, measured on the real clock on a four-core machine another workload
-  kept busy: an array of timers run element by element scans in 167 ms at 32,768 and
+  kept busy: an array of timers run element by element scans in 166 ms at 32,768 and
   367 ms at 65,536, a declaration's most, within a task's 500 ms watchdog, and a user
-  block's instances in 348 ms at 32,768, a scan linear in its elements since RV-6, where
-  `ton[16000]` took 1.8 s; an array of 32,768 timers retained is written every period,
-  its writer taking the image out (decision 455), and one of 65,536 is past the write
-  limit, `unknown`; and an edit's test step over 65,536 timers takes 355 ms, over a
-  block's instances some 20,000 within the idle watchdog. Past the bound the plant trips,
+  block's instances in 348 ms at 32,768, a scan allocating words linear in its elements
+  since RV-6, where `ton[16000]` took 1.8 s; but an array of counters of 65,536, 487 ms on
+  a quiet machine, or of timers in two dimensions, at the watchdog or past it, so the
+  bound is some 32,768 elements a plant; an array of 32,768 timers retained is written
+  every period, its writer taking the image out (decision 455), and one of 65,536 is past
+  the write limit, `unknown`; and an edit's test step over 65,536 timers takes 355 to 412
+  ms, near the idle watchdog and once past it under load, over a block's instances some
+  20,000 within it. Past the bound the plant trips,
   every output 0, named by the work it was met in, `{:watchdog, {:idle, 644, {:edit,
   :test}}}`; a larger plant gives `idle:`, a task's `watchdog` or `write_limit:` more.
   Each figure is that machine's: a soak on the target machine gives its own.

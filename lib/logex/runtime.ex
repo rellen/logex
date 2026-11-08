@@ -316,9 +316,12 @@ defmodule Logex.Runtime do
   element in that routine reading it there first, and the routine builds each such array
   again once as it ends, in one pass over each tuple a write reaches, where a write put
   the element into the array's tuple and so copied the whole array: a scan that runs each
-  of n elements of an array of instances, or writes each of an array's, takes time linear
-  in n, `ton[16000]` scanned element by element in some 84 ms where it took 1.8 s, as
-  many scalar timers in 56. An array of 256 elements or fewer is written into its tuple as
+  of n elements of an array of instances, or writes each of an array's, allocates words
+  linear in n, `ton[16000]` scanned element by element in some 84 ms where it took 1.8 s,
+  as many scalar timers in 56. Its time is not quite linear: `ton[n]` scans in 8, 37 and
+  218 ms at 4,096, 16,384 and 65,536 in a fresh process, as many scalar timers in 7, 29
+  and 133, and in 6, 66 and 401 ms in a process that holds the state between scans, as a
+  runner does, its heap the larger (RV-6's review). An array of 256 elements or fewer is written into its tuple as
   before, so a program of small arrays scans as it did; one larger pays some 20
   reductions a written element for the record, whose copy, which reductions count as
   about one, it no longer makes. Nothing a host sees changes: a state between scans holds

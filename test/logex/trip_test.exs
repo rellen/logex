@@ -247,6 +247,9 @@ defmodule Logex.TripTest do
 
     @impl true
     def cancel({clock, _agent}, timer), do: Manual.cancel(clock, timer)
+
+    @impl true
+    def wall_ms({clock, _agent}), do: Manual.wall_ms(clock)
   end
 
   # The hidden seam's steps, Logex.Runtime's, and a period's take-out that passes the time
@@ -847,6 +850,19 @@ defmodule Logex.TripTest do
   # due waits for it, so a test calls from another process and moves the clock on until
   # the call is answered, as Logex.Runner's moduledoc shows.
   defp called(fun, clock), do: calling(Task.async(fun), clock)
+
+  # The period's writer, once its first write is answered, 5 s at most.
+  defp written_once(runner), do: written_once(runner, 500)
+
+  defp written_once(runner, tries) when tries > 0,
+    do: answered(:sys.get_state(runner).retain.period, runner, tries)
+
+  defp answered(%{writer: writer, busy: false}, _runner, _tries) when is_pid(writer), do: writer
+
+  defp answered(_period, runner, tries) do
+    Process.sleep(10)
+    written_once(runner, tries - 1)
+  end
 
   defp calling(task, clock), do: called_back(Task.yield(task, 10), task, clock)
 
@@ -1533,9 +1549,12 @@ defmodule Logex.TripTest do
       assert %{status: :running, trip: nil} = Runner.status(runner)
     end
 
-    test "a hung device still trips once its turn is over, every output 0" do
+    # RV-6's review: the test's name said "every output 0", which a hung device, killed,
+    # never writes: its outputs are left to it, as every hung device's are (decision 114).
+    test "a hung device still trips once its turn is over, killed, its outputs left to it" do
       %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled()
-      :sys.suspend(device_pid(runner, "panel"))
+      hung = device_pid(runner, "panel")
+      :sys.suspend(hung)
 
       # The late wake judges no device; the next on time, a poll period on, finds the
       # panel silent after its turn and trips.
@@ -1544,8 +1563,109 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).status == :running
       Manual.advance(clock, 20)
       assert_receive {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
-      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}, unzeroed: ["panel"]} =
+               Runner.status(runner)
+
+      refute Process.alive?(hung)
       assert Sim.outputs(panel) == %{[0] => 1}
+    end
+
+    # RV-6's review: the thresholds, each pinned. A wake late by the idle watchdog exactly
+    # is the runner's own lateness within its watchdog, and judges at once, as every wake
+    # did before decision 461: only one later than that gives the devices a turn.
+    test "a wake late by no more than the idle watchdog judges the devices at once" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+      :sys.suspend(device_pid(runner, "panel"))
+
+      # The panel last heard at 1000; at 1040 within 50 + 10 still.
+      Manual.advance(clock, 40)
+      assert Runner.status(runner).status == :running
+
+      # The wake at 1050 read 50 ms late, at 1100: the panel 100 ms unheard trips.
+      stall(agent, 50)
+      Manual.advance(clock, 10)
+
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}, latest_wake: 50} =
+               Runner.status(runner)
+    end
+
+    test "the devices' turn is one poll period: a hung one trips at the look a poll period " <>
+           "after the late wake" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+      :sys.suspend(device_pid(runner, "panel"))
+
+      # The wake at 1010 read at 1110, the turn; the next wake, at 1120, a poll period on,
+      # is the first look after it, and trips.
+      stall(agent, 100)
+      Manual.advance(clock, 10)
+      assert %{status: :running, latest_wake: 100} = Runner.status(runner)
+      Manual.advance(clock, 9)
+      assert Runner.status(runner).status == :running
+      Manual.advance(clock, 1)
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+    end
+
+    test "a device's word taken in its turn counts from the late wake, and its silence " <>
+           "after trips once the idle watchdog and a poll period have passed since" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+
+      # The wake at 1010 read at 1110, the turn; the panel's polls due meanwhile run in
+      # its turn, each reading its clock 100 ms behind, its word heard at 1110.
+      stall(agent, 100, 100)
+      Manual.advance(clock, 10)
+      Manual.advance(clock, 0)
+      stall(agent, 0, 0)
+
+      # Then it hangs: heard at 1110, it is within 50 + 10 at 1170 and past it at 1180.
+      :sys.suspend(device_pid(runner, "panel"))
+      Manual.advance(clock, 60)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+    end
+
+    # RV-6's review: the runner's lateness is seen by the look, whatever brought it there.
+    # A runner the machine stopped took a device's change before its overdue wake, ran
+    # the round the change made, and judged its devices at once, as though on time,
+    # tripping a healthy drive whose polls were not yet run.
+    test "a round a device's change makes before the runner's overdue wake lets the " <>
+           "devices run first, as the wake would" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
+      {:ok, panel} = Sim.start_link(clock: clock, reports: true)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      text =
+        String.replace(@relayed, "interval 10", "interval 1000") <>
+          "var_global z bool at drive.i.0\ntask e single t priority 0\n" <>
+          "var_global t bool at panel.i.2\nvar_global hits dint\n" <>
+          "program h count with e\n  h.n hits\n"
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Stalled, {clock, agent}},
+          poll: 10,
+          idle: 50
+        )
+
+      Agent.update(agent, &%{&1 | runner: runner})
+      :ok = Runner.subscribe(runner, [:trip])
+      Manual.advance(clock, 1000)
+
+      # The runner's next reading 100 ms late, at the panel's change, its wake at 1010 not
+      # yet taken: the round runs, the drive unjudged, and the drive, heard in its turn,
+      # never trips.
+      stall(agent, 100)
+      Sim.set(panel, [2], 1)
+      assert %{status: :running, trip: nil, latest_wake: late} = Runner.status(runner)
+      assert late > 50
+      assert Runner.get!(runner, "hits") == 1
+      Manual.advance(clock, 200)
+      refute_received {Runner, ^runner, {:trip, _reason}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
     end
   end
 
@@ -1588,6 +1708,64 @@ defmodule Logex.TripTest do
         assert took > 2
         assert Sim.outputs(panel) == %{[0] => 0}
       end
+    end
+
+    # RV-6's review: every name the moduledoc gives, each pinned, the forcing requests'
+    # with a forces file as a host gives one.
+    @tag :tmp_dir
+    test "a forcing request names its function", %{tmp_dir: dir} do
+      for {work, call} <- [
+            force: &Runner.force(&1, "x", 1),
+            unforce: &Runner.unforce(&1, "x"),
+            unforce_all: &Runner.unforce_all/1
+          ] do
+        %{runner: runner, clock: clock, ticks: ticks, panel: panel} =
+          ticking(forces: Path.join(dir, "#{work}.forces"))
+
+        Agent.update(ticks, fn _ -> 3 end)
+        called(fn -> call.(runner) end, clock)
+        Agent.update(ticks, fn _ -> 0 end)
+        assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
+        assert took > 2
+        assert Sim.outputs(panel) == %{[0] => 0}
+      end
+    end
+
+    test "an accept and each edit step after it name their own" do
+      candidate = configured(String.replace(@relayed, "interval 10", "interval 20"))
+      accept = &Runner.accept(&1, candidate)
+
+      for {work, before, call} <- [
+            {:accept, [], accept},
+            {{:edit, :untest}, [accept, &Runner.test/1], &Runner.untest/1},
+            {{:edit, :assemble}, [accept, &Runner.test/1], &Runner.assemble/1},
+            {{:edit, :cancel}, [accept], &Runner.cancel/1}
+          ] do
+        %{runner: runner, clock: clock, ticks: ticks, panel: panel} = ticking()
+        for step <- before, do: assert({:ok, _} = called(fn -> step.(runner) end, clock))
+        Agent.update(ticks, fn _ -> 3 end)
+        called(fn -> call.(runner) end, clock)
+        Agent.update(ticks, fn _ -> 0 end)
+        assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
+        assert took > 2
+        assert Sim.outputs(panel) == %{[0] => 0}
+      end
+    end
+
+    # An accept is two requests, the resource taken and the edit held, the edit made in the
+    # caller between them (accept/2): the second, made here as accept/2 makes it, the only
+    # one timed so, names accept too.
+    test "an accept's hold of the edit names accept" do
+      candidate = configured(String.replace(@relayed, "interval 10", "interval 20"))
+      %{runner: runner, clock: clock, ticks: ticks, panel: panel} = ticking()
+      {edits, runtime, elapsed} = GenServer.call(runner, :resource)
+      {:ok, edit, forecast} = Logex.Configuration.Edit.accept(runtime, candidate, elapsed)
+      Agent.update(ticks, fn _ -> 3 end)
+      called(fn -> GenServer.call(runner, {:accept, edits, edit, forecast}) end, clock)
+      Agent.update(ticks, fn _ -> 0 end)
+      assert {:watchdog, {:idle, took, :accept}} = Runner.status(runner).trip
+      assert took > 2
+      assert Sim.outputs(panel) == %{[0] => 0}
     end
 
     test "an edit's step names the step, the plant tripped with every output 0" do
@@ -1639,6 +1817,65 @@ defmodule Logex.TripTest do
       # after it (decision 113), where the round's plan of its next wake came after the
       # period's hand-off and woke the tripped runner on.
       refute Enum.any?(Manual.pending(clock), fn {_at, pid, _message} -> pid == runner end)
+    end
+
+    # RV-6's review: a period's image that waited for the writer, busy with the one
+    # before, is handed to it once it answers, and that hand-off, the resource sent to
+    # the writer as at the period, is timed and named as the period's own, where it went
+    # untimed. The writer held, as a slow disk holds it, so that the third period waits.
+    @tag :tmp_dir
+    test "the hand-off of a period's image that waited for the writer names the period",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, ticks: ticks, panel: panel} =
+        ticking(retain: Path.join(dir, "plant.retain"), retain_period: 100)
+
+      :ok = Runner.subscribe(runner, [:trip])
+      Manual.advance(clock, 90)
+      writer = written_once(runner)
+      :sys.suspend(writer)
+      Manual.advance(clock, 100)
+      Manual.advance(clock, 100)
+      assert %{busy: true, pending: {_at, _image}} = :sys.get_state(runner).retain.period
+      Agent.update(ticks, fn _ -> 3 end)
+      :sys.resume(writer)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, took, :period}}}}, 5000
+      Agent.update(ticks, fn _ -> 0 end)
+      assert took > 2
+      assert Sim.outputs(panel) == %{[0] => 0}
+    end
+
+    # RV-6's review: the hand-off is the runner's own work from when it found the period
+    # due, not from the period's due time, which a late wake leaves behind it: here the
+    # period due at 100, found at 120, its take-out 600 ms.
+    @tag :tmp_dir
+    test "the period's hand-off is timed from when the runner found it due",
+         %{tmp_dir: dir} do
+      {:ok, clock} = Manual.start_link(now: 1_793_368_800_000)
+      {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
+      {:ok, panel} = Sim.start_link(clock: clock)
+      :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 0})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Stalled, {clock, agent}},
+          poll: 10,
+          retain: Path.join(dir, "plant.retain"),
+          retain_period: 100,
+          steps: SlowTaker
+        )
+
+      Agent.update(agent, &%{&1 | runner: runner})
+      :ok = Runner.subscribe(runner, [:trip])
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 90)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 600})
+      stall(agent, 20)
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 600, :period}}}}, 5000
+      assert Sim.outputs(panel) == %{[0] => 0}
     end
   end
 
@@ -2496,6 +2733,52 @@ defmodule Logex.TripTest do
       assert [{_key, polled, backs}] = :ets.lookup(Logex.TripTest, {runner, :step})
 
       assert polled <= backs + 1,
+             "the panel ran #{polled} polls in e1's step and told the runner #{backs} times"
+
+      Runner.stop(runner)
+    end
+
+    # RV-6's review: a device whose own poll read the change, its sim reporting none,
+    # waits on the runner with its next poll armed, and so tells the runner it is back at
+    # each poll meanwhile, as one that took a report does. Its next poll was armed only
+    # once the runner had answered, so it told the runner nothing while it waited, and a
+    # round past the idle watchdog took it for hung: the test above failed so 11 runs in
+    # 50 under `scripts/load.sh`, its panel's poll reading the change before the report
+    # came, e1's step waiting 5 s for a word the panel never sent. The idle watchdog here
+    # is 1000 ms, so that only that wait, past e1's watchdog, fails the test on a loaded
+    # machine, where a runner the machine stopped for 60 ms would trip it at 50.
+    test "a device waiting on the runner for the change its own poll read is heard at " <>
+           "each poll meanwhile, on the real clock" do
+      text =
+        "task e1 single t1 priority 0 watchdog 1000\ntask e2 single t2 priority 1\n" <>
+          "var_global t1 bool at panel.i.0\nvar_global t2 bool at panel.i.1\n" <>
+          "var_global y bool at panel.q.0\nvar_global hits dint\n" <>
+          "program a count with e1\n  a.n hits\nprogram b relay with e2\n  b.in t2\n  b.out y\n"
+
+      {:ok, panel} = Sim.start_link()
+      counter = make_ref()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}},
+          poll: 10,
+          idle: 1000,
+          steps: Sleeps,
+          clock: {Counted, counter}
+        )
+
+      :ets.insert(Logex.TripTest, {{runner, :counted}, counter})
+
+      # The panel's next poll reads both triggers' change and waits on the runner while
+      # e1's round sleeps 200 ms and then waits for the panel's word; e2's round follows.
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert written(panel, 1000) == %{[0] => 1}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "hits") == 1
+      assert [{_key, polled, backs}] = :ets.lookup(Logex.TripTest, {runner, :step})
+
+      assert backs > 0 and polled <= backs + 1,
              "the panel ran #{polled} polls in e1's step and told the runner #{backs} times"
 
       Runner.stop(runner)

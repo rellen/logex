@@ -205,8 +205,12 @@ defmodule Logex.Runner.Writer do
   # replaced (decision 449).
   #
   # Decision 456 (RV-6): before it copies, the copy compares the store's text with the
-  # highest-numbered copy that stands, and where they hold the same bytes it makes no new
-  # copy and is that one, `{:ok, n}` its number, so that a start that fails after its copy
+  # highest-numbered copy that stands, read at the name logex gives it,
+  # `<store>.dropped.<n>`, and where they hold the same bytes it makes no new copy and is
+  # that one, `{:ok, n}` its number, which `status/1` names by that name; an entry spelled
+  # otherwise at the highest number, `.dropped.007`, counts for the number alone and is
+  # never compared, the copy made past it (RV-6's review), and a host's own regular file
+  # at the name holding the same bytes is the copy, as the decision reads, so that a start that fails after its copy
   # and is started again, a supervisor's restarts among them, leaves one copy where it
   # left one a start, and so does an owed copy made by a later write over one that landed
   # late (decision 391), the copy a start owes compared as the start's own is

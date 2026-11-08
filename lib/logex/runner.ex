@@ -373,9 +373,14 @@ defmodule Logex.Runner do
     write, so that a slow write delays no round: while one is in progress the next waits,
     the newest replacing the one before, latest wins. Since decision 455 the take-out and
     the text are the writer's, within the write limit from the hand-off, so that the
-    runner's own work at a period is the resource's copy into the writer, some 4 ms for
-    32,768 retained timers, where it took the image out itself, 0.9 s for those, and
-    tripped a healthy plant at its first period (M7). A write made is the store's age in `status/1`'s
+    runner's own work at a period is the resource's copy into the writer, where it took
+    the image out itself, 0.9 s for 32,768 retained timers, and tripped a healthy plant at
+    its first period (M7). The copy follows the whole resource, every program's code and
+    every instance's state, not what it retains alone: some 10 ms for 16,384 retained
+    timers, whose take-out took 240 ms, and 36 ms for a program of 65,536 rungs over
+    `ton[65536]` that retains one bool, 91 ms for ten instances of it, whose take-out took
+    nothing (RV-6's review). A period's image that waited for the writer is handed on
+    once it answers, timed and named as the period's own (decision 352). A write made is the store's age in `status/1`'s
     `written_at`; one that fails leaves the store as it was and is reported,
     `{:retain, {:error, reason}}` and `failed`, the plant running on; since RV-4's review
     one the disk has not finished within the write limit of real time is reported
@@ -424,7 +429,11 @@ defmodule Logex.Runner do
     that landed late (provisional): the comparison a raw read inside the copy's own
     process and its limit, of a regular file of the store's size alone, and a copy it
     cannot read, a directory or a FIFO a host put there among them, no match, the new
-    copy made past it. A copy's
+    copy made past it; the copy compared is the highest number's by the name logex gives
+    it, `plant.dropped.<n>`, so that an entry spelled otherwise at that number,
+    `plant.dropped.007`, counts for the number and is never compared, the copy made past
+    it, and a host's own file at that name holding the same bytes is the copy `copy`
+    names (RV-6's review). A copy's
     failure is reported as a failed write's, `failed` in `status/1`, and the start goes
     on, the copy then owed (decision 416): since RV-5's review every write over the
     store, the period's, a trip's, a stop's, a shutdown's and a cold restart's, makes it
@@ -654,8 +663,16 @@ defmodule Logex.Runner do
     period, each device's turn, its next poll, and takes a device's word that it is back,
     from then on, as heard no earlier than that wake, so that only a device still silent
     after its turn trips the line, a hung one at the first look once the runner is on
-    time, and a device the machine starved beside the runner does not (provisional: each
-    late wake gives a turn of its own); and a device's process that goes down, which the runner traps, is `{:down,
+    time, and a device the machine starved beside the runner does not. The lateness is
+    seen at the look itself, against the runner's wake still to come, whatever brought it
+    there, a wake or a device's change, a force or an edit's round taken before its
+    overdue wake (provisional, RV-6's review); a wake late by the idle watchdog or less
+    judges at once. Each late look gives a turn of its own (provisional), so that while
+    every wake is late by more than the idle watchdog no device is judged: a hung input
+    card, its outputs none, trips only at the first look on time, the rounds meanwhile
+    running on its last inputs, and a wake that the runner's own long work made late, an
+    edit's step or a host's request of nearly the idle watchdog, gives a turn too. A
+    device's process that goes down, which the runner traps, is `{:down,
     reason}`. A device whose own read, report or write again fails tells the runner and
     latches, its 0 written where its adapter still takes it (decision 135);
     a round's write that fails trips at once, the devices after it not written;
@@ -744,22 +761,32 @@ defmodule Logex.Runner do
   writer, while every device waits on the idle watchdog and a poll period from the
   refresh before it; a round's scan is bounded by its task's watchdog, every device
   refreshed with that step's deadline. Since RV-6 the runner's own long work is cheaper:
-  a scan of every element of a large array of instances takes time linear in its
-  elements (`Logex.Runtime`'s "A large array"), an edit's switch reads each element it
-  moves once, and the period's take-out and every write's text are the writer's
-  (decision 455). Measured on the real clock with the defaults, `idle: 500`, `poll: 10`
-  and `write_limit: 5000`, a 100 ms task, on a four-core machine that another workload
-  kept busy, a load average of 9: an array of timers run element by element, `ton[n]` and
-  a rung each, scans in 67 ms at 16,384, 166 ms at 32,768 and 367 ms at 65,536, a
+  a scan of every element of a large array of instances allocates words linear in its
+  elements (`Logex.Runtime`'s "A large array"), where each element's write copied the
+  whole array, its time some 1.6 times that of as many scalar instances at 65,536 in a
+  fresh process, and more in one that holds the state as the runner does (RV-6's
+  review: `ton[n]` 8, 37 and 218 ms at 4,096, 16,384 and 65,536 against 7, 29 and 133
+  ms scalar, and 6, 66 and 401 ms held); an edit's switch reads each element it moves
+  once, and the period's take-out and every write's text are the writer's (decision
+  455). Measured on the real clock with the defaults, `idle: 500`, `poll: 10` and
+  `write_limit: 5000`, a 100 ms task, on a four-core machine that another workload kept
+  busy, a load average of 9: an array of timers run element by element, `ton[n]` and a
+  rung each, scans in 67 ms at 16,384, 166 ms at 32,768 and 367 ms at 65,536, a
   declaration's most (decision 403), within the 500 ms a task's watchdog is where none is
-  set, the 100 ms task missing periods past some 30,000; a user block's instances, each
-  called, in 119 ms at 10,922, 187 ms at 21,844 and 348 ms at 32,768; an array of timers
-  retained, with its period of 1000 ms, written every period at 32,768, the period's
-  hand-off a few ms, and at 65,536 past the write limit, the store `unknown` and reported
-  each period, its start's write 5.0 s; and an edit's test step over an array of timers
-  in 150 ms at 32,768 and 355 ms at 65,536, and over a user block's instances, which
-  moves each member, in 255 ms at 10,922 and 576 ms at 21,844, past the idle watchdog
-  some 20,000 on. A plant past the bound still trips, its outputs at 0, named by the work
+  set, the 100 ms task missing periods past some 30,000; not every kind fits a
+  declaration's most, so the bound is some 32,768 elements a plant (RV-6's review, on a
+  quiet machine): an array of counters, `ctu[n]`, in 218 ms at 32,768 and 487 ms at
+  65,536, which tripped `{:watchdog, {:task, "t", 542, 500}}` in the review, and timers
+  in two dimensions, `ton[128,256]`, in 255 ms at 32,768, `ton[128,512]` tripping at
+  504 ms; a user block's instances, each called, in 119 ms at 10,922, 187 ms at 21,844
+  and 348 ms at 32,768; an array of timers retained, with its period of 1000 ms, written
+  every period at 32,768, the period's hand-off a copy of the whole resource (above), and
+  at 65,536 past the write limit, the store `unknown` and reported each period, its
+  start's write 5.0 s; and an edit's test step over an array of timers in 150 ms at
+  32,768 and 355 ms at 65,536, 384 to 412 ms on a quiet machine and once 536 ms, past the
+  idle watchdog, under the review's load, and over a user block's instances, which moves
+  each member, in 255 ms at 10,922 and 576 ms at 21,844, past the idle watchdog some
+  20,000 on. A plant past the bound still trips, its outputs at 0, named by the work
   it was met in, `{:watchdog, {:idle, 644, {:edit, :test}}}` for an edit's test over
   32,768 instances of a block; a plant that needs more gives `idle:`, a task's
   `watchdog` or `write_limit:` more. Each figure is the machine's, and a soak on the
@@ -1079,7 +1106,7 @@ defmodule Logex.Runner do
   decision 440 always there, nil where no such write stands; `edit`, the stage of the
   edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
-  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a wake came after its time, in ms, since RV-6 a refresh's as a round's, so that the runner's own lateness shows (decision 461), where it was a round's alone;
+  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most the runner found itself past its wake's time, in ms, since RV-6 at a refresh's look as a round's, so that the runner's own lateness shows (decision 461), where it was a round's wake's alone, and since RV-6's review at a round a device's change, a force or an edit's step made before an overdue wake (provisional);
   `refresh_gap`, the longest wait between two refreshes of the devices, in ms; and since
   decision 262 `unzeroed`, the names, in device-name order, of the devices whose outputs
   are not known to be 0 since the trip: one whose adapter did not take the trip's 0,
@@ -1406,8 +1433,8 @@ defmodule Logex.Runner do
   defp took({:fault, cause}), do: {:error, cause}
 
   @impl GenServer
-  def handle_info({__MODULE__, :wake, token}, %{wake: {_timer, token, at}} = state),
-    do: {:noreply, woken(state, at)}
+  def handle_info({__MODULE__, :wake, token}, %{wake: {_timer, token, _at}} = state),
+    do: {:noreply, woken(state)}
 
   def handle_info({__MODULE__, :wake, _stale}, state), do: {:noreply, state}
 
@@ -1558,7 +1585,8 @@ defmodule Logex.Runner do
   defp requested(:free, request, state), do: answered(request, refresh(state, :idle))
 
   # Each request answered; one that took longer than the idle watchdog, served whole,
-  # trips the runner once it is answered, `{:watchdog, {:idle, ms}}` (decision 128). A
+  # trips the runner once it is answered, `{:watchdog, {:idle, ms, work}}` (decision 128,
+  # the work named since decision 352). A
   # restart is the tripped runner's own, its first round timed by its steps' watchdogs.
   defp answered({from, {:restart, _mode, _asked} = request}, state) do
     {reply, state} = served(request, state)
@@ -2628,12 +2656,14 @@ defmodule Logex.Runner do
   # limit and gone once a later write lands or fails, a start having none; a round, an
   # edit's step and a restart refused write nothing of their own, and a trip's, a stop's
   # and a cold restart's write each set or clear it as any write does. Decision 461 (RV-6):
-  # `turn`, the time on the runner's clock of its last wake late by more than the idle
-  # watchdog while running, or nil, none yet; set by such a wake, a round's or a
-  # refresh's, and read only by the look for a device not heard, which judges none within
-  # a poll period of it, and by a device's word that it is back, heard no earlier than
-  # it; a round, a trip, a restart, a stop and an edit's step leave it as it is, a time
-  # past by then, which judges nothing once a poll period has gone.
+  # `turn`, the time on the runner's clock of its last look, a round's or a refresh's,
+  # that found its wake past its time by more than the idle watchdog, or nil, none yet;
+  # set by such a look, whatever brought the runner to it, a wake or a change, a force
+  # or an edit's round before its overdue wake (RV-6's review), and read only by the look
+  # for a device not heard, which judges none within a poll period of it, and by a
+  # device's word that it is back, heard no earlier than it; a round, a trip, a restart, a
+  # stop and an edit's step leave it as it is, a time past by then, which judges nothing
+  # once a poll period has gone.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -2822,15 +2852,9 @@ defmodule Logex.Runner do
   # ---- the rounds ------------------------------------------------------------------------
 
   # A wake: a round where one is due, and otherwise the refresh a wait makes at least once
-  # a poll period. A wake that came late is kept in the status, the latest: since RV-6
-  # every wake's, a refresh's as a round's, so that the runner's own lateness shows
-  # (decision 461), where it was a round's wake's alone.
-  defp woken(state, at) do
-    now = now(state)
-    late = now - at
-    state = turned(late, now, %{state | latest_wake: max(state.latest_wake, late)})
-    wake(due?(state.next_round, now), state)
-  end
+  # a poll period. How late it came is seen by the look for a device not heard that both
+  # make (overdue/2).
+  defp woken(state), do: wake(due?(state.next_round, now(state)), state)
 
   defp due?(nil, _now), do: false
   defp due?(at, now), do: now >= at
@@ -2846,11 +2870,27 @@ defmodule Logex.Runner do
   # it. Only a device still silent after its turn trips the line, and a device hung in its
   # adapter still trips, at once once the runner wakes on time (provisional: each late
   # wake gives a turn of its own, so that while every wake is late by more than the idle
-  # watchdog no device is judged). As IEC 61131-3 leaves a controller's I/O faults to the
+  # watchdog no device is judged, and a hung device trips only at the first look on
+  # time). As IEC 61131-3 leaves a controller's I/O faults to the
   # implementer, so Logix faults a module's connection only after it has missed four of
   # its requested packet intervals, never on one late reading of a controller that was
   # itself held up.
-  defp turned(late, now, %{idle: idle, status: :running} = state) when late > idle,
+  #
+  # Since RV-6's review the lateness is seen by the look itself, against the runner's own
+  # wake still to come, whatever message brought the runner to the look: a wake, or a
+  # device's change, a force or an edit's round that came before its overdue wake, where
+  # only a wake's own lateness was seen, and a runner the machine stopped judged its
+  # devices at once when it took a change first (provisional). `latest_wake` is the most
+  # the runner found itself past its wake's time at a look, a refresh's or a round's,
+  # since RV-6 every wake's, so that the runner's own lateness shows.
+  defp overdue(now, %{wake: {_timer, _token, at}} = state),
+    do: turned(now - at, now, %{state | latest_wake: max(state.latest_wake, now - at)})
+
+  defp overdue(_now, state), do: state
+
+  # A look is made only while running (rounded/1, wake/2), so no status is read here,
+  # where the guard read one no tripped runner reaches (RV-6's review, its mutant r07).
+  defp turned(late, now, %{idle: idle} = state) when late > idle,
     do: %{state | turn: now}
 
   defp turned(_late, _now, state), do: state
@@ -2858,10 +2898,10 @@ defmodule Logex.Runner do
   defp wake(true, state), do: rounded(state)
 
   defp wake(false, %{retain: nil} = state),
-    do: heard_from(silent(state), state, &scheduled(refresh(&1, :idle)))
+    do: heard_from(silent(state), &scheduled(refresh(&1, :idle)))
 
   defp wake(false, state),
-    do: heard_from(silent(state), state, &scheduled(waited(refresh(&1, :idle))))
+    do: heard_from(silent(state), &scheduled(waited(refresh(&1, :idle))))
 
   # Decision 122's slots: after C ms of the continuous task's rounds, at the end of the
   # round that completes them, the runner serves its own work for up to S ms, each request
@@ -2992,7 +3032,7 @@ defmodule Logex.Runner do
   # reading gone wrong is decision 394's, the work in hand finished and the trip taken as
   # the runner next takes a message.
   defp in_round(state) do
-    heard_from(silent(%{state | in_round: []}), state, &a_round(%{&1 | in_round: []}))
+    heard_from(silent(%{state | in_round: []}), &a_round(%{&1 | in_round: []}))
   catch
     {__MODULE__, :clock, cause, at} ->
       published(at, Enum.reverse(at.in_round))
@@ -3250,7 +3290,13 @@ defmodule Logex.Runner do
   # as a round begins and at each wait's refresh, both while running, when no device is
   # down, is killed, its outputs left to what it does on losing its master, and trips the
   # runner `{:io, device, :timeout}`, the trip's zero finding it down.
-  defp silent(%{turn: turn, poll: poll} = state), do: judged(now(state), turn, poll, state)
+  # The look reads the clock once, and first sees whether the runner is late (overdue/2),
+  # giving the state it leaves with the device it found, if any.
+  defp silent(%{poll: poll} = state) do
+    now = now(state)
+    %{turn: turn} = state = overdue(now, state)
+    {judged(now, turn, poll, state), state}
+  end
 
   # Decision 461 (RV-6): no device is judged within a poll period of a late wake, its turn
   # (turned/3).
@@ -3265,9 +3311,9 @@ defmodule Logex.Runner do
   defp heard_at(at, nil), do: at
   defp heard_at(at, turn), do: max(at, turn)
 
-  defp heard_from(nil, state, go), do: go.(state)
+  defp heard_from({nil, state}, go), do: go.(state)
 
-  defp heard_from({name, pid}, state, _go) do
+  defp heard_from({{name, pid}, state}, _go) do
     Process.exit(pid, :kill)
     tripped(state, {:io, name, :timeout})
   end
@@ -3577,9 +3623,11 @@ defmodule Logex.Runner do
   # Decision 455 (RV-6): the period's take-out of the retained image, and its text, are the
   # writer's, made in its own process within the write limit from the hand-off (handed/2),
   # so that the runner's own work at a period is the hand-off alone, the resource as it
-  # stands sent to the writer, a copy of it, some 4 ms for 32,768 retained timers where the
-  # take-out took 0.9 s and the text 1.2 s and tripped a healthy plant at its first period
-  # (b3-store-image-1); the resource is plain data, so what the writer writes is the
+  # stands sent to the writer, a copy of it, where the take-out of 32,768 retained timers
+  # took 0.9 s and the text 1.2 s and tripped a healthy plant at its first period
+  # (b3-store-image-1). The copy is of the whole resource, its programs' code and its
+  # instances' state, not of the retained values alone: 10 ms for 16,384 retained timers
+  # and 36 ms for a program of 65,536 rungs retaining one bool (RV-6's review); the resource is plain data, so what the writer writes is the
   # resource as the runner held it at the hand-off. The hidden seam's `retained/1`, where a
   # test gives one, takes it out in the runner as before, so that a test sees when the
   # hand-off comes.
@@ -3661,8 +3709,14 @@ defmodule Logex.Runner do
 
   defp next_write(%{retain: %{period: %{pending: nil}}} = state), do: state
 
-  defp next_write(%{retain: %{period: %{pending: write} = periodic}} = state),
-    do: handed(put_period(state, %{periodic | pending: nil}), write)
+  # The hand-off of the image that waited, the resource sent to the writer, is the
+  # runner's own work at the period as the first hand-off is (period/2), timed and named
+  # `:period` (decision 352, RV-6's review), where it went untimed.
+  defp next_write(%{retain: %{period: %{pending: write} = periodic}} = state) do
+    at = now(state)
+    state = handed(put_period(state, %{periodic | pending: nil}), write)
+    idled(now(state) - at, :period, state)
+  end
 
   # Before a write at an event, a trip, a stop, a shutdown or a cold restart, the
   # writer's write in progress waited for and any pending one dropped, so that the
