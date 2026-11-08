@@ -426,7 +426,7 @@ defmodule Logex.IO.Sim do
   # Decision 462: a held reread whose process went down, killed by a runner that gave it up
   # (provisional), spends the hold, which holds nothing then; `let_go/1` takes the monitor
   # out, its message with it, so no other comes. Any other message, which nothing the sim
-  # is called by sends, is passed over, as GenServer's default passed it over.
+  # is called by sends, is passed over, where GenServer's default logged it.
   @impl GenServer
   def handle_info(
         {:DOWN, monitor, :process, _pid, _reason},

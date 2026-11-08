@@ -16484,7 +16484,7 @@ and CI checked; each fix with a test that fails when it is reverted.
      `hold/1` arms again and `let_go/1` holds nothing (provisional, question 4).
      `io_test.exs`'s "a held reread whose process goes down spends the hold"; the review's
      `hold_never2.exs` now reads `holding after: false`, `hold again: :ok`. Any other
-     message the sim is sent is passed over, as GenServer's default passed it.
+     message the sim is sent is passed over, where GenServer's default logged it.
   6. *The loader test past 60 s under heavy load* (low). Decision 464's raw calls run on
      the VM's dirty I/O schedulers, ten, which every raw file call shares: ten raw opens
      of FIFOs no process writes held them all here, the compile and the VM's own exit
@@ -16512,6 +16512,33 @@ and CI checked; each fix with a test that fails when it is reverted.
     | n462e_down_not_spent | a held reread's process going down spends nothing | red: io 1 |
     | n462f_stray_message_crashes | no clause for any other message | red: io 1 |
     | n462g_newest_fence_first | the oldest fence in the mailbox taken for the newest | red: io 1 |
+
+    And the ceilings' probes, over `d094bfe` (the patches `scratchpad/rv/rv17work/fix/mtB/`):
+
+    | probe | what it does | the full suite at `d094bfe` |
+    |---|---|---|
+    | q3_dispatch_four_times (the review's) | each instruction evaluated four times | red: ceiling 3 (a rung of scans, cycles and the round); besides, array 2, bit_string 1, element_bit 1, instance_array 2, long_timer 1, real 1, tag_bit 1, tag_subscript 1 |
+    | q5_every_element_20_dearer (the review's) | each element 20 reductions dearer | red: ceiling 3 (a rung of each); besides, real 1 |
+    | g_scan_2 | each element run twice again | red: ceiling 3 (a rung of each); besides, array 2, bit_string 1, element_bit 1, function_block 2, instance_array 2, long_timer 1, real 1, tag_bit 1, tag_subscript 2 |
+    | p1_every_instruction_dearer (RV-7's) | each element two reductions dearer | green (2842 passed) |
+    | p2_every_instruction_lowered_dearer (RV-7's) | each instruction lowered two dearer | green (2842 passed) |
+    | p4_every_round_dearer (RV-7's) | each round two dearer | green (2842 passed) |
+    | p5_every_cycle_step_dearer | each cycle step two dearer | green (2842 passed) |
+
+    At `aa17a15` neither of the review's probes turned a ceiling red, q5 only
+    `real_test.exs`'s bound, by a hundredth; the same-run bounds the probes turn red
+    besides are the probes', twins taking unlike `element/3` clauses, as the review found.
+
+  - *Merged with main* (`8a06268`, RV-16): README's landed paragraph names RV-16's
+    landings and RV-17's; `trip_test.exs`'s reread test keeps RV-17's hold, its comment
+    saying the drive's own opening limit bounds the held reread since decision 439, its
+    `idle: 5000` as it was; RV-16's as built follows RV-17's here as main placed it.
+
+  - *The load runs* (`scripts/load.sh -n 50`, four busy loops on four cores, a load average
+    of 2 to 24, at `8a06268`, RV-16 merged): `trip_test.exs`'s real-clock reread test and
+    `io_test.exs`'s three hold tests, 0 of 50 failed
+    (`scratchpad/rv/rv17work/fix/load_hold50.txt`). The loader test of finding 6 was not
+    run again beside full suites: the review's ten are the record, and the base no better.
 
   - *Provisional readings, and questions for the maintainer*, by what a maintainer or an
     operator sees. The record is silent on each; the reading taken is the closest to it.
