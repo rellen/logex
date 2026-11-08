@@ -113,6 +113,37 @@ defmodule Logex.Name do
   defp literal_name(false, _element, name), do: name
 
   @doc false
+  # RV-6 (decision 352): an element's name as logex spells it, `Logex.Array.name/2`'s,
+  # `lane_t[2]` or `grid[1,7]`, its word and each subscript's value, `{"grid", [1, 7]}`,
+  # read with no lexer, each subscript plain decimal digits, at most 18 of them, which the
+  # lexer would read as the same integer; nil for any other text, `temps[03]` among them,
+  # whose reader is element/1 and subscript/1. An online edit's switch reads each element
+  # it moves by its name, and read through the lexer each took some 70 reductions a
+  # subscript where this takes a few.
+  def spelled(name) when is_binary(name), do: spelled_of(element(name))
+
+  defp spelled_of({word, texts}), do: decimals(texts, word, [])
+  defp spelled_of(nil), do: nil
+
+  defp decimals([], word, values), do: {word, :lists.reverse(values)}
+
+  defp decimals([<<d, _::binary>> = text | texts], word, values)
+       when d in ?1..?9 and byte_size(text) <= 18,
+       do: decimal(digits?(text), text, {texts, word, values})
+
+  defp decimals(["0" | texts], word, values), do: decimals(texts, word, [0 | values])
+  defp decimals(_texts, _word, _values), do: nil
+
+  defp decimal(true, text, {texts, word, values}),
+    do: decimals(texts, word, [:erlang.binary_to_integer(text) | values])
+
+  defp decimal(false, _text, _rest), do: nil
+
+  defp digits?(<<>>), do: true
+  defp digits?(<<d, rest::binary>>) when d in ?0..?9, do: digits?(rest)
+  defp digits?(_text), do: false
+
+  @doc false
   # The word before a text's first bracket, however its brackets are written, `temps` of
   # `temps[2` or `temps[1, 2]`, or nil where it has none: how a host's key that names no
   # element is told which array it reached for.

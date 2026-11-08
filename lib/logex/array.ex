@@ -27,6 +27,10 @@ defmodule Logex.Array do
   @max_elements 65_536
   @max_dimensions 3
 
+  # RV-6 (decision 352): the most elements put_all/2 puts one by one into an array, each
+  # put a copy of the tuples its index passes through.
+  @few 8
+
   @doc false
   @shown_lines 10
 
@@ -191,6 +195,38 @@ defmodule Logex.Array do
 
   def put(value, [i | index], element),
     do: put_elem(value, i, put(elem(value, i), index, element))
+
+  @doc false
+  # RV-6 (decision 352): the array with each element `written` holds, a map of index to
+  # element, replaced, every other kept: a few put one by one, and more in one pass over
+  # each tuple a write reaches, up to its last written element, the rest of it taken
+  # whole, so that writing each of n elements copies each tuple once, where a put a write
+  # copied the array each time.
+  def put_all(value, written) when map_size(written) <= @few,
+    do: Enum.reduce(written, value, fn {index, element}, value -> put(value, index, element) end)
+
+  def put_all(value, written),
+    do: List.to_tuple(replaced(Tuple.to_list(value), 0, Enum.sort(Map.to_list(written))))
+
+  # The elements in order, each written one replaced, the run of an element of more
+  # dimensions put into it whole; sorted, an index's writes come together and in order.
+  defp replaced(elements, _i, []), do: elements
+
+  defp replaced([_element | elements], i, [{[i], element} | rest]),
+    do: [element | replaced(elements, i + 1, rest)]
+
+  defp replaced([element | elements], i, [{[i | _], _} | _] = written) do
+    {under, rest} = Enum.split_while(written, &under?(&1, i))
+    [put_all(element, Map.new(under, &inner/1)) | replaced(elements, i + 1, rest)]
+  end
+
+  defp replaced([element | elements], i, written),
+    do: [element | replaced(elements, i + 1, written)]
+
+  defp under?({[i | _], _element}, i), do: true
+  defp under?(_write, _i), do: false
+
+  defp inner({[_ | index], element}), do: {index, element}
 
   @doc false
   # Every index of an array of `dims`, in the elements' order.

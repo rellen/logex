@@ -1218,19 +1218,23 @@ defmodule Logex.Edit.Plan do
   # its value and is reported; a timer meets the timer rules; and an instance it holds is
   # migrated in turn. A member only the stopped program's version declares is kept, unused,
   # until assemble or cancel prunes it. Each is reported by its path, `s1.count`.
+  # RV-6 (decision 352): the instance's key read once (located/1), for its value, its
+  # array's name and its put back.
   defp migrate({name, plan}, fresh, rules, {env, reports, pre}) do
+    at = located(name)
+
     migrate_in(
-      key_get(env, name),
-      is_map_key(fresh, held_under(name)),
-      {name, plan},
+      located_get(env, at),
+      is_map_key(fresh, located_under(at)),
+      {name, at, plan},
       rules,
       {env, reports, pre}
     )
   end
 
-  defp migrate_in(%{} = map, false, {name, plan}, rules, {env, reports, pre}) do
+  defp migrate_in(%{} = map, false, {name, at, plan}, rules, {env, reports, pre}) do
     {map, reports, pre} = members(plan, map, name, rules, {reports, pre})
-    {key_put(env, name, map), reports, pre}
+    {located_put(env, at, map), reports, pre}
   end
 
   defp migrate_in(_started_or_not_a_map, _fresh?, _plan, _rules, acc), do: acc
@@ -1432,6 +1436,11 @@ defmodule Logex.Edit.Plan do
   defp fits?({:instances, dims, fit}, value),
     do: Logex.Array.held?(value, dims, &fits?(fit, &1))
 
+  # RV-6 (decision 352): a map of 32 keys or fewer gives its keys in order, so its keys
+  # are compared as they come, where each was sorted first; a larger one is sorted.
+  defp fits?({:members, keys}, %{} = timer) when map_size(timer) <= 32,
+    do: :maps.keys(timer) == keys
+
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false
   # M5-11: an array fits where it is held whole, each element of its elements' type.
@@ -1455,23 +1464,27 @@ defmodule Logex.Edit.Plan do
   # `key` is the timer's name in the map it lives in, and `name` how the record and the
   # report name it: a top-level timer's name, or its path inside an instance (M2-5).
   # M3-1: `.pre` is the type's preset member, `pre` for a timer (Logex.FbType.rules/1).
-  defp timed({key, name, _from, _to, %{preset: member}} = timer, undo, clock, {env, _, _} = acc),
-    do:
-      timer(Map.fetch(as_map(key_get(env, key)), member), timer, Map.get(undo, name), clock, acc)
+  # RV-6 (decision 352): the timer's key read once, an element's name into its array and
+  # index, for the value found and the value put back, where it was read three times.
+  defp timed({key, name, from, to, %{preset: member} = rules}, undo, clock, {env, _, _} = acc) do
+    at = located(key)
+    found = located_get(env, at)
+    timer(Map.fetch(as_map(found), member), {at, found, name, from, to, rules}, undo, clock, acc)
+  end
 
   defp timer(
          {:ok, pre},
-         {key, name, from, to, %{preset: member} = rules},
+         {at_key, found, name, from, to, %{preset: member} = rules},
          undo,
          {{_now, at}, back?, held},
          {env, report, left}
        ) do
-    found = key_get(env, key)
+    undo = Map.get(undo, name)
     value = undone(found, undo, back?)
     target = target(undo, pre, from, to)
     value = resumed(back?, {from, to}, Map.put(value, member, target), {at, held, rules})
 
-    {key_put(env, key, value),
+    {located_put(env, at_key, value),
      moved(name, {pre, target, to}, value, {rules, at}) ++ lasted(name, found, value) ++ report,
      Map.put(left, name, {target, pre, last_moved(found, value)})}
   end
@@ -1507,7 +1520,35 @@ defmodule Logex.Edit.Plan do
 
   defp key_put(map, key, value), do: Map.put(map, key, value)
 
-  defp element_key(key) do
+  # A key read once, `{:element, array, index}` for an element's, `{:key, key}` otherwise,
+  # and the value under it fetched and put as key_get/2 and key_put/3 do.
+  defp located(key) when is_element_key(key) do
+    {array, index} = element_key(key)
+    {:element, array, index}
+  end
+
+  defp located(key), do: {:key, key}
+
+  defp located_get(map, {:element, array, index}),
+    do: unfetched(element_fetch(Map.fetch(map, array), index))
+
+  defp located_get(map, {:key, key}), do: Map.get(map, key)
+
+  defp located_put(map, {:element, array, index}, value),
+    do: Map.put(map, array, put_element(Map.fetch!(map, array), index, value))
+
+  defp located_put(map, {:key, key}, value), do: Map.put(map, key, value)
+
+  defp located_under({:element, array, _index}), do: array
+  defp located_under({:key, key}), do: key
+
+  # RV-6 (decision 352): a key logex spelled, `Logex.Array.name/2`'s, read with no lexer
+  # (Logex.Name.spelled/1), and any other by the one reading of a lexed name.
+  defp element_key(key), do: element_key(Logex.Name.spelled(key), key)
+
+  defp element_key({_array, _index} = spelled, _key), do: spelled
+
+  defp element_key(nil, key) do
     {array, subscripts} = Logex.Name.element(key)
     {array, Enum.map(subscripts, &elem(Logex.Name.subscript(&1), 1))}
   end

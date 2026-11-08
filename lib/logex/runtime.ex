@@ -303,11 +303,26 @@ defmodule Logex.Runtime do
   its state, as a scan takes it. A var_external's global that does not fit its own type,
   which only a host gives it, is told as the global's, `runtime.globals holds`, by a cycle
   and a restart alike, where it was told as the state's (since the review after Milestone
-  6). The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
-  keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
-  `:ran`, and takes each out before it ends, so an env holding one is refused, since it
-  would change the run; a block instance's map holding one has it dropped before its body
-  runs.
+  6). The check is linear in the state, a guard a value, and since RV-6 builds no
+  element's name but for a message (decision 352). Its env's keys are tag names: a scan
+  keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump`,
+  `:ran` and since RV-6 `:open`, and takes each out before it ends, so an env holding one
+  is refused, since it would change the run; a block instance's map holding one has it
+  dropped before its body runs.
+
+  **A large array** (RV-6, decision 352). A scan's write of an element of an array of more
+  than 256 elements at every depth, or of any array once its routine has opened one, is
+  kept in the routine's record of the arrays it has written, `:open`, every read of an
+  element in that routine reading it there first, and the routine builds each such array
+  again once as it ends, in one pass over each tuple a write reaches, where a write put
+  the element into the array's tuple and so copied the whole array: a scan that runs each
+  of n elements of an array of instances, or writes each of an array's, takes time linear
+  in n, `ton[16000]` scanned element by element in some 84 ms where it took 1.8 s, as
+  many scalar timers in 56. An array of 256 elements or fewer is written into its tuple as
+  before, so a program of small arrays scans as it did; one larger pays some 20
+  reductions a written element for the record, whose copy, which reductions count as
+  about one, it no longer makes. Nothing a host sees changes: a state between scans holds
+  each array whole, as before.
   Scanning a recompile of
   the same name over a kept instance, a *plain swap*, stays in this contract: the instance
   keeps its values until `restart/3`, so a tag the recompile adds reads 0, an added timer
@@ -471,12 +486,47 @@ defmodule Logex.Runtime do
   @jump :jump
   @skipped :skipped
 
+  # RV-6 (decision 352): the key under which a routine holds the elements it has written of
+  # its large arrays, by array and then by index, a list of subscripts' values, until it is
+  # done (opened/3, closed/1), an atom too; and the size at most of an array whose element
+  # a write puts straight into its tuples, every larger one opened. A put into a tuple
+  # copies it, so a routine that wrote each of n elements of an array copied the array n
+  # times, quadratic in wall time though linear in reductions, which count a tuple's copy
+  # as about one: `ton[16000]` scanned element by element in 1.8 s against 54 ms for as
+  # many scalar timers (a2-compiler1-6, b4-edit-5). Opened, each write is a map's, and the
+  # routine's end builds each array it wrote again once, in one pass over each tuple a
+  # write reaches (Logex.Array.put_all/2). An array of 256 elements or fewer is put into as
+  # before, so a program of small arrays scans as it did.
+  @open :open
+  @small 256
+
   # The keys a routine's env holds its records under while it runs, which the routine that
   # ran it takes out when it is done, so that no state holds one between scans: an env a
   # host hands in holding one is refused (state!/2), and a block instance's map holding one
   # has it dropped before its body runs (members_of/1). A key the runtime adds joins them,
   # and the guard of state!/2's refusal, which names each, since a guard reads no list.
-  @own_keys [@faults, @jump, @ran]
+  @own_keys [@faults, @jump, @ran, @open]
+
+  # RV-6 (decision 352): an array a write may put into straight, one of @small elements or
+  # fewer at every depth: a tuple of scalars or of instances' maps, of tuples of them, or
+  # of tuples of those, at most three dimensions (Logex.Array). A guard that raises is
+  # false, so a value of no array's shape takes the opened path, which reads it as a write
+  # into it always did. An element a tag subscripts carries its array's sizes, read by
+  # is_small_dims/1, and a literal element of one dimension its array's own, `:erlang.size/1`
+  # of its tuple, each a guard the clause's head reads at no cost.
+  defguardp is_small(array)
+            when is_tuple(array) and tuple_size(array) <= @small and
+                   (not is_tuple(elem(array, 0)) or
+                      (is_tuple(elem(array, 0)) and not is_tuple(elem(elem(array, 0), 0)) and
+                         tuple_size(array) * tuple_size(elem(array, 0)) <= @small) or
+                      (is_tuple(elem(array, 0)) and is_tuple(elem(elem(array, 0), 0)) and
+                         tuple_size(array) * tuple_size(elem(array, 0)) *
+                           tuple_size(elem(elem(array, 0), 0)) <= @small))
+
+  defguardp is_small_dims(dims)
+            when (length(dims) == 1 and hd(dims) <= @small) or
+                   (length(dims) == 2 and hd(dims) * hd(tl(dims)) <= @small) or
+                   (length(dims) == 3 and hd(dims) * hd(tl(dims)) * hd(tl(tl(dims))) <= @small)
 
   # A state or a scan with every key of its struct and no other (a5-data-model-7).
   defguardp is_whole_instance(state)
@@ -1788,7 +1838,8 @@ defmodule Logex.Runtime do
   # mark keeps a memory blocked. No scan leaves one, so a host's env holding one is a
   # mistake, checked with the env's shape, before the clock and the owner.
   defp state!(%Instance{env: env}, _program)
-       when is_map_key(env, @faults) or is_map_key(env, @jump) or is_map_key(env, @ran),
+       when is_map_key(env, @faults) or is_map_key(env, @jump) or is_map_key(env, @ran) or
+              is_map_key(env, @open),
        do: raise(ArgumentError, own_keys(for key <- @own_keys, is_map_key(env, key), do: key))
 
   defp state!(%Instance{now: now}, _program) when not is_integer(now) or now < 0,
@@ -1915,7 +1966,7 @@ defmodule Logex.Runtime do
 
   defp held(:error, type, path, _blocks, acc),
     do: [
-      "state.env lacks `#{Enum.join(Enum.reverse(path), ".")}`: it is " <>
+      "state.env lacks `#{pathed(path)}`: it is " <>
         "#{Declarations.a_type(type)}, which a state holds whole, as " <>
         "`Logex.Runtime.instance/1` makes it"
       | acc
@@ -2024,7 +2075,7 @@ defmodule Logex.Runtime do
   defp shaped(false, true, {{:array, type, dims} = array, value, [name | path], blocks}, acc) do
     Enum.zip(Logex.Array.indexes(dims), Logex.Array.to_flat(value, dims))
     |> Enum.reduce([], fn {index, element}, lines ->
-      of_type(type, element, [Logex.Array.name(name, index) | path], blocks, lines)
+      of_type(type, element, [{name, index} | path], blocks, lines)
     end)
     |> Enum.reverse()
     |> Logex.Array.capped(&more_outside(array, [name | path], &1))
@@ -2043,7 +2094,7 @@ defmodule Logex.Runtime do
 
   defp more_outside(array, path, count),
     do:
-      "state.env holds `#{Enum.join(Enum.reverse(path), ".")}`, #{Declarations.a_type(array)}, " <>
+      "state.env holds `#{pathed(path)}`, #{Declarations.a_type(array)}, " <>
         "with #{count} more #{elements(count)} outside its type, not listed"
 
   # A host's value as a message shows it, a list of integers as a list, never as the
@@ -2088,9 +2139,17 @@ defmodule Logex.Runtime do
         path
       )
 
+  # RV-6 (decision 352): a path as a message names it, an element of an array on it kept as
+  # its array's name and its index until a message needs its name, so that the check of a
+  # state that fits, at every scan of a cycle (decision 174), builds no element's name.
+  defp pathed(path), do: Enum.map_join(Enum.reverse(path), ".", &part/1)
+
+  defp part({array, index}), do: Logex.Array.name(array, index)
+  defp part(name), do: name
+
   defp described(a_type, told, path),
     do:
-      "state.env holds `#{Enum.join(Enum.reverse(path), ".")}` outside its type: it is " <>
+      "state.env holds `#{pathed(path)}` outside its type: it is " <>
         "#{a_type}, and " <> told
 
   # What a held value outside its type is told (decisions 171 and 173): an integer its
@@ -3837,7 +3896,7 @@ defmodule Logex.Runtime do
   # it left: the one rung loop (M3-5). Each rung starts with power, and `{power_flow, env}`
   # threads through its elements in order. The scan is read-only and the same for every
   # instruction of every rung of one call (M1-6).
-  defp rungs([], env, _scan), do: env
+  defp rungs([], env, _scan), do: closed(env)
 
   defp rungs([{:rung, elements} | rest], env, scan) do
     {_power_flow, env} = series(elements, {true, env}, scan)
@@ -3869,7 +3928,18 @@ defmodule Logex.Runtime do
 
   # A label no rung after the jump heads, which only a program built by hand can hold: the
   # rest of the routine is skipped.
-  defp skipped([], _label, env, _scan), do: env
+  defp skipped([], _label, env, _scan), do: closed(env)
+
+  # RV-6 (decision 352): a routine done, each array it opened built again with the elements
+  # it wrote, once, and the record taken out, so that no state keeps one and an array is a
+  # tuple of its sizes again wherever a routine is not running (values!/2, Logex.Array).
+  defp closed(%{@open => open} = env),
+    do:
+      Enum.reduce(open, Map.delete(env, @open), fn {array, written}, env ->
+        %{env | array => Logex.Array.put_all(:erlang.map_get(array, env), written)}
+      end)
+
+  defp closed(env), do: env
 
   # M3-5 (decision 106): each edge memory a skipped rung's instructions keep, marked
   # `@skipped` in the routine's record under `@ran`, where the tree would hold it: a
@@ -5587,21 +5657,31 @@ defmodule Logex.Runtime do
   # M5-11 (decision 151): an element of an array, its subscripts literal, which the
   # compiler checked against its dimensions: one `elem/2` a dimension of the tuple its
   # array holds, which every state handed in holds whole (values!/2).
-  defp read(env, {:element, _, array, [i], _name}), do: elem(:erlang.map_get(array, env), i)
+  # RV-6 (decision 352): in a routine that has opened an array, every element is read
+  # through the elements it wrote (opened/3); a routine that has opened none reads as it
+  # did, its guard the one look.
+  defp read(env, {:element, _, array, [i], _name}) when not is_map_key(env, @open),
+    do: elem(:erlang.map_get(array, env), i)
 
-  defp read(env, {:element, _, array, index, _name}),
+  defp read(env, {:element, _, array, index, _name}) when not is_map_key(env, @open),
     do: Logex.Array.fetch(:erlang.map_get(array, env), index)
+
+  defp read(env, {:element, _, array, index, _name}), do: opened(env, array, index)
 
   # M5-12 (decisions 152 and 153): an element a tag subscripts, each subscript a literal's
   # value or its tag's, read as an integer, and checked against its dimension as the element
   # is read: one outside it is thrown to the instruction (element/3), with every subscript
   # read, one a dimension.
   # One dimension and one tag, `weights[slot]`, read with no list built.
-  defp read(env, {:element_at, _, array, [{:name, _, name}], [count], _name}),
-    do: elem(:erlang.map_get(array, env), one_subscript(Map.get(env, name, 0), count))
+  defp read(env, {:element_at, _, array, [{:name, _, name}], [count], _name})
+       when not is_map_key(env, @open),
+       do: elem(:erlang.map_get(array, env), one_subscript(Map.get(env, name, 0), count))
+
+  defp read(env, {:element_at, _, array, index, dims, _name}) when not is_map_key(env, @open),
+    do: Logex.Array.fetch(:erlang.map_get(array, env), subscripts(env, index, dims))
 
   defp read(env, {:element_at, _, array, index, dims, _name}),
-    do: Logex.Array.fetch(:erlang.map_get(array, env), subscripts(env, index, dims))
+    do: opened(env, array, subscripts(env, index, dims))
 
   # M5-14 (decision 154): a member of an element of an array of instances, its element read
   # first, as an element is read, then its member, and a bit of one, its member first; an
@@ -5611,6 +5691,39 @@ defmodule Logex.Runtime do
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
   defp walk(_not_a_map, _path), do: 0
+
+  # RV-6 (decision 352): an element of an array in a routine that has opened one: the
+  # value it last wrote there, or the array's as the routine found it.
+  defp opened(%{@open => open} = env, array, index),
+    do:
+      fetched(:maps.find(index, :maps.get(array, open, %{})), :erlang.map_get(array, env), index)
+
+  defp opened(env, array, index), do: fetched(:error, :erlang.map_get(array, env), index)
+
+  defp fetched({:ok, element}, _value, _index), do: element
+  defp fetched(:error, value, [i]), do: elem(value, i)
+  defp fetched(:error, value, index), do: Logex.Array.fetch(value, index)
+
+  defp into(tuple, [i | index], {env, array}, value) when is_small(tuple),
+    do: %{env | array => put_elem(tuple, i, Logex.Array.put(elem(tuple, i), index, value))}
+
+  defp into(_tuple, index, {env, array}, value), do: opening(env, array, index, value)
+
+  # RV-6 (decision 352): an element written into the routine's record of the arrays it has
+  # opened, its array opened by its first, the array itself as the routine found it until
+  # its end (closed/1). Its array must stand, as a put into it needs.
+  defp opening(%{@open => open} = env, array, index, element),
+    do: %{env | @open => :maps.put(array, :maps.put(index, element, opens(array, open)), open)}
+
+  defp opening(env, array, index, element) do
+    _array = :erlang.map_get(array, env)
+    :maps.put(@open, %{array => %{index => element}}, env)
+  end
+
+  # An array's written elements, its first write making the array's record, which needs
+  # the array to stand as a put into it would.
+  defp opens(array, open) when is_map_key(open, array), do: :erlang.map_get(array, open)
+  defp opens(_array, _open), do: %{}
 
   # A write to a member puts an instance back together where a hand-built env broke it:
   # what is not a map on the way becomes one.
@@ -5627,13 +5740,15 @@ defmodule Logex.Runtime do
          env,
          {:member, _, {:element_at, _, array, [{:name, _, name}], [count], _}, path},
          value
-       ) do
+       )
+       when count <= @small and not is_map_key(env, @open) do
     i = one_subscript(Map.get(env, name, 0), count)
     tuple = :erlang.map_get(array, env)
     %{env | array => put_elem(tuple, i, put_path(as_map(elem(tuple, i)), path, value))}
   end
 
-  defp write(env, {:member, _, {:element_at, _, array, index, dims, _}, path}, value) do
+  defp write(env, {:member, _, {:element_at, _, array, index, dims, _}, path}, value)
+       when is_small_dims(dims) and not is_map_key(env, @open) do
     at = subscripts(env, index, dims)
     tuple = :erlang.map_get(array, env)
 
@@ -5644,35 +5759,59 @@ defmodule Logex.Runtime do
     }
   end
 
+  # RV-6 (decision 352): a member of an element of a large array, or of any array in a
+  # routine that has opened one, read and written through the routine's record, its
+  # subscripts read and checked once.
+  defp write(env, {:member, _, {:element_at, _, array, index, dims, _}, path}, value) do
+    at = subscripts(env, index, dims)
+    opening(env, array, at, put_path(as_map(opened(env, array, at)), path, value))
+  end
+
   defp write(env, {:member, _, element, path}, value),
     do: write(env, element, put_path(as_map(read(env, element)), path, value))
 
   # M5-11: an element is written into its array, the tuple of each dimension it passes
   # through copied, every other element kept.
-  defp write(env, {:element, _, array, [i], _name}, value),
-    do: %{env | array => put_elem(:erlang.map_get(array, env), i, value)}
+  defp write(env, {:element, _, array, [i], _name}, value)
+       when :erlang.size(:erlang.map_get(array, env)) <= @small and
+              not is_map_key(env, @open),
+       do: %{env | array => put_elem(:erlang.map_get(array, env), i, value)}
+
+  # RV-6 (decision 352): an element of more dimensions put into its array where it is small
+  # (into/4), its first dimension's tuple put here, the rest by Logex.Array.put/3, a call a
+  # dimension as before; an element of an array of more than 256 elements, or of any array
+  # in a routine that has opened one, into the routine's record of the arrays it opened.
+  defp write(env, {:element, _, array, [_, _ | _] = index, _name}, value)
+       when not is_map_key(env, @open),
+       do: into(:erlang.map_get(array, env), index, {env, array}, value)
 
   defp write(env, {:element, _, array, index, _name}, value),
-    do: %{env | array => Logex.Array.put(:erlang.map_get(array, env), index, value)}
+    do: opening(env, array, index, value)
 
   # M5-12: an element a tag subscripts is written into its array once its subscripts are
   # read and checked, and a bit of one into its element, the rest of its word kept.
-  defp write(env, {:element_at, _, array, [{:name, _, name}], [count], _name}, value),
-    do: %{
-      env
-      | array =>
-          put_elem(
-            :erlang.map_get(array, env),
-            one_subscript(Map.get(env, name, 0), count),
-            value
-          )
-    }
+  defp write(env, {:element_at, _, array, [{:name, _, name}], [count], _name}, value)
+       when count <= @small and not is_map_key(env, @open),
+       do: %{
+         env
+         | array =>
+             put_elem(
+               :erlang.map_get(array, env),
+               one_subscript(Map.get(env, name, 0), count),
+               value
+             )
+       }
+
+  defp write(env, {:element_at, _, array, index, dims, _name}, value)
+       when is_small_dims(dims) and not is_map_key(env, @open),
+       do: %{
+         env
+         | array =>
+             Logex.Array.put(:erlang.map_get(array, env), subscripts(env, index, dims), value)
+       }
 
   defp write(env, {:element_at, _, array, index, dims, _name}, value),
-    do: %{
-      env
-      | array => Logex.Array.put(:erlang.map_get(array, env), subscripts(env, index, dims), value)
-    }
+    do: opening(env, array, subscripts(env, index, dims), value)
 
   # M5-8: a bit is written into its word, the rest of the word kept: 1 sets the mask's bits
   # and 0 clears them, so a signed type's top bit, whose mask is every bit from it up, is
