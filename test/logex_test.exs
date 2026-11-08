@@ -1379,3 +1379,70 @@ defmodule LogexTest.HeldFileServer do
     assert held == free
   end
 end
+
+defmodule LogexTest.GoneWorkingDirectory do
+  @moduledoc """
+  RV-17's review (decision 464): the loaders read the working directory only for a path
+  still relative once a leading `~` is the user's home, as `Path.expand/1` read it, so
+  that an absolute path, and one from home, compile with a working directory that cannot
+  be read, as a release directory replaced under a running VM leaves it, each giving what
+  it gives with the directory there; a relative path raises `File.Error` as
+  `Path.expand/1` raised it (provisional, `PLAN.md`'s RV-17 question 3). Not async: the
+  working directory is the VM's, and the test deletes it.
+  """
+  use ExUnit.Case, async: false
+
+  @moduletag :tmp_dir
+
+  @seal "function_block seal\nvar_input x bool\nvar_output y bool\nxic x ote y\n"
+
+  test "an absolute path, or one from home, compiles with the working directory deleted, " <>
+         "and a relative path raises as Path.expand/1 raised",
+       %{tmp_dir: dir} do
+    File.write!(Path.join(dir, "seal.ld"), @seal)
+    main = Path.join(dir, "main.ld")
+    File.write!(main, "var_input a bool\nvar_output b bool\nvar s seal\ncal s a b\n")
+    plant = Path.join(dir, "plant.logex")
+
+    File.write!(
+      plant,
+      "task fast interval 10 priority 1\nvar_global a1 bool at panel.i.0\n" <>
+        "var_global b1 bool at panel.q.0\nprogram m1 main with fast\nm1.a a1\nm1.b b1\n"
+    )
+
+    home = "~/logex-absent-#{System.unique_integer([:positive])}.ld"
+
+    calls = [
+      main: fn -> Logex.compile_file(main) end,
+      files: fn -> Logex.compile_files([main, main]) end,
+      plant: fn -> Logex.Configuration.compile_file(plant) end,
+      home: fn -> Logex.compile_file(home) end
+    ]
+
+    there = for {name, call} <- calls, do: {name, call.()}
+    assert {:ok, %Logex.Program{name: "main"}} = there[:main]
+    assert {:ok, %Logex.Configuration{}} = there[:plant]
+
+    assert {:error, [%Logex.Diagnostic{stage: :file, file: ^home, message: absent}]} =
+             there[:home]
+
+    assert absent == "cannot be read: no such file or directory"
+
+    here = File.cwd!()
+    gone = Path.join(dir, "gone")
+    File.mkdir!(gone)
+    File.cd!(gone)
+    on_exit(fn -> File.cd!(here) end)
+    File.rmdir!(gone)
+    assert :prim_file.get_cwd() == {:error, :enoent}
+
+    deleted = for {name, call} <- calls, do: {name, call.()}
+
+    assert_raise File.Error,
+                 "could not get current working directory nil: no such file or directory",
+                 fn -> Logex.compile_file("main.ld") end
+
+    File.cd!(here)
+    assert deleted == there
+  end
+end

@@ -131,6 +131,17 @@ defmodule Logex.IOTest do
     holding(sim)
   end
 
+  # Returns once no reread waits in the sim's hold, looking every millisecond for 5 s.
+  defp released(sim), do: released(sim, Sim.holding?(sim), 5_000)
+
+  defp released(_sim, false, _left), do: :ok
+  defp released(_sim, true, 0), do: flunk("a reread still waits in the sim's hold after 5 s")
+
+  defp released(sim, true, left) do
+    Process.sleep(1)
+    released(sim, Sim.holding?(sim), left - 1)
+  end
+
   # Returns once `pid` is in Process.sleep/1, looking every millisecond.
   defp asleep(pid), do: asleep(pid, Process.info(pid, :current_function))
 
@@ -488,6 +499,82 @@ defmodule Logex.IOTest do
       assert_raise ArgumentError,
                    "the simulated device #{inspect(sim)} holds no reread: hold/1 holds its next",
                    fn -> Sim.let_go(sim) end
+    end
+
+    # RV-17's review: a poll's read passes the hold by whatever else waits in the device's
+    # mailbox, a report, a cast or its own next poll, and the fence of a reread it was
+    # queued behind, read with that fence still there, since the device handles the fence
+    # only after the poll; a reread is the read that first finds its fence, the newest.
+    test "a poll's read passes the hold by with other messages and an earlier reread's " <>
+           "fence in its mailbox, its failure acted out in it" do
+      sim = sim()
+      state = opened(sim)
+      test = self()
+
+      device =
+        Task.async(fn ->
+          send(self(), {Logex.Runner.Device, :fence, make_ref()})
+          reread = Sim.read(state)
+          send(test, :reread)
+          receive do: (:poll -> :ok)
+
+          for message <- [{:"$gen_cast", :refresh}, {Logex.Runner.Device, :poll, 40}],
+              do: send(self(), message)
+
+          polled = Sim.read(state)
+          send(test, {:polled, reread, polled, Process.info(self(), :message_queue_len)})
+          receive do: (:reread -> :ok)
+
+          # The next reread's fence behind them all, the earlier one's still there.
+          send(self(), {Logex.Runner.Device, :fence, make_ref()})
+          Sim.read(state)
+        end)
+
+      assert_receive :reread, 5_000
+      assert Sim.hold(sim) == :ok
+      Sim.fail(sim, :read, {:value, [0], 9})
+      send(device.pid, :poll)
+      assert_receive {:polled, reread, polled, queued}, 5_000
+      assert reread == {:ok, %{[0] => 0, [1] => 0, [2, 1] => 0}, state}
+      assert polled == {:ok, %{[0] => 9, [1] => 0, [2, 1] => 0}, state}
+      assert queued == {:message_queue_len, 3}
+      assert {Sim.reads(sim), Sim.holding?(sim)} == {2, false}
+
+      # The hold is still the next reread's, which finds a fence of its own behind them.
+      send(device.pid, :reread)
+      holding(sim)
+      assert Task.yield(device, 50) == nil
+      assert Sim.reads(sim) == 2
+      assert Sim.let_go(sim) == :ok
+      assert Task.await(device) == {:ok, %{[0] => 0, [1] => 0, [2, 1] => 0}, state}
+      assert {Sim.reads(sim), Sim.holding?(sim)} == {3, false}
+    end
+
+    # RV-17's review: a held reread whose process goes down, as the runner kills a device
+    # whose reread it gave up, spends the hold (provisional): nothing waits in it, a hold
+    # may be armed again, and a let-go holds nothing.
+    test "a held reread whose process goes down spends the hold" do
+      sim = sim()
+      state = opened(sim)
+      assert Sim.hold(sim) == :ok
+      reader = spawn(fn -> fenced_read(state) end)
+      holding(sim)
+      Process.exit(reader, :kill)
+      released(sim)
+      assert Sim.reads(sim) == 0
+
+      assert_raise ArgumentError,
+                   "the simulated device #{inspect(sim)} holds no reread: hold/1 holds its next",
+                   fn -> Sim.let_go(sim) end
+
+      # Any other message the sim is sent is passed over.
+      send(sim, :stray)
+      assert Sim.hold(sim) == :ok
+      held = Task.async(fn -> fenced_read(state) end)
+      holding(sim)
+      assert Sim.let_go(sim) == :ok
+      assert {:ok, _values, ^state} = Task.await(held)
+      assert {Sim.reads(sim), Sim.holding?(sim)} == {1, false}
     end
 
     test "a hang blocks the device's process for ever" do

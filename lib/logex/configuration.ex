@@ -799,7 +799,9 @@ defmodule Logex.Configuration do
 
   The file, its program types' files and the listing of the `.ld` files beside it are
   read raw, off the VM's file server, as `Logex.compile_file/1` reads its files (decision
-  464), so a load waits on no other file call the VM makes.
+  464), so a load waits on no file call the VM makes through the server, and shares only
+  the VM's dirty I/O schedulers with its other raw file calls, as `Logex.compile_file/1`
+  says.
   """
   def compile_file(path) when is_binary(path),
     do: configuration_file(Path.extname(path), Path.basename(path), path)
