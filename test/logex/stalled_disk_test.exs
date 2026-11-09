@@ -2382,12 +2382,27 @@ defmodule Logex.StalledDiskTest do
       holder
     end
 
+    # A force whose write the test needs landed, asked again where the write was cut at
+    # the rig's short limit, a loaded machine slow over it, the file server not held: a
+    # later write that lands has had every call of the cut one answered before its own
+    # (decision 475), so that the file holds the runner's set, and nothing of the cut one
+    # is left in the server's mailbox for a held server's wait to take for the test's.
+    # The short limit is the test's to cut the write it holds; one landing was met past
+    # it at a load average of 30 (RV-18's load runs).
+    defp landed(runner, name, value),
+      do: landed(Runner.force(runner, name, value), runner, name, value, 10)
+
+    defp landed(:ok, _runner, _name, _value, _tries), do: :ok
+
+    defp landed({:error, {:forces, :timeout}}, runner, name, value, tries) when tries > 1,
+      do: landed(Runner.force(runner, name, value), runner, name, value, tries - 1)
+
     test "a stop that cuts a force's write holds the file until it lands, and the next " <>
            "start then reads what it left",
          %{tmp_dir: dir} do
       rig = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
       {:ok, runner} = Runner.start_link(rig.opts)
-      assert Runner.force(runner, "level", 7) == :ok
+      assert landed(runner, "level", 7) == :ok
       server = held()
       force = Task.async(fn -> stop_answer_of(fn -> Runner.force(runner, "eye_1", 1) end) end)
       _writing = waiting_call(server, :rename)
@@ -2397,7 +2412,7 @@ defmodule Logex.StalledDiskTest do
       # The file held for the stopped runner: a start on it refused, naming it.
       holder = holder_of(rig.forces)
       assert Paths.ended_runner(holder) == runner
-      next = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
+      next = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
 
       assert_raise ArgumentError, forces_held_told(next, runner, holder), fn ->
         Runner.start_link(next.opts)
@@ -2435,7 +2450,7 @@ defmodule Logex.StalledDiskTest do
       server = held()
       assert Runner.force(runner, "level", 7) == {:error, {:forces, :timeout}}
       :sys.resume(server)
-      assert Runner.force(runner, "level", 3) == :ok
+      assert landed(runner, "level", 3) == :ok
       assert Runner.stop(runner) == :ok
       assert Paths.held([{rig.forces, :forces}]) == :ok
       {:ok, runner} = Runner.start_link(rig.opts)

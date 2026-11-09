@@ -4170,9 +4170,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
   461). The look sees the lateness itself, whatever brought the runner to it, its wake
   or a device's change taken first (decision 485). Each late look gives a turn of its
-  own, and so does a round's step that runs past `idle:`, from its end (decision 486).
-  A turn spares only a device starved for less than four times `idle:` and a poll
-  period: one unheard that long, counted from when it was last heard, trips the line
+  own, and so does a round's step that runs past `idle:`, from its end (decision 486;
+  from its end provisional, `PLAN.md`'s RV-18 question 3). A turn spares only a device
+  starved for less than four times `idle:` and a poll period (the sum provisional,
+  question 2): one unheard that long, counted from when it was last heard, trips the line
   however late the runner, `{:io, device, :timeout}` as any hung device (the reason
   provisional, `PLAN.md`'s RV-18 question 1), so on a host late at every wake a hung
   input card still trips within that cap, every output 0 (decision 484), as a Logix
@@ -4421,31 +4422,31 @@ stage: nil
   answers, so a runner that ends gives the file up only once every write of it it began
   has ended: the file is held for it until the cut write's last call of the file system
   is answered, and a start on it meanwhile is refused, naming the file, the runner that
-  ended and the process holding the file, so no runner starts on a file a late write then
-  changes under it (decision 475). On a disk that never answers the hold lasts as long,
-  until the host kills the holder the refusal names, or the VM stops (provisional). A
-  runner killed or crashed holds nothing, its writes going down with it. A start reads the file raw, off the
-  VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
-  other process's file calls. A file that cannot be read, one the disk has not answered
-  within the write limit or one the file system refuses, a directory in its place among
-  them, starts a fresh start with no force and keeps at a restart the forces the runner
-  holds, the restart going on and the line coming back, and `status/1` names it,
-  `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
-  of it lands, no restart reading it meanwhile (decisions 390 and 445); with no such file to name,
-  `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
-  that reads the file takes what it holds, as every start does; but while
-  `forces_unread` stands a restart keeps the forces the runner holds and takes none from
-  the file, and the next force's or unforce's write writes the runner's set over it
-  (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
-  that could not read the file, the disk back, a trip and a restart, and the level reads
-  its input, never the 7 no one has forced since; an orderly stop while `forces_unread`
-  stands, `stop/2` or a supervisor's shutdown, writes the runner's own set over the file
-  before it ends, so the next start brings back no force the HMI was not showing either,
-  a `stop/2` whose write fails or is cut answering `{:error, {:forces, reason}}`, and a
-  crash writes nothing (decision 472); and a relative `forces:` whose
-  working directory the disk does not answer for in time refuses the start, the file
-  "cannot be located", as a relative store's does (decision 446), an absolute path the
-  advice. A
+  ended and the process holding the file, so no runner starts on a file a late write
+  then changes under it (decision 475). On a disk that never answers the hold lasts as
+  long, until the host kills the holder the refusal names, or the VM stops
+  (provisional). A runner killed or crashed holds nothing, its writes going down with
+  it. A start reads the file raw, off the VM's file server, as a restart does, so a FIFO
+  or a stalled disk in its place holds no other process's file calls. A file that cannot
+  be read, one the disk has not answered within the write limit or one the file system
+  refuses, a directory in its place among them, starts a fresh start with no force and
+  keeps at a restart the forces the runner holds, the restart going on and the line
+  coming back, and `status/1` names it, `forces_unread: {"packing.forces", :timeout}`,
+  until a force's or an unforce's write of it lands, no restart reading it meanwhile
+  (decisions 390 and 445); with no such file to name, `status/1`'s `forces_unread` is
+  nil, the key always there (decision 440). A restart that reads the file takes what it
+  holds, as every start does; but while `forces_unread` stands a restart keeps the
+  forces the runner holds and takes none from the file, and the next force's or
+  unforce's write writes the runner's set over it (decision 445): so a level switch
+  forced to 7 before a crash, a start on a stalled disk that could not read the file,
+  the disk back, a trip and a restart, and the level reads its input, never the 7 no one
+  has forced since; an orderly stop while `forces_unread` stands, `stop/2` or a
+  supervisor's shutdown, writes the runner's own set over the file before it ends, so
+  the next start brings back no force the HMI was not showing either, a `stop/2` whose
+  write fails or is cut answering `{:error, {:forces, reason}}`, and a crash writes
+  nothing (decision 472); and a relative `forces:` whose working directory the disk does
+  not answer for in time refuses the start, the file "cannot be located", as a relative
+  store's does (decision 446), an absolute path the advice. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every

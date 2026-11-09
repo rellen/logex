@@ -48,16 +48,16 @@ defmodule Logex.IO.Sim do
   - `hold/1` holds the device's next reread, a restart's read of a device that stayed up
     (decision 142), until `let_go/1` lets it go on, and `holding?/1` says whether one
     waits in the hold (decision 462), so that a test on the real clock can let one device
-    poll, released, while the runner waits on the reread of the device before it. A
-    reread is told from a poll's read by the fence `Logex.Runner.Device` sends itself
-    just before it, which waits in the device's mailbox while the adapter reads: a read is
-    a restart's where the newest fence in its process's mailbox is one no read of the sim
-    found there before, so that a poll, a tripped device's or a released one's, passes the
-    hold by, whatever else waits in the mailbox, the fence of a reread the poll was queued
-    behind among them (RV-17's review, decision 476). A poll passing the hold by goes on as usual, a
-    failure told to `:read` acted out in it. The held read then goes on as usual, a
-    failure told to `:read` meanwhile acted out in it, and `reads/1` counts it only then;
-    and a held read whose process goes down, a reread the runner gave up and killed
+    poll, released, while the runner waits on the reread of the device before it. A reread
+    is told from a poll's read by the fence `Logex.Runner.Device` sends itself just before
+    it, which waits in the device's mailbox while the adapter reads: a read is a restart's
+    where the newest fence in its process's mailbox is one no read of the sim found there
+    before, so that a poll, a tripped device's or a released one's, passes the hold by,
+    whatever else waits in the mailbox, the fence of a reread the poll was queued behind
+    among them (RV-17's review, decision 476). A poll passing the hold by goes on as
+    usual, a failure told to `:read` acted out in it. The held read then goes on as usual,
+    a failure told to `:read` meanwhile acted out in it, and `reads/1` counts it only
+    then; and a held read whose process goes down, a reread the runner gave up and killed
     (`{:io_init, device, :timeout}`), spends the hold, `holding?/1` false, so that
     `let_go/1` then holds nothing (decision 479). `hold/1` on a sim that holds already,
     `let_go/1` on one that holds nothing, and since decision 477 `let_go/1` of a hold no

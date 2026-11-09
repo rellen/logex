@@ -8,7 +8,7 @@ defmodule Logex.LoadingTest do
   Each test's name and assertions are as they were in `configuration_test.exs` and
   `review_lows_test.exs`, under the same `describe`. `logex_test.exs`'s loader tests that
   read many files, `LogexTest.HeldFileServer`'s, are a module of their own, `async: false`,
-  already.
+  already, and stay there (provisional, `PLAN.md`'s RV-18 question 9).
   """
   use ExUnit.Case, async: false
 
