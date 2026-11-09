@@ -57,11 +57,14 @@ defmodule Logex.IO.Sim do
     behind among them (RV-17's review). A poll passing the hold by goes on as usual, a
     failure told to `:read` acted out in it. The held read then goes on as usual, a
     failure told to `:read` meanwhile acted out in it, and `reads/1` counts it only then;
-    a hold let go before any reread came is taken back; and a held read whose process
-    goes down, a reread the runner gave up and killed (`{:io_init, device, :timeout}`),
-    spends the hold, `holding?/1` false, so that `let_go/1` then holds nothing
-    (provisional). `hold/1` on a sim that holds already, and `let_go/1` on one that holds
-    nothing, are the test's mistakes.
+    and a held read whose process goes down, a reread the runner gave up and killed
+    (`{:io_init, device, :timeout}`), spends the hold, `holding?/1` false, so that
+    `let_go/1` then holds nothing (decision 479). `hold/1` on a sim that holds already,
+    `let_go/1` on one that holds nothing, and since decision 477 `let_go/1` of a hold no
+    reread has come to, where it took the hold back, are the test's mistakes, each raised
+    and its message pinned, the sim left as it was, so that a test whose hold never
+    engaged fails, the hold still armed for the next reread (provisional: left armed, as
+    the other two mistakes leave the sim).
 
   **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the
   options it is bound with, which are `sim:` alone, a sim that is running and that no
@@ -143,7 +146,10 @@ defmodule Logex.IO.Sim do
     held!(GenServer.call(sim, :hold), sim)
   end
 
-  @doc "Lets the held reread go on, or takes back a hold no reread has come to."
+  @doc """
+  Lets the held reread go on. A hold no reread has come to, and no hold, is the test's
+  mistake (decision 477).
+  """
   def let_go(sim) do
     sim = sim!(sim)
     let!(GenServer.call(sim, :let_go), sim)
@@ -169,6 +175,16 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "the simulated device #{inspect(sim)} holds no reread: hold/1 holds its next"
+      )
+
+  # Decision 477 (RV-18): a hold armed that no reread has come to, let go, is the test's
+  # mistake, where it was taken back: a test whose hold never engaged fails.
+  defp let!(:unreached, sim),
+    do:
+      raise(
+        ArgumentError,
+        "the simulated device #{inspect(sim)} holds no reread yet: hold/1 armed the hold, " <>
+          "and no restart has read the device since"
       )
 
   # The inputs set, and, where they changed and the sim reports to a device, reported to
@@ -378,8 +394,9 @@ defmodule Logex.IO.Sim do
   def handle_call({:take, callback}, _from, state), do: taken(callback, state)
 
   # Decision 462: the hold armed by hold/1, a reread waiting in it its caller, `{:holding,
-  # from, monitor}`, answered by let_go/1; a hold let go meanwhile answers a reread at
-  # once; a reread whose process goes down meanwhile spends it (handle_info/2).
+  # from, monitor}`, answered by let_go/1; a reread whose process goes down meanwhile
+  # spends it (handle_info/2). Since decision 477 (RV-18) a let-go of the hold armed, no
+  # reread in it, is the test's mistake, the hold left armed, where it was taken back.
   def handle_call(:hold, _from, %{hold: nil} = state), do: {:reply, :ok, %{state | hold: :armed}}
   def handle_call(:hold, _from, state), do: {:reply, :held, state}
 
@@ -394,8 +411,7 @@ defmodule Logex.IO.Sim do
     {:reply, :ok, %{state | hold: nil}}
   end
 
-  def handle_call(:let_go, _from, %{hold: :armed} = state),
-    do: {:reply, :ok, %{state | hold: nil}}
+  def handle_call(:let_go, _from, %{hold: :armed} = state), do: {:reply, :unreached, state}
 
   def handle_call(:let_go, _from, state), do: {:reply, :unheld, state}
 

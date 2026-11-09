@@ -1386,9 +1386,10 @@ defmodule LogexTest.GoneWorkingDirectory do
   still relative once a leading `~` is the user's home, as `Path.expand/1` read it, so
   that an absolute path, and one from home, compile with a working directory that cannot
   be read, as a release directory replaced under a running VM leaves it, each giving what
-  it gives with the directory there; a relative path raises `File.Error` as
-  `Path.expand/1` raised it (provisional, `PLAN.md`'s RV-17 question 3). Not async: the
-  working directory is the VM's, and the test deletes it.
+  it gives with the directory there; and since decision 478 (RV-18) a relative path is a
+  `:file` diagnostic from each of the three loaders, "cannot be located: the working
+  directory cannot be read", where it raised `File.Error` as `Path.expand/1` raised it.
+  Not async: the working directory is the VM's, and the test deletes it.
   """
   use ExUnit.Case, async: false
 
@@ -1397,7 +1398,7 @@ defmodule LogexTest.GoneWorkingDirectory do
   @seal "function_block seal\nvar_input x bool\nvar_output y bool\nxic x ote y\n"
 
   test "an absolute path, or one from home, compiles with the working directory deleted, " <>
-         "and a relative path raises as Path.expand/1 raised",
+         "and a relative path is told it cannot be located",
        %{tmp_dir: dir} do
     File.write!(Path.join(dir, "seal.ld"), @seal)
     main = Path.join(dir, "main.ld")
@@ -1438,9 +1439,21 @@ defmodule LogexTest.GoneWorkingDirectory do
 
     deleted = for {name, call} <- calls, do: {name, call.()}
 
-    assert_raise File.Error,
-                 "could not get current working directory nil: no such file or directory",
-                 fn -> Logex.compile_file("main.ld") end
+    # Decision 478 (RV-18): a relative path a `:file` diagnostic, where it raised
+    # `File.Error`, "could not get current working directory nil: no such file or
+    # directory"; beside it in one call an absolute path compiles as ever.
+    located = "cannot be located: the working directory cannot be read"
+
+    told = fn path ->
+      {:error, [%Logex.Diagnostic{stage: :file, line: nil, file: path, message: located}]}
+    end
+
+    assert Logex.compile_file("main.ld") == told.("main.ld")
+    assert Logex.compile_file("sub/../main.ld") == told.("sub/../main.ld")
+    assert [relative, absolute] = Logex.compile_files(["main.ld", main])
+    assert relative == told.("main.ld")
+    assert absolute == there[:main]
+    assert Logex.Configuration.compile_file("plant.logex") == told.("plant.logex")
 
     File.cd!(here)
     assert deleted == there

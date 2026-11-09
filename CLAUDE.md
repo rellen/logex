@@ -178,6 +178,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   twins compiled in the same run, and a seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
+- `test/logex/loading_test.exs` — the loader tests that read many files, run alone, `async:
+  false`, and the check that no other test file holds them.
 - `test/logex/diagnostic_test.exs` — what each stage stamps on a diagnostic, and
   `format/1`.
 - `test/logex/naming_test.exs` — every mnemonic and keyword has its `docs/naming.md`

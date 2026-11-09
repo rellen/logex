@@ -119,8 +119,9 @@ defmodule Logex do
   every raw file call of the VM shares, so a compile still waits where all of them are
   taken, by ten raw opens of FIFOs that no process writes, say, as every raw call does.
   The working directory is read only for a path still relative once a leading `~/` is the
-  user's home, so an absolute path compiles while it cannot be read; a relative one then
-  raises `File.Error`, as `Path.expand/1` raises it (provisional).
+  user's home, so an absolute path compiles while it cannot be read; a relative one then,
+  a deleted directory's among them, is a `:file` diagnostic, "cannot be located: the
+  working directory cannot be read", and nothing is read (decision 478).
   """
   defdelegate compile_file(path), to: Logex.Compiler
 
