@@ -1380,6 +1380,54 @@ defmodule LogexTest.HeldFileServer do
   end
 end
 
+defmodule LogexTest.NoHome do
+  @moduledoc """
+  RV-18's review, finding 10 (decision 478's rule): a path from home, `~/main.ld`, where no
+  home directory is set, a VM started with `HOME` unset, is a `:file` diagnostic from each
+  of the three loaders, "cannot be located: no home directory is set (`HOME`)", where
+  `System.user_home!/0`, read as the path was expanded, raised a `RuntimeError` out of
+  them. The VM reads its home once, as it starts, so the loaders run in one of their own,
+  started so, with logex's compiled modules.
+  """
+  use ExUnit.Case, async: true
+
+  @elixir Enum.find(
+            [
+              Path.expand(Path.join([:code.lib_dir(:elixir), "..", "..", "bin", "elixir"])),
+              System.find_executable("elixir")
+            ],
+            &File.exists?(to_string(&1))
+          )
+
+  @script """
+  [
+    System.user_home(),
+    Logex.compile_file("~/main.ld"),
+    Logex.compile_files(["~/main.ld"]),
+    Logex.Configuration.compile_file("~/p.logex")
+  ]
+  |> :erlang.term_to_binary()
+  |> Base.encode64()
+  |> IO.puts()
+  """
+
+  test "a path from home with no home set is told it cannot be located" do
+    {output, 0} =
+      System.cmd(@elixir, ["-pa", Mix.Project.compile_path(), "-e", @script],
+        env: [{"HOME", nil}]
+      )
+
+    told = "cannot be located: no home directory is set (`HOME`)"
+
+    assert [
+             nil,
+             {:error, [%Logex.Diagnostic{stage: :file, file: "~/main.ld", message: ^told}]},
+             [{:error, [%Logex.Diagnostic{stage: :file, file: "~/main.ld", message: ^told}]}],
+             {:error, [%Logex.Diagnostic{stage: :file, file: "~/p.logex", message: ^told}]}
+           ] = output |> String.trim() |> Base.decode64!() |> :erlang.binary_to_term()
+  end
+end
+
 defmodule LogexTest.GoneWorkingDirectory do
   @moduledoc """
   RV-17's review (decision 464): the loaders read the working directory only for a path

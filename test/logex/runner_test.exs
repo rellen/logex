@@ -2720,10 +2720,13 @@ defmodule Logex.RunnerTest do
     # still each behind one, and never by a round's lateness or the rounds a second.
     # Decision 465 (RV-18): the requests that wait behind a write of the forces file are
     # joined into the next, so the writes are what each round's requests cost, at most
-    # half the callers' a round, each write answering at most every caller once, where
-    # each request was a write of its own and the calls were the writes (some 1,600 calls
-    # and 1,600 writes in a second at the parent, some 50,000 calls in 1,000 writes at the
-    # tip, each a hundred rounds). The writes are counted as the processes the runner
+    # half the callers' a round, and the calls at least twice the writes, the writes
+    # joining them, where each request was a write of its own and the calls were the
+    # writes (some 1,600 calls and 1,600 writes in a second at the parent, some 50,000
+    # calls in 1,000 writes at the tip, each a hundred rounds). RV-18's review: the calls
+    # were held at most a hundred a write, true of any run, each of the hundred callers
+    # waiting on one call at a time; held at least two a write, which a write each call
+    # fails. The writes are counted as the processes the runner
     # makes, each a write of the forces file, the runner given no store. The
     # task's watchdog and the idle watchdog are 5 s, so that a machine whose every core is
     # busy trips nothing: at a second the review's load runs latched the panel once in 50
@@ -2774,7 +2777,7 @@ defmodule Logex.RunnerTest do
 
       assert %{status: :running, trip: nil} = status
       assert writes <= 50 * (status.rounds - before)
-      assert calls <= 100 * writes
+      assert 2 * writes <= calls
       Runner.stop(runner)
     end
 

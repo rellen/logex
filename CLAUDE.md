@@ -158,8 +158,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 
 - `test/test_helper.exs` — starts ExUnit.
 - `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
-  file server is held and with the working directory deleted, and Milestones 1 to 3's
-  done sentences from files on disk.
+  file server is held, with the working directory deleted and with no home set, and
+  Milestones 1 to 3's done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded

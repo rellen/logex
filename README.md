@@ -3614,7 +3614,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   of a store's copies or a `.tmp` of any that another runner of the same VM holds, or
   whose store's copies' names another runner holds a file at, is refused, naming it and
   that runner, until the holder stops, crashes or is killed, when the file is free again
-  (decision 356), the VM's table of them kept by a process of logex's own that no
+  (decision 356), once every write of it the holder began has ended (decision 475,
+  "Forcing" below), the VM's table of them kept by a process of logex's own that no
   application's stop takes down; two VMs on one file are the host's to avoid, as are two
   paths to one file through a linked directory. Each path is resolved once, at the start,
   so a `File.cd` after it
@@ -4184,9 +4185,13 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   question 2): one unheard that long, counted from when it was last heard, trips the line
   however late the runner, `{:io, device, :timeout}` as any hung device (the reason
   provisional, `PLAN.md`'s RV-18 question 1), so on a host late at every wake a hung
-  input card still trips within that cap, every output 0 (decision 484), as a Logix
-  controller faults a module's connection after four missed packets at its RPI, never
-  on one late look. One that
+  input card still trips, at the first look past that cap, so as late as the gap between
+  two looks after it (with every wake 200 ms late, idle 50 and a poll of 10, at 420 ms
+  unheard), every output 0 (decision 484), as a Logix controller faults a module's
+  connection after four missed packets at its RPI, never on one late look. A look that
+  comes past the cap trips the device it finds unheard, the first in name order, even
+  where only the host was late, every card healthy: one wake 211 ms late at idle 50 does
+  so (provisional, the same question). One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4420,22 +4425,33 @@ stage: nil
   waits its turn behind the write, and every change that waited is joined into the next
   write, applied in the order asked, so the last asked is the last applied, each caller
   answered when that write lands, or as it fails or is cut, the same answer to each: ten
-  forces an HMI scripts on a disk that takes 3 s a write take two writes, 6 s, where each
-  had a write of its own (decision 465). A trip or an edit's step meanwhile leaves the
-  write as it is, the set it writes, built on the forces held as it began, becoming the
-  runner's once it lands; a restart waits for it, to its limit, before it reads the file,
-  so it reads what the write leaves and the HMI never shows a force that then vanishes
-  (decision 468); and a stop waits for it to its limit and answers its caller (decision
-  467). A write cut at its limit, at a stop as at any time, may still land once the disk
+  forces asked together, by ten panels or ten processes of one HMI, on a disk that takes
+  3 s a write take two writes, 6 s, where each had a write of its own (decision 465). A
+  force answers once its write lands, so one script that forces ten points one after
+  another waits for each and makes ten writes, 30 s. A trigger forced and unforced in
+  one joined write makes no round, the write taking the set the last change leaves, where
+  asked one after another each made its own (provisional, `PLAN.md`'s RV-18 questions).
+  A trip or an edit's step meanwhile leaves the write as it is, the set it writes, built
+  on the forces held as it began, becoming the runner's once it lands; a restart waits
+  for it, to its limit, before it reads the file, so it reads what the write leaves and
+  the HMI never shows a force that then vanishes (decision 468), the runner answering no
+  other request, `status/1` among them, while it waits (provisional), and a write the
+  restart's wait cut leaves the set it held unknown no more once the restart reads the
+  file, though it may still land (decision 391; provisional); and a stop waits for it to
+  its limit and answers its caller (decision 467). A write cut at its limit, at a stop as at any time, may still land once the disk
   answers, so a runner that ends gives the file up only once every write of it it began
   has ended: the file is held for it until the cut write's last call of the file system
   is answered, and a start on it meanwhile is refused, naming the file, the runner that
   ended and the process holding the file, so no runner starts on a file a late write
-  then changes under it (decision 475). On a disk that never answers the hold lasts as
-  long, until the host kills the holder the refusal names, or the VM stops
-  (provisional). A runner killed or crashed holds nothing, its writes going down with
-  it. A start reads the file raw, off the VM's file server, as a restart does, so a FIFO
-  or a stalled disk in its place holds no other process's file calls. A file that cannot
+  then changes under it (decision 475): a runner that crashes holds it so too. A runner
+  killed, which can hand nothing on, leaves its files to the next start, which takes one
+  only once the VM's file server has answered a look behind every call the killed
+  runner's writes left in its queue, at once on a healthy disk, and on a stalled one is
+  refused past its write limit, the file named left by the killed runner. On a disk that
+  never answers the hold lasts as long, a holder the host kills leaving the file to that
+  same look, until the VM stops (provisional). A start reads the file raw, off the VM's file
+  server, as a restart does, so a FIFO or a stalled disk in its place holds no other
+  process's file calls. A file that cannot
   be read, one the disk has not answered within the write limit or one the file system
   refuses, a directory in its place among them, starts a fresh start with no force and
   keeps at a restart the forces the runner holds, the restart going on and the line

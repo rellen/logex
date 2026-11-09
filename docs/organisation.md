@@ -14040,8 +14040,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      that is out are joined into the next write, applied in the order asked, every caller
      answered when that write lands, fails or is cut, the same answer to each; a forced
      trigger's round served as the write lands among them. `stalled_disk_test.exs`'s "ten
-     forces asked behind a write take two writes" and kin; the runner walk's
-     `:forces_together`; `runner_test.exs`'s tight loop restated as writes a round.)*
+     asked while one write is out take two writes, each caller answered when the joined
+     write lands, the changes applied in the order asked" and kin; the runner walk's
+     `:forces_together`; `runner_test.exs`'s tight loop restated as writes a round. RV-18's
+     review: only requests asked together are joined, a force answering once its write
+     lands, so one caller forcing ten points one after another makes ten writes; every
+     point a joined change unforces reads its device again, the last change's or not; the
+     changes joined at a cost in their number, not its square; and a trigger forced and
+     unforced in one joined write makes no round (provisional, RV-18's questions).)*
 
 466. **What `status/1` shows while a force is written (the review after Milestone 6),**
      RV-16's question 2 (decisions 437 and 440): only the forces in effect, so a force
@@ -14079,7 +14085,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      write of the forces file is out waits for it, to the write's own limit, before it
      reads the file, the write's callers answered first; a cut write leaves its set
      unknown until the restart reads the file and the file held (decisions 391 and 475);
-     a trip meanwhile as ever. `stalled_disk_test.exs`.)*
+     a trip meanwhile as ever. `stalled_disk_test.exs`. RV-18's review: the wait is the
+     runner's own, no other request, `status/1` among them, answered meanwhile, and the
+     restart that reads the file after a cut write names its set unknown no more though it
+     may still land (provisional both, RV-18's questions); a restart asked while the
+     runner runs waits for nothing, raised at once; the runner walk restates the wait,
+     `:restart_waited_write`.)*
 
 469. **What an abandoned round keeps (the review after Milestone 6),** RV-16's question 5
      (decision 441): what the round's steps before the bad clock reading wrote stays in
@@ -14171,7 +14182,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      having then ended; a start meanwhile refused naming the file held; a later write
      that ends by itself clears it. A server that never answers holds it until the holder
      is killed, by the host or with the VM (provisional: no limit).
-     `stalled_disk_test.exs`.)*
+     `stalled_disk_test.exs`. RV-18's review: a runner whose terminate runs holds the file
+     so whatever its reason, a crash's among them; one killed, which hands nothing on,
+     leaves its claim under its dead pid, `{:left, path, pid, role}`, and a start takes
+     the file only once the VM's file server has answered a look it makes then, within
+     its write limit, refused past it naming the file left, where the start took the file
+     at once and read it before the killed runner's queued write landed; a holder ends by
+     giving its files up, and one the host kills leaves them to that same look; the life
+     walk restates it, `:files_given_up` and `:files_left_at_kill`.)*
 
 476. **How the simulated device knows a restart's read (the review after Milestone 6),**
      RV-17's question 1 (decision 462): `Logex.IO.Sim` tells a restart's read by the fence

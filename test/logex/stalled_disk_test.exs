@@ -2115,6 +2115,66 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # RV-18's review, finding 8: the changes behind a write are joined at a cost in
+    # proportion to their number, where each change's points were appended to every point
+    # before them, a cost in their number squared: 16,000 behind one write took half a
+    # second of one handler's work, which no watchdog times. The runner's reductions from
+    # the disk's answer to every caller answered, at 500 and at 2,000 behind the write.
+    test "joining the requests behind a write grows with their number, not its square",
+         %{tmp_dir: dir} do
+      [small, large] =
+        for n <- [500, 2000] do
+          sub = Path.join(dir, "n#{n}")
+          File.mkdir_p!(sub)
+          rig = rig(sub, retain: nil, retain_period: nil, write_limit: @out)
+          {:ok, runner} = Runner.start_link(rig.opts)
+          server = held()
+          first = Task.async(fn -> Runner.force(runner, "level", 7) end)
+          _writing = renaming(server, runner)
+          behind = for i <- 1..n, do: Task.async(fn -> Runner.force(runner, "level", i) end)
+          all_behind(runner, n)
+          {:reductions, before} = Process.info(runner, :reductions)
+          :sys.resume(server)
+          assert Task.await(first, @answers) == :ok
+          assert Enum.uniq(for(task <- behind, do: Task.await(task, @answers))) == [:ok]
+          {:reductions, done} = Process.info(runner, :reductions)
+          assert %{forces: %{"level" => level}, forcing: nil} = Runner.status(runner)
+          assert level in 1..n
+          assert Runner.stop(runner) == :ok
+          done - before
+        end
+
+      assert large < 6 * small, "#{small} reductions at 500, #{large} at 2,000"
+    end
+
+    # RV-18's review, finding 2 (its mutant r03): every point a joined change unforces
+    # reads its device again once the joined write lands, the last change's or not, where
+    # only the last change's points were read again and an earlier one's kept its forced
+    # value in the logic, the lamp on, while status/1 showed it unforced.
+    test "a point unforced by a joined change that is not the last reads its device again",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      eye(rig, 0)
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      Manual.advance(rig.clock, 10)
+      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      server = held()
+      first = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      unforce = calling(Task.async(fn -> Runner.unforce(runner, "eye_1") end))
+      last = calling(Task.async(fn -> Runner.force(runner, "level", 3) end))
+      :sys.resume(server)
+      assert Task.await(first, @answers) == :ok
+      assert Task.await(unforce, @answers) == :ok
+      assert Task.await(last, @answers) == :ok
+      assert %{forces: %{"level" => 3}, forcing: nil} = Runner.status(runner)
+      Manual.advance(rig.clock, 10)
+      assert Runner.get!(runner, "eye_1") == 0
+      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 473 (RV-18): every host's mistake in a forcing request raised at once while
     # a write is out, each message pinned whole, nothing put behind the write for it, and
     # the write's own caller answered as ever once it lands.
@@ -2215,6 +2275,39 @@ defmodule Logex.StalledDiskTest do
       :sys.resume(server)
       assert Runner.stop(runner) == :ok
     end
+
+    # RV-18's review, finding 2 (its mutant r06): only a tripped runner's restart waits;
+    # one asked while the runner runs is the host's mistake, raised at once whatever write
+    # is out, as decision 473 has a forcing request's, the write and the request behind it
+    # left as they were and written in turn.
+    test "a restart asked while the runner runs is raised at once, the write out and the " <>
+           "requests behind it written in turn",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      first = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      behind = calling(Task.async(fn -> Runner.force(runner, "eye_1", 1) end))
+
+      restart =
+        Task.async(fn ->
+          assert_raise ArgumentError,
+                       "the runner is running: restart/2 starts a runner again once it has " <>
+                         "tripped",
+                       fn -> Runner.restart(runner, :warm) end
+        end)
+
+      assert {:ok, %ArgumentError{}} = Task.yield(restart, @answers)
+      assert Task.yield(first, 0) == nil
+      assert %{forcing: %{"level" => 7}} = Runner.status(runner)
+      :sys.resume(server)
+      assert Task.await(first, @answers) == :ok
+      assert Task.await(behind, @answers) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
+      assert %{forces: %{"eye_1" => 1, "level" => 7}, forcing: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
   end
 
   # Decision 445 (RV-16): while `forces_unread` stands a restart keeps the forces the
@@ -2293,7 +2386,7 @@ defmodule Logex.StalledDiskTest do
       assert_receive {:DOWN, ^ref, :process, ^runner, :killed}, @answers
       File.rm!(rig.forces)
       {_, 0} = System.cmd("mkfifo", [rig.forces])
-      next = rig(dir, [retain: nil, retain_period: nil] ++ extra)
+      next = rig(dir, Keyword.merge([retain: nil, retain_period: nil], extra))
       {:ok, runner} = Runner.start_link(next.opts)
       Process.unlink(runner)
       forces = next.forces
@@ -2332,6 +2425,17 @@ defmodule Logex.StalledDiskTest do
       assert File.read!(rig.forces) == "level 7\n"
     end
 
+    # RV-18's review, finding 2 (its mutant r08): a crash whose terminate/2 runs, a stop
+    # for a reason no orderly end gives, writes nothing either, where the test above, a
+    # kill, never reaches terminate/2.
+    test "a crash that runs terminate/2 writes nothing too", %{tmp_dir: dir} do
+      {runner, rig} = unread_start(dir)
+      ref = Process.monitor(runner)
+      assert GenServer.stop(runner, :boom) == :ok
+      assert_receive {:DOWN, ^ref, :process, ^runner, :boom}, @answers
+      assert File.read!(rig.forces) == "level 7\n"
+    end
+
     test "the runner's set as it stands at the stop, a force since among it", %{tmp_dir: dir} do
       {runner, rig} = unread_start(dir)
 
@@ -2358,6 +2462,18 @@ defmodule Logex.StalledDiskTest do
       assert {took, {:error, {:forces, :timeout}}} = timed(fn -> Runner.stop(runner) end)
       assert took >= @limit and took < @answers
       :sys.resume(server)
+    end
+
+    # RV-18's review, finding 2 (its mutant r09), the order as built (provisional,
+    # question 4): where both the forces file's write and the store's fail, stop/2 answers
+    # the store's failure; the forces file's is answered only where the store's landed.
+    test "a stop whose two writes both fail answers the store's failure", %{tmp_dir: dir} do
+      store = Path.join(dir, "both.retain")
+      {runner, rig} = unread_start(dir, retain: store, retain_period: 3_600_000)
+      File.mkdir!(rig.forces <> ".tmp")
+      File.mkdir!(store <> ".tmp")
+      assert Runner.stop(runner) == {:error, {:retain, :eisdir}}
+      assert File.read!(rig.forces) == "level 7\n"
     end
   end
 
@@ -2457,6 +2573,28 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # RV-18's review, finding 2 (its mutant r15): a later write that fails by itself has
+    # had every call before its own answered too, the cut one's among them, so it frees
+    # the file as one that lands does: the runner's stop, the file server held again,
+    # hands nothing to a holder.
+    test "a write that fails after a cut one frees the file at the stop as one that lands",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      assert Runner.force(runner, "level", 7) == {:error, {:forces, :timeout}}
+      :sys.resume(server)
+      _ = :sys.get_state(server)
+      File.rm(rig.forces <> ".tmp")
+      File.mkdir!(rig.forces <> ".tmp")
+      assert Runner.force(runner, "level", 3) == {:error, {:forces, :eisdir}}
+      File.rmdir!(rig.forces <> ".tmp")
+      server = held()
+      assert Runner.stop(runner) == :ok
+      assert Paths.held([{rig.forces, :forces}]) == :ok
+      :sys.resume(server)
+    end
+
     test "a stop whose store's write is cut holds the store, and a start whose first " <>
            "write is cut holds it too",
          %{tmp_dir: dir} do
@@ -2486,18 +2624,129 @@ defmodule Logex.StalledDiskTest do
       assert Paths.held([{rig.store, :retain}]) == :ok
     end
 
-    test "a crash holds nothing, as before", %{tmp_dir: dir} do
+    # RV-18's review, finding 1, the leave of decision 475 (a runner's claim given up at
+    # its end with a write still out): this test was "a crash holds nothing, as before",
+    # which asserted the killed runner's file free, `Paths.held/1` `:ok`, while the
+    # force's write it cut could still land. A killed runner runs no terminate/2 and hands
+    # nothing on, so its claim stands under its dead pid, told to a start as left, and the
+    # start takes the file only once the file server has answered a look behind every
+    # call the killed writes left in its queue (RV-16's probe T5, the review's 475K).
+    test "a runner killed with a write out leaves the file to a start's look at the file " <>
+           "server: refused past its limit, the next reading what the write left",
+         %{tmp_dir: dir} do
       rig = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
       {:ok, runner} = Runner.start_link(rig.opts)
       Process.unlink(runner)
+      assert landed(runner, "level", 7) == :ok
       server = held()
-      assert Runner.force(runner, "level", 7) == {:error, {:forces, :timeout}}
+      unforce = Task.async(fn -> stop_answer_of(fn -> Runner.unforce(runner, "level") end) end)
+      _writing = renaming(server, runner)
       ref = Process.monitor(runner)
       Process.exit(runner, :kill)
       assert_receive {:DOWN, ^ref, :process, ^runner, :killed}, @answers
-      assert Paths.held([{rig.forces, :forces}]) == :ok
+      assert Task.await(unforce, @answers) == gone_told(runner)
+      forces = rig.forces
+      assert Paths.held([{forces, :forces}]) == {:left, forces, runner, :forces}
+      assert :file.read_file(forces, [:raw]) == {:ok, "level 7\n"}
+
+      # A start meanwhile: its look waits behind the unforce's rename past its limit, and
+      # it is refused, the file named left, nothing read.
+      next = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
+      assert {took, message} = timed(fn -> start_refused(next.opts) end)
+      assert message == forces_left_told(next, runner, 300)
+      assert took >= 300 and took < @answers
+
+      # One whose look the disk answers: the unforce's rename lands first, and the start
+      # reads the file as it left it, `level` forced no more, where it read `level 7`
+      # and showed a force the file no longer held.
+      later = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      parent = self()
+
+      spawn(fn ->
+        {:ok, started} = Runner.start_link(later.opts)
+        Process.unlink(started)
+        send(parent, {:started, started})
+      end)
+
+      looking(server, forces)
       :sys.resume(server)
+      assert_receive {:started, runner}, @answers
+      assert File.read!(forces) == ""
+      assert %{forces: %{}, forces_unknown: nil, forces_unread: nil} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+      assert Paths.held([{forces, :forces}]) == :ok
     end
+
+    test "a runner killed with nothing out leaves the file to a start at once, and a holder " <>
+           "killed leaves its file to the same look",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      Process.unlink(runner)
+      assert landed(runner, "level", 7) == :ok
+      ref = Process.monitor(runner)
+      Process.exit(runner, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^runner, :killed}, @answers
+      forces = rig.forces
+      assert Paths.held([{forces, :forces}]) == {:left, forces, runner, :forces}
+      {:ok, runner} = Runner.start_link(rig(dir, retain: nil, retain_period: nil).opts)
+      assert %{forces: %{"level" => 7}} = Runner.status(runner)
+
+      # A stop that cuts a force's write hands the file to a holder; the holder killed by
+      # the host, the cut write still out, leaves the file to a start's look as a killed
+      # runner does, where the file was free at once.
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert Runner.stop(runner) == :ok
+      holder = holder_of(forces)
+      ref = Process.monitor(holder)
+      Process.exit(holder, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^holder, :killed}, @answers
+      assert Paths.held([{forces, :forces}]) == {:left, forces, holder, :forces}
+      next = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
+      assert forces_left_told(next, holder, 300) == start_refused(next.opts)
+      :sys.resume(server)
+      {:ok, runner} = Runner.start_link(next.opts)
+      assert %{forces: %{"eye_1" => 1, "level" => 7}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+  end
+
+  defp forces_left_told(rig, gone, ms),
+    do:
+      "the runner's forces: #{inspect(rig.forces)} names the forces file of " <>
+        "#{inspect(gone)}, a process of this VM that ended without giving it up: a write of " <>
+        "it may still wait in the VM's file server, which has not answered a look behind it " <>
+        "within the write limit, #{ms} ms (write_limit:), and may yet land"
+
+  # Every one of `n` forcing requests waiting behind the write that is out.
+  defp all_behind(runner, n),
+    do: behind_counted(:queue.len(:sys.get_state(runner).behind), runner, n)
+
+  defp behind_counted(n, _runner, n), do: :ok
+
+  defp behind_counted(_fewer, runner, n) do
+    Process.sleep(1)
+    all_behind(runner, n)
+  end
+
+  # A start's look at `path` through the held file server, once one from a live process
+  # waits there: a refused start's look, killed at its limit, left behind it, is passed by.
+  defp looking(server, path), do: looked_for(Process.info(server, :messages), server, path)
+
+  defp looked_for({:messages, messages}, server, path),
+    do: looker(Enum.any?(messages, &live_look?(&1, path)), server, path)
+
+  defp live_look?({:"$gen_call", {pid, _tag}, {:read_link_info, at}}, path),
+    do: IO.chardata_to_string(at) == path and Process.alive?(pid)
+
+  defp live_look?(_message, _path), do: false
+
+  defp looker(true, _server, _path), do: :ok
+
+  defp looker(false, server, path) do
+    Process.sleep(1)
+    looking(server, path)
   end
 
   # Real time slept past a write's limit, where one is out.

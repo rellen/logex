@@ -723,6 +723,39 @@ defmodule Logex.RetainPeriodTest do
       assert [[small], [large]] = sent
       assert :erts_debug.flat_size(small) == :erts_debug.flat_size(large)
     end
+
+    # RV-18's review, finding 2 (its mutant r20): what the instance holds beside its
+    # retained values, an array of 100 dints or of 3,000 that no path retains, is no more
+    # of the hand-off, where the test above, its code alone grown, let the runner send each
+    # retaining instance's whole state.
+    test "sends the retained values alone, whatever else the instance holds",
+         %{tmp_dir: dir} do
+      sent =
+        for size <- [100, 3000] do
+          tally =
+            String.replace(@tally, "var e bool\n", "var e bool\nvar spare dint[#{size}]\n") <>
+              "xic eye add spare[0] 1 spare[#{size - 1}]\n"
+
+          {:ok, program} = Logex.compile(tally, name: "tally")
+          {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => program})
+          rig = rig(Path.join(dir, "s#{size}"), configuration: config)
+          File.mkdir_p!(Path.dirname(rig.store))
+          {:ok, runner} = Runner.start_link(rig.opts)
+          :erlang.trace(runner, true, [:send])
+          eye(rig, 1, 100)
+          synced(runner)
+          :erlang.trace(runner, false, [:send])
+          trace = :erlang.trace_delivered(runner)
+          assert_receive {:trace_delivered, ^runner, ^trace}
+          assert total(rig.store) == "1"
+          assert Runner.get!(runner, "t1.spare[#{size - 1}]") == 1
+          assert Runner.stop(runner) == :ok
+          handed_off(runner)
+        end
+
+      assert [[small], [large]] = sent
+      assert :erts_debug.flat_size(small) == :erts_debug.flat_size(large)
+    end
   end
 
   # What the runner handed its writer, each period's, from the trace of its sends.
