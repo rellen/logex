@@ -2806,7 +2806,11 @@ defmodule Logex.RetainStoreTest do
     end
 
     # Decision 316: a shutdown's write that fails is reported as any failed write, the
-    # runner down all the same and the store as it was.
+    # runner down all the same and the store as it was. RV-18: the panel's device ended
+    # by the shutdown's close, `:normal`, its sim closed, asked of the device's own end
+    # and not only of the runner's, so that a device the runner killed at its deadline, a
+    # loaded machine's stall past the idle watchdog and a poll period of real time, is
+    # told as that.
     test "a parent's shutdown whose write fails is reported", %{tmp_dir: dir} do
       rig = rig(dir)
       Process.flag(:trap_exit, true)
@@ -2815,9 +2819,12 @@ defmodule Logex.RetainStoreTest do
       written = File.read!(rig.store)
       pressed(rig, [1, 0, 1])
       File.mkdir_p!(rig.store <> ".tmp")
+      [device] = for {"panel", pid, _points} <- :sys.get_state(runner).devices, do: pid
+      device_ref = Process.monitor(device)
       ref = Process.monitor(runner)
       Process.exit(runner, :shutdown)
       assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
+      assert_receive {:DOWN, ^device_ref, :process, ^device, :normal}, 5000
       assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written

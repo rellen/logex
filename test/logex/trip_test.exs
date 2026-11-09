@@ -490,6 +490,48 @@ defmodule Logex.TripTest do
     defp answered({:error, reason}, state), do: {:error, reason, state}
   end
 
+  # The simulated device, whose next write after the test arms it, its agent holding the
+  # test's pid, tells the test, `{HeldWrite, pid}`, and waits for `{HeldWrite, :go}`
+  # before the sim takes it: so that a test holds a device's write, a trip's zero among
+  # them, for as long as it needs, every write recorded by the sim as ever.
+  defmodule HeldWrite do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(device, points, opts) do
+      {:ok, sim} = Sim.init(device, points, sim: Keyword.fetch!(opts, :sim))
+      {:ok, %{sim: sim, agent: Keyword.fetch!(opts, :agent)}}
+    end
+
+    @impl true
+    def read(%{sim: sim} = state), do: read_as(Sim.read(sim), state)
+
+    @impl true
+    def write(values, %{sim: sim, agent: agent} = state) do
+      agent |> Agent.get_and_update(&{&1, nil}) |> held()
+      write_as(Sim.write(values, sim), state)
+    end
+
+    @impl true
+    def close(%{sim: sim}), do: Sim.close(sim)
+
+    defp held(nil), do: :ok
+
+    defp held(test) do
+      send(test, {__MODULE__, self()})
+
+      receive do
+        {__MODULE__, :go} -> :ok
+      end
+    end
+
+    defp read_as({:ok, values, sim}, state), do: {:ok, values, %{state | sim: sim}}
+    defp read_as({:error, reason, sim}, state), do: {:error, reason, %{state | sim: sim}}
+
+    defp write_as({:ok, sim}, state), do: {:ok, %{state | sim: sim}}
+    defp write_as({:error, reason, sim}, state), do: {:error, reason, %{state | sim: sim}}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -3137,24 +3179,39 @@ defmodule Logex.TripTest do
       {:ok, clock} = Manual.start_link()
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link()
+      {:ok, held} = Agent.start_link(fn -> nil end)
 
       {:ok, runner} =
         Runner.start_link(
           configuration: configured(text),
-          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {HeldWrite, sim: drive, agent: held}},
           clock: {Manual, clock},
           poll: 600,
           idle: 200,
           steps: Boom
         )
 
-      # The drive's zero sleeps 400 ms in real time, past the idle watchdog alone and
-      # within it and a poll period, 800, a margin wide enough for a busy machine (M5-5's
+      # The drive's zero held inside its write until the test has seen the runner wait for
+      # it past the idle watchdog alone, 200 ms of real time from when the zero began, the
+      # drive still alive, and then let go, so that it answers within the idle watchdog
+      # and a poll period, 800, with all the time a loaded machine takes. RV-18: the zero
+      # slept 400 ms, and beside full suites at a load of 18 its answer came 400 to 805
+      # ms after the trip began, 426 the median, 613 the ninetieth hundredth, and at 805
+      # the runner, as its rule says, killed the drive; a zero let go once the idle
+      # watchdog has passed shows the rule with the least of the window spent (M5-5's
       # review: within 200 and 200, a 300 ms zero failed now and then under load).
       old = device_pid(runner, "drive")
-      Sim.fail(drive, :write, {:delay, 400})
+      test = self()
+      Agent.update(held, fn nil -> test end)
       Sim.set(panel, [1], 5)
-      Manual.advance(clock, 10)
+      tripping = Task.async(fn -> Manual.advance(clock, 10) end)
+      assert_receive {HeldWrite, ^old}, 5000
+      begun = System.monotonic_time(:millisecond)
+      Process.sleep(201)
+      assert System.monotonic_time(:millisecond) - begun > 200
+      assert Process.alive?(old)
+      send(old, {HeldWrite, :go})
+      assert Task.await(tripping, 5000) == :ok
       assert Runner.status(runner).trip == {:internal, "boom in the outputs"}
       assert Process.alive?(old)
       assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]
