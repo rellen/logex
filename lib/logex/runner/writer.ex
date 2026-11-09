@@ -213,12 +213,12 @@ defmodule Logex.Runner.Writer do
   # `<store>.dropped.<n>`, and where they hold the same bytes it makes no new copy and is
   # that one, `{:ok, n}` its number, which `status/1` names by that name; an entry spelled
   # otherwise at the highest number, `.dropped.007`, counts for the number alone and is
-  # never compared, the copy made past it (RV-6's review), and a host's own regular file
+  # never compared, the copy made past it (RV-6's review, decision 487), and a host's own regular file
   # at the name holding the same bytes is the copy, as the decision reads, so that a start that fails after its copy
   # and is started again, a supervisor's restarts among them, leaves one copy where it
   # left one a start, and so does an owed copy made by a later write over one that landed
   # late (decision 391), the copy a start owes compared as the start's own is
-  # (provisional). The comparison is a read, raw and inside the copy's own process and
+  # (decision 483). The comparison is a read, raw and inside the copy's own process and
   # its limit, `write_limit:`: of the highest number's entry only where it is a regular
   # file, so that a FIFO or a device a host put there is never read; and an entry that is
   # none, or that cannot be read, a directory among them, is no match, the new copy made

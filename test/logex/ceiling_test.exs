@@ -45,8 +45,8 @@ defmodule Logex.CeilingTest do
   # A rung's figures, recorded with this test (RV-17's review, 2026-11-08, Elixir 1.20.4 on
   # OTP 28): each stage over the motor's rungs written sixteen times over less the same over
   # eight, the least of five differences, a rung of the forty between them, the same on
-  # six runs, the round's 37.49 to 37.57; each ceiling twice its figure (provisional,
-  # `PLAN.md`'s RV-17 question 6). Under a rung's evaluation made dearer across the board,
+  # six runs, the round's 37.49 to 37.57; each ceiling twice its figure (decision 481:
+  # each stage held whole and a rung). Under a rung's evaluation made dearer across the board,
   # each instruction evaluated four times over or each element 20 reductions dearer, a
   # rung of a scan, a cycle and a round read 2.25 and 2.75 its figure, red, and a rung's
   # lowering made three times over 1.86; each element evaluated once again read 1.96 to

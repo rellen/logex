@@ -54,7 +54,7 @@ defmodule Logex.IO.Sim do
     a restart's where the newest fence in its process's mailbox is one no read of the sim
     found there before, so that a poll, a tripped device's or a released one's, passes the
     hold by, whatever else waits in the mailbox, the fence of a reread the poll was queued
-    behind among them (RV-17's review). A poll passing the hold by goes on as usual, a
+    behind among them (RV-17's review, decision 476). A poll passing the hold by goes on as usual, a
     failure told to `:read` acted out in it. The held read then goes on as usual, a
     failure told to `:read` meanwhile acted out in it, and `reads/1` counts it only then;
     and a held read whose process goes down, a reread the runner gave up and killed
@@ -440,7 +440,7 @@ defmodule Logex.IO.Sim do
   def handle_call(:close, _from, state), do: {:reply, :ok, %{state | closed: true}}
 
   # Decision 462: a held reread whose process went down, killed by a runner that gave it up
-  # (provisional), spends the hold, which holds nothing then; `let_go/1` takes the monitor
+  # (decision 479), spends the hold, which holds nothing then; `let_go/1` takes the monitor
   # out, its message with it, so no other comes. Any other message, which nothing the sim
   # is called by sends, is passed over, where GenServer's default logged it.
   @impl GenServer

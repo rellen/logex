@@ -3014,7 +3014,19 @@ device for a poll period, each device's turn, a hung one still tripping once the
 is on time, the lateness in `status/1`'s `latest_wake`, every wake's (decision 461),
 since RV-6's review seen by the look itself, whatever brought the runner there; and a
 device waiting on the runner for the change its own poll read polls on meanwhile, its
-next poll armed before it passes the change on.)*
+next poll armed before it passes the change on.)* *(Since RV-18, 2026-11-09, the answers
+to RV-16's and RV-6's questions: forcing requests waiting behind a write of the forces
+file joined into the next write, each caller answered with it (decision 465), and the
+set the write that is out holds shown in `status/1`'s `forcing` (decision 466); a restart
+waiting for that write before it reads the file (decision 468); an orderly stop while
+`forces_unread` stands writing the runner's own set (decision 472); a host's mistake in a
+forcing request raised at once (decision 473); a round cut once its writes have begun
+publishing the outputs the devices took (decision 474); a runner's claim on its files
+held until every write of them it began has ended (decision 475); a device unheard for
+four times the idle watchdog and a poll period tripping the line however late the runner
+(decision 484); a round's step past the idle watchdog giving the devices a turn
+(decision 486); and the period's hand-off the retained values alone (decision 488); the
+others as built (decisions 467, 469, 470, 471, 482, 483, 485 and 487).)*
 
 **What fails, and what happens.**
 
@@ -4756,6 +4768,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   start compares the store with the highest-numbered copy standing before it copies,
   making none where they hold the same bytes, `copy` naming that one, so that a start
   that fails after its copy and is started again leaves one copy (decision 456).)*
+  *(RV-18, 2026-11-09: the period's hand-off is the retained values the runner picks out
+  of the resource, the writer making the image of them, so that its cost follows what is
+  retained (decision 488); and the runner's claim on its store, as on its forces file, is
+  held at its end until every write of it the runner began has ended (decision 475).)*
 - *An online edit of a qualifier* (decision 278): an edit that only adds or removes
   `retain` changes no value. Two report kinds, `:retain_added` and `:retain_removed`, by
   path, rows of `Logex.Edit`'s table and §4.9's and of `@report_kinds`, a global's in
@@ -14020,6 +14036,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      waiting behind the write that is out goes into the next write together, applied in
      the order asked, and each caller is answered when that write lands; ten such take two
      writes. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: the requests that wait behind the write
+     that is out are joined into the next write, applied in the order asked, every caller
+     answered when that write lands, fails or is cut, the same answer to each; a forced
+     trigger's round served as the write lands among them. `stalled_disk_test.exs`'s "ten
+     forces asked behind a write take two writes" and kin; the runner walk's
+     `:forces_together`; `runner_test.exs`'s tight loop restated as writes a round.)*
 
 466. **What `status/1` shows while a force is written (the review after Milestone 6),**
      RV-16's question 2 (decisions 437 and 440): only the forces in effect, so a force
@@ -14029,6 +14051,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `forcing`, the set the write that is out holds, nil where none is out, always there
      as decision 440 has the other keys, so an HMI can show the force as on its way. To
      build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: `status/1`'s `forcing`, the set the
+     write that is out holds, the runner's set as it will be once it lands, nil where
+     none is out, always there; `Logex.Runner.status/1`'s doc and README's forcing
+     passage. The walk checks it nil between steps.)*
 
 467. **A stop while a force is written (the review after Milestone 6),** RV-16's question
      3 (decision 437): the stop writes every device's 0 and closes them at once, then
@@ -14037,6 +14063,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-08): the plant is safe at once, and
      the force's caller is told the truth. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: the mark RV-16 left on it, the requests behind a write answered
+     as to a runner not running, is this decision's number.)*
 
 468. **A force's write that lands after a restart (the review after Milestone 6),**
      RV-16's question 4, as its review restated it (decision 437): a restart reads the
@@ -14047,6 +14075,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      write of the forces file is out waits for that write, up to the write limit, before
      it reads the file, so the HMI never shows a force that then vanishes; what a cut
      write leaves is decision 391's and 475's. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: a restart, cold or warm, asked while a
+     write of the forces file is out waits for it, to the write's own limit, before it
+     reads the file, the write's callers answered first; a cut write leaves its set
+     unknown until the restart reads the file and the file held (decisions 391 and 475);
+     a trip meanwhile as ever. `stalled_disk_test.exs`.)*
 
 469. **What an abandoned round keeps (the review after Milestone 6),** RV-16's question 5
      (decision 441): what the round's steps before the bad clock reading wrote stays in
@@ -14054,6 +14087,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: kept, as built (a)** (the maintainer, 2026-11-08), as a Logix major fault
      keeps what the rungs before it wrote. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: the mark RV-16 left on it is this decision's number.)*
 
 470. **Where a round's clock rule reaches (the review after Milestone 6),** RV-16's
      question 6 (decision 441): an untimed plant's period write, outside any round, trips
@@ -14063,6 +14097,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
      decision's number.
+     *(RV-18, 2026-11-09: the mark RV-16 left on it is this decision's number.)*
 
 471. **The share's count when a slot stays open (the review after Milestone 6),** RV-16's
      question 7 (decisions 396 and 442): the count begins again at the slot, whoever takes
@@ -14071,6 +14106,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: as built (a)** (the maintainer, 2026-11-08): a host's share stays its share on
      average, and a late taker keeps its next turn. RV-18 makes the mark the decision's
      number.
+     *(RV-18, 2026-11-09: the slot's comment cites this decision; RV-16 left no other
+     mark on it.)*
 
 472. **A stop and a fresh start while `forces_unread` stands (the review after Milestone
      6),** RV-16's question 8 (decisions 390 and 445): a stop leaves the forces file as it
@@ -14081,6 +14118,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      file before it ends, within the write limit, so the next start brings back nothing
      the HMI was not showing, as decision 445 has a restart; a stop whose write fails or
      is cut says so, as any write. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: an orderly end, `stop/2`, a parent's
+     shutdown or a `:normal` exit, while `forces_unread` stands writes the runner's own
+     set to the forces file within the write limit, after the write that is out; a stop
+     answers that write's failure, `{:error, {:forces, reason}}`, where the store's write
+     landed, and a shutdown tells it to no one (provisional both); a crash writes
+     nothing. `stalled_disk_test.exs` and the life walk's
+     `:life_end_wrote_unread_forces`.)*
 
 473. **A host's mistake behind a force's write (the review after Milestone 6),** RV-16's
      question 9 (decision 437): a forcing request naming no point, or a value its point
@@ -14090,6 +14134,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: raised at once (b)** (the maintainer, 2026-11-08): a host's mistake in a
      forcing request is raised at its caller as it is asked, as every host mistake is,
      whatever write is out. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: a force, an unforce and an unforce_all
+     are served as they are asked, as every host's request is, whatever write of the
+     forces file is out, so that a host's mistake in one is raised in its caller at once,
+     its message pinned; a request with no mistake joins the write's queue as its change.
+     `stalled_disk_test.exs`.)*
 
 474. **The clock gone wrong during a round's writes (the review after Milestone 6),**
      RV-16's question 10 (decision 441): the devices written before the bad reading keep
@@ -14099,6 +14148,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: what was sent published (b)** (the maintainer, 2026-11-08): the round's
      `{:round, now, outputs}` event is published with the outputs the devices took, so a
      log or an HMI that follows the rounds matches the plant. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `d2f708a`: a round cut once its writes have begun,
+     by a clock reading at or after a device's write, at its end, or by a device's write
+     that fails, publishes `{:round, now, outputs}` with the output points of every
+     device its writes reached, in device-name order up to the cut; one cut before any
+     device was reached publishes none. `runner_test.exs` and the runner walk's
+     `:clock_round_end` and `:round_cut_published`.)*
 
 475. **A cut force write that lands after its runner has gone (the review after Milestone
      6),** RV-16's question 11 (decisions 356, 391 and 437): a write of the forces file
@@ -14109,6 +14164,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      forces file (decision 356), and on its store, is held until every write of it the
      runner began has ended, so no runner of the VM starts on the file meanwhile, a start
      then refused naming the file held. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `b1726bb`: a runner's claim on its forces file and
+     store, at its end, is handed to a holder of logex's own, labelled `{Logex.Runner,
+     :ended, runner}`, where a write of the file was cut at its limit, and held until a
+     call of the file server made after the cut has answered, every call of the cut write
+     having then ended; a start meanwhile refused naming the file held; a later write
+     that ends by itself clears it. A server that never answers holds it until the holder
+     is killed, by the host or with the VM (provisional: no limit).
+     `stalled_disk_test.exs`.)*
 
 476. **How the simulated device knows a restart's read (the review after Milestone 6),**
      RV-17's question 1 (decision 462): `Logex.IO.Sim` tells a restart's read by the fence
@@ -14118,6 +14181,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: the fence read, as built (a)** (the maintainer, 2026-11-08): both are logex's
      own, the sim's documentation names the coupling, and a broken fence fails its test.
      RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: `Logex.IO.Sim`'s moduledoc cites this decision where RV-17 left
+     its review's mark.)*
 
 477. **Letting go of a hold no read came to (the review after Milestone 6),** RV-17's
      question 2 (decision 462): `let_go/1` before any restart has read the device answers
@@ -14126,6 +14191,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: raised (b)** (the maintainer, 2026-11-08): it raises as the test's mistake,
      its message pinned, as a hold set twice or a let-go of nothing does, so a test whose
      hold never engaged fails. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `8d3f524`: `let_go/1` of a hold armed that no
+     reread has come to raises, "the simulated device ... holds no reread yet: hold/1
+     armed the hold, and no restart has read the device since", the hold left armed
+     (provisional). `io_test.exs`.)*
 
 478. **A working directory that cannot be read (the review after Milestone 6),** RV-17's
      question 3 (decision 464): a relative path compiled where the working directory is
@@ -14135,6 +14204,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      diagnostic, "cannot be located: the working directory cannot be read", as the runner
      tells a relative store, so nothing escapes the public API but a diagnostic or a host's
      pinned `ArgumentError`. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `8d3f524`: `Logex.compile_file/1`,
+     `compile_files/1` and `Logex.Configuration.compile_file/1` return a `:file`
+     diagnostic, "cannot be located: the working directory cannot be read", for a
+     relative path where the working directory cannot be read, nothing read.
+     `logex_test.exs`'s `LogexTest.GoneWorkingDirectory`.)*
 
 479. **A held reread the runner gave up (the review after Milestone 6),** RV-17's question 4
      (decision 462): the hold is spent with the read it held, `holding?/1` false, `hold/1`
@@ -14142,6 +14216,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
      decision's number.
+     *(RV-18, 2026-11-09: the marks RV-17 left on it, in `Logex.IO.Sim`, are this
+     decision's number.)*
 
 480. **The loader test on a crowded machine (the review after Milestone 6),** RV-17's
      question 5 (decision 464): a loader test of 250 program types can pass ExUnit's 60 s
@@ -14151,12 +14227,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: run alone (c)** (the maintainer, 2026-11-08): the loader tests move to a
      module of their own, `async: false`, so no other test shares the dirty I/O schedulers
      with them, and no test is given more time. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `8d3f524`: `configuration_test.exs`'s two loader
+     tests of many files and `review_lows_test.exs`'s 300 loads beside the swapper move
+     to `Logex.LoadingTest` (`test/logex/loading_test.exs`), `async: false`, their names
+     and assertions as they were, with a test that the module is not async and that no
+     other file holds them; `logex_test.exs`'s of many files,
+     `LogexTest.HeldFileServer`'s, was a module of its own, `async: false`, already.)*
 
 481. **What a ceiling holds (the review after Milestone 6),** RV-17's question 6 (decision
      459): each stage is held whole and a rung, each under twice its own figure.
 
      **Taken: both, as built (a)** (the maintainer, 2026-11-08). RV-18 makes the mark the
      decision's number.
+     *(RV-18, 2026-11-09: the mark RV-17 left on it, in `ceiling_test.exs`, is this
+     decision's number.)*
 
 482. **What a trip names of the runner's own work (the review after Milestone 6),** RV-6's
      question 1 (decision 352): an idle watchdog's trip met in the runner's own work names
@@ -14166,6 +14250,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: the function's name, as built (a)** (the maintainer, 2026-11-08): the
      operator sees which kind of call tripped the line in a short name, and a trip's reason
      quotes no tag. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: the marks RV-6 left on it, in `Logex.Runner`, are this
+     decision's number.)*
 
 483. **An owed copy compared (the review after Milestone 6),** RV-6's question 2 (decision
      456): a copy the next period's write owes again, after one cut off at the write limit
@@ -14174,6 +14260,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: compared, as built (a)** (the maintainer, 2026-11-08): copies the same do not
      pile up on a slow disk. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: the marks RV-6 left on it, in `Logex.Runner` and its writer,
+     are this decision's number.)*
 
 484. **A hung device while every wake is late (the review after Milestone 6),** RV-6's
      question 3 (decision 461): each late look gives the devices a turn of its own, so on
@@ -14185,6 +14273,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the idle watchdog and a poll period trips the line whatever the runner's lateness, as
      a Logix connection faults after four missed packets at its RPI; a turn still spares a
      device starved for less. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `751699a`: within a late look's turn a device is
+     judged against the cap, four times the idle watchdog and a poll period unheard,
+     counted from when it was last heard; a trip by the cap reads as any silent device's,
+     `{:io, device, :timeout}`, the device killed and in `unzeroed` (provisional).
+     `trip_test.exs`'s probe and the cap's threshold; the runner walk's
+     `:hang_late_cap`.)*
 
 485. **The runner's lateness seen at any look (the review after Milestone 6),** RV-6's
      question 4 (decision 461): the runner's lateness is read at every look for silent
@@ -14194,6 +14288,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: every look, one key, as built (a)** (the maintainer, 2026-11-08): a stall
      that ends at a change trips no healthy device, and one figure says how late the
      runner has been. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: the marks RV-6 left on it, in `Logex.Runner`'s moduledoc,
+     `status/1`'s doc and README, are this decision's number.)*
 
 486. **A device starved while the runner is in a step (the review after Milestone 6),**
      RV-6's question 5 (decision 461, RV-7's question 4): only a late look gives a turn,
@@ -14205,6 +14301,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      runs past the idle watchdog gives the devices one poll period's turn before the next
      round's look judges them, as a late wake does, within decision 484's cap. To build in
      RV-18.
+     *(Landed with RV-18, 2026-11-09, `751699a`: a round's step that runs past the idle
+     watchdog sets the devices' turn at its end, a poll period, within decision 484's
+     cap; a step of the idle watchdog exactly gives none. `trip_test.exs`.)*
 
 487. **A copy spelled otherwise (the review after Milestone 6),** RV-6's question 6
      (decision 456): an entry at the highest number spelled as logex does not,
@@ -14213,6 +14312,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: logex's own spelling alone, as built (a)** (the maintainer, 2026-11-08):
      `status/1` names only a file logex wrote. RV-18 makes the mark the decision's number.
+     *(RV-18, 2026-11-09: `Logex.Runner`'s moduledoc and its writer cite this decision
+     where RV-6 left its review's mark.)*
 
 488. **What the period's hand-off sends (the review after Milestone 6),** RV-6's question
      7 (decisions 352 and 455): the runner sends its writer the whole resource each period,
@@ -14225,6 +14326,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      within the write limit (decision 455), so the runner's cost follows what is retained,
      not the plant's size, and a large retained array stays as cheap as decision 352 made
      it. To build in RV-18.
+     *(Landed with RV-18, 2026-11-09, `751699a`: the period's hand-off sends
+     `Logex.Runtime.retained_values/1`, the retained globals, the tags each retaining
+     instance's retained paths start from, the program types as the walk of a path reads
+     them, their code left out, and the triggers' samples; the writer makes the image of
+     them, `retained_image/1`, through which `retained/1` runs too. The runner's own
+     hand-off, the least of nine runs: 1.5 and 3.4 ms for 16,384 and 32,768 retained
+     timers against 6.8 and 17.0 ms as built and 279 and 792 ms at `40735fe`; under 0.01
+     ms for 65,536 rungs retaining one bool, one instance or ten, against 37 and 73 ms as
+     built. `retain_period_test.exs`.)*
 
 ---
 
