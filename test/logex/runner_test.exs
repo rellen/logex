@@ -226,7 +226,22 @@ defmodule Logex.RunnerTest do
     def cancel(clock, timer), do: Manual.cancel(clock, timer)
 
     defp wrong([{key, {function, answer}}], clock), do: within(in?(function), key, answer, clock)
+
+    # Decision 474 (RV-18): wrong at the reading after `skip` more readings inside the
+    # function, each read before it answered right.
+    defp wrong([{key, {function, answer, skip}}], clock),
+      do: skipped(in?(function), skip, key, {function, answer}, clock)
+
     defp wrong([], clock), do: Manual.now_ms(clock)
+
+    defp skipped(true, 0, key, {_function, answer}, clock), do: within(true, key, answer, clock)
+
+    defp skipped(true, skip, key, {function, answer}, clock) do
+      :ets.insert(Logex.RunnerTest, {key, {function, answer, skip - 1}})
+      Manual.now_ms(clock)
+    end
+
+    defp skipped(false, _skip, _key, _wrong, clock), do: Manual.now_ms(clock)
 
     defp in?(function) do
       {:current_stacktrace, frames} = Process.info(self(), :current_stacktrace)
@@ -359,7 +374,13 @@ defmodule Logex.RunnerTest do
   defp counted(text \\ @counted) do
     programs = %{
       "relay" => program(@relay, "relay"),
-      "count" => program("var_output n dint\nadd n 1 n", "count")
+      "count" => program("var_output n dint\nadd n 1 n", "count"),
+      "pair" =>
+        program(
+          "var_input in bool\nvar_output out bool\nvar_output also bool\n" <>
+            "xic in ote out\nxic in ote also",
+          "pair"
+        )
     }
 
     {:ok, config} = Configuration.compile("plant", text, programs)
@@ -823,6 +844,64 @@ defmodule Logex.RunnerTest do
         assert Sim.outputs(panel) == %{[0] => 1}
         assert Runner.stop(runner) == :ok
       end
+    end
+
+    # Decision 474 (RV-18): a round cut once its writes have begun publishes its own event
+    # with the outputs of every device its writes reached, so that a log that follows the
+    # rounds matches the plant, where it published none though the devices took them: the
+    # drive, first in name order, written its 1 and the clock found wrong after its write,
+    # before the panel's, at the round's end, or the panel's write failing.
+    test "a round cut at or after its writes publishes the outputs the devices took " <>
+           "(decision 474)" do
+      config =
+        counted(
+          "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+            "var_global y bool at panel.q.0\nvar_global z bool at drive.q.0\n" <>
+            "program r pair with fast\n  r.in x\n  r.out y\n  r.also z\n"
+        )
+
+      # No poll within the test, so that a write told to fail is the round's.
+      cut = fn wrong ->
+        {opts, rig} = plant_rig(config, poll: 1_000_000)
+        {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {WrongIn, rig.clock}))
+        :ok = Runner.subscribe(runner, [:trip, :round])
+        Manual.advance(rig.clock, 10)
+        assert_receive {Runner, ^runner, {:round, 10, %{"y" => 0, "z" => 0}}}, 5000
+        Sim.set(rig.panel, [0], 1)
+        wrong.(rig)
+        Manual.advance(rig.clock, 10)
+        assert_receive {Runner, ^runner, {:trip, reason}}, 5000
+        rounds = for {Runner, ^runner, {:round, now, outputs}} <- flushed(), do: {now, outputs}
+        assert Sim.outputs(rig.panel) == %{[0] => 0} and Sim.outputs(rig.drive) == %{[0] => 0}
+
+        {reason, rounds, %{[0] => 1} in Sim.writes(rig.drive),
+         %{[0] => 1} in Sim.writes(rig.panel)}
+      end
+
+      at = fn function, skip ->
+        fn %{clock: clock} ->
+          :ets.insert(__MODULE__, {{clock, :wrong_in}, {function, :late, skip}})
+        end
+      end
+
+      # After the drive's write, the drive's 1 published, the panel never written it.
+      assert cut.(at.(:wrote, 1)) ==
+               {{:clock, {:now_ms, :late}}, [{20, %{"z" => 1}}], true, false}
+
+      # Before the panel's write, the same.
+      assert cut.(at.(:wrote, 2)) ==
+               {{:clock, {:now_ms, :late}}, [{20, %{"z" => 1}}], true, false}
+
+      # At the round's end, every device written: the round whole.
+      assert cut.(at.(:delivered, 0)) ==
+               {{:clock, {:now_ms, :late}}, [{20, %{"y" => 1, "z" => 1}}], true, true}
+
+      # The panel's write failing: the drive's 1 published, then the trip.
+      assert cut.(fn %{panel: panel} -> Sim.fail(panel, :write, {:error, :eio}) end) ==
+               {{:io, "panel", {:error, :eio}}, [{20, %{"z" => 1}}], true, false}
+
+      # Before any write, at the drive's own, none published, as before.
+      assert cut.(at.(:wrote, 0)) == {{:clock, {:now_ms, :late}}, [], false, false}
     end
 
     # Decision 441 (RV-16's review): a round that trips, its task's step past its watchdog,
@@ -1864,8 +1943,28 @@ defmodule Logex.RunnerTest do
   end
 
   # A host's loop, on until told to stop, its count of calls made.
+  # Every message in the test's mailbox, taken.
+  defp flushed do
+    receive do
+      message -> [message | flushed()]
+    after
+      0 -> []
+    end
+  end
+
   defp looped(0, loop, calls), do: loop.(loop, calls)
   defp looped(_stop, _loop, calls), do: calls
+
+  # The processes a traced runner made, each a write of the forces file where it has no
+  # store (decision 465's count).
+  defp spawned(runner) do
+    receive do
+      {:trace, ^runner, :spawn, _pid, _mfa} -> 1 + spawned(runner)
+      {:trace, ^runner, _event, _pid, _detail} -> spawned(runner)
+    after
+      0 -> 0
+    end
+  end
 
   # The rounds run when a request is answered, with its answer, the clock moved one wake
   # at a time and at most ten times, so that one never answered fails rather than waits.
@@ -2618,7 +2717,17 @@ defmodule Logex.RunnerTest do
     # one request at most and the requests between two rounds are those the time no round
     # needs holds, a dozen at the tip. Judged by the requests served a round, at most half
     # the callers, which a loaded machine only lowers, the requests slower and the rounds
-    # still each behind one, and never by a round's lateness or the rounds a second. The
+    # still each behind one, and never by a round's lateness or the rounds a second.
+    # Decision 465 (RV-18): the requests that wait behind a write of the forces file are
+    # joined into the next, so the writes are what each round's requests cost, at most
+    # half the callers' a round, and the calls at least twice the writes, the writes
+    # joining them, where each request was a write of its own and the calls were the
+    # writes (some 1,600 calls and 1,600 writes in a second at the parent, some 50,000
+    # calls in 1,000 writes at the tip, each a hundred rounds). RV-18's review: the calls
+    # were held at most a hundred a write, true of any run, each of the hundred callers
+    # waiting on one call at a time; held at least two a write, which a write each call
+    # fails. The writes are counted as the processes the runner
+    # makes, each a write of the forces file, the runner given no store. The
     # task's watchdog and the idle watchdog are 5 s, so that a machine whose every core is
     # busy trips nothing: at a second the review's load runs latched the panel once in 50
     # beside the rest of the runner tests, and an instrumented run of them showed the
@@ -2657,14 +2766,18 @@ defmodule Logex.RunnerTest do
       end
 
       before = Runner.status(runner).rounds
+      :erlang.trace(runner, true, [:procs])
       callers = for _ <- 1..100, do: Task.async(fn -> loop.(loop, 0) end)
       Process.sleep(1000)
       :atomics.put(stop, 1, 1)
       calls = Enum.sum(Enum.map(callers, &Task.await(&1, 60_000)))
       status = Runner.status(runner)
+      :erlang.trace(runner, false, [:procs])
+      writes = spawned(runner)
 
       assert %{status: :running, trip: nil} = status
-      assert calls <= 50 * (status.rounds - before)
+      assert writes <= 50 * (status.rounds - before)
+      assert 2 * writes <= calls
       Runner.stop(runner)
     end
 
@@ -3228,7 +3341,8 @@ defmodule Logex.RunnerTest do
     end
 
     # Decision 440 (RV-16), the leave for `forces_unread` and `forces_unknown` absent:
-    # each always there, nil where nothing stands.
+    # each always there, nil where nothing stands; and decision 466 (RV-18) `forcing`,
+    # nil where no write of the forces file is out.
     test "status/1 at start" do
       {opts, _rig} = plant_rig(counted(), poll: 4)
       {:ok, runner} = Runner.start_link(opts)
@@ -3242,6 +3356,7 @@ defmodule Logex.RunnerTest do
                forces: %{},
                forces_unread: nil,
                forces_unknown: nil,
+               forcing: nil,
                edit: nil,
                runs: %{"fast" => {0, 500}, "trip" => {0, 500}},
                latest_wake: 0,

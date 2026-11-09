@@ -490,6 +490,48 @@ defmodule Logex.TripTest do
     defp answered({:error, reason}, state), do: {:error, reason, state}
   end
 
+  # The simulated device, whose next write after the test arms it, its agent holding the
+  # test's pid, tells the test, `{HeldWrite, pid}`, and waits for `{HeldWrite, :go}`
+  # before the sim takes it: so that a test holds a device's write, a trip's zero among
+  # them, for as long as it needs, every write recorded by the sim as ever.
+  defmodule HeldWrite do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(device, points, opts) do
+      {:ok, sim} = Sim.init(device, points, sim: Keyword.fetch!(opts, :sim))
+      {:ok, %{sim: sim, agent: Keyword.fetch!(opts, :agent)}}
+    end
+
+    @impl true
+    def read(%{sim: sim} = state), do: read_as(Sim.read(sim), state)
+
+    @impl true
+    def write(values, %{sim: sim, agent: agent} = state) do
+      agent |> Agent.get_and_update(&{&1, nil}) |> held()
+      write_as(Sim.write(values, sim), state)
+    end
+
+    @impl true
+    def close(%{sim: sim}), do: Sim.close(sim)
+
+    defp held(nil), do: :ok
+
+    defp held(test) do
+      send(test, {__MODULE__, self()})
+
+      receive do
+        {__MODULE__, :go} -> :ok
+      end
+    end
+
+    defp read_as({:ok, values, sim}, state), do: {:ok, values, %{state | sim: sim}}
+    defp read_as({:error, reason, sim}, state), do: {:error, reason, %{state | sim: sim}}
+
+    defp write_as({:ok, sim}, state), do: {:ok, %{state | sim: sim}}
+    defp write_as({:error, reason, sim}, state), do: {:error, reason, %{state | sim: sim}}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -1666,6 +1708,187 @@ defmodule Logex.TripTest do
       Manual.advance(clock, 200)
       refute_received {Runner, ^runner, {:trip, _reason}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
+    end
+  end
+
+  describe "a device unheard for four idle watchdogs and a poll period trips however late " <>
+             "the runner (decision 484)" do
+    # The panel that reports and an input card, the drive, on the stalled clock, idle 50
+    # and a poll period of 10: the cap is 4 * 50 + 10 = 210 ms unheard.
+    defp stalled_with_card do
+      {:ok, clock} = Manual.start_link()
+      {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
+      {:ok, panel} = Sim.start_link(clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      text =
+        String.replace(@relayed, "interval 10", "interval 1000") <>
+          "var_global z bool at drive.i.0\n"
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Stalled, {clock, agent}},
+          poll: 10,
+          idle: 50
+        )
+
+      Agent.update(agent, &%{&1 | runner: runner})
+      :ok = Runner.subscribe(runner, [:trip])
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 1000)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      %{runner: runner, clock: clock, agent: agent, panel: panel}
+    end
+
+    # The review's probe (RV-6's review, question 3): every wake 100 ms late, a hung input
+    # card. Each late look gives a turn of its own, so the line ran on the card's last
+    # inputs, `status: :running`, until a wake came on time; now the card, last heard at
+    # 1000, is judged against the cap at every look: 110 ms unheard at the wake at 1010
+    # read at 1110, 220 ms at the next, at 1120 read at 1220, past the cap, and the line
+    # trips there, every output 0, the card killed.
+    test "a hung input card while every wake is late trips within the cap, every output 0" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled_with_card()
+      hung = device_pid(runner, "drive")
+      :sys.suspend(hung)
+
+      stall(agent, 100)
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil, latest_wake: 100} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+
+      stall(agent, 100)
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", :timeout}}}
+
+      assert %{status: :tripped, trip: {:io, "drive", :timeout}, unzeroed: ["drive"]} =
+               Runner.status(runner)
+
+      refute Process.alive?(hung)
+      assert Sim.outputs(panel) == %{[0] => 0}
+    end
+
+    # The cap pinned: a device unheard for four times the idle watchdog and a poll period
+    # exactly is spared in a turn, and one a millisecond longer is not, at the late look
+    # itself, counted from when it was last heard, at 1000.
+    test "a turn spares a device unheard for the cap exactly, and not a millisecond longer" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+      :sys.suspend(device_pid(runner, "panel"))
+
+      # The wake at 1010 read at 1210: the panel 210 ms unheard, the cap.
+      stall(agent, 200)
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil, latest_wake: 200} = Runner.status(runner)
+
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+      :sys.suspend(device_pid(runner, "panel"))
+
+      # The wake at 1010 read at 1211: 211 ms unheard, past the cap, trips at once.
+      stall(agent, 201)
+      Manual.advance(clock, 10)
+
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}, latest_wake: 201} =
+               Runner.status(runner)
+    end
+  end
+
+  describe "a step past the idle watchdog gives the devices a turn (decision 486)" do
+    # One report changes both triggers: e1's step passes `e1_ms` on the manual clock, the
+    # panel's polls not run meanwhile (`Slow`), and e2's round, at once after it, looks for
+    # a device not heard, idle 50 and a poll period of 10.
+    @long_step "task e1 single t1 priority 0 watchdog 1000\ntask e2 single t2 priority 1\n" <>
+                 "var_global t1 bool at panel.i.0\nvar_global t2 bool at panel.i.1\n" <>
+                 "var_global e1_ms dint at panel.i.2\n" <>
+                 "var_global y bool at panel.q.0\nvar_global hits dint\n" <>
+                 "program a count with e1\n  a.n hits\nprogram b relay with e2\n" <>
+                 "  b.in t2\n  b.out y\n"
+
+    defp long_step(ms) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@long_step),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 10,
+          idle: 50,
+          steps: Slow
+        )
+
+      :ets.insert(__MODULE__, {runner, clock})
+      :ok = Runner.subscribe(runner, [:trip])
+      Sim.set(panel, [2], ms)
+      Manual.advance(clock, 1000)
+      %{runner: runner, clock: clock, panel: panel}
+    end
+
+    # `long_step/1`'s plant on the stalled clock, so that the panel's readings can lag.
+    defp lagged_step(ms) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@long_step),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Stalled, {clock, agent}},
+          poll: 10,
+          idle: 50,
+          steps: Slow
+        )
+
+      Agent.update(agent, &%{&1 | runner: runner})
+      :ets.insert(__MODULE__, {runner, clock})
+      Sim.set(panel, [2], ms)
+      Manual.advance(clock, 1000)
+      %{runner: runner, clock: clock, agent: agent, panel: panel}
+    end
+
+    # RV-6's question 5: e1's step 80 ms, past the idle watchdog, and the panel 80 ms
+    # unheard at e2's look, where it was judged at once and the healthy panel tripped the
+    # line `{:io, "panel", :timeout}`: the look comes within a poll period of the step's
+    # end, the panel's turn, and e2's round runs; the panel, heard in its turn, never trips.
+    test "a healthy device the step starved is not judged at the next round's look" do
+      %{runner: runner, clock: clock, panel: panel} = long_step(80)
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "hits") == 1
+      assert Runner.get!(runner, "y") == 1
+      Manual.advance(clock, 200)
+      refute_received {Runner, ^runner, {:trip, _reason}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+    end
+
+    # The threshold pinned, as decision 461's is: a step of the idle watchdog exactly is the
+    # runner's own work within its watchdog and gives no turn; one a millisecond longer
+    # does. The panel's readings 15 ms behind the runner's (`Stalled`'s lag), so that at
+    # e2's look after a step of 50 ms it is 65 ms unheard, past the idle watchdog and a
+    # poll period.
+    test "a step of the idle watchdog exactly gives no turn, and one a millisecond longer does" do
+      for {ms, trip} <- [{50, {:io, "panel", :timeout}}, {51, nil}] do
+        %{runner: runner, clock: clock, agent: agent, panel: panel} = lagged_step(ms)
+        stall(agent, 0, 15)
+        Manual.advance(clock, 10)
+        Sim.set(panel, %{[0] => 1, [1] => 1})
+        assert %{trip: ^trip} = Runner.status(runner), "a step of #{ms} ms"
+      end
+    end
+
+    # Within decision 484's cap: e1's step 211 ms, the panel then unheard past four times
+    # the idle watchdog and a poll period at e2's look, in the turn, trips there, e2's
+    # round not run.
+    test "a device the step left unheard past the cap trips at the next round's look" do
+      %{runner: runner, panel: panel} = long_step(211)
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+      assert Runner.get!(runner, "hits") == 1
+      assert Runner.get!(runner, "y") == 0
     end
   end
 
@@ -2956,24 +3179,39 @@ defmodule Logex.TripTest do
       {:ok, clock} = Manual.start_link()
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link()
+      {:ok, held} = Agent.start_link(fn -> nil end)
 
       {:ok, runner} =
         Runner.start_link(
           configuration: configured(text),
-          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {HeldWrite, sim: drive, agent: held}},
           clock: {Manual, clock},
           poll: 600,
           idle: 200,
           steps: Boom
         )
 
-      # The drive's zero sleeps 400 ms in real time, past the idle watchdog alone and
-      # within it and a poll period, 800, a margin wide enough for a busy machine (M5-5's
+      # The drive's zero held inside its write until the test has seen the runner wait for
+      # it past the idle watchdog alone, 200 ms of real time from when the zero began, the
+      # drive still alive, and then let go, so that it answers within the idle watchdog
+      # and a poll period, 800, with all the time a loaded machine takes. RV-18: the zero
+      # slept 400 ms, and beside full suites at a load of 18 its answer came 400 to 805
+      # ms after the trip began, 426 the median, 613 the ninetieth hundredth, and at 805
+      # the runner, as its rule says, killed the drive; a zero let go once the idle
+      # watchdog has passed shows the rule with the least of the window spent (M5-5's
       # review: within 200 and 200, a 300 ms zero failed now and then under load).
       old = device_pid(runner, "drive")
-      Sim.fail(drive, :write, {:delay, 400})
+      test = self()
+      Agent.update(held, fn nil -> test end)
       Sim.set(panel, [1], 5)
-      Manual.advance(clock, 10)
+      tripping = Task.async(fn -> Manual.advance(clock, 10) end)
+      assert_receive {HeldWrite, ^old}, 5000
+      begun = System.monotonic_time(:millisecond)
+      Process.sleep(201)
+      assert System.monotonic_time(:millisecond) - begun > 200
+      assert Process.alive?(old)
+      send(old, {HeldWrite, :go})
+      assert Task.await(tripping, 5000) == :ok
       assert Runner.status(runner).trip == {:internal, "boom in the outputs"}
       assert Process.alive?(old)
       assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]

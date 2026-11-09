@@ -361,12 +361,20 @@ devices run before judging them (decisions 455, 456 and 461); the rest with RV-1
 raw, off the VM's file server (decision 464), a hold in the simulated device on its next
 reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
 whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
-answers to the questions RV-16, RV-17 and RV-6 left, decisions 465–488, RV-18 builds:
-forces waiting behind a write joined into one, `status/1`'s `forcing`, a restart
-waiting for a force's write, a runner's claim on its files held until its last write of
-them has ended, a relative path compiled where the working directory is gone told
-as a diagnostic, and a hung device tripping the line within four idle watchdogs however
-late the runner, among them. Its answers to the questions RV-5 left, decisions 409–419, have landed with
+answers to the questions RV-16, RV-17 and RV-6 left, decisions 465–488, have landed with
+RV-18: forces waiting behind a write joined into one (decision 465), `status/1`'s
+`forcing` (decision 466), a restart waiting for a force's write (decision 468), an
+orderly stop while the forces file is named unread writing the runner's own set
+(decision 472), a host's mistake in a forcing request raised at once (decision 473), a
+round cut once its writes have begun published with the outputs the devices took
+(decision 474), a runner's claim on its files held until its last write of them has
+ended (decision 475), a let-go of a hold no reread came to raised (decision 477), a
+relative path compiled where the working directory is gone told as a diagnostic
+(decision 478), the loader tests of many files run alone (decision 480), a hung device
+tripping the line within four idle watchdogs and a poll period however late the runner
+(decision 484), a step past the idle watchdog giving the devices a turn (decision 486)
+and the period's hand-off sending the retained values alone (decision 488), the others
+as built. Its answers to the questions RV-5 left, decisions 409–419, have landed with
 RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
 ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
 (decision 412), the shutdown's write making the store's text within the write limit, which
@@ -3585,10 +3593,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   a longer `write_limit:`, which the deadline follows. Since decision 455 every write of
   the store makes its text so, in the write's own process within the write limit: a
   trip's, a cold restart's, `start: :cold`'s, a fresh start's with no store file and the
-  period's, whose writer takes the retained image out of the resource the runner hands it,
-  so that the runner's own work at a period is that hand-off, a copy of the whole
-  resource, its programs' code and its instances' state, into the writer, some 10 ms for
-  16,384 retained timers and 36 ms for a program of 65,536 rungs that retains one bool,
+  period's, whose writer makes the retained image of the values the runner picks out of
+  the resource and hands it, so that the runner's own work at a period is that hand-off,
+  a copy of what is retained into the writer, not of the whole resource (decision 488):
+  some 1.5 ms for 16,384 retained timers and 3.4 ms for 32,768, and under 0.01 ms for a
+  program of 65,536 rungs that retains one bool, where the whole resource took 37 ms,
   and a store too big to make and write within the limit
   is cut off at it and reported, `{:retain, {:error, :timeout}}`, its file `unknown` in
   `status/1`, the runner answering on: a trip of 131,072 retained timers answers a host's
@@ -3605,7 +3614,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   of a store's copies or a `.tmp` of any that another runner of the same VM holds, or
   whose store's copies' names another runner holds a file at, is refused, naming it and
   that runner, until the holder stops, crashes or is killed, when the file is free again
-  (decision 356), the VM's table of them kept by a process of logex's own that no
+  (decision 356), once every write of it the holder began has ended (decision 475,
+  "Forcing" below), the VM's table of them kept by a process of logex's own that no
   application's stop takes down; two VMs on one file are the host's to avoid, as are two
   paths to one file through a linked directory. Each path is resolved once, at the start,
   so a `File.cd` after it
@@ -4146,8 +4156,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   written after the reading: found wrong before the round's writes, as it begins or as a
   step is timed, every output is left unwritten, so the trip's 0 is the first the devices
   are given after it, and found wrong at a device's write, or at the round's end, the
-  devices written by then keep the round's outputs until the trip's 0 follows
-  (provisional); and
+  devices written by then keep the round's outputs until the trip's 0 follows (decisions
+  469 and 470), the round's own `{:round, now, outputs}` event published with the outputs
+  of every device its writes reached, so a log that follows the rounds holds what the
+  plant was given (decision 474), as it is where a device's write fails; and
   `{:internal, message}`, an exception out of the core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
@@ -4166,11 +4178,20 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   does not trip the line as hung, while a hung one still trips at the first look once
   the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
   461). The look sees the lateness itself, whatever brought the runner to it, its wake
-  or a device's change taken first. Each late look gives a turn of its own, so on a host
-  late at every wake a hung input card trips only once a wake comes on time, the rounds
-  running on its last inputs meanwhile (provisional, `PLAN.md`'s RV-6 question 3). As a
-  Logix controller faults a module's connection only after four missed packets at its
-  RPI, never on one late look. One that
+  or a device's change taken first (decision 485). Each late look gives a turn of its
+  own, and so does a round's step that runs past `idle:`, from its end (decision 486;
+  from its end provisional, `PLAN.md`'s RV-18 question 3). A turn spares only a device
+  starved for less than four times `idle:` and a poll period (the sum provisional,
+  question 2): one unheard that long, counted from when it was last heard, trips the line
+  however late the runner, `{:io, device, :timeout}` as any hung device (the reason
+  provisional, `PLAN.md`'s RV-18 question 1), so on a host late at every wake a hung
+  input card still trips, at the first look past that cap, so as late as the gap between
+  two looks after it (with every wake 200 ms late, idle 50 and a poll of 10, at 420 ms
+  unheard), every output 0 (decision 484), as a Logix controller faults a module's
+  connection after four missed packets at its RPI, never on one late look. A look that
+  comes past the cap trips the device it finds unheard, the first in name order, even
+  where only the host was late, every card healthy: one wake 211 ms late at idle 50 does
+  so (provisional, the same question). One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4394,34 +4415,62 @@ stage: nil
   the write is out, in a process of its own, and the force takes effect at the first
   round after it lands, its call answered then (decision 437): so on a slow disk the
   logic keeps the plant under control, every round reading the forces as they were and
-  `status/1` listing those, and no force is in effect before the file holds it. A force,
-  an unforce or an unforce_all asked while another's write is out, or while one asked so
-  waits, waits its turn behind it, in the order asked, each built on the set the one
-  before leaves, so the last asked is the last written; a trip, a restart or an edit's
-  step meanwhile leaves the write as it is, and the set it writes, built on the forces
-  held as it began, becomes the runner's once it lands, in place of any a restart read
-  from the file meanwhile; and a stop waits for it to its limit and answers its caller
-  (provisional). A write cut at its limit, at a stop as at any time, may still land once
-  the disk answers, after the runner that made it is gone, so the next start reads
-  whichever set the file then holds, and one already started does not know of it
-  (provisional). A start reads the file raw, off the
-  VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
-  other process's file calls. A file that cannot be read, one the disk has not answered
-  within the write limit or one the file system refuses, a directory in its place among
-  them, starts a fresh start with no force and keeps at a restart the forces the runner
-  holds, the restart going on and the line coming back, and `status/1` names it,
-  `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write
-  of it lands, no restart reading it meanwhile (decisions 390 and 445); with no such file to name,
-  `status/1`'s `forces_unread` is nil, the key always there (decision 440). A restart
-  that reads the file takes what it holds, as every start does; but while
-  `forces_unread` stands a restart keeps the forces the runner holds and takes none from
-  the file, and the next force's or unforce's write writes the runner's set over it
-  (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
-  that could not read the file, the disk back, a trip and a restart, and the level reads
-  its input, never the 7 no one has forced since; and a relative `forces:` whose
-  working directory the disk does not answer for in time refuses the start, the file
-  "cannot be located", as a relative store's does (decision 446), an absolute path the
-  advice. A
+  `status/1` listing those in `forces`, and no force is in effect before the file holds
+  it; meanwhile `status/1`'s `forcing` shows the set the write that is out holds, the
+  forces as they will be once it lands, nil where no write is out, the key always there,
+  so an HMI shows a force on its way (decision 466). A force, an unforce or an
+  unforce_all asked while another's write is out, or while one asked so waits, is served
+  as it is asked, a host's mistake in it, a point that is no input or a value that does
+  not fit, raised in its caller at once, whatever write is out (decision 473); its change
+  waits its turn behind the write, and every change that waited is joined into the next
+  write, applied in the order asked, so the last asked is the last applied, each caller
+  answered when that write lands, or as it fails or is cut, the same answer to each: ten
+  forces asked together, by ten panels or ten processes of one HMI, on a disk that takes
+  3 s a write take two writes, 6 s, where each had a write of its own (decision 465). A
+  force answers once its write lands, so one script that forces ten points one after
+  another waits for each and makes ten writes, 30 s. A trigger forced and unforced in
+  one joined write makes no round, the write taking the set the last change leaves, where
+  asked one after another each made its own (provisional, `PLAN.md`'s RV-18 questions).
+  A trip or an edit's step meanwhile leaves the write as it is, the set it writes, built
+  on the forces held as it began, becoming the runner's once it lands; a restart waits
+  for it, to its limit, before it reads the file, so it reads what the write leaves and
+  the HMI never shows a force that then vanishes (decision 468), the runner answering no
+  other request, `status/1` among them, while it waits (provisional), and a write the
+  restart's wait cut leaves the set it held unknown no more once the restart reads the
+  file, though it may still land (decision 391; provisional); and a stop waits for it to
+  its limit and answers its caller (decision 467). A write cut at its limit, at a stop as at any time, may still land once the disk
+  answers, so a runner that ends gives the file up only once every write of it it began
+  has ended: the file is held for it until the cut write's last call of the file system
+  is answered, and a start on it meanwhile is refused, naming the file, the runner that
+  ended and the process holding the file, so no runner starts on a file a late write
+  then changes under it (decision 475): a runner that crashes holds it so too. A runner
+  killed, which can hand nothing on, leaves its files to the next start, which takes one
+  only once the VM's file server has answered a look behind every call the killed
+  runner's writes left in its queue, at once on a healthy disk, and on a stalled one is
+  refused past its write limit, the file named left by the killed runner. On a disk that
+  never answers the hold lasts as long, a holder the host kills leaving the file to that
+  same look, until the VM stops (provisional). A start reads the file raw, off the VM's file
+  server, as a restart does, so a FIFO or a stalled disk in its place holds no other
+  process's file calls. A file that cannot
+  be read, one the disk has not answered within the write limit or one the file system
+  refuses, a directory in its place among them, starts a fresh start with no force and
+  keeps at a restart the forces the runner holds, the restart going on and the line
+  coming back, and `status/1` names it, `forces_unread: {"packing.forces", :timeout}`,
+  until a force's or an unforce's write of it lands, no restart reading it meanwhile
+  (decisions 390 and 445); with no such file to name, `status/1`'s `forces_unread` is
+  nil, the key always there (decision 440). A restart that reads the file takes what it
+  holds, as every start does; but while `forces_unread` stands a restart keeps the
+  forces the runner holds and takes none from the file, and the next force's or
+  unforce's write writes the runner's set over it (decision 445): so a level switch
+  forced to 7 before a crash, a start on a stalled disk that could not read the file,
+  the disk back, a trip and a restart, and the level reads its input, never the 7 no one
+  has forced since; an orderly stop while `forces_unread` stands, `stop/2` or a
+  supervisor's shutdown, writes the runner's own set over the file before it ends, so
+  the next start brings back no force the HMI was not showing either, a `stop/2` whose
+  write fails or is cut answering `{:error, {:forces, reason}}`, and a crash writes
+  nothing (decision 472); and a relative `forces:` whose working directory the disk does
+  not answer for in time refuses the start, the file "cannot be located", as a relative
+  store's does (decision 446), an absolute path the advice. A
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every

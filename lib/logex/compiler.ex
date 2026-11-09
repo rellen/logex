@@ -5055,8 +5055,11 @@ defmodule Logex.Compiler do
               "program or a function block from its `.ld` file"
           ), call}
 
-  defp by_extension(".ld", _basename, path, call), do: path_loaded(path, call)
-  defp by_extension("", ".ld", path, call), do: path_loaded(path, call)
+  defp by_extension(".ld", _basename, path, call),
+    do: located_loaded(SourceFile.unlocated(path), path, call)
+
+  defp by_extension("", ".ld", path, call),
+    do: located_loaded(SourceFile.unlocated(path), path, call)
 
   defp by_extension(".logex", basename, path, call),
     do:
@@ -5075,6 +5078,11 @@ defmodule Logex.Compiler do
        ), call}
 
   defp not_ld(path, message), do: {:error, [%{file_problem(message) | file: path}]}
+
+  # Decision 478 (RV-18): a relative path where the working directory cannot be read, a
+  # deleted one among them, is a `:file` diagnostic, where it raised `File.Error`.
+  defp located_loaded(nil, path, call), do: path_loaded(path, call)
+  defp located_loaded(message, path, call), do: {not_ld(path, message), call}
 
   # One path of the call: its result, and the call's memo and handed-back paths after it.
   # The memo keeps each file's result with the blocks it reaches, so a program whose blocks

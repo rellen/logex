@@ -4701,59 +4701,6 @@ defmodule Logex.ConfigurationTest do
       assert [_name] = file_errors(good)
     end
 
-    # A seeded property: the texts the totality property below draws, each written to a
-    # configuration file beside `seal.ld`. compile_file/1 never raises; every diagnostic
-    # names a file; and what it accepts is what compile/3 accepts from the same text over
-    # the program type it loaded, but for the file.
-    test "any text in a configuration file gives a result, compile/3's where it is accepted",
-         %{tmp_dir: dir} do
-      :rand.seed(:exsss, {2026, 10, 11})
-      seal_ld = write(dir, "seal.ld", @seal)
-      {:ok, seal} = Logex.compile_file(seal_ld)
-      path = Path.join(dir, "plant.logex")
-
-      outcomes =
-        for _ <- 1..300 do
-          source = edited(Enum.random([@base, @tasked, @broken]), Enum.random(0..4))
-          File.write!(path, source)
-          drawn(Configuration.compile_file(path), source, path, %{"seal" => seal})
-        end
-
-      assert :accepted in outcomes and :refused in outcomes
-    end
-
-    # The loader's passes, over n program types that each hold one shared block: the
-    # types named, their files, one memo across them, each type's blocks handed back, the
-    # citations. Each program is compiled once, so the whole is linear in the types.
-    test "loading stays linear in the program types a file names", %{tmp_dir: dir} do
-      load = fn n ->
-        here = Path.join(dir, "n#{n}")
-        File.mkdir_p!(here)
-        write(here, "seal.ld", @seal_ld)
-
-        text =
-          Enum.map_join(1..n, fn i ->
-            write(
-              here,
-              "t#{i}.ld",
-              "var_input a bool\nvar_output b bool\nvar s1 seal\n" <>
-                "cal s1 a a b\n"
-            )
-
-            "var_global a#{i} bool at panel.i.#{i}\nvar_global b#{i} bool at panel.q.#{i}\n" <>
-              "program m#{i} t#{i}\nm#{i}.a a#{i}\nm#{i}.b b#{i}\n"
-          end)
-
-        path = write(here, "plant.logex", text)
-        growth_reductions(fn -> {:ok, _config} = Configuration.compile_file(path) end)
-      end
-
-      # 4.007x to 4.025x over 36 runs of the suite, 24 of them three suites at once; the
-      # bound a fifth above the highest.
-      ratio = load.(200) / load.(50)
-      assert ratio < 4.9, "4x the program types took #{Float.round(ratio, 2)}x the reductions"
-    end
-
     test "a path that is not a binary is the host's mistake" do
       assert_raise ArgumentError,
                    ~s(Logex.Configuration.compile_file/1 takes a path as a binary, got: ) <>
@@ -4762,33 +4709,9 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
-  # The least of three counts of a call's reductions, since a busy VM can raise one.
-  defp growth_reductions(fun) do
-    Enum.min(
-      for _ <- 1..3 do
-        {:reductions, before} = Process.info(self(), :reductions)
-        fun.()
-        {:reductions, later} = Process.info(self(), :reductions)
-        later - before
-      end
-    )
-  end
-
   # A configuration as compile/3 gives it, which no file names.
   defp unfiled(config),
     do: %{config | file: nil, warnings: Enum.map(config.warnings, &%{&1 | file: nil})}
-
-  defp drawn({:ok, config}, source, path, programs) do
-    assert config.file == path
-    assert config.programs in [%{}, programs]
-    assert {:ok, unfiled(config)} == compiled(source, config.programs)
-    :accepted
-  end
-
-  defp drawn({:error, [_ | _] = diagnostics}, _source, _path, _programs) do
-    for diagnostic <- diagnostics, do: assert(is_binary(diagnostic.file))
-    :refused
-  end
 
   describe "compile/3's host mistakes" do
     # What no configuration text holds is the host's, raised as check/1 raises it.

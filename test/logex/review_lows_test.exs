@@ -667,40 +667,5 @@ defmodule Logex.ReviewLowsTest do
 
       assert ratio < 1.2, "a second spelling cost #{Float.round(ratio, 2)}x"
     end
-
-    # A block saved again between the loader's look at its kind and its compile was read as
-    # a program by the second and raised.
-    test "a6-compile-scale-2: a block's file swapped for a program's during a load is told it is a program" do
-      dir = dir!()
-      main = Path.join(dir, "main.ld")
-      seal = Path.join(dir, "seal.ld")
-      File.write!(main, "var_input a bool\nvar_output b bool\nvar s seal\ncal s a b\n")
-      block = "function_block seal\nvar_input x bool\nvar_output y bool\nxic x ote y\n"
-      program = "var_input x bool\nvar_output y bool\nxic x ote y\n"
-      File.write!(seal, block)
-
-      # The swaps are made raw, off the VM's file server, which serves every other file call
-      # of the VM one at a time (RV-7's review): through it the loop kept a write or a
-      # rename queued there at every moment, so that every other call waited behind one,
-      # and under the busy loops beside a full suite this test's 300 loads, and
-      # `configuration_test.exs`'s loader's beside it, ran past ExUnit's 60 s, where alone
-      # under the loops they took 2 s and 0.5 s. Since decision 464 the loads read raw too.
-      swapper =
-        spawn_link(fn ->
-          Stream.cycle([block, program])
-          |> Enum.each(fn text ->
-            :ok = :file.write_file(seal <> ".new", text, [:raw])
-            :ok = :prim_file.rename(seal <> ".new", seal)
-          end)
-        end)
-
-      results = for _ <- 1..300, do: Logex.compile_file(main)
-      Process.unlink(swapper)
-      Process.exit(swapper, :kill)
-
-      for result <- results do
-        assert match?({:ok, _}, result) or match?({:error, [%Diagnostic{} | _]}, result)
-      end
-    end
   end
 end

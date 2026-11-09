@@ -1076,20 +1076,53 @@ defmodule Logex.Runtime do
   278). A timer's `last` is never in it (decision 273). Its cost is the retained values' and the paths', with one step for
   each global and instance declared, whatever else the resource holds.
   """
-  def retained(runtime) do
+  def retained(runtime), do: retained_image(retained_values(runtime))
+
+  # Decision 488 (RV-18): what the runner's period hands its writer, the resource's retained
+  # values picked out of it and nothing else, so that the hand-off, a copy into the
+  # writer's process, costs what is retained, not the plant's size: each retained global's
+  # type and value, each instance whose program retains anything with the tags its
+  # retained paths start from, the program types those instances run as the walk of a
+  # retained path reads them, their code left out (`Logex.Image.schema/1`), and the
+  # triggers' samples; with one step for each global and instance declared. Where the
+  # runner sent the whole resource, every program's code and every instance's state, 36 ms
+  # of its own work a period for a program of 65,536 rungs that retains one bool, 91 ms
+  # for ten instances of it (RV-6's review). retained_image/1 makes the image retained/1
+  # gives from it, in the writer, within the write limit (decision 455).
+  @doc false
+  def retained_values(runtime) do
     %__MODULE__{config: config, globals: globals, instances: instances} = runtime!(runtime)
+
+    picked =
+      for {name, %Instance{type: type, env: env}} <- instances,
+          %Program{retained: [_ | _] = paths} <- [Map.fetch!(config.programs, type)],
+          into: %{},
+          do: {name, {type, Map.take(env, Image.heads(paths))}}
 
     %{
       configuration: config.name,
-      globals: Image.globals(config.globals, globals),
-      instances:
+      globals: Image.retained_globals(config.globals, globals),
+      programs:
         for(
-          {name, %Instance{type: type, env: env}} <- instances,
-          %Program{retained: [_ | _]} = program <- [Map.fetch!(config.programs, type)],
+          {_name, {type, _env}} <- picked,
           into: %{},
-          do: {name, Image.of(program, env)}
+          do: {type, Image.schema(Map.fetch!(config.programs, type))}
         ),
+      instances: picked,
       triggers: triggers(config, runtime.tasks)
+    }
+  end
+
+  @doc false
+  def retained_image(%{configuration: name, programs: programs} = values) do
+    %{
+      configuration: name,
+      globals: Image.globals(values.globals),
+      instances:
+        Map.new(values.instances, fn {instance, {type, env}} ->
+          {instance, Image.of(Map.fetch!(programs, type), env)}
+        end),
+      triggers: values.triggers
     }
   end
 

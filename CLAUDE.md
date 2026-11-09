@@ -158,8 +158,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 
 - `test/test_helper.exs` — starts ExUnit.
 - `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
-  file server is held and with the working directory deleted, and Milestones 1 to 3's
-  done sentences from files on disk.
+  file server is held, with the working directory deleted and with no home set, and
+  Milestones 1 to 3's done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded
@@ -178,6 +178,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   twins compiled in the same run, and a seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
+- `test/logex/loading_test.exs` — the loader tests that read many files, run alone, `async:
+  false`, and the check that no other test file holds them.
 - `test/logex/diagnostic_test.exs` — what each stage stamps on a diagnostic, and
   `format/1`.
 - `test/logex/naming_test.exs` — every mnemonic and keyword has its `docs/naming.md`

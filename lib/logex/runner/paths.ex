@@ -27,10 +27,33 @@ defmodule Logex.Runner.Paths do
   #   and no file a runner writes, kept as it stands (decision 450); a store or forces file
   #   named so is written through `<store>.dropped.tmp`, the copies' `.tmp`, and refused
   #   as that `.tmp`'s.
-  # - A file is held by a runner whose process is alive: one that crashed or was killed,
-  #   whose terminate/2 never ran, holds nothing, its claims taken over by the next runner
-  #   that claims the file. So a path is free again once its holder stops, crashes or is
-  #   killed.
+  # - A file is held by a runner whose process is alive, and given up as it ends. Since
+  #   decision 475 (RV-18) a runner that ends, its terminate/2 run, whatever its reason, a
+  #   stop's, a shutdown's or a crash's, with a write of a file it began cut at its write
+  #   limit and not yet known to have ended, hands that file's claims to a process of
+  #   logex's own (held_on/3), which holds them until every call of the file system that
+  #   write made has been answered, and then gives them up, so that no runner of the VM
+  #   starts on the file meanwhile, a start then refused naming the file held, the runner
+  #   that ended and the holder. A cut write's process is killed at its limit, and a killed
+  #   process makes no call after the one it is in: its raw calls run on in the kernel on
+  #   its own `.tmp`, which every later write's exclusive open deletes first, and its rename
+  #   or delete, which go through the VM's file server, wait in that server's queue,
+  #   answered in the order asked, so that once the server has answered a call the holder
+  #   asks after the kill, every call of the cut write has been answered.
+  # - A runner killed, whose terminate/2 never runs, gives nothing up and hands nothing on:
+  #   its claims stand under its pid, and its writes, linked to it, are killed with it,
+  #   each doing no call after the one it is in, which, a rename or a delete waiting in
+  #   the file server's queue, may yet land (RV-18's review, finding 1, RV-16's probe T5).
+  #   So a claim whose pid is no longer alive, a killed runner's or a holder's that was
+  #   killed, is told to a start's check as left, `{:left, path, pid, role}` (held/1),
+  #   and the start takes the file only once the VM's file server has answered a look it
+  #   makes then, within its write limit, every call the dead process's writes left in the
+  #   queue answered before it, and is refused past that limit, the file named left
+  #   (`Logex.Runner`); its claim in init/1 then takes the dead pid's over. A server that
+  #   never answers holds the file for as long as it does not: a holder ends only once its
+  #   call is answered, and one the host kills leaves its claims to that same look, so
+  #   that no start meanwhile reads a file a late write changes under it (provisional: no
+  #   limit, the record saying "however long the disk takes").
   # - The claims live in a public table of the VM's own, `{path, pid, role}`, made by a
   #   process of its own that the first claim starts, unlinked, which holds the table as
   #   long as the VM runs and does nothing else. Since RV-4's review its group leader is
@@ -67,11 +90,19 @@ defmodule Logex.Runner.Paths do
   # The first of the files a live runner holds, `{:held, path, holder, role}`, or `:ok`,
   # claiming nothing: the check a start makes in its caller before it reads either file,
   # so that a file another runner holds is told as that, never as what is in it; the claim
-  # in the runner's own process is the one that decides.
-  def held(files), do: crossed_held(first_held(files, table()), files)
+  # in the runner's own process is the one that decides. Since RV-18's review a file none
+  # holds whose claim stands under a pid no longer alive, a killed runner's or a killed
+  # holder's, is `{:left, path, pid, role}`, the first such, where nothing is held: a
+  # write of it that process began may still wait in the VM's file server's queue.
+  def held(files), do: crossed_held(first_held(files, table(), :ok), files)
 
-  defp crossed_held(:ok, files), do: crossed(files, nil, table())
-  defp crossed_held(held, _files), do: held
+  defp crossed_held({:held, _path, _holder, _role} = held, _files), do: held
+
+  defp crossed_held(free_or_left, files),
+    do: left_crossed(crossed(files, nil, table()), free_or_left)
+
+  defp left_crossed(:ok, free_or_left), do: free_or_left
+  defp left_crossed(held, _free_or_left), do: held
 
   # Decision 418: a store's copy named, `<store>.dropped.<n>`, n in decimal.
   def copy(store, n), do: store <> ".dropped." <> Integer.to_string(n)
@@ -138,18 +169,75 @@ defmodule Logex.Runner.Paths do
   defp copies_held(nil, rest, others), do: first_crossed(rest, others)
   defp copies_held({other, holder, role}, _rest, _others), do: {:held, other, holder, role}
 
-  defp first_held([], _table), do: :ok
+  defp first_held([], _table, left), do: left
 
-  defp first_held([{path, _role} | rest], table),
-    do: live_holder(:ets.lookup(table, path), rest, table)
+  defp first_held([{path, _role} | rest], table, left),
+    do: live_holder(:ets.lookup(table, path), rest, table, left)
 
-  defp live_holder([{path, holder, role}], rest, table),
-    do: live(Process.alive?(holder), {:held, path, holder, role}, rest, table)
+  defp live_holder([{_path, holder, _role} = row], rest, table, left),
+    do: live(Process.alive?(holder), row, rest, table, left)
 
-  defp live_holder([], rest, table), do: first_held(rest, table)
+  defp live_holder([], rest, table, left), do: first_held(rest, table, left)
 
-  defp live(true, held, _rest, _table), do: held
-  defp live(false, _held, rest, table), do: first_held(rest, table)
+  defp live(true, {path, holder, role}, _rest, _table, _left), do: {:held, path, holder, role}
+
+  defp live(false, {path, gone, role}, rest, table, :ok),
+    do: first_held(rest, table, {:left, path, gone, role})
+
+  defp live(false, _row, rest, table, left), do: first_held(rest, table, left)
+
+  # Decision 475 (RV-18): the files of a runner that ends, `runner` the calling process,
+  # each still its own, handed to a holder of logex's own, made here and given the
+  # runner's pid as its label, `{Logex.Runner, :ended, runner}`, before any is handed,
+  # so that a refusal names both; the holder asks the VM's file server one call, a look at
+  # `path` through it, and once it is answered, every call the runner's cut writes left
+  # in the server's queue answered before it, gives the files up and ends, so that no
+  # claim of a dead pid's is left behind it for a start to wait on (RV-18's review). Its
+  # group leader is the VM's `init`, as the keeper's is, so that no application's stop
+  # takes the claim with it. `[]`, nothing to hold, makes none.
+  def held_on([], _runner, _path), do: :ok
+
+  def held_on(files, runner, path) do
+    table = table()
+    ref = make_ref()
+    holder = spawn(fn -> holding(runner, ref, path, files) end)
+
+    receive do
+      {^ref, :labelled} -> :ok
+    end
+
+    for {at, role} <- files,
+        do: :ets.select_replace(table, [{{at, runner, role}, [], [{:const, {at, holder, role}}]}])
+
+    send(holder, {ref, :held})
+    :ok
+  end
+
+  # A runner killed before it has handed every file, its supervisor's shutdown past, ends
+  # the holder, its rows the dead runner's, or the holder's where it was killed between
+  # two hand-overs, each left to a start's look (held/1).
+  defp holding(runner, ref, path, files) do
+    watched = Process.monitor(runner)
+    Process.group_leader(self(), Process.whereis(:init))
+    Process.set_label({Logex.Runner, :ended, runner})
+    send(runner, {ref, :labelled})
+
+    receive do
+      {^ref, :held} -> answered(path, files)
+      {:DOWN, ^watched, :process, ^runner, _reason} -> :ok
+    end
+  end
+
+  defp answered(path, files) do
+    _ = :file.read_link_info(path)
+    release(files, self())
+  end
+
+  # The runner that handed a holder its files, or nil for a holder that is a runner.
+  def ended_runner(holder), do: ended_of(:proc_lib.get_label(holder))
+
+  defp ended_of({Logex.Runner, :ended, runner}), do: runner
+  defp ended_of(_label), do: nil
 
   # Every file of `pid`'s given up, where it is still `pid`'s.
   def release(files, pid) do

@@ -691,6 +691,86 @@ defmodule Logex.RetainPeriodTest do
     end
   end
 
+  describe "the period's hand-off (decision 488)" do
+    # The runner hands its writer the retained values it picks out of the resource, and
+    # the writer makes the image of them, where the runner sent it the whole resource, every
+    # program's code and every instance's state: so what it sends is the same for the box
+    # counter beside 100 rungs that retain nothing as beside 3,000, and the store the
+    # writer writes holds the resource's retained values.
+    test "sends the retained values alone, whatever else the program holds", %{tmp_dir: dir} do
+      sent =
+        for rungs <- [100, 3000] do
+          tally =
+            String.replace(@tally, "var e bool\n", "var e bool\nvar spare dint\n") <>
+              String.duplicate("xic eye add spare 1 spare\n", rungs)
+
+          {:ok, program} = Logex.compile(tally, name: "tally")
+          {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => program})
+          rig = rig(Path.join(dir, "r#{rungs}"), configuration: config)
+          File.mkdir_p!(Path.dirname(rig.store))
+          {:ok, runner} = Runner.start_link(rig.opts)
+          :erlang.trace(runner, true, [:send])
+          eye(rig, 1, 100)
+          synced(runner)
+          :erlang.trace(runner, false, [:send])
+          trace = :erlang.trace_delivered(runner)
+          assert_receive {:trace_delivered, ^runner, ^trace}
+          assert total(rig.store) == "1"
+          assert Runner.stop(runner) == :ok
+          handed_off(runner)
+        end
+
+      assert [[small], [large]] = sent
+      assert :erts_debug.flat_size(small) == :erts_debug.flat_size(large)
+    end
+
+    # RV-18's review, finding 2 (its mutant r20): what the instance holds beside its
+    # retained values, an array of 100 dints or of 3,000 that no path retains, is no more
+    # of the hand-off, where the test above, its code alone grown, let the runner send each
+    # retaining instance's whole state.
+    test "sends the retained values alone, whatever else the instance holds",
+         %{tmp_dir: dir} do
+      sent =
+        for size <- [100, 3000] do
+          tally =
+            String.replace(@tally, "var e bool\n", "var e bool\nvar spare dint[#{size}]\n") <>
+              "xic eye add spare[0] 1 spare[#{size - 1}]\n"
+
+          {:ok, program} = Logex.compile(tally, name: "tally")
+          {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => program})
+          rig = rig(Path.join(dir, "s#{size}"), configuration: config)
+          File.mkdir_p!(Path.dirname(rig.store))
+          {:ok, runner} = Runner.start_link(rig.opts)
+          :erlang.trace(runner, true, [:send])
+          eye(rig, 1, 100)
+          synced(runner)
+          :erlang.trace(runner, false, [:send])
+          trace = :erlang.trace_delivered(runner)
+          assert_receive {:trace_delivered, ^runner, ^trace}
+          assert total(rig.store) == "1"
+          assert Runner.get!(runner, "t1.spare[#{size - 1}]") == 1
+          assert Runner.stop(runner) == :ok
+          handed_off(runner)
+        end
+
+      assert [[small], [large]] = sent
+      assert :erts_debug.flat_size(small) == :erts_debug.flat_size(large)
+    end
+  end
+
+  # What the runner handed its writer, each period's, from the trace of its sends.
+  defp handed_off(runner, acc \\ []) do
+    receive do
+      {:trace, ^runner, :send, {:"$gen_cast", {:write, _at, taken, _owed}}, _writer} ->
+        handed_off(runner, [taken | acc])
+
+      {:trace, ^runner, :send, _message, _to} ->
+        handed_off(runner, acc)
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
   describe "a trip and a restart" do
     # A trip's write, like a stop's, waits for the period's write in progress and drops the
     # one pending, so that the trip's is the last on disk.

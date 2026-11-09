@@ -65,22 +65,47 @@ defmodule Logex.SourceFile do
   # a path still relative once a leading `~/` is the user's home, as `Path.expand/1` reads
   # it only then (a path the loaders expand names a file, so never `~` alone), so that an
   # absolute path, or one from home, compiles with a working directory that cannot be
-  # read, a deleted one among them (RV-17's review); a relative path with one raises as
-  # `Path.expand/1` raised, `File.cwd!/0`'s error (provisional, `PLAN.md`'s RV-17
-  # question 3).
+  # read, a deleted one among them (RV-17's review). Since decision 478 (RV-18) a relative
+  # path with one is told by the loaders first (unlocated/1), a `:file` diagnostic, where
+  # it raised `File.Error` as `Path.expand/1` raised it; one the working directory went
+  # from between that look and this is kept as it is spelled, which its read then refuses
+  # as a file that cannot be read, so that nothing leaves the loaders but a diagnostic or
+  # a host's pinned `ArgumentError`.
+  # RV-18's review, finding 10: a path from home where no home is set, `HOME` unset, which
+  # unlocated/1 tells first, is kept as it is spelled, where `Path.expand/1` raised.
   @doc false
   def expanded(path), do: from(rooted?(path), path)
 
   defp from(true, path), do: Path.expand(path)
-  defp from(false, path), do: Path.expand(path, cwd(:prim_file.get_cwd()))
+  defp from(false, path), do: expanded_from(:prim_file.get_cwd(), path)
+  defp from(:homeless, path), do: path
 
-  defp rooted?("~/" <> _rest), do: absolute?(System.user_home!())
+  defp expanded_from({:ok, dir}, path), do: Path.expand(path, IO.chardata_to_string(dir))
+  defp expanded_from({:error, _reason}, path), do: path
+
+  # Decision 478 (RV-18): why a path cannot be located, a relative one where the working
+  # directory cannot be read, as the runner tells a relative store or forces file whose
+  # directory it cannot read (decision 446), or nil where it can be.
+  # RV-18's review, finding 10: and a path from home, `~/main.ld`, where no home directory
+  # is set, `HOME` unset, which `System.user_home!/0`, read by `Path.expand/1`, raised as a
+  # `RuntimeError` out of the loaders.
+  @doc false
+  def unlocated(path), do: unlocated(rooted?(path), path)
+
+  defp unlocated(true, _path), do: nil
+  defp unlocated(false, _path), do: cwd_told(:prim_file.get_cwd())
+
+  defp unlocated(:homeless, _path),
+    do: "cannot be located: no home directory is set (`HOME`)"
+
+  defp cwd_told({:ok, _dir}), do: nil
+  defp cwd_told({:error, _reason}), do: "cannot be located: the working directory cannot be read"
+
+  defp rooted?("~/" <> _rest), do: home_rooted(System.user_home())
   defp rooted?(path), do: absolute?(path)
 
+  defp home_rooted(nil), do: :homeless
+  defp home_rooted(home), do: absolute?(home)
+
   defp absolute?(path), do: Path.type(path) == :absolute
-
-  defp cwd({:ok, dir}), do: IO.chardata_to_string(dir)
-
-  defp cwd({:error, reason}),
-    do: raise(File.Error, reason: reason, action: "get current working directory")
 end

@@ -471,10 +471,20 @@ defmodule Logex.IOTest do
       # The hold is the next reread's alone: the one after it goes on at once.
       assert Task.await(reread.()) == {:ok, %{[0] => 0, [1] => 1, [2, 1] => 0}, state}
 
-      # A hold let go before any reread came is taken back.
+      # Decision 477 (RV-18): a hold let go before any reread came is the test's mistake,
+      # raised, its message pinned, the hold left armed, where it was taken back; the next
+      # reread is held in it, and goes on once let go.
       assert Sim.hold(sim) == :ok
+
+      assert_raise ArgumentError,
+                   "the simulated device #{inspect(sim)} holds no reread yet: hold/1 armed " <>
+                     "the hold, and no restart has read the device since",
+                   fn -> Sim.let_go(sim) end
+
+      held = reread.()
+      holding(sim)
       assert Sim.let_go(sim) == :ok
-      assert Task.await(reread.()) == {:ok, %{[0] => 0, [1] => 1, [2, 1] => 0}, state}
+      assert Task.await(held) == {:ok, %{[0] => 0, [1] => 1, [2, 1] => 0}, state}
       assert Sim.reads(sim) == 5
 
       # A hold twice, or a let-go of nothing, is the test's mistake.

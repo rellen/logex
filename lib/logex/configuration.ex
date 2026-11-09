@@ -795,7 +795,9 @@ defmodule Logex.Configuration do
   A path that is not a `.logex` file, one named only `.logex`, a file that cannot be
   read, or a name that cannot name a configuration is a `:file` diagnostic, and only after
   a refused name is the file still compiled, so that its own mistakes are listed too. A
-  path that is not a binary is the host's mistake, raised as `ArgumentError`.
+  relative path where the working directory cannot be read, a deleted one among them, is
+  a `:file` diagnostic as `Logex.compile_file/1` tells it (decision 478). A path that is
+  not a binary is the host's mistake, raised as `ArgumentError`.
 
   The file, its program types' files and the listing of the `.ld` files beside it are
   read raw, off the VM's file server, as `Logex.compile_file/1` reads its files (decision
@@ -816,7 +818,7 @@ defmodule Logex.Configuration do
   # The extension says what a file is (decision 35), and a file named only `.logex` reads
   # as logex's own settings, which no configuration is.
   defp configuration_file(".logex", _basename, path),
-    do: source_file(Logex.SourceFile.read(path), path)
+    do: located_file(Logex.SourceFile.unlocated(path), path)
 
   defp configuration_file("", ".logex", path),
     do:
@@ -839,6 +841,11 @@ defmodule Logex.Configuration do
              "loads a configuration from its `.logex` file"
          )
        ]}
+
+  # Decision 478 (RV-18): a relative path where the working directory cannot be read is a
+  # `:file` diagnostic, as `Logex.compile_file/1` tells one.
+  defp located_file(nil, path), do: source_file(Logex.SourceFile.read(path), path)
+  defp located_file(message, path), do: {:error, [file_problem(path, message)]}
 
   defp source_file({:error, reason}, path),
     do: {:error, [file_problem(path, Logex.SourceFile.unreadable(reason))]}

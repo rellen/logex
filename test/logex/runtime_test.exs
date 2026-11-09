@@ -2273,7 +2273,9 @@ add e i y",
       # runner times: cycle_steps/3, cycle_step/2 and cycle_outputs/1. Decision 190:
       # fresh/1, internal, a new instance of a program a configuration's check has checked.
       # M6-4 (decision 282): the retained image, retained/1 and /2 taking it out, start/2
-      # and instance/2 laying it over a new resource or instance.
+      # and instance/2 laying it over a new resource or instance. Decision 488 (RV-18):
+      # retained_values/1 and retained_image/1, internal, the retained values the runner's
+      # period hands its writer and the image the writer makes of them.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
@@ -2296,6 +2298,8 @@ add e i y",
                  restart: 3,
                  retained: 1,
                  retained: 2,
+                 retained_image: 1,
+                 retained_values: 1,
                  scan: 2,
                  scan: 3,
                  start: 1,

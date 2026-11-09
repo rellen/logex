@@ -5,11 +5,13 @@ defmodule Logex.Runner.Writer do
   # own, linked to its runner, so that a period's store write, however slow, delays no
   # round. The runner hands it the resource between rounds with the time of its header,
   # and since decision 455 (RV-6) the writer takes the retained image out of it, where the
-  # runner took it out itself, encodes it as the store's text and writes it
-  # through `Logex.Retain.written/2`, `<path>.tmp` synced, closed and renamed over the
-  # store, and tells the runner how it went, `{Logex.Runner.Writer, pid, at, result}`. It
-  # holds one write at a time: the runner sends it the next only once it has answered,
-  # keeping the newest it took out meanwhile and dropping the older, latest wins.
+  # runner took it out itself, since decision 488 (RV-18) out of the retained values the
+  # runner picked out of the resource and sent alone, encodes it as the store's text and
+  # writes it through `Logex.Retain.written/2`, `<path>.tmp` synced, closed and renamed
+  # over the store, and tells the runner how it went, `{Logex.Runner.Writer, pid, at,
+  # result}`. It holds one write at a time: the runner sends it the next only once it has
+  # answered, keeping the newest it took out meanwhile and dropping the older, latest
+  # wins.
   #
   # Decision 353 (RV-4): every other write the runner makes, a force's of the forces file
   # and the store's at a trip, a stop, a shutdown, a cold restart and a fresh start, is
@@ -46,10 +48,13 @@ defmodule Logex.Runner.Writer do
   def start_link(path), do: GenServer.start_link(__MODULE__, {path, self()})
 
   # One image to write, sent only once the last write has been answered, with the copy a
-  # fresh start owes, nil for none (stored/4). Since decision 455 (RV-6) the resource the
-  # image is taken out of, `{:runtime, runtime}`, the take-out and the text made here, in
-  # the writer, within the limit the runner gives the write from the hand-off; an image a
-  # test's seam took out in the runner, `{:image, image}`, its text alone.
+  # fresh start owes, nil for none (stored/4). Since decision 455 (RV-6) the image's
+  # take-out and its text are made here, in the writer, within the limit the runner gives
+  # the write from the hand-off, and since decision 488 (RV-18) what the runner sends is
+  # the retained values it picked out of the resource, `{:values, values}`
+  # (`Logex.Runtime.retained_values/1`), the image made of them here, where it sent the
+  # whole resource; an image a test's seam took out in the runner, `{:image, image}`, its
+  # text alone.
   def write(pid, at, image, owed), do: GenServer.cast(pid, {:write, at, image, owed})
 
   # One write, waited on for `ms` of real time. Decision 414 (RV-13): `text` the store's
@@ -209,20 +214,20 @@ defmodule Logex.Runner.Writer do
   # `<store>.dropped.<n>`, and where they hold the same bytes it makes no new copy and is
   # that one, `{:ok, n}` its number, which `status/1` names by that name; an entry spelled
   # otherwise at the highest number, `.dropped.007`, counts for the number alone and is
-  # never compared, the copy made past it (RV-6's review), and a host's own regular file
-  # at the name holding the same bytes is the copy, as the decision reads, so that a start that fails after its copy
-  # and is started again, a supervisor's restarts among them, leaves one copy where it
-  # left one a start, and so does an owed copy made by a later write over one that landed
-  # late (decision 391), the copy a start owes compared as the start's own is
-  # (provisional). The comparison is a read, raw and inside the copy's own process and
-  # its limit, `write_limit:`: of the highest number's entry only where it is a regular
-  # file, so that a FIFO or a device a host put there is never read; and an entry that is
-  # none, or that cannot be read, a directory among them, is no match, the new copy made
-  # one past it, as before. Nothing is told before the copy is chosen to be made, so that
-  # a comparison cut off at its limit is a copy killed before it took a number, which can
-  # land nowhere, `:timeout` (decision 452). `told`, `{caller, tag}`, is told `{tag, n}`
-  # once the number is chosen, and nil, the period's writer, nothing. `{:ok, n}` or
-  # `{:error, reason}`.
+  # never compared, the copy made past it (RV-6's review, decision 487), and a host's own
+  # regular file at the name holding the same bytes is the copy, as the decision reads, so
+  # that a start that fails after its copy and is started again, a supervisor's restarts
+  # among them, leaves one copy where it left one a start, and so does an owed copy made
+  # by a later write over one that landed late (decision 391), the copy a start owes
+  # compared as the start's own is (decision 483). The comparison is a read, raw and
+  # inside the copy's own process and its limit, `write_limit:`: of the highest number's
+  # entry only where it is a regular file, so that a FIFO or a device a host put there is
+  # never read; and an entry that is none, or that cannot be read, a directory among them,
+  # is no match, the new copy made one past it, as before. Nothing is told before the copy
+  # is chosen to be made, so that a comparison cut off at its limit is a copy killed
+  # before it took a number, which can land nowhere, `:timeout` (decision 452). `told`,
+  # `{caller, tag}`, is told `{tag, n}` once the number is chosen, and nil, the period's
+  # writer, nothing. `{:ok, n}` or `{:error, reason}`.
   def copy(store, text, told),
     do: copy_numbered(highest_copy(store), store, text, told)
 
@@ -337,6 +342,6 @@ defmodule Logex.Runner.Writer do
     {:noreply, state}
   end
 
-  defp image({:runtime, runtime}), do: Logex.Runtime.retained(runtime)
+  defp image({:values, values}), do: Logex.Runtime.retained_image(values)
   defp image({:image, image}), do: image
 end
