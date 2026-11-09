@@ -387,14 +387,18 @@ defmodule Logex.Runner do
     write, so that a slow write delays no round: while one is in progress the next waits,
     the newest replacing the one before, latest wins. Since decision 455 the take-out and
     the text are the writer's, within the write limit from the hand-off, so that the
-    runner's own work at a period is the resource's copy into the writer, where it took
-    the image out itself, 0.9 s for 32,768 retained timers, and tripped a healthy plant at
-    its first period (M7). The copy follows the whole resource, every program's code and
-    every instance's state, not what it retains alone: some 10 ms for 16,384 retained
-    timers, whose take-out took 240 ms, and 36 ms for a program of 65,536 rungs over
-    `ton[65536]` that retains one bool, 91 ms for ten instances of it, whose take-out took
-    nothing (RV-6's review). A period's image that waited for the writer is handed on
-    once it answers, timed and named as the period's own (decision 352). A write made is the store's age in `status/1`'s
+    runner's own work at a period is the hand-off, where it took the image out itself,
+    0.9 s for 32,768 retained timers, and tripped a healthy plant at its first period
+    (M7); and since decision 488 (RV-18) the hand-off is the retained values alone, picked
+    out of the resource and copied into the writer, which makes the image of them, so that
+    it follows what is retained, not the plant's size, where it copied the whole resource,
+    every program's code and every instance's state: the least of nine runs, 1.5 ms for
+    16,384 retained timers and 3.4 ms for 32,768, against 6.8 and 17.0 ms as the whole
+    resource and 279 and 792 ms as the image taken out in the runner, and under 0.01 ms
+    for a program of 65,536 rungs over `ton[65536]` that retains one bool, one instance or
+    ten, against 37 and 73 ms as the whole resource (RV-18's measure). A period's image
+    that waited for the writer is handed on once it answers, timed and named as the
+    period's own (decision 352). A write made is the store's age in `status/1`'s
     `written_at`; one that fails leaves the store as it was and is reported,
     `{:retain, {:error, reason}}` and `failed`, the plant running on; since RV-4's review
     one the disk has not finished within the write limit of real time is reported
@@ -696,14 +700,20 @@ defmodule Logex.Runner do
     time, and a device the machine starved beside the runner does not. The lateness is
     seen at the look itself, against the runner's wake still to come, whatever brought it
     there, a wake or a device's change, a force or an edit's round taken before its
-    overdue wake (provisional, RV-6's review); a wake late by the idle watchdog or less
-    judges at once. Each late look gives a turn of its own (provisional), so that while
-    every wake is late by more than the idle watchdog no device is judged: a hung input
-    card, its outputs none, trips only at the first look on time, the rounds meanwhile
-    running on its last inputs, and a wake that the runner's own long work made late, an
-    edit's step or a host's request of nearly the idle watchdog, gives a turn too. A
-    device's process that goes down, which the runner traps, is `{:down,
-    reason}`. A device whose own read, report or write again fails tells the runner and
+    overdue wake (decision 485); a wake late by the idle watchdog or less judges at once.
+    Each late look gives a turn of its own, and a wake that the runner's own long work
+    made late, an edit's step or a host's request of nearly the idle watchdog, gives one
+    too; and since decision 486 (RV-18) so does a round's step that runs past the idle
+    watchdog, from the step's end, so that a healthy panel the host starved beside a long
+    step is not judged at the next round's look. A turn spares only a device starved for
+    less than a cap: since decision 484 (RV-18) a device unheard for four times the idle
+    watchdog and a poll period, counted from when it was last heard, trips the line
+    whatever the runner's lateness, as a Logix connection faults after four missed
+    packets at its RPI, where while every wake was late by more than the idle watchdog
+    no device was judged and a hung input card tripped only at the first look on time;
+    the trip by the cap reads as any silent device's, `{:io, device, :timeout}`, the
+    device killed and named in `status/1`'s `unzeroed` (provisional). A device's process
+    that goes down, which the runner traps, is `{:down, reason}`. A device whose own read, report or write again fails tells the runner and
     latches, its 0 written where its adapter still takes it (decision 135);
     a round's write that fails trips at once, the devices after it not written;
   - `{:fault, task, instance, fault}`: since M5-9 (decisions 153 and 160), a major fault,
@@ -817,7 +827,7 @@ defmodule Logex.Runner do
   in two dimensions, `ton[128,256]`, in 255 ms at 32,768, `ton[128,512]` tripping at
   504 ms; a user block's instances, each called, in 119 ms at 10,922, 187 ms at 21,844
   and 348 ms at 32,768; an array of timers retained, with its period of 1000 ms, written
-  every period at 32,768, the period's hand-off a copy of the whole resource (above), and
+  every period at 32,768, the period's hand-off a copy of its retained values (above), and
   at 65,536 past the write limit, the store `unknown` and reported each period, its
   start's write 5.0 s; and an edit's test step over an array of timers in 150 ms at
   32,768 and 355 ms at 65,536, 384 to 412 ms on a quiet machine and once 536 ms, past the
@@ -2858,11 +2868,12 @@ defmodule Logex.Runner do
   # `turn`, the time on the runner's clock of its last look, a round's or a refresh's,
   # that found its wake past its time by more than the idle watchdog, or nil, none yet;
   # set by such a look, whatever brought the runner to it, a wake or a change, a force
-  # or an edit's round before its overdue wake (RV-6's review), and read only by the look
-  # for a device not heard, which judges none within a poll period of it, and by a
-  # device's word that it is back, heard no earlier than it; a round, a trip, a restart, a
-  # stop and an edit's step leave it as it is, a time past by then, which judges nothing
-  # once a poll period has gone.
+  # or an edit's round before its overdue wake (RV-6's review), and since decision 486
+  # (RV-18) by the end of a round's step that ran past the idle watchdog, and read only by
+  # the look for a device not heard, which judges none within a poll period of it but one
+  # past decision 484's cap, and by a device's word that it is back, heard no earlier than
+  # it; a trip, a restart, a stop and an edit's step leave it as it is, a time past by
+  # then, which judges by the cap alone until a poll period has gone.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -3068,19 +3079,18 @@ defmodule Logex.Runner do
   # after the wake, counts as heard no earlier than the wake (notice/2), its reply in the
   # runner's mailbox its turn taken, though it read its clock before the machine stopped
   # it. Only a device still silent after its turn trips the line, and a device hung in its
-  # adapter still trips, at once once the runner wakes on time (provisional: each late
-  # wake gives a turn of its own, so that while every wake is late by more than the idle
-  # watchdog no device is judged, and a hung device trips only at the first look on
-  # time). As IEC 61131-3 leaves a controller's I/O faults to the
-  # implementer, so Logix faults a module's connection only after it has missed four of
-  # its requested packet intervals, never on one late reading of a controller that was
-  # itself held up.
+  # adapter still trips, at once once the runner wakes on time, and within the turn once
+  # it has been unheard past decision 484's cap, four times the idle watchdog and a poll
+  # period, however late every wake is (judged/4). As IEC 61131-3 leaves a controller's
+  # I/O faults to the implementer, so Logix faults a module's connection only after it
+  # has missed four of its requested packet intervals, never on one late reading of a
+  # controller that was itself held up.
   #
   # Since RV-6's review the lateness is seen by the look itself, against the runner's own
   # wake still to come, whatever message brought the runner to the look: a wake, or a
   # device's change, a force or an edit's round that came before its overdue wake, where
   # only a wake's own lateness was seen, and a runner the machine stopped judged its
-  # devices at once when it took a change first (provisional). `latest_wake` is the most
+  # devices at once when it took a change first (decision 485). `latest_wake` is the most
   # the runner found itself past its wake's time at a look, a refresh's or a round's,
   # since RV-6 every wake's, so that the runner's own lateness shows.
   defp overdue(now, %{wake: {_timer, _token, at}} = state),
@@ -3325,8 +3335,9 @@ defmodule Logex.Runner do
   defp stepped({:ok, {runtime, ran}}, kind, task, begun, {state, timed, events, times}) do
     events = Enum.reverse(ran, events)
     state = %{state | runtime: runtime, in_round: events}
-    took = now(state) - begun
-    state = ran(state, task, took)
+    ended = now(state)
+    took = ended - begun
+    state = long_step(took, ended, ran(state, task, took))
     limit = watchdog(task, state)
 
     checked(
@@ -3336,6 +3347,16 @@ defmodule Logex.Runner do
       {:ok, state, timed + timed(kind, took), events, [{task, took} | times]}
     )
   end
+
+  # Decision 486 (RV-18): a step that runs past the idle watchdog gives the devices a turn
+  # from its end, a poll period, as a late look does (turned/3), within decision 484's
+  # cap: the machine that kept the runner in its step so long may not have run its devices
+  # either, so the next round's look judges none within a poll period of the step's end
+  # but one unheard past the cap, and a device's word taken after the step counts as heard
+  # no earlier than its end (notice/2), where only a late look gave a turn and the next
+  # round's look tripped a healthy panel the host had starved beside the step.
+  defp long_step(took, ended, %{idle: idle} = state) when took > idle, do: %{state | turn: ended}
+  defp long_step(_took, _ended, state), do: state
 
   defp checked(nil, over, reason, acc), do: checked(over, reason, acc)
   defp checked(fault, _over, _reason, acc), do: checked(true, fault, acc)
@@ -3535,13 +3556,22 @@ defmodule Logex.Runner do
     {judged(now, turn, poll, state), state}
   end
 
-  # Decision 461 (RV-6): no device is judged within a poll period of a late wake, its turn
-  # (turned/3).
-  defp judged(now, turn, poll, _state) when is_integer(turn) and now - turn < poll, do: nil
+  # Decision 461 (RV-6): no device is judged within a poll period of a late look, its turn
+  # (turned/3), against the idle watchdog and a poll period. Decision 484 (RV-18): within a
+  # turn a device is judged against a cap, four times the idle watchdog and a poll period
+  # unheard, counted from when it was last heard, so that a turn spares only a device
+  # starved for less, and a hung card trips within the cap however late every look of the
+  # runner is, where while every look was late none was judged. A trip by the cap is a
+  # silent device's, `{:io, device, :timeout}`, the device killed (provisional).
+  defp judged(now, turn, poll, %{idle: idle} = state)
+       when is_integer(turn) and now - turn < poll,
+       do: unheard(now, 4 * idle + poll, state)
 
-  defp judged(now, _turn, poll, %{devices: devices, heard: heard, idle: idle}) do
+  defp judged(now, _turn, poll, %{idle: idle} = state), do: unheard(now, idle + poll, state)
+
+  defp unheard(now, limit, %{devices: devices, heard: heard}) do
     Enum.find_value(devices, fn {name, pid, _points} ->
-      now - Map.fetch!(heard, name) > idle + poll && {name, pid}
+      now - Map.fetch!(heard, name) > limit && {name, pid}
     end)
   end
 
@@ -3859,16 +3889,18 @@ defmodule Logex.Runner do
 
   # Decision 455 (RV-6): the period's take-out of the retained image, and its text, are the
   # writer's, made in its own process within the write limit from the hand-off (handed/2),
-  # so that the runner's own work at a period is the hand-off alone, the resource as it
-  # stands sent to the writer, a copy of it, where the take-out of 32,768 retained timers
-  # took 0.9 s and the text 1.2 s and tripped a healthy plant at its first period
-  # (b3-store-image-1). The copy is of the whole resource, its programs' code and its
-  # instances' state, not of the retained values alone: 10 ms for 16,384 retained timers
-  # and 36 ms for a program of 65,536 rungs retaining one bool (RV-6's review); the resource is plain data, so what the writer writes is the
-  # resource as the runner held it at the hand-off. The hidden seam's `retained/1`, where a
-  # test gives one, takes it out in the runner as before, so that a test sees when the
-  # hand-off comes.
-  defp taken_out(Runtime, runtime), do: {:runtime, runtime}
+  # so that the runner's own work at a period is the hand-off alone, where the take-out of
+  # 32,768 retained timers took 0.9 s and the text 1.2 s and tripped a healthy plant at its
+  # first period (b3-store-image-1). Decision 488 (RV-18): what the hand-off sends is the
+  # retained values the runner picks out of the resource (`Runtime.retained_values/1`),
+  # the image made of them in the writer, so that its cost, a copy into the writer, follows
+  # what is retained, not the plant's size, where it sent the whole resource, its programs'
+  # code and every instance's state, 36 ms for a program of 65,536 rungs retaining one
+  # bool and 91 ms for ten instances of it (RV-6's review). The values are plain data, so
+  # what the writer writes is the resource as the runner held it at the hand-off. The
+  # hidden seam's `retained/1`, where a test gives one, takes the image out in the runner
+  # as before, so that a test sees when the hand-off comes.
+  defp taken_out(Runtime, runtime), do: {:values, Runtime.retained_values(runtime)}
   defp taken_out(taker, runtime), do: {:image, taker.retained(runtime)}
 
   # A period whose wall clock gives no time is a write that fails, reported as one.

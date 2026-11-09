@@ -1203,24 +1203,27 @@ defmodule Logex.StalledDiskTest do
   # big to make and write within the limit is cut off at it and reported, the runner
   # answering on, where a trip of 131,072 retained timers kept it some 11 s making the text
   # (RV-13's question 7). Traced, each process the test and the runner start traced too:
-  # the runner calls neither `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2`, and
-  # one process calls both, each write's own, the period's the writer's.
+  # the runner calls neither `Logex.Runtime.retained_image/1` nor `Logex.Retain.encode/2`,
+  # and one process calls both, each write's own, the period's the writer's. Since
+  # decision 488 (RV-18) the image is made by `retained_image/1`, `retained/1` through it,
+  # and the period's writer makes it of the retained values the runner sends, where the
+  # trace named `retained/1`, which the writer called on the whole resource.
   describe "every write of the store makes its text in the write's own process (decision 455)" do
     # The work traced in `traced`, the runner or the test that starts one, and every process
     # either starts.
     defp texts_made(traced, work) do
       assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
-      assert :erlang.trace_pattern({Logex.Runtime, :retained, 1}, true, [:local]) == 1
+      assert :erlang.trace_pattern({Logex.Runtime, :retained_image, 1}, true, [:local]) == 1
       :erlang.trace(traced, true, [:call, :set_on_spawn])
       runner = work.()
       :erlang.trace(traced, false, [:call, :set_on_spawn])
       :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
-      :erlang.trace_pattern({Logex.Runtime, :retained, 1}, false, [:local])
+      :erlang.trace_pattern({Logex.Runtime, :retained_image, 1}, false, [:local])
       ref = :erlang.trace_delivered(:all)
       assert_receive {:trace_delivered, :all, ^ref}, @answers
       calls = traced_all()
       refute Enum.any?(calls, &match?({^runner, _mfa}, &1)), inspect(calls)
-      takers = for {pid, {Logex.Runtime, :retained, _}} <- calls, do: pid
+      takers = for {pid, {Logex.Runtime, :retained_image, _}} <- calls, do: pid
       makers = for {pid, {Logex.Retain, :encode, _}} <- calls, do: pid
       assert [_ | _] = takers
       assert takers == makers and self() not in takers

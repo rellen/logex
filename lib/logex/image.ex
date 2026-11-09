@@ -64,14 +64,51 @@ defmodule Logex.Image do
   defp taken(path, type, value, {kinds, values}),
     do: {value, {kinds, Map.put(values, path, {type, value})}}
 
-  # The retained globals of a resource, by name.
-  def globals(globals, values),
+  # The retained globals of a resource, by name, each its type and its value as the
+  # resource holds it (retained_globals/2), and their entries, each its host's form
+  # (globals/1): decision 488's hand-off picks out the first in the runner and the writer
+  # makes the second.
+  def retained_globals(globals, values),
     do:
       for(
         %Logex.Configuration.Global{retain: :retain, name: name, type: type} <- globals,
         into: %{},
-        do: {name, entry(type, Map.fetch!(values, name))}
+        do: {name, {type, Map.fetch!(values, name)}}
       )
+
+  def globals(retained),
+    do: Map.new(retained, fn {name, {type, value}} -> {name, entry(type, value)} end)
+
+  # Decision 488 (RV-18): the names a program's retained paths start from, the tags an
+  # instance's image is taken out of, `boxes` for `boxes`, `s1` for `s1.count` and `gates`
+  # for `gates[*].k`, read as along/5 reads a path's first segment.
+  def heads(paths) do
+    paths
+    |> Enum.map(fn path ->
+      [first | _rest] = String.split(path, ".", parts: 2)
+      {name, _each} = each(first)
+      name
+    end)
+    |> Enum.uniq()
+  end
+
+  # Decision 488 (RV-18): a program as the walk of its retained paths reads it, its code
+  # left out: its name, its retained paths, the tags they start from and its blocks, each
+  # user block's body with no rungs and no tags, as type_of/2 and within/2 read a body for
+  # its blocks alone, which within/2 sets from the program's.
+  def schema(%Program{retained: paths, tags: tags, blocks: blocks} = program),
+    do: %Program{
+      name: program.name,
+      retained: paths,
+      rungs: [],
+      tags: Map.take(tags, heads(paths)),
+      blocks: Map.new(blocks, fn {name, type} -> {name, bodiless(type)} end)
+    }
+
+  defp bodiless(%FbType{body: %Program{}} = type),
+    do: %{type | body: %Program{rungs: [], tags: %{}}}
+
+  defp bodiless(type), do: type
 
   defp entry({:array, _type, dims} = type, value), do: {type, Array.to_list(value, dims)}
   defp entry(type, value), do: {type, value}

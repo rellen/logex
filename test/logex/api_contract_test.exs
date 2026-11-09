@@ -14037,7 +14037,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     words, a hung device `{:io, device, :timeout}`, and since decision 461 one hung while
     the runner's wake was read late by more than the idle watchdog, the devices' polls not
     yet run, no device judged at the late look and the hung one tripped at the look a
-    poll period after it, and since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
+    poll period after it, and since decision 484 one hung while every look is late
+    tripped at the first look that finds it unheard past four times the idle watchdog and
+    a poll period, the healthy devices heard in each look's turn, and since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
     gives out of range, and since M5-12 an element whose subscript it gives outside its
     array, `{:fault, task, instance, fault}` at the step's end, no later step of its round
     run (decisions 153 and 160), as restated from the record; a fault that
@@ -14397,6 +14399,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 461 (RV-6's review): a hung device's turn after a late wake, and its trip
     # once the turn is over.
     :hang_late_turn,
+    # Decision 484 (RV-18): a hung device while every look is late, tripped at the first
+    # look past four times the idle watchdog and a poll period.
+    :hang_late_cap,
+    # Decision 350, met here since decision 484's walks: the trigger `g`'s rise kept back by
+    # a trip that stops its round, a round's write meeting the device hung while every
+    # look was late.
+    :rise_kept_by_trip,
     {:trip, :device},
     {:trip, :error},
     {:trip, :raised},
@@ -14764,6 +14773,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp walk(programs, dir, seed, steps, life \\ false) do
     Process.put(:rw_together, :rand.seed_s(:exsss, {seed, 437, 278}))
     Process.put(:rw_round_end, :rand.seed_s(:exsss, {seed, 474, 1}))
+    Process.put(:rw_late_cap, :rand.seed_s(:exsss, {seed, 484, 1}))
     # M6-7: a walk in three, by its own stream, starts with `keep`'s count unretained.
     d = %{draw() | keep: own(3) > 1, shelf: life}
     config = configured(d, programs)
@@ -14877,6 +14887,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = started(w, config)
     w = Enum.reduce_while(1..steps, w, fn _, w -> stepped_on(step(w)) end)
     w = round_end_cut(end_drawn(), settled(w))
+    w = late_cap_end(cap_drawn(2), w)
     w = ended(w)
     for {_name, sim} <- sims, do: GenServer.stop(sim)
     GenServer.stop(manual)
@@ -17096,6 +17107,65 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :ets.insert(@table, {{self(), :stall}, k})
     :ok = Manual.advance(w.manual, at - now(w))
     late_looked(consumed(%{w | floor: at + k}))
+  end
+
+  # Decision 484 (RV-18), restated: one walk in two where devices may hang, by a stream of
+  # its own seeded by each walk (`:rw_late_cap`), so that no other draw moves and no step
+  # comes after it, ends, after its last step and before its stop, where the runner runs
+  # and no fault is pending, with a device hung while every look is late: a stall of the
+  # idle watchdog, a poll period and a millisecond at each of the runner's wakes, the
+  # devices' polls due meanwhile delivered at the advance to the next, so that each look
+  # gives a turn of its own and the healthy devices are heard in it. The hung one, unheard
+  # from its last word, read from the runner as it hangs, trips at the first look that
+  # finds it unheard past four times the idle watchdog and a poll period, in that look's
+  # turn, and at none before but where a round's write meets it, the same trip; where
+  # every look being late left it unjudged until a look came on time.
+  defp late_cap_end(1, %{status: :running, fault: nil, round: nil, hangs: true} = w),
+    do: cap_hung(for(name <- ["drive", "panel"], not held_back?(name, w), do: name), w)
+
+  defp late_cap_end(_draw, w), do: w
+
+  defp cap_hung([], w), do: w
+
+  defp cap_hung(devices, w) do
+    device = Enum.at(devices, cap_drawn(length(devices)) - 1)
+    [pid] = for {^device, pid} <- device_pids(w.runner), do: pid
+    :sys.suspend(pid)
+
+    w = %{
+      w
+      | fault: {:io, device, :timeout},
+        down: MapSet.put(w.down, device),
+        hung: Map.put(w.hung, device, now(w))
+    }
+
+    every_late(Map.fetch!(:sys.get_state(w.runner).heard, device), w)
+  end
+
+  defp cap_drawn(n) do
+    {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_late_cap))
+    Process.put(:rw_late_cap, stream)
+    drawn
+  end
+
+  defp every_late(heard, w) do
+    k = w.idle + w.poll + 1
+    at = runner_wake(Manual.pending(w.manual), w.runner)
+    :ets.insert(@table, {{self(), :stall}, k})
+    :ok = Manual.advance(w.manual, at - now(w))
+    capped(at + k - heard > 4 * w.idle + w.poll, heard, consumed(%{w | floor: at + k}))
+  end
+
+  defp capped(true, _heard, w) do
+    reach(:hang_late_cap, true)
+    tripped!(w)
+  end
+
+  defp capped(false, _heard, %{status: :tripped} = w), do: tripped!(w)
+
+  defp capped(false, heard, w) do
+    assert Runner.status(w.runner).latest_wake > w.idle
+    every_late(heard, w)
   end
 
   defp runner_wake(pending, runner),

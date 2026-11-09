@@ -3585,10 +3585,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   a longer `write_limit:`, which the deadline follows. Since decision 455 every write of
   the store makes its text so, in the write's own process within the write limit: a
   trip's, a cold restart's, `start: :cold`'s, a fresh start's with no store file and the
-  period's, whose writer takes the retained image out of the resource the runner hands it,
-  so that the runner's own work at a period is that hand-off, a copy of the whole
-  resource, its programs' code and its instances' state, into the writer, some 10 ms for
-  16,384 retained timers and 36 ms for a program of 65,536 rungs that retains one bool,
+  period's, whose writer makes the retained image of the values the runner picks out of
+  the resource and hands it, so that the runner's own work at a period is that hand-off,
+  a copy of what is retained into the writer, not of the whole resource (decision 488):
+  some 1.5 ms for 16,384 retained timers and 3.4 ms for 32,768, and under 0.01 ms for a
+  program of 65,536 rungs that retains one bool, where the whole resource took 37 ms,
   and a store too big to make and write within the limit
   is cut off at it and reported, `{:retain, {:error, :timeout}}`, its file `unknown` in
   `status/1`, the runner answering on: a trip of 131,072 retained timers answers a host's
@@ -4168,11 +4169,15 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   does not trip the line as hung, while a hung one still trips at the first look once
   the runner is on time; `status/1`'s `latest_wake` shows how late it woke (decision
   461). The look sees the lateness itself, whatever brought the runner to it, its wake
-  or a device's change taken first. Each late look gives a turn of its own, so on a host
-  late at every wake a hung input card trips only once a wake comes on time, the rounds
-  running on its last inputs meanwhile (provisional, `PLAN.md`'s RV-6 question 3). As a
-  Logix controller faults a module's connection only after four missed packets at its
-  RPI, never on one late look. One that
+  or a device's change taken first (decision 485). Each late look gives a turn of its
+  own, and so does a round's step that runs past `idle:`, from its end (decision 486).
+  A turn spares only a device starved for less than four times `idle:` and a poll
+  period: one unheard that long, counted from when it was last heard, trips the line
+  however late the runner, `{:io, device, :timeout}` as any hung device (the reason
+  provisional, `PLAN.md`'s RV-18 question 1), so on a host late at every wake a hung
+  input card still trips within that cap, every output 0 (decision 484), as a Logix
+  controller faults a module's connection after four missed packets at its RPI, never
+  on one late look. One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
