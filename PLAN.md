@@ -23,7 +23,8 @@ RV-12's, decisions 409–432, for RV-13 to RV-15, of which RV-14 and RV-15, deci
 RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11's,
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
 decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
-to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18.)*
+to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
+2026-11-09.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -17568,6 +17569,270 @@ and CI checked; each fix with a test that fails when it is reverted.
   runner; a step past the idle watchdog giving the devices a turn before the next round
   judges them; the period's hand-off sending the retained values alone; and RV-6's marks
   of 482–488. It runs after RV-6, whose runner code it touches.
+
+  **RV-18 as built** (2026-11-09, branch `rv18` over `bfc13ba`). Each decision that
+  changes something has a test that fails when it is reverted, judged by the full suite
+  (the mutation table below). No test, walk or oracle was deleted or weakened; the tests
+  a decision changes changed as the decision says, each named below, and three tests
+  moved whole, names and assertions as they were (decision 480).
+
+  - *Decisions 465, 466 and 473, the forcing requests behind a write* (`b1726bb`;
+    `stalled_disk_test.exs`'s "the forcing requests behind a write joined into the next"):
+    a force, an unforce or an unforce_all is served as it is asked, whatever write of the
+    forces file is out, so that a host's mistake in one is raised in its caller at once,
+    each message pinned (473); a request with no mistake names its change alone,
+    `{:put, forces}`, `{:drop, names}` or `:clear`, and every change that waits behind the
+    write that is out is joined into the next write, applied in the order asked, its
+    callers answered when that write lands, fails or is cut, the same answer to each, so
+    that ten asked while one write is out take two writes (465); `status/1`'s `forcing` is
+    the set the write that is out holds, the runner's set as it will be once it lands, nil
+    where none is out, always there (466). The leaves: the unforce_all test's host
+    mistake raised before the write lands (473); `runner_test.exs`'s tight loop of forces
+    judged by the writes a round, the calls at most a hundred a write, since the calls a
+    write now carry are many (465); `status/1` at start with `forcing: nil` (466). The
+    runner walk's together step holds the runner while forces are asked and counts two
+    writes for them (465), and reads `forcing` nil at every check (466).
+  - *Decision 468, a restart waits for a force's write* (`b1726bb`;
+    `stalled_disk_test.exs`'s "a restart waits for a write of the forces file that is
+    out"): a restart, cold or warm, asked while a write of the forces file is out waits
+    for it, to the write's own limit, before it reads the file, the write's callers
+    answered first, the requests behind it joined into the next write once the restart is
+    answered; a cut write leaves what decisions 391 and 475 say. The leave: the trip,
+    restart and edit test's restart, which read the file while the unforce's write was
+    out, now waits for it.
+  - *Decision 472, a stop while `forces_unread` stands* (`b1726bb`;
+    `stalled_disk_test.exs`'s "a stop while the forces file is named unread"): an orderly
+    end, `stop/2`, a parent's shutdown or a `:normal` exit, writes the runner's own set
+    over the forces file within the write limit, after the write that is out, before the
+    store's; a crash writes nothing. A `stop/2` answers `{:error, {:forces, reason}}` where
+    that write fails and the store's landed, the store's failure first where both fail,
+    and a shutdown tells it to no one (provisional, question 4); the child spec gives a
+    runner with `forces:` two write limits more (provisional, question 5). The life walk's
+    orderly end while the file is named unread finds the runner's set written
+    (`:life_end_wrote_unread_forces`).
+  - *Decision 474, a round cut once its writes have begun* (`d2f708a`; `runner_test.exs`'s
+    "a round cut at or after its writes publishes the outputs the devices took"):
+    `in_round` carries the writes' reach from the refresh before them, each device added
+    in name order as it is written or passed as holding its outputs; a cut, a clock
+    reading found wrong at or after a device's write or at the round's end, or a device's
+    write that fails, publishes `{:round, now, outputs}` with the outputs of every device
+    reached, and one cut before any device was reached publishes none (the failing write
+    provisional, question 8). The runner walk restates it: a round a device's write cut
+    publishes the devices' before it, and one walk in three, by a stream of its own, ends
+    with a round the clock cuts at its end (`:round_cut_published`, `:clock_round_end`).
+  - *Decision 475, a runner's files held until its writes have ended* (`b1726bb`;
+    `stalled_disk_test.exs`'s "a runner's files held until its writes have ended"): at its
+    end a runner whose last write of the forces file was cut at its limit, or whose
+    store's write is unknown, hands that file's claim to a holder of logex's own,
+    labelled `{Logex.Runner, :ended, runner}`, which gives it up once a call of the VM's
+    file server made after the cut has answered, every call of the cut write having then
+    ended (the server answering in the order asked); a start meanwhile is refused naming
+    the file, the ended runner and the holder; a later write that ends by itself clears
+    the mark; a crash holds nothing, as before. A server that never answers holds the
+    claim until the holder is killed, by the host or with the VM (provisional, question
+    6). The leave: the write-limit test's start after a cut stop, refused now, made once
+    the holder ends.
+  - *Decision 477, a let-go of a hold no read came to* (`8d3f524`; `io_test.exs`'s hold
+    test): `Logex.IO.Sim.let_go/1` of a hold armed that no reread has come to raises, its
+    message pinned, the hold left armed for the next reread (provisional, question 7),
+    where it took the hold back and answered `:ok`.
+  - *Decision 478, a relative path with no working directory* (`8d3f524`; `logex_test.exs`'s
+    `LogexTest.GoneWorkingDirectory`): the three loaders give a `:file` diagnostic,
+    "cannot be located: the working directory cannot be read", for a relative path where
+    the working directory cannot be read, nothing read (`Logex.SourceFile.unlocated/1`),
+    where they raised `File.Error`; a directory gone between that look and the read is
+    refused by the read, so nothing leaves the loaders but a diagnostic or a pinned
+    `ArgumentError`.
+  - *Decision 480, the loader tests alone* (`8d3f524`; `loading_test.exs`):
+    `configuration_test.exs`'s "any text in a configuration file gives a result" and
+    "loading stays linear in the program types a file names" and `review_lows_test.exs`'s
+    300 loads beside the swapper move to `Logex.LoadingTest`, `async: false`, under the
+    same describes, with a test that the module is not async and that no other test file
+    holds the three; `logex_test.exs`'s loader test of many files,
+    `LogexTest.HeldFileServer`'s, was a module of its own, `async: false`, already
+    (question 9). CLAUDE.md names the new file.
+  - *Decision 484, the cap* (`751699a`; `trip_test.exs`'s "a device unheard for four idle
+    watchdogs and a poll period trips however late the runner"): within a late look's
+    turn a device is judged against four times the idle watchdog and a poll period
+    unheard, counted from when it was last heard (provisional: four times the idle
+    watchdog, and the poll period once, question 2), so that the review's probe, every
+    wake 100 ms late, idle 50, a hung input card, trips at the second late wake, every
+    output 0, where the line ran on; the cap pinned, 210 ms spared and 211 tripped. A trip
+    by the cap reads as any silent device's, `{:io, device, :timeout}`, the device killed
+    and named in `unzeroed` (provisional, question 1). The runner walk restates it: one
+    walk in two where devices may hang ends, by a stream of its own, with a device hung
+    while every look is late, tripped at the first look past the cap
+    (`:hang_late_cap`); its rounds reach decision 350's `:rise_kept_by_trip` there too.
+  - *Decision 486, a long step's turn* (`751699a`; `trip_test.exs`'s "a step past the
+    idle watchdog gives the devices a turn"): a round's step that runs past the idle
+    watchdog sets the devices' turn at its end, a poll period, within decision 484's cap
+    (the turn from the step's end provisional, question 3); a healthy panel the step
+    starved is not judged at the next round's look, one left unheard past the cap still
+    trips, and a step of the idle watchdog exactly gives no turn.
+  - *Decision 488, the period's hand-off* (`751699a`; `retain_period_test.exs`'s "sends
+    the retained values alone, whatever else the program holds"): the runner picks out
+    the retained values, `Logex.Runtime.retained_values/1`, the retained globals, the tags
+    each retaining instance's paths start from, the program types as the walk of a path
+    reads them, their code left out (`Logex.Image.schema/1`), and the triggers' samples,
+    and the writer makes the image of them, `retained_image/1`, through which
+    `retained/1` runs too. `runtime_test.exs`'s surface lists the two internal functions;
+    `stalled_disk_test.exs`'s decision 455 trace names `retained_image/1`, which every
+    image is made by, where it named `retained/1`, which the period's writer no longer
+    calls.
+  - *The marks* (`7bab96e`): every mark RV-16, RV-17 and RV-6 left on a reading
+    decisions 465–488 settle names the decision now, in `Logex.Runner` (467, 469, 470,
+    471, 482, 483, 485 and 487, and the comments 465, 468, 474 and 475 changed), its writer
+    (483, 487), `Logex.IO.Sim` (476, 479) and `ceiling_test.exs` (481); README's late
+    runner passage (484, 485, 486) and its hand-off figures (488). The readings this
+    item made that the record leaves open are marked provisional where they stand
+    (`1c19f23` the last four), each a question below; and every doc and comment line
+    the branch had left past the margin was wrapped again, no word changed.
+  - *Two load failures, root-caused* (`e6d81df`). `trip_test.exs`'s "a device's zero at a
+    trip is given the idle watchdog and a poll period to answer": beside two full suites
+    under four busy loops, a load average of 18, the drive's zero of a 400 ms sleep
+    answered 400 to 805 ms after the trip began over 178 runs, 426 the median and 613 the
+    ninetieth hundredth, and at 805 the runner, as its rule says, killed the drive past
+    800, the idle watchdog and a poll period (`scratchpad/rv/p18/repro_*.log`): the margin
+    a guessed sleep left was the loaded machine's to spend. The zero is now held inside
+    its write by a sim of the test's own, `HeldWrite`, until the test has seen the runner
+    wait past the idle watchdog alone, the drive alive at 200 ms, and let go then; a
+    deadline of the idle watchdog alone kills the drive before the test sees it alive.
+    `retain_store_test.exs`'s "a parent's shutdown whose write fails is reported": 179
+    runs beside the same suites closed the panel within 72 ms of the shutdown, the device
+    ending `:normal`; the runner closes every live device before its store's write and its
+    end, so a sim not closed after the runner's end is a device the runner killed at its
+    close's deadline, 510 ms of real time, or before, the stall the first test shows the
+    machine can make. The test now waits for the panel's own end and asserts it `:normal`
+    before it asks the sim, so a recurrence names that stall, and a close after the
+    runner's end would be waited for. Each passed 50 of 50 in the load run below. And one
+    this item's own load runs met: decision 475's first test, beside a second load run, a
+    load average of 30, had the force it sets up before it holds the file server cut at
+    the rig's 300 ms, the file server not held; the test now asks again a force it needs
+    landed (`landed/3`), a later write that lands having had the cut one's calls answered
+    before its own, and gives the start after the hold `@out`, the short limit kept for
+    the write it cuts.
+  - *The mutation table* (`scripts/mutate.sh` over `1c19f23`, each judged by the full
+    suite, 2,916 tests and doctests; the patches and logs under
+    `scratchpad/rv/p18/mut/`). Every mutant is red.
+
+    | mutant | what it does | the full suite at `1c19f23` |
+    |---|---|---|
+    | m465_own_writes | the requests behind a write each given a write of its own, the first alone | red: api_contract 2, stalled_disk 2 |
+    | m466_forcing_nil | `status/1`'s `forcing` nil while a write is out | red: stalled_disk 2 |
+    | m468_no_wait | a restart reads the file without waiting for the write that is out | red: stalled_disk 3 |
+    | m472_no_write | an orderly end while the file is named unread writes nothing | red: api_contract 1, stalled_disk 3 |
+    | m473_judged_in_turn | a force asked while a write is out queued whole, its mistake told only in its turn | red: api_contract 2, stalled_disk 7 |
+    | m474_no_event | a round cut once its writes have begun publishes no event | red: api_contract 2, runner 1 |
+    | m475_given_up | a file whose last write was cut given up at once at the runner's end | red: stalled_disk 4 |
+    | m477_ok | `let_go/1` of a hold no reread came to answers `:ok` and takes it back | red: io 1 |
+    | m478_none | a relative path with no working directory told nothing | red: logex 1 |
+    | m480_async | `Logex.LoadingTest` async | red: loading 1 |
+    | m484_cap_none | no device judged within a late look's turn, the cap gone | red: api_contract 1, trip 3 |
+    | m484_cap_wide | the cap a millisecond wider | red: trip 2 |
+    | m486_at_idle | a step of the idle watchdog exactly gives a turn | red: trip 1 |
+    | m486_no_turn | a long step gives no turn | red: trip 2 |
+    | m488_runtime | the period's hand-off sends the whole resource, the writer taking the image out | red: retain_period 1 |
+    | m488_whole | the image taken out in the runner and sent, as before decision 455 | red: stalled_disk 1 |
+    | s9_zero_idle_alone | a device's zero, and every call of a live device at an end, given the idle watchdog alone | red: trip 2, the zero test among them |
+    | s9_no_close | the runner's end closes no device | red: 27 tests, the parent's shutdown test among them |
+
+  - *The load runs* (`scripts/load.sh -n 50`, four busy loops on four cores; the
+    evidence under `scratchpad/rv/p18/`). Every runner test this item adds or changes,
+    35 tests in one run: `trip_test.exs`'s decisions 484 and 486 describes, the zero
+    test and the short heard-at-each-poll test; `stalled_disk_test.exs`'s describes of
+    decisions 465, 466, 473, 468, 472 and 475, decision 455's describe and the four
+    decision 437 tests the joined writes touch; `runner_test.exs`'s round cut at its
+    writes (474), the tight loop of forces (465), the stop and `status/1` at start
+    (466); `retain_store_test.exs`'s child spec (472), the period's bad wall clock and
+    the parent's shutdown; and `retain_period_test.exs`'s hand-off describe (488): at
+    `1c19f23` 1 of 50 failed (`load_tip2.txt`), the short heard-at-each-poll test,
+    tripped `{:watchdog, {:device, "panel", 60}}` with `latest_wake: 54`, the runner
+    itself held up past the 60 ms its panel's last idle refresh gave it, a form the
+    test's own comment names (an idle watchdog of 50 trips a runner the machine stops
+    for 60 ms) and not the step form; the run at `7bab96e` beside a second load run, a
+    load average of 25 to 30, had decision 475's first test fail in 1 of 8, above, and
+    was stopped. Decision 486's step form, the heard-at-each-poll test alone: at the
+    parent `bfc13ba` 4 of 50 failed (`load_heard_parent.txt`), run 32 in the step form,
+    `{:io, "panel", :timeout}` at round 2 after e1's run of 537 ms, `latest_wake: 0`,
+    alone under the four loops, and runs 6, 16 and 21, while a second load run ran
+    beside it, by e1's own watchdog, `{:watchdog, {:task, "e1", 1107 to 1255, 1000}}`,
+    which no turn spares; at `1c19f23` 0 of 50 (`load_heard_tip.txt`), the load
+    average 7 to 9. The step form is rare, one in fifty, so the runs show it met before
+    and not after; the rule is shown by `trip_test.exs`'s 486 describe on the manual
+    clock.
+  - *Decision 480's runs* (`scripts/load.sh -n 10 test/logex/loading_test.exs` at
+    `1c19f23` beside a full suite of the same commit run over and over, under the four
+    loops; `scratchpad/rv/p18/demo480/`): 0 of 10 failed, `Logex.LoadingTest` taking
+    28 to 65 s a run, its four tests one after another, no async module beside them.
+    The suite beside them, its first run under the loops and the loader runs, failed
+    `end_to_end_test.exs`'s "on the real clock the plant runs for 2 s and stops in
+    order", 18 rounds against 20, the form that test's comment says RV-7's review met
+    beside the busy loops and keeps (RV-7's question 4).
+  - *Cost against the parent* (`bfc13ba`, the runner's reductions, the least of several
+    runs, on the manual clock; `scratchpad/rv/p18/cost2/`): a round of three devices
+    whose outputs change 2,062 to 2,076, one whose outputs do not 1,761 to 1,772, the
+    writes' reach decision 474 keeps; a round with a store and a long period 1,727 to
+    1,734 against none 1,719 to 1,727, the store's 8.3 more a round 6.7; a host's
+    `status/1` 271 to 273 and `get/2` 279 to 279 with a periodic task, 265 to 267 and
+    279 to 279 with a continuous one; a force, its write made and its answer taken,
+    1,538 to 1,576, decision 465's change joined into a write; a period's write of a
+    thousand retained counters 447,205 both, a fresh start's 4,824,000 to 4,816,000 in
+    the VM, and the period, take-out to write, 8,647,000 to 8,702,000 in the VM, the
+    image made in the writer from the values (decision 488). The hand-off itself, the
+    runner's own, in decision 488's plants above.
+  - *Provisional readings, and questions for the maintainer.* Each is marked
+    provisional where it stands, the closest reading of the record, IEC 61131-3 and Logix
+    that could be found; each question says what an operator or a host sees.
+    1. *What a trip by the cap reads* (decision 484). A conveyor's host makes every wake
+       100 ms late, idle 50, and the drive's input card hangs: at the second late look,
+       220 ms after the card was last heard, the line trips `{:io, "drive", :timeout}`,
+       every output 0, `status/1` naming the drive in `unzeroed` and the lateness in
+       `latest_wake`: the same reason as a card a look on time found hung, as a Logix
+       connection that misses four packets at its RPI faults as a connection. (a) As
+       built, the same reason; (b) a reason of its own, `{:io, "drive", :unheard}`, so the
+       operator tells a stall from a hang; (c) the same reason, and a `{:late, ms}` event
+       at each late look.
+    2. *The cap's sum* (decision 484). "Four times the idle watchdog and a poll period"
+       is read as four idle watchdogs and one poll period, 210 ms at idle 50 and a poll of
+       10; read as four of both, it is 240 ms, a card silent 230 ms spared. (a) As built,
+       4 × idle + poll; (b) 4 × (idle + poll), four of the windows a look on time gives.
+    3. *Where a long step's turn begins* (decision 486). A lamp test's step of 80 ms,
+       idle 50, ends at 1080; the panel is judged by the cap alone until 1090, a poll
+       period from the step's end, and a step of exactly the idle watchdog gives no turn.
+       (a) As built, from the step's end; (b) from the next round's look, which a step
+       followed by other steps reaches later, the panel spared longer.
+    4. *A stop whose writes both fail* (decision 472). A stop while the forces file is
+       named unread, on a disk that refuses both writes: `stop/2` answers the store's
+       failure, `{:error, {:retain, reason}}`, and answers the forces file's only where
+       the store's landed; a supervisor's shutdown tells either only to the subscribers,
+       for the store, and no one for the forces file. (a) As built; (b) answer the forces
+       file's first, the operator's concern being the force; (c) answer both in one
+       `{:error, [...]}`, and publish the forces file's failure as an event at a
+       shutdown.
+    5. *The child spec's shutdown* (decision 472). A runner with `forces:` asks a
+       supervisor for two write limits more, 10 s at the default, for the force's write
+       that may be out and the write of its own set. (a) As built; (b) one more, the two
+       writes never both long; (c) none, the record naming no deadline, a supervisor's
+       kill cutting the forces file's write.
+    6. *A file held while the disk never answers* (decision 475). A stop cuts a force's
+       write on a disk that then never answers: the forces file stays held, a fresh start
+       on it refused naming the holder, until the host kills the holder or the VM stops.
+       (a) As built, no limit, as "however long the disk takes"; (b) a limit, ten write
+       limits, after which the holder gives the file up and a late landing may come.
+    7. *A let-go before any reread* (decision 477). A test arms a hold, lets it go before
+       any restart reads the device: `let_go/1` raises and the hold stays armed for the
+       next reread. (a) As built, armed, as the other two mistakes leave the sim; (b) the
+       hold taken back as it raises.
+    8. *A round cut by a device's failing write* (decision 474). The drive takes the
+       round's outputs, the panel's write fails: the round's event carries the drive's
+       outputs and the trip follows. (a) As built, published, "wherever any device was
+       written"; (b) published only for a cut by the clock, a failing write's round
+       unpublished as a trip's.
+    9. *The loader tests of `logex_test.exs`* (decision 480). Its test that reads many
+       files, `LogexTest.HeldFileServer`'s, already runs alone in a module of its own,
+       `async: false`, and stays there; `LogexTest`'s own loader tests read six files at
+       most and stay async. (a) As built; (b) `HeldFileServer`'s test moved into
+       `Logex.LoadingTest` too, one module for every loader test of many files.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
