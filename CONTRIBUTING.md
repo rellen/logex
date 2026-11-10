@@ -477,7 +477,16 @@ choice, not an oversight to fix.
   it delivers charges the runner a copy of its whole state a round, two of the eight that
   test read apart, a store's state being 200 words more, unevenly from run to run, and CI
   read 10.1 to 10.4 three times. Since RV-7 it takes that copy off, measured on the same
-  runner, and reads the two sides in turn: 5.8 to 6.1.
+  runner, and reads the two sides in turn: 5.8 to 6.1. Nor is the least of several runs
+  a quiet count where the processes a count reaches run at once on other schedulers: a
+  runner's reductions a round move with whether its clock and its device run beside it,
+  and the least of nine read a round's own cost only once the VM had settled them onto
+  one scheduler by itself. A fresh VM here read up to 2.6 over that test's figures for
+  eighteen counts and more, and CI read 10.02 on `e6d81df`, each side's least from a
+  stretch of its own, where a quiet VM of CI's read the same two figures at every count.
+  Since RV-19 that test counts with one scheduler online, the VM's flag set for the test
+  and put back after it, and reads the same figures at every count from the first, alone
+  and under the busy loops.
 - **A trace pattern moves every process's reductions, traced or not.** A pattern set
   with `:erlang.trace_pattern/3` is met by every process that calls the function, so
   while one test traces `Enum`, `:lists` or `:maps` another test's count of reductions
@@ -519,7 +528,14 @@ choice, not an oversight to fix.
   while the next one polls, holds that call in its sim, `Logex.IO.Sim.hold/1`, until it
   has seen what it waits for, and then lets it go, never a delay the machine may outlast:
   a reread that slept 800 ms met no poll of the device after it in three runs of 100
-  under the busy loops (`trip_test.exs`, decision 462).
+  under the busy loops (`trip_test.exs`, decision 462). And such a test reads the runner
+  within the window its rule is about: the busy loops hold the whole VM, a process at
+  `:max` priority waking up to 223 ms late in 5 s where it woke within 4 ms with the
+  machine quiet (RV-19's review), so that a runner at an idle watchdog of 50 ms trips by
+  its devices' heartbeat once its work is done, as it should; the short
+  heard-at-each-poll test, which reads `status/1` after its rounds and failed so 1 run in
+  50 in RV-18's runs, reads since RV-19 the runner's events up to the round its rule
+  ends with as well, and whether it may read them alone is the maintainer's to say.
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input

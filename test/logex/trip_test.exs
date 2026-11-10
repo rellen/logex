@@ -1772,6 +1772,11 @@ defmodule Logex.TripTest do
     # The cap pinned: a device unheard for four times the idle watchdog and a poll period
     # exactly is spared in a turn, and one a millisecond longer is not, at the late look
     # itself, counted from when it was last heard, at 1000.
+    # Decision 490 (RV-19): the look at 1211 comes 211 ms after the round's at 1000, more
+    # than the cap, and so names the runner's lateness, `{:watchdog, {:late, 211}}`, where
+    # it named the panel `{:io, "panel", :timeout}` (decision 484); the panel, hung, takes
+    # no 0 and is named in `unzeroed`. The cap a device is named by is pinned below at a
+    # look that comes within the cap of the last.
     test "a turn spares a device unheard for the cap exactly, and not a millisecond longer" do
       %{runner: runner, clock: clock, agent: agent} = stalled()
       :sys.suspend(device_pid(runner, "panel"))
@@ -1784,12 +1789,193 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, agent: agent} = stalled()
       :sys.suspend(device_pid(runner, "panel"))
 
-      # The wake at 1010 read at 1211: 211 ms unheard, past the cap, trips at once.
+      # The wake at 1010 read at 1211: 211 ms unheard, past the cap, trips at once, and
+      # 211 ms after the last look, the runner's own lateness.
       stall(agent, 201)
       Manual.advance(clock, 10)
 
-      assert %{status: :tripped, trip: {:io, "panel", :timeout}, latest_wake: 201} =
+      assert %{status: :tripped, trip: {:watchdog, {:late, 211}}, latest_wake: 201} =
                Runner.status(runner)
+    end
+
+    # Decision 490 (RV-19): the cap pinned where a device is named, at a look that comes
+    # within the cap of the last: the wake at 1010 read at 1110, the panel 110 ms unheard,
+    # in its turn; the wake at 1120 read at 1210, 100 ms after that look, the panel 210 ms
+    # unheard, the cap, spared; read at 1211, 211 ms, past it, the panel named and killed,
+    # `{:io, "panel", :timeout}`, as decisions 484 and 489 have it.
+    test "a look within the cap of the last names a device unheard past the cap, and spares " <>
+           "one unheard for the cap exactly" do
+      for {stall, trip} <- [{90, nil}, {91, {:io, "panel", :timeout}}] do
+        %{runner: runner, clock: clock, agent: agent} = stalled()
+        hung = device_pid(runner, "panel")
+        :sys.suspend(hung)
+        stall(agent, 100)
+        Manual.advance(clock, 10)
+        assert %{status: :running, trip: nil, latest_wake: 100} = Runner.status(runner)
+        stall(agent, stall)
+        Manual.advance(clock, 10)
+        assert %{trip: ^trip, latest_wake: 100} = Runner.status(runner), "#{stall} ms late"
+        assert Process.alive?(hung) == (trip == nil)
+      end
+    end
+  end
+
+  # Decision 490 (RV-19): a trip the runner's own lateness causes names the lateness, so
+  # that the operator goes to the computer and not to a healthy card: a look that comes more
+  # than decision 484's cap after the runner's last look, or the end of its last round,
+  # finds every device unheard past the cap by that alone, and trips `{:watchdog, {:late,
+  # ms}}`, `ms` the time since that look, every output 0, no device killed, where it named
+  # the first device in name order, `{:io, "drive", :timeout}`, killed (RV-18's review,
+  # its probe 484S). The cap 4 * 50 + 10 = 210 ms, as above.
+  describe "a look more than the cap after the runner's last trips the runner's lateness " <>
+             "(decision 490)" do
+    # RV-18's review's probe 484S: one wake 211 ms late, every card healthy. The round at
+    # 1000 is the last look, the wake at 1010 is read at 1221, 221 ms after it.
+    test "one wake late past the cap, every card healthy, trips the lateness, every output " <>
+           "0, no card killed" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled_with_card()
+      cards = for name <- ["drive", "panel"], do: device_pid(runner, name)
+      stall(agent, 211)
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:late, 221}}}}
+
+      assert %{
+               status: :tripped,
+               trip: {:watchdog, {:late, 221}},
+               latest_wake: 211,
+               unzeroed: []
+             } = Runner.status(runner)
+
+      assert Enum.all?(cards, &Process.alive?/1)
+      assert Sim.outputs(panel) == %{[0] => 0}
+
+      # The cards' polls the stall held run, and the line comes back on a restart.
+      Manual.advance(clock, 10)
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      Manual.advance(clock, 1000)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+    end
+
+    # The threshold pinned, the hung panel unheard past the cap at both looks: the wake at
+    # 1010 read at 1110, its turn, the last look; the wake at 1120 read 210 ms after it, at
+    # 1320, names the panel, and read 211 ms after it, at 1321, names the lateness.
+    test "a look the cap exactly after the last names the device, and one a millisecond " <>
+           "later the lateness" do
+      for {stall, trip} <- [{200, {:io, "panel", :timeout}}, {201, {:watchdog, {:late, 211}}}] do
+        %{runner: runner, clock: clock, agent: agent} = stalled()
+        :sys.suspend(device_pid(runner, "panel"))
+        stall(agent, 100)
+        Manual.advance(clock, 10)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        stall(agent, stall)
+        Manual.advance(clock, 10)
+        assert %{status: :tripped, trip: ^trip} = Runner.status(runner), "#{stall} ms late"
+      end
+    end
+
+    # RV-19's review, finding 2 (its probes P490a and P490g): the lateness is named only
+    # where the look finds every device unheard past the cap. One wake read 201 ms late,
+    # 211 ms after the round at 1000, past the cap: the panel and the drive polled at 1010
+    # and were heard then, 201 ms before the look, within the cap, so nothing trips, as
+    # the same wake 210 ms late, the cards 210 ms unheard, the cap; 211 ms late, the cards
+    # 211 ms unheard, past it, is the probe 484S above, the lateness.
+    test "a look past the cap that finds every card heard within it trips nothing" do
+      for late <- [201, 210] do
+        %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled_with_card()
+        cards = for name <- ["drive", "panel"], do: device_pid(runner, name)
+        stall(agent, late)
+        Manual.advance(clock, 10)
+
+        assert %{status: :running, trip: nil, latest_wake: ^late} = Runner.status(runner),
+               "#{late} ms late"
+
+        assert Enum.all?(cards, &Process.alive?/1)
+        assert Sim.outputs(panel) == %{[0] => 1}
+        Manual.advance(clock, 1000)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+      end
+    end
+
+    # RV-19's review, finding 2: a card hung beside healthy ones is named however late the
+    # look, the others heard within the cap, their polls run while the runner's were not:
+    # the drive hung, one wake read 201 ms late, the look 211 ms after the round at 1000,
+    # the drive 211 ms unheard and the panel 201, names the drive, killed, `{:io, "drive",
+    # :timeout}`, where it named the lateness and sent the operator to the computer; so
+    # does one read 210 ms late, the panel 210 ms unheard, the cap, heard within it; read
+    # 211 ms late, the panel unheard 211 ms too, every device past the cap, the lateness,
+    # the hung drive then killed by the trip's 0 it does not take, as any device that does
+    # not answer it, and named in `unzeroed`.
+    test "a card hung beside healthy ones is named however late the look, and the lateness " <>
+           "only where every card is unheard past the cap" do
+      for {late, trip} <- [
+            {201, {:io, "drive", :timeout}},
+            {210, {:io, "drive", :timeout}},
+            {211, {:watchdog, {:late, 221}}}
+          ] do
+        %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled_with_card()
+        hung = device_pid(runner, "drive")
+        healthy = device_pid(runner, "panel")
+        :sys.suspend(hung)
+        stall(agent, late)
+        Manual.advance(clock, 10)
+        assert_receive {Runner, ^runner, {:trip, ^trip}}
+
+        assert %{status: :tripped, trip: ^trip, latest_wake: ^late, unzeroed: ["drive"]} =
+                 Runner.status(runner)
+
+        refute Process.alive?(hung)
+        assert Process.alive?(healthy)
+        assert Sim.outputs(panel) == %{[0] => 0}
+      end
+    end
+
+    # RV-19's review, mutation table's q04: only a look for a device not heard, and a
+    # round's end, is the runner's last look; a host's request, which refreshes the
+    # devices' deadlines, is none. The panel hung after the round at 1000; three status/1
+    # requests each read 71 ms late, the last at 1213, the wake at 1010 not yet run: its
+    # look at 1213 comes 213 ms after the round's, the panel unheard as long, the only
+    # device, and names the runner's lateness, where counted from the last request's
+    # refresh it named the panel, `{:io, "panel", :timeout}`.
+    test "a host's requests between two looks are no look" do
+      %{runner: runner, clock: clock, agent: agent} = stalled()
+      hung = device_pid(runner, "panel")
+      :sys.suspend(hung)
+
+      for _request <- 1..3 do
+        stall(agent, 71)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+      end
+
+      assert Manual.now_ms(clock) == 1213
+      :ok = Manual.advance(clock, 0)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:late, 213}}}}
+      assert %{status: :tripped, trip: {:watchdog, {:late, 213}}} = Runner.status(runner)
+    end
+
+    # RV-19's review, finding 5: a restart's read hears every device, each having answered
+    # it, so that the time the runner stood tripped is neither a device's silence nor the
+    # runner's lateness. The panel trips the line at 1010 by a read that fails; the
+    # restart's own reading of the clock passes 300 ms, the panel's polls not run
+    # meanwhile (`Stalled`), and the panel answers the restart's read: its first round's
+    # look finds it heard at the restart and the line runs, where the panel kept the time
+    # it was last heard before the trip and was named, `{:io, "panel", :timeout}`, 0 ms
+    # after the restart; and the gap counts from the restart, the release the runner's
+    # last look, where counted from the round at 1000 it read `{:watchdog, {:late, 310}}`.
+    test "a restart's read hears every device, the time stood tripped neither a device's " <>
+           "silence nor the runner's lateness" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled()
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      stall(agent, 300)
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
+      Manual.advance(clock, 1000)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Sim.outputs(panel) == %{[0] => 1}
     end
   end
 
@@ -1881,7 +2067,10 @@ defmodule Logex.TripTest do
 
     # Within decision 484's cap: e1's step 211 ms, the panel then unheard past four times
     # the idle watchdog and a poll period at e2's look, in the turn, trips there, e2's
-    # round not run.
+    # round not run. Since decision 490 (RV-19) the look's gap is counted from the end of
+    # e1's round, the runner's last, not from its look 211 ms before, so the step names the
+    # panel and not the runner's lateness: the step is the runner's own work, timed by its
+    # task's watchdog.
     test "a device the step left unheard past the cap trips at the next round's look" do
       %{runner: runner, panel: panel} = long_step(211)
       Sim.set(panel, %{[0] => 1, [1] => 1})
@@ -2945,10 +3134,27 @@ defmodule Logex.TripTest do
       :ets.insert(Logex.TripTest, {{runner, :counted}, counter})
 
       # One report changes both triggers: e1's round sleeps 200 ms while the panel waits,
-      # and e2's round, at once after it, finds the panel heard.
+      # and e2's round, at once after it, finds the panel heard: `status/1` running and
+      # untripped, y 1, as the test has read since RV-7's review; and since RV-19 no trip
+      # among the runner's events, read in the order it sent them, up to e2's round, the
+      # one that writes y 1. A host that holds the whole VM past the idle watchdog and a
+      # poll period, 60 ms here, as the busy loops held it, a process at `:max` priority
+      # waking up to 223 ms late in RV-19's review's runs (`scratchpad/rv/p19r/canary/`),
+      # trips the runner after its rounds by the panel's own heartbeat, `{:watchdog,
+      # {:device, "panel", 60}}`, which sends the operator to the panel's card though only
+      # the host was late (question 3), or past decision 484's cap by its lateness
+      # (decision 490), as it should a runner silent that long, and `status/1` read after
+      # the rounds then reads that trip: under the busy loops the test failed so 1 run in
+      # 50 in RV-18's runs, at its tip and its parent, and 0 in 50 in RV-19's and its
+      # review's; the scenario kept 300 ms idle after its rounds tripped 227 runs in 240,
+      # never naming the panel `{:io, "panel", :timeout}`. RV-19 took the `status/1` and
+      # `get!/2` lines out, which its review found outside the leave the record gives, and
+      # they stand, whether the test may read the events alone the maintainer's to say.
+      Runner.subscribe(runner, [:trip, :round])
       Sim.set(panel, %{[0] => 1, [1] => 1})
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 1
+      assert for({:trip, _} = trip <- events_until_written(runner, "y"), do: trip) == []
 
       # And each poll the panel ran while it waited told the runner (RV-7's review): a
       # device that told it at only some would pass the step's wait for one `back` and
@@ -3351,6 +3557,17 @@ defmodule Logex.TripTest do
     defp zeroed(_last, panel, tries) do
       Process.sleep(10)
       zero(panel, tries - 1)
+    end
+  end
+
+  # The runner's events up to its first round that writes `point` 1, in the order it sent
+  # them, that round's left out.
+  defp events_until_written(runner, point, seen \\ []) do
+    receive do
+      {Runner, ^runner, {:round, _now, %{^point => 1}}} -> Enum.reverse(seen)
+      {Runner, ^runner, event} -> events_until_written(runner, point, [event | seen])
+    after
+      5000 -> flunk("no round wrote #{point} 1; the runner sent #{inspect(Enum.reverse(seen))}")
     end
   end
 

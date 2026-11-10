@@ -63,7 +63,7 @@ defmodule Logex.IO.Sim do
     `let_go/1` on one that holds nothing, and since decision 477 `let_go/1` of a hold no
     reread has come to, where it took the hold back, are the test's mistakes, each raised
     and its message pinned, the sim left as it was, so that a test whose hold never
-    engaged fails, the hold still armed for the next reread (provisional: left armed, as
+    engaged fails, the hold still armed for the next reread (decision 496: left armed, as
     the other two mistakes leave the sim).
 
   **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the

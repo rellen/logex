@@ -846,8 +846,11 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    test "a force's: the set it held unknown until a later write of the file lands, " <>
-           "fails or a restart reads it",
+    # Decision 502 (RV-19): a restart's read no longer makes the set known, the cut write
+    # that held it able to land after the read; the name was "... lands, fails or a
+    # restart reads it", and the restart's last assertion read it nil.
+    test "a force's: the set it held unknown until a later write of the file lands or " <>
+           "fails, a restart's read leaving it so",
          %{tmp_dir: dir} do
       rig = rig(dir, retain: nil, retain_period: nil)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -884,7 +887,9 @@ defmodule Logex.StalledDiskTest do
       assert Runner.status(runner).forces_unknown == nil
       File.rmdir!(rig.forces <> ".tmp")
 
-      # Past its limit once more; then a restart reads the file, and knows what it holds.
+      # Past its limit once more; then a restart reads the file as it stands, and names the
+      # set unknown still, the cut write able to land after its read (decision 502); a
+      # later write that lands knows it.
       server = held()
       assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
       :sys.resume(server)
@@ -896,9 +901,10 @@ defmodule Logex.StalledDiskTest do
       assert set == %{"eye_1" => 1, "level" => 7}
       assert Runner.restart(runner, :warm) == :ok
       status = Runner.status(runner)
-      # Decision 440 (RV-16), the leave for the key absent: always there, nil.
-      assert status.forces_unknown == nil
+      assert status.forces_unknown == %{"eye_1" => 1, "level" => 7}
       assert status.forces in [%{"level" => 7}, %{"eye_1" => 1, "level" => 7}]
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      assert %{forces_unknown: nil, forces: %{"eye_1" => 1, "level" => 7}} = Runner.status(runner)
       assert Runner.stop(runner) == :ok
     end
 
@@ -2234,10 +2240,13 @@ defmodule Logex.StalledDiskTest do
       Manual.advance(rig.clock, 10)
       assert %{status: :tripped, forces: %{}, forcing: %{"level" => 7}} = Runner.status(runner)
 
-      # The restart waits on the write, the runner answering nothing meanwhile.
+      # The restart waits on the write, and since decision 500 (RV-19) off the runner's
+      # path, the runner answering meanwhile, where it answered nothing (decision 468 as
+      # RV-18 built it).
       restart = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
       assert Task.yield(restart, 200) == nil
       assert Task.yield(first, 0) == nil
+      assert %{status: :tripped, forcing: %{"level" => 7}} = Runner.status(runner)
 
       :sys.resume(server)
       assert Task.await(first, @answers) == :ok
@@ -2254,8 +2263,11 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 502 (RV-19): the set the cut write held stays unknown after the restart's
+    # read, the write able to land after it; the name ended "the set unknown no more", and
+    # the status read `forces_unknown: nil`.
     test "a write cut at its limit: the restart answers once it is cut and reads the file " <>
-           "as it stands, the set unknown no more",
+           "as it stands, the set still unknown",
          %{tmp_dir: dir} do
       rig = rig(dir, retain: nil, retain_period: nil, write_limit: 300)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -2269,11 +2281,178 @@ defmodule Logex.StalledDiskTest do
       assert {forced, {:error, {:forces, :timeout}}} = Task.await(force, @answers)
       assert forced >= 300 and took < @answers
 
-      assert %{status: :running, forces: %{}, forces_unknown: nil, forcing: nil} =
+      assert %{status: :running, forces: %{}, forces_unknown: %{"level" => 7}, forcing: nil} =
                Runner.status(runner)
 
       :sys.resume(server)
       assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 500 (RV-19): the wait off the runner's path. RV-18's review's probe 468W, a
+    # lamp test's force out on a disk that takes its time, the line tripped and restarted:
+    # status/1 blocked 1,503 ms while the restart waited; now every request is answered at
+    # once meanwhile, the line shown tripped and the force on its way in `forcing`, and
+    # the restart is made, and answered, once the write has ended.
+    test "while a restart waits for the write every request is answered at once, the line " <>
+           "tripped and the force in forcing",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      restart = calling(Task.async(fn -> Runner.restart(runner, :cold) end))
+
+      {took, status} = timed(fn -> Runner.status(runner) end)
+      assert %{status: :tripped, trip: {:io, "panel", _}, forcing: %{"level" => 7}} = status
+      assert took < 200
+      assert {:ok, _value} = Runner.get(runner, "level")
+      assert :ok = Runner.subscribe(runner, [:restart])
+      assert Task.yield(restart, 100) == nil
+
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert Task.await(restart, @answers) == :ok
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      assert %{status: :running, forces: %{"level" => 7}, forcing: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "level") == 7
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 500 (RV-19), the readings the record leaves (provisional): a force asked
+    # during the wait joins the next write, as decision 465 has every request behind a
+    # write, and the restart reads the file the write it waited for left, the force
+    # written after it; and a second restart asked meanwhile is taken once the first is
+    # made, as it was when the wait was the runner's own, and finds the runner running,
+    # refused as decision 133 refuses any.
+    test "a force asked during the wait is written after the restart, and a second restart " <>
+           "finds the line running",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      first = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      restart = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+      behind = calling(Task.async(fn -> Runner.force(runner, "eye_1", 1) end))
+
+      again =
+        calling(
+          Task.async(fn ->
+            assert_raise ArgumentError,
+                         "the runner is running: restart/2 starts a runner again once it " <>
+                           "has tripped",
+                         fn -> Runner.restart(runner, :warm) end
+          end)
+        )
+
+      assert %{status: :tripped, forces: %{}, forcing: %{"level" => 7}} = Runner.status(runner)
+      :sys.resume(server)
+      assert Task.await(first, @answers) == :ok
+      assert Task.await(restart, @answers) == :ok
+      assert %ArgumentError{} = Task.await(again, @answers)
+      assert Task.await(behind, @answers) == :ok
+      assert File.read!(rig.forces) == "eye_1 1\nlevel 7\n"
+      assert %{status: :running, forces: %{"eye_1" => 1, "level" => 7}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-19's review, finding 1 (its probe P500a): decision 354 has a trip stand until a
+    # restart asked after it. Two restarts wait for the write; the first is made, and its
+    # own first round's write fails, tripping the line again: the second, asked before that
+    # trip, is refused by it, in decision 133's words, the line left tripped, where taken
+    # after the trip it found the runner tripped and was made, the trip cleared by a
+    # restart asked before it. Where the first is refused, the line still tripped, the
+    # second is made in turn, as when the wait was the runner's own.
+    test "a second restart waiting is refused by a trip the first's own round meets, and " <>
+           "made where the first is refused",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      Sim.fail(rig.panel, :write, {:error, :eio})
+      :ok = Runner.subscribe(runner, [:trip, :restart])
+      first = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+
+      second =
+        calling(
+          Task.async(fn ->
+            assert_raise ArgumentError,
+                         "the runner is running: restart/2 starts a runner again once it " <>
+                           "has tripped",
+                         fn -> Runner.restart(runner, :warm) end
+          end)
+        )
+
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert Task.await(first, @answers) == :ok
+      assert %ArgumentError{} = Task.await(second, @answers)
+      assert_receive {Runner, ^runner, {:restart, :warm}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
+      refute_receive {Runner, ^runner, {:restart, _mode}}, 100
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+
+      server = held()
+      again = Task.async(fn -> Runner.force(runner, "level", 3) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      refused = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+      made = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+      :sys.resume(server)
+      assert Task.await(again, @answers) == :ok
+      assert {:error, {:io_init, "panel", _cause}} = Task.await(refused, @answers)
+      assert Task.await(made, @answers) == :ok
+      assert %{status: :running, trip: nil, forces: %{"level" => 3}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 500 (RV-19), provisional: an edit's step asked during the wait is served at
+    # once, the restart made on the resource it leaves; and a stop meanwhile answers the
+    # restart as one to a runner that is not running, as decision 467 answers the requests
+    # behind the write, the stop waiting for the write to its limit and answering its
+    # callers as it ends.
+    test "an edit's step during the wait is served at once, and a stop answers the waiting " <>
+           "restart as not running",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+
+      restart =
+        calling(
+          Task.async(fn ->
+            assert_raise ArgumentError,
+                         "the runner #{inspect(runner)} is not running",
+                         fn -> Runner.restart(runner, :warm) end
+          end)
+        )
+
+      assert {:ok, _forecast} = Runner.accept(runner, configured())
+      assert %{status: :tripped, edit: :accepted} = Runner.status(runner)
+      assert {:ok, _report} = Runner.cancel(runner)
+      assert %{status: :tripped, edit: nil} = Runner.status(runner)
+      assert Task.yield(restart, 0) == nil
+
+      stop = Task.async(fn -> Runner.stop(runner) end)
+      assert %ArgumentError{} = Task.await(restart, @answers)
+      assert Task.yield(stop, 0) == nil
+      :sys.resume(server)
+      assert Task.await(stop, @answers) == :ok
+      assert Task.await(force, @answers) == :ok
     end
 
     # RV-18's review, finding 2 (its mutant r06): only a tripped runner's restart waits;
@@ -2464,16 +2643,69 @@ defmodule Logex.StalledDiskTest do
       :sys.resume(server)
     end
 
-    # RV-18's review, finding 2 (its mutant r09), the order as built (provisional,
-    # question 4): where both the forces file's write and the store's fail, stop/2 answers
-    # the store's failure; the forces file's is answered only where the store's landed.
-    test "a stop whose two writes both fail answers the store's failure", %{tmp_dir: dir} do
+    # RV-18's review, finding 2 (its mutant r09). Decision 493 (RV-19): where both the
+    # forces file's write and the store's fail, stop/2 answers both in one error, in the
+    # order they were written, where it answered the store's failure alone and the forces
+    # file's went untold.
+    test "a stop whose two writes both fail answers both", %{tmp_dir: dir} do
       store = Path.join(dir, "both.retain")
       {runner, rig} = unread_start(dir, retain: store, retain_period: 3_600_000)
       File.mkdir!(rig.forces <> ".tmp")
       File.mkdir!(store <> ".tmp")
-      assert Runner.stop(runner) == {:error, {:retain, :eisdir}}
+      assert Runner.stop(runner) == {:error, [forces: :eisdir, retain: :eisdir]}
       assert File.read!(rig.forces) == "level 7\n"
+    end
+
+    # Decision 493 (RV-19): where only one fails it is answered as it stands, the store's
+    # alone `{:error, {:retain, reason}}`; and writes cut at their limit on a stalled disk
+    # are answered so, both in the list, `:timeout` each.
+    test "a stop whose store's write alone fails answers it alone, and two writes cut are " <>
+           "both answered",
+         %{tmp_dir: dir} do
+      store = Path.join(dir, "store.retain")
+      {runner, _rig} = unread_start(dir, retain: store, retain_period: 3_600_000)
+      File.mkdir!(store <> ".tmp")
+      assert Runner.stop(runner) == {:error, {:retain, :eisdir}}
+      File.rmdir!(store <> ".tmp")
+
+      File.mkdir!(Path.join(dir, "cut"))
+      cut = Path.join([dir, "cut", "store.retain"])
+      {runner, _rig} = unread_start(Path.join(dir, "cut"), retain: cut, retain_period: 3_600_000)
+      server = held()
+
+      assert {took, {:error, [forces: :timeout, retain: :timeout]}} =
+               timed(fn -> Runner.stop(runner) end)
+
+      assert took >= 2 * @limit and took < @answers
+      :sys.resume(server)
+    end
+
+    # Decision 493 (RV-19): a shutdown, which no caller waits on, publishes the forces
+    # file's failure to the subscribers, `{:forces, {:error, reason}}`, a default kind, as
+    # it publishes the store's, so that an HMI or a log can warn that the next start may
+    # bring back an old force, where it told it to no one; and a stop/2 publishes it too,
+    # besides its answer, the store's after it.
+    test "a shutdown publishes the forces file's failure, and a stop too", %{tmp_dir: dir} do
+      store = Path.join(dir, "end.retain")
+      {runner, rig} = unread_start(dir, retain: store, retain_period: 3_600_000)
+      :ok = Runner.subscribe(runner)
+      File.mkdir!(rig.forces <> ".tmp")
+      File.mkdir!(store <> ".tmp")
+      Process.flag(:trap_exit, true)
+      Process.link(runner)
+      Process.exit(runner, :shutdown)
+      assert_receive {:EXIT, ^runner, :shutdown}, @answers
+      assert_received {Runner, ^runner, {:forces, {:error, :eisdir}}}
+      assert_received {Runner, ^runner, {:retain, {:error, :eisdir}}}
+      assert File.read!(rig.forces) == "level 7\n"
+
+      File.mkdir!(Path.join(dir, "stop"))
+      {runner, rig} = unread_start(Path.join(dir, "stop"))
+      :ok = Runner.subscribe(runner, [:forces])
+      File.mkdir!(rig.forces <> ".tmp")
+      assert Runner.stop(runner) == {:error, {:forces, :eisdir}}
+      assert_received {Runner, ^runner, {:forces, {:error, :eisdir}}}
+      refute_received {Runner, ^runner, _other}
     end
   end
 

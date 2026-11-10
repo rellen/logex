@@ -24,7 +24,7 @@ RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
 decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
 to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
-2026-11-09, and to RV-18's, decisions 489–502, for RV-19.)*
+2026-11-09, and to RV-18's, decisions 489–502, for RV-19, which landed on 2026-11-10.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -18030,6 +18030,457 @@ and CI checked; each fix with a test that fails when it is reverted.
   later write of it ends. And every provisional mark RV-18 left on a reading decisions
   489–502 settle made the decision's number. It runs after RV-18, whose runner code it
   touches, and before RV-8.
+
+  **RV-19 as built** (2026-11-10, branch `rv19` over `3760e1d`). Each decision that
+  changes something has a test that fails when it is reverted, judged by the full suite
+  (the mutation table below), and is restated in the walks. No test, walk or oracle was
+  deleted or weakened; the tests a decision changes changed as the decision says, each
+  named below. *(RV-19's review found two lines of the short heard-at-each-poll test taken
+  out outside that leave, its finding 7; they stand again, and the review's other
+  findings are below, each fixed.)*
+
+  - *Decision 490, a trip the runner's own lateness causes* (`f20bac5`; `trip_test.exs`'s
+    "a look more than the cap after the runner's last trips the runner's lateness"): the
+    runner keeps `looked`, the time on its clock of its last look for a device not heard,
+    a round's or a refresh's, or of its last round's end, its writes made; a look that
+    finds a device unheard past its limit and comes more than decision 484's cap after
+    it, four idle watchdogs and a poll period (decision 491), finds every device unheard
+    past the cap by that lateness alone and trips `{:watchdog, {:late, ms}}`, every output
+    0 through each device that answers, no device killed; `ms` is the gap, the time since
+    that look, the figure the rule weighs, always past the cap, where the wake's own
+    lateness, which `status/1`'s `latest_wake` shows beside it, reads up to a poll period
+    less (provisional, question 1 below). A device unheard past its limit at a look within
+    the cap of the last is named `{:io, device, :timeout}`, killed, as decisions 484 and
+    489 have it, and a look that finds every device heard trips nothing however late. The
+    runner's own work past the idle watchdog, a host's request, an edit's step or the
+    period's hand-off, has tripped `{:watchdog, {:idle, ms, work}}` already once it is
+    done (decision 482) and keeps that name; a round's step is the runner's own work
+    timed by its task's watchdog, so the gap counts from the round's end, and decision
+    486's step of 211 ms names the panel it left unheard (provisional, question 2). RV-18's
+    review's probe 484S, one wake 211 ms late at idle 50 and a poll of 10, every card
+    healthy, trips `{:watchdog, {:late, 221}}`, `latest_wake` 211, `unzeroed` [], every
+    card alive; the hung card on a host late by 100 ms at every wake still trips `{:io,
+    "drive", :timeout}` at 220 ms (decision 484's test, unchanged). The leave: the cap's
+    threshold test, its second look 211 ms after the round at 1000, reads `{:watchdog,
+    {:late, 211}}`; the device's cap is pinned anew at a look within the cap of the last
+    (210 ms spared, 211 named), and the lateness's threshold at a gap of 210 (the device
+    named) and 211 (the lateness). The runner walk ends one walk in three, by a stream of
+    its own (`{seed, 490, 1}`), with one wake read late by the cap and a millisecond,
+    every device healthy, the trip `{:watchdog, {:late, ms}}` against `looked` read from
+    the runner (`{:trip, :late}`). A restart's first look counts its gap from the
+    restart, the time the runner stood tripped no lateness (`663c36d`, "a restart's first
+    look counts its gap from the restart": a read that fails trips the line, the host
+    stalls the restart's clock reading 300 ms, and the restart's look names the panel,
+    `{:io, "panel", :timeout}`, where the restart's look left unset reads `{:late, 310}`,
+    the mutant the table first met as a survivor). *(RV-19's review, findings 2, 4 and 5:
+    "finds every device unheard past the cap by that lateness alone" was false, a device
+    polled since the last look being heard within the cap, so a card hung beside healthy
+    ones was named the lateness; the lateness is now named only where the look finds
+    every device unheard past the cap, a hung card beside one heard within it named; the
+    walk's oracle read `looked` from the runner and now holds its own; and the restart's
+    look's test pinned a panel named 0 ms after it answered the restart's read, which now
+    hears every device. Below.)*
+  - *Decision 493, a stop's two failures and a shutdown's* (`f20bac5`;
+    `stalled_disk_test.exs`'s decision 472 describe): `stop/2` answers both of its end's
+    writes that failed or were cut in one error, `{:error, [forces: reason, retain:
+    reason]}`, in the order they were written, and either alone as before (the shape
+    provisional, question 4); every orderly end publishes the forces file's failure to the
+    subscribers, `{:forces, {:error, reason}}`, a new event kind and a default one, as it
+    publishes the store's, so that a supervisor's shutdown, which answers no caller,
+    tells it, and a stop publishes it beside its answer (provisional, question 5). The
+    leave: "a stop whose two writes both fail answers the store's failure" is "... answers
+    both", `{:error, [forces: :eisdir, retain: :eisdir]}`. `runner_test.exs`'s
+    subscribe/2 mistake names the kinds, `:forces` among them now (the kinds' message, one
+    word added, pinned whole). The life walk, one orderly end in two while the forces
+    file is named unread, by a stream of its own (`{seed, 493, 1}`), meets a directory at
+    the file's `.tmp`: a stop answers `{:error, {:forces, :eisdir}}`, every end publishes
+    the event to a subscriber of `:forces`, an end whose write lands publishes nothing,
+    and the next start takes what the file held (`:life_end_forces_failed`,
+    `:life_stop_forces_told`, `:life_shutdown_forces_told`).
+  - *Decision 500, a restart's wait off the runner's path* (`f20bac5`;
+    `stalled_disk_test.exs`'s decision 468 describe): a tripped runner's restart asked
+    while a write of the forces file is out is kept, `restarting`, the runner answering
+    `status/1`, tripped, the force in `forcing`, and every other request meanwhile; once
+    the write's answer is taken, landed, failed or cut, each restart that waited is taken
+    in turn and judged as the runner then stands, made and answered, before the requests
+    behind the write are joined; a stop answers each as a runner not running. The
+    readings the record leaves, provisional (questions 6 to 8): a force asked during the
+    wait joins the next write, written after the restart, which reads the file the write
+    it waited for left; a second restart is taken once the first is made and finds the
+    runner running, refused (decision 133), as it did when the wait was the runner's own
+    (since RV-19's review, finding 1, also where the first's own first round trips the
+    line, refused by that trip, decision 354); an edit's step is served at once; a trip's notice changes nothing, the runner tripped
+    already. RV-18's review's probe 468W, `status/1` blocked 1,503 ms while a restart
+    waited, answers at once (the new test reads it within 200 ms). The leave: the 468
+    test's comment, "the runner answering nothing meanwhile", is now its opposite, and the
+    test reads `status/1` while the restart waits. The runner walk's `:restart_waited_write`
+    sends `status/1` after the restart while the runner is held, and reads it answered
+    ahead of the write's answer, tripped, the force in `forcing`.
+  - *Decision 502, `forces_unknown` through a restart* (`f20bac5`;
+    `stalled_disk_test.exs`'s decision 391 and 468 describes): a restart leaves
+    `forces_unknown` as it stands, whatever it reads; the restart reads and shows the file
+    as it stands, the cut write's set named unknown until a later write of the file ends,
+    landed or failed, a stop's own (decision 472) among them. The leave: decision 391's
+    test, "... until a later write of the file lands, fails or a restart reads it", is
+    "... lands or fails, a restart's read leaving it so", the restart's status reading the
+    set and a later force clearing it; and the 468 test of a cut write reads
+    `forces_unknown: %{"level" => 7}` after the restart, "the set still unknown". The
+    runner walk, one restart in three that reads the file and waits for no write, by a
+    stream of its own (`{seed, 502, 1}`), cuts a force's write first: the VM's file server
+    held, the write's rename waiting in its queue, the limit's own message sent to the
+    runner, the force answered `{:error, {:forces, :timeout}}`; the file server let go, the
+    cut rename lands; the restart takes the file's set and names the cut set unknown
+    still, which the walk's every check now reads from its model, until the same force
+    asked again lands (`:restart_after_cut_write`, `:cut_known_by_later_write`).
+  - *The marks* (`663c36d`): every mark RV-18 left on a reading decisions 489–502 settle
+    names the decision now: `Logex.Runner`'s moduledoc (489, 491, 492, 495, 497, 501),
+    `child_spec/1`'s doc (494), overdue/2's, long_step/3's, delivered/5's and judged/4's
+    comments (491, 492, 497, 489), `Logex.Runner.Paths`' comment (495, 499),
+    `Logex.IO.Sim`'s moduledoc (496), `Logex.LoadingTest`'s moduledoc (498) and README's
+    late runner and forcing passages (489, 491, 492, 495, 501). RV-19's own readings the
+    record leaves are marked provisional where they stand, each a question below.
+  - *The two load failures RV-18 left* (`663c36d`), each root-caused, neither given time
+    nor a wider bound.
+    (a) `trip_test.exs`'s short heard-at-each-poll test, red 1 run in 50 under the busy
+    loops in RV-18's builder's and its review's runs, `{:watchdog, {:device, "panel",
+    60}}`, `latest_wake` 53 to 54, `rounds: 3`, `now: 272`. What the machine holds up is
+    the whole VM: a process at `:max` priority waking every millisecond, run under
+    `scripts/load.sh`'s four busy loops on this machine's four cores, woke 100 ms late or
+    more at 25 of its 60 wakes in 5 s, 215 ms at worst, where with the machine quiet it
+    woke within 4 ms; the host holds every scheduler at once, the runner, the panel's
+    device and the test with it. The test's scenario kept idle for 300 ms after its
+    rounds (`scratchpad/rv/p19/probe5a/`) tripped 227 runs in 240 under the busy loops:
+    by the panel's own heartbeat, `{:watchdog, {:device, "panel", 60}}`, 154, the panel's
+    deadline wake running before the runner's late refresh, and past the cap by the
+    runner's lateness, `{:watchdog, {:late, 211 to 239}}`, 73 (decision 490); never `{:io,
+    "panel", :timeout}`, never naming the card. So the rule is right: a runner
+    silent past its idle watchdog and a poll period, 60 ms here, is tripped by its
+    devices' heartbeat (decisions 125 and 137) whatever held it, and past the cap names
+    its own lateness; the test was wrong, reading `status/1` once its rounds were done,
+    outside the window its rule is about, where a hold of 55 ms or more trips a runner at
+    idle 50. It now subscribes to `:trip` and `:round` before the change and reads the
+    runner's events up to e2's round, the one that writes y 1, no trip among them: the
+    claim `status/1` and `get!/2` made (running, untripped, y 1) is made at that round,
+    and the lines that made it later are gone for that reason. The mutant whose device
+    tells the runner nothing while it waits (`m5a_quiet_wait`) turns it red. Decision
+    490's light leaves a question, a latch the runner's lateness ran out named as the
+    device's watchdog (question 3 below). CONTRIBUTING.md's real-clock practice says it.
+    (b) `retain_period_test.exs`'s cost test of a store with a long period, 10.02 against
+    its bound of 10 in CI on `e6d81df`, `{none, long} = {1677.17, 1687.19}`. What it
+    measured that CI's machine moves is the schedulers' interleaving. A diagnostic run in
+    CI (`6913767`, on the backup branch for one run, never to land) read its two counts
+    in one VM: 1678.565 and 1684.605 at every count but the first, 6.04 apart, the first
+    `none` 10 higher, and with a tracer beside the runner 6.0 to 9.4 apart; neither of
+    the failing run's leasts is such a count. Here a fresh VM read 1679.4 to 1681.2 and
+    1685.5 to 1686.6 for eighteen counts and more, and once it had settled 1678.555 and
+    1684.6 at every count, with no collection in any window and the same messages
+    counted, and with the device's polls taken out the same spread before it settled;
+    with one scheduler online, 1678.555 and 1684.6 at every count from the first, alone
+    and under the busy loops (`scratchpad/rv/p19/probe5b/`). A runner's reductions a
+    round move with whether its clock and its device run beside it on other schedulers,
+    only ever upwards, and the least of nine read a round's own cost only where the VM
+    had settled them onto one scheduler by itself, which a full suite's VM may not have
+    done, each side's least then from a stretch of its own. The test counts with one
+    scheduler online now, the VM's flag set for the test and put back after it
+    (`one_scheduler/0`), its bound, its twin, its copy taken off and its least of nine as
+    they were; the mutant that makes a round with a store 4 reductions dearer
+    (`m5b_store_dearer`) reads 10.045 and turns it red. CONTRIBUTING.md's cost practice
+    says it.
+  - *Load runs* (`scripts/load.sh`, four busy loops on this machine's four cores, the
+    logs under `scratchpad/rv/p19/`): the short heard-at-each-poll test 0 of 50 at the
+    parent, 0 of 50 at `f20bac5` and 0 of 50 as it now stands (RV-18's runs met its
+    failure once in 50, twice); the cost test of a store with a long period 0 of 50 at
+    `f20bac5` and 0 of 50 as it now stands, its failure CI's alone; decision 490's,
+    484's and 486's describes in `trip_test.exs` (the restart's first look among them),
+    decisions 391's, 468's and 472's in `stalled_disk_test.exs` and `runner_test.exs`'s
+    subscribe/2 test, 29 tests, 0 of 50; the runner walks and the life walk 0 of 10, in
+    runs of three and seven, a fourth run of the first stopped by the shell's own time
+    limit and not counted.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite; the patches
+    and logs under `scratchpad/rv/p19/muts/`), at `f20bac5`, the last two rows and
+    `m490_no_restart_looked`'s second run at `663c36d`:
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `m490_device` | a look past the cap names the device, as before | red, 5 (trip 3, walks 2) |
+    | `m490_gap_ge` | the cap's own gap trips the lateness | red, 1 (trip) |
+    | `m490_no_round_end` | a round's end sets no `looked` | red, 1 (trip, decision 486's step) |
+    | `m490_look_unset` | a look sets no `looked` | red, 3 (trip) |
+    | `m490_no_restart_looked` | a restart's look sets no `looked` | survived at `f20bac5`; red, 1 at `663c36d` (trip) |
+    | `m493_store_alone` | a stop answers the store's failure alone | red, 2 (stalled disk) |
+    | `m493_order` | the store's failure first | red, 2 (stalled disk) |
+    | `m493_no_publish` | the forces file's failure published to no one | red, 2 (stalled disk, life walk) |
+    | `m500_on_path` | the restart waits for the write on the runner's path | red, 6 (stalled disk 4, walks 2) |
+    | `m500_second_made` | a second restart made as a tripped runner's | red, 1 (stalled disk) |
+    | `m500_stop_silent` | a stop leaves a waiting restart unanswered | red, 1 (stalled disk) |
+    | `m500_joined_first` | the requests behind the write joined before the restarts are made | survived: equivalent |
+    | `m502_cleared` | a restart's read clears `forces_unknown` | red, 4 (stalled disk 2, walks 2) |
+    | `m5a_quiet_wait` | a device waiting on the runner tells it nothing at its polls | red, 2 (trip) |
+    | `m5b_store_dearer` | a round with a store 4 reductions dearer | red, 1 (retain period) |
+
+    `m500_joined_first` is equivalent: the restarts are made within the handling of the
+    write's answer, and the joined write's set is built on the runner's forces, which
+    after the answer are the file's set the restart reads, whether the write landed (the
+    set it held), failed (the set before it) or was cut (the set before it, the cut set
+    named unknown by both), so the restart reads the same file and the joined write
+    writes the same set in either order.
+  - *Cost against the parent* (`3760e1d`), the runner's own reductions on the manual
+    clock, two runs each and one more with one scheduler online (`+S 1:1`), the scripts
+    under `scratchpad/rv/p19/cost/`: a round of three tasks 2075.9 to 2076.9 changing
+    and 1771.4 to 1771.9 unchanged at the parent, 2079.0 to 2079.4 and 1771.5 to 1773.6
+    here (one scheduler 2073.45 and 1769.45 against 2075.45 and 1771.45), two
+    reductions a round more, `looked` set as a round ends (decision 490); a round with a
+    store and a long period over one with none 7.6 to 8.9 at the parent and 8.2 here, 8.045
+    at both with one scheduler; a period's write 447,205 at both, a start's runner 155,698
+    and 155,700; a host's request, `status/1` 273.0 to 273.1 and `get/2` 278.7 to 279.1 at
+    both (one scheduler 272.66 and 278.67 at both); a force with its write's answer 1583.6
+    at the parent and 1589.1 here (one scheduler 1583.6 and 1585.4), the answer taken
+    through the publication of a failure (decision 493); a warm restart with a forces
+    file and 50 inputs 5098.4 to 5099.4 at the parent and 5097.9 to 5098.9 here. *(RV-19's
+    review, finding 8: the force's few reductions more are decision 500's call made as
+    the answer is taken, `restarts_made/1`, and the larger state, not 493's publication,
+    which only an end makes; the restart figures had no saved artifact; and a restart
+    while a force's write is out cost some 33 more, which went unreported. Measured again
+    below.)*
+  - *CLAUDE.md*: no line changed; no file was added, and each line stays true.
+  - *Provisional readings, and questions for the maintainer*. Each is marked provisional
+    where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
+    be found; each question says what an operator or a host sees.
+    1. *What a lateness trip's figure reads* (decision 490). A fan line's host stalls the
+       runner once, its wake at 1010 read at 1221, idle 50 and a poll of 10, the last look
+       at 1000: the line trips `{:watchdog, {:late, 221}}`, the time since that look, while
+       `status/1`'s `latest_wake` reads 211, the wake's own lateness. (a) As built, the
+       gap, the figure weighed against the cap, always past it; (b) the wake's lateness,
+       as `latest_wake` reads it, which a wake planned a poll period on leaves up to a
+       poll period under the cap, `{:late, 201}` beside a cap of 210.
+    2. *Where the gap counts from* (decision 490). A lamp test's step runs 250 ms (its
+       task's watchdog 1000) at idle 50, and the panel's card is left unheard: the next
+       round's look names the panel, `{:io, "panel", :timeout}`, the gap counted from the
+       round's end, the step being the runner's own work. (a) As built, from the last look
+       or the last round's end; (b) from the last look alone, a long step then tripping as
+       the runner's lateness, `{:watchdog, {:late, 251}}`, sending the operator to the
+       computer though the step was within its watchdog.
+    3. *A device's own watchdog the runner's lateness ran out* (decisions 125, 137 and
+       490; the load failure (a) above). A loaded host holds the whole VM 64 ms at idle 50
+       and a poll of 10, well within the cap: the panel, hearing nothing for 60 ms, latches
+       by itself as the VM comes back and the line trips `{:watchdog, {:device, "panel",
+       60}}`, `latest_wake` 54, the operator sent to the panel's card though only the host
+       was late. (a) As built, the device's watchdog named, as decision 137 has it; (b) a
+       latch the runner's own late wake explains, its wake later than the device's
+       deadline, named as the runner's lateness, `{:watchdog, {:late, ms}}`.
+    4. *The shape of a stop's two failures* (decision 493). A stop on a disk that refuses
+       both writes answers `{:error, [forces: :eisdir, retain: :eisdir]}`. (a) As built, a
+       keyword list in the order written; (b) the store's first, `[retain: ..., forces:
+       ...]`; (c) a map, `%{forces: ..., retain: ...}`.
+    5. *Who hears of the forces file's failure* (decision 493). A stop/2 whose write of
+       the runner's own set fails answers it and publishes `{:forces, {:error, reason}}`
+       too, and the event is a kind of its own, `:forces`, sent by default. (a) As built;
+       (b) published only at a shutdown, which has no caller; (c) under the store's kind,
+       `:retain`, one kind for both files' failures.
+    6. *A second restart asked while one waits* (decision 500). An operator presses
+       restart twice while a lamp test's force is written on a slow disk: once the write
+       ends the first restart is made and the second, taken then, finds the line running
+       and is refused, "the runner is running", as when the runner waited inside the
+       first, and since RV-19's review so where the first restart's own first round trips
+       the line again, the second asked before that trip (decision 354). (a) As built;
+       (b) the second answered with the first's answer, one restart made; (c) both made,
+       the line restarted twice.
+    7. *A force asked while a restart waits* (decisions 465 and 500). The HMI forces
+       `eye` while the restart waits for `level`'s write: the restart reads the file
+       `level`'s write left and runs, and `eye`'s force is written after it, in effect a
+       write later. (a) As built; (b) the restart waits for the joined write too, reading
+       `eye` forced.
+    8. *A restart waiting, as `status/1` shows it* (decision 500). While the restart
+       waits, `status/1` shows the line tripped and the force in `forcing`, and nothing of
+       the restart asked. (a) As built; (b) a key of its own, `restarting: [:warm]`, so
+       an HMI shows the restart on its way.
+
+  **RV-19's review** (2026-11-10, at `09a89cb`, `scratchpad/rv/r19/`): the four gates
+  green, 2,934 tests, CI green on every commit; nine findings, one high, one medium, three
+  medium-low and four low, each fixed here with a test that fails when it is reverted or
+  with the documents made true (`a782aa9`, `94b7045` and `10197d2`, each GATE-OK, 2,938,
+  11 doctests and 2,927 tests, and CI green; this record the commit after them).
+  1. *Decision 500 broke decision 354* (high). A second restart asked during the wait
+     was judged after the first was made, `restarting` emptied before either was taken, so
+     where the first's own first round tripped the line again, its write failing, the
+     second found the runner tripped and was made, clearing a trip it was asked before;
+     the parent refused it (`refused_waiting/1` scans the mailbox at the trip), the review's
+     probe P500a. Now each restart still waiting stays in `restarting` while the one before
+     it is made (`restarts_made/1`), and the trip refuses each, in decision 133's words,
+     before the mailbox's (`refused_waiting/1`); a first restart refused, the line still
+     tripped, leaves the second made as before. `stalled_disk_test.exs`'s "a second
+     restart waiting is refused by a trip the first's own round meets, and made where the
+     first is refused" pins both; the runner walk's restart that waits for a force's write
+     has a second restart asked behind it, refused (`:second_restart_refused`), the walk
+     meeting a first round that trips among them (`:second_restart_refused_by_trip`).
+     `Logex.Runner`'s moduledoc, `restart/2`'s doc, the state's comment, README and
+     decision 500's note say it.
+  2. *Decision 490 named a hung card's trip as the runner's lateness* (medium). A look
+     more than the cap after the last named the lateness wherever it found any device
+     unheard past its limit; but the devices poll on their own clock, so a look 211 ms
+     after the last finds those polled since heard within the cap, and a card hung beside
+     them was named the lateness (P490g: `{:watchdog, {:late, 211..220}}`, the hung card
+     killed by the trip's 0), which the same lateness with every card healthy did not trip
+     at all (P490a). The record's own words, "finds every device unheard", and RV-18's
+     question 1 extended, option (b), "a look that finds every device unheard past the
+     cap", are now built: the lateness is named only where no device was heard within the
+     cap (`late/4`, `heard_within/3`), and a device unheard past its limit at any other
+     look is named, `{:io, device, :timeout}`. The probes at the fix: P490g 201 to 210 ms
+     late `{:io, "c1", :timeout}`, 215 and later the lateness, every card then past the
+     cap; P490a 199 to 201 nothing, 300 `{:late, 310}`; P490c a hung card under
+     sustained lateness of 201 ms or less named, 250 the lateness; P490i the hung card
+     named, the panel heard. `trip_test.exs`'s "a look past the cap that finds every card
+     heard within it trips nothing" (201 and 210 ms late) and "a card hung beside healthy
+     ones is named however late the look, and the lateness only where every card is
+     unheard past the cap" (201 and 210 the card, 211 the lateness, the hung card killed by
+     the trip's 0 and named in `unzeroed`) pin it; README's "no card killed" now reads no
+     card killed for the naming, a hung one by the trip's 0 as any device that does not
+     answer it, and the moduledoc, `late/4`'s and `judged/4`'s comments, decision 490's
+     note and §4.11's say so.
+  3. *Three survivors* (medium-low), the review's q02, q03 and q04. q02, a look past the
+     cap tripping the lateness where every device was heard, is red in `trip_test.exs`
+     (the first test above) and the runner walk; q04, a host's request counted a look, is
+     red in `trip_test.exs`'s "a host's requests between two looks are no look", three
+     `status/1` requests each read 71 ms late, the hung panel's look at 1213 naming the
+     lateness, `{:late, 213}`, where q04 names the panel. q03, `looked` 0 at the start,
+     is equivalent under the rule as built: at the start every device is heard at the
+     start's own time or later, so a look that finds every device unheard past the cap
+     comes more than the cap after the start whatever `looked` holds; so is the restart's
+     `looked` left unset (`m490_no_restart_looked`), every device heard at the release
+     (finding 5). Both stay set, the state's rule for a start and a restart.
+  4. *The runner walk's 490 oracle was the runner's* (medium-low). Its end read `looked`
+     from the runner and drew only every device unheard past the cap. Now the walk runs
+     the runner to a wake on time whose look is the model's own last one, one walk in two
+     a refresh's with no round due (`:late_look_after_refresh`), every device healthy and
+     the stall past the cap, so the trip's `ms` counts from that look and from no round's
+     end, and in the other one a device's poll follows before the next wake; it reads each
+     device's last word, from `heard` as decision 484's end does and from the polls the
+     clock delivers before the wake (`Manual.pending/1`), hangs a device one walk in two,
+     and stalls the wake past the cap or within it, the model naming the lateness only
+     where every device is unheard past the cap, a device otherwise
+     (`:late_look_names_device`), and nothing where none is (`:late_look_spared`). The
+     walk is red under q02, `m490_look_unset`, `m490_device`, the fix reverted and the
+     heard-within bound made strict; `m490_no_round_end`, `m490_gap_ge` and q04 stay
+     `trip_test.exs`'s alone. The life walk's end whose forces file write fails meets, one
+     in two where a store is kept and no copy owed, a failing store write too: a stop
+     answers both, the store holds what it held for the next start
+     (`:life_end_both_failed`, `:life_end_store_kept`), red under the store's failure
+     answered alone.
+  5. *The restart's first look's test pinned a panel named 0 ms after it answered*
+     (medium-low). A restart reread every device but heard none, so a device the host had
+     held from its polls kept its last word from before the trip and was named at the
+     restart's first look though it had just answered the restart's read; the parent did
+     the same. Now the release hears every device at the restart's time, as a device
+     opened again was heard already (provisional, question 10), and the test reads the
+     line running: "a restart's read hears every device, the time stood tripped neither a
+     device's silence nor the runner's lateness" (the fix reverted names the panel).
+  6. *Questions 2 and 5 not marked where they stand* (low): the gap counted from a round's
+     end is marked provisional in the moduledoc and README, and the `:forces` event, a kind
+     of its own sent by default and published by a stop as well as answered, in
+     subscribe/2's doc, `stop/2`'s, the moduledoc and README.
+  7. *Two lines of the heard test taken out outside the leave* (low). The short
+     heard-at-each-poll test reads `status/1`, running and untripped, and `get!/2`, y 1,
+     after its rounds again, as it did from RV-7's review to RV-19, the events check up to
+     e2's round kept beside them; 0 of 50 under the busy loops
+     (`scratchpad/rv/p19r/load_heard_restored.txt`), as the review's 0 of 50 of the
+     parent's form. Whether it may read the events alone is asked (question 9).
+  8. *The cost record* (low): corrected in the as-built record above, and measured again
+     below, the scripts the review's and their output saved.
+  9. *Document nits* (low). The canary run again and saved
+     (`scratchpad/rv/p19r/canary/canary.txt`): with the machine quiet a process at `:max`
+     priority woke within 4 ms in 5 s, at `:normal` within 7; under the four busy loops
+     at `:max` 215, 223 and 219 ms at worst in three runs of 5 s, some 20 wakes of each
+     run 100 ms late or more; CONTRIBUTING.md and the test's comment say 223 ms, and the
+     comment names the panel's card question 3 is about.
+
+  *The mutation table* (`scripts/mutate.sh` at `10197d2`, each judged by the full suite;
+  the patches and logs under `scratchpad/rv/p19r/mut/`, the review's own patches where
+  they apply, `r_`, and remade on the new code where they do not):
+
+    | mutant | what it does | the full suite at `10197d2` |
+    |---|---|---|
+    | `f1_emptied_first` | the waiting restarts taken out before any is made (finding 1 reverted) | red, 3 (walks 2, stalled disk 1) |
+    | `f1_trip_skips` | a trip leaves the restarts still waiting unrefused | red, 3 (walks 2, stalled disk 1) |
+    | `q01_restart_order` (remade) | the waiting restarts taken in reverse order | red, 4 (walks 2, stalled disk 2) |
+    | `f2_late_whatever_heard` | a late look names the lateness whatever device was heard (finding 2 reverted) | red, 2 (walk 1, trip 1) |
+    | `f2_within_strict` | a device heard the cap exactly before the look counted unheard past it | red, 2 (walk 1, trip 1) |
+    | `q02_late_nothing_unheard` | a look past the cap trips the lateness though no device is unheard | red, 3 (walks 2, trip 1) |
+    | `r_q03_looked_zero_at_start` | `looked` 0 at the start | survived: equivalent (finding 3) |
+    | `r_q04_refresh_is_a_look` | a refresh sets `looked`, a host's request a look | red, 1 (trip) |
+    | `f5_release_hears_none` | the release hears no device (finding 5 reverted) | red, 1 (trip) |
+    | `m490_no_restart_looked` (remade) | the release sets no `looked` | survived: equivalent (finding 3) |
+    | `m490_look_unset` (remade) | a look sets no `looked` | red, 3 (walk 1, trip 2) |
+    | `m490_no_round_end` (remade) | a round's end sets no `looked` | red, 1 (trip) |
+    | `m490_gap_ge` (remade) | the cap's own gap trips the lateness | red, 1 (trip) |
+    | `m490_device` (remade) | a late look names the device, as before decision 490 | red, 6 (walk 1, trip 5) |
+    | `q08_ms_is_wake_lateness` (remade) | `ms` a poll period less than the gap | red, 6 (walk 1, trip 5) |
+    | `q09_cap_without_poll` (remade) | the lateness's cap without its poll period | red, 1 (trip) |
+    | `r_q07_late_kills_device` | a late trip kills the first device | red, 2 (walk 1, trip 1) |
+    | `m493_store_alone` (remade) | a stop whose two writes fail answers the store's alone | red, 3 (life walk 1, stalled disk 2) |
+    | `r_q10_forces_under_retain` | the forces file's failure published under `:retain` | red, 2 (life walk 1, stalled disk 1) |
+    | `r_q11_forces_not_default` | `:forces` not a default kind | red, 1 (stalled disk) |
+    | `r_q12_stop_does_not_publish` | a stop answers the forces file's failure and publishes nothing | red, 2 (life walk 1, stalled disk 1) |
+    | `r_q05_cut_makes_no_restart` | a cut write makes no waiting restart | red, 1 (stalled disk) |
+    | `r_q06_waiting_mode_warm` | a waiting restart made warm whatever was asked | red, 1 (stalled disk) |
+    | `r_q13_terminate_restart_ok` | a stop answers a waiting restart `:ok` | red, 1 (stalled disk) |
+    | `r_q14_restart_knows_landed_cut_set` | a restart that reads the cut set names it known | red, 3 (walks 2, stalled disk 1) |
+
+    Every mutant is red but the two the rule makes equivalent (finding 3): at a start and
+    at a restart every device is heard at the time `looked` is set or later, so a look
+    that finds every device unheard past the cap comes more than the cap after it
+    whatever `looked` then holds. The review's q01, q02, q08 and q09 no longer applied to
+    the new code and are remade to do the same; its other patches run as they were.
+
+  *Load runs* (`scripts/load.sh`, four busy loops, the logs under `scratchpad/rv/p19r/`):
+  the changed and new runner tests, sixteen a run, `trip_test.exs`'s describes of decisions
+  484 and 490, the restart's read hearing every device among them, and
+  `stalled_disk_test.exs`'s of decision 468, the second restart refused by the first's
+  trip among them, 0 of 50 (`load_changed.txt`); the short heard-at-each-poll test with
+  its two lines back, 0 of 50 (`load_heard_restored.txt`); the runner walk, the
+  input-check walk and the life walk, which restate findings 1, 2 and 4 now, 0 of 5
+  (`load_walks.txt`), four tests a run.
+
+  *Cost against the parent* (`3760e1d`), the review's scripts, two runs each
+  (`scratchpad/rv/p19r/cost/cost.txt`): a round of three devices 2,078.1 to 2,080.4
+  changing and 1,773.1 to 1,773.9 unchanged, against 2,076.9 to 2,078.2 and 1,772.2 to
+  1,772.8, a reduction or two; a round with a store and a long period over none 7.8 to
+  8.2, against 8.15 to 8.3; a period's write 447,205 both, a start's runner 155,700
+  and 155,698; `status/1` 273.1 to 273.4 and `get/2` 279.0 to 279.2, against 273.1 to
+  273.3 and 278.7. A force with its write's answer reads 1,597.3 in every run here, one
+  scheduler too, against 1,583.6 at the parent and 1,585.4 at `09a89cb`; no code on its
+  path changed (reverting finding 2's fix alone, or finding 5's, neither of which a force
+  runs, reads 1,585.2 and 1,585.3, finding 1's 1,591.9), and with one more
+  `Process.info/2` in the measuring process the tip reads 1,585.0 and `09a89cb` 1,585.1,
+  the same four collections a run: the twelve reductions are where the runner's mailbox
+  stands as the script's calls fall, not work of these fixes. A warm restart with a
+  forces file and 50 inputs 5,110.3 to 5,113.6 against 5,095.4 to 5,097.4, the release
+  hearing every device (finding 5; reverted, 5,098.6). A warm restart while a force's
+  write is out, which the builder did not report, 5,358.9 at `09a89cb` and 5,362.4 to
+  5,405.8 here, against 5,324.6 to 5,327.5 at the parent: the restart kept and made once
+  the write's answer is taken, off the runner's path (decision 500), its figure moving
+  with the moment the answer comes, by the script's 20 ms sleep, in two bands.
+
+  *CLAUDE.md*: no line changed; no file was added, and each line stays true.
+
+  *Provisional readings the review's fixes made, and questions for the maintainer*. The
+  record's own questions 1 to 8 above stand; question 6 now says a second restart is
+  refused where the first's own first round trips too.
+  9. *The short heard-at-each-poll test's status read* (finding 7). A test that holds a
+     box counter's panel waiting through a 200 ms round reads `status/1` once the rounds
+     are done; a host that freezes the whole machine more than 60 ms just then trips the
+     line by the panel's own heartbeat, and the test fails, 1 run in 50 under four busy
+     loops in RV-18's runs, 0 in 50 since. (a) As it stands, the status read kept beside
+     the events up to e2's round; (b) the events alone, the window the rule is about, the
+     status read after it dropped.
+  10. *A restart's read as a device's word* (finding 5). A conveyor trips when its
+      panel's read fails; the host is slow as the operator restarts it, 300 ms passing in
+      the restart's own clock reading, and the panel answers the restart's read: (a) as
+      built, every device the restart read is heard at the restart, so the line runs; (b)
+      as before, the panel keeps its last word from before the trip and the line trips
+      again at once, `{:io, "panel", :timeout}`, though the panel just answered. A Logix
+      module's connection, once opened again, times its RPI from that opening, so (a) is
+      the closer (unverified: read from the RPI's definition, not checked against a
+      manual); IEC 61131-3 leaves a controller's I/O faults to the implementer.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

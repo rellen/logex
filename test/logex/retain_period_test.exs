@@ -1016,6 +1016,12 @@ defmodule Logex.RetainPeriodCostTest do
     {(b - a) / rounds, (d - c) / 200}
   end
 
+  # One scheduler online until the test ends, the VM's flag put back as it was then.
+  defp one_scheduler do
+    online = :erlang.system_flag(:schedulers_online, 1)
+    on_exit(fn -> :erlang.system_flag(:schedulers_online, online) end)
+  end
+
   # The least of several runs' costs a round. The devices' messages a round depend on how
   # the scheduler interleaves them, which only ever adds reductions: one run in CI read
   # 15.6 more a round where five here read 3.5 to 7.6 (ci on 8f92723), and since RV-3's
@@ -1028,8 +1034,21 @@ defmodule Logex.RetainPeriodCostTest do
   # taken off, the two measured in turn, nine of each, the least of each: CI read 10.3,
   # 10.4 and 10.1 apart on `cb18575`, `57260e1` and `6e3b6a6` and 8.1 on RV-7's probe,
   # where runs here read 8.0 to 9.0, the copy 2.0 to 2.5 of it and the rest 5.8 to 6.1.
+  #
+  # Since RV-19 it counts with one scheduler online, the VM's own flag set for the test
+  # and put back after it, so that the runner, its clock and its device run one at a time:
+  # a runner's reductions a round move with whether the processes it calls and that send
+  # to it run at the same time on other schedulers, which only ever adds to them, and the
+  # least of nine read a round's own cost only where the VM had settled its processes onto
+  # one scheduler by itself. CI read 10.02 on `e6d81df`, `{1677.17, 1687.19}`, where a
+  # quiet VM of CI's read 1678.565 and 1684.605 at every count but its first, 6.04 apart
+  # (RV-19's probe on `6913767`): neither least was a settled count. Here a fresh VM read
+  # 1679.4 to 1681.2 and 1685.5 to 1686.6 for eighteen counts and more, until it settled,
+  # and then 1678.555 and 1684.6 at every count; with one scheduler online, 1678.555 and
+  # 1684.6 at every count from the first, alone and under the busy loops.
   test "a round with a store and a long period costs within a few reductions of none",
        %{tmp_dir: dir} do
+    one_scheduler()
     config = counters(4)
     store = [retain: Path.join(dir, "s"), retain_period: 3_600_000]
 
