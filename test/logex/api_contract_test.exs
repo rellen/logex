@@ -13997,7 +13997,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   `write_limit:` (decision 400), and no write passes it, so `status/1` names no force's
   set unknown (decision 391), but since decision 502 a force's write the walk cuts now and
   then before a restart, holding the VM's file server and sending the runner its limit's
-  message, whose set the restart names unknown still, until a later write lands. Since
+  message, whose set the restart names unknown still, until a later write lands; and
+  since RV-19's review a restart that waits for a force's write has a second asked behind
+  it, refused once the first is made, where the first's own first round trips the line
+  again among it (decision 354). Since
   RV-16 every round's forces are the ones the forces
   file holds as it begins, a force in effect only once its write has landed (decision
   437), and since RV-16's review forces asked together, each before the last is
@@ -14043,8 +14046,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     poll period after it, and since decision 484 one hung while every look is late
     tripped at the first look that finds it unheard past four times the idle watchdog and
     a poll period, the healthy devices heard in each look's turn, and since decision 490
-    a look more than that cap after the runner's last, every device healthy,
-    `{:watchdog, {:late, ms}}`, and since M5-9 a step whose run met a major fault, a bit
+    a look more than that cap after the runner's last, which the model holds, that finds
+    every device unheard past the cap, `{:watchdog, {:late, ms}}`, and since RV-19's
+    review one that finds a device heard within the cap, sparing the rest or naming a hung
+    one, and since M5-9 a step whose run met a major fault, a bit
     whose number the panel's dint
     gives out of range, and since M5-12 an element whose subscript it gives outside its
     array, `{:fault, task, instance, fault}` at the step's end, no later step of its round
@@ -14409,8 +14414,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # look past four times the idle watchdog and a poll period.
     :hang_late_cap,
     # Decision 490 (RV-19): a look more than that cap after the runner's last, every device
-    # healthy, tripped as the runner's own lateness.
+    # unheard past the cap, tripped as the runner's own lateness; and since RV-19's review
+    # such a look that finds a device heard within the cap, sparing every device or
+    # naming one unheard past it.
     {:trip, :late},
+    :late_look_spared,
+    :late_look_names_device,
+    :late_look_after_refresh,
     # Decision 350, met here since decision 484's walks: the trigger `g`'s rise kept back by
     # a trip that stops its round, a round's write meeting the device hung while every
     # look was late.
@@ -14536,6 +14546,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # its write; and decision 475: a runner killed leaving its files' claims to the next
     # start's look.
     :restart_waited_write,
+    # RV-19's review (finding 1): a second restart asked during that wait, refused, and
+    # refused where the first's own first round tripped the line again (decision 354).
+    :second_restart_refused,
+    :second_restart_refused_by_trip,
     # Decision 502 (RV-19): a restart after a force's write the walk cut at its limit,
     # naming its set unknown still, and a later write that knows it.
     :restart_after_cut_write,
@@ -16129,6 +16143,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     # Its first round ran before it returned.
     w = drained(w)
+    reach(:second_restart_refused_by_trip, waits and w.status == :tripped)
     assert w.round == nil and (w.first == false or w.status == :tripped)
     cut_known(checked(consumed(w)))
   end
@@ -16199,6 +16214,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     force = send_force(w.runner, name, value)
     restart = :gen_server.send_request(w.runner, {:restart, mode})
     status = :gen_server.send_request(w.runner, :status)
+    again = :gen_server.send_request(w.runner, {:restart, mode})
     :ok = :sys.resume(w.runner)
     forces = Map.put(w.forces, name, value)
 
@@ -16211,6 +16227,20 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     assert before == w.forces
     assert :gen_server.wait_response(restart, 60_000) == {:reply, :ok}
+
+    # RV-19's review (finding 1), restated: a second restart asked during the wait is
+    # taken once the first is made and is refused in decision 133's words, the line
+    # running, or tripped again by the first's own first round, a trip it was asked before
+    # (decision 354), where it was made and cleared that trip.
+    assert :gen_server.wait_response(again, 60_000) ==
+             {:reply,
+              {:raise,
+               %ArgumentError{
+                 message:
+                   "the runner is running: restart/2 starts a runner again once it has tripped"
+               }}}
+
+    reach(:second_restart_refused, true)
     assert :gen_server.wait_response(force, 0) == {:reply, :ok}
     reach(:restart_waited_write, true)
     text = for {forced, at} <- Enum.sort(forces), into: "", do: "#{forced} #{at}\n"
@@ -16502,6 +16532,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_end_forces_failed,
     :life_stop_forces_told,
     :life_shutdown_forces_told,
+    # Since RV-19's review: both of an end's writes failed, the store kept as it was.
+    :life_end_both_failed,
+    :life_end_store_kept,
     # Decision 475 (RV-18), since its review: an orderly end giving its files up, and a
     # crash leaving them to the next start's look.
     :files_given_up,
@@ -16688,8 +16721,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_end_cold, mode == :cold)
     forces_told!(listener, failing, kind)
     w = ended_unread(failing, w)
-    w = stored_at(w, w.rt)
+    w = stored_at(store_failed(failing, w), w.rt)
     life_store!(w)
+    w = store_freed(failing, w)
     w = owed_made!(w)
     w = started(%{w | start: mode, change: nil, edit: nil}, config)
     reach(:"life_#{kind}_fresh", true)
@@ -16710,7 +16744,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Decision 493 (RV-19), restated: that write failed, the file holds what it held, the
   # forces no one forced since among them, which the next fresh start, reading the file,
   # takes (on_file/1); the failure told to the stop's caller and published (above).
-  defp ended_unread(true, w) do
+  defp ended_unread(failed, w) when failed in [:forces, :both] do
     File.rmdir!(w.file <> ".tmp")
     text = for {name, value} <- Enum.sort(on_file(w)), into: "", do: "#{name} #{value}\n"
     assert File.read!(w.file) == text
@@ -16726,15 +16760,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # landing, and every orderly end, a shutdown, which answers no caller, among them,
   # publishes `{:forces, {:error, :eisdir}}` to a subscriber of `:forces`, where a
   # shutdown told it to no one; an end whose write lands publishes nothing.
-  defp end_fails(%{unread: {file, _reason}}), do: end_failing(end_fail_drawn(2), file)
+  defp end_fails(%{unread: {file, _reason}} = w), do: end_failing(end_fail_drawn(2), file, w)
   defp end_fails(_w), do: false
 
-  defp end_failing(1, file) do
+  defp end_failing(1, file, w) do
     File.mkdir!(file <> ".tmp")
-    true
+    store_fails(end_fail_drawn(2), w)
   end
 
-  defp end_failing(_draw, _file), do: false
+  defp end_failing(_draw, _file, _w), do: false
+
+  # Decision 493 (RV-19), restated since RV-19's review (finding 4): one such end in two
+  # whose runner keeps a store and owes no copy meets a directory at the store's `.tmp`
+  # too, both of its writes failing: a stop answers both in one error, `{:error, [forces:
+  # :eisdir, retain: :eisdir]}`, in the order written, where it answered the store's
+  # alone; the store holds what it held, which the next start reads.
+  defp store_fails(1, %{store: store, owed: nil, owing: false}) when is_binary(store) do
+    File.mkdir!(store <> ".tmp")
+    :both
+  end
+
+  defp store_fails(_draw, _w), do: :forces
 
   defp end_fail_drawn(n) do
     {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_end_fail))
@@ -16773,12 +16819,26 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp forces_told!(listener, failing, kind) do
     assert_receive {:listened, ^listener, heard}, 5000
     assert heard == forces_heard(failing)
-    reach(:life_end_forces_failed, failing)
-    reach(:"life_#{kind}_forces_told", failing)
+    reach(:life_end_forces_failed, failing != false)
+    reach(:"life_#{kind}_forces_told", failing != false)
+    reach(:life_end_both_failed, failing == :both)
   end
 
-  defp forces_heard(true), do: [{:forces, {:error, :eisdir}}]
   defp forces_heard(false), do: []
+  defp forces_heard(_failed), do: [{:forces, {:error, :eisdir}}]
+
+  # The store's write failed beside the forces file's (store_fails/2): the store as it
+  # was, the model's write not made, and the directory taken away before the next start.
+  defp store_failed(:both, w), do: %{w | store_failing: true, failed_seen: false}
+  defp store_failed(_failing, w), do: w
+
+  defp store_freed(:both, w) do
+    File.rmdir!(w.store <> ".tmp")
+    reach(:life_end_store_kept, w.failed_seen)
+    %{w | store_failing: false}
+  end
+
+  defp store_freed(_failing, w), do: w
 
   # Decision 360 since RV-5's review: a copy owed is made by the end's write, which wrote
   # the store after it, of the store as the start read it.
@@ -16809,7 +16869,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_end(kind, runner, _failing), do: life_end(kind, runner)
 
-  defp stop_answer(true), do: {:error, {:forces, :eisdir}}
+  defp stop_answer(:both), do: {:error, [forces: :eisdir, retain: :eisdir]}
+  defp stop_answer(:forces), do: {:error, {:forces, :eisdir}}
   defp stop_answer(false), do: :ok
 
   defp life_end(:shutdown, runner),
@@ -17512,27 +17573,179 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     drawn
   end
 
-  # Decision 490 (RV-19), restated: one walk in three, by a stream of its own seeded by
-  # each walk (`:rw_late_trip`), so that no other draw moves and no step comes after it,
-  # ends, after decision 486's end and before its stop, where the runner runs and no fault
-  # is pending, with one wake of the runner's read late by four times the idle watchdog, a
-  # poll period and a millisecond, every device healthy, their polls due meanwhile not yet
-  # run: the look comes more than the cap after the runner's last look or round's end,
-  # read from the runner as decision 484's end reads `heard`, and finds every device
-  # unheard past the cap by that alone, so it trips the runner's own lateness,
-  # `{:watchdog, {:late, ms}}`, `ms` the time since that look, no device killed and every
-  # output 0, where it named the first device in name order, killed.
-  defp late_trip_end(1, %{status: :running, fault: nil, round: nil} = w) do
-    k = 4 * w.idle + w.poll + 1
-    at = runner_wake(Manual.pending(w.manual), w.runner)
-    looked = :sys.get_state(w.runner).looked
-    :ets.insert(@table, {{self(), :stall}, k})
-    w = %{w | fault: {:watchdog, {:late, at + k - looked}}}
-    :ok = Manual.advance(w.manual, at - now(w))
-    tripped!(consumed(%{w | floor: at + k}))
-  end
+  # Decision 490 (RV-19), restated since RV-19's review: one walk in three, by a stream of
+  # its own seeded by each walk (`:rw_late_trip`), so that no other draw moves and no step
+  # comes after it, ends, after decision 486's end and before its stop, where the runner
+  # runs and no fault is pending, with one late look. The walk first runs the runner to
+  # its next wake on time, at `at0`, its look there the runner's last, which the model
+  # holds itself; then reads each device's last word, from the runner as decision 484's
+  # end reads `heard`, and the devices' polls the clock delivers before the runner's next
+  # wake, at `at1`, each a word heard then; hangs one device in two, by the same stream,
+  # its polls unheard; and stalls the wake at `at1` by `k`, past the idle watchdog so the
+  # look is in its own turn, the devices judged against the cap, four times the idle
+  # watchdog and a poll period, drawn so that the device last heard is unheard past the
+  # cap or within it by up to a poll period, and a hung one past it. The model's rule:
+  # the first device in name order unheard past the cap is named, `{:io, device,
+  # :timeout}`, killed, but where the look comes more than the cap after `at0` and every
+  # device is unheard past it, the runner's lateness, `{:watchdog, {:late, ms}}`, `ms` the
+  # time since `at0`, no device killed by the naming, a hung one by the trip's 0; and no
+  # device unheard past the cap trips nothing, however late. The model held no `looked`
+  # of its own and drew only every device unheard past the cap (RV-19's review, finding
+  # 4).
+  defp late_trip_end(1, %{status: :running, fault: nil, round: nil} = w),
+    do: late_look(late_trip_drawn(2), 12, w)
 
   defp late_trip_end(_draw, w), do: w
+
+  # The runner run on, a wake at a time on time, to the first of twelve whose look fits:
+  # one walk in two a refresh's, no round due at it, every device then healthy and the
+  # stall past the cap, so that the trip's `ms` counts from that look and no round's end
+  # (`:late_look_after_refresh`); and in the other one after which a device's poll comes
+  # before the runner's next wake, a word heard since the look, so that a look more than
+  # the cap after it may find a device heard within the cap. Where none of twelve fits,
+  # the twelfth, as drawn.
+  defp late_look(kind, n, w) do
+    at0 = runner_wake(Manual.pending(w.manual), w.runner)
+    refresh = next_at(w) > at0
+    :ok = Manual.advance(w.manual, at0 - now(w))
+    w = consumed(w)
+    late_looked(kind, late_fits?(kind, refresh, w), n, at0, w)
+  end
+
+  defp late_fits?(1, refresh, _w), do: refresh
+  defp late_fits?(_kind, _refresh, %{status: :running} = w), do: polled_before(w) != %{}
+  defp late_fits?(_kind, _refresh, _w), do: true
+
+  defp late_looked(1, true, _n, at0, w), do: late_trip_from(at0, :refresh, w)
+  defp late_looked(_kind, true, _n, at0, w), do: late_trip_from(at0, :drawn, w)
+
+  defp late_looked(kind, false, n, _at0, %{status: :running, fault: nil, round: nil} = w)
+       when n > 1,
+       do: late_look(kind, n - 1, w)
+
+  defp late_looked(_kind, false, _n, at0, w), do: late_trip_from(at0, :drawn, w)
+
+  # Each device's poll the clock delivers before the runner's next wake, by name.
+  defp polled_before(w) do
+    pids = device_pids(w.runner)
+
+    {before, _wake} =
+      Enum.split_while(Manual.pending(w.manual), &(not runner_wake?(&1, w.runner)))
+
+    for {at, pid, {Logex.Runner.Device, :poll, _}} <- before,
+        {name, ^pid} <- pids,
+        into: %{},
+        do: {name, at}
+  end
+
+  defp late_trip_from(at0, look, %{status: :running, fault: nil, round: nil} = w) do
+    cap = 4 * w.idle + w.poll
+    pids = Enum.sort(device_pids(w.runner))
+    heard = :sys.get_state(w.runner).heard
+    at1 = runner_wake(Manual.pending(w.manual), w.runner)
+    polled = polled_before(w)
+    {hung, band} = late_case(look, pids, polled)
+    unheard = for {name, _pid} <- pids, do: {name, at1 - last_word(name, hung, heard, polled)}
+    k = late_stall(band, late_trip_drawn(w.poll), hung, unheard, {cap, at1 - at0})
+    assert k > w.idle
+    late = for {name, u} <- unheard, do: {name, u + k}
+    gap = at1 + k - at0
+
+    expected =
+      late_expected(Enum.find(late, &(elem(&1, 1) > cap)), late_all?(late, cap), gap > cap, gap)
+
+    hang(hung, pids)
+    :ets.insert(@table, {{self(), :stall}, k})
+    w = late_down(expected, hung, at0, %{w | fault: expected})
+    :ok = Manual.advance(w.manual, at1 - now(w))
+    reach(:late_look_after_refresh, look == :refresh and expected == {:watchdog, {:late, gap}})
+    late_tripped(expected, gap > cap, consumed(%{w | floor: at1 + k}))
+  end
+
+  defp late_trip_from(_at0, _look, w), do: w
+
+  # After a refresh's look every device healthy and the stall past the cap; otherwise one
+  # walk in two every device healthy, the stall within the cap, and in the other a device
+  # hung, one whose poll the clock does not deliver before the wake where there is one,
+  # and the stall past the cap or within it, each by its draw.
+  defp late_case(:refresh, _pids, _polled), do: {nil, 1}
+  defp late_case(:drawn, pids, polled), do: late_drawn(late_trip_drawn(2), pids, polled)
+
+  defp late_drawn(1, _pids, _polled), do: {nil, 2}
+
+  defp late_drawn(_draw, pids, polled) do
+    {unpolled, polled} = Enum.split_with(pids, fn {name, _pid} -> polled[name] == nil end)
+    {late_hung(unpolled ++ polled, length(unpolled)), late_trip_drawn(2)}
+  end
+
+  defp runner_wake?({_at, pid, {Runner, :wake, _token}}, runner), do: pid == runner
+  defp runner_wake?(_timer, _runner), do: false
+
+  defp late_hung(pids, 0), do: elem(Enum.at(pids, late_trip_drawn(length(pids)) - 1), 0)
+  defp late_hung(pids, n), do: elem(Enum.at(pids, late_trip_drawn(n) - 1), 0)
+
+  # A device's last word before the late look: the poll the clock delivers before the
+  # runner's wake, if any, and the runner's `heard` otherwise, a hung device's always.
+  defp last_word(name, name, heard, _polled), do: Map.fetch!(heard, name)
+  defp last_word(name, _hung, heard, polled), do: Map.get(polled, name, Map.fetch!(heard, name))
+
+  # The stall: the device last heard unheard past the cap by 1 to a poll period ms (1), or
+  # within it by 0 to a poll period less one (2), the look then more than the cap after
+  # the last where a device was heard since it (`span`, the time from the last look to
+  # the wake); a hung device always past it.
+  defp late_stall(band, j, nil, unheard, {cap, span}),
+    do: late_band(band, j, min_unheard(unheard), cap, span)
+
+  defp late_stall(band, j, hung, unheard, {cap, _span}) do
+    {_name, u} = List.keyfind(unheard, hung, 0)
+    others = List.keydelete(unheard, hung, 0)
+    late_hung_band(band, j, u, min_unheard(others), cap)
+  end
+
+  defp late_band(1, j, u, cap, _span), do: cap - u + j
+  defp late_band(_band, j, u, cap, span) when span > u, do: cap - u - rem(j - 1, span - u)
+  defp late_band(_band, j, u, cap, _span), do: cap - u - (j - 1)
+
+  defp late_hung_band(2, _j, u, others, cap) when u > others, do: cap - others
+  defp late_hung_band(_band, j, u, others, cap), do: cap - min(u, others) + j
+
+  defp min_unheard([]), do: 0
+  defp min_unheard(unheard), do: Enum.min(for {_name, u} <- unheard, do: u)
+
+  defp late_all?(late, cap), do: Enum.all?(late, &(elem(&1, 1) > cap))
+
+  defp late_expected(nil, _all, _past, _gap), do: nil
+  defp late_expected(_found, true, true, gap), do: {:watchdog, {:late, gap}}
+  defp late_expected({name, _unheard}, _all, _past, _gap), do: {:io, name, :timeout}
+
+  defp hang(nil, _pids), do: :ok
+  defp hang(name, pids), do: :ok = :sys.suspend(Map.fetch!(Map.new(pids), name))
+
+  # The model's devices down at the trip: the one named, killed, and a hung one, which the
+  # trip's 0 kills where it is not the one named, as any device that does not answer it.
+  defp late_down(nil, _hung, _at0, w), do: w
+
+  defp late_down({:io, name, :timeout}, hung, at0, w),
+    do: late_hung_down(hung, at0, %{w | down: MapSet.put(w.down, name)})
+
+  defp late_down({:watchdog, {:late, _ms}}, hung, at0, w), do: late_hung_down(hung, at0, w)
+
+  defp late_hung_down(nil, _at0, w), do: w
+
+  defp late_hung_down(hung, at0, w),
+    do: %{w | down: MapSet.put(w.down, hung), hung: Map.put(w.hung, hung, at0)}
+
+  defp late_tripped(nil, past, w) do
+    reach(:late_look_spared, past)
+    checked(w)
+  end
+
+  defp late_tripped({:io, _name, :timeout}, past, w) do
+    reach(:late_look_names_device, past)
+    tripped!(w)
+  end
+
+  defp late_tripped({:watchdog, {:late, _ms}}, _past, w), do: tripped!(w)
 
   defp late_trip_drawn(n) do
     {drawn, stream} = :rand.uniform_s(n, Process.get(:rw_late_trip))
