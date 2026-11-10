@@ -1413,7 +1413,8 @@ defmodule Logex.Runner do
   it was stopped, so that round's elapsed time is 0; and since RV-19's review every
   device is heard at the release, each having answered the restart's read, so that the
   first round's look finds none unheard by the time the runner stood tripped, nor counts
-  that time as the runner's lateness (decision 490). `:ok`, or `{:error, {:io_init,
+  that time as the runner's lateness (decision 490; provisional, the record silent on
+  it). `:ok`, or `{:error, {:io_init,
   device, reason}}` for the first device, in device-name order, that cannot be opened or
   whose read fails, the runner left tripped with its first reason and every device that
   answers written 0 once more (decisions 136 and 142), and since decision 394 `{:error,
@@ -4431,12 +4432,13 @@ defmodule Logex.Runner do
     %{state | unzeroed: MapSet.union(state.unzeroed, state.down)}
   end
 
-  # RV-19's review (finding 5): every device the restart read, reread or opened again,
-  # answered that read before the release, so each is heard at the restart's time, as a
-  # device opened again was already (reopen_checked/6), and the restart's first round's
-  # look finds none unheard by the time the runner stood tripped, where a device reread
-  # kept the time it was last heard before the trip, and one the host held from its polls
-  # meanwhile was named 0 ms after the restart though it had just answered.
+  # RV-19's review (finding 5; provisional): every device the restart read, reread or
+  # opened again, answered that read before the release, so each is heard at the
+  # restart's time, as a device opened again was already (reopen_checked/6), and the
+  # restart's first round's look finds none unheard by the time the runner stood
+  # tripped, where a device reread kept the time it was last heard before the trip, and
+  # one the host held from its polls meanwhile was named 0 ms after the restart though
+  # it had just answered.
   defp released(mode, state) do
     runtime = Runtime.restart(state.runtime, mode)
     at = now(state)

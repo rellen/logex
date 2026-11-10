@@ -18035,7 +18035,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   changes something has a test that fails when it is reverted, judged by the full suite
   (the mutation table below), and is restated in the walks. No test, walk or oracle was
   deleted or weakened; the tests a decision changes changed as the decision says, each
-  named below.
+  named below. *(RV-19's review found two lines of the short heard-at-each-poll test taken
+  out outside that leave, its finding 7; they stand again, and the review's other
+  findings are below, each fixed.)*
 
   - *Decision 490, a trip the runner's own lateness causes* (`f20bac5`; `trip_test.exs`'s
     "a look more than the cap after the runner's last trips the runner's lateness"): the
@@ -18070,7 +18072,14 @@ and CI checked; each fix with a test that fails when it is reverted.
     look counts its gap from the restart": a read that fails trips the line, the host
     stalls the restart's clock reading 300 ms, and the restart's look names the panel,
     `{:io, "panel", :timeout}`, where the restart's look left unset reads `{:late, 310}`,
-    the mutant the table first met as a survivor).
+    the mutant the table first met as a survivor). *(RV-19's review, findings 2, 4 and 5:
+    "finds every device unheard past the cap by that lateness alone" was false, a device
+    polled since the last look being heard within the cap, so a card hung beside healthy
+    ones was named the lateness; the lateness is now named only where the look finds
+    every device unheard past the cap, a hung card beside one heard within it named; the
+    walk's oracle read `looked` from the runner and now holds its own; and the restart's
+    look's test pinned a panel named 0 ms after it answered the restart's read, which now
+    hears every device. Below.)*
   - *Decision 493, a stop's two failures and a shutdown's* (`f20bac5`;
     `stalled_disk_test.exs`'s decision 472 describe): `stop/2` answers both of its end's
     writes that failed or were cut in one error, `{:error, [forces: reason, retain:
@@ -18098,8 +18107,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     readings the record leaves, provisional (questions 6 to 8): a force asked during the
     wait joins the next write, written after the restart, which reads the file the write
     it waited for left; a second restart is taken once the first is made and finds the
-    runner running, refused (decision 133), as it did when the wait was the runner's own;
-    an edit's step is served at once; a trip's notice changes nothing, the runner tripped
+    runner running, refused (decision 133), as it did when the wait was the runner's own
+    (since RV-19's review, finding 1, also where the first's own first round trips the
+    line, refused by that trip, decision 354); an edit's step is served at once; a trip's notice changes nothing, the runner tripped
     already. RV-18's review's probe 468W, `status/1` blocked 1,503 ms while a restart
     waited, answers at once (the new test reads it within 200 ms). The leave: the 468
     test's comment, "the runner answering nothing meanwhile", is now its opposite, and the
@@ -18226,7 +18236,12 @@ and CI checked; each fix with a test that fails when it is reverted.
     both (one scheduler 272.66 and 278.67 at both); a force with its write's answer 1583.6
     at the parent and 1589.1 here (one scheduler 1583.6 and 1585.4), the answer taken
     through the publication of a failure (decision 493); a warm restart with a forces
-    file and 50 inputs 5098.4 to 5099.4 at the parent and 5097.9 to 5098.9 here.
+    file and 50 inputs 5098.4 to 5099.4 at the parent and 5097.9 to 5098.9 here. *(RV-19's
+    review, finding 8: the force's few reductions more are decision 500's call made as
+    the answer is taken, `restarts_made/1`, and the larger state, not 493's publication,
+    which only an end makes; the restart figures had no saved artifact; and a restart
+    while a force's write is out cost some 33 more, which went unreported. Measured again
+    below.)*
   - *CLAUDE.md*: no line changed; no file was added, and each line stays true.
   - *Provisional readings, and questions for the maintainer*. Each is marked provisional
     where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
@@ -18266,8 +18281,10 @@ and CI checked; each fix with a test that fails when it is reverted.
        restart twice while a lamp test's force is written on a slow disk: once the write
        ends the first restart is made and the second, taken then, finds the line running
        and is refused, "the runner is running", as when the runner waited inside the
-       first. (a) As built; (b) the second answered with the first's answer, one restart
-       made; (c) both made, the line restarted twice.
+       first, and since RV-19's review so where the first restart's own first round trips
+       the line again, the second asked before that trip (decision 354). (a) As built;
+       (b) the second answered with the first's answer, one restart made; (c) both made,
+       the line restarted twice.
     7. *A force asked while a restart waits* (decisions 465 and 500). The HMI forces
        `eye` while the restart waits for `level`'s write: the restart reads the file
        `level`'s write left and runs, and `eye`'s force is written after it, in effect a

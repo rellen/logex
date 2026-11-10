@@ -3134,19 +3134,26 @@ defmodule Logex.TripTest do
       :ets.insert(Logex.TripTest, {{runner, :counted}, counter})
 
       # One report changes both triggers: e1's round sleeps 200 ms while the panel waits,
-      # and e2's round, at once after it, finds the panel heard, no trip before it: the
-      # runner's events read in the order it sent them, up to e2's round, the one that
-      # writes y 1 (RV-19). What comes after that round is not this test's, and was read
-      # until RV-19, by `status/1` once the rounds were done: a host that holds the whole
-      # VM past the idle watchdog and a poll period, 60 ms here, as the busy loops held it
-      # up to 230 ms, a process at `:max` priority waking that late, trips the runner then
-      # by the panel's own heartbeat, `{:watchdog, {:device, "panel", 60}}`, or past
-      # decision 484's cap by its lateness (decision 490), as it should a runner silent
-      # that long; under the busy loops the test failed so 1 run in 50 at RV-18's tip and
-      # its parent, and the scenario kept 300 ms idle after its rounds tripped 227 runs in
-      # 240, its trip never naming the panel's card.
+      # and e2's round, at once after it, finds the panel heard: `status/1` running and
+      # untripped, y 1, as the test has read since RV-7's review; and since RV-19 no trip
+      # among the runner's events, read in the order it sent them, up to e2's round, the
+      # one that writes y 1. A host that holds the whole VM past the idle watchdog and a
+      # poll period, 60 ms here, as the busy loops held it, a process at `:max` priority
+      # waking up to 223 ms late in RV-19's review's runs (`scratchpad/rv/p19r/canary/`),
+      # trips the runner after its rounds by the panel's own heartbeat, `{:watchdog,
+      # {:device, "panel", 60}}`, which sends the operator to the panel's card though only
+      # the host was late (question 3), or past decision 484's cap by its lateness
+      # (decision 490), as it should a runner silent that long, and `status/1` read after
+      # the rounds then reads that trip: under the busy loops the test failed so 1 run in
+      # 50 in RV-18's runs, at its tip and its parent, and 0 in 50 in RV-19's and its
+      # review's; the scenario kept 300 ms idle after its rounds tripped 227 runs in 240,
+      # never naming the panel `{:io, "panel", :timeout}`. RV-19 took the `status/1` and
+      # `get!/2` lines out, which its review found outside the leave the record gives, and
+      # they stand, whether the test may read the events alone the maintainer's to say.
       Runner.subscribe(runner, [:trip, :round])
       Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "y") == 1
       assert for({:trip, _} = trip <- events_until_written(runner, "y"), do: trip) == []
 
       # And each poll the panel ran while it waited told the runner (RV-7's review): a

@@ -4239,7 +4239,7 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   `open:`, so that a gateway that stayed up and answers its reread in 700 ms lets the
   restart through (decision 439), every device heard then, having answered that read, so
   the first round's look finds none unheard by the time the line stood tripped (RV-19's
-  review), restarts the resource, which keeps its
+  review, provisional), restarts the resource, which keeps its
   input image and puts every other global back to its initial value, a warm restart
   keeping what each program marks `retain` (M6-2), and runs the first
   round at once, on what was read, the stopped time not counted: the conveyor stays off

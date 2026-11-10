@@ -529,11 +529,13 @@ choice, not an oversight to fix.
   has seen what it waits for, and then lets it go, never a delay the machine may outlast:
   a reread that slept 800 ms met no poll of the device after it in three runs of 100
   under the busy loops (`trip_test.exs`, decision 462). And such a test reads the runner
-  within the window its rule is about, never after it: the busy loops hold the whole VM,
-  a process at `:max` priority waking up to 230 ms late, so that a runner at an idle
-  watchdog of 50 ms trips by its devices' heartbeat once its work is done, as it should;
-  the short heard-at-each-poll test read `status/1` after its rounds and failed so 1 run
-  in 50, and since RV-19 reads the runner's events up to the round its rule ends with.
+  within the window its rule is about: the busy loops hold the whole VM, a process at
+  `:max` priority waking up to 223 ms late in 5 s where it woke within 4 ms with the
+  machine quiet (RV-19's review), so that a runner at an idle watchdog of 50 ms trips by
+  its devices' heartbeat once its work is done, as it should; the short
+  heard-at-each-poll test, which reads `status/1` after its rounds and failed so 1 run in
+  50 in RV-18's runs, reads since RV-19 the runner's events up to the round its rule
+  ends with as well, and whether it may read them alone is the maintainer's to say.
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input
