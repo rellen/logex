@@ -14469,7 +14469,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      it publishes the store's. `stalled_disk_test.exs`'s both-fail test answers both (the
      decision's leave) and two tests more; `runner_test.exs`'s kinds message names
      `:forces`; the life walk fails one orderly end in two while the file is named unread,
-     a stop answering it and a shutdown publishing it.)*
+     a stop answering it and a shutdown publishing it.)* *(RV-19's review, 2026-11-10: the
+     life walk fails the store's write beside it one such end in two where a store is kept
+     and no copy owed, a stop answering both in one error and the store kept as it was for
+     the next start.)*
 
 494. **The child spec's shutdown time (the review after Milestone 6),** RV-18's question 5
      (decision 472): a runner with `forces:` asks its supervisor for two write limits
