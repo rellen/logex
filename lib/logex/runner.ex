@@ -76,7 +76,7 @@ defmodule Logex.Runner do
   one the server has not answered by then refuses the start, the file named left by that
   process. A file server that never answers holds the file for as long, the holder ending
   only once its call is answered, and one the host kills leaving the file to that same
-  look, or with the VM (provisional: no limit of its own, the record saying however long
+  look, or with the VM (decision 495: no limit of its own, the record saying however long
   the disk takes). A start under a name already registered is `{:error,
   {:already_started, pid}}` first, OTP's, and claims nothing. Two VMs on one file are the
   host's to avoid: nothing in one VM sees another, nor one file reached by two paths
@@ -549,7 +549,7 @@ defmodule Logex.Runner do
   then unforced in one joined write makes no round: the write takes the set the last
   change leaves, which reads the trigger as it read, as the forces in effect change only
   as a write lands (decision 117), where asked one after another the force's write made
-  the trigger's round and the unforce's another (provisional, RV-18's review). A trip and
+  the trigger's round and the unforce's another (decision 501, RV-18's review). A trip and
   an edit's step made meanwhile
   leave the write as it is, and the set the write holds, built on the forces the runner
   held as it was begun, becomes the runner's set as it lands, or not, as its answer says
@@ -757,17 +757,17 @@ defmodule Logex.Runner do
     Each late look gives a turn of its own, and a wake that the runner's own long work
     made late, an edit's step or a host's request of nearly the idle watchdog, gives one
     too; and since decision 486 (RV-18) so does a round's step that runs past the idle
-    watchdog, from the step's end (provisional: from its end, not the next round's look),
+    watchdog, from the step's end (decision 492: from its end, not the next round's look),
     so that a healthy panel the host starved beside a long step is not judged at the next
     round's look. A turn spares only a device starved for less than a cap: since decision
     484 (RV-18) a device unheard for four times the idle watchdog and a poll period
-    (provisional: four idle watchdogs and one poll period, not four of both), counted from
+    (decision 491: four idle watchdogs and one poll period, not four of both), counted from
     when it was last heard, trips the line whatever the runner's lateness, as a Logix
     connection faults after four missed packets at its RPI, where while every wake was
     late by more than the idle watchdog no device was judged and a hung input card tripped
     only at the first look on time; the trip by the cap reads as any silent device's,
     `{:io, device, :timeout}`, the device killed and named in `status/1`'s `unzeroed`
-    (provisional), at a look that comes within the cap of the runner's last, and since
+    (decision 489), at a look that comes within the cap of the runner's last, and since
     decision 490 (RV-19) one that comes more than the cap after it names the runner's
     lateness, `{:watchdog, {:late, ms}}` (above), so that a host late once by 211 ms at
     idle 50 and a poll of 10, every card healthy, trips the lateness where it tripped the
@@ -844,7 +844,7 @@ defmodule Logex.Runner do
   period's wall clock, comes once every device has the round's outputs, the trip's 0
   following (what such a round keeps, decision 469, and where its rule reaches,
   decision 470, each as built). Since decision 474 a round cut once its writes have begun,
-  at a device's write, at its end or by a device's write that fails (provisional, the
+  at a device's write, at its end or by a device's write that fails (decision 497, the
   failing write's), publishes its own event, `{:round, now, outputs}`, with the output
   points of every device its writes reached, in device-name order up to the cut, each
   written or holding them already, where it published none though the devices took its
@@ -1024,7 +1024,7 @@ defmodule Logex.Runner do
   it, the host raising `write_limit:`. Since decision 472 a runner given `forces:` is
   given two write limits more, the force's write that may be out, waited for to its own
   limit, and the write of the runner's set an orderly end makes while `forces_unread`
-  stands, so that a supervisor waits for the store's write after both (provisional: the
+  stands, so that a supervisor waits for the store's write after both (decision 494: the
   record names no deadline), `devices * (idle + poll) + 4 * write_limit` ms.
   """
   def child_spec(opts),
@@ -3246,7 +3246,7 @@ defmodule Logex.Runner do
   # it. Only a device still silent after its turn trips the line, and a device hung in its
   # adapter still trips, at once once the runner wakes on time, and within the turn once
   # it has been unheard past decision 484's cap, four times the idle watchdog and a poll
-  # period (provisional, the poll period once), however late every wake is (judged/4).
+  # period (decision 491, the poll period once), however late every wake is (judged/4).
   # As IEC 61131-3 leaves a controller's I/O faults to the implementer, so Logix faults a
   # module's connection only after it has missed four of its requested packet intervals,
   # never on one late reading of a controller that was itself held up.
@@ -3515,7 +3515,7 @@ defmodule Logex.Runner do
   end
 
   # Decision 486 (RV-18): a step that runs past the idle watchdog gives the devices a turn
-  # from its end (provisional: the step's end, where the next round's look would spare a
+  # from its end (decision 492: the step's end, where the next round's look would spare a
   # device longer after a step followed by others), a poll period, as a late look does
   # (turned/3), within decision 484's cap: the machine that kept the runner in its step
   # so long may not have run its devices either, so the next round's look judges none
@@ -3607,7 +3607,7 @@ defmodule Logex.Runner do
   end
 
   # Decision 474 (RV-18): a device's write that fails publishes the round as far as its
-  # writes reached (cut_round/2) and then its trip (provisional: the record names a cut
+  # writes reached (cut_round/2) and then its trip (decision 497: the record names a cut
   # "wherever any device was written", which a failing write's round is read to be).
   defp delivered({:trip, reason, %{in_round: [{:reached, _, _} | _]} = state}, _, _, _, _) do
     published(state, cut_round(state.in_round, state))
@@ -3748,12 +3748,14 @@ defmodule Logex.Runner do
   # Decision 461 (RV-6): no device is judged within a poll period of a late look, its turn
   # (turned/3), against the idle watchdog and a poll period. Decision 484 (RV-18): within a
   # turn a device is judged against a cap, four times the idle watchdog and a poll period
-  # unheard (provisional: 4 × idle + poll, not 4 × (idle + poll)), counted from when it
+  # unheard (decision 491: 4 × idle + poll, not 4 × (idle + poll)), counted from when it
   # was last heard, so that a turn spares only a device starved for less, and a hung card
   # trips at the first look past the cap however late every look of the runner is, where
   # while every look was late none was judged; so does a device a single look past the cap
-  # finds unheard where only the runner was late, the first in name order. A trip by the
-  # cap is a silent device's, `{:io, device, :timeout}`, the device killed (provisional).
+  # finds unheard where only the runner was late, the first in name order, which since
+  # decision 490 (RV-19) names the runner's lateness, late/3. A trip by the cap at any
+  # other look is a silent device's, `{:io, device, :timeout}`, the device killed
+  # (decision 489).
   defp judged(now, turn, poll, %{idle: idle} = state)
        when is_integer(turn) and now - turn < poll,
        do: unheard(now, 4 * idle + poll, state)

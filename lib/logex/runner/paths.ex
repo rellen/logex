@@ -52,8 +52,9 @@ defmodule Logex.Runner.Paths do
   #   (`Logex.Runner`); its claim in init/1 then takes the dead pid's over. A server that
   #   never answers holds the file for as long as it does not: a holder ends only once its
   #   call is answered, and one the host kills leaves its claims to that same look, so
-  #   that no start meanwhile reads a file a late write changes under it (provisional: no
-  #   limit, the record saying "however long the disk takes").
+  #   that no start meanwhile reads a file a late write changes under it (decision 495: no
+  #   limit, the record saying "however long the disk takes"; decision 499: the start
+  #   waits its write limit for the look, then is refused).
   # - The claims live in a public table of the VM's own, `{path, pid, role}`, made by a
   #   process of its own that the first claim starts, unlinked, which holds the table as
   #   long as the VM runs and does nothing else. Since RV-4's review its group leader is

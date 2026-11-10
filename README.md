@@ -374,11 +374,12 @@ relative path compiled where the working directory is gone told as a diagnostic
 tripping the line within four idle watchdogs and a poll period however late the runner
 (decision 484), a step past the idle watchdog giving the devices a turn (decision 486)
 and the period's hand-off sending the retained values alone (decision 488), the others
-as built. Its answers to the questions RV-18 left, decisions 489–502, RV-19 builds: a
-trip the runner's own lateness causes naming the lateness (decision 490), a stop telling
-both its writes' failures (decision 493), a restart's wait for a force's write keeping
-the runner answering (decision 500) and `forces_unknown` kept while a cut write may land
-(decision 502), the others as built. Its answers to the questions RV-5 left, decisions
+as built. Its answers to the questions RV-18 left, decisions 489–502, have landed with
+RV-19: a trip the runner's own lateness causes naming the lateness, `{:watchdog, {:late,
+ms}}` (decision 490), a stop telling both its writes' failures and a shutdown publishing
+the forces file's (decision 493), a restart's wait for a force's write keeping the runner
+answering (decision 500) and `forces_unknown` kept while a cut write may land (decision
+502), the others as built. Its answers to the questions RV-5 left, decisions
 409–419, have landed with
 RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
 ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
@@ -4189,11 +4190,11 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   461). The look sees the lateness itself, whatever brought the runner to it, its wake
   or a device's change taken first (decision 485). Each late look gives a turn of its
   own, and so does a round's step that runs past `idle:`, from its end (decision 486;
-  from its end provisional, `PLAN.md`'s RV-18 question 3). A turn spares only a device
-  starved for less than four times `idle:` and a poll period (the sum provisional,
-  question 2): one unheard that long, counted from when it was last heard, trips the line
-  however late the runner, `{:io, device, :timeout}` as any hung device (the reason
-  provisional, `PLAN.md`'s RV-18 question 1), so on a host late at every wake a hung
+  from its end, decision 492). A turn spares only a device starved for less than four
+  times `idle:` and a poll period (the sum, decision 491): one unheard that long, counted
+  from when it was last heard, trips the line however late the runner, `{:io, device,
+  :timeout}` as any hung device (the reason, decision 489), so on a host late at every
+  wake a hung
   input card still trips, at the first look past that cap, so as late as the gap between
   two looks after it (with every wake 200 ms late, idle 50 and a poll of 10, at 420 ms
   unheard), every output 0 (decision 484), as a Logix controller faults a module's
@@ -4447,7 +4448,7 @@ stage: nil
   force answers once its write lands, so one script that forces ten points one after
   another waits for each and makes ten writes, 30 s. A trigger forced and unforced in
   one joined write makes no round, the write taking the set the last change leaves, where
-  asked one after another each made its own (provisional, `PLAN.md`'s RV-18 questions).
+  asked one after another each made its own (decision 501).
   A trip or an edit's step meanwhile leaves the write as it is, the set it writes, built
   on the forces held as it began, becoming the runner's once it lands; a restart waits
   for it, to its limit, before it reads the file, so it reads what the write leaves and
@@ -4472,7 +4473,7 @@ stage: nil
   runner's writes left in its queue, at once on a healthy disk, and on a stalled one is
   refused past its write limit, the file named left by the killed runner. On a disk that
   never answers the hold lasts as long, a holder the host kills leaving the file to that
-  same look, until the VM stops (provisional). A start reads the file raw, off the VM's file
+  same look, until the VM stops (decision 495). A start reads the file raw, off the VM's file
   server, as a restart does, so a FIFO or a stalled disk in its place holds no other
   process's file calls. A file that cannot
   be read, one the disk has not answered within the write limit or one the file system

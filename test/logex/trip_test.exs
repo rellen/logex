@@ -1874,6 +1874,25 @@ defmodule Logex.TripTest do
         assert %{status: :tripped, trip: ^trip} = Runner.status(runner), "#{stall} ms late"
       end
     end
+
+    # The time a runner stands tripped is no lateness, as the clock does not count it: a
+    # restart's release, which reads every device, is the runner's last look, so its first
+    # round's look counts its gap from the restart. The panel trips the line at 1010 by a
+    # read that fails; the restart's own reading of the clock passes 300 ms, the panel's
+    # polls not run meanwhile (`Stalled`), so that its first round's look finds the panel
+    # unheard past the idle watchdog and a poll period, 0 ms after the restart, and names
+    # it, where counted from the round at 1000, the last look before the trip, the time
+    # stood tripped would have tripped the runner's lateness, `{:watchdog, {:late, 310}}`.
+    test "a restart's first look counts its gap from the restart, the time stood tripped " <>
+           "no lateness" do
+      %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled()
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      stall(agent, 300)
+      assert Runner.restart(runner, :warm) == :ok
+      assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+    end
   end
 
   describe "a step past the idle watchdog gives the devices a turn (decision 486)" do
@@ -3031,10 +3050,20 @@ defmodule Logex.TripTest do
       :ets.insert(Logex.TripTest, {{runner, :counted}, counter})
 
       # One report changes both triggers: e1's round sleeps 200 ms while the panel waits,
-      # and e2's round, at once after it, finds the panel heard.
+      # and e2's round, at once after it, finds the panel heard, no trip before it: the
+      # runner's events read in the order it sent them, up to e2's round, the one that
+      # writes y 1 (RV-19). What comes after that round is not this test's, and was read
+      # until RV-19, by `status/1` once the rounds were done: a host that holds the whole
+      # VM past the idle watchdog and a poll period, 60 ms here, as the busy loops held it
+      # up to 230 ms, a process at `:max` priority waking that late, trips the runner then
+      # by the panel's own heartbeat, `{:watchdog, {:device, "panel", 60}}`, or past
+      # decision 484's cap by its lateness (decision 490), as it should a runner silent
+      # that long; under the busy loops the test failed so 1 run in 50 at RV-18's tip and
+      # its parent, and the scenario kept 300 ms idle after its rounds tripped 227 runs in
+      # 240, never before e2's round.
+      Runner.subscribe(runner, [:trip, :round])
       Sim.set(panel, %{[0] => 1, [1] => 1})
-      assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Runner.get!(runner, "y") == 1
+      assert for({:trip, _} = trip <- events_until_written(runner, "y"), do: trip) == []
 
       # And each poll the panel ran while it waited told the runner (RV-7's review): a
       # device that told it at only some would pass the step's wait for one `back` and
@@ -3437,6 +3466,17 @@ defmodule Logex.TripTest do
     defp zeroed(_last, panel, tries) do
       Process.sleep(10)
       zero(panel, tries - 1)
+    end
+  end
+
+  # The runner's events up to its first round that writes `point` 1, in the order it sent
+  # them, that round's left out.
+  defp events_until_written(runner, point, seen \\ []) do
+    receive do
+      {Runner, ^runner, {:round, _now, %{^point => 1}}} -> Enum.reverse(seen)
+      {Runner, ^runner, event} -> events_until_written(runner, point, [event | seen])
+    after
+      5000 -> flunk("no round wrote #{point} 1; the runner sent #{inspect(Enum.reverse(seen))}")
     end
   end
 

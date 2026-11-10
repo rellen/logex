@@ -16247,13 +16247,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {_device, _address, type} = @inputs[name]
     values = paired_values(type)
     value = Enum.at(values, restart_cut_drawn(length(values)) - 1)
+    # No `.tmp` left standing, whose delete would wait in the held server ahead of the
+    # write's rename.
+    File.rm(w.file <> ".tmp")
     server = Process.whereis(:file_server_2)
     :ok = :sys.suspend(server)
 
     try do
       force = send_force(w.runner, name, value)
       %{writing: %{write: {writer, ref}}} = :sys.get_state(w.runner)
-      rename_waiting(server, writer)
+      rename_waiting(server, writer, System.monotonic_time(:millisecond) + 5000)
       send(w.runner, {Logex.Runner.Writer, :forces_late, ref})
       assert :gen_server.wait_response(force, 5000) == {:reply, {:error, {:forces, :timeout}}}
     after
@@ -16275,10 +16278,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     drawn
   end
 
-  # The cut write's rename waiting in the held file server's mailbox, once it does.
-  defp rename_waiting(server, writer) do
+  # The cut write's rename waiting in the held file server's mailbox, once it does, within
+  # the walk's own limit of real time.
+  defp rename_waiting(server, writer, until) do
     {:messages, messages} = Process.info(server, :messages)
-    rename_found(Enum.any?(messages, &rename_of?(&1, writer)), server, writer)
+    rename_found(Enum.any?(messages, &rename_of?(&1, writer)), server, writer, until)
   end
 
   defp rename_of?({:"$gen_call", {pid, _tag}, request}, writer) when pid == writer,
@@ -16286,11 +16290,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp rename_of?(_message, _writer), do: false
 
-  defp rename_found(true, _server, _writer), do: :ok
+  defp rename_found(true, _server, _writer, _until), do: :ok
 
-  defp rename_found(false, server, writer) do
+  defp rename_found(false, server, writer, until) do
+    assert System.monotonic_time(:millisecond) < until, "the force's write made no rename"
     Process.sleep(1)
-    rename_waiting(server, writer)
+    rename_waiting(server, writer, until)
   end
 
   # The set the cut write held named unknown through the restart (checked/1), and known
