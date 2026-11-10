@@ -14354,6 +14354,152 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      ms for 65,536 rungs retaining one bool, one instance or ten, against 37 and 73 ms as
      built. `retain_period_test.exs`.)*
 
+
+489. **What a trip by the cap reads (the review after Milestone 6),** RV-18's question 1
+     (decision 484): a conveyor's host late by 100 ms at every wake, idle 50, its drive's
+     input card hung, trips the line at the second late look, 220 ms after the card was
+     last heard, `{:io, "drive", :timeout}`, every output 0, the same reason as a card a
+     look on time found hung.
+
+     **Taken: the same reason, as built (a)** (the maintainer, 2026-11-10): the card is
+     what failed, and the host's lateness already shows in `status/1`'s `latest_wake`; a
+     Logix connection that misses four packets at its RPI faults as a connection however
+     loaded the controller. RV-19 makes the mark the decision's number.
+
+490. **The cap where nothing is hung (the review after Milestone 6),** RV-18's question 1,
+     extended (decisions 484 and 489): a fan line's host that stalls once for 211 ms, idle
+     50 and a poll of 10, every card healthy, trips the line `{:io, "drive", :timeout}`,
+     naming the first device in name order, so the operator goes to a healthy card.
+
+     **Taken: the runner's lateness named (b)** (the maintainer, 2026-11-10): a trip the
+     runner's own lateness causes names the lateness, `{:watchdog, {:late, ms}}`, every
+     output 0, and sends the operator to the computer, not to a card; a look that comes
+     more than the cap after the runner's last look finds every device unheard by its
+     lateness alone, and trips so; a device unheard past the cap at any other look is
+     named, as decision 489 has it. As a Logix controller frozen past four RPIs loses
+     every connection, the line stops; what it names is the controller. To build in
+     RV-19.
+
+491. **The cap's sum (the review after Milestone 6),** RV-18's question 2 (decision 484):
+     "four times the idle watchdog and a poll period" is read as four idle watchdogs and
+     one poll period, 210 ms at idle 50 and a poll of 10, not four of both, 240 ms.
+
+     **Taken: four idle watchdogs and a poll, as built (a)** (the maintainer,
+     2026-11-10): the tighter reading, a drive card silent 230 ms tripping the line; Logix
+     times a connection out at four RPIs with nothing added. RV-19 makes the mark the
+     decision's number.
+
+492. **Where a long step's turn begins (the review after Milestone 6),** RV-18's question
+     3 (decision 486): a lamp test's step of 80 ms, idle 50, ends at 1080 ms, the panel
+     spared until 1090 ms, a poll period from the step's end; a step of exactly the idle
+     watchdog gives no turn.
+
+     **Taken: from the step's end, as built (a)** (the maintainer, 2026-11-10): a panel
+     really hung trips sooner; neither IEC 61131-3 nor Logix has such a turn, Logix's I/O
+     running apart from its logic. RV-19 makes the mark the decision's number.
+
+493. **A stop whose two writes both fail (the review after Milestone 6),** RV-18's question
+     4 (decision 472): a stop on a disk that refuses both writes answers the store's
+     failure, `{:error, {:retain, reason}}`, and the forces file's only where the store's
+     landed; a supervisor's shutdown tells the forces file's failure to no one, so the
+     next start may bring back a force the operator removed, no one warned.
+
+     **Taken: both told (c)** (the maintainer, 2026-11-10): `stop/2` answers every write
+     of its end that failed or was cut, the store's and the forces file's, in one error;
+     a shutdown, which has no caller, publishes the forces file's failure to the
+     subscribers as an event, as it does the store's, so an HMI or a log can warn that the
+     next start may bring back an old force. Neither IEC 61131-3 nor Logix has an external
+     forces file. To build in RV-19.
+
+494. **The child spec's shutdown time (the review after Milestone 6),** RV-18's question 5
+     (decision 472): a runner with `forces:` asks its supervisor for two write limits
+     more, 10 s at the default, for a force's write that may be out and the write of its
+     own set.
+
+     **Taken: two write limits, as built (a)** (the maintainer, 2026-11-10): both writes
+     have their full time, so a fan line's application shut down on a slow disk ends with
+     the operator's forces written. RV-19 makes the mark the decision's number.
+
+495. **A file held while the disk never answers (the review after Milestone 6),** RV-18's
+     question 6 (decision 475): a cut write on a disk that never answers again leaves the
+     forces file held, every start on it refused naming the holder, until the host kills
+     the holder or the VM stops; since RV-18's review, a holder the host kills leaves the
+     file to the next start's look (decision 499).
+
+     **Taken: held, no limit, as built (a)** (the maintainer, 2026-11-10): a start stays
+     refused while the old write may still land, as decision 475's "however long the disk
+     takes"; the operator sees the refusal naming the file. RV-19 makes the mark the
+     decision's number.
+
+496. **A let-go before any reread (the review after Milestone 6),** RV-18's question 7
+     (decision 477): `Logex.IO.Sim.let_go/1` asked before any restart has read the device
+     raises, and the hold stays armed for the next reread.
+
+     **Taken: raised, left armed, as built (a)** (the maintainer, 2026-11-10): the raise
+     fails the test with its pinned message and the sim stays as the test set it, as its
+     other two mistakes leave it. RV-19 makes the mark the decision's number.
+
+497. **A round cut by a device's failing write (the review after Milestone 6),** RV-18's
+     question 8 (decision 474): a fan line's drive takes the round's outputs and the
+     panel's write fails; the round's event carries the drive's outputs and the trip
+     follows.
+
+     **Taken: published, as built (a)** (the maintainer, 2026-11-10): the log shows what
+     the drive took, then the trip, and matches the plant; a Logix module's fault does not
+     undo another module's outputs. RV-19 makes the mark the decision's number.
+
+498. **`HeldFileServer`'s loader test (the review after Milestone 6),** RV-18's question 9
+     (decision 480): `LogexTest.HeldFileServer`, a module of its own in `logex_test.exs`,
+     `async: false` already, stays there.
+
+     **Taken: left where it is, as built (a)** (the maintainer, 2026-11-10): it already
+     runs alone, beside the other tests of `Logex`'s own loader. RV-19 makes the mark the
+     decision's number.
+
+499. **A start on the file of a runner killed with a write out (the review after Milestone
+     6),** RV-18's question 10 (decision 475, RV-18's review): a runner killed while its
+     unforce's rename waits in a stalled file server's queue hands nothing on; a start on
+     its forces file waits for the file server to answer a look, up to its write limit,
+     and is refused past it naming the file left.
+
+     **Taken: wait, then refused, as built (a)** (the maintainer, 2026-11-10): on a
+     healthy disk the look answers at once and the line starts; on a stalled one the line
+     never starts on a force set that may still change under it. Logix keeps forces in
+     controller memory, two controllers never on one file. RV-19 makes the mark the
+     decision's number.
+
+500. **A restart's wait for a force's write (the review after Milestone 6),** RV-18's
+     question 11 (decision 468): a restart asked while a write of the forces file is out
+     waits for it with the runner answering nothing, so a lamp's force on a disk that takes
+     3 s freezes the HMI's status, `forcing` with it, for up to the write limit.
+
+     **Taken: the wait off the runner's path (b)** (the maintainer, 2026-11-10): the
+     restart waits for the write without holding the runner, `status/1` and the other
+     requests answered meanwhile, the line shown tripped and the force being written in
+     `forcing`; the restart is made, and its caller answered, once the write has ended, as
+     decision 468 has it. Logix keeps answering status during a mode change. To build in
+     RV-19.
+
+501. **A trigger forced and unforced in one joined write (the review after Milestone 6),**
+     RV-18's question 12 (decision 465): a box counter's event task runs on `eye`; an HMI
+     script forces `eye` to 1 and unforces it while another write is out, both join one
+     write that leaves `eye` as it read, and the count does not move.
+
+     **Taken: the net change, as built (a)** (the maintainer, 2026-11-10): a force is a
+     maintenance tool, not a signal; a Logix force raises no module's change-of-state
+     event. RV-19 makes the mark the decision's number.
+
+502. **A restart after a cut write (the review after Milestone 6),** RV-18's question 13
+     (decisions 391 and 468): a force of `level` 7 cut at the write limit; the restart
+     that waited for it reads the file, the force not in it, and names nothing unknown,
+     though the cut write may still land and put `level 7` back for the next restart.
+
+     **Taken: still unknown (b)** (the maintainer, 2026-11-10): `forces_unknown` stays
+     set, naming the set the cut write held, while the cut write may land, until a later
+     write of the file ends, a restart's read among the things that no longer clear it;
+     the HMI keeps warning while the runner knows a landing may come. Decision 391's "or
+     a restart reads it" is read so. To build in RV-19.
+
 ---
 
 ## 8. Sources, and what is unverified

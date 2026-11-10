@@ -374,7 +374,12 @@ relative path compiled where the working directory is gone told as a diagnostic
 tripping the line within four idle watchdogs and a poll period however late the runner
 (decision 484), a step past the idle watchdog giving the devices a turn (decision 486)
 and the period's hand-off sending the retained values alone (decision 488), the others
-as built. Its answers to the questions RV-5 left, decisions 409–419, have landed with
+as built. Its answers to the questions RV-18 left, decisions 489–502, RV-19 builds: a
+trip the runner's own lateness causes naming the lateness (decision 490), a stop telling
+both its writes' failures (decision 493), a restart's wait for a force's write keeping
+the runner answering (decision 500) and `forces_unknown` kept while a cut write may land
+(decision 502), the others as built. Its answers to the questions RV-5 left, decisions
+409–419, have landed with
 RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
 ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
 (decision 412), the shutdown's write making the store's text within the write limit, which

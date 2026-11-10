@@ -24,7 +24,7 @@ RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
 decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
 to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
-2026-11-09.)*
+2026-11-09, and to RV-18's, decisions 489–502, for RV-19.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -17785,7 +17785,9 @@ and CI checked; each fix with a test that fails when it is reverted.
     the VM, and the period, take-out to write, 8,647,000 to 8,702,000 in the VM, the
     image made in the writer from the values (decision 488). The hand-off itself, the
     runner's own, in decision 488's plants above.
-  - *Provisional readings, and questions for the maintainer.* Each is marked
+  - *Provisional readings, and questions for the maintainer* *(all nine answered on
+    2026-11-10, decisions 489 and 491 to 498: 1, 2, 3 and 5 to 9 as built, 4 changed, to
+    build in RV-19)*. Each is marked
     provisional where it stands, the closest reading of the record, IEC 61131-3 and Logix
     that could be found; each question says what an operator or a host sees.
     1. *What a trip by the cap reads* (decision 484). A conveyor's host makes every wake
@@ -17976,7 +17978,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   447,205 both, a fresh start's 4,808,000 to 4,822,000 in the VM, its caller's look at
   the claims the same where no claim is left, and the period 8,696,000 to 8,700,000.
 
-  *Provisional readings the review's fixes made, and questions for the maintainer.*
+  *Provisional readings the review's fixes made, and questions for the maintainer*
+  *(all answered on 2026-11-10, decisions 490 and 499 to 502: 10 and 12 as built, 11, 13
+  and 1 extended changed, to build in RV-19; 6 restated, decision 495, as built)*.
   10. *A start on the file of a runner killed with a write out* (decision 475). A drive's
       runner is killed by its supervisor while an unforce of `speed` is being written on a
       stalled disk; the operator starts the line again at once: the start waits for the
@@ -18013,6 +18017,19 @@ and CI checked; each fix with a test that fails when it is reverted.
   6, restated. With question 10's look, a holder the host kills no longer frees the file
      at once on a disk that still does not answer: the next start waits its write limit
      for the look and is refused, the file free once the disk answers.
+- **RV-19 — the answers to RV-18's questions** (decisions 490, 493, 500 and 502). A trip
+  the runner's own lateness causes naming the lateness, `{:watchdog, {:late, ms}}`, a look
+  that comes more than decision 484's cap after the runner's last finding every device
+  unheard by that alone, a device unheard past the cap at any other look named as before;
+  a stop answering every write of its end that failed or was cut, the store's and the
+  forces file's, in one error, and a shutdown publishing the forces file's failure to the
+  subscribers as it does the store's; a restart's wait for a write of the forces file made
+  off the runner's path, `status/1` and the other requests answered meanwhile, the
+  restart made and its caller answered once the write has ended; and `forces_unknown`
+  kept after a restart's read while a cut write of the forces file may land, until a
+  later write of it ends. And every provisional mark RV-18 left on a reading decisions
+  489–502 settle made the decision's number. It runs after RV-18, whose runner code it
+  touches, and before RV-8.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
