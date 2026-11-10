@@ -481,7 +481,7 @@ choice, not an oversight to fix.
   a quiet count where the processes a count reaches run at once on other schedulers: a
   runner's reductions a round move with whether its clock and its device run beside it,
   and the least of nine read a round's own cost only once the VM had settled them onto
-  one scheduler by itself. A fresh VM here read 1.0 to 2.6 over that test's figure for
+  one scheduler by itself. A fresh VM here read up to 2.6 over that test's figures for
   eighteen counts and more, and CI read 10.02 on `e6d81df`, each side's least from a
   stretch of its own, where a quiet VM of CI's read the same two figures at every count.
   Since RV-19 that test counts with one scheduler online, the VM's flag set for the test

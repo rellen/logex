@@ -3060,7 +3060,7 @@ defmodule Logex.TripTest do
       # decision 484's cap by its lateness (decision 490), as it should a runner silent
       # that long; under the busy loops the test failed so 1 run in 50 at RV-18's tip and
       # its parent, and the scenario kept 300 ms idle after its rounds tripped 227 runs in
-      # 240, never before e2's round.
+      # 240, its trip never naming the panel's card.
       Runner.subscribe(runner, [:trip, :round])
       Sim.set(panel, %{[0] => 1, [1] => 1})
       assert for({:trip, _} = trip <- events_until_written(runner, "y"), do: trip) == []
