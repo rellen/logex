@@ -3527,7 +3527,8 @@ defmodule Logex.RunnerTest do
       for kinds <- [:ran, [:ran, :rounds], ["ran"], [:round | :ran], [:ran, :round | :overlap]] do
         raises(
           "a runner's events are subscribed by a list of their kinds, among :overlap, " <>
-            ":fault, :trip, :restart, :edit, :retain, :ran and :round, got: #{inspect(kinds)}",
+            ":fault, :trip, :restart, :edit, :retain, :forces, :ran and :round, got: " <>
+            "#{inspect(kinds)}",
           fn -> Runner.subscribe(runner, kinds) end
         )
       end
