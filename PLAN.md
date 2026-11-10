@@ -18478,8 +18478,9 @@ and CI checked; each fix with a test that fails when it is reverted.
       built, every device the restart read is heard at the restart, so the line runs; (b)
       as before, the panel keeps its last word from before the trip and the line trips
       again at once, `{:io, "panel", :timeout}`, though the panel just answered. A Logix
-      module's connection, once opened again, times its RPI from that opening; IEC
-      61131-3 leaves it to the implementer.
+      module's connection, once opened again, times its RPI from that opening, so (a) is
+      the closer (unverified: read from the RPI's definition, not checked against a
+      manual); IEC 61131-3 leaves a controller's I/O faults to the implementer.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
