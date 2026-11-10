@@ -277,7 +277,8 @@ defmodule Logex.Runner do
     `{:retain, {:error, reason}}`, a store write that failed, and since decision 493
     (RV-19) `{:forces, {:error, reason}}`, the write of the runner's own set an orderly
     end made while the forces file stood unread (decision 472) that failed or was cut, a
-    shutdown's, which answers no caller, among them. A subscriber is monitored and
+    shutdown's, which answers no caller, among them (provisional: a kind of its own, sent
+    by default, and published by a stop as well as answered). A subscriber is monitored and
     dropped when it goes down. `unsubscribe/1` stops them.
   - `force/3`, `unforce/2` and `unforce_all/1` force an input point, below.
   - `stop/2` writes every output 0 once, through each device, and closes every device, in
@@ -571,7 +572,9 @@ defmodule Logex.Runner do
   (decision 465), written after the restart, which reads the file the write it waited
   for left; a second restart asked meanwhile is taken once the first is made, as when the
   wait was the runner's own, and so finds the runner running, refused (decision 133), or
-  still tripped where the first was refused, and made; an edit's step meanwhile is
+  still tripped where the first was refused, and made, and since RV-19's review one the
+  first's own first round trips before it is taken is refused by that trip, a restart
+  asked before it, as decision 354 refuses any (`restart/2`); an edit's step meanwhile is
   served at once, the restart made on the resource it leaves; a trip's notice meanwhile
   changes nothing, the runner tripped already; and a stop meanwhile answers the restart as
   one to a runner that is not running, as it answers the requests behind the write. A stop
@@ -618,7 +621,8 @@ defmodule Logex.Runner do
   {:forces, reason}}` (`stop/2`), since decision 493 (RV-19) beside the store's where
   both fail, `{:error, [forces: reason, retain: reason]}`, and every orderly end, a
   shutdown that answers no caller among them, publishing that failure to the subscribers,
-  `{:forces, {:error, reason}}`, as it publishes the store's, and a crash writing nothing; a
+  `{:forces, {:error, reason}}`, as it publishes the store's (provisional: a kind of its
+  own, by default, a stop's published as well as answered), and a crash writing nothing; a
   line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
@@ -710,19 +714,26 @@ defmodule Logex.Runner do
   - `{:watchdog, {:late, ms}}`: since decision 490 (RV-19), the runner's own lateness: a
     look for a device not heard that comes more than decision 484's cap, four times the
     idle watchdog and a poll period, after the runner's last look or the end of its last
-    round, and finds a device unheard past its limit, as every device then is by that
-    lateness alone, a device heard at the last look being so unheard now, `ms` the time
-    since that look (provisional: the gap the rule weighs against the cap, not the wake's
-    own lateness, which `status/1`'s `latest_wake` shows, up to a poll period less); every
-    output 0 through each device that answers, no device killed, so that the operator
-    goes to the computer and not to a healthy card, where it named the first device in
-    name order, `{:io, device, :timeout}`, and killed it (decision 484, below). The
+    round, the runner itself late, and finds every device unheard past the cap, none
+    heard within it, so that what was not heard the machine ran no more than the runner,
+    `ms` the time since that look (provisional: the gap the rule weighs against the cap,
+    not the wake's own lateness, which `status/1`'s `latest_wake` shows, up to a poll
+    period less); every output 0 through each device that answers, no device killed by
+    the naming, a hung one killed by the trip's 0 it does not take, as any device that
+    does not answer it, so that the operator goes to the computer and not to a healthy
+    card, where it named the first device in name order, `{:io, device, :timeout}`, and
+    killed it (decision 484, below). Where such a look finds a device heard within the
+    cap, its polls run while the runner's were not, it names the device unheard past its
+    limit, `{:io, device, :timeout}`, as at any other look (RV-19's review: a hung card
+    beside healthy ones is named however late the look); and a look that finds no device
+    unheard past its limit trips nothing, however late, so that one wake 201 ms late at
+    idle 50 and a poll of 10, every card heard at the poll before it, trips nothing. The
     runner's own work past the idle watchdog, a host's request, an edit's step or the
     period's hand-off, which may make the look late, has tripped `{:watchdog, {:idle, ms,
-    work}}` already, once that work was done (decision 482), and keeps that name; and a
-    round's step, timed by its task's watchdog, is no lateness: the gap counts from the
-    round's end, so a device a long step left unheard past the cap is named (decision
-    486, below). A look that finds every device heard trips nothing, however late;
+    work}}` already, once that work was done (decision 482), and keeps that name, though
+    it is no look, the gap counting across it; and a round's step, timed by its task's
+    watchdog, is no lateness: the gap counts from the round's end (provisional), so a
+    device a long step left unheard past the cap is named (decision 486, below);
   - `{:io, device, cause}`: an I/O fault (decision 114). Every callback is called guarded
     in its device's process: an `{:error, reason, state}` it gives is `{:error, reason}`,
     a raise `{:raised, message}`, a throw `{:thrown, term}`, an exit `{:exited, term}`,
@@ -768,11 +779,13 @@ defmodule Logex.Runner do
     only at the first look on time; the trip by the cap reads as any silent device's,
     `{:io, device, :timeout}`, the device killed and named in `status/1`'s `unzeroed`
     (decision 489), at a look that comes within the cap of the runner's last, and since
-    decision 490 (RV-19) one that comes more than the cap after it names the runner's
-    lateness, `{:watchdog, {:late, ms}}` (above), so that a host late once by 211 ms at
-    idle 50 and a poll of 10, every card healthy, trips the lateness where it tripped the
-    first device in name order, and a hung card on a host late by 100 ms at every wake
-    still trips naming it, at 220 ms unheard. A device's process that goes down, which the
+    decision 490 (RV-19) one that comes more than the cap after it and finds every device
+    unheard past the cap names the runner's lateness, `{:watchdog, {:late, ms}}` (above),
+    so that a host late once by 211 ms at idle 50 and a poll of 10, every card healthy,
+    trips the lateness where it tripped the first device in name order, a hung card
+    beside healthy ones heard within the cap is named however late the look, and a hung
+    card on a host late by 100 ms at every wake still trips naming it, at 220 ms unheard.
+    A device's process that goes down, which the
     runner traps, is `{:down, reason}`. A device whose own read, report or write again
     fails tells the runner and
     latches, its 0 written where its adapter still takes it (decision 135); a round's
@@ -1175,7 +1188,7 @@ defmodule Logex.Runner do
   store's failure alone; and the forces file's failure is published to the subscribers,
   `{:forces, {:error, reason}}`, as the store's is, by a stop and by a parent's
   shutdown, which makes the same write and has no caller to answer, where it told its
-  failure to no one. Since
+  failure to no one (provisional: a stop's published as well as answered). Since
   decision 475 a file whose last write the runner cut at its limit, the stop's own among
   them, is held for the stopped runner until that write has ended (the moduledoc's "Its
   files"), so that a start on it meanwhile is refused, naming it.
@@ -1280,7 +1293,8 @@ defmodule Logex.Runner do
   of the runner's own set over a forces file it could not read (decision 472) that an
   orderly end made and that failed or was cut, a shutdown's among them, which answers no
   caller, so that an HMI or a log can warn that the next start may bring back an old
-  force, by default; `:ran`, the resource's `{:ran, task, instance, now}`, and
+  force, by default (provisional: a kind of its own, sent by default, and published by a
+  stop as well as answered); `:ran`, the resource's `{:ran, task, instance, now}`, and
   `:round`, the runner's `{:round, now, outputs}` after each round, and since decision 474
   after a round cut once its writes have begun, with the outputs of the devices its writes
   reached, so that its outputs are what the devices took, only where named, since a live
@@ -1396,7 +1410,10 @@ defmodule Logex.Runner do
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
   round run at once, on what was read, before it returns, the clock not counting the time
-  it was stopped, so that round's elapsed time is 0. `:ok`, or `{:error, {:io_init,
+  it was stopped, so that round's elapsed time is 0; and since RV-19's review every
+  device is heard at the release, each having answered the restart's read, so that the
+  first round's look finds none unheard by the time the runner stood tripped, nor counts
+  that time as the runner's lateness (decision 490). `:ok`, or `{:error, {:io_init,
   device, reason}}` for the first device, in device-name order, that cannot be opened or
   whose read fails, the runner left tripped with its first reason and every device that
   answers written 0 once more (decisions 136 and 142), and since decision 394 `{:error,
@@ -1404,7 +1421,9 @@ defmodule Logex.Runner do
   runner that is running is the host's mistake (decision 133), judged as the restart arrives, so that one asked while
   it runs is refused whatever comes before it is served, a trip among it, which refuses
   every restart that reached the runner before it, waiting in its mailbox or its queue,
-  and the trip stands until a restart asked after it (decision 354). It reads the forces
+  or, since RV-19's review, waiting for a write of the forces file (decision 500) behind
+  a restart whose own first round meets it, and the trip stands until a restart asked
+  after it (decision 354). It reads the forces
   file again first, as every start does (decision 127): a force it cannot take is raised
   here, the runner left tripped, and since decision 390 a read that fails, one the disk
   has not finished within the write limit of real time (decisions 353 and 400) or one the
@@ -2476,23 +2495,25 @@ defmodule Logex.Runner do
   # answer has been, as the runner took it from its mailbox when the wait was its own, and
   # judged then (provisional): the first, the runner tripped, made, its forces file or
   # its clock refusing it as any, and one after it that finds the runner running refused
-  # as any restart of a running runner is (decision 133), one that finds it still tripped
-  # made in turn; the requests that waited behind the write, one asked during the wait
-  # among them, are joined into the next write once every restart is answered, on the
-  # set they leave (provisional: the restart reads the file the write it waited for left,
-  # the requests behind it written after). A trip meanwhile leaves the write as it is, as
-  # ever; an edit's step meanwhile is served at once, the restart made on the resource it
-  # leaves; and a stop meanwhile answers each restart as one to a runner that is not
-  # running, as the requests behind the write are (decision 467).
+  # as any restart of a running runner is (decision 133), one that finds it still tripped,
+  # the restart before it refused, made in turn; the requests that waited behind the
+  # write, one asked during the wait among them, are joined into the next write once
+  # every restart is answered, on the set they leave (provisional: the restart reads the
+  # file the write it waited for left, the requests behind it written after). Each
+  # restart still waiting stays in `restarting` while the one before it is made, so that
+  # a trip that restart's first round meets refuses it, a restart asked before that trip,
+  # as decision 354 refuses one in the mailbox (refused_waiting/1), where judged after it
+  # it found the runner tripped again and cleared a trip it was asked before (RV-19's
+  # review, finding 1). A trip meanwhile leaves the write as it is, as ever; an edit's
+  # step meanwhile is served at once, the restart made on the resource it leaves; and a
+  # stop meanwhile answers each restart as one to a runner that is not running, as the
+  # requests behind the write are (decision 467).
   defp restarts_made(%{restarting: []} = state), do: state
 
-  defp restarts_made(%{restarting: waiting} = state),
-    do: Enum.reduce(waiting, %{state | restarting: []}, &restart_made/2)
-
-  defp restart_made({from, mode}, state) do
-    {reply, state} = served({:restart, mode, state.status}, state)
+  defp restarts_made(%{restarting: [{from, mode} | waiting]} = state) do
+    {reply, state} = served({:restart, mode, state.status}, %{state | restarting: waiting})
     GenServer.reply(from, reply)
-    state
+    restarts_made(state)
   end
 
   # Decision 465 (RV-18): every request that waited behind the write, joined into the
@@ -3016,11 +3037,13 @@ defmodule Logex.Runner do
   # `restarting`, the restarts asked while the runner was tripped and a write of the
   # forces file was out, each `{from, mode}`, in the order asked, [] from the start; set
   # by such a restart, which waits there off the runner's path, and emptied once that
-  # write's answer is taken, each then taken in turn and judged as the runner's status
+  # write's answer is taken, each then taken out in turn and judged as the runner's status
   # then stands (restarts_made/1), before the requests behind the write are joined; a
-  # round runs none while the runner is tripped, a trip finds the runner tripped already
-  # and leaves it, an edit's step leaves it, and a stop answers each as a runner that is
-  # not running.
+  # round runs none while the runner is tripped, a trip that finds the runner tripped
+  # already leaves it, and since RV-19's review (finding 1) one that a restart made from
+  # it meets, in its first round, refuses each still in it, asked before that trip
+  # (refused_waiting/1); an edit's step leaves it, and a stop answers each as a runner
+  # that is not running.
   # Decision 461 (RV-6): `turn`, the time on the runner's clock of its last look, a round's or
   # a refresh's, that found its wake past its time by more than the idle watchdog, or nil,
   # none yet; set by such a look, whatever brought the runner to it, a wake or a change, a
@@ -3033,7 +3056,8 @@ defmodule Logex.Runner do
   # the time on the runner's clock of its last look for a device not heard, a round's or
   # a refresh's, or of its last round's end, once its writes are made, whichever came
   # last, the start's time at the start; set by each look, the trip's among them, and each
-  # round's end, and by a restart's release, which reads every device; and read only by
+  # round's end, and by a restart's release, which reads every device, every device heard
+  # then too (released/2); and read only by
   # the look, which names the runner's lateness where it comes more than decision 484's
   # cap after it; a trip, a stop and an edit's step leave it as it is, no look being made
   # while tripped.
@@ -3713,7 +3737,8 @@ defmodule Logex.Runner do
 
   # A device hung inside its own adapter (decision 114): one that has told the runner it is
   # back from its adapter, after a read or a report or by answering a round's write in
-  # time, within the idle watchdog and a poll period, the time the runner gives any call
+  # time, or since RV-19's review by answering a restart's read, heard at its release
+  # (released/2), within the idle watchdog and a poll period, the time the runner gives any call
   # of its own to a device, is heard; the first in device-name order that has not, checked
   # as a round begins and at each wait's refresh, both while running, when no device is
   # down, is killed, its outputs left to what it does on losing its master, and trips the
@@ -3723,27 +3748,42 @@ defmodule Logex.Runner do
   defp silent(%{poll: poll, looked: looked} = state) do
     now = now(state)
     %{turn: turn} = state = overdue(now, state)
-    {late(judged(now, turn, poll, state), now - looked, state), %{state | looked: now}}
+    {late(judged(now, turn, poll, state), now, now - looked, state), %{state | looked: now}}
   end
 
   # Decision 490 (RV-19): a look that comes more than decision 484's cap after the
-  # runner's last look, or the end of its last round (`looked`), finds every device unheard
-  # past the cap by the runner's own lateness alone, a device heard at that look being so
-  # unheard now, whether it is hung or the machine ran it no more than the runner: so the
-  # device it finds unheard trips the line as the runner's lateness, `{:watchdog, {:late,
-  # ms}}`, `ms` the time since that look (provisional: the gap the rule weighs against the
-  # cap, not the wake's lateness `latest_wake` shows, which a wake planned a poll period on
-  # leaves up to a poll period less), every output 0 and no device killed, so that the
-  # operator goes to the computer, not to a healthy card, where it named the first device
-  # in name order, killed, as decision 484 had it. A device unheard past its limit at any
-  # other look is named, `{:io, device, :timeout}`, as decisions 484 and 489 have it; and
-  # a look that finds every device heard trips nothing, however late.
-  defp late(nil, _gap, _state), do: nil
+  # runner's last look, or the end of its last round (`looked`), the runner itself late,
+  # and finds every device unheard past the cap, none heard since within it, trips the
+  # line as the runner's own lateness, `{:watchdog, {:late, ms}}`, `ms` the time since that
+  # look (provisional: the gap the rule weighs against the cap, not the wake's lateness
+  # `latest_wake` shows, which a wake planned a poll period on leaves up to a poll period
+  # less), every output 0 and no device killed, so that the operator goes to the computer,
+  # not to a healthy card, where it named the first device in name order, killed, as
+  # decision 484 had it: what was not heard, the machine ran no more than the runner. A
+  # device unheard past its limit at any other look is named, `{:io, device, :timeout}`,
+  # as decisions 484 and 489 have it, a late look's among them where another device was
+  # heard within the cap, its polls run while the runner's were not, so that a card hung
+  # beside healthy ones is named however late the look (RV-19's review, finding 2, its
+  # probe P490g: one late wake read 211 ms after the last look, the card hung, the others
+  # heard 201 ms before, named the lateness); and a look that finds no device unheard past
+  # its limit trips nothing, however late, the same lateness tripping nothing where every
+  # card is heard (its probe P490a).
+  defp late(nil, _now, _gap, _state), do: nil
 
-  defp late(_device, gap, %{idle: idle, poll: poll}) when gap > 4 * idle + poll,
-    do: {:late, gap}
+  defp late(device, now, gap, %{idle: idle, poll: poll} = state) when gap > 4 * idle + poll,
+    do: lateness(heard_within(now, 4 * idle + poll, state), device, gap)
 
-  defp late(device, _gap, _state), do: device
+  defp late(device, _now, _gap, _state), do: device
+
+  defp lateness(nil, _device, gap), do: {:late, gap}
+  defp lateness(_heard, device, _gap), do: device
+
+  # The first device, in name order, heard within `limit` of `now`, or nil.
+  defp heard_within(now, limit, %{devices: devices, heard: heard}) do
+    Enum.find_value(devices, fn {name, _pid, _points} ->
+      now - Map.fetch!(heard, name) <= limit && name
+    end)
+  end
 
   # Decision 461 (RV-6): no device is judged within a poll period of a late look, its turn
   # (turned/3), against the idle watchdog and a poll period. Decision 484 (RV-18): within a
@@ -3753,9 +3793,10 @@ defmodule Logex.Runner do
   # trips at the first look past the cap however late every look of the runner is, where
   # while every look was late none was judged; so does a device a single look past the cap
   # finds unheard where only the runner was late, the first in name order, which since
-  # decision 490 (RV-19) names the runner's lateness, late/3. A trip by the cap at any
-  # other look is a silent device's, `{:io, device, :timeout}`, the device killed
-  # (decision 489).
+  # decision 490 (RV-19) names the runner's lateness where that look comes more than the
+  # cap after the runner's last and every device is unheard past the cap (late/4). A trip
+  # by the cap at any other look is a silent device's, `{:io, device, :timeout}`, the
+  # device killed (decision 489).
   defp judged(now, turn, poll, %{idle: idle} = state)
        when is_integer(turn) and now - turn < poll,
        do: unheard(now, 4 * idle + poll, state)
@@ -3874,7 +3915,7 @@ defmodule Logex.Runner do
         in_round: nil
     }
 
-    refused_waiting(state)
+    state = refused_waiting(state)
     state = zeroed(state)
     published(state, [{:trip, reason}])
     {_written, state} = kept_store(state, state.runtime)
@@ -3887,7 +3928,17 @@ defmodule Logex.Runner do
   # before it, a device's change whose round trips or a notice a round's start takes; one
   # that arrives once the trip has begun is the trip's own to serve. A restart taken from
   # the mailbox before the trip, waiting in the queue for the share's slot, keeps the
-  # status it was taken under and is refused as the queue is drained.
+  # status it was taken under and is refused as the queue is drained. Since RV-19's review
+  # (finding 1) so is every restart that waited for a write of the forces file (decision
+  # 500) and is still waiting, in `restarting`, as the one before it is made and that
+  # one's first round trips: each was asked before the trip, and is refused first, in
+  # the order asked, and then the mailbox's.
+  defp refused_waiting(%{restarting: [{from, mode} | waiting]} = state) do
+    {refusal, _state} = served({:restart, mode, :running}, state)
+    GenServer.reply(from, refusal)
+    refused_waiting(%{state | restarting: waiting})
+  end
+
   defp refused_waiting(state) do
     receive do
       {:"$gen_call", from, {:restart, mode}} when mode in [:cold, :warm] ->
@@ -3895,7 +3946,7 @@ defmodule Logex.Runner do
         GenServer.reply(from, refusal)
         refused_waiting(state)
     after
-      0 -> :ok
+      0 -> state
     end
   end
 
@@ -4380,6 +4431,12 @@ defmodule Logex.Runner do
     %{state | unzeroed: MapSet.union(state.unzeroed, state.down)}
   end
 
+  # RV-19's review (finding 5): every device the restart read, reread or opened again,
+  # answered that read before the release, so each is heard at the restart's time, as a
+  # device opened again was already (reopen_checked/6), and the restart's first round's
+  # look finds none unheard by the time the runner stood tripped, where a device reread
+  # kept the time it was last heard before the trip, and one the host held from its polls
+  # meanwhile was named 0 ms after the restart though it had just answered.
   defp released(mode, state) do
     runtime = Runtime.restart(state.runtime, mode)
     at = now(state)
@@ -4393,6 +4450,7 @@ defmodule Logex.Runner do
         anchor: at - state.logical,
         refreshed: at,
         looked: at,
+        heard: Map.new(state.heard, fn {name, _heard} -> {name, at} end),
         retain: period_from(state.retain, at),
         logic: Map.new(state.logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)
     }

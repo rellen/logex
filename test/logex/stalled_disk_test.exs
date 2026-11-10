@@ -2361,6 +2361,61 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # RV-19's review, finding 1 (its probe P500a): decision 354 has a trip stand until a
+    # restart asked after it. Two restarts wait for the write; the first is made, and its
+    # own first round's write fails, tripping the line again: the second, asked before that
+    # trip, is refused by it, in decision 133's words, the line left tripped, where taken
+    # after the trip it found the runner tripped and was made, the trip cleared by a
+    # restart asked before it. Where the first is refused, the line still tripped, the
+    # second is made in turn, as when the wait was the runner's own.
+    test "a second restart waiting is refused by a trip the first's own round meets, and " <>
+           "made where the first is refused",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      server = held()
+      force = Task.async(fn -> Runner.force(runner, "level", 7) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+      Sim.fail(rig.panel, :write, {:error, :eio})
+      :ok = Runner.subscribe(runner, [:trip, :restart])
+      first = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+
+      second =
+        calling(
+          Task.async(fn ->
+            assert_raise ArgumentError,
+                         "the runner is running: restart/2 starts a runner again once it " <>
+                           "has tripped",
+                         fn -> Runner.restart(runner, :warm) end
+          end)
+        )
+
+      :sys.resume(server)
+      assert Task.await(force, @answers) == :ok
+      assert Task.await(first, @answers) == :ok
+      assert %ArgumentError{} = Task.await(second, @answers)
+      assert_receive {Runner, ^runner, {:restart, :warm}}
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
+      refute_receive {Runner, ^runner, {:restart, _mode}}, 100
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
+
+      server = held()
+      again = Task.async(fn -> Runner.force(runner, "level", 3) end)
+      _writing = waiting_call(server, :rename)
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      refused = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+      made = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
+      :sys.resume(server)
+      assert Task.await(again, @answers) == :ok
+      assert {:error, {:io_init, "panel", _cause}} = Task.await(refused, @answers)
+      assert Task.await(made, @answers) == :ok
+      assert %{status: :running, trip: nil, forces: %{"level" => 3}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
     # Decision 500 (RV-19), provisional: an edit's step asked during the wait is served at
     # once, the restart made on the resource it leaves; and a stop meanwhile answers the
     # restart as one to a runner that is not running, as decision 467 answers the requests

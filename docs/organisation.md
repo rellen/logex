@@ -3028,9 +3028,10 @@ four times the idle watchdog and a poll period tripping the line however late th
 (decision 486); and the period's hand-off the retained values alone (decision 488); the
 others as built (decisions 467, 469, 470, 471, 482, 483, 485 and 487).)* *(Since RV-19,
 2026-11-10, the answers to RV-18's questions: a look that comes more than decision 484's
-cap after the runner's last look, or the end of its last round, tripping the runner's
-own lateness, `{:watchdog, {:late, ms}}`, every output 0 and no device killed, a reason
-of the trip list's own (decision 490); `stop/2` answering both of its end's writes that
+cap after the runner's last look, or the end of its last round, and finds every device
+unheard past the cap tripping the runner's own lateness, `{:watchdog, {:late, ms}}`, every
+output 0 and no device killed for it, a reason of the trip list's own, a hung device
+beside one heard within the cap named as before (decision 490, since RV-19's review); `stop/2` answering both of its end's writes that
 failed, and every orderly end publishing the forces file's failure, `{:forces, {:error,
 reason}}`, an event of its own (decision 493); a restart's wait for a write of the forces
 file made off the runner's path, every request answered meanwhile (decision 500); and a
@@ -14411,7 +14412,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      ends one walk in three with a wake past the cap, `{:trip, :late}`. A restart's first
      look counts its gap from the restart, the time the runner stood tripped no lateness
      (`663c36d`: a test whose mutant, the restart's look left unset, reads `{:late,
-     310}`).)*
+     310}`).)* *(RV-19's review, 2026-11-10: the look named the lateness wherever it came
+     more than the cap after the last and found any device unheard past its limit, so a
+     card hung beside healthy ones heard within the cap, its probe P490g, one wake 201 ms
+     late, was named the runner's lateness, which tripped nothing with every card healthy;
+     the decision's "finds every device unheard" is now built, as the question's option (b)
+     had it, "a look that finds every device unheard past the cap": the lateness is named
+     only where no device was heard within the cap, a device unheard past its limit at any
+     other look named, and every device a restart reads is heard at its release, so that
+     the time a runner stood tripped is neither lateness nor silence, where a device reread
+     kept the time it was last heard before the trip; the restart's look's own test, which
+     pinned that, reads the line running. `trip_test.exs` pins the cards heard within the
+     cap at 201 and 210 ms, the hung card named at 201 and 210 and the lateness at 211, and
+     a host's requests no look.)*
 
 491. **The cap's sum (the review after Milestone 6),** RV-18's question 2 (decision 484):
      "four times the idle watchdog and a poll period" is read as four idle watchdogs and
@@ -14546,7 +14559,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      provisional: a force asked during the wait joins the next write, written after the
      restart, which reads the file the write it waited for left; a second restart is taken
      once the first is made and finds the runner running, refused (decision 133), as it
-     did when the wait was the runner's own; an edit's step is served at once. RV-18's
+     did when the wait was the runner's own, and since RV-19's review one the first's own
+     first round trips before it is taken is refused by that trip, asked before it
+     (decision 354), where it was made and cleared the trip; an edit's step is served at
+     once. RV-18's
      review's probe 468W, `status/1` blocked 1,503 ms, now answers at once.
      `stalled_disk_test.exs`'s 468 test reads `status/1` while the restart waits, three
      tests more; the runner walk's `:restart_waited_write` reads it answered, tripped, the
