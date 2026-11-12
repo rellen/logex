@@ -110,6 +110,11 @@ defmodule Logex.Configuration.Text do
   to it until it is printed: `Logex.Configuration.check/1` refuses a global named `at`,
   which no line can declare, as it refuses one named `program`, which a line can, since a
   configuration file's keyword names nothing in one.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Parser}

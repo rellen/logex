@@ -597,9 +597,10 @@ defmodule Logex.Runner do
   trips before it is taken is refused by that trip, a restart asked before it, as
   decision 354 refuses any (`restart/2`; decision 508). A stop meanwhile answers the
   restart as one to a runner that is not running, as it answers every request behind the
-  write (decision 467). The readings no decision has taken yet are provisional: an edit's
-  step meanwhile is served at once, the restart made on the resource it leaves; and a
-  trip's notice meanwhile changes nothing, the runner tripped already. A stop
+  write (decision 467). An edit's step meanwhile is served at once, the restart made on
+  the resource it leaves, as it would be had the operator pressed Restart a moment later;
+  and a trip's notice meanwhile changes nothing, the runner tripped already (decision
+  518). A stop
   waits for it to its own limit, after its zeros and its closes, and answers its callers
   as it ends, a force waiting behind it answered as to a runner that is not running
   (decision 467); one it cuts at that limit may still land once the disk answers, as any
@@ -1383,6 +1384,13 @@ defmodule Logex.Runner do
   again against the resource as it is then (decision 141). `{:edit, :accept, forecast}` goes to the
   subscribers. Its host mistakes are `Logex.Configuration.Edit.accept/3`'s, raised in the
   caller.
+
+  **Its cost** (decision 513) is `Logex.Configuration.Edit.accept/3`'s: a write through a
+  tag subscript, `move x lane_t[i].pre`, counts as a write of every element the subscript
+  may reach, so a sorter's `var lane_t ton[4096]` with 40 such rungs takes some 0.5 s to
+  accept, and one of `ton[65536]` with 10 some 4.2 s (RV-20's figures, the least of three
+  on one machine). The plant runs on meanwhile, the runner's rounds waiting on no accept;
+  the HMI that asked waits.
   """
   def accept(runner, candidate) do
     {edits, runtime, elapsed, stored} = call(runner, :resource)
@@ -2574,7 +2582,8 @@ defmodule Logex.Runner do
   # as decision 354 refuses one in the mailbox (refused_waiting/1), where judged after it
   # it found the runner tripped again and cleared a trip it was asked before (RV-19's
   # review, finding 1). A trip meanwhile leaves the write as it is, as ever; an edit's
-  # step meanwhile is served at once, the restart made on the resource it leaves; and a
+  # step meanwhile is served at once, the restart made on the resource it leaves, and a
+  # trip's notice changes nothing, the runner tripped already (decision 518); and a
   # stop meanwhile answers each restart as one to a runner that is not running, as the
   # requests behind the write are (decision 467).
   defp restarts_made(%{restarting: []} = state), do: state

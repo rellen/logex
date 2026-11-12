@@ -29,7 +29,8 @@ and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)* 
 2026-11-12, RV-8: the paragraph is a short account of the review, what it found, what it
 changed and what its close puts to the maintainer, RV-8's questions, eight since RV-8's
 review; and since their answers the same day, decisions 513–521, it says the review is
-done, decision 521, and names what waits, RV-20 to RV-25.)*
+done, decision 521, and names what waits, RV-20 to RV-25.)* *(Since RV-20, 2026-11-12:
+it says RV-20 has landed, and names what still waits.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -18786,6 +18787,466 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   any module a README example calls beyond them put to the maintainer (514). And decision
   500's two readings' marks, an edit's step and a trip's notice while a restart waits,
   made 518's number. It runs first, beside RV-21.
+  **RV-20 as built** (2026-11-12, branch `rv20` over `681e326`). Each decision that
+  changes something has a test that fails when it is reverted, judged by the full suite
+  (the mutation table below). No test, walk or oracle was deleted or weakened; five pinned
+  did-you-means changed as decision 520 says, each named below, and two call traces were
+  widened to follow the compile's own process.
+
+  - *Step 1, measured at `681e326`* (`scratchpad/rv/w20/probes/measure.exs`, each compile
+    in a fresh process traced for its collections, the least of three on this machine): a
+    box counter's program of 4,000 tags in which a renamed tag leaves `n` rungs naming a
+    tag that is gone, and a configuration with `n` refused connections among `2n` globals:
+
+    | n | program | | | configuration | | |
+    |---|---|---|---|---|---|---|
+    | | time | reductions | full collections | time | reductions | full collections |
+    | 1,000 | 13.4 s | 1,257 M | 20 | 4.7 s | 480 M | 9 |
+    | 2,000 | 49.8 s | 2,606 M | 7,095 | 21.4 s | 1,964 M | 10 |
+    | 4,000 | 253.3 s | 5,706 M | 48,353 | 81.7 s | 7,931 M | 18 |
+
+  - *Decision 520 (c), the did-you-mean bounded* (`354327f`). Both forms built and
+    measured at those sizes, the compile in the caller as at the base (form B alone and A
+    with B are patches kept with the working files):
+
+    | form, n = 1,000 / 2,000 / 4,000 | program | configuration |
+    |---|---|---|
+    | A, the first hundred names alone | 1.38 / 1.35 / 5.16 s; 126 / 127 / 140 M | 0.53 / 1.28 / 2.54 s; 52 / 107 / 215 M |
+    | B, candidates within one character of the name's length | 9.8 / 46.5 / 243.8 s; 873 / 2,206 / 5,204 M | 3.5 / 11.8 / 53.3 s; 311 / 1,011 / 4,499 M |
+    | A and B together, kept | 0.41 / 0.38 / 1.29 s; 34 / 35 / 39 M | 0.14 / 0.34 / 0.65 s; 10 / 16 / 30 M |
+
+    B alone saves little where a plant's names share their lengths, `pushbutton_start_1`
+    to `_4000`, and stays quadratic; A bounds the count, its hundred matches against every
+    name; together the hundred are matched against the names of a like length, a quarter
+    of A's reductions. *What an engineer sees*: under A the first hundred names a compile
+    cannot find, in line order, are each offered the nearest of every name, and every one
+    after none; under B every name is offered the nearest of the names within one
+    character of its length, so `stop` is no longer offered for `stop_hold`, nor `end` for
+    `ender`, nor `fast` for `fast.x`, nor `t.acc` for `t.acc[0]`, where A would still
+    offer them; together, the first hundred are offered as B offers, and the rest none.
+    Kept together, the cheapest, provisional, question 1 below *(since RV-20's review the
+    first form alone, below)*. Built as a deferral: a site that would suggest gives its
+    diagnostic `Logex.Declarations.offer/5` as its message, and the compile's last pass
+    over its diagnostics in line order, `offered/1`, makes each message, the hundred
+    counted across a compile's look-ups among the names its texts declare: a program's
+    tags, labels and members, a configuration's globals, instances, tasks, members and
+    program types (a configuration file's loader's absent program types among them); a
+    name after the hundred is told what a name none is near is told (a member's message
+    lists the members, a global's says how to declare it). A type word's did-you-mean,
+    among the type words logex has and the blocks given, and a configuration file reader's
+    are bounded by the language, and stay as they were *(RV-20's review: the blocks given
+    are the host's, not the language's; a type word is offered among the hundred since,
+    below)*. A host's call that names what is not there, the runtime's, the runner's and
+    `Logex.IO`'s, is no compile's refusal, and offers the nearest of every name as ever.
+    Tests: `compile_total_test.exs`'s "a refusal of many names gone costs near the count
+    of the names" and `configuration_test.exs`'s "compile/3's refusal of many globals gone
+    costs near their count", 4x the names gone in under 6x the reductions, 1.25x and 1.46x
+    here, every name matched against every name (the mutation table's c6) 20.84x and
+    18.25x, each also holding that the first hundred in line order are offered one; and
+    "the first hundred names gone in line order are offered one, a label's among them" and
+    "compile/3 offers the first hundred names gone in line order, whatever finds them", a
+    jump's label and a task's single, which their checks find out of line order. The five
+    pins changed (`validation_test.exs` twice, `array_test.exs`, `configuration_test.exs`
+    twice) each lose a suggestion more than one character off; `validation_test.exs`'s two
+    and `configuration_test.exs`'s "an instance names a task the configuration declares"
+    gained a near name of a like length, offered (`pxxp_on` for `pump_on` at 0.81, `endd`
+    for `end`, `fas.t` for `fast`) or below the cut-off (`stort` for `stop` at 0.78).
+  - *Decision 520 (b), the compile in a process of its own* (`bedba95`).
+    `Logex.Compiler.Worker` runs `Logex.Compiler`'s three, spawned by module, function and
+    arguments so that no closure reaches the loader's own compile (decision 432's code
+    graph holds). The mechanism, found by measuring: a process's `min_bin_vheap_size` is
+    the allowance of binaries off its heap whose excess turns each young collection that
+    promotes them into a full one; OTP 28 takes a spawn's `min_bin_vheap_size` only beside
+    another of its heap's options, alone it is dropped and the process keeps 46,422 words
+    (`scratchpad/rv/w20/probes/vheap2.exs`), so the worker is always given the caller's
+    `min_heap_size`, `max_heap_size`, `fullsweep_after` and priority beside it, which also
+    keeps a cost test's heap no collection visits; the allowance is the caller's and twice
+    the text's words, and the loader's process raises its own as it reads each file to
+    twice the binaries it holds, never adding to the allowance it has, since the VM rounds
+    an allowance up to a heap size, a step of up to half again, and adding at each of
+    `loading_test.exs`'s many files compounded those steps past any size and crashed the
+    VM ("no next heap size found", found here before the commit). Why it holds: the text
+    and the refusals' messages stay under twice the text, so no collection finds the old
+    heap's binaries past the allowance. Measured, the compile in its own process and the
+    did-you-mean unbounded: the 400 KB comment with 100 names gone, 118 full collections
+    6; the box counter at 2,000, 7,095 and 49.8 s 28 and 31.9 s. At the tip, both: the
+    program 0.38, 0.45 and 0.44 s, 33.7, 34.7 and 36.5 M, 10, 10 and 11 full collections;
+    the configuration, which runs in the caller and holds no text since `96beba0`, 0.13,
+    0.39 and 0.81 s, 9.6, 16.2 and 29.5 M, 8, 10 and 17. The host sees the result it would
+    compiling itself, and the readings the record leaves, provisional, question 3: a
+    mistake the compile raises, a host's `ArgumentError` among them, raised again in the
+    caller, message and stack unchanged *(the stack, RV-20's review found, the compile's
+    process's alone; since, the compile's and then the caller's)*; the worker unlinks
+    itself before it answers, so a
+    caller that traps exits is sent nothing; a compile killed from outside takes its
+    caller with it, with its reason, trapping exits or not; a caller that exits, a host's
+    time limit's `Task.shutdown/2` among them, takes the compile with it; the group leader
+    a spawn's, the caller's; no process dictionary read or written; and the caller charged
+    the reductions the compile spent, a time slice at a time (`:erlang.bump_reductions/1`
+    charges a slice at most). Tests (`logex_test.exs`, "a compile's own process (decision
+    520)"): each of the three spawns its process, gone once it answers; the same results,
+    a program, a block, warnings and 153 diagnostics, through compile/2, compile_file/1
+    and compile_files/1; six host mistakes raised in the caller; trap exits; killed from
+    outside, trapping or not, `:kill` and `:shutdown`; a caller killed and a task shut
+    down; group leader, priority, heap and dictionary; the charge within 1,000 reductions
+    of the compile run in the caller; and the full collections of a 400 KB text against
+    none, under 2x and 10 more, for each of the three.
+  - *Every cost, growth, ceiling and trace test that reads a compile* (COMMON) still reads
+    all of it. A test counting reductions counts its own process's, which the worker's
+    charge brings to the whole compile wherever it ran, and the worker takes the counting
+    process's heap settings, so a test's heap no collection visits is the compile's too.
+    Measured (`scratchpad/rv/w20/probes/common.exs`, the least of five, a heap no
+    collection visits and the VM's): README's motor 8,711 against 8,647 run in the caller,
+    64 more; a program of 2,000 tags, -0.17% and +0.48%; 500 and 8,000 groups deep, +0.02%
+    and +0.05% (+0.99% and -0.44% in the VM's heap); a compile given a chain of 20 types,
+    64 more; compile_file/1 of the chain and compile_files/1 of its 21 files, 61 more. So
+    every count stands within the handing over, a same-run twin's difference unchanged and
+    a ratio of two sizes within a few hundredths, and every mutant each test was written
+    for, made in the compile's work, is charged to it as before: the mutation table's `k1`
+    (a quadratic pass over the rungs) and `k2` (each rung 700 reductions dearer) are red
+    in the growth and ceiling tests below, and `b8` (the charge taken off) in the test
+    that pins it. The tests that read a compile's work, found by a scan of every test that
+    compiles and counts reductions, collections or calls (85 tests in 30 files,
+    `scratchpad/rv/w20/common/scan.txt`): those that count reductions count their own
+    process's, or a process they spawn, which the charge brings to the whole compile, so
+    none changed, `ceiling_test.exs`'s compile, `compile_total_test.exs`'s twins,
+    `logex_test.exs`'s three growth tests and `function_block_test.exs`'s growth and
+    once-a-type tests among them; `configuration_test.exs`'s full collections trace
+    `Logex.Configuration.compile/3`, which runs in the caller; the full collections of a
+    program's compile, new here, trace the caller with `:set_on_spawn`; and the two call
+    traces of `function_block_test.exs` (`compiles/1`, `load_traced/1`) now trace with
+    `:set_on_spawn` and take every message once `:erlang.trace_delivered(:all)` says so,
+    five tests red at the tip without it, their calls made in the compile's process. The
+    other call traces, `runtime_test.exs`'s, `retain_store_test.exs`'s,
+    `runner_edit_test.exs`'s and README's, trace no compile, and the steps of
+    `instance_array_test.exs`'s words a step allocates hold none.
+  - *Decision 520 (a)* (`a78226f`): `Logex`'s moduledoc gives a compile's own process, and
+    `Logex.compile/2`'s and `Logex.Configuration.compile/3`'s docs the cost that remains,
+    with the figures above.
+  - *Decision 513* (`a78226f`): the docs of `Logex.Edit.accept/3`,
+    `Logex.Configuration.Edit.accept/3` and `Logex.Runner.accept/2` give an accept's cost
+    over a large array, measured again here (`scratchpad/rv/w20/probes/accept.exs`, the
+    least of three): a sorter's `ton[4096]` with 40 writes through a tag subscript 513,
+    489 and 526 ms; `ton[65536]` with 10, 4.80, 4.06 and 4.18 s.
+  - *Decision 514* (`10eda92`): the fifteen documented modules outside the contract each
+    end their moduledoc with one sentence, "Outside the host contract, this module takes
+    logex's own data unguarded, and anything else may raise as Elixir does: a host's way
+    in is `Logex`, `Logex.Runtime`, `Logex.Edit`, `Logex.Configuration` and
+    `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and `Logex.Tag.new!/5`
+    (decision 514)": `Logex.Compiler`, `Lexer`, `Parser`, `Printer`, `Declarations`,
+    `FbType` and `FbType.Member`, `Program`, `Walk`, `Warnings`, `Diagnostic`, `Instance`,
+    `Scan`, `Fault` and `Configuration.Text`. `runtime_test.exs`'s "every documented
+    module outside the host contract says so, and none inside it" reads every module the
+    application holds and pins the fifteen. Inside it, provisional, question 2: the
+    configuration's elements, `Logex.IO.Point`, `Logex.IO.Sim` and the runner's three
+    clocks. README names the contract where it introduces the API, and the modules its
+    examples call beyond it.
+  - *Decision 518* (`a78226f`): decision 500's two readings, an edit's step served at once
+    while a restart waits and a trip's notice changing nothing, are 518's in
+    `Logex.Runner`'s moduledoc and a comment, README and `stalled_disk_test.exs`;
+    `runtime_test.exs`'s "the docs decisions 513, 518 and 520 owe say what they decided"
+    reads the moduledoc, the three accepts' docs and the compile's.
+  - *CLAUDE.md*: a line for `lib/logex/compiler/worker.ex`; `Logex.Declarations`' line
+    names the did-you-mean, `logex_test.exs`'s the compile's own process,
+    `compile_total_test.exs`'s a refusal of many names gone, and `runtime_test.exs`'s the
+    moduledocs held to the host contract.
+  - *The cost against the parent*: README's motor compiles in 8,712 reductions, 8,649 at
+    `681e326`, the 63 the handing over; the plant's configuration in 25,633, 25,626.
+
+  - *The mutation table* (`scripts/mutate.sh` at `a78226f`, each judged by the full suite
+    of 2,955; the patches are kept with the working files, `scratchpad/rv/w20/mut/`).
+    Every mutant is killed:
+
+    | mutant | what it takes back | full suite | the tests that fail |
+    |---|---|---|---|
+    | c1 | the bound, both forms | 10 red | the growth tests and line-order tests of both, the five pins changed, the own-process test's large compile past its 30 s |
+    | c2 | the hundred | 5 red | both growth tests, both line-order tests, the own-process test's large compile |
+    | c3 | the like length | 6 red | the five pins changed, the own-process test's large compile |
+    | c6 | the like length gone and every name after the hundred matched against every name, its message dropped | 3 red | both growth tests, by their ratio alone: 20.84x and 18.25x the reductions for 4x the names gone; the own-process test's large compile |
+    | c4 | the program's offers made before its diagnostics are put in line order | 1 red | "the first hundred names gone in line order are offered one, a label's among them" |
+    | c5 | the configuration's offers made before its line order | 1 red | "compile/3 offers the first hundred names gone in line order, whatever finds them" |
+    | b1 | the compile in the caller, as before | 7 red | `logex_test.exs`'s own-process tests |
+    | b2a | the spawn's allowance not raised by the text | 2 red | "a long text's compile stays young", the group leader and heap test |
+    | b2b | the loader's process not raising its allowance as it reads | 1 red | "a long text's compile stays young", for compile_file/1 and compile_files/1 |
+    | b3 | no unlink before the answer | 1 red | "a caller that traps exits is sent nothing of the compile" |
+    | b4 | no link | 1 red | "a caller that exits takes its compile with it" |
+    | b5 | a compile killed from outside answered `{:error, reason}` | 1 red | "a compile killed from outside takes its caller with it" |
+    | b6 | the priority not the caller's | 1 red | "the compile's process takes the caller's group leader, priority and heap" |
+    | b7 | a mistake not raised again | 24 red | every host-mistake test of the three, `function_block_test.exs`'s 17 among them |
+    | b8 | no charge | 6 red | "the caller is charged the reductions its compile spent", and five cost tests that read a compile: `bit_string_test.exs`'s compile of no bit strings, `tag_subscript_test.exs`'s one-shots, `array_test.exs`'s state check, `compile_total_test.exs`'s twin, `function_block_test.exs`'s table walked once |
+    | b9 | the loader's allowance added to at each file, as first built | the VM aborts ("no next heap size found") | the suite |
+    | m514 missing | the sentence taken off `Logex.Walk` | 1 red | "every documented module outside the host contract says so, and none inside it" |
+    | m514 inside | the sentence put on `Logex.Runtime` | 1 red | the same |
+    | d | the docs of 513, 518 and 520 taken back | 1 red | "the docs decisions 513, 518 and 520 owe say what they decided" |
+    | k1 | a quadratic pass over a program's rungs in its compile | 20 red | every growth test of a compile, `logex_test.exs`'s two (14.1x for 4x the tags) among them |
+    | k2 | each rung 700 reductions dearer | 2 red | `ceiling_test.exs`'s compile of README's motor, `typed_counter_test.exs`'s program of bools |
+
+    k1's run also met `runner_test.exs:1059` red, the flake below; the own-process test's
+    large compile passed its 30 s under c1, c2, c3 and c6, each a compile the mutant made
+    slow.
+  - *CI*: `354327f`, `bedba95` and `a78226f` green; `10eda92` red, twice over. First,
+    `logex_test.exs`'s time-limit test looked for the compile's process in
+    `Process.list/0` and met other async tests' compiles; `a78226f` traces the task's own
+    process with `:set_on_spawn` instead, and each of the own-process tests waits for its
+    compile's `:exit` trace, never a process list. Second, `runner_test.exs:1059`, a flake
+    since RV-11's `434ada2` and none of this item's: `open: 1` limits both devices'
+    openings to 1 ms, and the test takes `{:error, {:io_init, "drive", :timeout}}` alone,
+    so a panel whose opening passes 1 ms first fails it; k1's run met it too. The runner's
+    start is RV-21's, beside this item, so it is left, put here for RV-21.
+
+  *Questions for the maintainer*, by what an operator or an engineer sees:
+  1. *A long refusal's did-you-mean* (decision 520 (c), as built provisional). A box
+     counter's tag `pushbutton_start` renamed leaves 2,000 rungs naming
+     `pushbuton_start_1` to `_2000`: (a) as built, both forms, the first hundred offered
+     the nearest name within one character of their length, 0.45 s at 2,000 among 4,000
+     tags; a rung naming `stop_hold` where `stop` is declared is offered nothing, nor a
+     `jmp ender` where a rung begins `lbl end`; (b) the first hundred alone, each offered
+     the nearest of every name as before, 1.35 s, `stop` offered for `stop_hold`; (c) a
+     wider like length, within two characters or a third of the name's, which offers `end`
+     for `ender` again, at a cost between (a)'s and (b)'s.
+  2. *Where the host contract ends, for what README's examples call* (decision 514). An
+     engineer copies an example that prints a refusal with `Logex.Diagnostic.format/1`,
+     drives a conveyor's panel with `Logex.IO.Sim` and moves `Logex.Runner.Clock.Manual`.
+     As built, provisional: `Logex.IO.Sim`, the runner's clocks (`Logex.Runner.Clock`,
+     `Clock.Manual`, `Clock.Monotonic`), the configuration's elements (`Task`, `Global`,
+     `Instance`, `Connection`, which `Configuration.new!/1` checks) and `Logex.IO.Point`
+     (what `Logex.IO`'s behaviour hands an adapter) inside the contract, each refusing a
+     host's mistake with a pinned message; `Logex.Diagnostic`, `Logex.FbType` (README's
+     `ctu/0`) and `Logex.Scan` (a struct `Runtime.call/4` checks) outside, taking logex's
+     own data unguarded. c4-api-fuzz-11's cases in those outside: `Diagnostic.format/1` of
+     a diagnostic whose message is a charlist raises a raw `ArgumentError`, and of
+     anything but a diagnostic `FunctionClauseError`; `FbType.builtin/1`, `held/1`,
+     `initial/1,2`, `member/2`, `of/1`, `public/1`, `signature/1`, `started/2`,
+     `type_of/2`, `within/2` and `writable/1` raise `FunctionClauseError` given what logex
+     never makes. (a) As built; (b) `Logex.Diagnostic.format/1` inside too, a host's tool
+     every example calls, its mistakes pinned; (c) the tools outside, the record's eight
+     alone the contract, each tool's moduledoc saying it takes logex's own data unguarded.
+  3. *A compile's own process* (decision 520 (b), the readings the record leaves). A
+     host's HMI process compiles a program while a supervisor shuts the plant's tools
+     down: (a) as built, a compile killed from outside takes the caller with it, its
+     reason kept, though the caller traps exits; the caller is charged the compile's
+     reductions; the compile takes the caller's priority and heap settings; (b) a caller
+     that traps exits is answered `{:error, ...}` instead and lives on; (c) the compile at
+     the VM's own priority and heap, a caller's `max_heap_size` no limit on it.
+  **RV-20's review** (2026-11-12, of `60c9400`, `scratchpad/rv/r20/`): the four gates
+  green, 2,955 tests, CI green on `60c9400`, `a78226f`, `bedba95` and `354327f` and red on
+  `10eda92` as recorded above; nothing breaks correctness, and eleven findings, two
+  medium, one medium-low, one low-medium, five low, a nit and two observations, each about
+  what the engineer sees, a cost the record did not state, an untested rule or a document
+  that said something untrue. Each is fixed here with a test that fails when it is
+  reverted or with the documents made true (`a312652`, GATE-OK, 2,960, 11 doctests and
+  2,949 tests, its CI run red on a flake of a test this item never touched, *Found while
+  fixing* below; this record, with the two fixes found while fixing, the commit after
+  it). The working files are under `scratchpad/rv/w20/fix/`.
+  1. *The did-you-mean kept was neither of the decision's two forms* (medium). Decision
+     520 (c) offers "the first hundred alone, or matched only against names of a like
+     length" and keeps "the one its figures favour"; RV-20 built both together, which
+     narrowed every compile's suggestions, not only a long refusal's: `stp_buttn` was no
+     longer offered `stop_button`, nor `conveyor_run` `conveyor_running`, nor `fault`
+     `fault_reset`, nor `jmp ender` `end`, and `t1.acc_x` was given the list of members
+     (the review's `probes/typos.exs`; 26 of 71,549 sources lost a suggestion and nothing
+     else changed). The figures the choice was made on were the compile's in the caller;
+     with the compile in its own process the first form alone is flat, measured again here
+     (`scratchpad/rv/w20/probes/measure.exs`, the least of three): a box counter of 4,000
+     tags with 1,000, 2,000, 4,000 and 16,000 names gone 1.32, 1.47, 1.52 and 1.84 s,
+     126, 127, 129 and 140 M reductions, 11 to 13 full collections; a configuration with
+     1,000, 2,000 and 4,000 refused connections 0.50, 1.25 and 2.73 s, 52, 107 and 215 M,
+     the hundred matched against twice as many globals. So the first form alone is kept:
+     the first hundred names a text cannot find, in line order, are each offered the
+     nearest of every name, as before the decision, and every name after them none
+     (`Logex.Declarations.offered/1`); `typos.exs` prints the base's messages again. The
+     five pins RV-20 changed are back as they stood at `681e326`; the four examples it
+     added beside them (`pxxp_on`, `stort`, `endd`, `fas.t`) hold under the first form
+     too and stay. Question 1 is put again below with these figures, and says that the
+     second form changes every compile's suggestions.
+  2. *Unknown members past the hundredth each listed every member* (medium). A name past
+     the hundred was told what a name none is near is told, and a member's message ends
+     with its type's members, so 16,000 references to unknown members of a block of 1,000
+     made 174.5 MB of messages handed back across the process boundary, where a
+     configuration lists a type's members once. Now a message that ends with a list, a
+     type's members or the blocks a compile was given, gives it in each of the hundred, as
+     ever, and after them once a list, by the first message that would give it, none where
+     one before gave it (`Logex.Declarations.listing/3`, the list keyed by the type's name
+     or `:blocks`); a configuration's lists are given once over all its messages, as
+     before. The review's `probes/members.exs` at the fix: 300 members and 4,000
+     references 243 KB in 74 ms (12.8 MB and 0.77 s at `60c9400`, 359 KB and 2.6 s at
+     `681e326`), 1,000 and 16,000 958 KB in 0.34 s (174.5 MB and 8.0 s; 1.4 MB and 106 s).
+     `compile_total_test.exs`'s "a list past the hundred (decision 520)": "is given once,
+     by the first message that would give it, none where one before did" pins a ton's
+     members given by each of the hundred and by none after, a block's given once after
+     them and the blocks given once; "keeps the refusal's text near the count of its names
+     and its lists", 4x the members and the names gone 4.08x the text, 4x the blocks given
+     and the lines 3.99x, where every message giving its list made 16x.
+  3. *Four of 19 planted mutants survived* (medium-low). r03 (`max_heap_size` not given
+     the compile's process): `logex_test.exs`'s "a caller's limit of its heap holds its
+     compile", a caller limited to 50,000 words killed with its compile, `:killed`, though
+     the compile would give one diagnostic back. r10 (the stack dropped): "a host's
+     mistake is raised with the stack it had when the caller compiled itself" (finding
+     5). r12 and r13 (the tags' names and the later labels gathered for every name gone,
+     the laziness the comment claims taken back), which the reductions cannot see, a
+     list's building a BIF's work, while the time grows as the names gone times those
+     declared (the review's 0.59 s against 8.5 s for 16,000 names gone among 4,000 tags):
+     `compile_total_test.exs`'s "a name past the hundredth (decision 520)" counts the
+     words `Logex.Compiler.compile/2` allocates in a process whose heap no collection
+     visits, a trace of its collections checking it, every module loaded first (a
+     process that loads one is collected as it does: 18 collections in the first count of
+     a fresh VM, which a heap's size and its count of minor collections did not show),
+     for twins whose last 400 lines name a tag, a label, a member or a type that is there
+     or is not, after a hundred unknown members of a ton; their difference, the cost of
+     400 names past the hundred, at 250 and 1,000 tags, labels and members, and 100 and
+     400 blocks given: 0.97x, 1.00x, 1.31x and 1.03x, where each look-up built for every
+     name reads 3.42x, 3.76x, 3.73x and 3.34x (the mutation table's r12,
+     r13, m06 and m07).
+  4. *An unknown type word among the blocks given was unbounded* (low-medium), and RV-20's
+     record called it bounded by the language: the blocks given are the host's `types:`.
+     500 blocks given and 4,000 lines naming a misspelt type took 32.7 s, 793 M
+     reductions and 49.7 MB of messages, each matched against all 500 and listing them.
+     Now a type word is one of the hundred names a text cannot find, offered among logex's
+     type words and the blocks given, both gathered only where a message needs them, and
+     the blocks given are a list given once after the hundred: 0.70 s, 24 M and 3.05 MB
+     at the fix (`probes/types.exs`), 1,000 lines 0.80 s and 1.67 MB. The as-built record
+     above is corrected where it said so; the tests are finding 2's and 3's.
+  5. *"Message and stack unchanged" was untrue* (low). A mistake raised again in the
+     caller carried the compile's process's stack alone, ending in the worker's
+     `outcome/1` and `serve/1`, the host's call site lost. Now it carries the compile's
+     frames down to its call of `Logex.Compiler`'s, then the caller's from where it called
+     (`own/1`, `caller/0`), which reads as when the caller compiled itself:
+     `Logex.compile(:motor, name: "m")` from a script names the compiler's frame and then
+     the script's line, as at `681e326`. The test above holds the first two frames equal
+     to those `Logex.Compiler`'s own call gives in the caller, a frame of the caller's
+     function among them and none of the worker's, for six mistakes through the three.
+  6. *The hundred is a text's, not a compile's* (low). Each block file the loader reads,
+     and each path of `compile_files/1`, offers its own hundred (the review's
+     `probes/blocks.exs`: 40 files of 1,000 names gone, 4,000 offered, 2.2 s at
+     `60c9400`). Bounded and linear in the files either way, so the documents now say it,
+     as the review advised: `compile/2`'s doc and `Logex.Declarations`' comment, "the
+     first hundred names a text cannot find", each block file's and each path's its own;
+     provisional, question 4. With the first form alone each file's hundred is matched
+     against all its names: the probe at the fix, 8.9 s and 926 M reductions; one hundred
+     for the whole compile, measured with a scratch patch not kept, 1.1 s and 79 M, the
+     first block file's hundred offered and the program's own typo none.
+  7. *The charge's cost in real time* (low). Each `:erlang.bump_reductions/1` gives the
+     scheduler a turn, so on a busy machine the charge lengthens the caller's wait:
+     measured again here (`scratchpad/rv/r20/probes/load.exs`, 20,000 timers, the least of
+     three on four cores), 3.16 s beside eight busy loops against 2.73 s without the
+     charge, 1.69 and 1.73 s on an idle machine. And the compile's process takes the
+     caller's `min_heap_size`, so a caller given a large minimum heap, a cost test's
+     8,000,000 words, holds two while its compile runs. `Logex`'s moduledoc and the
+     worker's comment say both; question 3 counts the first among what the charge costs.
+  8. *A provisional mark of decision 500's readings left* (low): decision 500's landed
+     note gets a dated note, as 467's and 510's have, that its edit's step served at once
+     is decision 518's, with a trip's notice changing nothing, and the other two readings
+     decisions 509's and 508's.
+  9. *README's contract passage and decision 514's letter* (low). README's examples build
+     the configuration's elements, `Logex.Configuration.Task`, `Global`, `Instance` and
+     `Connection`, which question 2 counts inside the contract; the passage now names them
+     beside `Logex.IO.Sim` and the clocks, "each refusing a host's mistake where it can
+     make one", since `Logex.Runner.Clock.Monotonic.now_ms/1` reads no clock term, as its
+     doc says. That the fifteen modules' sentence and the tools inside the contract are a
+     reading, the decision's letter being "each other documented module", question 2
+     says, its option (c) the letter.
+  10. *A comment on the wrong test* (nit): RV-8's review's comment is back above
+      "compile/3 holds no source text over its work", the two tests of decision 520 above
+      it with their own.
+  11. *Observations.* `stalled_disk_test.exs:1856` failed once under the review's r06, its
+      monitor given `:noproc`, the writer gone already: a race in the runner's own area,
+      none of this item's, left for the runner's items, RV-21's start and RV-25's split,
+      with `runner_test.exs:1059` recorded above.
+
+  *Found while fixing*: (i) `a312652`'s CI run was red, `frontend_test.exs`'s "growth: a
+  plain decimal costs what it did" reading 34.2 against 33.07 a literal: a test this item
+  never touched, red wherever it is the VM's first to lex, since its first count loads the
+  lexer, the loading's reductions counted (run alone in a fresh VM it reads 34.37 at
+  `681e326` and 34.36 at `a312652`, three times each); it now tokenizes each spelling once
+  before it counts, and passes alone, three times. (ii) `logex_test.exs`'s "the compile's
+  process takes the caller's group leader, priority and heap", a compile at `:low`
+  priority read while it runs, passed its 30 s in two of the thirteen full suites of the
+  mutation table, its 1,000 names gone each of the hundred matched against all 4,000 tags
+  since finding 1; its compile now has one name gone, a long text's alone.
+
+  *CLAUDE.md*: `compile_total_test.exs`'s line names a refusal of many names gone near
+  their count in its reductions, its words and its text.
+
+  *The mutation table* (`scripts/mutate.sh` at `a312652`, each judged by the full suite of
+  2,960; the patches and logs under `scratchpad/rv/w20/fix/mut/`, the review's four
+  survivors remade on the new code, `r`):
+
+    | mutant | what it takes back | full suite | the tests that fail |
+    |---|---|---|---|
+    | m01 | the like length, the second form, back beside the hundred (finding 1 reverted) | 5 red | the five pins it had changed, `validation_test.exs` twice, `configuration_test.exs` twice, `array_test.exs` |
+    | m02 | a list given by every message after the hundred (finding 2 reverted) | 3 red | both tests of "a list past the hundred", and "a name past the hundredth", 3.97x |
+    | m03 | a list given among the hundred not marked given | 1 red | "is given once, by the first message that would give it, none where one before did" |
+    | m04 | a type word matched against every type and block given at every line, the blocks listed each time (finding 4 reverted) | 3 red | both tests of "a list past the hundred", and "a name past the hundredth", its heap passed |
+    | m05 | a member's message listing its type's members every time, as RV-20 built it | 3 red, and the flake below | both tests of "a list past the hundred", and "a name past the hundredth", 3.99x |
+    | m06 | a type's members gathered for every unknown member | 1 red | "a name past the hundredth", 3.73x |
+    | m07 | the blocks given gathered at every unknown type word | 1 red | "a name past the hundredth", 3.34x |
+    | m08 | the hundred and first offered one | 6 red, and the flake below | the four tests that read the hundred in line order, "a list past the hundred" and "a name past the hundredth" |
+    | r03 | the caller's `max_heap_size` not given the compile's process | 1 red | "a caller's limit of its heap holds its compile" |
+    | r10 | the stack dropped | 1 red | "a host's mistake is raised with the stack it had when the caller compiled itself" |
+    | r10b | the compile's process's stack alone, as RV-20 built it (finding 5 reverted) | 1 red | the same |
+    | r12 | the tags' names gathered for every name gone | 1 red | "a name past the hundredth", 3.42x |
+    | r13 | the later labels gathered for every jump that names none | 1 red | "a name past the hundredth", 3.76x |
+
+    m05's and m08's runs also met `logex_test.exs`'s "the compile's process takes the
+    caller's group leader, priority and heap" past its 30 s, a flake this item made and
+    fixed below (*Found while fixing*), none of either mutant's.
+
+  *The cost against the parent*: README's motor compiles in 8,712 reductions and the
+  plant's configuration in 25,633, as at `60c9400`; 8,649 and 25,626 at `681e326`, the 63
+  and 7 the handing over (`scratchpad/rv/w20/probes/motorplant.exs`, the least of nine).
+
+  *Questions for the maintainer*, as they now stand, by what an operator or an engineer
+  sees (questions 2 and 3 as put above, with what the review adds; 4 and 5 new):
+  1. *A long refusal's did-you-mean* (decision 520 (c), as built provisional, put again).
+     A box counter's tag `pushbutton_start` renamed leaves 2,000 rungs naming
+     `pushbuton_start_1` to `_2000` among 4,000 tags: (a) as built since the review, the
+     decision's first form alone, the first hundred offered the nearest of every name as
+     before the decision and the rest nothing, about 1.5 s, flat from 1,000 to 16,000
+     names gone, and a single typo anywhere offered what it was before, `stp_buttn` told
+     `stop_button`, `jmp ender` told `end`; (b) both forms together, as RV-20 first built
+     it, about 0.5 s, but every compile's suggestions narrowed to names within one
+     character of the typo's length, so a one-typo program is offered nothing for
+     `stp_buttn`, `conveyor_run` or `jmp ender`; (c) a wider like length, within two
+     characters or a third of the name's, between (a)'s and (b)'s in both. IEC 61131-3
+     says nothing of a compiler's messages; Studio 5000's verify names an undefined tag,
+     and whether it offers a near name the record's sources do not say (unverified).
+  2. *Where the host contract ends, for what README's examples call* (decision 514), as
+     put above: (a) as built; (b) `Logex.Diagnostic.format/1` inside too; (c) the
+     decision's letter, the record's eight alone the contract and every other documented
+     module, `Logex.IO.Sim`, the runner's clocks, the configuration's elements and
+     `Logex.IO.Point` among them, saying it takes logex's own data unguarded. The review
+     checked the tools: given junk, `Logex.IO.Sim` and `Logex.Runner.Clock.Manual` raise
+     `ArgumentError` alone; `Clock.Monotonic.now_ms/1` reads no clock term and takes any;
+     `Logex.Diagnostic.format/1` raises `FunctionClauseError`. IEC is silent on a host's
+     API, and the record cites no Logix SDK.
+  3. *A compile's own process* (decision 520 (b)), as put above, with what the charge
+     costs: a host's HMI compiles a conveyor's program on a busy machine; (a) as built,
+     the caller charged the compile's reductions, so a host that counts its own work
+     counts the compile's, and its wait some 16% longer beside eight busy loops; a caller
+     given a large minimum heap holds two while it compiles; (b) a caller that traps exits
+     answered `{:error, ...}` instead and living on; (c) the compile at the VM's own
+     priority and heap and no charge: no longer wait on a busy machine, but a caller's
+     limit of its heap no limit on its compile, and a host's count of its own reductions
+     no longer holding the compile. IEC says nothing of compile time; Logix compiles on
+     the workstation, in Studio 5000.
+  4. *Whose hundred* (decision 520 (c), a reading the record leaves, provisional). A plant
+     compiled from a file whose 40 block files each name 1,000 tags renamed: (a) as built,
+     each text counts its own hundred, so each block file's first hundred are offered a
+     near name, 4,000 in all, some 9 s; (b) one hundred for the whole compile, the block
+     files and the program's text in the order the loader reads them, some 1 s, the first
+     block file's hundred alone offered, and the program's own typo, read last, none. IEC
+     61131-3 is silent; how Studio 5000 counts its verify's errors across routines is
+     unverified.
+  5. *What a name past the hundred is told of a list* (decision 520 (c), a reading the
+     record leaves, provisional). A box counter's block `lane` of 300 members, and 4,000
+     rungs naming members it does not have: (a) as built, each of the first hundred
+     messages lists `lane`'s members, and after them the list is given once, by the first
+     message that would give it and none where one before did, some 240 KB of messages;
+     (b) no list after the hundred, the messages after it naming the member alone; (c) a
+     type's members listed once over all the messages, as a configuration lists them,
+     which would change today's message of a timer named twice with unknown members, the
+     second no longer listing `pre`, `acc`, `dn`, `tt` and `en`. IEC and Logix have no
+     bearing (unverified for Logix).
 - **RV-21 — the host's frictions** (decision 517). A fresh start that finds the store
   written by another program than the files' warns of it, the operator told that an edit
   never reached the files, its form and message a question where a reading is left;

@@ -63,6 +63,11 @@ defmodule Logex.FbType do
   declaration reads it in constant time (`Logex.Declarations.check/1`, which counts the
   instance itself too and refuses one past 65,536). It is part of the type a check
   compares, so a type handed in with another count is not the one its text compiles to.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Program, Tag}
@@ -70,7 +75,14 @@ defmodule Logex.FbType do
   @reals Logex.Declarations.reals()
 
   defmodule Member do
-    @moduledoc "One member of a function block type. See `Logex.FbType`."
+    @moduledoc """
+    One member of a function block type. See `Logex.FbType`.
+
+    Outside the host contract, this module takes logex's own data unguarded, and anything
+    else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`,
+    `Logex.Edit`, `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`,
+    `Logex.IO` and `Logex.Tag.new!/5` (decision 514).
+    """
     @enforce_keys [:name, :type, :role]
     defstruct [:name, :type, :role, write: false, initial: 0, retain: nil]
 

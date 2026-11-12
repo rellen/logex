@@ -79,6 +79,11 @@ defmodule Logex.Declarations do
   name is a global's too (`docs/organisation.md` §4.8). Logic reads and writes it. A
   function block's file refuses it (`Logex.Compiler`), and a program run alone keeps it as
   a tag of its own, at 0, which its host cannot set (`Logex.Runtime`).
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Diagnostic, FbType, Parser, Tag}
@@ -371,6 +376,78 @@ defmodule Logex.Declarations do
 
   defp near(true, best), do: " — did you mean `#{best}`?"
   defp near(false, _best), do: ""
+
+  # Decision 520 (c, RV-20): a compile's did-you-means are bounded, a program's and a
+  # configuration's alike, so a refusal of many names it cannot find costs near their
+  # count, where each was matched against every name the text declares, 50 s for 2,000 of
+  # them among a box counter's 4,000 tags. The decision's first form, the first hundred
+  # names alone, kept since its review, the one its figures favour once the compile runs
+  # in its own process: the first hundred names a text cannot find, in line order, a type
+  # word among them, are each offered the nearest of every name, as suggest/4 finds it,
+  # as before the decision; every name after them is told what a name with none near it
+  # is told, and looked for among nothing. A site that would suggest gives its diagnostic
+  # `offer/5` as its message, which holds the look-up and what the message is made of
+  # around the suggestion, and the text's last pass over its diagnostics in line order,
+  # `offered/1`, makes each message (provisional: which names are offered one is the
+  # maintainer's to say, `PLAN.md`'s RV-20 question 1). A message that ends with a list of
+  # names, a type's members or the blocks given, gives it in each of the hundred, as ever,
+  # and after them once a list, by the first message that would give it, none where one
+  # before gave it, so that the refusal's text grows with its count and not as its count
+  # times the list (`listing/3`). A host's call that names what is not there,
+  # `Logex.Runtime`'s, the runner's and `Logex.IO`'s, is no compile's refusal, and
+  # suggest/4 offers it the nearest of every name, as ever.
+  @offered 100
+
+  @doc false
+  # A did-you-mean deferred to the text's last pass: `build` makes the message from the
+  # suggestion, "" where none is offered, or a `listing/3` where it ends with a list.
+  # `names` may be a function that gives them, so a name past the hundredth costs no list
+  # of every name.
+  def offer(name, names, shown, kind, build), do: {:offer, name, names, {shown, kind}, build}
+
+  @doc false
+  # A message an offer's `build` makes that ends with a list of names, `list` making it and
+  # `key` naming it: given in full among the first hundred, and after them once.
+  def listing(message, key, list), do: {:listing, message, key, list}
+
+  @doc false
+  # Decision 520: each message `offer/5` deferred, made in the order given, line order, the
+  # first hundred offered a suggestion and the rest none, each list after them given once.
+  def offered(diagnostics) do
+    {diagnostics, _state} = Enum.map_reduce(diagnostics, {0, MapSet.new()}, &offering/2)
+    diagnostics
+  end
+
+  defp offering(
+         %Diagnostic{message: {:offer, name, names, {shown, kind}, build}} = d,
+         {count, listed}
+       )
+       when count < @offered,
+       do:
+         made(d, build.(suggest(name, candidates(names), shown, kind)), {count + 1, listed}, true)
+
+  defp offering(%Diagnostic{message: {:offer, _name, _names, _how, build}} = d, state),
+    do: made(d, build.(""), state, false)
+
+  defp offering(diagnostic, state), do: {diagnostic, state}
+
+  defp candidates(names) when is_function(names, 0), do: names.()
+  defp candidates(names), do: names
+
+  # A list among the hundred is given, and marked given; after them, only where none
+  # before gave it.
+  defp made(d, {:listing, message, key, list}, {count, listed}, true),
+    do: {%{d | message: message <> list.()}, {count, MapSet.put(listed, key)}}
+
+  defp made(d, {:listing, message, key, list}, {count, listed}, false),
+    do: listed_once(MapSet.member?(listed, key), d, {message, key, list}, {count, listed})
+
+  defp made(d, message, state, _within), do: {%{d | message: message}, state}
+
+  defp listed_once(true, d, {message, _key, _list}, state), do: {%{d | message: message}, state}
+
+  defp listed_once(false, d, {message, key, list}, {count, listed}),
+    do: {%{d | message: message <> list.()}, {count, MapSet.put(listed, key)}}
 
   @doc """
   The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
@@ -1362,16 +1439,31 @@ defmodule Logex.Declarations do
   # logex's own, the elementary ones and each of Logex.FbType.builtins/0, and the
   # did-you-mean is among them too, `tpp` told of `tp`. None of them differs from `type`
   # only in case, since a type word is read in any case, so a case-sensitive one is a
-  # block's.
+  # block's. Decision 520 (c, RV-20): the did-you-mean is offered among the first hundred
+  # names the text cannot find (offered/1), and the blocks given, which a host may give by
+  # the hundred, are listed by each of those and after them once, each looked at only
+  # where a message needs them.
   defp unknown_type(false, name, type, {_kw, types}) do
-    blocks = Enum.sort(for {block, %FbType{}} <- types, do: block)
+    blocks = fn -> Enum.sort(for {block, %FbType{}} <- types, do: block) end
+
+    unknown =
+      "unknown type `#{type}`: logex has " <> listed(Enum.map(own_type_words(), &"`#{&1}`"))
 
     {:untyped, name,
-     "unknown type `#{type}`: logex has " <>
-       listed(Enum.map(own_type_words(), &"`#{&1}`")) <>
-       given(Enum.map(blocks, &"`#{&1}`")) <>
-       suggest(type, own_type_words() ++ blocks, & &1, "type names")}
+     offer(
+       type,
+       fn -> own_type_words() ++ blocks.() end,
+       & &1,
+       "type names",
+       &given_type(&1, unknown, blocks)
+     )}
   end
+
+  defp given_type("", unknown, blocks),
+    do: listing(unknown, :blocks, fn -> given(Enum.map(blocks.(), &"`#{&1}`")) end)
+
+  defp given_type(suggestion, unknown, blocks),
+    do: unknown <> given(Enum.map(blocks.(), &"`#{&1}`")) <> suggestion
 
   # logex's own type words: the elementary types in the table's order, `bool`, then the
   # signed integers and the unsigned by width (M5-3), then the built-in function block

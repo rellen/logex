@@ -29,6 +29,11 @@ defmodule Logex.Diagnostic do
     reads, a program type's file on that type's own problems (M2-2); and on an `:edit` problem from the candidate's `file`, nil for a
     candidate compiled from text (fix F15).
   - `severity` is `:error` or `:warning`.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   @enforce_keys [:stage, :line, :message]

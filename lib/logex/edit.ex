@@ -406,6 +406,14 @@ defmodule Logex.Edit do
   Accepts `candidate` beside `running`, the program `state` is an instance of:
   `{:ok, edit, forecast}`, the forecast being the report a test taken now would give, or
   `{:error, diagnostics}` when the candidate changes a tag's type. Nothing is changed.
+
+  **Its cost** (decision 513). An accept walks what both programs write, and counts a
+  write through a tag subscript, `move x lane_t[i].pre`, as a write of every element the
+  subscript may reach, so its cost grows as such writes times the array's elements: a
+  sorter's `var lane_t ton[4096]` with 40 such rungs takes some 0.5 s to accept, and one
+  of `ton[65536]` with 10 some 4.8 s (RV-20's figures, the least of three on one
+  machine). The accept is the caller's work, so the HMI that asked for it waits, and
+  nothing else does.
   """
   def accept(running, candidate, state) do
     checked!(running)

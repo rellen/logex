@@ -753,6 +753,15 @@ defmodule Logex.ValidationTest do
       assert source_errors("var start bool\nxic stat_pb ote start") == [
                "line 2: `stat_pb` is not declared"
              ]
+
+      # Either side of the cut-off among names of one length: 0.810 and 0.783.
+      assert source_errors("var pump_on bool\nxic pxxp_on ote pump_on") == [
+               "line 2: `pxxp_on` is not declared — did you mean `pump_on`?"
+             ]
+
+      assert source_errors("var stop bool\nxic stort ote stop") == [
+               "line 2: `stort` is not declared"
+             ]
     end
 
     test "the how-to note needs a program with no declaration at all, and survives other errors" do
@@ -1590,13 +1599,15 @@ defmodule Logex.ValidationTest do
            "one back is refused" do
       assert source_errors(
                "var a bool\nlbl done xic a ote a\nxic a jmp donee\nxic a jmp Done\n" <>
-                 "lbl here xic a jmp her\nxic a jmp ender\nlbl end xic a ote a"
+                 "lbl here xic a jmp her\nxic a jmp ender\nxic a jmp endd\nlbl end xic a ote a"
              ) == [
                "line 3: `jmp donee` names no label: no rung of this program begins `lbl donee`",
                "line 4: `jmp Done` names no label: no rung of this program begins `lbl Done`",
                "line 5: `jmp her` names no label: no rung of this program begins `lbl her`",
                "line 6: `jmp ender` names no label: no rung of this program begins " <>
-                 "`lbl ender` — did you mean `end`?"
+                 "`lbl ender` — did you mean `end`?",
+               "line 7: `jmp endd` names no label: no rung of this program begins `lbl endd` " <>
+                 "— did you mean `end`?"
              ]
     end
 

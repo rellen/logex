@@ -1276,6 +1276,371 @@ defmodule LogexTest do
       end
     end
   end
+
+  # Decision 520 (b, RV-20): `Logex.compile/2`, `Logex.compile_file/1` and
+  # `Logex.compile_files/1` run `Logex.Compiler`'s own in a process of its own
+  # (`Logex.Compiler.Worker`), its allowance of binaries off its heap sized to its text,
+  # and hand the result back: the host sees what it would have seen had it compiled
+  # itself, a host's mistake raised in it, and its count of reductions holds the whole
+  # compile.
+  describe "a compile's own process (decision 520)" do
+    @describetag :tmp_dir
+
+    # A box counter's `tags` buttons and coils, and `gone` rungs naming a button renamed,
+    # each a name gone, after a comment of `comment` bytes.
+    defp counter(tags, gone, comment \\ 0) do
+      IO.iodata_to_binary([
+        "// ",
+        String.duplicate("x", comment),
+        "\n",
+        for(i <- 1..tags, do: "var lane_#{i} bool\nvar pushbutton_start_#{i} bool\n"),
+        for(i <- 1..tags, do: "xic pushbutton_start_#{i} ote lane_#{i}\n"),
+        for(i <- 1..gone//1, do: "xic pushbuton_start_#{i} ote lane_#{rem(i - 1, tags) + 1}\n")
+      ])
+    end
+
+    # `fun` run in a process of its own, P, after `setup`, which this one traces for the
+    # processes it spawns and theirs, so that the compile's process's own exit is seen:
+    # P, the process P's compile runs in, and P's answer once it has one. P waits for
+    # `:done` before it ends.
+    defp compiling(fun, setup \\ fn -> :ok end) do
+      parent = self()
+
+      p =
+        spawn(fn ->
+          receive do
+            :go ->
+              setup.()
+              send(parent, {:compiled, self(), fun.()})
+              receive(do: (:done -> :ok))
+          end
+        end)
+
+      :erlang.trace(p, true, [:procs, :set_on_spawn])
+      send(p, :go)
+      assert_receive {:trace, ^p, :spawn, worker, {Logex.Compiler.Worker, :serve, [_]}}, 10_000
+      {p, worker}
+    end
+
+    test "each of the three runs its compile in a process of its own, gone once it answers",
+         %{tmp_dir: dir} do
+      path = Path.join(dir, "seal.ld")
+      File.write!(path, @seal)
+
+      for {call, here} <- [
+            {fn -> Logex.compile(@seal, name: "seal") end,
+             fn -> Logex.Compiler.compile(@seal, name: "seal") end},
+            {fn -> Logex.compile_file(path) end, fn -> Logex.Compiler.compile_file(path) end},
+            {fn -> Logex.compile_files([path, path]) end,
+             fn -> Logex.Compiler.compile_files([path, path]) end}
+          ] do
+        {p, worker} = compiling(call)
+        assert_receive {:compiled, ^p, result}, 10_000
+        assert_receive {:trace, ^worker, :exit, :normal}, 10_000
+        assert result == here.()
+        assert Process.info(p, :links) == {:links, []}
+        send(p, :done)
+      end
+    end
+
+    test "the host sees the result it would compiling itself: the program, every diagnostic " <>
+           "in its order, every warning",
+         %{tmp_dir: dir} do
+      warned = "var_input a bool\nvar_output q bool\nvar unused bool\nxic a ote q\nxic a ote q\n"
+      block = "function_block seal\n" <> @seal
+      refused = counter(150, 150) <> "zzz\nxic a ote\n"
+
+      for {source, name} <- [{@seal, "seal"}, {warned, "w"}, {block, "seal"}, {refused, "p"}] do
+        assert Logex.compile(source, name: name) == Logex.Compiler.compile(source, name: name)
+      end
+
+      assert {:ok, %Logex.Program{warnings: [_ | _]}} = Logex.compile(warned, name: "w")
+      assert {:error, diagnostics} = Logex.compile(refused, name: "p")
+      assert length(diagnostics) == 153
+
+      paths =
+        for {file, source} <- [{"seal.ld", block}, {"w.ld", warned}, {"p.ld", refused}] do
+          path = Path.join(dir, file)
+          File.write!(path, source)
+          path
+        end
+
+      for path <- paths, do: assert(Logex.compile_file(path) == Logex.Compiler.compile_file(path))
+      assert Logex.compile_files(paths) == Logex.Compiler.compile_files(paths)
+    end
+
+    test "a host's mistake is raised in the caller, its message unchanged" do
+      held = "var_input x bool\nvar_output y bool\nvar s seal\ncal s x y"
+
+      for {call, message} <- [
+            {fn -> Logex.compile(:motor, name: "m") end,
+             "Logex.compile/2 takes source text as a binary, got: :motor"},
+            {fn -> Logex.compile(@seal, name: :m) end, "a program's name is a string, got: :m"},
+            {fn -> Logex.compile(@seal, name: "m", types: [:seal]) end,
+             "types must be function block types from Logex.compile/2, got: :seal"},
+            {fn -> Logex.compile(held, name: "m", types: :seal) end,
+             "types must be a list of function block types from Logex.compile/2, got: :seal"},
+            {fn -> Logex.compile_file(:motor) end,
+             "Logex.compile_file/1 takes a path as a binary, got: :motor"},
+            {fn -> Logex.compile_files([:motor]) end,
+             "Logex.compile_files/1 takes a list of paths as binaries, got: [:motor]"}
+          ] do
+        {p, worker} = compiling(fn -> {:raised, assert_raise(ArgumentError, message, call)} end)
+        assert_receive {:compiled, ^p, {:raised, %ArgumentError{}}}, 10_000
+        assert_receive {:trace, ^worker, :exit, :normal}, 10_000
+        send(p, :done)
+      end
+    end
+
+    # RV-20's review (finding 5): the stack read as when the caller compiled itself, the
+    # compile's frames, then the caller's from where it called, none of the compile's own
+    # process's, where it read the compile's process's alone and lost the host's call site.
+    test "a host's mistake is raised with the stack it had when the caller compiled itself" do
+      for {apart, here} <- [
+            {fn -> Logex.compile(:motor, name: "m") end,
+             fn -> Logex.Compiler.compile(:motor, name: "m") end},
+            {fn -> Logex.compile(@seal, name: "m", types: [:seal]) end,
+             fn -> Logex.Compiler.compile(@seal, name: "m", types: [:seal]) end},
+            {fn -> Logex.compile_file(:motor) end, fn -> Logex.Compiler.compile_file(:motor) end},
+            {fn -> Logex.compile_files([:motor]) end,
+             fn -> Logex.Compiler.compile_files([:motor]) end}
+          ] do
+        {error, stack} = raised_at(apart)
+        assert {^error, kept} = raised_at(here)
+        refute Enum.any?(stack, &match?({Logex.Compiler.Worker, _, _, _}, &1))
+        assert [{Logex.Compiler, _, _, _} | _] = stack
+        assert Enum.any?(stack, &match?({LogexTest, :raised_at, 1, _}, &1))
+        assert Enum.take(stack, 2) == Enum.take(kept, 2)
+      end
+    end
+
+    defp raised_at(call) do
+      call.()
+    rescue
+      error -> {error, __STACKTRACE__}
+    end
+
+    # RV-20's review (finding 3): a caller's limit of its heap holds its compile, which
+    # takes the caller's `max_heap_size`: a compile past it is killed, and takes its caller
+    # with it, though what it would give back is one diagnostic.
+    test "a caller's limit of its heap holds its compile" do
+      long = counter(2000, 0) <> "xic gone ote lane_1\n"
+      parent = self()
+
+      {pid, ref} =
+        spawn_monitor(fn ->
+          :erlang.garbage_collect()
+          Process.flag(:max_heap_size, %{size: 50_000, kill: true, error_logger: false})
+          send(parent, {:compiled, Logex.compile(long, name: "p")})
+        end)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 30_000
+      refute_received {:compiled, _result}
+
+      # Without the limit, the same compile gives one diagnostic back.
+      assert {:error, [%Logex.Diagnostic{line: 6002}]} = Logex.compile(long, name: "p")
+    end
+
+    test "a caller that traps exits is sent nothing of the compile, and keeps its links" do
+      for call <- [
+            fn -> Logex.compile(@seal, name: "seal") end,
+            fn -> Logex.compile(counter(100, 100), name: "p") end,
+            fn -> Logex.compile(:motor, name: "m") end
+          ] do
+        task =
+          Task.async(fn ->
+            Process.flag(:trap_exit, true)
+            {:links, links} = Process.info(self(), :links)
+            result = tried(call)
+            {result, links, Process.info(self(), [:links, :messages])}
+          end)
+
+        assert {_result, links, [links: links, messages: []]} = Task.await(task, 30_000)
+      end
+    end
+
+    # What `call` gives, or what it raised. Read at once after it, the caller's links and
+    # mailbox hold the compile's process one way or the other until it has unlinked
+    # itself: linked while it runs, its exit a message once it has ended.
+    defp tried(call) do
+      call.()
+    rescue
+      error -> error
+    end
+
+    test "a compile killed from outside takes its caller with it, trapping exits or not" do
+      long = counter(2000, 1000)
+
+      for trap <- [false, true], reason <- [:kill, :shutdown] do
+        {p, worker} =
+          compiling(fn -> Logex.compile(long, name: "p") end, fn ->
+            Process.flag(:trap_exit, trap)
+          end)
+
+        ref = Process.monitor(p)
+        Process.exit(worker, reason)
+        assert_receive {:DOWN, ^ref, :process, ^p, gone}, 30_000
+        assert gone == killed(reason), "trapping exits: #{trap}, #{reason}"
+      end
+    end
+
+    defp killed(:kill), do: :killed
+    defp killed(reason), do: reason
+
+    test "a caller that exits takes its compile with it, as a host's own time limit kills it" do
+      long = counter(2000, 1000)
+
+      for reason <- [:kill, :shutdown] do
+        {p, worker} = compiling(fn -> Logex.compile(long, name: "p") end)
+        ref = Process.monitor(worker)
+        Process.exit(p, reason)
+        assert_receive {:DOWN, ^ref, :process, ^worker, gone}, 30_000
+        assert gone == killed(reason)
+      end
+
+      # A host's own time limit, a task's: its owner, P, traced with every process it
+      # spawns, the task and the task's compile among them, shuts it down unanswered.
+      parent = self()
+
+      p =
+        spawn(fn ->
+          receive do
+            :go ->
+              task = Task.async(fn -> Logex.compile(long, name: "p") end)
+
+              receive do
+                :shut ->
+                  send(parent, {:shut, Task.yield(task, 0), Task.shutdown(task, :brutal_kill)})
+              end
+          end
+        end)
+
+      :erlang.trace(p, true, [:procs, :set_on_spawn])
+      send(p, :go)
+      assert_receive {:trace, _task, :spawn, worker, {Logex.Compiler.Worker, :serve, [_]}}, 10_000
+      ref = Process.monitor(worker)
+      send(p, :shut)
+      assert_receive {:shut, nil, nil}, 30_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, :killed}, 30_000
+    end
+
+    test "the compile's process takes the caller's group leader, priority and heap, and no " <>
+           "process dictionary" do
+      # One name gone, so that the compile at low priority, read while it runs, is a long
+      # text's and not the hundred suggestions' too: with a thousand gone, each of the
+      # hundred matched against all 4,000 tags since RV-20's review, it passed its 30 s on
+      # a loaded machine in two of nine full suites.
+      long = counter(2000, 1)
+      leader = spawn(fn -> receive(do: (:never -> :ok)) end)
+
+      {p, worker} =
+        compiling(fn -> Logex.compile(long, name: "p") end, fn ->
+          Process.group_leader(self(), leader)
+          Process.flag(:priority, :low)
+          Process.flag(:min_heap_size, 50_000)
+          Process.flag(:fullsweep_after, 7)
+          Process.put(:mine, :kept)
+        end)
+
+      info = Process.info(worker, [:group_leader, :priority, :garbage_collection, :dictionary])
+      assert info[:group_leader] == leader
+      assert info[:priority] == :low
+      assert info[:dictionary] == []
+      gc = info[:garbage_collection]
+      assert gc[:min_heap_size] >= 50_000
+      assert gc[:fullsweep_after] == 7
+      words = div(byte_size(long), :erlang.system_info(:wordsize))
+      {:min_bin_vheap_size, vm} = :erlang.system_info(:min_bin_vheap_size)
+      assert gc[:min_bin_vheap_size] >= vm + 2 * words
+      assert_receive {:compiled, ^p, {:error, _}}, 30_000
+      assert Process.info(p, :dictionary) == {:dictionary, [mine: :kept]}
+      send(p, :done)
+    end
+
+    # The caller's count of reductions holds the compile's, wherever it ran: what a
+    # compile through `Logex.compile/2` charges its caller against `Logex.Compiler`'s own
+    # run in the caller, each in a process of its own whose heap no collection visits, the
+    # least of three. They differ by what the handing over costs, a spawn and two messages.
+    test "the caller is charged the reductions its compile spent" do
+      source = counter(800, 0)
+
+      count = fn call ->
+        Enum.min(
+          for _ <- 1..3 do
+            parent = self()
+
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:ok, _program} = call.()
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:reductions, later - before})
+                end,
+                [:monitor, min_heap_size: 8_000_000]
+              )
+
+            assert_receive {:reductions, n}, 30_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+            n
+          end
+        )
+      end
+
+      here = count.(fn -> Logex.Compiler.compile(source, name: "p") end)
+      apart = count.(fn -> Logex.compile(source, name: "p") end)
+      assert here > 1_000_000
+      assert apart >= here and apart <= here + 1_000, "#{apart} charged, #{here} here"
+    end
+
+    # Decision 520 (RV-8's review): a program keeps its text (decision 54), so a compile
+    # held it over its work, and with its refusals' messages the binaries its process held
+    # passed the VM's allowance, 46,422 words: each young collection that moved them to the
+    # old heap was followed by a full one. Counted from the caller traced with the
+    # processes it spawns, the full collections of 100 names gone with and without a
+    # comment of 400 KB, which a compile's own allowance holds.
+    test "a long text's compile stays young, its process's allowance sized to its text",
+         %{tmp_dir: dir} do
+      long = counter(100, 100, 400 * 1024)
+      short = counter(100, 100)
+      file = Path.join(dir, "long.ld")
+      File.write!(file, long)
+      other = Path.join(dir, "short.ld")
+      File.write!(other, short)
+
+      for {long_call, short_call} <- [
+            {fn -> Logex.compile(long, name: "p") end, fn -> Logex.compile(short, name: "p") end},
+            {fn -> Logex.compile_file(file) end, fn -> Logex.compile_file(other) end},
+            {fn -> Logex.compile_files([file]) end, fn -> Logex.compile_files([other]) end}
+          ] do
+        long_full = full_collections(long_call)
+        short_full = full_collections(short_call)
+
+        assert long_full <= 2 * short_full + 10,
+               "#{long_full} full collections with the long text, #{short_full} without"
+      end
+    end
+
+    # The full collections of a process that runs `call`, and of every process it spawns,
+    # until it has its answer, each trace message taken.
+    defp full_collections(call) do
+      parent = self()
+      pid = spawn(fn -> receive(do: (:go -> send(parent, {:answered, self(), call.()}))) end)
+      :erlang.trace(pid, true, [:garbage_collection, :set_on_spawn])
+      send(pid, :go)
+      assert_receive {:answered, ^pid, _result}, 60_000
+      ref = :erlang.trace_delivered(:all)
+      full(ref, 0)
+    end
+
+    defp full(ref, count) do
+      receive do
+        {:trace_delivered, :all, ^ref} -> count
+        {:trace, _pid, :gc_major_start, _info} -> full(ref, count + 1)
+        {:trace, _pid, _event, _info} -> full(ref, count)
+      end
+    end
+  end
 end
 
 defmodule LogexTest.HeldFileServer do

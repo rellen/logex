@@ -2527,7 +2527,8 @@ defmodule Logex.ConfigurationTest do
         var_global pb bool at panel.i.0
         task fast interval 10 priority 1
         task a.b interval 10 priority 1
-        """ <> wired(for i <- 1..10, do: "m#{i}")
+        program m11 seal with fas.t
+        """ <> wired(for i <- 1..11, do: "m#{i}")
 
       assert errors(source, %{"seal" => seal}) == [
                "line 1: no task `fsat` — did you mean `fast`?",
@@ -2544,7 +2545,9 @@ defmodule Logex.ConfigurationTest do
                  "nothing in one is named so",
                "line 10: no task `Fast` — did you mean `fast`? (names are case-sensitive)",
                "line 13: `a.b` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
-                 "and a location, as in `panel.i.0`"
+                 "and a location, as in `panel.i.0`",
+               "line 14: no task `fas.t`: a task's name has no `.`, which is kept for a path " <>
+                 "and a location — did you mean `fast`?"
              ]
     end
 
@@ -6177,6 +6180,64 @@ defmodule Logex.ConfigurationTest do
 
       ratio = compile.(1000) / compile.(250)
       assert ratio < 5.03, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # Decision 520 (c, RV-20): a refusal of many globals gone costs near their count, a
+    # configuration's as a program's. Each connection naming a global the text does not
+    # declare was matched against every global for a did-you-mean, so 2,000 refused
+    # connections among 4,000 globals took 21 s; now the first hundred alone are offered
+    # the nearest name. `n` instances of a seal each connecting its start to a renamed
+    # button, compiled at 4x the instances.
+    test "compile/3's refusal of many globals gone costs near their count" do
+      {:ok, seal} =
+        Logex.compile("var_input start bool\nvar_output motor bool\nxic start ote motor",
+          name: "seal"
+        )
+
+      compile = fn n ->
+        text =
+          Enum.map_join(1..n, "\n", fn i ->
+            "var_global pushbutton_start_#{i} bool\nvar_global k#{i} bool\n" <>
+              "program m#{i} seal\nm#{i}.start pushbuton_start_#{i}\nm#{i}.motor k#{i}"
+          end)
+
+        {:error, diagnostics} = compiled(text, %{"seal" => seal})
+
+        assert Enum.map(diagnostics, &(&1.message =~ "did you mean")) ==
+                 List.duplicate(true, min(n, 100)) ++ List.duplicate(false, n - min(n, 100))
+
+        reductions(fn -> {:error, [_ | _]} = compiled(text, %{"seal" => seal}) end)
+      end
+
+      # 1.46x at the tip; a refusal linear in its globals would read 4x, and the match of
+      # every name against every global, as before decision 520, 16x. The bound lets the
+      # linear pass and turns the quadratic red.
+      ratio = compile.(400) / compile.(100)
+      assert ratio < 6.0, "4x the globals gone took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # The first hundred in line order, whatever check finds them: a task's single, which
+    # the task checks find before every connection, is offered none on the last line,
+    # after a hundred connections each offered one.
+    test "compile/3 offers the first hundred names gone in line order, whatever finds them" do
+      {:ok, seal} =
+        Logex.compile("var_input start bool\nvar_output motor bool\nxic start ote motor",
+          name: "seal"
+        )
+
+      text =
+        Enum.map_join(1..100, "\n", fn i ->
+          "var_global pushbutton_start_#{i} bool\nvar_global k#{i} bool\n" <>
+            "program m#{i} seal\nm#{i}.start pushbuton_start_#{i}\nm#{i}.motor k#{i}"
+        end) <> "\ntask t single pushbuton_start_50 priority 1"
+
+      assert {:error, diagnostics} = compiled(text, %{"seal" => seal})
+      assert length(diagnostics) == 101
+      assert List.last(diagnostics).line == 501
+      assert List.last(diagnostics).message =~ "the single of `t`: no global `pushbuton_start_50`"
+
+      assert Enum.map(diagnostics, &(&1.message =~ "did you mean")) ==
+               List.duplicate(true, 100) ++ [false]
     end
 
     # RV-8's review (b6-configuration-9): compile/3 held its source text over the whole

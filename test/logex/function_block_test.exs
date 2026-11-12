@@ -5195,7 +5195,10 @@ defmodule Logex.FunctionBlockTest.Traced do
     # through the compiler's internal entry (`Logex.Compiler.loaded/2`), and compiles a file
     # the loader read through its own compile, private since decision 432
     # (`own_compiled/2`), and what it gave. Until decision 432 the loader's compile was
-    # `loaded/2`'s, counted as `loaded`; since, the loader never calls `loaded/2`.
+    # `loaded/2`'s, counted as `loaded`; since, the loader never calls `loaded/2`. Since
+    # decision 520 (RV-20) a compile runs in a process of its own, which the trace follows
+    # (`:set_on_spawn`), so every call of the compile's is counted wherever it is made, and
+    # each trace message is taken once the trace has delivered them all.
     defp compiles(fun) do
       Code.ensure_loaded!(Logex.Compiler)
       patterns = [{Logex.Compiler, :recompiled, 4}, {Logex.Compiler, :loaded, 2}]
@@ -5207,27 +5210,31 @@ defmodule Logex.FunctionBlockTest.Traced do
         parent = self()
         ref = make_ref()
         pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
-        :erlang.trace(pid, true, [:call])
+        :erlang.trace(pid, true, [:call, :set_on_spawn])
         send(pid, :go)
         assert_receive {^ref, result}, 30_000
-        {result, traced(pid, %{recompiled: 0, loaded: 0, own_compiled: 0})}
+        delivered = :erlang.trace_delivered(:all)
+        assert_receive {:trace_delivered, :all, ^delivered}, 30_000
+        {result, traced(%{recompiled: 0, loaded: 0, own_compiled: 0})}
       after
         for pattern <- patterns, do: :erlang.trace_pattern(pattern, false, [:global])
         :erlang.trace_pattern(own, false, [:local])
       end
     end
 
-    defp traced(pid, counts) do
+    defp traced(counts) do
       receive do
-        {:trace, ^pid, :call, {Logex.Compiler, kind, _args}} ->
-          traced(pid, Map.update!(counts, kind, &(&1 + 1)))
+        {:trace, _pid, :call, {Logex.Compiler, kind, _args}} ->
+          traced(Map.update!(counts, kind, &(&1 + 1)))
       after
         0 -> counts
       end
     end
 
     # Every call `fun` makes, run in a process of its own, to a function of the modules a
-    # load runs through, with its arguments, and what it gave.
+    # load runs through, with its arguments, and what it gave. Since decision 520 (RV-20)
+    # the calls of the process the compile runs in too, which the trace follows
+    # (`:set_on_spawn`), each taken once the trace has delivered them all.
     defp load_traced(fun) do
       modules = [
         Logex,
@@ -5249,22 +5256,23 @@ defmodule Logex.FunctionBlockTest.Traced do
       parent = self()
       ref = make_ref()
       pid = spawn_link(fn -> receive(do: (:go -> send(parent, {ref, fun.()}))) end)
-      only = [{:_, [{:==, {:self}, pid}], []}]
 
       try do
-        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, only, [:local])
-        :erlang.trace(pid, true, [:call])
+        for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, true, [:local])
+        :erlang.trace(pid, true, [:call, :set_on_spawn])
         send(pid, :go)
         assert_receive {^ref, result}, 30_000
-        {result, calls(pid, [])}
+        delivered = :erlang.trace_delivered(:all)
+        assert_receive {:trace_delivered, :all, ^delivered}, 30_000
+        {result, calls([])}
       after
         for module <- modules, do: :erlang.trace_pattern({module, :_, :_}, false, [:local])
       end
     end
 
-    defp calls(pid, calls) do
+    defp calls(calls) do
       receive do
-        {:trace, ^pid, :call, call} -> calls(pid, [call | calls])
+        {:trace, _pid, :call, call} -> calls([call | calls])
       after
         0 -> Enum.reverse(calls)
       end

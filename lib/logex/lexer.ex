@@ -61,6 +61,11 @@ defmodule Logex.Lexer do
   number may be based or hold `_` (M5-7, decision 149); and a name's last part may be a
   tag's name in brackets, `status.[n]` (M5-9, decision 160). leex made the last five
   illegal characters, or `1_000` a mistyped lexeme.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_

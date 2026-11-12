@@ -48,6 +48,11 @@ defmodule Logex.Instance do
 
   Make one with `Logex.Runtime.instance/1`. One built or edited by hand is outside the
   contract of `Logex.Runtime`.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   @enforce_keys [:type, :env, :now, :first]

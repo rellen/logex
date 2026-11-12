@@ -2260,10 +2260,116 @@ add e i y",
   end
 
   describe "the public surface (B5)" do
+    # Decision 514 (RV-20): the host contract is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+    # `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+    # `Logex.Tag.new!/5`; every other documented module of lib/ says in one sentence, the
+    # same everywhere, that it takes logex's own data unguarded and names the contract.
+    # Read from every module the application holds, its moduledoc as compiled. Inside the
+    # contract too, provisional readings each put to the maintainer (`PLAN.md`'s RV-20):
+    # the configuration's elements, `Logex.Configuration`'s own data which its `new!/1`
+    # checks; `Logex.IO.Point`, what `Logex.IO`'s behaviour hands an adapter; and the
+    # host's tools README's examples call, each of which refuses a host's mistake with a
+    # pinned message, `Logex.IO.Sim` and the runner's clocks.
+    @contract [
+      Logex,
+      Logex.Runtime,
+      Logex.Edit,
+      Logex.Configuration,
+      Logex.Configuration.Edit,
+      Logex.Runner,
+      Logex.IO,
+      Logex.Tag
+    ]
+
+    @provisional [
+      Logex.Configuration.Task,
+      Logex.Configuration.Global,
+      Logex.Configuration.Instance,
+      Logex.Configuration.Connection,
+      Logex.IO.Point,
+      Logex.IO.Sim,
+      Logex.Runner.Clock,
+      Logex.Runner.Clock.Manual,
+      Logex.Runner.Clock.Monotonic
+    ]
+
+    @outside "Outside the host contract, this module takes logex's own data unguarded, and " <>
+               "anything else may raise as Elixir does: a host's way in is `Logex`, " <>
+               "`Logex.Runtime`, `Logex.Edit`, `Logex.Configuration` and " <>
+               "`Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and " <>
+               "`Logex.Tag.new!/5` (decision 514)."
+
+    # Decisions 513, 518 and 520 (RV-20) are documents: the cost an accept pays over a
+    # large array, in each of the three accepts' docs; decision 500's two readings no
+    # longer provisional, in the runner's moduledoc; and a compile's own process and the
+    # cost a compile's refusal leaves, in `Logex`'s and the configuration's.
+    test "the docs decisions 513, 518 and 520 owe say what they decided" do
+      doc = fn module, name, arity ->
+        {:docs_v1, _, :elixir, _, _, _, docs} = Code.fetch_docs(module)
+        [text] = for {{:function, ^name, ^arity}, _, _, %{"en" => text}, _} <- docs, do: text
+        String.replace(text, ~r/\s+/, " ")
+      end
+
+      moduledoc = fn module ->
+        {:docs_v1, _, :elixir, _, %{"en" => text}, _, _} = Code.fetch_docs(module)
+        String.replace(text, ~r/\s+/, " ")
+      end
+
+      for {module, arity} <- [{Logex.Edit, 3}, {Logex.Configuration.Edit, 3}, {Logex.Runner, 2}] do
+        assert doc.(module, :accept, arity) =~ "**Its cost** (decision 513)"
+        assert doc.(module, :accept, arity) =~ "`var lane_t ton[4096]` with 40 such rungs"
+      end
+
+      assert moduledoc.(Logex.Runner) =~
+               "and a trip's notice meanwhile changes nothing, the runner tripped already " <>
+                 "(decision 518)"
+
+      refute moduledoc.(Logex.Runner) =~ "The readings no decision has taken yet"
+      assert moduledoc.(Logex) =~ "**A compile's own process** (decision 520)"
+      assert doc.(Logex, :compile, 2) =~ "**The cost that remains** (decision 520)"
+      assert doc.(Logex.Configuration, :compile, 3) =~ "**The cost that remains** (decision 520)"
+    end
+
+    test "every documented module outside the host contract says so, and none inside it" do
+      documented =
+        for module <- Application.spec(:logex, :modules),
+            {:docs_v1, _, :elixir, _, %{"en" => doc}, _, _} <- [Code.fetch_docs(module)],
+            do: {module, String.replace(doc, ~r/\s+/, " ")}
+
+      inside = @contract ++ @provisional
+
+      assert Enum.sort(for {module, _doc} <- documented, module not in inside, do: module) ==
+               Enum.sort([
+                 Logex.Compiler,
+                 Logex.Configuration.Text,
+                 Logex.Declarations,
+                 Logex.Diagnostic,
+                 Logex.Fault,
+                 Logex.FbType,
+                 Logex.FbType.Member,
+                 Logex.Instance,
+                 Logex.Lexer,
+                 Logex.Parser,
+                 Logex.Printer,
+                 Logex.Program,
+                 Logex.Scan,
+                 Logex.Walk,
+                 Logex.Warnings
+               ])
+
+      for {module, doc} <- documented do
+        assert String.contains?(doc, @outside) == module not in inside,
+               "#{inspect(module)}'s moduledoc and the host contract (decision 514)"
+      end
+
+      assert Enum.all?(inside, &(&1 in Enum.map(documented, fn {module, _doc} -> module end)))
+    end
+
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       # M2-2: compile_files/1, the loader's one memo over several files, which a
       # configuration's loader goes through. Since decision 432 each of the three is
-      # Logex.Compiler's, delegated.
+      # Logex.Compiler's, and since decision 520 (RV-20) run in a process of its own by
+      # Logex.Compiler.Worker, to which Logex delegates.
       assert Enum.sort(Logex.__info__(:functions)) ==
                [compile: 2, compile_file: 1, compile_files: 1]
 
@@ -2357,8 +2463,9 @@ add e i y",
       # loaded/2, internal (no doc), instructionize/3 for the loader's own types alone;
       # since decision 432 instructionize/3 exactly, each type checked, the loader never
       # calling it. Decision 432: compile/2, compile_file/1 and compile_files/1, internal
-      # (no doc), Logex's three, delegated, so that the loader is in the module that
-      # compiles and its own compile private code no term a host hands in reaches.
+      # (no doc), Logex's three, so that the loader is in the module that compiles and its
+      # own compile private code no term a host hands in reaches; since decision 520 each
+      # run in a process of its own (Logex.Compiler.Worker).
       assert Enum.sort(Logex.Compiler.__info__(:functions)) == [
                compile: 2,
                compile_file: 1,

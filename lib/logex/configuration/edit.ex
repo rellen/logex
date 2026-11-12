@@ -354,6 +354,13 @@ defmodule Logex.Configuration.Edit do
   the resource's last cycle would give (decision 139), or
   `{:error, diagnostics}` when the candidate changes what may change only with a restart.
   Nothing is changed.
+
+  **Its cost** (decision 513). An accept plans each program type once, walking what both
+  versions write, and counts a write through a tag subscript, `move x lane_t[i].pre`, as
+  a write of every element the subscript may reach, so its cost grows as such writes
+  times the array's elements: a sorter's `var lane_t ton[4096]` with 40 such rungs takes
+  some 0.5 s to accept, and one of `ton[65536]` with 10 some 4.1 s (RV-20's figures, the
+  least of three on one machine). The accept is the caller's work, the HMI's that asked.
   """
   def accept(runtime, candidate, elapsed_ms \\ 0) do
     %Runtime{config: original} = runtime = runtime!(runtime)
