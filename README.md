@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is forty modules in `lib/`.
+written by hand, and the whole thing is forty-four modules in `lib/`.
 
 **Stage: early, and honest about it.** Forty instructions, among them four timers, two
 that run IEC's three counters and their typed variants, seven of arithmetic and `sqrt`,
@@ -337,113 +337,28 @@ scan ever sees one (decisions 171 and 173). A tag the state leaves out reads ope
 ### What has landed
 
 Every milestone decided has landed, retained values the last (the first bullet below,
-the milestones newest first). What waits to land is the rest of the maintainer's answers to the
-review of the whole codebase after Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)),
-decisions 347–360 in [`docs/organisation.md`](docs/organisation.md) §7, which `PLAN.md`'s
-item RV-8 closes ("The review after Milestone 6"), RV-7's and RV-6's having landed, RV-6's the
-runner's own long work cheaper and bounded, a scan of a large array of instances
-allocating words linear in its elements, an edit's switch and the period's take-out cheaper, the size of plant
-the defaults carry measured and stated below, and a trip met in that work naming it
-(decision 352). Its answers to the
-questions RV-11 left, decisions 437–447, have landed with RV-16: the rounds running on
-while a force's write of the forces file is out, the force in effect from the first
-round after it lands (decision 437), every device a restart opens or reads again
-limited by its own `open:` (decision 439), `status/1`'s `forces_unread`,
-`forces_unknown` and the store's `unknown` always there, nil where nothing stands
-(decision 440), a round whose clock reads wrong stopping there, writing nothing after the
-reading (decision 441), a slot of the share that finds nothing waiting kept open until a
-request takes it (decision 442) and a restart while `forces_unread` stands keeping the
-forces the runner holds (decision 445), the other five as built (decisions 438, 443,
-444, 446 and 447). Three of its answers to the questions RV-13 and RV-7 left, decisions
-448–464, have landed with RV-6: every write of the store making its text within the
-write limit, a copy the same as the last one skipped and a late runner letting its
-devices run before judging them (decisions 455, 456 and 461); the rest with RV-17: the loaders reading and looking at their files
-raw, off the VM's file server (decision 464), a hold in the simulated device on its next
-reread (decision 462) and a ceiling a stage, the compile, a scan, a cycle and a round,
-whole and a rung, twice a figure recorded with it (decision 459), the others as built. Its
-answers to the questions RV-16, RV-17 and RV-6 left, decisions 465–488, have landed with
-RV-18: forces waiting behind a write joined into one (decision 465), `status/1`'s
-`forcing` (decision 466), a restart waiting for a force's write (decision 468), an
-orderly stop while the forces file is named unread writing the runner's own set
-(decision 472), a host's mistake in a forcing request raised at once (decision 473), a
-round cut once its writes have begun published with the outputs the devices took
-(decision 474), a runner's claim on its files held until its last write of them has
-ended (decision 475), a let-go of a hold no reread came to raised (decision 477), a
-relative path compiled where the working directory is gone told as a diagnostic
-(decision 478), the loader tests of many files run alone (decision 480), a hung device
-tripping the line within four idle watchdogs and a poll period however late the runner
-(decision 484), a step past the idle watchdog giving the devices a turn (decision 486)
-and the period's hand-off sending the retained values alone (decision 488), the others
-as built. Its answers to the questions RV-18 left, decisions 489–502, have landed with
-RV-19: a trip the runner's own lateness causes naming the lateness, `{:watchdog, {:late,
-ms}}` (decision 490), a stop telling both its writes' failures and a shutdown publishing
-the forces file's (decision 493), a restart's wait for a force's write keeping the runner
-answering (decision 500) and `forces_unknown` kept while a cut write may land (decision
-502), the others as built. Its answers to the questions RV-19 left, decisions 503–512,
-take each as built. Its answers to the questions RV-5 left, decisions
-409–419, have landed with
-RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
-ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied
-(decision 412), the shutdown's write making the store's text within the write limit, which
-the child spec's deadline counts (decision 414), a cold start over a store a fresh start
-would refuse copying it first (decision 417) and each copy of the store a name of its own,
-`<store>.dropped.1` and on, none replaced (decision 418), the other six as built
-(decisions 409, 411, 413, 415, 416 and 419); its answers to the four RV-15 left, decisions
-433–436, are each as built, their marks made with RV-13. Its answers to the questions RV-4
-left, decisions 390–401, have landed with RV-11: every file write and read the runner
-makes limited by a `write_limit:` of its own, 5 s unless set, apart from the heartbeat
-(decision 400), a device's opening by an `open:` of its own (decision 398), a forces file
-a start or a restart cannot read carried on and named in `status/1` (decision 390), a
-write past its limit named unknown until a later one lands or fails (decision 391), a
-clock gone wrong a trip (decision 394), a host's requests held to their share against a
-due periodic round (decision 396) and a misread address shown as the configuration writes
-it, `panel.i.7` (decision 399), the other five as built (decisions 392, 393, 395, 397 and
-401). Its answers to the questions RV-10 and RV-12 left, decisions 420–432, have landed
-with RV-14 and RV-15: each of RV-10's nine as built (decisions 420–428), an instance
-counting itself and a host's closure refused as built (decisions 429 and 430), a bit of a
-member of an element written through a tag subscript or numbered by a tag warned as a word
-array's bit is where the pair may meet (decision 431), and the loader's own compile
-private code that nothing a host hands in reaches, no token at all (decision 432). Its
-answers to the questions RV-9 left, decisions 402–408, have landed with RV-12: a
-declaration counting every tag, element and instance it holds, at every depth (decision
-403), the loader's trust in its own types one no host can borrow, so a type edited by hand
-is checked whether a host hands it to `Logex.compile/2` or to the compiler's internal
-entry (decision 404), which since RV-15 is no token at all but the loader's own compile,
-private code that no closure or term a host hands in reaches (decision 432), and two bits
-whose literal numbers differ, `w[i].3` and `w[j].4`, or a one-shot's storage bit beside a
-write whose literal places differ from it, no warning (decision 405), the other four as
-built (decisions 402, 406, 407 and 408). Its answers
-to the questions RV-3 left, decisions 374–389, have landed with RV-10: a retained `tof`
-held on put at rest by the restart or the start itself, wherever it sits (decision 385), a
-warm restart's timers counted from the resource's `now` (decision 382), a preset no
-instruction gives kept from the store (decision 378), a done bit a frozen timer's catch-up
-sets forecast (decision 381), a point rewired between, or newly wired from, var_outputs no
-rung writes held (decisions 386 and 387), an edit that would hold a var_output a rung
-reads refused (decision 388), and since RV-10's review one that would hold a var_output
-wired to another point too, a stored sample of a task the configuration drops dropped
-and reported (decision 389), every stored sample a start lays on no task among them since
-the review, and an element named with a leading zero, `temps[03]`, read as `temps[3]`
-everywhere a host names one (decision 384). The maintainer's answers to the
-questions RV-1 and RV-2 left, decisions 361–373, have landed with RV-9: a rung that is a label alone
-taken where a jump names it (decision 367), a declaration's elements counted through
-every array of instances it holds (decision 370), the loader trusting the types it
-compiled itself (decision 371), two writes whose literal subscripts differ no warning
-(decision 372), and `wired.logex` and the one fragment of "Running a plant on the clock"
-shown and run (decisions 363 and 365). RV-3's three have landed, a
-held output held through a var_output no rung writes (decision 347), a retained `tof`
-at rest after a restart (decisions 349 and 385) and a trigger's rise a trip cut off taken in the
-next cycle (decision 350). RV-4's, the runner's, have landed too: each device's write
-given its own time (decision 348), every file write the runner makes limited (decision
-353), a restart judged as it arrives (decision 354) and two runners of one VM refused one
-store or forces file (decision 356), each in "Running a plant on the clock" and "The
-store on disk", below. RV-5's, the store's, have landed: a store's last line its count of
-lines, `logex retain 2`, so that a store cut short is refused, never read short (decision
-355), and a copy of the store a fresh start drops from (decision 360), numbered since
-decision 418, `<store>.dropped.1`, each in "The store on disk". The one of decisions
-347–360 that changes the source language
-has landed with RV-2: a rung that writes nothing and jumps nowhere, such as the first half
-of a rung wrapped onto two lines, `xic start xio stop` above `ote motor`, is refused at
-its line, told that a newline ends a rung (decision 351).
+the milestones newest first), and so has the review of the whole codebase that followed
+Milestone 6 ([`docs/review-2026-11-01.md`](docs/review-2026-11-01.md)). Twenty-seven
+reviewers attacked the code at `d422608` by running it, each finding tried and its
+refutation tried in turn: of 203 findings 13 were refuted and 190 survived, 12 high, 35
+medium and 143 low, about 60 defects, gathered where code read again the names the lexer
+had cut, at features combined late, in the runner's own work against a real-time deadline
+and in a configuration edit's held outputs, while the evaluator, the front end's round
+trip, the lone edit and the runner's scheduling held. Nineteen items, RV-1 to RV-19,
+built the maintainer's answers, decisions 347–512 in
+[`docs/organisation.md`](docs/organisation.md) §7: every source text compiles or is told
+why, and a rung that writes nothing and jumps nowhere, such as the first half of a rung
+wrapped onto two lines, is refused at its line (decision 351); a held output holds; a
+retained `tof` held on at the outage comes to rest; each device's write has a limit of its
+own, every file write and read the runner makes is limited by `write_limit:`, and a hung
+device trips the line however late the runner, its own lateness named as such; a store cut
+short is refused, a fresh start that drops anything keeps a numbered copy of the store, and
+two runners of one VM are refused one file; the runner's own long work is cheaper, bounded
+and named when it trips; and the suite's cost pins are bounds measured within the run. Its
+close, `PLAN.md`'s item RV-8 ("The review after Milestone 6"), accounts for every finding:
+177 closed, each by a fix a test holds or a document made true, 20 kept by a decision or a
+recorded reason, the 13 refuted among them, and 6 put to the maintainer as questions (the
+review's "The close").
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -5459,7 +5374,7 @@ the clock", is a fragment, which it only parses (`test/logex/readme_test.exs`).
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands, conventions and a line for each module and test file, for anyone (or anything) editing the code
-- `docs/review-2026-11-01.md` — the adversarial review of the whole codebase after Milestone 6, every finding with its repro
+- `docs/review-2026-11-01.md` — the adversarial review of the whole codebase after Milestone 6, every finding with its repro, and its close, what became of each
 - [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4, and its data types, §4.12, the integer widths, bit strings, reals and arrays, with Milestone 5, and retained values and a true warm restart, §4.13, with Milestone 6)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
