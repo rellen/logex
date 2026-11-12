@@ -14758,6 +14758,143 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(RV-8, 2026-11-12: the marks RV-19's review left on it, in `restart/2`'s doc, the
      release's comment and README's restart passage, are this decision's number.)*
 
+
+513. **An edit's accept over a large array (the review after Milestone 6),** RV-8's
+     question 1 (a4-warnings-walk-5): a sorter with `var lane_t ton[4096]` and 40 rungs
+     like `xic a move x lane_t[i].pre` takes some 0.55 s to accept an online edit, and one
+     of `ton[65536]` with 10 such rungs 4.3 s, the walk counting each write through a tag
+     subscript as a write of every element; the runner goes on meanwhile, the accept being
+     the host's in its own process (decision 141), and the HMI waits.
+
+     **Taken: as built, the cost documented (a)** (the maintainer, 2026-11-12): the plant
+     never waits, the engineer at most a few seconds on an array of tens of thousands; the
+     docs of `Logex.Edit.accept/3` and `Logex.Runner.accept/2` give these figures. IEC
+     61131-3 has no online edit, and how long Logix takes to check one the record does not
+     say. RV-20 writes the docs.
+
+514. **Where the host contract ends (the review after Milestone 6),** RV-8's question 2
+     (c4-api-fuzz-11): `Logex.Program.initial_env(:x)` or `Logex.Walk.writes(nil)` raises
+     `FunctionClauseError`, and `Logex.Diagnostic.format/1` of a diagnostic whose message
+     is a charlist a raw `ArgumentError`, where the convention says a host's mistake is a
+     pinned `ArgumentError`: 118 cases in 40 documented functions that take what logex
+     makes.
+
+     **Taken: the modules named as the way in (a)** (the maintainer, 2026-11-12): the host
+     contract is the modules README and CLAUDE.md name as the way in, `Logex`,
+     `Logex.Runtime`, `Logex.Edit`, `Logex.Configuration` and `Logex.Configuration.Edit`,
+     `Logex.Runner`, `Logex.IO` and `Logex.Tag.new!/5`; each other documented module's
+     moduledoc says it takes logex's own data unguarded, so a developer who hands one
+     something else meets a crash its doc warned of. IEC 61131-3 says nothing of a host's
+     API, and the record cites no Logix SDK on it. RV-20 writes the moduledocs and puts
+     to the maintainer any module a README example calls beyond these.
+
+515. **The project's own findings (the review after Milestone 6),** RV-8's question 3
+     (b7-premortem-project-4, -6, -9 and -10, c6-pmi-10): a red CI run on a box counter's
+     change prints `Result: 2938/2939 passed` and names no test; the version is still
+     0.1.0, with no changelog or tag across changes that alter a running program's
+     outputs; there are no typespecs or static analysis; `runner.ex` is some 5,700 lines
+     and `api_contract_test.exs` some 21,700; and one agent writes both the code and the
+     record.
+
+     **Taken: four built, the fifth left (e), (b), (c) and (d)** (the maintainer,
+     2026-11-12): (e) CI names a red run's failed tests, its test step `scripts/gate.sh`
+     or `scripts/failed.exs` run after a red `mix test`; (b) a release step before any
+     publish, a version, a changelog drawn from §7's decisions and a tag; (c) typespecs on
+     the host contract (decision 514) and Dialyzer in CI, OTP's own `dialyzer`, no
+     dependency added; (d) the runner and the contract test file split by concern, no
+     behaviour changed. One agent writing the code and the record (-6) is left as it is,
+     the record saying so. IEC 61131-3 covers none of these; Logix firmware ships with
+     versioned release notes. RV-22 builds (e) and (b), putting the first version's number
+     and its tag to the maintainer before any tag is pushed; RV-24 builds (c); RV-25
+     builds (d), last and alone, since it touches every file the others do.
+
+516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
+     (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the
+     tests drive, so no real conveyor, fan or lamp can run on logex.
+
+     **Taken: left, the record saying so (a)** (the maintainer, 2026-11-12): logex stays
+     a runtime driven by the simulator, as README's "What logex is not" says; no milestone
+     is planned for an adapter now. IEC 61131-3 leaves I/O to the implementer, and Logix
+     uses its own I/O modules.
+
+517. **The host's frictions the PMI met (the review after Milestone 6),** RV-8's question 4
+     (the PMI): a test of a conveyor presses its start button with `Sim.set(panel, [0],
+     1)` and reads the motor as `%{[0] => 1}`, where the configuration writes `panel.i.0`
+     and `drive.q.0`; an assembled edit lives in memory and the store, so a fresh start
+     from the files on disk runs the old program again with the edited program's retained
+     values laid over it; README's examples are not files a host can copy; and README
+     shows no adapter.
+
+     **Taken: all four built, (c), (e), (b) and (d)** (the maintainer, 2026-11-12): (c) a
+     fresh start that finds the store written by another program than the files' warns of
+     it, so the operator learns the edit never reached the files (the store names its
+     configuration already); (e) `Logex.IO.Sim`'s `set/3`, `outputs/1` and `writes/1` take
+     and give the configuration's text, `"panel.i.0"`, once a runner has opened the
+     device, the list kept for a sim no runner has opened; (b) README's examples shipped
+     as files under `examples/`, still run by `readme_test.exs`; (d) an adapter example in
+     README beside `Logex.IO.Sim`, what a real device's code must do. IEC 61131-3 writes
+     an address one way everywhere, `%IX0.0`, and Logix `Local:1:I.Data.0` in the program
+     and its tools alike. RV-21 builds them, keeping "What logex is not" true.
+
+518. **Decision 500's readings no question asked (the review after Milestone 6),** RV-8's
+     question 5: while a restart waits for a force's write on a slow disk, an engineer's
+     edit step is served at once and the restart made on the resource it leaves; and a
+     trip's notice changes nothing, the line tripped already.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-12): an edit's step is served while
+     a line is tripped in any case, so the restart runs what the resource holds, as it
+     would had the operator pressed Restart a moment later. IEC 61131-3 is silent, and the
+     record has no Logix source. RV-20 makes the marks the decision's number.
+
+519. **The marks no decision of the review settles (the review after Milestone 6),** RV-8's
+     question 6: the loader's memo takes a directory reached through a link as another
+     path, so a block reached both ways compiles twice and its warnings come twice;
+     `Logex.IO.Sim` keeps its newest 100,000 writes; and the marks of Milestones 5 and 6
+     stand, some 85 in `lib/`, the tests and README, 7 in `docs/naming.md`, a
+     `word_to_byte` of a fan's status word keeping its low byte "for every value" among
+     them, and some 30 in `docs/organisation.md`'s design.
+
+     **Taken: traced first (b)** (the maintainer, 2026-11-12): a pass traces each mark
+     against decisions 144–346, as RV-1 did for 343–345, makes the settled ones the
+     decision's number, and puts the rest to the maintainer, grouped by what an operator
+     sees. IEC and Logix have no bearing on the record's own marks. RV-23 is the pass.
+
+520. **A long program's refusals (the review after Milestone 6),** RV-8's question 8
+     (RV-8's review): a box counter's program of some 280 KB in which a renamed tag leaves
+     2,000 rungs naming a tag that is gone takes 52 s to refuse, each unknown name matched
+     against 4,000 for a did-you-mean, where 1,000 such rungs take 5.9 s; the program
+     keeps its text (decision 54), so `Logex.compile/2` holds it over its work, and with
+     its refusals' messages it outgrows what a process may hold off its heap before its
+     garbage collections turn full ones, 7,096 of some 54,000.
+
+     **Taken: both fixes, the cost left documented (c), (b) and (a)** (the maintainer,
+     2026-11-12): (c) the did-you-mean bounded, a program's and a configuration's alike,
+     so a refusal of many costs near its count; where its two forms, the first hundred
+     unknown names alone or candidates of a like length, differ in what an engineer sees,
+     RV-20 measures both and keeps the one its figures favour, marked provisional and put
+     to the maintainer; (b) the compile run in a process of its own, its allowance sized
+     to its text, its result handed back, the host seeing the same result and a host's
+     mistake still raised in the caller with its pinned message; (a) `Logex.compile/2`'s
+     doc giving the cost that remains. IEC 61131-3 says nothing of compile time; Logix
+     checks a project on the workstation, in Studio 5000. RV-20 builds them.
+
+521. **When the review after Milestone 6 is done (the review after Milestone 6),** RV-8's
+     question 7: RV-8 wrote the done sentence, the record holding none, "done when each of
+     its 203 findings is closed by a fix a test holds or a document made true, or kept by
+     a decision or a recorded reason, and each item of the PMI and of both pre-mortems
+     likewise; when the fuzzers, walks and oracles the report credits hold at the tip at
+     the sizes they ran; when README's 'What logex is not' is true of the code and every
+     README example runs as shown; when no mark a decision of 347–512 settles still says
+     provisional; and when every finding and reading no decision settles has been put to
+     the maintainer and answered."
+
+     **Taken: done once the answers are recorded (a)** (the maintainer, 2026-11-12): the
+     sentence as written, met with decisions 513–520 recorded, the eight rows left open
+     each settled by one of them, so 177 closed and 26 settled by a decision or a recorded
+     reason; what the answers build runs as items of their own, RV-20 to RV-25, each
+     built, reviewed and fixed as every item is. The review after Milestone 6 is done on
+     2026-11-12. IEC and Logix have no bearing.
+
 ---
 
 ## 8. Sources, and what is unverified

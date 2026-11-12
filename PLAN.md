@@ -28,7 +28,8 @@ to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
 and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)* *(Since
 2026-11-12, RV-8: the paragraph is a short account of the review, what it found, what it
 changed and what its close puts to the maintainer, RV-8's questions, eight since RV-8's
-review.)*
+review; and since their answers the same day, decisions 513–521, it says the review is
+done, decision 521, and names what waits, RV-20 to RV-25.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14292,7 +14293,9 @@ and CI checked; each fix with a test that fails when it is reverted.
   RV-8's review found and no decision settles, not yet answered. So the review is not
   done until the answers come.
 
-  *Questions for the maintainer*, by what an operator or a maintainer sees:
+  *Questions for the maintainer*, by what an operator or a maintainer sees *(all eight
+  answered on 2026-11-12, decisions 513–521, the review done once they were recorded,
+  decision 521, and what they build items RV-20 to RV-25)*:
   1. *An edit's accept over a large array* (a4-warnings-walk-5). A sorter with `var lane_t
      ton[4096]` and 40 rungs like `xic a move x lane_t[i].pre` takes some 0.55 s to accept
      an online edit, and one of `ton[65536]` with 10 such rungs 4.3 s, the walk counting
@@ -18751,6 +18754,74 @@ and CI checked; each fix with a test that fails when it is reverted.
       module's connection, once opened again, times its RPI from that opening, so (a) is
       the closer (unverified: read from the RPI's definition, not checked against a
       manual); IEC 61131-3 leaves a controller's I/O faults to the implementer.
+
+**The review done, 2026-11-12** (decision 521). The maintainer answered RV-8's eight
+questions, decisions 513–521: an accept's cost over a large array documented (513); the
+host contract the modules named as the way in, every other module's doc saying it takes
+logex's own data unguarded (514); CI naming a failed test, a release step, typespecs with
+Dialyzer and the runner split by concern, one agent writing code and record left as it is
+(515); no real adapter for now (516); the host's four frictions built (517); decision
+500's two readings as built (518); the marks of Milestones 5 and 6 traced before any is
+taken (519); a long program's refusals bounded and its compile run in a process of its
+own (520); and the review done once these were recorded (521). Its eight open rows are
+each settled by one of 513–516, so 177 rows are closed and 26 settled by a decision or a
+recorded reason. What the answers build runs as the items below, each built, reviewed
+adversarially, fixed, landed and CI checked, as every item is: RV-20 and RV-21 first, side
+by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
+
+- **RV-20 — the compile's refusals and the host contract** (decisions 513, 514, 518 and
+  520). A refusal of many unknown names costing near its count, a program's and a
+  configuration's alike, the did-you-mean bounded: its two forms, the first hundred
+  unknown names alone and candidates of a like length, measured at 1,000, 2,000 and 4,000
+  unknown names, and where they differ in what an engineer sees the one the figures favour
+  kept, marked provisional and put to the maintainer. `Logex.compile/2`'s work, and the
+  loader's where it holds a text the same way, run in a process of its own with an
+  allowance sized to its text, its result handed back, the host seeing the same result
+  and a host's mistake raised in the caller with its pinned message; a test that counts
+  the full collections of a long text, as `configuration_test.exs`'s does for a
+  configuration, and `Logex.compile/2`'s doc giving the cost that remains. The docs of
+  `Logex.Edit.accept/3` and `Logex.Runner.accept/2` giving an accept's cost over a large
+  array (513). Each documented module outside the host contract saying in its moduledoc
+  that it takes logex's own data unguarded, and README naming the contract's modules,
+  any module a README example calls beyond them put to the maintainer (514). And decision
+  500's two readings' marks, an edit's step and a trip's notice while a restart waits,
+  made 518's number. It runs first, beside RV-21.
+- **RV-21 — the host's frictions** (decision 517). A fresh start that finds the store
+  written by another program than the files' warns of it, the operator told that an edit
+  never reached the files, its form and message a question where a reading is left;
+  `Logex.IO.Sim`'s `set/3`, `outputs/1` and `writes/1` taking and giving the
+  configuration's text, `"panel.i.0"`, once a runner has opened the device, the list kept
+  for a sim no runner has opened; README's examples shipped as files under `examples/`,
+  `readme_test.exs` running them there and holding README's blocks to them; and an
+  adapter example in README beside `Logex.IO.Sim`, what a real device's code must do
+  under `Logex.IO`'s behaviour, run or parsed by `readme_test.exs` as every block is;
+  "What logex is not" kept true. It runs first, beside RV-20.
+- **RV-22 — CI and the release step** (decision 515, (e) and (b)). CI's test step naming
+  each failed test of a red run, `scripts/gate.sh`, or `scripts/failed.exs` after a red
+  `mix test`, shown on a run made red on a branch of its own; and a release step before
+  any publish, a version, a changelog drawn from §7's decisions and a tag, its procedure
+  written in `CONTRIBUTING.md` and checked as the gate is; the first version's number, and
+  whether its tag is pushed, put to the maintainer before any tag is. `mix.exs`'s Elixir
+  bound is not touched. It runs after RV-20 and RV-21, beside RV-23.
+- **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
+  `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
+  `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of
+  §7, as RV-1 did for 343–345; a mark a decision settles made the decision's number, with
+  a dated note on it; the rest, the loader memo's linked directory and `Logex.IO.Sim`'s
+  100,000 writes among them, put to the maintainer grouped by what an operator sees. It
+  builds no rule. It runs after RV-20 and RV-21, whose marks it traces too, beside RV-22.
+- **RV-24 — typespecs and Dialyzer** (decision 515, (c)). Typespecs on the host
+  contract's functions, decision 514's modules, and Dialyzer, OTP's own `dialyzer` over
+  the compiled modules with a table of the toolchain's applications, no dependency added,
+  run in CI, each warning it gives fixed with a test where it is a defect or recorded
+  with its reason. It runs after RV-23.
+- **RV-25 — the runner and the contract test file split by concern** (decision 515,
+  (d)). `Logex.Runner`'s 5,700 lines into internal modules by concern, the public module
+  and every message unchanged, each new module a line in CLAUDE.md; and
+  `api_contract_test.exs`'s 21,700 into files by walk, each walk's reach still asserted;
+  no behaviour changed, the suite's count the same, and the mutation tables of the
+  runner's recent items still red. It runs last and alone, since it touches every file the
+  others do.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
