@@ -14771,6 +14771,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      docs of `Logex.Edit.accept/3` and `Logex.Runner.accept/2` give these figures. IEC
      61131-3 has no online edit, and how long Logix takes to check one the record does not
      say. RV-20 writes the docs.
+     *(Landed with RV-20, 2026-11-12, `a78226f`: the docs of `Logex.Edit.accept/3`,
+     `Logex.Configuration.Edit.accept/3`, which pays the same walk, and
+     `Logex.Runner.accept/2` give the cost, measured again at the tip, the least of three:
+     `ton[4096]` with 40 writes through a tag subscript 513, 489 and 526 ms, `ton[65536]`
+     with 10 4.80, 4.06 and 4.18 s; `runtime_test.exs` reads the three.)*
 
 514. **Where the host contract ends (the review after Milestone 6),** RV-8's question 2
      (c4-api-fuzz-11): `Logex.Program.initial_env(:x)` or `Logex.Walk.writes(nil)` raises
@@ -14787,6 +14792,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      something else meets a crash its doc warned of. IEC 61131-3 says nothing of a host's
      API, and the record cites no Logix SDK on it. RV-20 writes the moduledocs and puts
      to the maintainer any module a README example calls beyond these.
+     *(Landed with RV-20, 2026-11-12, `10eda92`: the fifteen documented modules outside the
+     contract end their moduledoc with one sentence, the same in each, and
+     `runtime_test.exs` reads every module the application holds and holds each to it, or
+     to none inside the contract; README names the contract where it introduces the API.
+     Provisional, `PLAN.md`'s RV-20 question 2: inside it, the configuration's elements,
+     `Logex.IO.Point`, and the host's tools README's examples call, `Logex.IO.Sim` and the
+     runner's clocks; outside it, `Logex.Diagnostic`, `Logex.FbType` and `Logex.Scan`,
+     which they call too.)*
 
 515. **The project's own findings (the review after Milestone 6),** RV-8's question 3
      (b7-premortem-project-4, -6, -9 and -10, c6-pmi-10): a red CI run on a box counter's
@@ -14845,6 +14858,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      a line is tripped in any case, so the restart runs what the resource holds, as it
      would had the operator pressed Restart a moment later. IEC 61131-3 is silent, and the
      record has no Logix source. RV-20 makes the marks the decision's number.
+     *(RV-20, 2026-11-12, `a78226f`: the marks, in `Logex.Runner`'s moduledoc and a
+     comment, README and `stalled_disk_test.exs`, are this decision's number.)*
 
 519. **The marks no decision of the review settles (the review after Milestone 6),** RV-8's
      question 6: the loader's memo takes a directory reached through a link as another
@@ -14877,6 +14892,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      mistake still raised in the caller with its pinned message; (a) `Logex.compile/2`'s
      doc giving the cost that remains. IEC 61131-3 says nothing of compile time; Logix
      checks a project on the workstation, in Studio 5000. RV-20 builds them.
+     *(Landed with RV-20, 2026-11-12. (c), `354327f`: both forms measured at 1,000, 2,000
+     and 4,000 names gone; kept together, the cheapest, the first hundred names a compile
+     cannot find in line order each offered the nearest within one character of its
+     length, every name after them none (provisional, `PLAN.md`'s RV-20 question 1), a
+     program's and a configuration's, deferred to the compile's last pass
+     (`Logex.Declarations.offer/5`, `offered/1`); a box counter's 2,000 names gone among
+     4,000 tags 0.45 s, 2,000 refused connections 0.39 s. (b), `bedba95`: the compile in
+     `Logex.Compiler.Worker`'s process, its allowance the caller's and twice its text's
+     words, OTP 28 taking a spawn's `min_bin_vheap_size` only beside another heap option;
+     the loader's process raising its own as it reads; the caller's priority and heap
+     settings taken, the caller charged the compile's reductions, a mistake raised again
+     in it (readings the record leaves, question 3). (a), `a78226f`: `Logex.compile/2`'s
+     and `Logex.Configuration.compile/3`'s docs give the cost that remains.)*
 
 521. **When the review after Milestone 6 is done (the review after Milestone 6),** RV-8's
      question 7: RV-8 wrote the done sentence, the record holding none, "done when each of

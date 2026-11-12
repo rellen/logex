@@ -372,9 +372,10 @@ accounts for every finding: 177 closed, each by a fix a test holds or a document
 true, 18 kept by a decision or a recorded reason, the 13 refuted among them, and 8 put to
 the maintainer as questions (the review's "The close"). The maintainer answered them on
 2026-11-12, decisions 513–521, and took the review as done (decision 521); what the
-answers build waits as `PLAN.md`'s RV-20 to RV-25: a refusal of many unknown names
-costing near its count and the compile in a process of its own, a fresh start warning
-that an edit never reached the files, the simulator taking the configuration's
+answers build runs as `PLAN.md`'s RV-20 to RV-25. RV-20 has landed: a refusal of many
+unknown names costs near its count, a compile runs in a process of its own, and every
+module outside the host contract says so (decisions 514 and 520). Waiting: a fresh start
+warning that an edit never reached the files, the simulator taking the configuration's
 addresses, the examples as files beside an adapter's, CI naming a failed test, a release
 step, typespecs with Dialyzer, and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and

@@ -31,7 +31,9 @@ defmodule Logex.Compiler.Worker do
   # `ArgumentError` among them, is raised again in the caller, its message and stack as
   # they were. And the caller is charged the reductions the compile's process spent, so
   # that what the caller counts of its own work, `Process.info(self(), :reductions)` as
-  # every cost test of logex reads it, holds the whole compile wherever it ran.
+  # every cost test of logex reads it, holds the whole compile wherever it ran. The
+  # settings taken, a compile killed taking its caller with it and the charge are
+  # readings the record leaves (provisional, `PLAN.md`'s RV-20, question 3).
   #
   # The process runs this module's `serve/1`, spawned by module, function and arguments,
   # never a closure, and it calls `Logex.Compiler`'s three, which take a source text and
