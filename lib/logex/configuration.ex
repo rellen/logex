@@ -610,14 +610,16 @@ defmodule Logex.Configuration do
   text over its work (RV-8's review): it grows linearly in its text, and a refusal costs
   near the count of its mistakes, since the first hundred names it cannot find, in line
   order, a global, an instance, a task, a member or a program type, are each offered the
-  nearest name of a like length, within one character of its own, a name differing only
-  in case always among them, and every name after them none, looked for among nothing
-  (provisional, `Logex.Declarations`), as `Logex.compile/2`'s are. So 1,000, 2,000 and
-  4,000 connections naming a renamed button among twice as many globals are refused in
-  some 0.13, 0.39 and 0.81 s, 10 to 30 million reductions, where they took 4.7, 21 and
-  82 s, 480 to 7,931 million reductions, each name matched against every global (RV-20's
-  figures, the least of three on one machine). `compile_file/1` compiles its program
-  types through `Logex.compile_files/1`, in a process of its own.
+  nearest of every name it could be, a name differing only in case always the one, and
+  every name after them none, looked for among nothing (provisional,
+  `Logex.Declarations`), as `Logex.compile/2`'s are, its loader's absent program types
+  counted with them; and each list of names a message would end with is given once, as
+  ever. So 1,000, 2,000 and 4,000 connections naming a renamed button among twice as many
+  globals are refused in some 0.5, 1.3 and 2.7 s, 52 to 215 million reductions, the
+  hundred matched against every global, where they took 4.7, 21 and 82 s, 480 to 7,931
+  million reductions, each name matched against every global (RV-20's review's figures,
+  the least of three on one machine). `compile_file/1` compiles its program types through
+  `Logex.compile_files/1`, in a process of its own.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)

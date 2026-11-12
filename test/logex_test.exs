@@ -1392,6 +1392,55 @@ defmodule LogexTest do
       end
     end
 
+    # RV-20's review (finding 5): the stack read as when the caller compiled itself, the
+    # compile's frames, then the caller's from where it called, none of the compile's own
+    # process's, where it read the compile's process's alone and lost the host's call site.
+    test "a host's mistake is raised with the stack it had when the caller compiled itself" do
+      for {apart, here} <- [
+            {fn -> Logex.compile(:motor, name: "m") end,
+             fn -> Logex.Compiler.compile(:motor, name: "m") end},
+            {fn -> Logex.compile(@seal, name: "m", types: [:seal]) end,
+             fn -> Logex.Compiler.compile(@seal, name: "m", types: [:seal]) end},
+            {fn -> Logex.compile_file(:motor) end, fn -> Logex.Compiler.compile_file(:motor) end},
+            {fn -> Logex.compile_files([:motor]) end,
+             fn -> Logex.Compiler.compile_files([:motor]) end}
+          ] do
+        {error, stack} = raised_at(apart)
+        assert {^error, kept} = raised_at(here)
+        refute Enum.any?(stack, &match?({Logex.Compiler.Worker, _, _, _}, &1))
+        assert [{Logex.Compiler, _, _, _} | _] = stack
+        assert Enum.any?(stack, &match?({LogexTest, :raised_at, 1, _}, &1))
+        assert Enum.take(stack, 2) == Enum.take(kept, 2)
+      end
+    end
+
+    defp raised_at(call) do
+      call.()
+    rescue
+      error -> {error, __STACKTRACE__}
+    end
+
+    # RV-20's review (finding 3): a caller's limit of its heap holds its compile, which
+    # takes the caller's `max_heap_size`: a compile past it is killed, and takes its caller
+    # with it, though what it would give back is one diagnostic.
+    test "a caller's limit of its heap holds its compile" do
+      long = counter(2000, 0) <> "xic gone ote lane_1\n"
+      parent = self()
+
+      {pid, ref} =
+        spawn_monitor(fn ->
+          :erlang.garbage_collect()
+          Process.flag(:max_heap_size, %{size: 50_000, kill: true, error_logger: false})
+          send(parent, {:compiled, Logex.compile(long, name: "p")})
+        end)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 30_000
+      refute_received {:compiled, _result}
+
+      # Without the limit, the same compile gives one diagnostic back.
+      assert {:error, [%Logex.Diagnostic{line: 6002}]} = Logex.compile(long, name: "p")
+    end
+
     test "a caller that traps exits is sent nothing of the compile, and keeps its links" do
       for call <- [
             fn -> Logex.compile(@seal, name: "seal") end,

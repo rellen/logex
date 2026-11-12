@@ -47,17 +47,23 @@ defmodule Logex do
   7,095 of them for a box counter's 280 KB program, refused in 50 s, where the allowance
   leaves 28 and 32 s, before the did-you-mean was bounded (`compile/2`). It takes the
   caller's priority and heap settings, `min_heap_size`, `max_heap_size` and
-  `fullsweep_after` (provisional), and its group leader, as a spawn always does, and reads
-  and writes no process dictionary, the caller's or its own. It is linked to the caller
-  and unlinks itself before it answers, so a caller that traps exits is sent nothing of
-  it, its links as they were. A mistake it raises, a host's `ArgumentError` among them, is
-  raised again in the caller, its message and stack unchanged; a compile killed from
-  outside takes its caller with it, with the same reason, trapping exits or not, as a
-  compile killed in the caller would have (provisional); and a caller that exits, killed
-  by a host's own time limit among them, takes the compile with it, its work never left
+  `fullsweep_after` (provisional), so a caller's limit of its heap holds its compile, and
+  a caller given a large minimum heap holds two while its compile runs, its own and the
+  compile's; and its group leader, as a spawn always does, and reads and writes no
+  process dictionary, the caller's or its own. It is linked to the caller and unlinks
+  itself before it answers, so a caller that traps exits is sent nothing of it, its links
+  as they were. A mistake it raises, a host's `ArgumentError` among them, is raised again
+  in the caller, its message unchanged and its stack the compile's, then the caller's
+  from where it called, as when the caller compiled itself; a compile killed from outside
+  takes its caller with it, with the same reason, trapping exits or not, as a compile
+  killed in the caller would have (provisional); and a caller that exits, killed by a
+  host's own time limit among them, takes the compile with it, its work never left
   running. The caller is charged the reductions the compile spent, so that its own count,
   `Process.info(self(), :reductions)`, holds the whole compile, as when it ran there
-  (provisional: `PLAN.md`'s RV-20, question 3).
+  (provisional: `PLAN.md`'s RV-20, question 3); charged a time slice at a time, each
+  giving the scheduler a turn, so on a busy machine the charge lengthens the caller's
+  wait: 20,000 timers compiled in 3.2 s beside eight busy loops on four cores, 2.7 s
+  without the charge, and 1.7 s either way on an idle machine (RV-20's review).
 
   Outside its own process a compile costs what it did: README's motor 8,712 reductions,
   63 more than when the caller compiled itself, the handing over.
@@ -95,18 +101,22 @@ defmodule Logex do
 
   **The cost that remains** (decision 520). A compile grows linearly in its text: its
   declarations, its rungs, the depth of its groups and the types it holds. A refusal costs
-  near the count of its mistakes: the first hundred names it cannot find, in line order,
-  a tag, a label or a member, are each offered the nearest name of a like length, within
-  one character of its own, a name differing only in case always among them, and every
-  name after them is told what a name with none near it is told, looked for among nothing
-  (provisional, `Logex.Declarations`). So a box counter of 4,000 tags in which a renamed
-  tag leaves 1,000, 2,000 and 4,000 rungs naming a tag that is gone is refused in some
-  0.38, 0.45 and 0.44 s, 34 to 37 million reductions and 10 or 11 full collections, where
-  it took 13, 50 and 253 s, 1,257 to 5,706 million reductions and up to 48,353 full
-  collections, each name matched against all 4,000 (RV-20's figures, the least of three on
-  one machine). What is left is the text's own compile and the hundred suggestions, each
-  matched against the names of its like length, some 30 million reductions of them among
-  4,000 tags; the engineer waits for it, and nothing runs meanwhile.
+  near the count of its mistakes: the first hundred names a text cannot find, in line
+  order, a tag, a label, a member or a type, are each offered the nearest of every name it
+  could be, as before the decision, a name differing only in case always the one, and
+  every name after them is told what a name with none near it is told, looked for among
+  nothing (provisional, `Logex.Declarations`). Each text counts its own hundred: the
+  program's, and with `compile_file/1` and `compile_files/1` each block file's and each
+  path's. A message that ends with a list, a type's members or the blocks given, gives it
+  in each of the hundred, and after them once a list, by the first message that would
+  give it. So a box counter of 4,000 tags in which a renamed tag leaves 1,000, 2,000,
+  4,000 and 16,000 rungs naming a tag that is gone is refused in some 1.3, 1.5, 1.5 and
+  1.8 s, 126 to 140 million reductions and 11 to 13 full collections, where it took 13,
+  50 and 253 s for the first three, 1,257 to 5,706 million reductions and up to 48,353
+  full collections, each name matched against all 4,000 (RV-20's review's figures, the
+  least of three on one machine). What is left is the text's own compile and the hundred
+  suggestions, each matched against every tag, some 120 million reductions among 4,000;
+  the engineer waits for it, and nothing runs meanwhile.
   """
   defdelegate compile(source, options), to: Logex.Compiler.Worker
 

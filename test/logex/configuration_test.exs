@@ -1349,15 +1349,13 @@ defmodule Logex.ConfigurationTest do
 
       # A name with `.` parts is told a task's name has none, with a did-you-mean among the
       # tasks; a name of another kind is told what it is; a keyword is told it names
-      # nothing; and any other name is told the near name, or how to declare it. Since
-      # decision 520 (RV-20) the near name is one of a like length, within one character
-      # of the name's, so `fast`, two shorter than `fast.x`, is offered no more.
+      # nothing; and any other name is told the near name, or how to declare it.
       assert refused(fields) == [
                "no task `fsat` — did you mean `fast`?",
                "no task `q`: declare it with a `task` line, as in `task q interval 10 priority 1`",
                "no task `q.r`: a task's name has no `.`, which is kept for a path and a location",
                "no task `fast.x`: a task's name has no `.`, which is kept for a path and a " <>
-                 "location",
+                 "location — did you mean `fast`?",
                "`pb` is a global, not a task",
                "no task `With`: `With` is a keyword of a configuration file, and nothing in one " <>
                  "is named so"
@@ -2538,7 +2536,7 @@ defmodule Logex.ConfigurationTest do
                "line 3: no task `nothing_like_it`: declare it with a `task` line, as in " <>
                  "`task nothing_like_it interval 10 priority 1`",
                "line 5: no task `fast.x`: a task's name has no `.`, which is kept for a path " <>
-                 "and a location",
+                 "and a location — did you mean `fast`?",
                "line 6: no task `panel.i.0`: a task's name has no `.`, which is kept for a " <>
                  "path and a location",
                "line 7: no task `m1.start`: a task's name has no `.`, which is kept for a path " <>
@@ -2548,8 +2546,6 @@ defmodule Logex.ConfigurationTest do
                "line 10: no task `Fast` — did you mean `fast`? (names are case-sensitive)",
                "line 13: `a.b` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
                  "and a location, as in `panel.i.0`",
-               # Decision 520 (RV-20): the near name of a like length, `fast` for `fas.t`,
-               # where `fast.x`, two longer, is offered none.
                "line 14: no task `fas.t`: a task's name has no `.`, which is kept for a path " <>
                  "and a location — did you mean `fast`?"
              ]
@@ -6186,21 +6182,12 @@ defmodule Logex.ConfigurationTest do
       assert ratio < 5.03, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
     end
 
-    # RV-8's review (b6-configuration-9): compile/3 held its source text over the whole
-    # compile, to lex it again for the spellings its refusals quote, and a text of more than
-    # some 370 KB, with the messages of its refused lines, outgrew what binaries off its
-    # heap a process holds before its garbage collections turn full ones: 2,000 refused
-    # connections took 95 s and 13,583 full collections, against 22 s and 17 where the
-    # text was let go after its read. The same text with and without a comment of 400
-    # KB, its full collections counted as the compile's own process makes them: 5 and 5
-    # over six runs since, 379 against 6 with the text held; the bound twice the short
-    # text's and ten.
     # Decision 520 (c, RV-20): a refusal of many globals gone costs near their count, a
     # configuration's as a program's. Each connection naming a global the text does not
     # declare was matched against every global for a did-you-mean, so 2,000 refused
     # connections among 4,000 globals took 21 s; now the first hundred alone are offered
-    # the nearest name, among those of a like length. `n` instances of a seal each
-    # connecting its start to a renamed button, compiled at 4x the instances.
+    # the nearest name. `n` instances of a seal each connecting its start to a renamed
+    # button, compiled at 4x the instances.
     test "compile/3's refusal of many globals gone costs near their count" do
       {:ok, seal} =
         Logex.compile("var_input start bool\nvar_output motor bool\nxic start ote motor",
@@ -6253,6 +6240,15 @@ defmodule Logex.ConfigurationTest do
                List.duplicate(true, 100) ++ [false]
     end
 
+    # RV-8's review (b6-configuration-9): compile/3 held its source text over the whole
+    # compile, to lex it again for the spellings its refusals quote, and a text of more than
+    # some 370 KB, with the messages of its refused lines, outgrew what binaries off its
+    # heap a process holds before its garbage collections turn full ones: 2,000 refused
+    # connections took 95 s and 13,583 full collections, against 22 s and 17 where the
+    # text was let go after its read. The same text with and without a comment of 400
+    # KB, its full collections counted as the compile's own process makes them: 5 and 5
+    # over six runs since, 379 against 6 with the text held; the bound twice the short
+    # text's and ten.
     test "compile/3 holds no source text over its work, so a long one's collections stay young" do
       programs = plant_programs()
 

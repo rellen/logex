@@ -862,10 +862,10 @@ defmodule Logex.CompileTotalTest do
   # Decision 520 (c, RV-20): a refusal of many names gone costs near their count. Each name
   # a compile cannot find was matched against every name the program declares for a
   # did-you-mean, so a box counter's 4,000 tags and 2,000 rungs naming a renamed tag took
-  # 50 s; now the first hundred alone are offered the nearest name, among those of a like
-  # length. A box counter of `n` buttons and coils whose `n` rungs each name a button
-  # renamed, compiled at 4x the names and the rungs, counted in a process of its own whose
-  # heap no collection visits, the least of three.
+  # 50 s; now the first hundred alone are offered the nearest name. A box counter of `n`
+  # buttons and coils whose `n` rungs each name a button renamed, compiled at 4x the names
+  # and the rungs, counted in a process of its own whose heap no collection visits, the
+  # least of three.
   describe "a refusal of many names gone (decision 520)" do
     test "costs near the count of the names, not the names times those declared" do
       counter = fn n ->
@@ -931,6 +931,244 @@ defmodule Logex.CompileTotalTest do
 
       assert Enum.map(names, &(&1.message =~ "did you mean")) ==
                List.duplicate(true, 99) ++ [false]
+    end
+  end
+
+  # RV-20's review (findings 2 and 4): a message that ends with a list, a type's members
+  # or the blocks a compile was given, gave it whole after the hundred too, so 16,000
+  # unknown members of a block of 1,000 made 174.5 MB of messages, and 4,000 lines naming
+  # a misspelt type among 500 blocks given 49.7 MB, the second matched against all 500 at
+  # every line. Each of the hundred gives its list as ever, and after them a list is given
+  # once, by the first message that would give it, none where one before gave it.
+  describe "a list past the hundred (decision 520)" do
+    defp section(name) do
+      {:ok, type} =
+        Logex.compile(
+          "function_block #{name}\nvar_input go bool\nvar_output run bool\nxic go ote run\n",
+          name: name
+        )
+
+      type
+    end
+
+    test "is given once, by the first message that would give it, none where one before did" do
+      source =
+        IO.iodata_to_binary([
+          "var a bool\nvar q bool\nvar t ton\nvar b big\nxic a ton t 10\nxic a cal b a q\n",
+          List.duplicate("xic t.zz ote a\n", 100),
+          "xic t.yy ote a\nxic b.zz ote a\nxic b.yy ote a\nvar s1 sectoin\nvar s2 sectoin\n"
+        ])
+
+      assert {:error, diagnostics} =
+               Logex.compile(source, name: "p", types: [section("big"), section("section")])
+
+      {hundred, past} = Enum.split(diagnostics, 100)
+
+      assert Enum.uniq(Enum.map(hundred, & &1.message)) == [
+               "`t.zz` is not a member of `t`, a ton: its members are `pre`, `acc`, `dn`, " <>
+                 "`tt` and `en`"
+             ]
+
+      after_first = "`var` after the first rung (line 5): declarations come first"
+
+      logex_has =
+        "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, " <>
+          "`ulint`, `real`, `lreal`, `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, " <>
+          "`ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, " <>
+          "`ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, " <>
+          "`ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, " <>
+          "`ton`, `ton_ltime`, `tp` and `tp_ltime`"
+
+      assert Enum.map(past, &{&1.line, &1.message}) == [
+               {107, "`t.yy` is not a member of `t`, a ton"},
+               {108,
+                "`b.zz` is not a member of `b`, an instance of `big`: its members are `go` " <>
+                  "and `run`"},
+               {109, "`b.yy` is not a member of `b`, an instance of `big`"},
+               {110, after_first},
+               {110,
+                "unknown type `sectoin`: " <>
+                  logex_has <> ", and the function blocks `big` and `section`"},
+               {111, after_first},
+               {111, "unknown type `sectoin`: " <> logex_has}
+             ]
+    end
+
+    # Each of the hundred lists the block's members or the blocks given, and the names
+    # after them once: their text grows with the lists and the names, 4x at 4x each, where
+    # every name giving its list made it grow as their product, 16x.
+    test "keeps the refusal's text near the count of its names and its lists" do
+      members = fn n, gone ->
+        {:ok, big} =
+          Logex.compile(
+            IO.iodata_to_binary([
+              "function_block big\nvar_input go bool\n",
+              for(i <- 1..n, do: "var_output out_#{i} bool\n"),
+              "xic go ote out_1\n"
+            ]),
+            name: "big"
+          )
+
+        lines = for i <- 1..gone, do: "xic b.zz_#{i} ote a\n"
+
+        {IO.iodata_to_binary(["var a bool\nvar q bool\nvar b big\nxic a cal b a q\n", lines]),
+         [big]}
+      end
+
+      types = fn n, gone ->
+        given = for b <- 1..n, do: section("section_#{b}")
+        lines = for i <- 1..gone, do: "var s#{i} sectoin_#{i}\n"
+        {IO.iodata_to_binary([lines, "var a bool\nxic a ote a\n"]), given}
+      end
+
+      for {kind, shape} <- [members: members, types: types] do
+        bytes = fn n, gone ->
+          {source, given} = shape.(n, gone)
+          assert {:error, diagnostics} = Logex.compile(source, name: "p", types: given)
+          Enum.sum(Enum.map(diagnostics, &byte_size(&1.message)))
+        end
+
+        ratio = bytes.(200, 1600) / bytes.(50, 400)
+
+        assert ratio < 6.0,
+               "4x the #{kind} and 4x the names gone made #{Float.round(ratio, 2)}x the text"
+      end
+    end
+  end
+
+  # RV-20's review (finding 3): a name past the hundredth is offered nothing, so its look-up
+  # is never made: the tags' names, the later labels, a type's members and the blocks given
+  # are each gathered in a function `Logex.Declarations.offered/1` calls only for the
+  # hundred, and a list after them once. Built eagerly, each a BIF's work or a list's, the
+  # reductions barely move, while the words grow as the names gone times those declared,
+  # 0.59 s against 8.5 s for 16,000 names gone among a box counter's 4,000 tags. So the
+  # words a compile allocates are counted, in a process whose heap no collection visits
+  # during it, which a trace of its collections checks: two twins, a hundred unknown
+  # members of a ton first, then `m` lines naming a tag, a label, a member or a type that
+  # is not there, or one that is, compiled by `Logex.Compiler.compile/2` in that process,
+  # the twins' difference the cost of `m` names past the hundred, at `n` and 4n names
+  # declared. Measured at the tip: 0.97x, 1.00x, 1.31x and 1.03x; each built eagerly 3.42x,
+  # past the heap, 3.73x and 3.34x.
+  describe "a name past the hundredth (decision 520)" do
+    defp allocated(source, types) do
+      parent = self()
+
+      {pid, ref} =
+        :erlang.spawn_opt(
+          fn ->
+            :erlang.garbage_collect()
+            send(parent, {:ready, self()})
+            assert_receive :go, 60_000
+            result = Logex.Compiler.compile(source, name: "p", types: types)
+            send(parent, {:done, self()})
+            assert_receive :stop, 60_000
+            exit({:ok, result})
+          end,
+          [:monitor, min_heap_size: 10_000_000, min_bin_vheap_size: 50_000_000]
+        )
+
+      assert_receive {:ready, ^pid}, 60_000
+      {:garbage_collection_info, before} = Process.info(pid, :garbage_collection_info)
+      :erlang.trace(pid, true, [:garbage_collection])
+      send(pid, :go)
+      assert_receive {:done, ^pid}, 60_000
+      {:garbage_collection_info, later} = Process.info(pid, :garbage_collection_info)
+      traced = :erlang.trace_delivered(pid)
+      assert_receive {:trace_delivered, ^pid, ^traced}, 60_000
+      send(pid, :stop)
+      assert_receive {:DOWN, ^ref, :process, ^pid, {:ok, {:error, [_ | _]}}}, 60_000
+      refute_received {:trace, ^pid, _collection, _info}, "collected during the compile"
+      later[:heap_size] - before[:heap_size]
+    end
+
+    # A hundred unknown members of a ton, each matched against its five members.
+    defp past(head, lines),
+      do:
+        IO.iodata_to_binary([
+          head,
+          "xic a ton t 10\n",
+          List.duplicate("xic t.zz ote a\n", 100),
+          lines
+        ])
+
+    defp twin(:tags, n, m, gone) do
+      declared = for i <- 1..n, do: "var pushbutton_start_#{i} bool\n"
+
+      lines =
+        for i <- 1..m,
+            do:
+              "xic #{named(gone, "pushbuton_start_#{i}", "pushbutton_start_#{rem(i - 1, n) + 1}")} ote a\n"
+
+      {past(["var a bool\nvar t ton\n" | declared], lines), []}
+    end
+
+    defp twin(:labels, n, m, gone) do
+      lines = [
+        for(i <- 1..m, do: "xic a #{named(gone, "jmp gone_#{i}", "ote a")}\n"),
+        for(i <- 1..n, do: "lbl station_#{i} xic a ote a\n")
+      ]
+
+      {past("var a bool\nvar t ton\n", lines), []}
+    end
+
+    defp twin(:members, n, m, gone) do
+      {:ok, big} =
+        Logex.compile(
+          IO.iodata_to_binary([
+            "function_block big\nvar_input go bool\n",
+            for(i <- 1..n, do: "var_output out_#{i} bool\n"),
+            "xic go ote out_1\n"
+          ]),
+          name: "big"
+        )
+
+      lines =
+        for i <- 1..m, do: "xic b.#{named(gone, "ot_#{i}", "out_#{rem(i - 1, n) + 1}")} ote a\n"
+
+      {past("var a bool\nvar t ton\nvar b big\nxic a cal b\n", lines), [big]}
+    end
+
+    # A declaration after the first rung is refused for its place in both twins alike.
+    defp twin(:types, n, m, gone) do
+      types =
+        for b <- 1..n do
+          {:ok, type} =
+            Logex.compile(
+              "function_block section_#{b}\nvar_input go bool\nvar_output run bool\nxic go ote run\n",
+              name: "section_#{b}"
+            )
+
+          type
+        end
+
+      lines = for i <- 1..m, do: "var s#{i} #{named(gone, "sectoin_1", "bool")}\n"
+      {past("var a bool\nvar t ton\n", lines), types}
+    end
+
+    defp named(true, gone, _there), do: gone
+    defp named(false, _gone, there), do: there
+
+    defp past_hundred(kind, n, m) do
+      {there, types} = twin(kind, n, m, false)
+      {gone, types_gone} = twin(kind, n, m, true)
+      allocated(gone, types_gone) - allocated(there, types)
+    end
+
+    test "costs the same whatever the text declares, a tag's, a label's, a member's and a type's" do
+      # Every module the compile calls loaded before any count, here, since a process that
+      # loads one is collected as it does.
+      for kind <- [:tags, :labels, :members, :types], gone <- [true, false] do
+        {source, types} = twin(kind, 5, 5, gone)
+        assert {:error, [_ | _]} = Logex.Compiler.compile(source, name: "p", types: types)
+      end
+
+      for {kind, n} <- [tags: 250, labels: 250, members: 250, types: 100] do
+        ratio = past_hundred(kind, 4 * n, 400) / past_hundred(kind, n, 400)
+
+        assert ratio < 2.0,
+               "400 #{kind} past the hundred took #{Float.round(ratio, 2)}x the words " <>
+                 "among 4x the names declared"
+      end
     end
   end
 

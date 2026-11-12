@@ -21,17 +21,20 @@ defmodule Logex.Compiler.Worker do
   # The process takes the caller's priority and heap settings, its `min_heap_size`,
   # `max_heap_size` and `fullsweep_after`, so a compile runs as it ran in the caller, a
   # cost test's heap no collection visits among them, and a host's limit of its heap holds
-  # it still; its group leader is the caller's, as a spawn's always is, and it reads and
+  # it still (a caller with a large minimum heap holding two while it runs); its group leader is the caller's, as a spawn's always is, and it reads and
   # writes no process dictionary, the caller's or its own. It is linked to the caller and
   # monitored, so a caller that exits, killed by a host's own time limit among them,
   # takes it with it, its work never left running; and it unlinks itself before it
   # answers, so a caller that traps exits is sent nothing of it. A compile killed from
   # outside takes its caller with it, with its reason, trapping exits or not, as a
   # compile killed in the caller would have. A mistake it raises, a host's
-  # `ArgumentError` among them, is raised again in the caller, its message and stack as
-  # they were. And the caller is charged the reductions the compile's process spent, so
+  # `ArgumentError` among them, is raised again in the caller, its message as it was and
+  # its stack the compile's down to its call of `Logex.Compiler`'s, then the caller's
+  # from where it called, as the stack read when the caller compiled itself. And the caller is charged the reductions the compile's process spent, so
   # that what the caller counts of its own work, `Process.info(self(), :reductions)` as
-  # every cost test of logex reads it, holds the whole compile wherever it ran. The
+  # every cost test of logex reads it, holds the whole compile wherever it ran: a time
+  # slice at a time, each giving the scheduler a turn, so on a busy machine the charge
+  # lengthens the caller's wait (RV-20's review, some 16% beside eight busy loops). The
   # settings taken, a compile killed taking its caller with it and the charge are
   # readings the record leaves (provisional, `PLAN.md`'s RV-20, question 3).
   #
@@ -111,7 +114,18 @@ defmodule Logex.Compiler.Worker do
   defp worked({:files, paths}), do: Logex.Compiler.compile_files(paths)
 
   defp given({:ok, result}), do: result
-  defp given({kind, reason, stack}), do: :erlang.raise(kind, reason, stack)
+  defp given({kind, reason, stack}), do: :erlang.raise(kind, reason, own(stack) ++ caller())
+
+  # The stack a mistake is raised with in the caller: the compile's own, down to the frame
+  # that called `Logex.Compiler`'s, then the caller's, from where it called `Logex`'s, so
+  # that it reads as when the caller compiled itself (RV-20's review), its host's own call
+  # site among it.
+  defp own(stack), do: Enum.take_while(stack, &(elem(&1, 0) != __MODULE__))
+
+  defp caller do
+    {:current_stacktrace, stack} = Process.info(self(), :current_stacktrace)
+    Enum.drop_while(stack, &(elem(&1, 0) in [__MODULE__, Process]))
+  end
 
   # The caller's priority and heap settings, its allowance of binaries off its heap raised
   # by twice its text's words and the VM's own allowance beside them.

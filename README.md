@@ -59,12 +59,13 @@ order it gets fixed, and why.
 host hands any of them that it was not made for is refused with an `ArgumentError` whose
 message says what it takes, and nothing else escapes them. Every other module takes
 logex's own data unguarded, and says so in its doc (decision 514). The examples below
-call a few more: as a host's tools, each refusing a host's mistake as the contract does,
-`Logex.IO.Sim`, the simulated device, and the runner's clocks, `Logex.Runner.Clock.Manual`
-the one a test moves; and on logex's own data, unguarded, `Logex.Diagnostic.format/1` on
-the diagnostics logex gives, `Logex.FbType.ctu/0` beside a tag's type and a
-`%Logex.Scan{}` that `Logex.Runtime.call/4` checks (provisional readings, `PLAN.md`'s
-RV-20).
+call a few more: inside the contract, each refusing a host's mistake where it can make
+one, the configuration's elements, `Logex.Configuration.Task`, `Global`, `Instance`
+and `Connection`, which `Logex.Configuration.new!/1` checks, `Logex.IO.Sim`, the
+simulated device, and the runner's clocks, `Logex.Runner.Clock.Manual` the one a test
+moves; and outside it, on logex's own data, unguarded, `Logex.Diagnostic.format/1` on the
+diagnostics logex gives, `Logex.FbType.ctu/0` beside a tag's type and a `%Logex.Scan{}`
+that `Logex.Runtime.call/4` checks (provisional readings, `PLAN.md`'s RV-20, question 2).
 
 ## The dialect
 

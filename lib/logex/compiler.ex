@@ -3845,9 +3845,12 @@ defmodule Logex.Compiler do
       |> check_member_write(slot, tag, name, member, {line, word})
 
   # Matched on the member's own name: on the whole name, every member of `t1` shares `t1.`,
-  # and IEC's `t1.et` would come out nearest to `t1.tt`.
+  # and IEC's `t1.et` would come out nearest to `t1.tt`. Decision 520 (c, RV-20): offered
+  # among the first hundred names the text cannot find, its type's members listed by each
+  # of those that offers none and after them once a type (`Logex.Declarations.offered/1`),
+  # and read only where a message needs them.
   defp resolve(nil, {:unknown_member, tag, part}, _slot, {:name, line, name}, _at, diagnostics) do
-    names = Enum.map(FbType.public(tag.type), & &1.name)
+    names = fn -> Enum.map(FbType.public(tag.type), & &1.name) end
     member = "`#{name}` is not a member of `#{tag.name}`, #{Declarations.instance_of(tag.type)}"
 
     message =
@@ -3856,7 +3859,7 @@ defmodule Logex.Compiler do
         names,
         &"#{tag.name}.#{&1}",
         "members",
-        &(member <> members(&1, names))
+        &members(&1, member, {tag.type.name, names})
       )
 
     [diagnostic(line, message) | diagnostics]
@@ -3997,10 +4000,15 @@ defmodule Logex.Compiler do
   defp way("ctu"), do: "up"
   defp way("ctd"), do: "down"
 
-  # A user block may show no member outside it (M2-5).
-  defp members("", []), do: ": it has none that logic outside it may name"
-  defp members("", names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
-  defp members(suggestion, _names), do: suggestion
+  # A user block may show no member outside it (M2-5). Its members are a list
+  # `Logex.Declarations.offered/1` gives once after the hundred, a type's.
+  defp members("", member, {type, names}),
+    do: Declarations.listing(member, {:members, type}, fn -> members(names.()) end)
+
+  defp members(suggestion, member, _names), do: member <> suggestion
+
+  defp members([]), do: ": it has none that logic outside it may name"
+  defp members(names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
 
   defp listed([one]), do: one
   defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
