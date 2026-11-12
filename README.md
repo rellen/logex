@@ -379,7 +379,8 @@ RV-19: a trip the runner's own lateness causes naming the lateness, `{:watchdog,
 ms}}` (decision 490), a stop telling both its writes' failures and a shutdown publishing
 the forces file's (decision 493), a restart's wait for a force's write keeping the runner
 answering (decision 500) and `forces_unknown` kept while a cut write may land (decision
-502), the others as built. Its answers to the questions RV-5 left, decisions
+502), the others as built. Its answers to the questions RV-19 left, decisions 503–512,
+take each as built. Its answers to the questions RV-5 left, decisions
 409–419, have landed with
 RV-13: the store and the forces file reading a line ended by CRLF or a lone CR as one
 ended by LF (decision 410), `status/1`'s `copy` always there, nil where nothing was copied

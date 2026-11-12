@@ -24,7 +24,8 @@ RV-15's, decisions 433–436, each as built, their marks made in RV-13, to RV-11
 decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and RV-7's,
 decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
 to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
-2026-11-09, and to RV-18's, decisions 489–502, for RV-19, which landed on 2026-11-10.)*
+2026-11-09, and to RV-18's, decisions 489–502, for RV-19, which landed on 2026-11-12,
+and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14178,7 +14179,8 @@ and CI checked; each fix with a test that fails when it is reverted.
      leaves a host's load as it is.
 - **RV-8 — the close.** README's "What logex is not" and every example re-run, the report's
   findings each closed or kept by a recorded reason, and the review's done sentence put to
-  the maintainer.
+  the maintainer. It also makes the marks RV-19 left provisional the numbers of decisions
+  503–512, which took each as built.
 - **RV-9 — the answers to RV-1's and RV-2's questions** (decisions 363, 365, 367, 370, 371
   and 372). `wired.logex` shown in README as a file of its own; README's one fragment run
   in a setup the test makes; a rung that is a label alone accepted where a jump of its
@@ -18243,8 +18245,10 @@ and CI checked; each fix with a test that fails when it is reverted.
     while a force's write is out cost some 33 more, which went unreported. Measured again
     below.)*
   - *CLAUDE.md*: no line changed; no file was added, and each line stays true.
-  - *Provisional readings, and questions for the maintainer*. Each is marked provisional
-    where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
+  - *Provisional readings, and questions for the maintainer* *(all eight answered on
+    2026-11-12, decisions 503 to 510, each as built, its mark made in RV-8)*. Each is
+    marked provisional where it stands, the closest reading of the record, IEC 61131-3
+    and Logix that could
     be found; each question says what an operator or a host sees.
     1. *What a lateness trip's figure reads* (decision 490). A fan line's host stalls the
        runner once, its wake at 1010 read at 1221, idle 50 and a poll of 10, the last look
@@ -18462,7 +18466,8 @@ and CI checked; each fix with a test that fails when it is reverted.
 
   *CLAUDE.md*: no line changed; no file was added, and each line stays true.
 
-  *Provisional readings the review's fixes made, and questions for the maintainer*. The
+  *Provisional readings the review's fixes made, and questions for the maintainer* *(both
+  answered on 2026-11-12, decisions 511 and 512, as built, their marks made in RV-8)*. The
   record's own questions 1 to 8 above stand; question 6 now says a second restart is
   refused where the first's own first round trips too.
   9. *The short heard-at-each-poll test's status read* (finding 7). A test that holds a

@@ -14600,6 +14600,118 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      file server held and the limit's message sent, its rename landing late, and names
      the set unknown through the restart until the same force lands again.)*
 
+503. **What a lateness trip's figure reads (the review after Milestone 6),** RV-19's
+     question 1 (decision 490): a fan line's host stalls the runner once, its wake at 1010
+     read at 1221, idle 50 and a poll of 10, the last look at 1000; the line trips
+     `{:watchdog, {:late, 221}}`, the time since that look, while `status/1`'s
+     `latest_wake` reads 211, the wake's own lateness.
+
+     **Taken: the gap, as built (a)** (the maintainer, 2026-11-12): the trip reads the
+     figure the cap was weighed against, always past it, and `latest_wake` still shows the
+     wake's own lateness, so the operator sees both; neither IEC 61131-3 nor Logix has
+     such a figure. RV-8 makes the mark the decision's number.
+
+504. **Where a lateness's gap counts from (the review after Milestone 6),** RV-19's
+     question 2 (decision 490): a lamp test's step runs 250 ms, its task's watchdog 1000,
+     at idle 50, and leaves the panel's card unheard; the next round's look names the
+     panel, `{:io, "panel", :timeout}`, the gap counted from the last look or the last
+     round's end, the step being the runner's own work.
+
+     **Taken: from the round's end, as built (a)** (the maintainer, 2026-11-12): a step
+     within its watchdog is not the computer late, and the operator is sent to the card;
+     Logix runs its I/O apart from its logic, the closer to this reading. RV-8 makes the
+     mark the decision's number.
+
+505. **A device's own watchdog the host's lateness ran out (the review after Milestone
+     6),** RV-19's question 3 (decisions 125, 137 and 490): a loaded host holds the whole
+     VM 64 ms at idle 50 and a poll of 10, well within the cap; the conveyor's panel,
+     hearing nothing for 60 ms, latches by itself and the line trips `{:watchdog,
+     {:device, "panel", 60}}`, `latest_wake` 54.
+
+     **Taken: the panel named, as built (a)** (the maintainer, 2026-11-12): the panel did
+     latch, as decision 137 has it, and `latest_wake` shows the host was late, so the
+     operator sees both; Logix logs a module's connection fault naming the module, and IEC
+     61131-3 leaves a controller's I/O faults to the implementer. RV-8 makes the mark the
+     decision's number.
+
+506. **The shape of a stop's two failures (the review after Milestone 6),** RV-19's
+     question 4 (decision 493): a stop on a disk that refuses both of its end's writes
+     answers `{:error, [forces: reason, retain: reason]}`, a keyword list in the order
+     written; one failure alone reads `{:error, {:retain, reason}}` or `{:error, {:forces,
+     reason}}`, as before.
+
+     **Taken: a list in the order written, as built (a)** (the maintainer, 2026-11-12):
+     neither IEC 61131-3 nor Logix has an external forces file. RV-8 makes the mark the
+     decision's number.
+
+507. **Who hears of the forces file's failure (the review after Milestone 6),** RV-19's
+     question 5 (decision 493): every orderly end whose write of the forces file fails, a
+     stop or a supervisor's shutdown, publishes `{:forces, {:error, reason}}`, a kind of
+     its own sent to subscribers by default, a stop answering its caller as well.
+
+     **Taken: an event of its own, by default, at every end, as built (a)** (the
+     maintainer, 2026-11-12): an HMI or a log warns that the next start may bring back an
+     old force even when the stop's caller is another program; neither IEC 61131-3 nor
+     Logix has an external forces file. RV-8 makes the mark the decision's number.
+
+508. **A second restart asked while one waits (the review after Milestone 6),** RV-19's
+     question 6 (decisions 133, 354 and 500): an operator presses restart twice on a
+     tripped line while a lamp's force is written to a slow disk; once the write ends the
+     first restart is made, and the second, taken then, finds the line running and is
+     refused, "the runner is running", or, where the first restart's own first round trips
+     the line again, is refused by that trip, asked before it; where the first is refused
+     the second is made.
+
+     **Taken: the second refused, as built (a)** (the maintainer, 2026-11-12): a second
+     press never clears a trip it was asked before, as decision 354 has it, and one
+     restart is made for one tripped line; Logix's reading is unverified. RV-8 makes the
+     mark the decision's number.
+
+509. **A force asked while a restart waits (the review after Milestone 6),** RV-19's
+     question 7 (decisions 465 and 500): the HMI forces a box counter's `eye` while a
+     restart waits for `level`'s write; the restart reads the file `level`'s write left and
+     runs, and `eye`'s force joins the next write, written after the restart, in effect a
+     write later.
+
+     **Taken: written after the restart, as built (a)** (the maintainer, 2026-11-12): the
+     restart starts on the file as the write it waited for left it, and a later force
+     cannot keep putting the restart off; Logix applies forces in controller memory at
+     once. RV-8 makes the mark the decision's number.
+
+510. **A restart waiting, as `status/1` shows it (the review after Milestone 6),** RV-19's
+     question 8 (decision 500): while a restart waits for a force's write, `status/1`
+     shows the line tripped and the force being written in `forcing`, and nothing of the
+     restart asked.
+
+     **Taken: tripped, the force in `forcing`, as built (a)** (the maintainer,
+     2026-11-12): no key of its own for a restart on its way; Logix keeps answering status
+     during a mode change, and whether it shows the change pending is unverified. RV-8
+     makes the mark the decision's number.
+
+511. **The short heard-at-each-poll test's status read (the review after Milestone 6),**
+     RV-19's question 9 (RV-19's review, finding 7): the test that holds a box counter's
+     panel waiting through a 200 ms round reads `status/1` and `get!/2` once its rounds
+     are done, beside its check of the events up to the round that writes `y` 1; a host
+     that freezes the whole VM more than 60 ms just then trips the line by the panel's own
+     heartbeat, 1 run in 50 under four busy loops in RV-18's runs, 0 in 50 since RV-19.
+
+     **Taken: both checks kept, as it stands (a)** (the maintainer, 2026-11-12): nothing
+     is taken out of the test; it bears on no operator's view, and neither IEC 61131-3 nor
+     Logix has a bearing. RV-8 makes the mark the decision's number.
+
+512. **A restart's read as a device's word (the review after Milestone 6),** RV-19's
+     question 10 (RV-19's review, finding 5): a conveyor trips when its panel's read fails;
+     the host is slow as the operator restarts it, 300 ms passing in the restart's own
+     clock reading, and the panel answers the restart's read; every device the restart
+     read is heard at the restart, and the line runs.
+
+     **Taken: heard at the restart, as built (a)** (the maintainer, 2026-11-12): a device
+     that has just answered is not named silent; before RV-19's review the panel kept its
+     last word from before the trip and the line tripped again at once, `{:io, "panel",
+     :timeout}`. A Logix module's connection, once opened again, times its RPI from that
+     opening, the closer reading (unverified); IEC 61131-3 leaves a controller's I/O faults
+     to the implementer. RV-8 makes the mark the decision's number.
+
 ---
 
 ## 8. Sources, and what is unverified
