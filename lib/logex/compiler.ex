@@ -61,6 +61,11 @@ defmodule Logex.Compiler do
   record, the Elixir-side declarer and the naming test; `signature/2` for the walks
   (`Logex.Walk`), which look an instruction's slots up here; and `lowered?/1` and
   `recompiled/4` for the check of a type given (`Logex.FbType.user?/1`, decision 54).
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Parser, Program, SourceFile, Tag, Walk}

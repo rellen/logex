@@ -88,6 +88,11 @@ defmodule Logex.Warnings do
   warnings read the program's text, not which rungs run.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Compiler, Declarations, Diagnostic, FbType, Parser, Tag, Walk}

@@ -194,7 +194,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   each item's Done-when and Milestones 5 and 6's done sentences, from text and files on
   disk, against oracles that know nothing of logex; its assertions name no IR tag.
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
-  surface and the checks made where a program is first handed in.
+  surface, every moduledoc held to the host contract, and the checks made where a program
+  is first handed in.
 - `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.

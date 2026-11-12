@@ -2260,6 +2260,80 @@ add e i y",
   end
 
   describe "the public surface (B5)" do
+    # Decision 514 (RV-20): the host contract is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+    # `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+    # `Logex.Tag.new!/5`; every other documented module of lib/ says in one sentence, the
+    # same everywhere, that it takes logex's own data unguarded and names the contract.
+    # Read from every module the application holds, its moduledoc as compiled. Inside the
+    # contract too, provisional readings each put to the maintainer (`PLAN.md`'s RV-20):
+    # the configuration's elements, `Logex.Configuration`'s own data which its `new!/1`
+    # checks; `Logex.IO.Point`, what `Logex.IO`'s behaviour hands an adapter; and the
+    # host's tools README's examples call, each of which refuses a host's mistake with a
+    # pinned message, `Logex.IO.Sim` and the runner's clocks.
+    @contract [
+      Logex,
+      Logex.Runtime,
+      Logex.Edit,
+      Logex.Configuration,
+      Logex.Configuration.Edit,
+      Logex.Runner,
+      Logex.IO,
+      Logex.Tag
+    ]
+
+    @provisional [
+      Logex.Configuration.Task,
+      Logex.Configuration.Global,
+      Logex.Configuration.Instance,
+      Logex.Configuration.Connection,
+      Logex.IO.Point,
+      Logex.IO.Sim,
+      Logex.Runner.Clock,
+      Logex.Runner.Clock.Manual,
+      Logex.Runner.Clock.Monotonic
+    ]
+
+    @outside "Outside the host contract, this module takes logex's own data unguarded, and " <>
+               "anything else may raise as Elixir does: a host's way in is `Logex`, " <>
+               "`Logex.Runtime`, `Logex.Edit`, `Logex.Configuration` and " <>
+               "`Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and " <>
+               "`Logex.Tag.new!/5` (decision 514)."
+
+    test "every documented module outside the host contract says so, and none inside it" do
+      documented =
+        for module <- Application.spec(:logex, :modules),
+            {:docs_v1, _, :elixir, _, %{"en" => doc}, _, _} <- [Code.fetch_docs(module)],
+            do: {module, String.replace(doc, ~r/\s+/, " ")}
+
+      inside = @contract ++ @provisional
+
+      assert Enum.sort(for {module, _doc} <- documented, module not in inside, do: module) ==
+               Enum.sort([
+                 Logex.Compiler,
+                 Logex.Configuration.Text,
+                 Logex.Declarations,
+                 Logex.Diagnostic,
+                 Logex.Fault,
+                 Logex.FbType,
+                 Logex.FbType.Member,
+                 Logex.Instance,
+                 Logex.Lexer,
+                 Logex.Parser,
+                 Logex.Printer,
+                 Logex.Program,
+                 Logex.Scan,
+                 Logex.Walk,
+                 Logex.Warnings
+               ])
+
+      for {module, doc} <- documented do
+        assert String.contains?(doc, @outside) == module not in inside,
+               "#{inspect(module)}'s moduledoc and the host contract (decision 514)"
+      end
+
+      assert Enum.all?(inside, &(&1 in Enum.map(documented, fn {module, _doc} -> module end)))
+    end
+
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       # M2-2: compile_files/1, the loader's one memo over several files, which a
       # configuration's loader goes through. Since decision 432 each of the three is

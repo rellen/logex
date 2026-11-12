@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is forty-four modules in `lib/`.
+written by hand, and the whole thing is forty-five modules in `lib/`.
 
 **Stage: early, and honest about it.** Forty instructions, among them four timers, two
 that run IEC's three counters and their typed variants, seven of arithmetic and `sqrt`,
@@ -53,6 +53,18 @@ retained global" and "The store on disk", below). What logex is not, a safety co
 first of all, is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
+
+**The host contract** is `Logex`, `Logex.Runtime`, `Logex.Edit`, `Logex.Configuration` and
+`Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and `Logex.Tag.new!/5`: what a
+host hands any of them that it was not made for is refused with an `ArgumentError` whose
+message says what it takes, and nothing else escapes them. Every other module takes
+logex's own data unguarded, and says so in its doc (decision 514). The examples below
+call a few more: as a host's tools, each refusing a host's mistake as the contract does,
+`Logex.IO.Sim`, the simulated device, and the runner's clocks, `Logex.Runner.Clock.Manual`
+the one a test moves; and on logex's own data, unguarded, `Logex.Diagnostic.format/1` on
+the diagnostics logex gives, `Logex.FbType.ctu/0` beside a tag's type and a
+`%Logex.Scan{}` that `Logex.Runtime.call/4` checks (provisional readings, `PLAN.md`'s
+RV-20).
 
 ## The dialect
 

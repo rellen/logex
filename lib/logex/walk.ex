@@ -38,6 +38,11 @@ defmodule Logex.Walk do
   `cal` of what its table holds as no user block's instance, which only a program built by
   hand can hold, has no slots and reaches nothing, as it runs nothing (`Logex.Runtime`).
   A rung a jump may skip is walked as any rung, its writes writes (decision 107).
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Compiler, FbType, Program, Tag}

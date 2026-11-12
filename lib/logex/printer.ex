@@ -18,6 +18,11 @@ defmodule Logex.Printer do
   cannot represent at all.
 
   The output is canonical rather than faithful — see `print/1`.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   @doc """

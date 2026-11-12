@@ -79,6 +79,11 @@ defmodule Logex.Declarations do
   name is a global's too (`docs/organisation.md` §4.8). Logic reads and writes it. A
   function block's file refuses it (`Logex.Compiler`), and a program run alone keeps it as
   a tag of its own, at 0, which its host cannot set (`Logex.Runtime`).
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   alias Logex.{Diagnostic, FbType, Parser, Tag}
