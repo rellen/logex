@@ -1,0 +1,9 @@
+var_global estp       bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global k1         bool at panel.q.0
+program c1 conveyor
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset 0
+  c1.motor k1
+  c1.estop estp

@@ -1,0 +1,8 @@
+task fast interval 10 priority 1 watchdog 0
+task main continuous priority 2
+task more continuous
+task fast2 interval 10 watchdog 50 priority 1
+var_global eye bool at panel.i.8
+program b1 boxes
+  b1.eye eye
+  b1.reset_pb 0

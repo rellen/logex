@@ -283,6 +283,17 @@ a changed one is run by the suite: when the test fails, the code or the README i
 and the diff it prints says which line. The prose, the syntax list and the instruction
 table have no test behind them.
 
+The examples are files a host can copy, under `examples/` (decision 517 (b)): every
+script and every file README shows, the files `@derived` makes and each continued script
+whole, beside `examples/mix.exs`, a project naming logex in the directory above, so that
+`mix run scan.exs` from there runs one as README does. The test runs each example from
+its files there, copied to its directory under `tmp/readme/`, holds every block README
+shows to its file and `examples/` to nothing else, and runs `scan.exs` through the
+project with `mix run`, its build kept under `tmp/`; so a block changed in README is
+changed in its file in the same commit, and a path is marked once in README, a later
+file of the same name named apart, `broken_retain.logex`. `test/logex/clauses_test.exs`
+holds every script there to the clauses rule, as it holds the harness.
+
 ### Do not restore vendor names
 
 `docs/naming.md`'s Conventional column is unattributed on purpose, and the policy extends

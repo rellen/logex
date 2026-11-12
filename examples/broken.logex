@@ -1,0 +1,11 @@
+task fast interval 10 priority 1
+var_global pb_start_1 bool at panel.i.0
+var_global pb_stop_1  bool at panel.i.1
+var_global k1         bool at panel.q.0
+var_global sp_1       dint at drive.q.0
+program m1 motor with fsat
+  m1.start    pb_start_1
+  m1.stop     pb_stop_1
+  m1.motor    pb_stop_1
+  m1.speed_sp k1
+program m2 pump

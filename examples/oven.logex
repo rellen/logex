@@ -1,0 +1,11 @@
+// oven.logex -- eight zones, their temperatures from the oven card
+task fast interval 10 priority 1
+
+var_global zone_t   real[8] at card.i.0
+var_global zone_hot bool[8] at card.q.0
+var_global zone_sp  real    180.0
+
+program oven zones with fast
+  oven.t   zone_t
+  oven.sp  zone_sp
+  oven.hot zone_hot

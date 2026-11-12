@@ -22,7 +22,8 @@ own documentation holds:
   the reference it cites, before writing a stanza: it carries the IEC feature numbers a
   stanza should cite.
 - **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
-  is and how to use it is `README.md`, whose examples the suite runs.
+  is and how to use it is `README.md`, whose examples the suite runs from their files
+  under `examples/`, a project of their own (`examples/mix.exs`, logex its dependency).
 
 ## Commands
 
@@ -250,12 +251,13 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   configuration edit's holds, each against oracles restated from the programs' text, each
   asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
-  trees of `lib/`, the walks, the end-to-end tests and the README harness.
+  trees of `lib/`, the walks, the end-to-end tests, the README harness and the examples.
 - `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
-  `$ mix run` follows, run in a fresh VM and its output compared with README's, and every
-  other `elixir` block a fragment it names and parses, and runs in a setup it makes where
-  it gives one, held to README's prose (`CONTRIBUTING.md`, "Landing work stales the
-  plan").
+  `$ mix run` follows, run from its files under `examples/` in a fresh VM and its output
+  compared with README's, each block held to its file there, `examples/scan.exs` run by
+  `mix run` through `examples/mix.exs`, and every other `elixir` block a fragment it
+  names and parses, and runs in a setup it makes where it gives one, held to README's
+  prose (`CONTRIBUTING.md`, "Landing work stales the plan").
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
@@ -342,7 +344,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   ambiguity but those.
 - **The README is checked.** A language change stales its syntax list, instruction table
   and examples; each example's output is compared by `readme_test.exs`, a file an example
-  reads is marked `<!-- file: path -->` above its block, and an `elixir` block shown with
+  reads is marked `<!-- file: path -->` above its block, each block is its file under
+  `examples/`, changed with it, and an `elixir` block shown with
   no output is a fragment the test names (`CONTRIBUTING.md`). Its prose has no test: its
   "What logex is not" says plainly what logex does not do, a safety function first, each
   claim checked against the code, so a change that adds what it says logex lacks, an

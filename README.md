@@ -445,7 +445,13 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 
 ## An example
 
-Neither file below is in the repository — create them to follow along.
+Every example in this file is in the repository, under `examples/`: each script a `$ mix
+run` block follows, and every file one reads, `motor.ld` and `scan.exs` below among them,
+and the files the prose describes rather than shows, `faster/packing.logex` among them.
+From that directory, `mix run scan.exs` runs one as it is run here, `examples/mix.exs`
+naming logex, the directory above, as its one dependency; a script shown here as the
+continuation of another, `a_trip.exs`, is there whole. The suite runs every one of them
+there and holds each block shown here to its file (decision 517 (b)).
 
 `motor.ld` — a seal-in motor starter with a latched fault. Every tag is declared before the
 first rung: what it holds (`bool`, `dint` or another type), and whether it is supplied from outside
@@ -3098,9 +3104,9 @@ program t1 tally
   t1.full case_lamp
 ```
 
-and `broken.logex`, a mistake on each of its last five lines:
+and `broken_retain.logex`, a mistake on each of its last five lines:
 
-<!-- file: broken.logex -->
+<!-- file: broken_retain.logex -->
 ```
 var_global eye_1              bool at panel.i.0
 var_global retain case_lamp   bool at panel.q.0
@@ -3158,7 +3164,7 @@ IO.inspect(dropped)
 {:ok, wired} = Logex.Configuration.compile_file("wired.logex")
 Enum.each(wired.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
 
-{:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
+{:error, diagnostics} = Logex.Configuration.compile_file("broken_retain.logex")
 Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
 ```
 
@@ -3173,11 +3179,11 @@ from image     total_boxes=5 t1.boxes.cv=5 case_full=0
 a ctu_int      total_boxes=5 t1.boxes.cv=0 case_full=0
 [{"t1.boxes", {:retyped, "ctu", "ctu_int"}}]
 wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_lamp`: after a warm start it is written in the first round
-broken.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
-broken.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
-broken.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
-broken.logex: line 5: `program` is a keyword and cannot name a device
-broken.logex: line 6: `retain` is a keyword and cannot name an instance
+broken_retain.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
+broken_retain.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
+broken_retain.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
+broken_retain.logex: line 5: `program` is a keyword and cannot name a device
+broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
 ```
 
 - A warm restart, `Logex.Runtime.restart(runtime, :warm)`, keeps a global its line marks
@@ -4044,18 +4050,16 @@ closed: true
   ```elixir
   task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
 
-  answered = fn answered ->
-    case Task.yield(task, 10) do
-      {:ok, value} ->
-        value
+  answered = fn
+    _answered, {:ok, value} ->
+      value
 
-      nil ->
-        Manual.advance(clock, 0)              # one owed round; at most 4 bring the slot
-        answered.(answered)
-    end
+    answered, nil ->
+      Manual.advance(clock, 0)                # one owed round; at most 4 bring the slot
+      answered.(answered, Task.yield(task, 10))
   end
 
-  answered.(answered)
+  answered.(answered, Task.yield(task, 10))
   ```
 
 A trip (M4-4, decisions 110 to 115, 125, 126 and 128) has one path, whatever caused it:
@@ -5170,13 +5174,12 @@ cycle = fn rt, elapsed, label, inputs ->
   {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
   ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
   # `horn` is a global of the candidate's alone.
-  horn =
-    case Logex.Runtime.get(rt, "horn") do
-      {:ok, value} -> " horn=#{value}"
-      {:error, _reason} -> ""
-    end
+  horn = fn
+    {:ok, value} -> " horn=#{value}"
+    {:error, _reason} -> ""
+  end
 
-  IO.puts("#{label}k1=#{out["k1"]} k1_at_trip=#{Logex.Runtime.get!(rt, "k1_at_trip")}#{horn}  ran #{Enum.join(ran, ", ")}")
+  IO.puts("#{label}k1=#{out["k1"]} k1_at_trip=#{Logex.Runtime.get!(rt, "k1_at_trip")}#{horn.(Logex.Runtime.get(rt, "horn"))}  ran #{Enum.join(ran, ", ")}")
   rt
 end
 
@@ -5411,9 +5414,10 @@ CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 `MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
 Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`); `scripts/gate.sh` runs the
 same four here. The suite runs every example in this file, each script a `$ mix run`
-block follows, and compares what it prints with what is printed here; the one `elixir`
-block shown with no output, the call made from another process in "Running a plant on
-the clock", is a fragment, which it only parses (`test/logex/readme_test.exs`).
+block follows, from its file under `examples/`, and compares what it prints with what is
+printed here, each block shown here held to its file; the one `elixir` block shown with
+no output, the call made from another process in "Running a plant on the clock", is a
+fragment, which it runs in the state its prose describes (`test/logex/readme_test.exs`).
 
 ## Documents
 

@@ -1,0 +1,4 @@
+task trip single pb priority 0
+var_global pb bool at panel.i.0
+program d debounce with trip
+  d.in pb

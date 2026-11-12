@@ -1,0 +1,6 @@
+var_global eye_1              bool at panel.i.0
+var_global retain case_lamp   bool at panel.q.0
+var_global total_boxes retain dint
+var_global retain non_retain total dint
+var_global eye_2              bool at program.i.1
+program retain tally
