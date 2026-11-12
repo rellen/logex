@@ -4702,7 +4702,13 @@ defmodule Logex.EndToEndTest do
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link(clock: clock)
       points = Logex.IO.points(plant)
-      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      address =
+        Map.new(
+          for {device, ps} <- points,
+              %{direction: :input} = p <- ps,
+              do: {p.name, Enum.join([device, "i" | p.address], ".")}
+        )
 
       {:ok, runner} =
         Runner.start_link(
@@ -4819,7 +4825,7 @@ defmodule Logex.EndToEndTest do
       by_device = fn device ->
         for %{direction: :output} = p <- Map.fetch!(points, device),
             into: %{},
-            do: {p.address, Map.fetch!(outputs, p.name)}
+            do: {Enum.join([device, "q" | p.address], "."), Map.fetch!(outputs, p.name)}
       end
 
       {events, by_device.("panel"), by_device.("drive"),
@@ -4848,7 +4854,7 @@ defmodule Logex.EndToEndTest do
       assert Enum.any?(events, &match?({:ran, "trip", "snap", _}, &1))
       assert Enum.any?(events, &match?({:round, _, %{"k1" => 1}}, &1))
       assert Enum.any?(events, &match?({:round, _, %{"case_full" => 1}}, &1))
-      assert Enum.any?(runner_log, &match?({_, _, %{[0] => 1200}, _}, &1))
+      assert Enum.any?(runner_log, &match?({_, _, %{"drive.q.0" => 1200}, _}, &1))
       rounds = Enum.count(events, &match?({:round, _, _}, &1))
       assert rounds > 2_000
 
@@ -4877,7 +4883,7 @@ defmodule Logex.EndToEndTest do
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}}
         )
 
-      Sim.set(panel, %{[0] => 1, [3] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.3" => 1})
       Process.sleep(2_000)
       status = Runner.status(runner)
       assert %{status: :running, trip: nil} = status
@@ -4890,8 +4896,16 @@ defmodule Logex.EndToEndTest do
 
       assert Runner.stop(runner) == :ok
       refute Process.alive?(runner)
-      assert List.last(Sim.writes(panel)) == %{[0] => 0, [1] => 0, [2] => 0, [3] => 0, [4] => 0}
-      assert List.last(Sim.writes(drive)) == %{[0] => 0, [1] => 0}
+
+      assert List.last(Sim.writes(panel)) == %{
+               "panel.q.0" => 0,
+               "panel.q.1" => 0,
+               "panel.q.2" => 0,
+               "panel.q.3" => 0,
+               "panel.q.4" => 0
+             }
+
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 0, "drive.q.1" => 0}
       assert Sim.closed?(panel) and Sim.closed?(drive)
     end
   end
@@ -4974,7 +4988,13 @@ defmodule Logex.EndToEndTest do
       {:ok, panel} = Sim.start_link(reports: true, clock: clock)
       {:ok, drive} = Sim.start_link(clock: clock)
       points = Logex.IO.points(plant)
-      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      address =
+        Map.new(
+          for {device, ps} <- points,
+              %{direction: :input} = p <- ps,
+              do: {p.name, Enum.join([device, "i" | p.address], ".")}
+        )
 
       {:ok, runner} =
         Runner.start_link(
@@ -5120,7 +5140,13 @@ defmodule Logex.EndToEndTest do
       plant = plant_on_disk(dir)
       file = Path.join(dir, "forces")
       points = Logex.IO.points(plant)
-      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      address =
+        Map.new(
+          for {device, ps} <- points,
+              %{direction: :input} = p <- ps,
+              do: {p.name, Enum.join([device, "i" | p.address], ".")}
+        )
 
       start = fn ->
         {:ok, clock} = Manual.start_link()
@@ -5279,7 +5305,7 @@ defmodule Logex.EndToEndTest do
       # Every value a 16-bit register gives, its top among them, reaches the dint whole: a
       # uint widens into a dint, so the oracle is the value itself.
       for hz <- [0, 1, 1200, 32_767, 32_768, 65_534, 65_535] do
-        Sim.set(drive, [0], hz)
+        Sim.set(drive, "drive.i.0", hz)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "fan_hz") == hz
         assert Runner.get!(runner, "fan1.speed") == hz
@@ -5300,7 +5326,7 @@ defmodule Logex.EndToEndTest do
       assert Runner.get!(runner, "fan_speed") == 65_535
 
       # A reading the uint cannot hold is a bad value, and the plant trips on it.
-      Sim.set(drive, [0], 65_536)
+      Sim.set(drive, "drive.i.0", 65_536)
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.0", 65_536}}
       assert Runner.get!(runner, "fan_speed") == 65_535
@@ -5391,11 +5417,11 @@ defmodule Logex.EndToEndTest do
           for(_ <- 1..40, do: :rand.uniform(65_536) - 1)
 
       for status <- statuses do
-        Sim.set(drive, [4], status)
+        Sim.set(drive, "drive.i.4", status)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "drive_status") == status
         assert Runner.get!(runner, "run_lamp") == at_speed(status), inspect(status)
-        assert Sim.outputs(panel)[[6]] == at_speed(status)
+        assert Sim.outputs(panel)["panel.q.6"] == at_speed(status)
       end
 
       # A force is held to the word, read as the device's is, and kept in the forces file.
@@ -5407,7 +5433,7 @@ defmodule Logex.EndToEndTest do
                    "`drive_status` is a word, forced to an integer from 0 to 65535, got: -1",
                    fn -> Runner.force(runner, "drive_status", -1) end
 
-      Sim.set(drive, [4], 0)
+      Sim.set(drive, "drive.i.4", 0)
       assert :ok = Runner.force(runner, "drive_status", 65_535)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "run_lamp") == 1
@@ -5420,7 +5446,7 @@ defmodule Logex.EndToEndTest do
         bad_reading(how, drive, bad)
         Manual.advance(clock, 10)
         assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.4", bad}}
-        Sim.set(drive, [4], 0)
+        Sim.set(drive, "drive.i.4", 0)
         assert :ok = Runner.force(runner, "drive_status", 65_535)
         assert Runner.restart(runner, :cold) == :ok
         Manual.advance(clock, 10)
@@ -5431,7 +5457,7 @@ defmodule Logex.EndToEndTest do
 
       # A fresh start reads the force back from its file.
       {runner, clock, _panel, drive} = lamp_runner(plant, dir)
-      Sim.set(drive, [4], 0)
+      Sim.set(drive, "drive.i.4", 0)
       Manual.advance(clock, 10)
       assert Runner.status(runner).forces == %{"drive_status" => 65_535}
       assert Runner.get!(runner, "run_lamp") == 1
@@ -5459,7 +5485,7 @@ defmodule Logex.EndToEndTest do
                    end
     end
 
-    defp bad_reading(:set, drive, value), do: Sim.set(drive, [4], value)
+    defp bad_reading(:set, drive, value), do: Sim.set(drive, "drive.i.4", value)
     defp bad_reading(:read, drive, value), do: Sim.fail(drive, :read, {:value, [4], value})
   end
 
@@ -5530,26 +5556,26 @@ defmodule Logex.EndToEndTest do
       for _ <- 1..60 do
         faults = :rand.uniform(65_536) - 1
         n = :rand.uniform(16) - 1
-        Sim.set(drive, [4], faults)
-        Sim.set(panel, [8], n)
+        Sim.set(drive, "drive.i.4", faults)
+        Sim.set(panel, "panel.i.8", n)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "run_lamp") == selected(faults, n), inspect({faults, n})
-        assert Sim.outputs(panel)[[6]] == selected(faults, n)
+        assert Sim.outputs(panel)["panel.q.6"] == selected(faults, n)
       end
 
       # Every output lit that can be, the lamp among them, then `sel` at 16 as the slow
       # task falls due: the fast task's step trips, the slow task's never runs.
-      Sim.set(drive, [4], 0xFFFF)
-      Sim.set(panel, %{[0] => 1, [3] => 1, [8] => 15})
+      Sim.set(drive, "drive.i.4", 0xFFFF)
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.3" => 1, "panel.i.8" => 15})
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel)[[6]] == 1
-      assert Sim.outputs(panel)[[0]] == 1
+      assert Sim.outputs(panel)["panel.q.6"] == 1
+      assert Sim.outputs(panel)["panel.q.0"] == 1
 
       %{now: now} = Runner.status(runner)
       at = now + 50 - rem(now, 50)
       Manual.advance(clock, at - now - 1)
       Runner.subscribe(runner, [:ran, :fault, :trip, :round])
-      Sim.set(panel, [8], 16)
+      Sim.set(panel, "panel.i.8", 16)
       Manual.advance(clock, 1)
 
       fault = %Logex.Fault{
@@ -5572,10 +5598,10 @@ defmodule Logex.EndToEndTest do
       # Every output 0 once, through each device, and nothing after.
       panel_writes = Sim.writes(panel)
       drive_writes = Sim.writes(drive)
-      assert List.last(panel_writes) == Map.new([0, 1, 2, 3, 6], &{[&1], 0})
-      assert List.last(drive_writes) == %{[0] => 0, [1] => 0}
+      assert List.last(panel_writes) == Map.new([0, 1, 2, 3, 6], &{"panel.q.#{&1}", 0})
+      assert List.last(drive_writes) == %{"drive.q.0" => 0, "drive.q.1" => 0}
       Manual.advance(clock, 1000)
-      Sim.set(panel, [8], 3)
+      Sim.set(panel, "panel.i.8", 3)
       Manual.advance(clock, 1000)
       assert {Sim.writes(panel), Sim.writes(drive)} == {panel_writes, drive_writes}
       Runner.stop(runner)
@@ -5691,7 +5717,7 @@ defmodule Logex.EndToEndTest do
           for(_ <- 1..60, do: Enum.random([:rand.uniform() * 100, :rand.uniform(100)]))
 
       for reading <- readings do
-        Sim.set(drive, [0], reading)
+        Sim.set(drive, "drive.i.0", reading)
         Manual.advance(clock, 10)
         hz = single(reading * 1.0)
 
@@ -5700,7 +5726,7 @@ defmodule Logex.EndToEndTest do
         assert Runner.get!(runner, "fan_hz") === hz, inspect(reading)
         assert Runner.get!(runner, "fan_speed") === speed, inspect(reading)
         assert Runner.get!(runner, "fan_rpm") === hz * 60.0 + 0.0, inspect(reading)
-        assert Sim.outputs(panel)[[7]] == over, inspect(reading)
+        assert Sim.outputs(panel)["panel.q.7"] == over, inspect(reading)
       end
 
       # A force is held to the real's nearest value, written as the shortest text that
@@ -5718,13 +5744,13 @@ defmodule Logex.EndToEndTest do
 
       # A reading past the real's range is a bad value, and the plant trips on it.
       assert :ok = Runner.unforce(runner, "fan_hz")
-      Sim.set(drive, [0], Integer.pow(2, 128))
+      Sim.set(drive, "drive.i.0", Integer.pow(2, 128))
       Manual.advance(clock, 10)
 
       assert Runner.status(runner).trip ==
                {:io, "drive", {:bad_value, "drive.i.0", Integer.pow(2, 128)}}
 
-      Sim.set(drive, [0], 50.5)
+      Sim.set(drive, "drive.i.0", 50.5)
       assert :ok = Runner.force(runner, "fan_hz", 0.1)
       assert Runner.restart(runner, :cold) == :ok
       Manual.advance(clock, 10)
@@ -5732,7 +5758,7 @@ defmodule Logex.EndToEndTest do
       Runner.stop(runner)
 
       {runner, clock, _panel, drive} = speed_runner(plant, dir)
-      Sim.set(drive, [0], 50.5)
+      Sim.set(drive, "drive.i.0", 50.5)
       Manual.advance(clock, 10)
       assert Runner.status(runner).forces == %{"fan_hz" => single(0.1)}
       assert Runner.get!(runner, "fan_hz") === single(0.1)
@@ -6166,8 +6192,8 @@ defmodule Logex.EndToEndTest do
           eye = Enum.random([0, 0, 1])
           weight = Enum.random(0..999)
           slot = Enum.random(0..7)
-          Sim.set(drive, [4], weight)
-          Sim.set(panel, %{[8] => eye, [9] => slot})
+          Sim.set(drive, "drive.i.4", weight)
+          Sim.set(panel, %{"panel.i.8" => eye, "panel.i.9" => slot})
           Manual.advance(clock, 10)
 
           weights = box_weighed(eye == 1 and last_eye == 0, weights, {slot, weight})
@@ -6175,8 +6201,8 @@ defmodule Logex.EndToEndTest do
           heavy = bit(last > 500)
           assert Runner.get!(runner, "scales.weights") == weights
           assert Runner.get!(runner, "box_last") == last
-          assert Sim.outputs(panel)[[7]] == last
-          assert Sim.outputs(panel)[[6]] == heavy
+          assert Sim.outputs(panel)["panel.q.7"] == last
+          assert Sim.outputs(panel)["panel.q.6"] == heavy
           {weights, eye}
         end)
 
@@ -6185,16 +6211,23 @@ defmodule Logex.EndToEndTest do
       # Every output lit that can be, then `slot` at 8 as the slow task falls due: the fast
       # task's step trips, the slow task's never runs.
       heavy_slot = Enum.find_index(weights, &(&1 > 500))
-      Sim.set(panel, %{[0] => 1, [3] => 1, [8] => 0, [9] => heavy_slot})
+
+      Sim.set(panel, %{
+        "panel.i.0" => 1,
+        "panel.i.3" => 1,
+        "panel.i.8" => 0,
+        "panel.i.9" => heavy_slot
+      })
+
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel)[[6]] == 1
-      assert Sim.outputs(panel)[[0]] == 1
+      assert Sim.outputs(panel)["panel.q.6"] == 1
+      assert Sim.outputs(panel)["panel.q.0"] == 1
 
       %{now: now} = Runner.status(runner)
       at = now + 50 - rem(now, 50)
       Manual.advance(clock, at - now - 1)
       Runner.subscribe(runner, [:ran, :fault, :trip, :round])
-      Sim.set(panel, [9], 8)
+      Sim.set(panel, "panel.i.9", 8)
       Manual.advance(clock, 1)
 
       fault = %Logex.Fault{
@@ -6218,16 +6251,18 @@ defmodule Logex.EndToEndTest do
         for {device, points} <- Logex.IO.points(plant),
             %{direction: :output, address: address} <- points,
             reduce: %{} do
-          acc -> Map.update(acc, device, %{address => 0}, &Map.put(&1, address, 0))
+          acc ->
+            at = Enum.join([device, "q" | address], ".")
+            Map.update(acc, device, %{at => 0}, &Map.put(&1, at, 0))
         end
 
       panel_writes = Sim.writes(panel)
       drive_writes = Sim.writes(drive)
       assert List.last(panel_writes) == outputs["panel"]
       assert List.last(drive_writes) == outputs["drive"]
-      assert Map.keys(outputs["panel"]) |> Enum.member?([7])
+      assert Map.keys(outputs["panel"]) |> Enum.member?("panel.q.7")
       Manual.advance(clock, 1000)
-      Sim.set(panel, [9], 3)
+      Sim.set(panel, "panel.i.9", 3)
       Manual.advance(clock, 1000)
       assert {Sim.writes(panel), Sim.writes(drive)} == {panel_writes, drive_writes}
       Runner.stop(runner)
@@ -6354,7 +6389,7 @@ defmodule Logex.EndToEndTest do
                 into: %{},
                 do: {zone, Enum.random([Enum.random(0..400), :rand.uniform() * 400])}
 
-          Sim.set(card, Map.new(changed, fn {zone, t} -> {[zone], t} end))
+          Sim.set(card, Map.new(changed, fn {zone, t} -> {"card.i.#{zone}", t} end))
           Manual.advance(clock, 10)
 
           temps =
@@ -6365,7 +6400,7 @@ defmodule Logex.EndToEndTest do
           assert Runner.get!(runner, "zone_t") == temps
           assert Runner.get!(runner, "zone_t0") === hd(temps)
 
-          assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
+          assert for(i <- 0..7, do: Sim.outputs(card)["card.q.#{i}"]) ==
                    for(t <- temps, do: bit(t > 180.0))
 
           temps
@@ -6373,27 +6408,27 @@ defmodule Logex.EndToEndTest do
 
       # Zone 3 forced over its setpoint against a card that says it is cold: its lamp
       # lit, the zones beside it still the card's, its line in the forces file by name.
-      Sim.set(card, %{[3] => 20, [4] => 20})
+      Sim.set(card, %{"card.i.3" => 20, "card.i.4" => 20})
       assert :ok = Runner.force(runner, "zone_t[3]", 250)
       Manual.advance(clock, 10)
       temps = temps |> List.replace_at(3, 250.0) |> List.replace_at(4, 20.0)
       assert Runner.get!(runner, "zone_t") == temps
-      assert Sim.outputs(card)[[3]] == 1 and Sim.outputs(card)[[4]] == 0
+      assert Sim.outputs(card)["card.q.3"] == 1 and Sim.outputs(card)["card.q.4"] == 0
       assert File.read!(Path.join(dir, "forces")) == "zone_t[3] 250.0\n"
 
       # A zone past a real's range trips the plant; put right, a restart reads the card
       # again, the force still on.
-      Sim.set(card, [6], Integer.pow(2, 128))
+      Sim.set(card, "card.i.6", Integer.pow(2, 128))
 
       assert Runner.status(runner).trip ==
                {:io, "card", {:bad_value, "card.i.6", Integer.pow(2, 128)}}
 
-      Sim.set(card, [6], 190.5)
+      Sim.set(card, "card.i.6", 190.5)
       assert Runner.restart(runner, :cold) == :ok
       Manual.advance(clock, 10)
       temps = List.replace_at(temps, 6, 190.5)
       assert Runner.get!(runner, "zone_t") == temps
-      assert Sim.outputs(card)[[3]] == 1 and Sim.outputs(card)[[6]] == 1
+      assert Sim.outputs(card)["card.q.3"] == 1 and Sim.outputs(card)["card.q.6"] == 1
 
       # Killed: a fresh runner from the same file comes back with zone 3 forced.
       Process.flag(:trap_exit, true)
@@ -6411,7 +6446,7 @@ defmodule Logex.EndToEndTest do
       assert :ok = Runner.unforce(runner, "zone_t[3]")
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "zone_t") == List.replace_at(temps, 3, 20.0)
-      assert Sim.outputs(card)[[3]] == 0
+      assert Sim.outputs(card)["card.q.3"] == 0
       assert File.read!(Path.join(dir, "forces")) == ""
       Runner.stop(runner)
     end
@@ -6878,7 +6913,7 @@ defmodule Logex.EndToEndTest do
             |> Map.merge(bits)
             |> Map.merge(%{"bool" => bool, "real" => real, "lreal" => lreal})
 
-          Sim.set(bench_io, Map.new(values, fn {type, v} -> {[at[type]], v} end))
+          Sim.set(bench_io, Map.new(values, fn {type, v} -> {"bench.i.#{at[type]}", v} end))
 
           # The fan, the oven and the box counter.
           hz = Enum.random([:rand.uniform() * 100, :rand.uniform(100), -0.0])
@@ -6893,22 +6928,30 @@ defmodule Logex.EndToEndTest do
           outfeed = Enum.random([0, 0, 0, 1])
           full = Enum.random(List.duplicate(0, 40) ++ [1])
           slot = Enum.random(0..7)
-          Sim.set(drive, %{[0] => hz, [4] => weight})
-          Sim.set(card, Map.new(zones, fn {zone, t} -> {[zone], t} end))
-          Sim.set(panel, %{[8] => eye, [9] => slot, [10] => outfeed, [11] => full})
+          Sim.set(drive, %{"drive.i.0" => hz, "drive.i.4" => weight})
+          Sim.set(card, Map.new(zones, fn {zone, t} -> {"card.i.#{zone}", t} end))
+
+          Sim.set(panel, %{
+            "panel.i.8" => eye,
+            "panel.i.9" => slot,
+            "panel.i.10" => outfeed,
+            "panel.i.11" => full
+          })
+
           Manual.advance(clock, 10)
 
           out = Sim.outputs(bench_io)
 
           for {type, lo, hi} <- @integer_types do
-            assert out[[at[type]]] == wrapped(ints[type] + 1, lo, hi), type
-            assert out[[15 + at[type]]] == bit(ints[type] < hi), type
+            assert out["bench.q.#{at[type]}"] == wrapped(ints[type] + 1, lo, hi), type
+            assert out["bench.q.#{15 + at[type]}"] == bit(ints[type] < hi), type
           end
 
           for {type, width} <- @bit_strings,
-              do: assert(out[[at[type]]] == Integer.pow(2, width) - 1 - bits[type], type)
+              do:
+                assert(out["bench.q.#{at[type]}"] == Integer.pow(2, width) - 1 - bits[type], type)
 
-          assert out[[at["bool"]]] == 1 - bool
+          assert out["bench.q.#{at["bool"]}"] == 1 - bool
           r = single(real * 1.0)
           assert Runner.get!(runner, "b_i_real") === r
 
@@ -6928,7 +6971,7 @@ defmodule Logex.EndToEndTest do
           assert Runner.get!(runner, "fan_hz") === fan
           assert Runner.get!(runner, "fan_speed") === speed
           assert Runner.get!(runner, "fan_rpm") === fan * 60.0 + 0.0
-          assert Sim.outputs(panel)[[7]] == bit(speed > 3000)
+          assert Sim.outputs(panel)["panel.q.7"] == bit(speed > 3000)
 
           # The oven's eight zones, each lamp lit over 180.
           temps =
@@ -6938,7 +6981,7 @@ defmodule Logex.EndToEndTest do
 
           assert Runner.get!(runner, "zone_t") == temps
 
-          assert for(i <- 0..7, do: Sim.outputs(card)[[i]]) ==
+          assert for(i <- 0..7, do: Sim.outputs(card)["card.q.#{i}"]) ==
                    for(t <- temps, do: bit(t > 180.0))
 
           # The box counter, IEC's CTUD restated over an int: a load first, then an up
@@ -6952,9 +6995,9 @@ defmodule Logex.EndToEndTest do
           weights = box_weighed(rose, model.weights, {slot, weight})
           assert Runner.get!(runner, "boxes.boxes.cv") == cv
           assert Runner.get!(runner, "boxes.weights") == weights
-          assert Sim.outputs(panel)[[4]] == cv
-          assert Sim.outputs(panel)[[5]] == Enum.at(weights, slot)
-          assert Sim.outputs(panel)[[6]] == ov
+          assert Sim.outputs(panel)["panel.q.4"] == cv
+          assert Sim.outputs(panel)["panel.q.5"] == Enum.at(weights, slot)
+          assert Sim.outputs(panel)["panel.q.6"] == ov
 
           %{
             model
@@ -6967,7 +7010,7 @@ defmodule Logex.EndToEndTest do
               seen:
                 MapSet.union(
                   model.seen,
-                  MapSet.new([{:ov, ov}, {:wrap, out[[15]]}, {:full, full}])
+                  MapSet.new([{:ov, ov}, {:wrap, out["bench.q.15"]}, {:full, full}])
                 )
           }
         end)
@@ -6978,7 +7021,7 @@ defmodule Logex.EndToEndTest do
       # `slot` at 8: the fast task's step trips on `move weights[slot] last`, and every
       # output of every device is written 0 once, and nothing after.
       Runner.subscribe(runner, [:fault, :trip, :round])
-      Sim.set(panel, [9], 8)
+      Sim.set(panel, "panel.i.9", 8)
       Manual.advance(clock, 10)
 
       assert {:fault, "fast", "boxes",
@@ -6992,13 +7035,15 @@ defmodule Logex.EndToEndTest do
         for {device, points} <- Logex.IO.points(plant),
             %{direction: :output, address: address} <- points,
             reduce: %{} do
-          acc -> Map.update(acc, device, %{address => 0}, &Map.put(&1, address, 0))
+          acc ->
+            at = Enum.join([device, "q" | address], ".")
+            Map.update(acc, device, %{at => 0}, &Map.put(&1, at, 0))
         end
 
       writes = Map.new(sims, fn {name, sim} -> {name, Sim.writes(sim)} end)
       for {name, zero} <- zeros, do: assert(List.last(writes[name]) == zero, name)
       Manual.advance(clock, 1000)
-      Sim.set(panel, [9], 3)
+      Sim.set(panel, "panel.i.9", 3)
       Manual.advance(clock, 1000)
       assert Map.new(sims, fn {name, sim} -> {name, Sim.writes(sim)} end) == writes
       Runner.stop(runner)
@@ -7259,7 +7304,7 @@ defmodule Logex.EndToEndTest do
     # a trip, the panel's read made to fail, and then a kill; each but the eye followed by
     # a fresh start on the same store, once its devices' processes have gone.
     defp kept_run({:eye, eye}, rig) do
-      Sim.set(rig.panel, [8], eye)
+      Sim.set(rig.panel, "panel.i.8", eye)
       Manual.advance(rig.clock, 20)
       rig
     end
@@ -7613,16 +7658,16 @@ defmodule Logex.EndToEndTest do
 
     # The runner's side of each step.
     defp life_run({:eye, eye, hold}, rig) do
-      Sim.set(rig.panel, [8], eye)
-      Sim.set(rig.panel, [9], hold)
+      Sim.set(rig.panel, "panel.i.8", eye)
+      Sim.set(rig.panel, "panel.i.9", hold)
       Manual.advance(rig.clock, 20)
       rig
     end
 
     defp life_run(:press, rig) do
-      Sim.set(rig.panel, [0], 1)
+      Sim.set(rig.panel, "panel.i.0", 1)
       Manual.advance(rig.clock, 10)
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       Manual.advance(rig.clock, 10)
       rig
     end
@@ -7698,7 +7743,7 @@ defmodule Logex.EndToEndTest do
       assert life_values(rig.runner) == model.now, inspect(step)
       assert Runner.get!(rig.runner, "k1") == model.motor, inspect(step)
       assert Runner.get!(rig.runner, "m1.s1.run") == model.motor, inspect(step)
-      assert Map.get(Sim.outputs(rig.panel), [0], 0) == model.motor, inspect(step)
+      assert Map.get(Sim.outputs(rig.panel), "panel.q.0", 0) == model.motor, inspect(step)
       model
     end
 

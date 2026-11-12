@@ -14362,21 +14362,27 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   ]
 
   @inputs %{
-    "pa" => {"panel", [0], :bool},
-    "pb" => {"panel", [1], :bool},
-    "pd" => {"panel", [2], :dint},
-    "pt[0]" => {"panel", [3], :int},
-    "pt[1]" => {"panel", [4], :int},
-    "pt[2]" => {"panel", [5], :int},
-    "da" => {"drive", [0], :bool},
-    "db" => {"drive", [1], :bool},
-    "dr" => {"drive", [2], :real},
-    "dw" => {"drive", [3], :word}
+    "pa" => {"panel", "panel.i.0", :bool},
+    "pb" => {"panel", "panel.i.1", :bool},
+    "pd" => {"panel", "panel.i.2", :dint},
+    "pt[0]" => {"panel", "panel.i.3", :int},
+    "pt[1]" => {"panel", "panel.i.4", :int},
+    "pt[2]" => {"panel", "panel.i.5", :int},
+    "da" => {"drive", "drive.i.0", :bool},
+    "db" => {"drive", "drive.i.1", :bool},
+    "dr" => {"drive", "drive.i.2", :real},
+    "dw" => {"drive", "drive.i.3", :word}
   }
 
   @outputs %{
-    "panel" => %{[0] => "qa", [1] => "qn"},
-    "drive" => %{[0] => "qb", [1] => "qc", [2] => "qs[0]", [3] => "qs[1]", [4] => "qu"}
+    "panel" => %{"panel.q.0" => "qa", "panel.q.1" => "qn"},
+    "drive" => %{
+      "drive.q.0" => "qb",
+      "drive.q.1" => "qc",
+      "drive.q.2" => "qs[0]",
+      "drive.q.3" => "qs[1]",
+      "drive.q.4" => "qu"
+    }
   }
 
   # Everything the walk must be seen to reach: every event kind; every trip reason but

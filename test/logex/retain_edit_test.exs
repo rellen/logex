@@ -627,7 +627,7 @@ defmodule Logex.RetainEditTest do
 
   defp pressed(%{panel: panel, clock: clock}, eyes) do
     for eye <- eyes do
-      Sim.set(panel, [0], eye)
+      Sim.set(panel, "panel.i.0", eye)
       Manual.advance(clock, 10)
     end
   end
@@ -665,7 +665,7 @@ defmodule Logex.RetainEditTest do
   # A trip, the panel's read failing, and a warm restart, the eye low so that nothing
   # counts and nothing latches in its first round: the count and the lamp as it keeps them.
   defp warm(rig, runner) do
-    Sim.set(rig.panel, [0], 0)
+    Sim.set(rig.panel, "panel.i.0", 0)
     Manual.advance(rig.clock, 10)
     Sim.fail(rig.panel, :read, {:error, :eio})
     Manual.advance(rig.clock, 10)

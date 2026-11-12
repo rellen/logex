@@ -164,27 +164,27 @@ defmodule Logex.ForceTest do
 
       # Its device says 0 and then 1 and 0 again; the controller reads 1 throughout.
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
-      Sim.set(panel, [0], 1)
-      Sim.set(panel, [0], 0)
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
+      Sim.set(panel, "panel.i.0", 1)
+      Sim.set(panel, "panel.i.0", 0)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "x") == 1
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       assert File.read!(file) == "x 1\n"
 
       # Forced to 0 against a device that says 1, and then unforced: the next round reads
       # the device's last value, 1, which no report brought again.
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.force(runner, "x", 0) == :ok
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       assert File.read!(file) == "x 0\n"
       assert Runner.unforce(runner, "x") == :ok
       assert Runner.status(runner).forces == %{}
       assert File.read!(file) == ""
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "x") == 1
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
     end
 
     test "a device's change while forced is kept, and an unforce puts back the last one",
@@ -194,7 +194,7 @@ defmodule Logex.ForceTest do
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "seen") == 7
 
-      for value <- [3, 9, -4], do: Sim.set(panel, [2], value)
+      for value <- [3, 9, -4], do: Sim.set(panel, "panel.i.2", value)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "seen") == 7
 
@@ -219,7 +219,7 @@ defmodule Logex.ForceTest do
            "writes it empty",
          %{tmp_dir: dir} do
       %{runner: runner, clock: clock, panel: panel, file: file} = started(dir)
-      Sim.set(panel, %{[0] => 1, [2] => 5})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.2" => 5})
       Runner.force(runner, "x", 0)
       Runner.force(runner, "level", -12)
       Runner.force(runner, "x", 0)
@@ -255,13 +255,13 @@ defmodule Logex.ForceTest do
       Manual.advance(clock, 10)
 
       # A value that does not fit trips it; put right, it restarts with the force on.
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       assert %{status: :tripped, forces: %{"x" => 1}} = Runner.status(runner)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       assert Runner.restart(runner, :cold) == :ok
       assert %{status: :running, forces: %{"x" => 1}} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 1
-      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
     end
 
     # The panel's process killed, the runner tripped; the panel's `x` then 1, which the
@@ -280,7 +280,7 @@ defmodule Logex.ForceTest do
       Process.exit(pid, :kill)
       wait_until(fn -> Runner.status(runner).status == :tripped end)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.restart(runner, :warm) == :ok
       Manual.advance(clock, 10)
       assert Runner.unforce(runner, "x") == :ok
@@ -297,10 +297,10 @@ defmodule Logex.ForceTest do
     test "is taken while tripped, and the restart's first round reads it", %{tmp_dir: dir} do
       %{runner: runner, clock: clock, panel: panel} = started(dir, write_limit: 5000)
       Manual.advance(clock, 10)
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       assert Runner.status(runner).status == :tripped
       assert Runner.force(runner, "x", 1) == :ok
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       Runner.restart(runner, :cold)
       assert Runner.get!(runner, "y") == 1
     end
@@ -313,7 +313,7 @@ defmodule Logex.ForceTest do
       rounds = Runner.status(runner).rounds
 
       assert Runner.force(runner, "e", 1) == :ok
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
       assert Runner.status(runner).rounds == rounds + 1
 
       # Forced again to what it reads: no change, no round.
@@ -321,8 +321,8 @@ defmodule Logex.ForceTest do
       assert Runner.status(runner).rounds == rounds + 1
 
       # Its device's changes change nothing the controller reads, and make no round.
-      Sim.set(panel, [1], 1)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 1)
+      Sim.set(panel, "panel.i.1", 0)
       assert Runner.status(runner).rounds == rounds + 1
       assert Runner.get!(runner, "hits") == 1
 
@@ -333,7 +333,7 @@ defmodule Logex.ForceTest do
 
       # Forced to 1 again, a rise: counted, at once.
       Runner.force(runner, "e", 1)
-      assert Sim.outputs(drive) == %{[0] => 2}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 2}
       assert Runner.status(runner).rounds == rounds + 3
 
       # unforce_all/1's change of it makes one round too.
@@ -379,8 +379,8 @@ defmodule Logex.ForceTest do
         )
 
       for name <- ["stop", "guard", "lift"], do: :ok = Runner.force(runner, name, 0)
-      Sim.set(panel, %{[1] => 1, [2] => 1})
-      Sim.set(drive, [3], 1)
+      Sim.set(panel, %{"panel.i.1" => 1, "panel.i.2" => 1})
+      Sim.set(drive, "drive.i.3", 1)
       Runner.subscribe(runner, [:ran, :round])
 
       assert Runner.unforce_all(runner) == :ok
@@ -397,7 +397,7 @@ defmodule Logex.ForceTest do
 
     test "while tripped a forced trigger makes no round", %{tmp_dir: dir} do
       %{runner: runner, panel: panel} = started(dir)
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       %{rounds: rounds, status: :tripped} = Runner.status(runner)
       Runner.force(runner, "e", 1)
       assert Runner.status(runner).rounds == rounds
@@ -485,7 +485,7 @@ defmodule Logex.ForceTest do
       assert Runner.force(runner, "x", 1) == {:error, {:forces, :enoent}}
       assert Runner.status(runner).forces == %{}
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       assert File.ls!(dir) == []
     end
 
@@ -503,7 +503,7 @@ defmodule Logex.ForceTest do
       assert Runner.status(runner).forces == %{"x" => 1}
       assert File.ls!(dir) == ["forces"]
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
     end
   end
 
@@ -515,7 +515,7 @@ defmodule Logex.ForceTest do
       Runner.force(runner, "x", 1)
       Runner.force(runner, "level", -3)
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
 
       # The crash: the runner is gone, and its devices zero their outputs.
       Process.flag(:trap_exit, true)
@@ -561,7 +561,7 @@ defmodule Logex.ForceTest do
       File.write!(Path.join(dir, "forces"), "e 1\n")
       %{runner: runner, drive: drive} = started(dir)
       assert Runner.get!(runner, "hits") == 1
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
     end
 
     # RV-5 (b3-store-image-11, a7-docs-1): a refusal names its first 50 problems and counts
@@ -840,7 +840,7 @@ defmodule Logex.ForceTest do
       assert %{status: :running, forces: %{}, forces_unread: {^file, :eisdir}} =
                Runner.status(runner)
 
-      Sim.set(panel, [2], 6)
+      Sim.set(panel, "panel.i.2", 6)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "seen") == 6
 
@@ -860,10 +860,10 @@ defmodule Logex.ForceTest do
          %{tmp_dir: dir} do
       %{runner: runner, clock: clock, panel: panel, file: file} = started(dir)
       Runner.force(runner, "x", 1)
-      Sim.set(panel, %{[0] => 0, [2] => 8})
+      Sim.set(panel, %{"panel.i.0" => 0, "panel.i.2" => 8})
       Manual.advance(clock, 10)
-      Sim.set(panel, [1], 5)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 5)
+      Sim.set(panel, "panel.i.1", 0)
       assert %{status: :tripped} = Runner.status(runner)
       writes = Sim.writes(panel)
 
@@ -888,8 +888,8 @@ defmodule Logex.ForceTest do
       # cannot be read: one that cannot be read, a directory in its place, keeps the forces
       # the runner holds and the restart goes on, the file named in status/1, where it
       # raised "the forces file cannot be read" and left the runner tripped.
-      Sim.set(panel, [1], 5)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 5)
+      Sim.set(panel, "panel.i.1", 0)
       File.rm!(file)
       File.mkdir!(file)
       assert Runner.restart(runner, :cold) == :ok
@@ -904,8 +904,8 @@ defmodule Logex.ForceTest do
       # file and keeps the runner's own set, `level` at 2, the file named still, where it
       # found no file, no force, and named it no more; the next force's write writes the
       # runner's set over it, and names it no more (decision 440: nil).
-      Sim.set(panel, [1], 5)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 5)
+      Sim.set(panel, "panel.i.1", 0)
       File.rmdir!(file)
       assert Runner.restart(runner, :cold) == :ok
 
@@ -920,8 +920,8 @@ defmodule Logex.ForceTest do
       assert Runner.get!(runner, "seen") == 2
 
       # Deleted, it is no force at the next restart: `level` back to its device's 8.
-      Sim.set(panel, [1], 5)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 5)
+      Sim.set(panel, "panel.i.1", 0)
       File.rm!(file)
       assert Runner.restart(runner, :warm) == :ok
       assert Runner.status(runner).forces == %{}

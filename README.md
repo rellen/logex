@@ -1400,11 +1400,11 @@ Logex.Runtime.instance(selected)
     clock: {Logex.Runner.Clock.Manual, clock}
   )
 
-Logex.IO.Sim.set(drive, [0], 0x0010)
-Logex.IO.Sim.set(panel, [0], 4)
+Logex.IO.Sim.set(drive, "drive.i.0", 0x0010)
+Logex.IO.Sim.set(panel, "panel.i.0", 4)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("bit 4:  the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
-Logex.IO.Sim.set(panel, [0], 16)
+Logex.IO.Sim.set(panel, "panel.i.0", 16)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("bit 16: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
 IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
@@ -1433,8 +1433,8 @@ $ mix run selected.exs
 16#0010, bit 16  %{"checked" => 0, "lamp" => 0}
     %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}
     %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xio, path: nil, file: "selected.ld", line: 7, read: 16}
-bit 4:  the lamp %{[0] => 1}
-bit 16: the lamp %{[0] => 0}, :tripped
+bit 4:  the lamp %{"panel.q.0" => 1}
+bit 16: the lamp %{"panel.q.0" => 0}, :tripped
     {:fault, "fast", "lamp1", %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}}
 line 5: `status.[code]` takes its bit number from `code`, a word (declared on line 2), which is no integer: a bit number is held in a tag of an integer type, so convert it first, with `word_to_uint`
 line 6: `on.[n]` names a bit of `on`, a bool, which has no bits
@@ -1882,11 +1882,11 @@ Logex.Runtime.instance(scales)
     clock: {Logex.Runner.Clock.Manual, clock}
   )
 
-Logex.IO.Sim.set(drive, [0], 730)
-Logex.IO.Sim.set(panel, %{[0] => 1, [1] => 4})
+Logex.IO.Sim.set(drive, "drive.i.0", 730)
+Logex.IO.Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 4})
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("box 730 in slot 4: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
-Logex.IO.Sim.set(panel, [1], 8)
+Logex.IO.Sim.set(panel, "panel.i.1", 8)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("slot 8: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
 IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
@@ -1922,8 +1922,8 @@ gone, slot 2      %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 410,
 slot 8            %{"heavy" => 0, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
     %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}
     %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: {8}}
-box 730 in slot 4: the lamp %{[0] => 1}
-slot 8: the lamp %{[0] => 0}, :tripped
+box 730 in slot 4: the lamp %{"panel.q.0" => 1}
+slot 8: the lamp %{"panel.q.0" => 0}, :tripped
     {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}}
 grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: {1, 9}}]
 line 8: `weights[code]` takes a subscript from `code`, a word (declared on line 5), which is no integer: a subscript is a literal or a tag of an integer type, so convert it first, with `word_to_uint`
@@ -3361,7 +3361,7 @@ end
 {:ok, runner} = Runner.start_link(opts)
 
 for eye <- [1, 0, 1, 0, 1, 0, 1, 0] do
-  Sim.set(panel, [0], eye)
+  Sim.set(panel, "panel.i.0", eye)
   Manual.advance(clock, 1000)
 end
 
@@ -3936,25 +3936,25 @@ alias Logex.IO.Sim
 show = fn label ->
   %{now: now, rounds: rounds} = Runner.status(runner)
   out = Sim.outputs(panel)
-  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.count")}")
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.count")}")
 end
 
 show.("started        ")
-Sim.set(panel, [0], 1)                      # pb_start_1, reported and merged at once
+Sim.set(panel, "panel.i.0", 1)              # pb_start_1, reported and merged at once
 Manual.advance(clock, 10)                   # a round each millisecond, the conveyor's at 10
 show.("start pressed  ")
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)                    # a box on the eye...
+  Sim.set(panel, "panel.i.8", 1)            # a box on the eye...
   Manual.advance(clock, 2)
-  Sim.set(panel, [8], 0)                    # ...and past it
+  Sim.set(panel, "panel.i.8", 0)            # ...and past it
   Manual.advance(clock, 2)
 end
 
 show.("three boxes    ")
 :ok = Runner.subscribe(runner, [:ran])
-Sim.set(panel, [7], 1)                      # the e-stop, which the conveyor reads at 30
+Sim.set(panel, "panel.i.7", 1)              # the e-stop, which the conveyor reads at 30
 Manual.advance(clock, 10)
 show.("e-stop at 22   ")
 IO.inspect(for({Runner, ^runner, {:ran, "fast", i, at}} <- Process.info(self(), :messages) |> elem(1), do: {i, at}), label: "the conveyor ran")
@@ -3977,7 +3977,7 @@ the conveyor ran: [{"c1", 30}]
   overlaps: %{"fast" => 0, "main" => 0},
   latest_wake: 0
 ]
-the last two writes: [%{[0] => 0, [4] => 1}, %{[0] => 0, [4] => 0}]
+the last two writes: [%{"panel.q.0" => 0, "panel.q.4" => 1}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
 closed: true
 ```
 
@@ -4008,6 +4008,11 @@ closed: true
   one with no output point among them, is written nothing at a poll.
 - The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
   at 30, which latched its fault and stopped it.
+- Once a runner has opened it, a sim is set and read at the configuration's addresses,
+  as `packing.logex` writes them: `set(panel, "panel.i.8", 1)` sets the eye, and
+  `outputs/1` and `writes/1` give `case_full` under `"panel.q.4"`. A sim no runner has
+  opened knows no device's name, and is set by the adapter's list, `[8]` (decision 517
+  (e), provisional).
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's
@@ -4066,9 +4071,9 @@ status = fn keys ->                         # the fields named, in the order nam
   IO.inspect(for(key <- keys, do: {key, Map.fetch!(Runner.status(runner), key)}))
 end
 
-Sim.set(panel, [0], 1)                      # start pressed
+Sim.set(panel, "panel.i.0", 1)              # start pressed
 Manual.advance(clock, 10)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 Sim.fail(panel, :read, {:error, :eio})      # the panel's next read, at its poll at 20, fails
 Manual.advance(clock, 15)
@@ -4090,10 +4095,10 @@ $ mix run a_trip.exs
 [status: :tripped, trip: {:io, "panel", {:error, :eio}}, now: 19, rounds: 20]
 events: [trip: {:io, "panel", {:error, :eio}}]
 k1 in the resource: 1
-the panel's last two writes: [%{[0] => 1, [4] => 0}, %{[0] => 0, [4] => 0}]
+the panel's last two writes: [%{"panel.q.0" => 1, "panel.q.4" => 0}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
 [status: :tripped, now: 19, rounds: 20]
 [status: :running, trip: nil, now: 19, rounds: 21]
-the panel's outputs: %{[0] => 0, [4] => 0}
+the panel's outputs: %{"panel.q.0" => 0, "panel.q.4" => 0}
 ```
 
 - The reasons: `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run longer
@@ -4242,17 +4247,17 @@ alias Logex.IO.Sim
 show = fn label ->
   %{status: status, now: now} = Runner.status(runner)
   out = Sim.outputs(panel)
-  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
 end
 
-Sim.set(panel, [0], 1)                      # start pressed
+Sim.set(panel, "panel.i.0", 1)              # start pressed
 Manual.advance(clock, 10)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)
+  Sim.set(panel, "panel.i.8", 1)
   Manual.advance(clock, 2)
-  Sim.set(panel, [8], 0)
+  Sim.set(panel, "panel.i.8", 0)
   Manual.advance(clock, 2)
 end
 
@@ -4325,8 +4330,8 @@ end
 :ok = Runner.force(runner, "eye", 1)           # the photo-eye forced blocked
 Manual.advance(clock, 2)
 show.(runner, "eye forced     ")
-Sim.set(panel, [8], 1)                         # the real eye: blocked, then clear
-Sim.set(panel, [8], 0)
+Sim.set(panel, "panel.i.8", 1)                 # the real eye: blocked, then clear
+Sim.set(panel, "panel.i.8", 0)
 Manual.advance(clock, 2)
 show.(runner, "eye moved      ")
 IO.inspect(File.read!("packing.forces"), label: "packing.forces")
@@ -4514,14 +4519,14 @@ alias Logex.IO.Sim
 # No clock: the machine's, Logex.Runner.Clock.Monotonic.
 {:ok, runner} = Runner.start_link(configuration: plant, io: %{"panel" => {Sim, sim: panel}})
 
-Sim.set(panel, [0], 1)                      # start pressed for 100 ms
+Sim.set(panel, "panel.i.0", 1)              # start pressed for 100 ms
 Process.sleep(100)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)                    # a box on the eye for 20 ms, then 20 ms clear
+  Sim.set(panel, "panel.i.8", 1)            # a box on the eye for 20 ms, then 20 ms clear
   Process.sleep(20)
-  Sim.set(panel, [8], 0)
+  Sim.set(panel, "panel.i.8", 0)
   Process.sleep(20)
 end
 
@@ -4556,7 +4561,7 @@ $ mix run on_the_real_clock.exs
   no_more_rounds_than_milliseconds: true
 ]
 this run's figures: now=1230 rounds=1229 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
-the last write: %{[0] => 0, [4] => 0}
+the last write: %{"panel.q.0" => 0, "panel.q.4" => 0}
 closed: true
 ```
 
@@ -4681,15 +4686,15 @@ end
 
 {:ok, runner} = start.()
 
-lamps = fn -> Enum.map(0..7, &Sim.outputs(card)[[&1]]) end
+lamps = fn -> Enum.map(0..7, &Sim.outputs(card)["card.q.#{&1}"]) end
 
-Sim.set(card, %{[0] => 175.5, [1] => 182, [2] => 179.9, [3] => 201.25, [5] => 190})
+Sim.set(card, %{"card.i.0" => 175.5, "card.i.1" => 182, "card.i.2" => 179.9, "card.i.3" => 201.25, "card.i.5" => 190})
 Manual.advance(clock, 10)
 IO.inspect(Runner.get!(runner, "zone_t"), label: "zone_t  ")
 IO.inspect(lamps.(), label: "lamps   ")
 
 :ok = Runner.force(runner, "zone_t[3]", 150)
-Sim.set(card, [3], 205.0)
+Sim.set(card, "card.i.3", 205.0)
 Manual.advance(clock, 10)
 IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "forced  ")
 IO.inspect(lamps.(), label: "lamps   ")

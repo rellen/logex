@@ -657,7 +657,7 @@ defmodule Logex.LongTimerTest do
           clock: {Manual, clock}
         )
 
-      Sim.set(sim, [0], 1)
+      Sim.set(sim, "card.i.0", 1)
       # The device reads it at its next poll, 10 ms on.
       Manual.advance(clock, 10)
       timing = Runner.get!(runner, "m.t.acc")

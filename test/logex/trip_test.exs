@@ -610,13 +610,13 @@ defmodule Logex.TripTest do
            "write, every output written 0 once and nothing after, the resource kept" do
       %{runner: runner, clock: clock, panel: panel} = rig()
       Runner.subscribe(runner)
-      assert Sim.writes(panel) == [%{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}]
 
       # The round computes y = 1, and its outputs are never written: the panel is zeroed.
-      Sim.set(panel, %{[0] => 1, [1] => 5})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 5})
       Manual.advance(clock, 10)
       assert_receive {Runner, ^runner, {:trip, {:internal, "boom in the outputs"}}}
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert Runner.get!(runner, "y") == 1
       assert Runner.get!(runner, "r.out") == 1
 
@@ -625,9 +625,9 @@ defmodule Logex.TripTest do
 
       # Nothing after: no round, no write, whatever the clock or the inputs do.
       Manual.advance(clock, 1000)
-      Sim.set(panel, [0], 0)
+      Sim.set(panel, "panel.i.0", 0)
       Manual.advance(clock, 1000)
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert %{status: :tripped, rounds: 1} = Runner.status(runner)
       refute Enum.any?(Manual.pending(clock), fn {_at, pid, _message} -> pid == runner end)
       refute_received {Runner, ^runner, _event}
@@ -643,10 +643,10 @@ defmodule Logex.TripTest do
             {5, "boom in the outputs"}
           ] do
         %{runner: runner, clock: clock, panel: panel} = rig()
-        Sim.set(panel, [1], boom)
+        Sim.set(panel, "panel.i.1", boom)
         Manual.advance(clock, 10)
         assert Runner.status(runner).trip == {:internal, reason}
-        assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+        assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       end
     end
 
@@ -659,7 +659,7 @@ defmodule Logex.TripTest do
 
       %{runner: runner, clock: clock, panel: panel} = rig(configured(text))
       Runner.subscribe(runner, [:ran, :trip])
-      Sim.set(panel, [1], 2)
+      Sim.set(panel, "panel.i.1", 2)
       Manual.advance(clock, 10)
 
       # The first task's step ran and is kept, its event sent; the slow task's raised, and
@@ -674,11 +674,11 @@ defmodule Logex.TripTest do
     test "while tripped a device's change is merged and makes no round, and a host's " <>
            "request is served at once" do
       %{runner: runner, clock: clock, panel: panel} = rig()
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       Manual.advance(clock, 10)
       assert %{status: :tripped, rounds: 1} = Runner.status(runner)
 
-      Sim.set(panel, %{[0] => 1, [1] => 0})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 0})
       assert :sys.get_state(runner).pending == %{"x" => 1, "boom" => 0}
       assert Runner.get!(runner, "x") == 0
       assert %{rounds: 1} = Runner.status(runner)
@@ -695,13 +695,13 @@ defmodule Logex.TripTest do
       assert Enum.any?(Manual.pending(clock), fn {_at, pid, _message} -> pid == runner end)
 
       # The trigger's round, at once, trips: the periodic task's wake at 10 is cancelled.
-      Sim.set(panel, [1], 5)
-      Sim.set(panel, [2], 1)
+      Sim.set(panel, "panel.i.1", 5)
+      Sim.set(panel, "panel.i.2", 1)
       assert %{status: :tripped, rounds: 1} = Runner.status(runner)
       refute Enum.any?(Manual.pending(clock), fn {_at, pid, _message} -> pid == runner end)
 
-      Sim.set(panel, [2], 0)
-      Sim.set(panel, [2], 1)
+      Sim.set(panel, "panel.i.2", 0)
+      Sim.set(panel, "panel.i.2", 1)
       Manual.advance(clock, 100)
       assert %{status: :tripped, rounds: 1} = Runner.status(runner)
       assert Runner.get!(runner, "hits") == 1
@@ -728,7 +728,7 @@ defmodule Logex.TripTest do
       Manual.pass(clock, 1)
       task = Task.async(fn -> Runner.get!(runner, "a") end)
       wait_queued(runner)
-      Sim.set(panel, [1], 2)
+      Sim.set(panel, "panel.i.1", 2)
       Manual.advance(clock, 0)
       assert Task.await(task) == 1
       assert Runner.status(runner).trip == {:internal, "boom in a step"}
@@ -739,13 +739,13 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel} = rig(configured(), poll: 10)
       Manual.advance(clock, 30)
       assert length(Sim.writes(panel)) == 4
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       Manual.advance(clock, 10)
       assert Runner.status(runner).status == :tripped
       device = :sys.get_state(runner).devices |> hd() |> elem(1)
       :erlang.trace(device, true, [:receive])
       written = Sim.writes(panel)
-      assert List.last(written) == %{[0] => 0}
+      assert List.last(written) == %{"panel.q.0" => 0}
 
       # Its polls go on, reading, and write nothing; and the runner sends no refresh,
       # whatever a host asks of it.
@@ -765,10 +765,14 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@relayed <> "var_global z bool at drive.q.0\n"))
 
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       Manual.advance(clock, 10)
       zeroed = {Sim.writes(panel), Sim.writes(drive)}
-      assert zeroed == {[%{[0] => 0}, %{[0] => 0}], [%{[0] => 0}, %{[0] => 0}]}
+
+      assert zeroed ==
+               {[%{"panel.q.0" => 0}, %{"panel.q.0" => 0}],
+                [%{"drive.q.0" => 0}, %{"drive.q.0" => 0}]}
+
       assert Runner.stop(runner) == :ok
       assert {Sim.writes(panel), Sim.writes(drive)} == zeroed
       assert Sim.closed?(panel) and Sim.closed?(drive)
@@ -986,14 +990,14 @@ defmodule Logex.TripTest do
            "write, every output 0 once and nothing after, the trip naming it" do
       %{runner: runner, clock: clock, panel: panel} = lamped()
       Runner.subscribe(runner, [:ran, :fault, :trip, :round])
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       assert {Runner.get!(runner, "a"), Runner.get!(runner, "b")} == {2, 2}
 
       # At 16 in a word: the lamp's run, and the counter's after it in the same task, then
       # the trip; the slow task's step never runs.
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       fault = out_of_range("fast", "l", 4, 16)
       assert_receive {Runner, ^runner, {:ran, "fast", "l", 20}}
@@ -1005,9 +1009,9 @@ defmodule Logex.TripTest do
       assert %{status: :tripped, trip: ^fault} = Runner.status(runner)
 
       written = Sim.writes(panel)
-      assert List.last(written) == %{[0] => 0, [1] => 0}
+      assert List.last(written) == %{"panel.q.0" => 0, "panel.q.1" => 0}
       Manual.advance(clock, 1000)
-      Sim.set(panel, [1], 3)
+      Sim.set(panel, "panel.i.1", 3)
       Manual.advance(clock, 1000)
       assert Sim.writes(panel) == written
 
@@ -1026,28 +1030,28 @@ defmodule Logex.TripTest do
     # restart's first round writes it, as before.
     test "a trip's 0 that fails names its device in status/1, the first reason kept, until a restart" do
       %{runner: runner, clock: clock, panel: panel} = lamped()
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       assert Runner.status(runner).unzeroed == []
       written = Sim.writes(panel)
 
       Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       fault = out_of_range("fast", "l", 4, 16)
       assert %{status: :tripped, trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
       assert Sim.writes(panel) == written
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
 
       Manual.advance(clock, 1000)
       assert %{status: :tripped, trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
       assert Sim.writes(panel) == written
 
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       assert Runner.restart(runner, :cold) == :ok
       assert %{status: :running, unzeroed: []} = Runner.status(runner)
-      assert List.last(Sim.writes(panel)) == %{[0] => 0, [1] => 0}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 0, "panel.q.1" => 0}
       assert length(Sim.writes(panel)) == length(written) + 1
     end
 
@@ -1088,7 +1092,7 @@ defmodule Logex.TripTest do
 
       # The next round, at 10, raises in its step, and the trip's 0 fails at every device.
       for {_name, sim} <- sims, do: Sim.fail(sim, :write, {:error, :gone})
-      Sim.set(panel, [1], 2)
+      Sim.set(panel, "panel.i.1", 2)
       Manual.advance(clock, 10)
       assert %{status: :tripped, unzeroed: unzeroed} = Runner.status(runner)
       assert unzeroed == names
@@ -1098,18 +1102,18 @@ defmodule Logex.TripTest do
     test "a trip's 0 that fails is tried again at every poll until it is taken" do
       # Polls at 7, 14, 21, …, apart from the fast task's rounds at 10, 20, ….
       %{runner: runner, clock: clock, panel: panel} = lamped(@lamped, 7)
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 15)
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
 
       # The trip's 0, at 20, and the polls' at 21 and 28 fail; the poll's at 35 is taken.
       for _ <- 1..3, do: Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 5)
       fault = out_of_range("fast", "l", 4, 16)
       assert %{status: :tripped, trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
       written = Sim.writes(panel)
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
 
       Manual.advance(clock, 1)
       assert %{trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
@@ -1121,13 +1125,13 @@ defmodule Logex.TripTest do
 
       Manual.advance(clock, 7)
       assert %{status: :tripped, trip: ^fault, unzeroed: []} = Runner.status(runner)
-      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
-      assert Sim.outputs(panel) == %{[0] => 0, [1] => 0}
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0, "panel.q.1" => 0}]
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0, "panel.q.1" => 0}
 
       # Taken once, it is written nothing more, however the inputs change.
-      Sim.set(panel, [1], 3)
+      Sim.set(panel, "panel.i.1", 3)
       Manual.advance(clock, 100)
-      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0, "panel.q.1" => 0}]
       assert %{status: :tripped, trip: ^fault, unzeroed: []} = Runner.status(runner)
 
       assert Runner.restart(runner, :cold) == :ok
@@ -1140,10 +1144,10 @@ defmodule Logex.TripTest do
     # before whose new 0 is taken is named no more.
     test "a restart refused whose 0 a device named before takes drops its name" do
       %{runner: runner, clock: clock, panel: panel} = lamped()
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
       Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       fault = out_of_range("fast", "l", 4, 16)
       assert %{status: :tripped, trip: ^fault, unzeroed: ["panel"]} = Runner.status(runner)
@@ -1154,7 +1158,7 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) ==
                {:error, {:io_init, "panel", {:unknown_address, "panel.i.7"}}}
 
-      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0, "panel.q.1" => 0}]
       assert %{status: :tripped, trip: ^fault, unzeroed: []} = Runner.status(runner)
     end
 
@@ -1165,40 +1169,40 @@ defmodule Logex.TripTest do
     test "a stop of a tripped runner tries the 0 once more on a device still named, then " <>
            "closes it" do
       %{runner: runner, clock: clock, panel: panel} = lamped()
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
       Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
       written = Sim.writes(panel)
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
 
       assert Runner.stop(runner) == :ok
-      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
-      assert Sim.outputs(panel) == %{[0] => 0, [1] => 0}
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0, "panel.q.1" => 0}]
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0, "panel.q.1" => 0}
       assert Sim.closed?(panel)
     end
 
     test "a stop of a tripped runner whose device fails its last 0 too closes it anyway" do
       %{runner: runner, clock: clock, panel: panel, config: config} = lamped()
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
       for _ <- 1..2, do: Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
       written = Sim.writes(panel)
 
       assert Runner.stop(runner) == :ok
       assert Sim.writes(panel) == written
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       assert Sim.closed?(panel)
 
       # The review of decisions 286-289: Sim.writes/1 records only the writes taken, so the
       # last 0 is seen to be tried by the failure it used up: a runner opened on the panel
       # afterwards meets no failure left queued, and its first round's write is taken.
-      Sim.set(panel, [1], 15)
+      Sim.set(panel, "panel.i.1", 15)
 
       {:ok, again} =
         Runner.start_link(
@@ -1209,7 +1213,7 @@ defmodule Logex.TripTest do
         )
 
       assert %{status: :running, trip: nil} = Runner.status(again)
-      assert List.last(Sim.writes(panel)) == %{[0] => 1, [1] => 1}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       assert Runner.stop(again) == :ok
     end
 
@@ -1222,10 +1226,10 @@ defmodule Logex.TripTest do
     test "a stop of a tripped runner whose last 0 hangs returns once the device's deadline " <>
            "passes, the device killed and its adapter not closed" do
       %{runner: runner, clock: clock, panel: panel} = lamped(@lamped, 50, idle: 300)
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
       Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
       written = Sim.writes(panel)
@@ -1236,7 +1240,7 @@ defmodule Logex.TripTest do
       assert took >= 350 and took < 3000
       assert_receive {:DOWN, ^device, :process, _, :killed}, 5000
       assert Sim.writes(panel) == written
-      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       refute Sim.closed?(panel)
     end
 
@@ -1245,10 +1249,10 @@ defmodule Logex.TripTest do
     @tag :capture_log
     test "a tripped runner killed: a device still named tries its 0 once more as it closes" do
       %{runner: runner, clock: clock, panel: panel} = lamped()
-      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 15})
       Manual.advance(clock, 10)
       Sim.fail(panel, :write, {:error, :eio})
-      Sim.set(panel, [1], 16)
+      Sim.set(panel, "panel.i.1", 16)
       Manual.advance(clock, 10)
       assert %{status: :tripped, unzeroed: ["panel"]} = Runner.status(runner)
       written = Sim.writes(panel)
@@ -1257,7 +1261,7 @@ defmodule Logex.TripTest do
       Process.unlink(runner)
       Process.exit(runner, :kill)
       assert_receive {:DOWN, ^device, :process, _, _}, 5000
-      assert Sim.writes(panel) == written ++ [%{[0] => 0, [1] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0, "panel.q.1" => 0}]
       assert Sim.closed?(panel)
     end
 
@@ -1282,7 +1286,7 @@ defmodule Logex.TripTest do
 
       %{runner: runner, clock: clock, panel: panel} = lamped(text)
       Runner.subscribe(runner, [:fault, :trip])
-      Sim.set(panel, %{[1] => 16, [2] => -1})
+      Sim.set(panel, %{"panel.i.1" => 16, "panel.i.2" => -1})
       Manual.advance(clock, 10)
       first = out_of_range("fast", "l", 4, 16)
       second = out_of_range("fast", "l2", 4, -1)
@@ -1315,10 +1319,10 @@ defmodule Logex.TripTest do
           "program l lamp\n  l.faults faults\n  l.sel sel\n  l.lamp lamp\n"
 
       %{runner: runner, clock: clock, panel: panel} = lamped(text)
-      Sim.set(panel, [1], -1)
+      Sim.set(panel, "panel.i.1", -1)
       Manual.advance(clock, 1)
       assert Runner.status(runner).trip == out_of_range("main", "l", 4, -1)
-      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 0}
     end
 
     test "a minor fault trips nothing" do
@@ -1349,15 +1353,15 @@ defmodule Logex.TripTest do
     test "a restart, cold or warm, runs again once the number is back in range" do
       for mode <- [:cold, :warm] do
         %{runner: runner, clock: clock, panel: panel} = lamped()
-        Sim.set(panel, %{[0] => 0x8000, [1] => 16})
+        Sim.set(panel, %{"panel.i.0" => 0x8000, "panel.i.1" => 16})
         Manual.advance(clock, 10)
         assert Runner.status(runner).trip == out_of_range("fast", "l", 4, 16)
 
-        Sim.set(panel, [1], 15)
+        Sim.set(panel, "panel.i.1", 15)
         assert :ok = Runner.restart(runner, mode)
         assert %{status: :running} = Runner.status(runner)
         Manual.advance(clock, 10)
-        assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1, "panel.q.1" => 1}
       end
     end
 
@@ -1386,7 +1390,7 @@ defmodule Logex.TripTest do
         )
 
       :ets.insert(__MODULE__, {runner, clock})
-      Sim.set(panel, %{[1] => 16, [2] => 51})
+      Sim.set(panel, %{"panel.i.1" => 16, "panel.i.2" => 51})
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == out_of_range("fast", "l", 4, 16)
     end
@@ -1402,7 +1406,7 @@ defmodule Logex.TripTest do
 
       %{runner: runner, clock: clock, panel: panel} = slow(text)
       Runner.subscribe(runner)
-      Sim.set(panel, [1], 50)
+      Sim.set(panel, "panel.i.1", 50)
       Manual.advance(clock, 10)
 
       # Decision 396 (RV-11): the round at 10 took 50 ms, so the round due at 20 is owed
@@ -1411,12 +1415,12 @@ defmodule Logex.TripTest do
                called(fn -> Runner.status(runner) end, clock)
 
       # The next round, late, takes 51 ms: y = 1 is computed and never written.
-      Sim.set(panel, %{[0] => 1, [1] => 51})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 51})
       Manual.advance(clock, 50)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:task, "fast", 51, 50}}}}
       assert Runner.status(runner).trip == {:watchdog, {:task, "fast", 51, 50}}
       assert Runner.get!(runner, "y") == 1
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert Runner.status(runner).runs["fast"] == {51, 50}
     end
 
@@ -1427,14 +1431,14 @@ defmodule Logex.TripTest do
           "program c count with e\n  c.n hits\n"
 
       %{runner: runner, panel: panel} = slow(text)
-      Sim.set(panel, [1], 20)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.1", 20)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.status(runner).status == :running
-      Sim.set(panel, %{[0] => 0, [1] => 21})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, %{"panel.i.0" => 0, "panel.i.1" => 21})
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.status(runner).trip == {:watchdog, {:task, "e", 21, 20}}
       assert Runner.get!(runner, "hits") == 2
-      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 0}
     end
 
     test "a round that outlasts the continuous task's watchdog trips, naming each step " <>
@@ -1446,9 +1450,9 @@ defmodule Logex.TripTest do
           "program f count with fan\n  f.n a\nprogram m count\n  m.n b\n"
 
       %{runner: runner, clock: clock, panel: panel} = slow(text)
-      Sim.set(panel, [0], 150)
+      Sim.set(panel, "panel.i.0", 150)
       Manual.advance(clock, 999)
-      Sim.set(panel, [1], 50)
+      Sim.set(panel, "panel.i.1", 50)
 
       # At 1000 the fan's run, 150 ms, and the box counter's, 50, make the round's 200.
       # A round is owed, so a host's call would wait for the share's slot: the runner's
@@ -1459,7 +1463,7 @@ defmodule Logex.TripTest do
                :sys.get_state(runner)
 
       # Back to back, 50 ms a round, to 2000, where the fan's run takes 151.
-      Sim.set(panel, [0], 151)
+      Sim.set(panel, "panel.i.0", 151)
       Manual.advance(clock, 800)
 
       assert Runner.status(runner).trip ==
@@ -1470,7 +1474,7 @@ defmodule Logex.TripTest do
       # The round's count is never written: the panel's output is 0, written once after
       # the last count, and nothing after.
       Manual.advance(clock, 100)
-      assert [%{[0] => 0}, %{[0] => last} | _] = Enum.reverse(Sim.writes(panel))
+      assert [%{"panel.q.0" => 0}, %{"panel.q.0" => last} | _] = Enum.reverse(Sim.writes(panel))
       assert last > 0
     end
 
@@ -1480,10 +1484,10 @@ defmodule Logex.TripTest do
           "var_global b dint\nprogram m count\n  m.n b\n"
 
       %{runner: runner, clock: clock, panel: panel} = slow(text)
-      Sim.set(panel, [0], 500)
+      Sim.set(panel, "panel.i.0", 500)
       Manual.advance(clock, 1)
       assert :sys.get_state(runner).status == :running
-      Sim.set(panel, [0], 501)
+      Sim.set(panel, "panel.i.0", 501)
       Manual.advance(clock, 0)
       assert Runner.status(runner).trip == {:watchdog, {:round, :none, 501, 500, [{:none, 501}]}}
     end
@@ -1549,9 +1553,9 @@ defmodule Logex.TripTest do
 
       Agent.update(agent, &%{&1 | runner: runner})
       :ok = Runner.subscribe(runner, [:trip])
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 1000)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       %{runner: runner, clock: clock, agent: agent, panel: panel}
     end
 
@@ -1570,10 +1574,10 @@ defmodule Logex.TripTest do
       refute_received {Runner, ^runner, {:trip, _reason}}
       assert %{status: :running, trip: nil, latest_wake: late} = Runner.status(runner)
       assert late >= 100
-      assert Sim.outputs(panel) == %{[0] => 1}
-      Sim.set(panel, [0], 0)
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
+      Sim.set(panel, "panel.i.0", 0)
       Manual.advance(clock, 1000)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
 
     test "a device's word taken after the late wake is heard no earlier than the wake" do
@@ -1610,7 +1614,7 @@ defmodule Logex.TripTest do
                Runner.status(runner)
 
       refute Process.alive?(hung)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
     end
 
     # RV-6's review: the thresholds, each pinned. A wake late by the idle watchdog exactly
@@ -1701,7 +1705,7 @@ defmodule Logex.TripTest do
       # yet taken: the round runs, the drive unjudged, and the drive, heard in its turn,
       # never trips.
       stall(agent, 100)
-      Sim.set(panel, [2], 1)
+      Sim.set(panel, "panel.i.2", 1)
       assert %{status: :running, trip: nil, latest_wake: late} = Runner.status(runner)
       assert late > 50
       assert Runner.get!(runner, "hits") == 1
@@ -1736,9 +1740,9 @@ defmodule Logex.TripTest do
 
       Agent.update(agent, &%{&1 | runner: runner})
       :ok = Runner.subscribe(runner, [:trip])
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 1000)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       %{runner: runner, clock: clock, agent: agent, panel: panel}
     end
 
@@ -1756,7 +1760,7 @@ defmodule Logex.TripTest do
       stall(agent, 100)
       Manual.advance(clock, 10)
       assert %{status: :running, trip: nil, latest_wake: 100} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
 
       stall(agent, 100)
       Manual.advance(clock, 10)
@@ -1766,7 +1770,7 @@ defmodule Logex.TripTest do
                Runner.status(runner)
 
       refute Process.alive?(hung)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
 
     # The cap pinned: a device unheard for four times the idle watchdog and a poll period
@@ -1847,13 +1851,13 @@ defmodule Logex.TripTest do
              } = Runner.status(runner)
 
       assert Enum.all?(cards, &Process.alive?/1)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
 
       # The cards' polls the stall held run, and the line comes back on a restart.
       Manual.advance(clock, 10)
       assert Runner.restart(runner, :warm) == :ok
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       Manual.advance(clock, 1000)
       assert %{status: :running, trip: nil} = Runner.status(runner)
     end
@@ -1892,7 +1896,7 @@ defmodule Logex.TripTest do
                "#{late} ms late"
 
         assert Enum.all?(cards, &Process.alive?/1)
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
         Manual.advance(clock, 1000)
         assert %{status: :running, trip: nil} = Runner.status(runner)
       end
@@ -1927,7 +1931,7 @@ defmodule Logex.TripTest do
 
         refute Process.alive?(hung)
         assert Process.alive?(healthy)
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       end
     end
 
@@ -1972,10 +1976,10 @@ defmodule Logex.TripTest do
       stall(agent, 300)
       assert Runner.restart(runner, :warm) == :ok
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       Manual.advance(clock, 1000)
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
     end
   end
 
@@ -2006,7 +2010,7 @@ defmodule Logex.TripTest do
 
       :ets.insert(__MODULE__, {runner, clock})
       :ok = Runner.subscribe(runner, [:trip])
-      Sim.set(panel, [2], ms)
+      Sim.set(panel, "panel.i.2", ms)
       Manual.advance(clock, 1000)
       %{runner: runner, clock: clock, panel: panel}
     end
@@ -2029,7 +2033,7 @@ defmodule Logex.TripTest do
 
       Agent.update(agent, &%{&1 | runner: runner})
       :ets.insert(__MODULE__, {runner, clock})
-      Sim.set(panel, [2], ms)
+      Sim.set(panel, "panel.i.2", ms)
       Manual.advance(clock, 1000)
       %{runner: runner, clock: clock, agent: agent, panel: panel}
     end
@@ -2040,14 +2044,14 @@ defmodule Logex.TripTest do
     # end, the panel's turn, and e2's round runs; the panel, heard in its turn, never trips.
     test "a healthy device the step starved is not judged at the next round's look" do
       %{runner: runner, clock: clock, panel: panel} = long_step(80)
-      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.get!(runner, "hits") == 1
       assert Runner.get!(runner, "y") == 1
       Manual.advance(clock, 200)
       refute_received {Runner, ^runner, {:trip, _reason}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
     end
 
     # The threshold pinned, as decision 461's is: a step of the idle watchdog exactly is the
@@ -2060,7 +2064,7 @@ defmodule Logex.TripTest do
         %{runner: runner, clock: clock, agent: agent, panel: panel} = lagged_step(ms)
         stall(agent, 0, 15)
         Manual.advance(clock, 10)
-        Sim.set(panel, %{[0] => 1, [1] => 1})
+        Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
         assert %{trip: ^trip} = Runner.status(runner), "a step of #{ms} ms"
       end
     end
@@ -2073,7 +2077,7 @@ defmodule Logex.TripTest do
     # task's watchdog.
     test "a device the step left unheard past the cap trips at the next round's look" do
       %{runner: runner, panel: panel} = long_step(211)
-      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
       assert_receive {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
       assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
       assert Runner.get!(runner, "hits") == 1
@@ -2098,9 +2102,9 @@ defmodule Logex.TripTest do
           ] ++ extra
         )
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       %{runner: runner, clock: clock, ticks: ticks, panel: panel}
     end
 
@@ -2118,7 +2122,7 @@ defmodule Logex.TripTest do
         Agent.update(ticks, fn _ -> 0 end)
         assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
         assert took > 2
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       end
     end
 
@@ -2139,7 +2143,7 @@ defmodule Logex.TripTest do
         Agent.update(ticks, fn _ -> 0 end)
         assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
         assert took > 2
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       end
     end
 
@@ -2160,7 +2164,7 @@ defmodule Logex.TripTest do
         Agent.update(ticks, fn _ -> 0 end)
         assert {:watchdog, {:idle, took, ^work}} = Runner.status(runner).trip
         assert took > 2
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
       end
     end
 
@@ -2177,7 +2181,7 @@ defmodule Logex.TripTest do
       Agent.update(ticks, fn _ -> 0 end)
       assert {:watchdog, {:idle, took, :accept}} = Runner.status(runner).trip
       assert took > 2
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
 
     test "an edit's step names the step, the plant tripped with every output 0" do
@@ -2194,7 +2198,7 @@ defmodule Logex.TripTest do
       assert %{status: :tripped, trip: {:watchdog, {:idle, ^took, {:edit, :test}}}} =
                Runner.status(runner)
 
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
 
     @tag :tmp_dir
@@ -2216,14 +2220,14 @@ defmodule Logex.TripTest do
         )
 
       :ok = Runner.subscribe(runner, [:trip])
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 600})
       Manual.advance(clock, 90)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 600, :period}}}}, 5000
       assert Runner.status(runner).trip == {:watchdog, {:idle, 600, :period}}
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
 
       # The trip, met after the round, cancels the runner's wake, and none is scheduled
       # after it (decision 113), where the round's plan of its next wake came after the
@@ -2253,7 +2257,7 @@ defmodule Logex.TripTest do
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, took, :period}}}}, 5000
       Agent.update(ticks, fn _ -> 0 end)
       assert took > 2
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
 
     # RV-6's review: the hand-off is the runner's own work from when it found the period
@@ -2280,14 +2284,14 @@ defmodule Logex.TripTest do
 
       Agent.update(agent, &%{&1 | runner: runner})
       :ok = Runner.subscribe(runner, [:trip])
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 90)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       :ets.insert(Logex.TripTest, {{self(), :slow}, clock, 600})
       stall(agent, 20)
       Manual.advance(clock, 10)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:idle, 600, :period}}}}, 5000
-      assert Sim.outputs(panel) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
     end
   end
 
@@ -2318,26 +2322,28 @@ defmodule Logex.TripTest do
         %{runner: runner, clock: clock, panel: panel, drive: drive} =
           slow(@conveyor, poll: 10)
 
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 600)
-        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+        assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+                 {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
 
         # The step at 610 is stuck, the devices polled and their deadlines met meanwhile:
         # each device's one wake has moved on, at 560, to the idle watchdog's deadline then,
         # 1060, and the step's refresh brings it sooner, to 670.
-        Sim.set(panel, [1], stuck)
+        Sim.set(panel, "panel.i.1", stuck)
         Manual.advance(clock, 10)
         [drive_seen, panel_seen] = seen(runner)
 
         assert {List.last(drive_seen), List.last(panel_seen)} ==
-                 {%{[0] => b(not zeroed)}, %{[0] => b(not zeroed)}}
+                 {%{"drive.q.0" => b(not zeroed)}, %{"panel.q.0" => b(not zeroed)}}
 
         # Either way the step outlasted its watchdog, and the runner trips once it is back,
         # each device written 0 once, by its latch or by the trip, and nothing after.
         assert Runner.status(runner).trip == {:watchdog, {:task, "fast", stuck, 50}}
         Manual.advance(clock, 1000)
-        assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
-        assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
+        assert [%{"panel.q.0" => 0}, %{"panel.q.0" => 1} | _] = Enum.reverse(Sim.writes(panel))
+        assert [%{"drive.q.0" => 0}, %{"drive.q.0" => 1} | _] = Enum.reverse(Sim.writes(drive))
       end
     end
 
@@ -2349,39 +2355,47 @@ defmodule Logex.TripTest do
     test "a renewal older than the step's refresh since is not taken: every device is at " <>
            "0 within the step's watchdog and a poll period" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 600)
 
       # A round whose drive takes 5 ms to write, so that the panel's write after it renews
       # every device's deadline; then a round with no time in its writes.
       Sim.fail(drive, :write, {:delay, 5})
-      Sim.set(panel, [0], 0)
+      Sim.set(panel, "panel.i.0", 0)
       Manual.advance(clock, 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
 
-      Sim.set(panel, [1], 60)
+      assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+               {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
+
+      Sim.set(panel, "panel.i.1", 60)
       Manual.advance(clock, 10)
       [drive_seen, panel_seen] = seen(runner)
-      assert {List.last(drive_seen), List.last(panel_seen)} == {%{[0] => 0}, %{[0] => 0}}
+
+      assert {List.last(drive_seen), List.last(panel_seen)} ==
+               {%{"drive.q.0" => 0}, %{"panel.q.0" => 0}}
+
       assert Runner.status(runner).trip == {:watchdog, {:task, "fast", 60, 50}}
     end
 
     test "a step that takes exactly its watchdog leaves a poll period's margin: no " <>
            "device latches, and the runner runs on" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      Sim.set(panel, [1], 50)
+      Sim.set(panel, "panel.i.1", 50)
       Manual.advance(clock, 10)
       [drive_seen, panel_seen] = seen(runner)
-      assert {List.last(drive_seen), List.last(panel_seen)} == {%{[0] => 1}, %{[0] => 1}}
-      Sim.set(panel, [1], 0)
+
+      assert {List.last(drive_seen), List.last(panel_seen)} ==
+               {%{"drive.q.0" => 1}, %{"panel.q.0" => 1}}
+
+      Sim.set(panel, "panel.i.1", 0)
       Manual.advance(clock, 1000)
       assert %{status: :running, runs: %{"fast" => {50, 50}}} = Runner.status(runner)
-      refute %{[0] => 0} in Enum.drop(Sim.writes(panel), 2)
-      refute %{[0] => 0} in Enum.drop(Sim.writes(drive), 2)
+      refute %{"panel.q.0" => 0} in Enum.drop(Sim.writes(panel), 2)
+      refute %{"drive.q.0" => 0} in Enum.drop(Sim.writes(drive), 2)
     end
 
     test "a runner stuck in its own work leaves every device at 0 within its idle " <>
@@ -2390,7 +2404,7 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 20)
       %{rounds: rounds} = Runner.status(runner)
 
@@ -2399,20 +2413,20 @@ defmodule Logex.TripTest do
       Manual.advance(clock, 109)
 
       assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
-               {%{[0] => 1}, %{[0] => 1}}
+               {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
 
       Manual.advance(clock, 1)
 
       assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
-               {%{[0] => 0}, %{[0] => 0}}
+               {%{"panel.q.0" => 0}, %{"drive.q.0" => 0}}
 
       # Its wakes waited in its mailbox; it trips on the first device's notice, the drive's,
       # the first in device-name order, and runs no round.
       :sys.resume(runner)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
       assert %{status: :tripped, rounds: ^rounds} = Runner.status(runner)
-      assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
-      assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
+      assert [%{"panel.q.0" => 0}, %{"panel.q.0" => 1} | _] = Enum.reverse(Sim.writes(panel))
+      assert [%{"drive.q.0" => 0}, %{"drive.q.0" => 1} | _] = Enum.reverse(Sim.writes(drive))
       refute_received {Runner, ^runner, {:trip, _}}
     end
 
@@ -2425,19 +2439,19 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 20)
       :sys.suspend(runner)
       Manual.advance(clock, 109)
       written = Sim.writes(panel)
-      assert List.last(written) == %{[0] => 1}
+      assert List.last(written) == %{"panel.q.0" => 1}
 
       # Its latch at 130, the poll's 0 at 130 and the next poll's at 140 fail; 150's is taken.
       for _ <- 1..3, do: Sim.fail(panel, :write, {:error, :eio})
       Manual.advance(clock, 1)
       assert Sim.writes(panel) == written
-      assert Sim.outputs(panel) == %{[0] => 1}
-      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 0}
 
       :sys.resume(runner)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
@@ -2449,10 +2463,10 @@ defmodule Logex.TripTest do
 
       Manual.advance(clock, 10)
       assert %{trip: {:watchdog, {:device, "drive", 110}}, unzeroed: []} = Runner.status(runner)
-      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0}]
 
       Manual.advance(clock, 100)
-      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0}]
       assert Runner.status(runner).unzeroed == []
     end
 
@@ -2467,13 +2481,13 @@ defmodule Logex.TripTest do
 
       # The round at 0 carried 110, the panel's wake set there; the round at 1, writing
       # y = 1, carried 111, a later deadline, which keeps that wake.
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 1)
       :sys.suspend(runner)
       Manual.advance(clock, 109)
-      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
       Manual.advance(clock, 1)
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
       :sys.resume(runner)
       assert Runner.status(runner).trip == {:watchdog, {:device, "panel", 110}}
     end
@@ -2487,7 +2501,7 @@ defmodule Logex.TripTest do
         rig(configured(text), poll: 10, idle: 100, steps: Runtime)
 
       # The deadline is 111, as above; the poll at 110 reads for 1 ms, to 111.
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 1)
       :sys.suspend(runner)
       Manual.advance(clock, 99)
@@ -2495,7 +2509,7 @@ defmodule Logex.TripTest do
       Sim.fail(panel, :read, {:delay, 1})
       Manual.advance(clock, 10)
       Manual.advance(clock, 1)
-      assert Enum.drop(Sim.writes(panel), written) == [%{[0] => 0}]
+      assert Enum.drop(Sim.writes(panel), written) == [%{"panel.q.0" => 0}]
       :sys.resume(runner)
     end
 
@@ -2505,7 +2519,7 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 20)
 
       # Both deadlines are 130; the drive's process is held, so the panel's notice comes
@@ -2514,11 +2528,11 @@ defmodule Logex.TripTest do
       drive_device = device_pid(runner, "drive")
       :sys.suspend(drive_device)
       Manual.advance(clock, 110)
-      assert List.last(Sim.writes(panel)) == %{[0] => 0}
-      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 0}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
       :sys.resume(drive_device)
       :sys.get_state(drive_device)
-      zeroed_once(drive, 1)
+      zeroed_once(drive, "drive.q.0", 1)
       :sys.resume(runner)
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
       refute_received {Runner, ^runner, {:trip, _}}
@@ -2544,7 +2558,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel} =
         rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       :sys.suspend(runner)
       Manual.advance(clock, 200)
       :sys.resume(runner)
@@ -2552,7 +2566,7 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == :ok
       Manual.advance(clock, 1000)
       assert %{status: :running} = Runner.status(runner)
-      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
 
       # And a device that latches after the restart trips it, its notice carrying the
       # count of restarts its release gave it; so does a fault of its own after a second.
@@ -2615,9 +2629,10 @@ defmodule Logex.TripTest do
     Runner.status(runner)
   end
 
-  # The trip's 0 written once, after the last value, and nothing after.
-  defp zeroed_once(sim, last) do
-    assert [%{[0] => 0}, %{[0] => ^last} | _] = Enum.reverse(Sim.writes(sim))
+  # The trip's 0 written once, after the last value, and nothing after, at the output the
+  # configuration writes `at`.
+  defp zeroed_once(sim, at, last) do
+    assert [%{^at => 0}, %{^at => ^last} | _] = Enum.reverse(Sim.writes(sim))
   end
 
   # Decision 348's plant on the real clock: a panel that reports its e-stop, and the
@@ -2676,15 +2691,15 @@ defmodule Logex.TripTest do
           rig(configured(@read_both), poll: 10, steps: Runtime)
 
         Runner.subscribe(runner)
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
         Sim.fail(drive, :read, how)
         Manual.advance(clock, 10)
         assert_receive {Runner, ^runner, {:trip, {:io, "drive", ^cause}}}, 5000
         assert Runner.status(runner).trip == {:io, "drive", cause}
         Manual.advance(clock, 100)
-        zeroed_once(panel, 1)
-        zeroed_once(drive, 1)
+        zeroed_once(panel, "panel.q.0", 1)
+        zeroed_once(drive, "drive.q.0", 1)
         assert Runner.get!(runner, "y") == 1
       end
     end
@@ -2695,15 +2710,15 @@ defmodule Logex.TripTest do
         rig(configured(@read_both), steps: Runtime)
 
       Sim.fail(panel, :report, :raise)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
 
       assert Runner.status(runner).trip ==
                {:io, "panel",
                 {:raised, "the simulated device \"panel\" raised in report, as fail/3 told it"}}
 
       Manual.advance(clock, 100)
-      zeroed_once(panel, 0)
-      zeroed_once(drive, 0)
+      zeroed_once(panel, "panel.q.0", 0)
+      zeroed_once(drive, "drive.q.0", 0)
     end
 
     # Found by M4-6's walk: a device took a change the runner refused as passed on, so a
@@ -2734,7 +2749,7 @@ defmodule Logex.TripTest do
         assert Runner.restart(runner, :cold) == :ok
         Manual.advance(clock, 10)
         assert %{status: :running} = Runner.status(runner)
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "x") == 1
       end
@@ -2743,7 +2758,7 @@ defmodule Logex.TripTest do
       # beside it, which the restart's read takes before its first round.
       %{runner: runner, panel: panel} = rig(configured(), poll: 10)
       Sim.fail(panel, :report, {:value, [1], 2_147_483_648})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
 
       assert Runner.status(runner).trip ==
                {:io, "panel", {:bad_value, "panel.i.1", 2_147_483_648}}
@@ -2760,11 +2775,11 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), steps: Runtime)
 
       Sim.fail(drive, :write, {:error, :eio})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert Runner.get!(runner, "y") == 1
     end
 
@@ -2772,13 +2787,13 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), poll: 10, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Sim.fail(drive, :write, :throw)
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == {:io, "drive", {:thrown, {Sim, :write}}}
-      zeroed_once(panel, 1)
-      zeroed_once(drive, 1)
+      zeroed_once(panel, "panel.q.0", 1)
+      zeroed_once(drive, "drive.q.0", 1)
     end
 
     test "a result the behaviour does not give is a raise, in its words; a close that " <>
@@ -2818,20 +2833,20 @@ defmodule Logex.TripTest do
       # deadline, 300 ms and a poll period, in real time on the manual clock.
       old = device_pid(runner, "drive")
       Sim.fail(drive, :write, :hang)
-      {took, :ok} = :timer.tc(fn -> Sim.set(panel, [0], 1) end, :millisecond)
+      {took, :ok} = :timer.tc(fn -> Sim.set(panel, "panel.i.0", 1) end, :millisecond)
       assert took >= 310 and took < 3000
       assert Runner.status(runner).trip == {:io, "drive", :timeout}
       refute Process.alive?(old)
 
       # Its outputs are left to the device; every other device is zeroed. Since decision
       # 262 status/1 names it, its outputs not known to be 0, until the restart.
-      assert Sim.writes(drive) == [%{[0] => 0}]
-      zeroed_once(panel, 0)
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}]
+      zeroed_once(panel, "panel.q.0", 0)
       assert Runner.status(runner).unzeroed == ["drive"]
 
       assert Runner.restart(runner, :cold) == :ok
       assert device_pid(runner, "drive") != old
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
       assert %{status: :running, unzeroed: []} = Runner.status(runner)
     end
 
@@ -2842,12 +2857,12 @@ defmodule Logex.TripTest do
 
       old = device_pid(runner, "drive")
       Sim.fail(drive, :write, {:delay, 510})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.status(runner).trip == {:io, "drive", :timeout}
       assert Process.alive?(old)
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}, %{"drive.q.0" => 0}]
       assert Runner.status(runner).unzeroed == []
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert Runner.restart(runner, :cold) == :ok
       assert device_pid(runner, "drive") == old
 
@@ -2858,9 +2873,9 @@ defmodule Logex.TripTest do
         rig(configured(@drive_stopped), poll: 10, steps: Runtime)
 
       Sim.fail(drive, :write, {:delay, 509})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.status(runner).status == :running
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}]
       assert Sim.writes(panel) == []
     end
 
@@ -2874,10 +2889,10 @@ defmodule Logex.TripTest do
 
       Sim.fail(drive, :write, {:delay, 509})
       Sim.fail(panel, :write, {:delay, 5})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 1}]
 
       # A panel that takes its whole own limit, 510 ms from its start, is the one late,
       # named for it, and the drive, which answered in time, takes the trip's 0.
@@ -2886,10 +2901,10 @@ defmodule Logex.TripTest do
 
       Sim.fail(drive, :write, {:delay, 509})
       Sim.fail(panel, :write, {:delay, 510})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.status(runner).trip == {:io, "panel", :timeout}
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}, %{"drive.q.0" => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 1}, %{"panel.q.0" => 0}]
       assert Runner.status(runner).unzeroed == []
     end
 
@@ -2905,7 +2920,7 @@ defmodule Logex.TripTest do
       # is 1500 ms now, and the four writes' excess over one deadline only grows with load.)
       %{runner: runner, panel: panel, agents: agents} = slow_rig(@five, 2000)
       for agent <- Enum.take(agents, 4), do: Agent.update(agent, &%{&1 | slow: {:sleep, 600}})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1], 5)
       Runner.stop(runner)
@@ -2918,7 +2933,7 @@ defmodule Logex.TripTest do
       Runner.subscribe(runner, [:trip])
       for agent <- [a, b, c, d], do: Agent.update(agent, &%{&1 | slow: {:sleep, 600}})
       Agent.update(e, &%{&1 | slow: :hang})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert_receive {Runner, ^runner, {:trip, {:io, "e", :timeout}}}, 15_000
       assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1, 0], 4) ++ [[0]]
       assert Runner.status(runner).unzeroed == ["e"]
@@ -2936,7 +2951,7 @@ defmodule Logex.TripTest do
       %{runner: runner, panel: panel, agents: [a, b | _] = agents} = slow_rig(@five, 5000)
       Agent.update(a, &%{&1 | slow: {:sleep, 3000}})
       Agent.update(b, &%{&1 | slow: {:sleep, 2500}})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Enum.map(agents, &slow_writes/1) == List.duplicate([0, 1], 5)
       Runner.stop(runner)
@@ -2947,12 +2962,12 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), poll: 10, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Process.exit(device_pid(runner, "drive"), :kill)
       assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
-      zeroed_once(panel, 1)
-      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      zeroed_once(panel, "panel.q.0", 1)
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
       assert Runner.status(runner).unzeroed == ["drive"]
 
       assert Runner.restart(runner, :warm) == :ok
@@ -2974,7 +2989,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), poll: 10, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       # The panel's death is waited for, so that the runner's exit signal from it is not
       # overtaken by the status call under load.
@@ -2987,7 +3002,7 @@ defmodule Logex.TripTest do
       assert %{trip: {:io, "panel", {:down, :killed}}, unzeroed: ["panel"]} =
                Runner.status(runner)
 
-      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 0}
 
       old = device_pid(runner, "drive")
       watched = Process.monitor(old)
@@ -3010,7 +3025,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       killed(runner, "drive")
       Sim.fail(drive, :init, {:error, :refused})
@@ -3021,7 +3036,7 @@ defmodule Logex.TripTest do
 
       assert Runner.restart(runner, :cold) == :ok
       assert Runner.status(runner).unzeroed == []
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
     end
 
     test "a device that cannot be opened at a restart gives the restart its own reason, " <>
@@ -3029,7 +3044,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       killed(runner, "drive")
 
@@ -3056,7 +3071,7 @@ defmodule Logex.TripTest do
         %{runner: runner, clock: clock, panel: panel, drive: drive} =
           rig(configured(text), poll: 10, idle: 1000, steps: Runtime)
 
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10_000)
 
         # The drive's process held after its read at 10,000, as one hung in its next read
@@ -3074,7 +3089,7 @@ defmodule Logex.TripTest do
         # Killed at once, not waited on for its 0: its outputs are left to it.
         assert took < 500
         refute Process.alive?(old)
-        zeroed_once(panel, 1)
+        zeroed_once(panel, "panel.q.0", 1)
         assert Sim.writes(drive) == drive_written
 
         # Opened again at a restart, two seconds on, and heard from its opening.
@@ -3102,11 +3117,11 @@ defmodule Logex.TripTest do
         )
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
-      assert written(panel, 200) == %{[0] => 1}
+      Sim.set(panel, "panel.i.0", 1)
+      assert written(panel, 200) == %{"panel.q.0" => 1}
       Sim.fail(drive, :read, :hang)
       assert_receive {Runner, ^runner, {:trip, {:io, "drive", :timeout}}}, 5000
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
       Runner.stop(runner)
     end
 
@@ -3151,7 +3166,7 @@ defmodule Logex.TripTest do
       # `get!/2` lines out, which its review found outside the leave the record gives, and
       # they stand, whether the test may read the events alone the maintainer's to say.
       Runner.subscribe(runner, [:trip, :round])
-      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 1
       assert for({:trip, _} = trip <- events_until_written(runner, "y"), do: trip) == []
@@ -3201,8 +3216,8 @@ defmodule Logex.TripTest do
 
       # The panel's next poll reads both triggers' change and waits on the runner while
       # e1's round sleeps 200 ms and then waits for the panel's word; e2's round follows.
-      Sim.set(panel, %{[0] => 1, [1] => 1})
-      assert written(panel, 1000) == %{[0] => 1}
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
+      assert written(panel, 1000) == %{"panel.q.0" => 1}
       assert %{status: :running, trip: nil} = Runner.status(runner)
       assert Runner.get!(runner, "hits") == 1
       assert [{_key, polled, backs}] = :ets.lookup(Logex.TripTest, {runner, :step})
@@ -3228,10 +3243,10 @@ defmodule Logex.TripTest do
       # e2's round begins at 134, the drive heard at 134, not at 20.
       Manual.advance(clock, 29)
       Sim.fail(drive, :write, {:delay, 105})
-      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
       assert %{status: :running, trip: nil, now: 134} = Runner.status(runner)
       assert Runner.get!(runner, "hits") == 1
-      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
     end
 
     test "a device that hangs while the runner is tripped is killed at the restart's " <>
@@ -3239,7 +3254,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@read_both), poll: 10, idle: 300, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Sim.fail(panel, :read, {:error, :eio})
       Manual.advance(clock, 10)
@@ -3248,7 +3263,7 @@ defmodule Logex.TripTest do
       # The drive's process held, as one hung in its adapter is, and its stop pressed.
       old = device_pid(runner, "drive")
       :sys.suspend(old)
-      Sim.set(drive, [0], 1)
+      Sim.set(drive, "drive.i.0", 1)
       assert Runner.restart(runner, :cold) == :ok
       refute Process.alive?(old)
       assert device_pid(runner, "drive") != old
@@ -3263,7 +3278,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@read_both), poll: 10, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Sim.fail(panel, :read, {:error, :eio})
       Manual.advance(clock, 10)
@@ -3273,7 +3288,7 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", :refused}}
       assert :sys.get_state(device_pid(runner, "panel")).latched
       Manual.advance(clock, 100)
-      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+      assert Sim.writes(panel) == written ++ [%{"panel.q.0" => 0}]
       assert Runner.status(runner).trip == {:io, "panel", {:error, :eio}}
 
       # The drive opened again, the panel then held and refused: the drive is written 0.
@@ -3281,15 +3296,15 @@ defmodule Logex.TripTest do
         rig(configured(@read_both), poll: 10, idle: 300, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Process.exit(device_pid(runner, "drive"), :kill)
       assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
-      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
       :sys.suspend(device_pid(runner, "panel"))
       Sim.fail(panel, :init, {:error, :refused})
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "panel", :refused}}
-      zeroed_once(drive, 1)
+      zeroed_once(drive, "drive.q.0", 1)
       assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
     end
 
@@ -3300,16 +3315,16 @@ defmodule Logex.TripTest do
         slow(@conveyor <> "var_global d bool at drive.i.0\n", poll: 7)
 
       Manual.advance(clock, 15)
-      Sim.set(panel, %{[0] => 1, [1] => 30})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 30})
       Sim.fail(drive, :read, {:error, :eio})
       Manual.advance(clock, 5)
 
       # The round computed z = 1 and wrote the panel; the drive, latched at 21, took
       # nothing, and the runner tripped on its notice as the next round began.
       assert Runner.get!(runner, "z") == 1
-      zeroed_once(panel, 1)
-      assert List.last(Sim.writes(drive)) == %{[0] => 0}
-      refute %{[0] => 1} in Sim.writes(drive)
+      zeroed_once(panel, "panel.q.0", 1)
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 0}
+      refute %{"drive.q.0" => 1} in Sim.writes(drive)
       assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
     end
 
@@ -3409,7 +3424,7 @@ defmodule Logex.TripTest do
       old = device_pid(runner, "drive")
       test = self()
       Agent.update(held, fn nil -> test end)
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       tripping = Task.async(fn -> Manual.advance(clock, 10) end)
       assert_receive {HeldWrite, ^old}, 5000
       begun = System.monotonic_time(:millisecond)
@@ -3420,7 +3435,7 @@ defmodule Logex.TripTest do
       assert Task.await(tripping, 5000) == :ok
       assert Runner.status(runner).trip == {:internal, "boom in the outputs"}
       assert Process.alive?(old)
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 0}]
     end
 
     test "a device opened again at a restart whose first read does not fit leaves the " <>
@@ -3429,7 +3444,7 @@ defmodule Logex.TripTest do
         rig(configured(@read_both), steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Process.exit(device_pid(runner, "drive"), :kill)
       assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
@@ -3474,7 +3489,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       ref = Process.monitor(runner)
       Process.flag(:trap_exit, true)
@@ -3483,8 +3498,8 @@ defmodule Logex.TripTest do
 
       assert_raise ArgumentError, ~r/is not running/, fn -> Runner.status(runner) end
       assert_receive {:DOWN, ^ref, :process, ^runner, {:shutdown, {:clock, _reason}}}, 5000
-      zeroed_once(panel, 1)
-      zeroed_once(drive, 1)
+      zeroed_once(panel, "panel.q.0", 1)
+      zeroed_once(drive, "drive.q.0", 1)
       assert Sim.closed?(panel) and Sim.closed?(drive)
     end
 
@@ -3510,16 +3525,16 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@read_both), poll: 10, steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       :sys.suspend(runner)
       Sim.fail(drive, :read, {:error, :eio})
       Manual.advance(clock, 10)
-      zeroed_once(drive, 1)
-      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      zeroed_once(drive, "drive.q.0", 1)
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
       :sys.resume(runner)
       assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
     end
 
     test "a fault while tripped changes no reason" do
@@ -3552,7 +3567,7 @@ defmodule Logex.TripTest do
     defp zero(_panel, 0), do: :never
     defp zero(panel, tries), do: zeroed(List.last(Sim.writes(panel)), panel, tries)
 
-    defp zeroed(%{[0] => 0}, _panel, _tries), do: :zeroed
+    defp zeroed(%{"panel.q.0" => 0}, _panel, _tries), do: :zeroed
 
     defp zeroed(_last, panel, tries) do
       Process.sleep(10)
@@ -3575,7 +3590,7 @@ defmodule Logex.TripTest do
   defp written(_panel, 0), do: :never
   defp written(panel, tries), do: written(Sim.outputs(panel), panel, tries)
 
-  defp written(%{[0] => 1} = outputs, _panel, _tries), do: outputs
+  defp written(%{"panel.q.0" => 1} = outputs, _panel, _tries), do: outputs
 
   defp written(_outputs, panel, tries) do
     Process.sleep(10)
@@ -3603,9 +3618,9 @@ defmodule Logex.TripTest do
         )
 
       :ets.insert(__MODULE__, {{runner, :panel}, panel})
-      Sim.set(panel, [1], 1)
-      assert written(panel, 200) == %{[0] => 1}
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.1", 1)
+      assert written(panel, 200) == %{"panel.q.0" => 1}
+      Sim.set(panel, "panel.i.0", 1)
       assert :ets.lookup_element(__MODULE__, {runner, :seen}, 2) == :zeroed
       assert {:watchdog, {:task, "e", _took, 20}} = Runner.status(runner).trip
       Runner.stop(runner)
@@ -3619,7 +3634,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@conveyor), steps: Runtime)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       devices = for name <- ["drive", "panel"], do: monitored(device_pid(runner, name))
       Process.flag(:trap_exit, true)
@@ -3627,8 +3642,8 @@ defmodule Logex.TripTest do
       assert_receive {:EXIT, ^runner, :killed}, 5000
       for ref <- devices, do: assert_receive({:DOWN, ^ref, :process, _pid, :killed}, 5000)
 
-      zeroed_once(panel, 1)
-      zeroed_once(drive, 1)
+      zeroed_once(panel, "panel.q.0", 1)
+      zeroed_once(drive, "drive.q.0", 1)
       assert Sim.closed?(panel) and Sim.closed?(drive)
     end
 
@@ -3661,7 +3676,7 @@ defmodule Logex.TripTest do
       Sim.fail(panel, :report, :hang)
 
       assert_raise ArgumentError, ~r/^Logex.IO.Sim waited 100 ms for /, fn ->
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
       end
 
       Process.unlink(runner)
@@ -3678,7 +3693,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
         rig(configured(@relayed <> "var_global z bool at drive.q.0\n"))
 
-      Sim.set(panel, %{[0] => 1, [1] => 5})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 5})
       Manual.advance(clock, 10)
       zeroed = {Sim.writes(panel), Sim.writes(drive)}
       devices = for name <- ["drive", "panel"], do: Process.monitor(device_pid(runner, name))
@@ -3708,19 +3723,19 @@ defmodule Logex.TripTest do
             poll: poll
           )
 
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
-        assert List.last(Sim.writes(panel)) == %{[0] => 1}
+        assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
 
         # The runner held, the panel's change waits in its mailbox, the panel waiting on
         # it, the change reported as it is set or read at the poll at 20; the stop is
         # served all the same, and closes the panel while it waits.
         :sys.suspend(runner)
-        spawn(fn -> Sim.set(panel, [2], 5) end)
+        spawn(fn -> Sim.set(panel, "panel.i.2", 5) end)
         spawn(fn -> Manual.advance(clock, 10) end)
         waiting(runner)
         assert Runner.stop(runner) == :ok
-        zeroed_once(panel, 1)
+        zeroed_once(panel, "panel.q.0", 1)
         assert :ets.lookup_element(__MODULE__, {:closes, panel}, 2) == 1
       end
     end
@@ -3747,12 +3762,12 @@ defmodule Logex.TripTest do
 
       Process.unlink(runner)
       ref = Process.monitor(runner)
-      Sim.set(panel, %{[1] => 6, [2] => 1})
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, %{"panel.i.1" => 6, "panel.i.2" => 1})
+      Sim.set(panel, "panel.i.0", 1)
       assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
       assert Sim.closed?(panel)
       # The first round's 0, its relay not run, and the close's, once.
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       assert :ets.lookup_element(__MODULE__, {:closes, panel}, 2) == 1
     end
 
@@ -3779,11 +3794,11 @@ defmodule Logex.TripTest do
     @tag :capture_log
     test "a close that raises is passed over, and no 0 is written again as the device stops" do
       %{runner: runner, clock: clock, panel: panel} = rig(configured(@conveyor), steps: Runtime)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Sim.fail(panel, :close, :raise)
       assert Runner.stop(runner) == :ok
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
     end
 
     @tag :capture_log
@@ -3802,12 +3817,12 @@ defmodule Logex.TripTest do
       {:ok, supervisor} = Supervisor.start_link([{Runner, opts}], strategy: :one_for_one)
       [{Runner, runner, :worker, [Runner]}] = Supervisor.which_children(supervisor)
       ref = Process.monitor(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      Sim.set(panel, [1], 6)
+      Sim.set(panel, "panel.i.1", 6)
       Manual.advance(clock, 10)
       assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
       assert Sim.closed?(panel)
       assert Supervisor.which_children(supervisor) == []
     end
@@ -3847,7 +3862,7 @@ defmodule Logex.TripTest do
           steps: Boom
         )
 
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       {:reductions, before} = Process.info(runner, :reductions)
       Manual.advance(clock, 10)
       {:reductions, later} = Process.info(runner, :reductions)
@@ -3891,16 +3906,16 @@ defmodule Logex.TripTest do
   defp tripped_on_speed(extra, bad) do
     rig = rig(configured(@speed), [poll: 10, steps: Runtime] ++ extra)
     %{runner: runner, clock: clock, panel: panel, drive: drive} = rig
-    Sim.set(drive, [0], 1000)
-    Sim.set(panel, [0], 1)
+    Sim.set(drive, "drive.i.0", 1000)
+    Sim.set(panel, "panel.i.0", 1)
     Manual.advance(clock, 10)
     assert Runner.get!(runner, "speed") == 1000
-    assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+    assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
     for _ <- 1..bad, do: Sim.fail(drive, :read, {:value, [0], @too_fast})
     Manual.advance(clock, 10)
     assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.0", @too_fast}}
-    zeroed_once(panel, 1)
-    zeroed_once(drive, 1)
+    zeroed_once(panel, "panel.q.0", 1)
+    zeroed_once(drive, "drive.q.0", 1)
     rig
   end
 
@@ -3924,15 +3939,26 @@ defmodule Logex.TripTest do
         end
 
         Manual.advance(clock, 100)
-        assert Enum.drop(Sim.writes(panel), panel_at) == [%{[0] => 0}, %{[0] => 0}]
-        assert Enum.drop(Sim.writes(drive), drive_at) == [%{[0] => 0}, %{[0] => 0}]
+
+        assert Enum.drop(Sim.writes(panel), panel_at) == [
+                 %{"panel.q.0" => 0},
+                 %{"panel.q.0" => 0}
+               ]
+
+        assert Enum.drop(Sim.writes(drive), drive_at) == [
+                 %{"drive.q.0" => 0},
+                 %{"drive.q.0" => 0}
+               ]
+
         assert %{status: :tripped, rounds: ^rounds} = Runner.status(runner)
         refute_received {Runner, ^runner, {:restart, _mode}}
 
         # Put right, the next restart runs.
         assert Runner.restart(runner, mode) == :ok
         assert_received {Runner, ^runner, {:restart, ^mode}}
-        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+        assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+                 {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
       end
     end
 
@@ -3943,12 +3969,12 @@ defmodule Logex.TripTest do
 
         # Mended while tripped, and read by no poll before the restart: the restart's own
         # read gives the first round its speed.
-        Sim.set(drive, [0], 1200)
+        Sim.set(drive, "drive.i.0", 1200)
         assert Runner.restart(runner, mode) == :ok
         assert %{status: :running, trip: nil} = Runner.status(runner)
         assert Runner.get!(runner, "speed") == 1200
-        assert List.last(Sim.writes(panel)) == %{[0] => 1}
-        assert List.last(Sim.writes(drive)) == %{[0] => 1}
+        assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 1}
+        assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
       end
     end
 
@@ -4002,7 +4028,7 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).trip == {:io, "drive", {:bad_value, "drive.i.0", @too_fast}}
       assert Runner.restart(runner, :warm) == :ok
       assert device_pid(runner, "drive") != old
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
     end
 
     test "the cards are read in device-name order, the first that fails the restart's " <>
@@ -4016,7 +4042,9 @@ defmodule Logex.TripTest do
                {:error, {:io_init, "panel", {:bad_value, "panel.i.0", 2}}}
 
       assert Runner.restart(runner, :cold) == :ok
-      assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+      assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+               {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
     end
 
     # Found by M4-6's third verification: the device took a restart's read as what it had
@@ -4060,11 +4088,11 @@ defmodule Logex.TripTest do
            "nothing, a good one overwrites nothing the restart read" do
       for {before, now} <- [{@too_fast, 1000}, {1500, 1700}] do
         %{runner: runner, clock: clock, panel: panel, drive: drive} = tripped_on_speed([], 1)
-        Sim.set(drive, [0], 1000)
+        Sim.set(drive, "drive.i.0", 1000)
 
         case before do
           @too_fast -> Sim.fail(drive, :read, {:value, [0], @too_fast})
-          speed -> Sim.set(drive, [0], speed)
+          speed -> Sim.set(drive, "drive.i.0", speed)
         end
 
         :sys.suspend(runner)
@@ -4072,7 +4100,7 @@ defmodule Logex.TripTest do
         restart_waiting(runner)
         poll = Task.async(fn -> Manual.advance(clock, 10) end)
         changes_waiting(runner)
-        Sim.set(drive, [0], now)
+        Sim.set(drive, "drive.i.0", now)
         :sys.resume(runner)
         assert Task.await(restart) == :ok
         Task.await(poll)
@@ -4080,7 +4108,9 @@ defmodule Logex.TripTest do
         assert %{status: :running, trip: nil} = Runner.status(runner)
         assert Runner.get!(runner, "speed") == now
         assert :sys.get_state(device_pid(runner, "drive")).image == %{[0] => now}
-        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+        assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+                 {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
       end
     end
 
@@ -4110,7 +4140,7 @@ defmodule Logex.TripTest do
 
           :report ->
             Sim.fail(panel, :report, {:value, [0], window})
-            report = Task.async(fn -> Sim.set(panel, [5], 1) end)
+            report = Task.async(fn -> Sim.set(panel, "panel.i.5", 1) end)
             reported_or_passed(report, runner)
         end
 
@@ -4120,7 +4150,9 @@ defmodule Logex.TripTest do
         assert %{status: :running, trip: nil} = Runner.status(runner)
         assert Runner.get!(runner, "x") == 1
         assert :sys.get_state(panel_pid).image[[0]] == 1
-        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+        assert {Sim.outputs(panel), Sim.outputs(drive)} ==
+                 {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
       end
     end
 
@@ -4221,7 +4253,7 @@ defmodule Logex.TripTest do
           poll: 10
         )
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       Sim.fail(panel, :read, {:value, [0], 7})
       Manual.advance(clock, 10)
@@ -4330,7 +4362,7 @@ defmodule Logex.TripTest do
             idle: 5000
           )
 
-        Sim.set(a, [0], 1)
+        Sim.set(a, "a.i.0", 1)
         Sim.fail(a, :read, {:value, [0], 7})
         Manual.advance(clock, 100)
         assert {:io, "a", _} = Runner.status(runner).trip
@@ -4395,7 +4427,7 @@ defmodule Logex.TripTest do
           poll: 100
         )
 
-      Sim.set(a, [0], 1)
+      Sim.set(a, "a.i.0", 1)
       Sim.fail(a, :read, {:value, [0], 7})
       Manual.advance(clock, 100)
       assert {:io, "a", _} = Runner.status(runner).trip
@@ -4445,7 +4477,7 @@ defmodule Logex.TripTest do
       b = device_pid(runner, "b")
       send(b, {:report, reports})
       :sys.get_state(b)
-      Sim.set(a, [0], 1)
+      Sim.set(a, "a.i.0", 1)
       Sim.fail(a, :read, {:value, [0], 7})
       Manual.advance(clock, 100)
       assert {:io, "a", _} = Runner.status(runner).trip
@@ -4721,7 +4753,7 @@ defmodule Logex.TripTest do
       %{runner: runner, clock: clock, drive: drive} = tripped_on_speed([], 1)
       Sim.fail(drive, :read, {:error, :eio})
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", {:error, :eio}}}
-      Sim.set(drive, [0], 1300)
+      Sim.set(drive, "drive.i.0", 1300)
       Manual.advance(clock, 10)
       drive_pid = device_pid(runner, "drive")
       assert :sys.get_state(drive_pid).image[[0]] == 1300
@@ -4736,7 +4768,7 @@ defmodule Logex.TripTest do
         tripped_on_speed([forces: Path.join(dir, "forces")], 1)
 
       :ok = Runner.force(runner, "speed", 5)
-      Sim.set(drive, [0], 1300)
+      Sim.set(drive, "drive.i.0", 1300)
       assert Runner.restart(runner, :cold) == :ok
       assert Runner.get!(runner, "speed") == 5
       :ok = Runner.unforce(runner, "speed")
@@ -4751,16 +4783,16 @@ defmodule Logex.TripTest do
       for mode <- [:cold, :warm] do
         %{runner: runner, clock: clock, panel: panel} = rig()
         Runner.subscribe(runner)
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "runs") == 2
-        Sim.set(panel, [1], 5)
+        Sim.set(panel, "panel.i.1", 5)
         Manual.advance(clock, 10)
         assert %{status: :tripped, now: 20, rounds: 2} = Runner.status(runner)
 
         # Stopped for a second; the input that tripped it is put right meanwhile.
         Manual.advance(clock, 1000)
-        Sim.set(panel, [1], 0)
+        Sim.set(panel, "panel.i.1", 0)
         assert Runner.restart(runner, mode) == :ok
         assert_receive {Runner, ^runner, {:restart, ^mode}}
 
@@ -4772,7 +4804,13 @@ defmodule Logex.TripTest do
         assert gap < 1000
         assert Runner.get!(runner, "runs") == 1
         assert Runner.get!(runner, "x") == 1
-        assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}, %{[0] => 1}]
+
+        assert Sim.writes(panel) == [
+                 %{"panel.q.0" => 0},
+                 %{"panel.q.0" => 1},
+                 %{"panel.q.0" => 0},
+                 %{"panel.q.0" => 1}
+               ]
 
         # And the periodic task keeps its grid from there.
         Manual.advance(clock, 9)
@@ -4792,13 +4830,13 @@ defmodule Logex.TripTest do
           "program c count with e\n  c.n hits\n"
 
       %{runner: runner, clock: clock, panel: panel} = rig(configured(text))
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 11)
       assert Runner.get!(runner, "hits") == 1
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       Manual.advance(clock, 9)
       assert Runner.status(runner).status == :tripped
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
 
       # t is 0 again after the restart, and its round sets it to 1: a change logic wrote,
       # whose round comes at the next millisecond (decision 123) and runs e.
@@ -4814,23 +4852,23 @@ defmodule Logex.TripTest do
     test "a restart's first round writes again nothing written before the trip, a poll " <>
            "inside it among it: a restart is never a resume" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 30)
       Sim.fail(panel, :read, {:error, :eio})
       Manual.advance(clock, 10)
       assert {:io, "panel", {:error, :eio}} = Runner.status(runner).trip
-      zeroed_once(panel, 1)
-      zeroed_once(drive, 1)
+      zeroed_once(panel, "panel.q.0", 1)
+      zeroed_once(drive, "drive.q.0", 1)
       tripped = {length(Sim.writes(panel)), length(Sim.writes(drive))}
 
       # x released while tripped, and the restart's first round stuck 15 ms, the devices
       # polled meanwhile with the step's deadline heard: none writes its 1 again, and the
       # round writes its own 0.
-      Sim.set(panel, %{[0] => 0, [1] => 15})
+      Sim.set(panel, %{"panel.i.0" => 0, "panel.i.1" => 15})
       assert Runner.restart(runner, :cold) == :ok
       {panel_at, drive_at} = tripped
-      assert Enum.drop(Sim.writes(panel), panel_at) == [%{[0] => 0}]
-      assert Enum.drop(Sim.writes(drive), drive_at) == [%{[0] => 0}]
+      assert Enum.drop(Sim.writes(panel), panel_at) == [%{"panel.q.0" => 0}]
+      assert Enum.drop(Sim.writes(drive), drive_at) == [%{"drive.q.0" => 0}]
 
       # Decision 396 (RV-11): the restart's first round took 15 ms, so a round is due and
       # the call waits for it, where it was served at once.
@@ -4839,11 +4877,11 @@ defmodule Logex.TripTest do
 
     test "a restart that trips again zeroes once more, and once" do
       %{runner: runner, clock: clock, panel: panel} = rig()
-      Sim.set(panel, %{[0] => 1, [1] => 5})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 5})
       Manual.advance(clock, 10)
       assert Runner.restart(runner, :cold) == :ok
       assert Runner.status(runner).status == :tripped
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 0}, %{"panel.q.0" => 0}]
       Manual.advance(clock, 100)
       assert length(Sim.writes(panel)) == 3
     end
@@ -4854,12 +4892,12 @@ defmodule Logex.TripTest do
         rig(configured(@conveyor), poll: 10, idle: 500, steps: Runtime)
 
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 30)
       Sim.fail(panel, :read, {:error, :eio})
       Manual.advance(clock, 10)
       assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
-      Sim.set(panel, [0], 0)
+      Sim.set(panel, "panel.i.0", 0)
 
       # The host's restart waits in the busy runner's mailbox while time passes the
       # latched panel's last deadline; the restart is taken first, and its first round
@@ -4892,8 +4930,8 @@ defmodule Logex.TripTest do
       task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
       Manual.advance(clock, 110)
-      zeroed_once(panel, 1)
-      zeroed_once(drive, 1)
+      zeroed_once(panel, "panel.q.0", 1)
+      zeroed_once(drive, "drive.q.0", 1)
       :sys.resume(runner)
       assert Task.await(task) == {:raised, @running}
       assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}
@@ -4912,7 +4950,7 @@ defmodule Logex.TripTest do
       refute_received {Runner, ^runner, {:trip, _}}
 
       assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
-               {%{[0] => 1}, %{[0] => 1}}
+               {%{"panel.q.0" => 1}, %{"drive.q.0" => 1}}
     end
 
     test "a restart asked while running is refused at the trip (decision 354), and one " <>
@@ -4929,7 +4967,7 @@ defmodule Logex.TripTest do
       drive_device = device_pid(runner, "drive")
       :sys.suspend(drive_device)
       Manual.advance(clock, 110)
-      zeroed_once(panel, 1)
+      zeroed_once(panel, "panel.q.0", 1)
       :sys.resume(runner)
       zero_waiting(drive_device)
       :sys.resume(drive_device)
@@ -4941,7 +4979,13 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == :ok
       assert_receive {Runner, ^runner, {:restart, :cold}}
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Enum.take(Sim.writes(drive), -3) == [%{[0] => 1}, %{[0] => 0}, %{[0] => 1}]
+
+      assert Enum.take(Sim.writes(drive), -3) == [
+               %{"drive.q.0" => 1},
+               %{"drive.q.0" => 0},
+               %{"drive.q.0" => 1}
+             ]
+
       Manual.advance(clock, 50)
       assert %{status: :running} = Runner.status(runner)
       refute_received {Runner, ^runner, {:trip, _}}
@@ -4983,7 +5027,7 @@ defmodule Logex.TripTest do
       # the drive's write, and the trip refuses the restart, which reached the runner before
       # it, where the restart taken after the trip would have been served and cleared it.
       :sys.suspend(runner)
-      setter = Task.async(fn -> Sim.set(panel, [0], 1) end)
+      setter = Task.async(fn -> Sim.set(panel, "panel.i.0", 1) end)
       change_waiting(runner)
       task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
@@ -4999,7 +5043,7 @@ defmodule Logex.TripTest do
       assert_receive {Runner, ^runner, {:restart, :cold}}
       Manual.advance(clock, 10)
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      assert List.last(Sim.writes(drive)) == %{"drive.q.0" => 1}
     end
 
     test "a restart asked while a round is under way, the runner inside a device's write, " <>
@@ -5022,7 +5066,7 @@ defmodule Logex.TripTest do
       # The e-stop's round writes the held device, whose write waits on the test: the
       # host's restart reaches the runner while it waits there, then the write fails, and
       # the round's trip refuses the restart.
-      setter = Task.async(fn -> Sim.set(panel, [0], 1) end)
+      setter = Task.async(fn -> Sim.set(panel, "panel.i.0", 1) end)
       assert_receive {Held, writer}, 5000
       task = Task.async(fn -> restart_answer(runner, :cold) end)
       restart_waiting(runner)
@@ -5046,7 +5090,7 @@ defmodule Logex.TripTest do
         Runner.restart(runner, :cold)
       end)
 
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       Manual.advance(clock, 10)
 
       for mode <- [:hot, nil, "cold"] do
@@ -5082,7 +5126,7 @@ defmodule Logex.TripTest do
         "program r relay\n  r.in x\n  r.out y\nprogram s relay\n  s.in x\n  s.out z\n"
 
     rig = rig(configured(text), poll: 10, idle: 100, steps: Runtime)
-    Sim.set(rig.panel, [0], 1)
+    Sim.set(rig.panel, "panel.i.0", 1)
     Manual.advance(rig.clock, 1)
     rig
   end

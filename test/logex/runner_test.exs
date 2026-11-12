@@ -668,22 +668,22 @@ defmodule Logex.RunnerTest do
         {:ok, clock} = Manual.start_link()
         {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {RunnerOddClock, clock}))
         :ok = Runner.subscribe(runner)
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
 
         :ets.insert(__MODULE__, {{clock, :runner_now_ms}, answer})
         Manual.advance(clock, 10)
         assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, ^answer}}}}, 5000
         assert %{status: :tripped, trip: {:clock, {:now_ms, ^answer}}} = Runner.status(runner)
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
         assert Runner.restart(runner, :warm) == {:error, {:clock, {:now_ms, answer}}}
 
         :ets.delete(__MODULE__, {clock, :runner_now_ms})
         assert Runner.restart(runner, :warm) == :ok
         Manual.advance(clock, 10)
         assert %{status: :running, trip: nil} = Runner.status(runner)
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
         assert Runner.stop(runner) == :ok
       end
     end
@@ -696,7 +696,7 @@ defmodule Logex.RunnerTest do
       {opts, %{panel: panel}} = rig()
       {:ok, clock} = Manual.start_link()
       {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {RunnerOddClock, clock}))
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       :ets.insert(__MODULE__, {{clock, :runner_now_ms}, :late})
       Manual.advance(clock, 10)
@@ -714,7 +714,7 @@ defmodule Logex.RunnerTest do
 
       Manual.advance(clock, 10)
       assert %{status: :running, trip: nil} = Runner.status(runner)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       assert Runner.stop(runner) == :ok
     end
 
@@ -728,21 +728,21 @@ defmodule Logex.RunnerTest do
         {opts, %{clock: clock, panel: panel}} = rig()
         {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
         :ok = Runner.subscribe(runner)
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
 
         :ets.insert(__MODULE__, {{clock, :device_now_ms}, answer})
         Manual.advance(clock, 10)
         assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, ^answer}}}}, 5000
         assert %{status: :tripped, trip: {:clock, {:now_ms, ^answer}}} = Runner.status(runner)
-        assert Sim.outputs(panel) == %{[0] => 0}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
 
         :ets.delete(__MODULE__, {clock, :device_now_ms})
         assert Runner.restart(runner, :warm) == :ok
         Manual.advance(clock, 10)
         assert %{status: :running, trip: nil} = Runner.status(runner)
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
         assert Runner.stop(runner) == :ok
       end
     end
@@ -757,10 +757,10 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock, panel: panel}} = rig()
       {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
       :ok = Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
-      Sim.set(panel, [0], 0)
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
+      Sim.set(panel, "panel.i.0", 0)
 
       %{"panel" => device} = devices(runner)
       ref = Process.monitor(device)
@@ -802,18 +802,18 @@ defmodule Logex.RunnerTest do
       :ok = Runner.subscribe(runner, [:trip, :round])
       Manual.advance(clock, 10)
       assert_receive {Runner, ^runner, {:round, 10, _outputs}}, 5000
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       :ets.insert(__MODULE__, {{:wrong_after, runner}, {clock, :late}})
       Manual.advance(clock, 10)
 
       assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
       refute_received {Runner, ^runner, {:round, _now, _outputs}}
       assert %{status: :tripped, trip: {:clock, {:now_ms, :late}}} = Runner.status(runner)
-      refute %{[0] => 1} in Sim.writes(panel)
-      assert Sim.outputs(panel) == %{[0] => 0}
+      refute %{"panel.q.0" => 1} in Sim.writes(panel)
+      assert Sim.outputs(panel) == %{"panel.q.0" => 0}
 
       assert Runner.restart(runner, :warm) == :ok
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       assert Runner.stop(runner) == :ok
     end
 
@@ -830,18 +830,18 @@ defmodule Logex.RunnerTest do
         :ok = Runner.subscribe(runner, [:trip, :round])
         Manual.advance(clock, 10)
         assert_receive {Runner, ^runner, {:round, 10, _outputs}}, 5000
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         :ets.insert(__MODULE__, {{clock, :wrong_in}, {function, :late}})
         Manual.advance(clock, 10)
 
         assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
         assert :ets.lookup(__MODULE__, {clock, :wrong_in}) == []
         refute_received {Runner, ^runner, {:round, _now, _outputs}}
-        refute %{[0] => 1} in Sim.writes(panel)
-        assert Sim.outputs(panel) == %{[0] => 0}
+        refute %{"panel.q.0" => 1} in Sim.writes(panel)
+        assert Sim.outputs(panel) == %{"panel.q.0" => 0}
 
         assert Runner.restart(runner, :warm) == :ok
-        assert Sim.outputs(panel) == %{[0] => 1}
+        assert Sim.outputs(panel) == %{"panel.q.0" => 1}
         assert Runner.stop(runner) == :ok
       end
     end
@@ -867,15 +867,17 @@ defmodule Logex.RunnerTest do
         :ok = Runner.subscribe(runner, [:trip, :round])
         Manual.advance(rig.clock, 10)
         assert_receive {Runner, ^runner, {:round, 10, %{"y" => 0, "z" => 0}}}, 5000
-        Sim.set(rig.panel, [0], 1)
+        Sim.set(rig.panel, "panel.i.0", 1)
         wrong.(rig)
         Manual.advance(rig.clock, 10)
         assert_receive {Runner, ^runner, {:trip, reason}}, 5000
         rounds = for {Runner, ^runner, {:round, now, outputs}} <- flushed(), do: {now, outputs}
-        assert Sim.outputs(rig.panel) == %{[0] => 0} and Sim.outputs(rig.drive) == %{[0] => 0}
 
-        {reason, rounds, %{[0] => 1} in Sim.writes(rig.drive),
-         %{[0] => 1} in Sim.writes(rig.panel)}
+        assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0} and
+                 Sim.outputs(rig.drive) == %{"drive.q.0" => 0}
+
+        {reason, rounds, %{"drive.q.0" => 1} in Sim.writes(rig.drive),
+         %{"panel.q.0" => 1} in Sim.writes(rig.panel)}
       end
 
       at = fn function, skip ->
@@ -920,7 +922,7 @@ defmodule Logex.RunnerTest do
         |> Keyword.put(:steps, StepTakes)
 
       {:ok, runner} = Runner.start_link(opts)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       :ets.insert(__MODULE__, {{runner, :step_ms}, {clock, 600}})
       Manual.advance(clock, 10)
 
@@ -957,7 +959,7 @@ defmodule Logex.RunnerTest do
       {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
       :ok = Runner.subscribe(runner)
       Manual.advance(clock, 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
 
       %{"panel" => device} = devices(runner)
       ref = Process.monitor(device)
@@ -972,8 +974,8 @@ defmodule Logex.RunnerTest do
 
       :sys.resume(runner)
       assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
-      refute %{[0] => 1} in Sim.writes(drive)
-      assert Sim.outputs(drive) == %{[0] => 0}
+      refute %{"drive.q.0" => 1} in Sim.writes(drive)
+      assert Sim.outputs(drive) == %{"drive.q.0" => 0}
       assert Runner.stop(runner) == :ok
     end
 
@@ -992,7 +994,7 @@ defmodule Logex.RunnerTest do
       {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {DeviceOddClock, clock}))
       :ok = Runner.subscribe(runner)
       Manual.advance(clock, 10)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
 
       %{"panel" => device} = devices(runner)
       ref = Process.monitor(device)
@@ -1009,8 +1011,8 @@ defmodule Logex.RunnerTest do
 
       :sys.resume(runner)
       assert_receive {Runner, ^runner, {:trip, {:clock, {:now_ms, :late}}}}, 5000
-      refute %{[0] => 1} in Sim.writes(drive)
-      assert Sim.outputs(drive) == %{[0] => 0}
+      refute %{"drive.q.0" => 1} in Sim.writes(drive)
+      assert Sim.outputs(drive) == %{"drive.q.0" => 0}
       assert Runner.stop(runner) == :ok
     end
 
@@ -1333,7 +1335,7 @@ defmodule Logex.RunnerTest do
       assert_receive {:DOWN, ^monitor, :process, ^runner, reason}
                      when reason in [:normal, :noproc]
 
-      assert Sim.writes(panel) == [%{[0] => 1}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 1}, %{"panel.q.0" => 0}]
       assert Sim.closed?(panel)
     end
 
@@ -1399,7 +1401,7 @@ defmodule Logex.RunnerTest do
       assert Process.alive?(runner)
       assert %{rounds: 1, status: :running} = Runner.status(runner)
       assert Runner.get!(runner, "x") == 0
-      assert Sim.writes(panel) == [%{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}]
     end
 
     # Starts and stops by one name while another process polls the runner by that name:
@@ -1461,8 +1463,8 @@ defmodule Logex.RunnerTest do
 
       # The relay, due at 0, saw `x` at 1 in the first round, before the clock moved.
       assert {Sim.reads(panel), Sim.reads(drive)} == {1, 1}
-      assert Sim.writes(panel) == [%{[0] => 1}]
-      assert Sim.writes(drive) == [%{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 1}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}]
       assert Runner.get!(runner, "r.out") == 1
     end
 
@@ -1673,7 +1675,7 @@ defmodule Logex.RunnerTest do
 
       # `drive` comes first, so it was opened, and is closed again, its output zeroed once.
       assert Sim.closed?(drive)
-      assert Sim.writes(drive) == [%{[0] => 0}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}]
       assert Sim.writes(panel) == []
 
       # The first fails, and none after it is opened.
@@ -1707,7 +1709,7 @@ defmodule Logex.RunnerTest do
       {:ok, runner} =
         Runner.start_link(Keyword.put(opts, :io, %{opts[:io] | "panel" => {Sim, sim: quiet}}))
 
-      Sim.set(quiet, [1], 1)
+      Sim.set(quiet, "panel.i.1", 1)
       Manual.advance(clock, 9)
       assert Runner.get!(runner, "hits") == 0
       Manual.advance(clock, 1)
@@ -1731,7 +1733,7 @@ defmodule Logex.RunnerTest do
       {:ok, runner} =
         Runner.start_link(Keyword.update!(opts, :io, &Map.put(&1, "keys", {Sim, sim: keys})))
 
-      Sim.set(keys, [0], 1)
+      Sim.set(keys, "keys.i.0", 1)
       assert Runner.get!(runner, "hits") == 1
       assert Sim.reads(keys) == 1
       assert Sim.writes(keys) == []
@@ -1769,10 +1771,10 @@ defmodule Logex.RunnerTest do
 
       # The timer starts at the rise at 2, and reads 5 ms at the rise at 7.
       Manual.pass(clock, 2)
-      Sim.set(panel, [1], 1)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 1)
+      Sim.set(panel, "panel.i.1", 0)
       Manual.pass(clock, 5)
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert Runner.get!(runner, "hits") == 5
     end
 
@@ -1781,16 +1783,16 @@ defmodule Logex.RunnerTest do
       {opts, %{panel: panel, drive: drive}} = plant_rig()
       {:ok, runner} = Runner.start_link(opts)
 
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert Runner.get!(runner, "hits") == 1
-      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Sim.outputs(drive) == %{"drive.q.0" => 1}
 
       # A fall is a change too, its own round, which runs no event task; and the next rise
       # another.
-      Sim.set(panel, [1], 0)
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 0)
+      Sim.set(panel, "panel.i.1", 1)
       assert Runner.get!(runner, "hits") == 2
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 2}]
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}, %{"drive.q.0" => 2}]
     end
 
     test "a change of another input is merged, makes no round, and the next round takes " <>
@@ -1798,19 +1800,19 @@ defmodule Logex.RunnerTest do
       {opts, %{panel: panel}} = plant_rig()
       {:ok, runner} = Runner.start_link(opts)
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       assert Runner.get!(runner, "x") == 0
-      assert Sim.writes(panel) == [%{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}]
 
       # The trigger's round takes `x` too, and the relay, not due at 0 once it has run,
       # leaves `y` as it was.
-      Sim.set(panel, %{[1] => 1})
+      Sim.set(panel, %{"panel.i.1" => 1})
       assert Runner.get!(runner, "x") == 1
       assert Runner.get!(runner, "hits") == 1
 
       # One report with both: `x`'s change is merged before the trigger's round, which
       # takes it.
-      Sim.set(panel, %{[0] => 0, [1] => 0})
+      Sim.set(panel, %{"panel.i.0" => 0, "panel.i.1" => 0})
       assert Runner.get!(runner, "x") == 0
     end
 
@@ -1840,8 +1842,8 @@ defmodule Logex.RunnerTest do
       # Both rise in one report: `e`'s round first, at [1], counting 1, and then `f`'s, at
       # [2], which copies the count it finds; in one round `two`, of the higher priority,
       # would copy it before `trip` counted.
-      Sim.set(panel, %{[2] => 1, [1] => 1})
-      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
+      Sim.set(panel, %{"panel.i.2" => 1, "panel.i.1" => 1})
+      assert Sim.writes(drive) == [%{"drive.q.0" => 0}, %{"drive.q.0" => 1}]
       assert {Runner.get!(runner, "hits"), Runner.get!(runner, "seen")} == {1, 1}
     end
 
@@ -1856,16 +1858,16 @@ defmodule Logex.RunnerTest do
 
       {opts, %{panel: panel}} = plant_rig(counted(text))
       {:ok, _runner} = Runner.start_link(opts)
-      assert Sim.writes(panel) == [%{[0] => 0}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}]
 
       # The panel's own change makes a round that writes the panel, which answers the write
       # while it waits for that round: `y` follows `e`.
-      Sim.set(panel, [1], 1)
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+      Sim.set(panel, "panel.i.1", 1)
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 1}]
 
       # A fall runs no event task, so `y` stays 1, and the panel is not written again.
-      Sim.set(panel, [1], 0)
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+      Sim.set(panel, "panel.i.1", 0)
+      assert Sim.writes(panel) == [%{"panel.q.0" => 0}, %{"panel.q.0" => 1}]
     end
 
     test "every device refreshed before each step with its deadline, its task's watchdog " <>
@@ -1885,13 +1887,13 @@ defmodule Logex.RunnerTest do
 
       # A rise of `e` at 2: the event task's step, 40 and 7 on, and the write's, 300 and 7.
       Manual.pass(clock, 2)
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert refreshes(panel_device) == [2 + 47, 2 + 307]
       assert refreshes(drive_device) == [2 + 47, 2 + 307]
 
       # A fall runs no step: the write's alone.
       Manual.pass(clock, 3)
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       assert refreshes(drive_device) == [5 + 307]
 
       # A watchdog left unset is 500 ms, and the idle watchdog 500 ms and the poll period
@@ -1901,7 +1903,7 @@ defmodule Logex.RunnerTest do
       %{"drive" => drive_device} = devices(runner)
       traced(drive_device)
       Manual.pass(clock, 2)
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert refreshes(drive_device) == [2 + 510, 2 + 510]
     end
   end
@@ -2058,10 +2060,10 @@ defmodule Logex.RunnerTest do
 
       # A press and release between two due times: two rounds at once, `trip` run once,
       # each planning the next round again, its earlier wake cancelled.
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert {rounds(runner), Runner.get!(runner, "hits")} == {5, 1}
       assert [{40, ^runner, _}] = Enum.filter(Manual.pending(clock), &(elem(&1, 1) == runner))
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       assert {rounds(runner), Runner.get!(runner, "hits")} == {6, 1}
 
       # And the due times go on as before, on their grid.
@@ -2085,8 +2087,8 @@ defmodule Logex.RunnerTest do
           traced(drive)
 
           Manual.advance(clock, 13)
-          Sim.set(panel, [1], 1)
-          Sim.set(panel, [1], 0)
+          Sim.set(panel, "panel.i.1", 1)
+          Sim.set(panel, "panel.i.1", 0)
           Manual.advance(clock, 30)
           {rounds(runner), Runner.get!(runner, "hits"), refreshes(drive)}
         end
@@ -2967,7 +2969,7 @@ defmodule Logex.RunnerTest do
       %{"panel" => device} = devices(runner)
       assert :sys.get_state(device).deadline == 0 + 510
       Manual.pass(clock, 2)
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
       assert :sys.get_state(device).deadline == 2 + 510
     end
 
@@ -3013,7 +3015,7 @@ defmodule Logex.RunnerTest do
         Sim.set(panel, [0], 1)
         {:ok, _runner} = Runner.start_link(opts)
         Manual.advance(clock, 30)
-        assert Sim.writes(panel) == List.duplicate(%{[0] => 1}, 1 + again), "poll #{poll}"
+        assert Sim.writes(panel) == List.duplicate(%{"panel.q.0" => 1}, 1 + again), "poll #{poll}"
       end
 
       # The values last written: a change written by a round is what comes again. `x` set
@@ -3022,11 +3024,18 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock, panel: panel}} = rig()
       {:ok, _runner} = Runner.start_link(opts)
       Manual.advance(clock, 12)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 8)
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}, %{[0] => 0}, %{[0] => 1}]
+
+      assert Sim.writes(panel) == [
+               %{"panel.q.0" => 0},
+               %{"panel.q.0" => 0},
+               %{"panel.q.0" => 0},
+               %{"panel.q.0" => 1}
+             ]
+
       Manual.advance(clock, 10)
-      assert Enum.drop(Sim.writes(panel), 3) == [%{[0] => 1}, %{[0] => 1}]
+      assert Enum.drop(Sim.writes(panel), 3) == [%{"panel.q.0" => 1}, %{"panel.q.0" => 1}]
     end
 
     # A round's write does not stand in for a poll's: a toggle the continuous task runs,
@@ -3067,7 +3076,7 @@ defmodule Logex.RunnerTest do
         {opts, %{clock: clock, panel: panel}} = rig(config)
         {:ok, runner} = Runner.start_link(opts)
         Manual.advance(clock, 40)
-        assert Enum.map(Sim.writes(panel), & &1[[0]]) == writes, "interval #{interval}"
+        assert Enum.map(Sim.writes(panel), & &1["panel.q.0"]) == writes, "interval #{interval}"
         Runner.stop(runner)
       end
     end
@@ -3101,7 +3110,7 @@ defmodule Logex.RunnerTest do
       Logex.Runner.Device.refresh(device, 1_000, 50)
       Logex.Runner.Device.write(device, %{[0] => 1})
       Manual.advance(clock, 20)
-      assert Sim.writes(panel) == List.duplicate(%{[0] => 1}, 3)
+      assert Sim.writes(panel) == List.duplicate(%{"panel.q.0" => 1}, 3)
     end
 
     # A device written but never refreshed has heard no deadline, and writes nothing
@@ -3131,7 +3140,7 @@ defmodule Logex.RunnerTest do
       Logex.Runner.Device.write(device, %{[0] => 1})
       Manual.advance(clock, 50)
       assert Sim.reads(panel) == 6
-      assert Sim.writes(panel) == [%{[0] => 1}]
+      assert Sim.writes(panel) == [%{"panel.q.0" => 1}]
     end
 
     # A poll writes again after its read: a read that passes a change on, a rise of an
@@ -3159,9 +3168,9 @@ defmodule Logex.RunnerTest do
         )
 
       Manual.advance(clock, 12)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 8)
-      assert Enum.map(Sim.writes(panel), & &1[[0]]) == [0, 0, 1, 1]
+      assert Enum.map(Sim.writes(panel), & &1["panel.q.0"]) == [0, 0, 1, 1]
       Runner.stop(runner)
     end
 
@@ -3192,7 +3201,10 @@ defmodule Logex.RunnerTest do
       {:ok, runner} = Runner.start_link(opts)
       :sys.suspend(runner)
       Manual.advance(clock, 600)
-      assert Sim.writes(panel) == List.duplicate(%{[0] => 0}, 1 + 50) ++ [%{[0] => 0}]
+
+      assert Sim.writes(panel) ==
+               List.duplicate(%{"panel.q.0" => 0}, 1 + 50) ++ [%{"panel.q.0" => 0}]
+
       :sys.resume(runner)
     end
 
@@ -3310,9 +3322,9 @@ defmodule Logex.RunnerTest do
            "(decision 116)" do
       {opts, %{panel: panel, drive: drive, clock: clock}} = plant_rig()
       {:ok, runner} = Runner.start_link(opts)
-      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
       Manual.advance(clock, 10)
-      assert Sim.outputs(panel) == %{[0] => 1}
+      assert Sim.outputs(panel) == %{"panel.q.0" => 1}
       before = {Sim.writes(panel), Sim.writes(drive)}
 
       # One write each at the stop, every output 0, and nothing else.
@@ -3320,7 +3332,8 @@ defmodule Logex.RunnerTest do
       refute Process.alive?(runner)
 
       assert {Sim.writes(panel), Sim.writes(drive)} ==
-               {elem(before, 0) ++ [%{[0] => 0}], elem(before, 1) ++ [%{[0] => 0}]}
+               {elem(before, 0) ++ [%{"panel.q.0" => 0}],
+                elem(before, 1) ++ [%{"drive.q.0" => 0}]}
 
       assert Sim.closed?(panel) and Sim.closed?(drive)
       reads = Sim.reads(panel)
@@ -3328,7 +3341,7 @@ defmodule Logex.RunnerTest do
       # Nothing after: no read, no write.
       Manual.advance(clock, 50)
       assert Sim.reads(panel) == reads
-      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(panel)) == %{"panel.q.0" => 0}
 
       # Its reason is a GenServer's, and a runner that is none is told so.
       {opts, _rig} = plant_rig()
@@ -3665,7 +3678,7 @@ defmodule Logex.RunnerTest do
         )
 
       {:reductions, before} = Process.info(runner, :reductions)
-      Sim.set(panel, Map.new(0..(n - 1), &{[&1], 1}))
+      Sim.set(panel, Map.new(0..(n - 1), &{"panel.i.#{&1}", 1}))
       {:reductions, later} = Process.info(runner, :reductions)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "big[#{n - 1}]") == 1
@@ -3714,7 +3727,7 @@ defmodule Logex.RunnerTest do
       before = cost.()
 
       for i <- 1..4 do
-        Sim.set(src, [0], rem(i, 2))
+        Sim.set(src, "src.i.0", rem(i, 2))
         for {_name, sim} <- sims, do: Sim.fail(sim, :write, {:delay, 1})
         Manual.advance(clock, 1000)
       end

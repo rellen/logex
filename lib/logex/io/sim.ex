@@ -6,8 +6,37 @@ defmodule Logex.IO.Sim do
   panel}}`, sets its inputs and reads what was written to its outputs:
 
       {:ok, panel} = Logex.IO.Sim.start_link(reports: true)
-      Logex.IO.Sim.set(panel, [0], 1)        # an input, at its address
-      Logex.IO.Sim.outputs(panel)            # the last value written to each output
+      Logex.IO.Sim.set(panel, [0], 1)              # before a runner opens it: its list
+      # ... a runner started with io: %{"panel" => {Logex.IO.Sim, sim: panel}} ...
+      Logex.IO.Sim.set(panel, "panel.i.0", 1)      # an input, as the configuration writes it
+      Logex.IO.Sim.outputs(panel)                  # the last value written to each output
+
+  **Its addresses** (decision 517 (e), RV-21). An address is the adapter's list,
+  `panel.i.1.3`'s `[1, 3]` (`Logex.IO`), until a runner has opened the sim, and from then
+  on the configuration's text, `"panel.i.0"`, the location in its one spelling, a bit
+  `"panel.i.1.3"` and a located array's element at its own address, `temps real[8] at
+  card.i.0`'s `temps[3]` at `"card.i.3"`, as decision 399 has a trip name one, so that a
+  test sets the button the configuration writes `panel.i.0` as `"panel.i.0"` and reads the
+  motor it writes `drive.q.0` as `%{"drive.q.0" => 1}`. A sim is opened by a runner when
+  `init/3` is called from a runner's device, a `Logex.Runner.Device` process, and keeps
+  that device's name once the device closes it, between runners and after a stop; a test
+  that calls the callbacks itself opens no runner's, and its sim keeps the list
+  (provisional, `PLAN.md`'s RV-21 question 3):
+  - `set/3` and `set/2` take a list before a runner's open and the text after it; the
+    other form is the test's mistake, its message naming the form the sim takes, and so
+    is a text of an output, of another device or of no location in its one spelling,
+    `"panel.I.0"` or `"panel.i.00"`; a text of an input no point reads, past none of
+    `inputs:`, is set as a list would be, read by no point;
+  - `outputs/1` and `writes/1` give lists before and the text after, every write spelled
+    by the device a runner last opened the sim for, those made before a reopen among
+    them, since a sim is one device's;
+  - `fail/3`'s `{:value, address, value}` is the adapter's own term, which the runner
+    names as the configuration writes it where it is a list of whole numbers (decision
+    399) and as the adapter gave it otherwise (decision 443), so it stays a list, or any
+    term a test means as an address no configuration writes;
+  - the sim's own refusal of an address past `inputs:` names it in the form the test gave,
+    `the sim has 8 inputs, at the addresses "card.i.0" to "card.i.7", got: "card.i.9"`
+    after a runner's open (decision 443's refusal, in the new form).
 
   **The test's side.**
   - `start_link/1` starts one linked to the caller. `reports: true` makes it report each
@@ -21,8 +50,8 @@ defmodule Logex.IO.Sim do
     past them, `temps real[10] at card.i.0` on a sim of 8 inputs, is refused at bind;
     since M5-13's review each option is taken once, a key given twice refused; and since
     RV-4 `writes:` is how many writes it keeps, its newest, 100,000 unless set.
-  - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
-    values, each any number, an integer or a float, which the runner checks against its
+  - `set/3` sets one input, at its address (above), and `set/2` several, a map of
+    addresses to values, each any number, an integer or a float, which the runner checks against its
     point's type, a real point's taking either (`Logex.IO`), unset inputs reading 0;
     since M5-13's review an address past `inputs:` is refused, the first in order, and
     nothing set. Where the sim reports, the inputs that changed are
@@ -31,8 +60,8 @@ defmodule Logex.IO.Sim do
     finds the device's change made, by construction. A device that is down, or goes down
     while it handles the report, with whatever reason, `:timeout` among them, is passed
     over; one still alive that does not answer within `wait:` is the test's mistake.
-  - `outputs/1` gives the last value written to each output, `writes/1` every write in
-    order, so that "zeroed once" can be asserted, since RV-4 its newest 100,000, or as
+  - `outputs/1` gives the last value written to each output, by address (above),
+    `writes/1` every write in order, so that "zeroed once" can be asserted, since RV-4 its newest 100,000, or as
     many as `writes:` says, so that a sim written again every poll period for hours holds a
     bounded record (c6-pmi-7, provisional), `reads/1` the number of reads made,
     failed ones among them, and `closed?/1` whether the device was closed since it was
@@ -110,22 +139,36 @@ defmodule Logex.IO.Sim do
   """
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
 
-  @doc "Sets the input at `address` to `value`, reporting it where the sim reports and it changed."
+  @doc """
+  Sets the input at `address` to `value`, reporting it where the sim reports and it
+  changed: the address a list, `[0]`, until a runner has opened the sim, and from then on
+  as the configuration writes it, `"panel.i.0"` (decision 517 (e)).
+  """
   def set(sim, address, value) do
     sim = sim!(sim)
-    setting(sim, %{address!(address) => value!(value)})
+    setting(sim, &%{addressed!(&1, address, sim) => value!(value)})
   end
 
-  @doc "Sets several inputs, a map of addresses to values, reported as one where the sim reports."
+  @doc """
+  Sets several inputs, a map of addresses to values, reported as one where the sim
+  reports, each address as `set/3` takes one.
+  """
   def set(sim, values) do
     sim = sim!(sim)
-    setting(sim, values!(values))
+    setting(sim, &inputs!(values, &1, sim))
   end
 
-  @doc "The last value written to each output, by address."
+  @doc """
+  The last value written to each output, by address: a list, `[0]`, until a runner has
+  opened the sim, and from then on as the configuration writes it, `"drive.q.0"` (decision
+  517 (e)).
+  """
   def outputs(sim), do: GenServer.call(sim!(sim), :outputs)
 
-  @doc "Every write, in order, each the values `write/2` was given."
+  @doc """
+  Every write, in order, each the values `write/2` was given, by address as `outputs/1`
+  gives them.
+  """
   def writes(sim), do: GenServer.call(sim!(sim), :writes)
 
   @doc "The number of reads made, failed ones among them."
@@ -189,11 +232,21 @@ defmodule Logex.IO.Sim do
 
   # The inputs set, and, where they changed and the sim reports to a device, reported to
   # it from the caller, which then waits through `:sys` until the device has handled it.
-  defp setting(sim, values), do: set!(GenServer.call(sim, {:set, values}), sim)
+  # Decision 517 (e) (RV-21): the addresses are taken by the device the sim is named for
+  # as the set reaches it, so that where a runner opened it between the look and the set
+  # they are taken again, by the name it has now, and never set by the one it had.
+  defp setting(sim, taken), do: setting(sim, taken, GenServer.call(sim, :named))
+
+  defp setting(sim, taken, named),
+    do: set!(GenServer.call(sim, {:set, taken.(named), named}), sim, taken)
 
   # M5-13's review: an address past the sim's inputs, where it was started with `inputs:`,
   # is the test's mistake, as a point bound past them is the host's, and nothing is set.
-  defp set!({:past, address, size}, _sim),
+  # Decision 517 (e) (RV-21): once a runner has opened the sim, in the configuration's
+  # text, as the test wrote it.
+  defp set!(:renamed, sim, taken), do: setting(sim, taken)
+
+  defp set!({:past, address, size, nil}, _sim, _taken),
     do:
       raise(
         ArgumentError,
@@ -201,7 +254,16 @@ defmodule Logex.IO.Sim do
           "got: #{inspect(address, charlists: :as_lists)}"
       )
 
-  defp set!({reporter, changed, wait}, sim),
+  defp set!({:past, address, size, named}, _sim, _taken),
+    do:
+      raise(
+        ArgumentError,
+        "the sim has #{size} #{noun(:input, size)}, at the addresses " <>
+          "#{inspect(at(named, :input, [0]))} to #{inspect(at(named, :input, [size - 1]))}, " <>
+          "got: #{inspect(at(named, :input, address))}"
+      )
+
+  defp set!({reporter, changed, wait}, sim, _taken),
     do: reported(reporter, {__MODULE__, sim, changed}, wait)
 
   defp reported(nil, _report, _wait), do: :ok
@@ -293,7 +355,7 @@ defmodule Logex.IO.Sim do
   end
 
   defp opened(sim, device, points) do
-    open!(GenServer.call(sim, {:opened, self(), device}), sim)
+    open!(GenServer.call(sim, {:opened, self(), device, runner?()}), sim)
 
     {:ok,
      %{
@@ -303,6 +365,11 @@ defmodule Logex.IO.Sim do
        outputs: for(%Point{direction: :output, address: address} <- points, do: address)
      }}
   end
+
+  # Decision 517 (e) (RV-21): whether the process that opens the sim is a runner's device,
+  # `Logex.Runner.Device`'s, which a runner starts for each device it binds, rather than a
+  # test that calls the adapter's callbacks itself, which keeps the list form.
+  defp runner?, do: Process.get(:"$initial_call") == {Logex.Runner.Device, :init, 1}
 
   # A sim another device opened meanwhile, though no device held it when its options were
   # checked, is refused as the check refuses it.
@@ -355,12 +422,13 @@ defmodule Logex.IO.Sim do
        device: nil,
        failures: %{},
        hold: nil,
-       found: nil
+       found: nil,
+       named: nil
      })}
   end
 
   @impl GenServer
-  def handle_call({:set, values}, _from, state),
+  def handle_call({:set, values, named}, _from, %{named: named} = state),
     do:
       set_in(
         values |> Map.keys() |> Enum.reject(&within?(&1, state.sizes.input)) |> Enum.sort(),
@@ -368,10 +436,20 @@ defmodule Logex.IO.Sim do
         state
       )
 
-  def handle_call(:outputs, _from, state), do: {:reply, state.outputs, state}
+  def handle_call({:set, _values, _named}, _from, state), do: {:reply, :renamed, state}
+
+  def handle_call(:outputs, _from, state),
+    do: {:reply, spelled(state.named, :output, state.outputs), state}
 
   def handle_call(:writes, _from, state),
-    do: {:reply, Enum.reverse(Enum.take(state.writes, state.kept)), state}
+    do:
+      {:reply,
+       state.writes
+       |> Enum.take(state.kept)
+       |> Enum.reverse()
+       |> Enum.map(&spelled(state.named, :output, &1)), state}
+
+  def handle_call(:named, _from, state), do: {:reply, state.named, state}
 
   def handle_call(:reads, _from, state), do: {:reply, state.reads, state}
   def handle_call(:closed, _from, state), do: {:reply, state.closed, state}
@@ -418,8 +496,8 @@ defmodule Logex.IO.Sim do
   def handle_call(:holding, _from, state),
     do: {:reply, match?({:holding, _from, _monitor}, state.hold), state}
 
-  def handle_call({:opened, pid, device}, _from, state),
-    do: opening(holder(state), pid, device, state)
+  def handle_call({:opened, pid, device, runner}, _from, state),
+    do: opening(holder(state), pid, device, named(runner, device, state))
 
   def handle_call(:holder, _from, state), do: {:reply, holder(state), state}
   def handle_call(:sizes, _from, state), do: {:reply, state.sizes, state}
@@ -488,6 +566,19 @@ defmodule Logex.IO.Sim do
   defp alive(true, pid, device), do: {pid, device}
   defp alive(false, _pid, _device), do: nil
 
+  # Decision 517 (e) (RV-21): the device a runner opened the sim for last, by whose name
+  # its addresses are taken and given from then on, kept once the device closes it, and
+  # by an open of a test's own; and the values by address, each spelled as the
+  # configuration writes it once a runner has opened the sim, `panel.i.0` an input's and
+  # `drive.q.0` an output's, a list until then.
+  defp named(true, device, state), do: %{state | named: device}
+  defp named(false, _device, state), do: state
+
+  defp spelled(nil, _direction, values), do: values
+
+  defp spelled(named, direction, values),
+    do: Map.new(values, fn {address, value} -> {at(named, direction, address), value} end)
+
   # Opened by the process that holds it, or by any once none does.
   defp opening({holder, held}, pid, _device, state) when holder != pid,
     do: {:reply, {:held, holder, held}, state}
@@ -498,7 +589,7 @@ defmodule Logex.IO.Sim do
   # The device a sim reports to: the one that opened it, where it reports and an input
   # changed.
   defp set_in([address | _past], _values, state),
-    do: {:reply, {:past, address, state.sizes.input}, state}
+    do: {:reply, {:past, address, state.sizes.input, state.named}, state}
 
   defp set_in([], values, state) do
     changed =
@@ -726,16 +817,81 @@ defmodule Logex.IO.Sim do
           inspect(points)
       )
 
+  # The values the runner's device writes, by the adapter's own address, a list.
   defp values!(values) when is_map(values) and not is_struct(values) do
     Enum.each(values, fn {address, value} -> {address!(address), value!(value)} end)
     values
   end
 
-  defp values!(other),
+  defp values!(other), do: raise(ArgumentError, by_address(other))
+
+  # The inputs a test sets, by the address set/3 takes.
+  defp inputs!(values, named, sim) when is_map(values) and not is_struct(values),
+    do:
+      Map.new(values, fn {address, value} -> {addressed!(named, address, sim), value!(value)} end)
+
+  defp inputs!(other, _named, _sim), do: raise(ArgumentError, by_address(other))
+
+  defp by_address(other),
+    do: "values go by address, a map of addresses to numbers, got: #{inspect(other)}"
+
+  # Decision 517 (e) (RV-21): an input's address as a test gives one, a list until a runner
+  # has opened the sim and from then on the configuration's text, the device's own input,
+  # `panel.i.0`, read as the configuration reads a location (`Logex.Configuration.
+  # location/1`), its one spelling, and taken as its list, `[0]`; the other form, and a
+  # text that is no input of the device's, the test's mistake, its message naming the
+  # form the sim takes (provisional, `PLAN.md`'s RV-21 question 3).
+  defp addressed!(nil, address, _sim) when is_list(address), do: address!(address)
+
+  defp addressed!(nil, address, sim) when is_binary(address),
     do:
       raise(
         ArgumentError,
-        "values go by address, a map of addresses to numbers, got: #{inspect(other)}"
+        "no runner has opened the simulated device #{inspect(sim)}, so it knows no device's " <>
+          "name: until one has, an input's address is a list of whole numbers, [0], got: " <>
+          inspect(address)
+      )
+
+  defp addressed!(nil, address, _sim), do: address!(address)
+
+  defp addressed!(named, address, sim) when is_binary(address),
+    do: located!(Logex.Configuration.location(address), named, address, sim)
+
+  defp addressed!(named, address, sim),
+    do:
+      raise(
+        ArgumentError,
+        "a runner has opened the simulated device #{inspect(sim)} for the device `#{named}`: " <>
+          "an input's address is the configuration's text from then on, " <>
+          "#{inspect(at(named, :input, [0]))}, got: " <>
+          inspect(address, charlists: :as_lists)
+      )
+
+  defp located!({:ok, {named, "i", fields}}, named, _address, _sim), do: fields
+
+  defp located!({:ok, {named, "q", _fields}}, named, address, sim),
+    do:
+      raise(
+        ArgumentError,
+        "#{inspect(address)} is an output of the device `#{named}`, and set/2 and set/3 " <>
+          "set the simulated device #{inspect(sim)}'s inputs"
+      )
+
+  defp located!({:ok, {device, _io, _fields}}, named, address, sim),
+    do:
+      raise(
+        ArgumentError,
+        "#{inspect(address)} is the device `#{device}`'s, and the simulated device " <>
+          "#{inspect(sim)} is the device `#{named}`'s, its inputs " <>
+          "#{inspect(at(named, :input, [0]))} and on"
+      )
+
+  defp located!(:error, named, address, _sim),
+    do:
+      raise(
+        ArgumentError,
+        "#{inspect(address)} is no address as the configuration writes one, an input of " <>
+          "the device `#{named}` as #{inspect(at(named, :input, [0]))}"
       )
 
   defp address!([_ | _] = address), do: whole!(fields?(address), address)

@@ -1397,7 +1397,7 @@ defmodule Logex.RetainConfigurationTest do
         )
 
       for eye <- [1, 0, 1, 0, 1, 0] do
-        Sim.set(panel, [0], eye)
+        Sim.set(panel, "panel.i.0", eye)
         Manual.advance(clock, 10)
       end
 
@@ -1411,7 +1411,7 @@ defmodule Logex.RetainConfigurationTest do
       assert Runner.restart(runner, :warm) == :ok
       assert for(path <- paths, do: Runner.get!(runner, path)) == [3, 3, 3, 7]
 
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "total_boxes") == 4
 
@@ -1470,9 +1470,9 @@ defmodule Logex.RetainConfigurationTest do
         state = fn -> {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} end
 
         press = fn point ->
-          Sim.set(panel, [point], 1)
+          Sim.set(panel, "panel.i.#{point}", 1)
           Manual.advance(clock, 10)
-          Sim.set(panel, [point], 0)
+          Sim.set(panel, "panel.i.#{point}", 0)
           Manual.advance(clock, 30)
         end
 
@@ -1564,11 +1564,11 @@ defmodule Logex.RetainConfigurationTest do
         state = fn -> {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} end
         Manual.advance(clock, 30)
         assert state.() == {0, 0}
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 10)
         assert %{status: :tripped} = Runner.status(runner)
         assert state.() == {1, 0}
-        Sim.set(panel, [0], 0)
+        Sim.set(panel, "panel.i.0", 0)
         Manual.advance(clock, 10)
         assert Runner.restart(runner, mode) == :ok
         Manual.advance(clock, 50)

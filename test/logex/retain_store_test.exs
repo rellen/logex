@@ -131,7 +131,7 @@ defmodule Logex.RetainStoreTest do
 
   defp pressed(%{panel: panel, clock: clock}, eyes) do
     for eye <- eyes do
-      Sim.set(panel, [0], eye)
+      Sim.set(panel, "panel.i.0", eye)
       Manual.advance(clock, 10)
     end
   end
@@ -1263,13 +1263,13 @@ defmodule Logex.RetainStoreTest do
          %{tmp_dir: dir} do
       rig = slotted(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 100)
 
       assert %{status: :tripped, trip: {:fault, "fast", "s1", %{read: {8}}}} =
                Runner.status(runner)
 
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
       assert File.read!(rig.store) =~ "\ns1.slot dint 8\n"
 
       # Edited while tripped: a warm restart keeps what the runner holds, 8, and trips
@@ -2836,7 +2836,7 @@ defmodule Logex.RetainStoreTest do
       assert values(runner) == [2, 2, 1, 2]
       Process.unlink(runner)
       ref = Process.monitor(runner)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 10)
       assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
       assert Sim.closed?(rig.panel)
@@ -2867,7 +2867,7 @@ defmodule Logex.RetainStoreTest do
       Process.exit(runner, :shutdown)
       assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
       assert_received {:written, %{[0] => 0}, {:ok, ^started}}
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(store) =~ "global total_boxes dint 2\n"
       opener_down(rig.panel)
@@ -3350,7 +3350,7 @@ defmodule Logex.RetainStoreTest do
       started = File.read!(store)
       assert started =~ "global total_boxes dint 0\n"
       flush()
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 10)
       assert %{status: :tripped, trip: {:fault, "fast", "t1", _fault}} = Runner.status(runner)
       assert_received {:written, %{[0] => 0}, {:ok, ^started}}
@@ -3368,7 +3368,7 @@ defmodule Logex.RetainStoreTest do
 
       assert Runner.stop(runner, :shutdown) == {:error, {:retain, :eisdir}}
       assert_receive {:EXIT, ^runner, :shutdown}, 5000
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written
     end
@@ -3441,7 +3441,7 @@ defmodule Logex.RetainStoreTest do
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == {reads, writes}
-      assert List.last(writes) == %{[0] => 0}
+      assert List.last(writes) == %{"panel.q.0" => 0}
       assert values(runner) == [2, 2, 1, 2]
 
       # Put right, the next restart writes, runs, and clears the failure.
@@ -3485,7 +3485,7 @@ defmodule Logex.RetainStoreTest do
       back = File.read!(rig.store)
       assert back =~ "configuration plant written 2026-10-30T14:00:02Z\n"
       assert String.replace(back, "14:00:02Z", "14:00:00Z") == at_trip
-      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(rig.panel)) == %{"panel.q.0" => 0}
       killed(runner)
       opener_down(rig.panel)
 
@@ -3538,7 +3538,7 @@ defmodule Logex.RetainStoreTest do
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert values(runner) == [2, 2, 1, 2]
       assert File.read!(rig.store) =~ "global total_boxes dint 0\n"
-      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(rig.panel)) == %{"panel.q.0" => 0}
       File.rm_rf!(tmp)
       Agent.update(agent, fn _ -> fn -> :ok end end)
       assert Runner.stop(runner) == :ok
@@ -3576,28 +3576,28 @@ defmodule Logex.RetainStoreTest do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
       killed(runner)
       opener_down(rig.panel)
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       before = Sim.writes(rig.panel)
 
       # The store is the start's, which held the lamp off: a fresh start's first round
       # writes it off.
       {:ok, runner} = Runner.start_link(rig.opts)
-      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{[0] => 0}]
+      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{"panel.q.0" => 0}]
       tripped(rig, runner)
       assert Runner.restart(runner, :warm) == :ok
       pressed(rig, [1])
       tripped(rig, runner)
       killed(runner)
       opener_down(rig.panel)
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       before = Sim.writes(rig.panel)
 
       # The trip's store holds the lamp on: the first round's write is the one that lights it.
       {:ok, runner} = Runner.start_link(rig.opts)
-      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{[0] => 1}]
+      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{"panel.q.0" => 1}]
       assert Runner.stop(runner) == :ok
     end
 
@@ -3624,13 +3624,13 @@ defmodule Logex.RetainStoreTest do
       config = configured(source, %{"scale" => scale})
       rig = rig(dir, configuration: config)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 100)
       assert %{status: :tripped, trip: {:fault, "fast", "s1", fault}} = Runner.status(runner)
       assert %{kind: :index_out_of_range, read: {8}} = fault
       killed(runner)
       opener_down(rig.panel)
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
 
       {:ok, runner} = Runner.start_link(rig.opts)
 
@@ -3712,11 +3712,11 @@ defmodule Logex.RetainStoreTest do
     defp cut_off(rig) do
       {:ok, runner} = Runner.start_link(rig.opts)
       Manual.advance(rig.clock, 30)
-      Sim.set(rig.panel, [0], 1)
+      Sim.set(rig.panel, "panel.i.0", 1)
       Manual.advance(rig.clock, 30)
       assert %{status: :tripped, trip: {:fault, "fast", "f1", _}} = Runner.status(runner)
       assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {1, 0}
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       Manual.advance(rig.clock, 10)
       runner
     end
@@ -3898,14 +3898,14 @@ defmodule Logex.RetainStoreTest do
 
       rig = rig(dir, configuration: config)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [0], 1)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.0", 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 20)
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
       Manual.advance(rig.clock, 20)
       assert {Runner.get!(runner, "k"), Runner.get!(runner, "l")} == {1, 1}
       killed(runner)
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       opener_down(rig.panel)
 
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -3913,7 +3913,7 @@ defmodule Logex.RetainStoreTest do
 
       seen =
         for g <- [0, 1, 1] do
-          Sim.set(rig.panel, [1], g)
+          Sim.set(rig.panel, "panel.i.1", g)
           Manual.advance(rig.clock, 10)
           {Runner.get!(runner, "k"), Runner.get!(runner, "l")}
         end

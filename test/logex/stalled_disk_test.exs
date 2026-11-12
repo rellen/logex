@@ -129,7 +129,7 @@ defmodule Logex.StalledDiskTest do
   end
 
   defp eye(%{panel: panel, clock: clock}, eye) do
-    Sim.set(panel, [0], eye)
+    Sim.set(panel, "panel.i.0", eye)
     Manual.advance(clock, 10)
   end
 
@@ -338,7 +338,7 @@ defmodule Logex.StalledDiskTest do
 
       assert %{status: :running, forces: %{"level" => 7}} = Runner.status(runner)
       eye(rig, 0)
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
 
       # The disk back, the next force writes the whole set.
       :sys.resume(server)
@@ -367,7 +367,7 @@ defmodule Logex.StalledDiskTest do
       # store as the host spelled it, `failed` nil, where it was `failed: :timeout`.
       assert %{status: :tripped, retain: %{failed: nil, unknown: store}} = Runner.status(runner)
       assert store == rig.store
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
 
       # A cold restart writes the store first, and its write times out as the trip's did.
       {took, answer} = timed(fn -> Runner.restart(runner, :cold) end)
@@ -560,7 +560,7 @@ defmodule Logex.StalledDiskTest do
                Runner.status(runner)
 
       assert store == rig.store
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
 
       assert Runner.restart(runner, :warm) == :ok
       assert %{status: :running} = Runner.status(runner)
@@ -1732,7 +1732,7 @@ defmodule Logex.StalledDiskTest do
                Runner.status(runner)
 
       assert rounds == before + 5 and forces == %{}
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Task.yield(force, 0) == nil
 
       # The disk back, the force answered once its write has landed, the file holding it,
@@ -1741,9 +1741,9 @@ defmodule Logex.StalledDiskTest do
       assert Task.await(force, @answers) == :ok
       assert File.read!(rig.forces) == "eye_1 1\n"
       assert %{forces: %{"eye_1" => 1}, rounds: ^rounds} = Runner.status(runner)
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       Manual.advance(rig.clock, 10)
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
       assert Runner.stop(runner) == :ok
     end
 
@@ -1893,7 +1893,7 @@ defmodule Logex.StalledDiskTest do
       assert Task.await(force, @answers) == :ok
       assert %{status: :tripped, forces: %{"eye_1" => 1}} = Runner.status(runner)
       assert Runner.restart(runner, :warm) == :ok
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
 
       # A restart while it is out waits for it (decision 468), then reads the file it left,
       # raw, the new set, its first round reading the eye as the device gives it.
@@ -1910,7 +1910,7 @@ defmodule Logex.StalledDiskTest do
       assert Task.await(unforce, @answers) == :ok
       assert File.read!(rig.forces) == ""
       assert %{status: :running, forces: %{}, forcing: nil} = Runner.status(runner)
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
 
       # An edit's steps while it is out, each answered: the force taken once it lands onto
       # the configuration the edit switched to.
@@ -1948,7 +1948,7 @@ defmodule Logex.StalledDiskTest do
       stop = Task.async(fn -> Runner.stop(runner) end)
       assert Task.yield(stop, 200) == nil
       assert Sim.closed?(rig.panel)
-      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(rig.panel)) == %{"panel.q.0" => 0}
       :sys.resume(server)
       assert Task.await(force, @answers) == :ok
       assert Task.await(stop, @answers) == :ok
@@ -2013,7 +2013,7 @@ defmodule Logex.StalledDiskTest do
       deadline = System.monotonic_time(:millisecond) + 10_000
       assert %{forces: %{}, trip: nil} = rounds_past(runner, before, deadline)
       assert Task.yield(force, 0) == nil
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       :sys.resume(server)
       assert Task.await(force, @answers) == :ok
       assert lamp_on(rig.panel, System.monotonic_time(:millisecond) + 10_000) == 1
@@ -2165,7 +2165,7 @@ defmodule Logex.StalledDiskTest do
       eye(rig, 0)
       assert Runner.force(runner, "eye_1", 1) == :ok
       Manual.advance(rig.clock, 10)
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
       server = held()
       first = Task.async(fn -> Runner.force(runner, "level", 7) end)
       _writing = waiting_call(server, :rename)
@@ -2178,7 +2178,7 @@ defmodule Logex.StalledDiskTest do
       assert %{forces: %{"level" => 3}, forcing: nil} = Runner.status(runner)
       Manual.advance(rig.clock, 10)
       assert Runner.get!(runner, "eye_1") == 0
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Runner.stop(runner) == :ok
     end
 
@@ -2260,7 +2260,7 @@ defmodule Logex.StalledDiskTest do
                Runner.status(runner)
 
       Manual.advance(rig.clock, 10)
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
       assert Runner.stop(runner) == :ok
     end
 
@@ -2521,7 +2521,7 @@ defmodule Logex.StalledDiskTest do
       let_go(forces)
       File.rm!(forces)
       File.write!(forces, "level 7\n")
-      Sim.set(next.panel, [1], 3)
+      Sim.set(next.panel, "panel.i.1", 3)
       Manual.advance(next.clock, 10)
       assert Runner.get!(runner, "level") == 3
 
@@ -3004,7 +3004,7 @@ defmodule Logex.StalledDiskTest do
   # The panel's lamp once a round has written it on, polled until `deadline`.
   defp lamp_on(panel, deadline), do: lamp(Sim.outputs(panel), panel, deadline)
 
-  defp lamp(%{[0] => 1}, _panel, _deadline), do: 1
+  defp lamp(%{"panel.q.0" => 1}, _panel, _deadline), do: 1
 
   defp lamp(_outputs, panel, deadline) do
     assert System.monotonic_time(:millisecond) < deadline, "the force was never read"
