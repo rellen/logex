@@ -62,6 +62,22 @@ defmodule Logex.ClausesTest do
         do: assert(conditionals == [], inspect(module))
   end
 
+  # The rule in `lib/` itself (decision 264, CLAUDE.md's Conventions), read as the walks'
+  # are, from each file's syntax tree, so that a conditional written inline, `if(x, do:
+  # 1)`, or through its module is found, and one in a moduledoc's example is none: the
+  # parser's three `case`s alone. The review after Milestone 6 (a7-docs-9) found that
+  # `instance_array_test.exs`'s reading of lines took an example in `Logex.Runner`'s
+  # moduledoc for the runner's one and could see no inline form.
+  test "lib/ holds no case, cond, if or unless, inline or in a block, but the parser's three" do
+    found =
+      for path <- Path.wildcard(Path.join(@root, "lib/**/*.ex")),
+          {_module, %{conditionals: conditionals}} <- modules(path),
+          {_owner, _line, kind} <- conditionals,
+          do: {Path.relative_to(path, @root), kind}
+
+    assert Enum.sort(found) == List.duplicate({"lib/logex/parser.ex", :case}, 3)
+  end
+
   test "a module named by an expression is read, by the expression's text" do
     source = ~S'''
     for n <- [1, 2] do
@@ -258,4 +274,6 @@ defmodule Logex.ClausesTest do
 
   defp name({:when, _, [head | _]}), do: name(head)
   defp name({name, _, _}) when is_atom(name), do: name
+  # A function `lib/` names by `unquote`, one a `for` defines for each built-in type.
+  defp name({{:unquote, _, _} = name, _, _}), do: Macro.to_string(name)
 end

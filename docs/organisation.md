@@ -10962,7 +10962,11 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      `:rand`). *Since that review* `clauses_test.exs` reads every form of a module's body,
      not only a `def`, `defp` or `test`: a conditional in a `setup`, a macro, a module
      attribute's anonymous function or the body's own code lies in no draw, and one written
-     through its module, `Kernel.if(…)`, is one.
+     through its module, `Kernel.if(…)`, is one. *(RV-8, 2026-11-12: `lib/` too is read by
+     its syntax trees, `clauses_test.exs`, "lib/ holds no case, cond, if or unless, inline
+     or in a block, but the parser's three", which the review after Milestone 6 found the
+     grep of lines could not hold, a7-docs-9: it took an example in `Logex.Runner`'s
+     moduledoc for "the runner's one" and saw no conditional written inline.)*
 265. **Milestone 5's done sentence (Milestone 5),** M5-16's question, which its review
      answered for itself by building the one plant. **Taken: accepted as is; Milestone 5
      is closed** (the maintainer, 2026-10-26): `end_to_end_test.exs`, "Milestone 5's done

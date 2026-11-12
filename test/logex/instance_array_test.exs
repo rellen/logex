@@ -2836,7 +2836,10 @@ defmodule Logex.InstanceArrayTest do
   describe "the code" do
     # CLAUDE.md: multiple function clauses, not conditionals. M5-14 brought seven `case`
     # expressions into `lib/`, which its review found; the four this test names are older,
-    # the parser's three and the runner's one, and no new one joins them unseen.
+    # the parser's three and the runner's one, and no new one joins them unseen. The
+    # runner's is an example in its moduledoc, which this reading of lines takes for code,
+    # and a conditional written inline it does not see; `clauses_test.exs` reads `lib/`'s
+    # syntax trees, the parser's three alone (the review after Milestone 6, a7-docs-9).
     test "lib/ holds no case, cond, if or unless but the parser's three and the runner's one" do
       found =
         for path <- Path.wildcard("lib/**/*.ex"),

@@ -250,7 +250,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   configuration edit's holds, each against oracles restated from the programs' text, each
   asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
-  trees of the walks, the end-to-end tests and the README harness.
+  trees of `lib/`, the walks, the end-to-end tests and the README harness.
 - `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
   `$ mix run` follows, run in a fresh VM and its output compared with README's, and every
   other `elixir` block a fragment it names and parses, and runs in a setup it makes where
