@@ -1526,7 +1526,11 @@ defmodule LogexTest do
 
     test "the compile's process takes the caller's group leader, priority and heap, and no " <>
            "process dictionary" do
-      long = counter(2000, 1000)
+      # One name gone, so that the compile at low priority, read while it runs, is a long
+      # text's and not the hundred suggestions' too: with a thousand gone, each of the
+      # hundred matched against all 4,000 tags since RV-20's review, it passed its 30 s on
+      # a loaded machine in two of nine full suites.
+      long = counter(2000, 1)
       leader = spawn(fn -> receive(do: (:never -> :ok)) end)
 
       {p, worker} =

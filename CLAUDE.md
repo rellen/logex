@@ -179,8 +179,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   gives, from source.
 - `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
   name readers, a number's bounds, a rung that writes nothing, the compile's cost against
-  twins compiled in the same run, a refusal of many names gone near their count, and a
-  seeded mutation walk that nothing escapes.
+  twins compiled in the same run, a refusal of many names gone near their count in its
+  reductions, its words and its text, and a seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
 - `test/logex/loading_test.exs` — the loader tests that read many files, run alone, `async:

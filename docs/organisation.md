@@ -14593,6 +14593,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `stalled_disk_test.exs`'s 468 test reads `status/1` while the restart waits, three
      tests more; the runner walk's `:restart_waited_write` reads it answered, tripped, the
      force in `forcing`.)*
+     *(RV-20's review, 2026-11-12: of the readings above, an edit's step served at once
+     is decision 518's, taken as built with a trip's notice changing nothing while a
+     restart waits; its marks, in `Logex.Runner`'s moduledoc and a comment, README and
+     `stalled_disk_test.exs`, are 518's number since RV-20. A force asked during the wait
+     is decision 509's, and a second restart decision 508's.)*
 
 501. **A trigger forced and unforced in one joined write (the review after Milestone 6),**
      RV-18's question 12 (decision 465): a box counter's event task runs on `eye`; an HMI
@@ -14905,6 +14910,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      settings taken, the caller charged the compile's reductions, a mistake raised again
      in it (readings the record leaves, question 3). (a), `a78226f`: `Logex.compile/2`'s
      and `Logex.Configuration.compile/3`'s docs give the cost that remains.)*
+     *(RV-20's review, 2026-11-12, `a312652`: the two forms together were neither of the
+     decision's, and narrowed every compile's suggestions, a typo two characters off its
+     name's length offered nothing in any program; measured again with the compile in its
+     own process, the first form alone costs 1.3 to 1.8 s for 1,000 to 16,000 names gone
+     among a box counter's 4,000 tags, flat, so the first hundred names a text cannot find
+     are offered the nearest of every name, as before the decision, a type word among
+     them, and every name after them none (provisional, `PLAN.md`'s RV-20, question 1, put
+     again). A message that ends with a list, a type's members or the blocks given, gives
+     it in each of the hundred and after them once a list (provisional, question 5), where
+     16,000 unknown members of a block of 1,000 made 174.5 MB of messages; each text
+     counts its own hundred, a block file's and each path's (provisional, question 4); and
+     a mistake raised again in the caller carries the compile's stack, then the caller's.)*
 
 521. **When the review after Milestone 6 is done (the review after Milestone 6),** RV-8's
      question 7: RV-8 wrote the done sentence, the record holding none, "done when each of

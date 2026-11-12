@@ -1048,7 +1048,7 @@ defmodule Logex.CompileTotalTest do
   # is not there, or one that is, compiled by `Logex.Compiler.compile/2` in that process,
   # the twins' difference the cost of `m` names past the hundred, at `n` and 4n names
   # declared. Measured at the tip: 0.97x, 1.00x, 1.31x and 1.03x; each built eagerly 3.42x,
-  # past the heap, 3.73x and 3.34x.
+  # 3.76x, 3.73x and 3.34x.
   describe "a name past the hundredth (decision 520)" do
     defp allocated(source, types) do
       parent = self()
