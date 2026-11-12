@@ -2263,7 +2263,8 @@ add e i y",
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       # M2-2: compile_files/1, the loader's one memo over several files, which a
       # configuration's loader goes through. Since decision 432 each of the three is
-      # Logex.Compiler's, delegated.
+      # Logex.Compiler's, and since decision 520 (RV-20) run in a process of its own by
+      # Logex.Compiler.Worker, to which Logex delegates.
       assert Enum.sort(Logex.__info__(:functions)) ==
                [compile: 2, compile_file: 1, compile_files: 1]
 
@@ -2357,8 +2358,9 @@ add e i y",
       # loaded/2, internal (no doc), instructionize/3 for the loader's own types alone;
       # since decision 432 instructionize/3 exactly, each type checked, the loader never
       # calling it. Decision 432: compile/2, compile_file/1 and compile_files/1, internal
-      # (no doc), Logex's three, delegated, so that the loader is in the module that
-      # compiles and its own compile private code no term a host hands in reaches.
+      # (no doc), Logex's three, so that the loader is in the module that compiles and its
+      # own compile private code no term a host hands in reaches; since decision 520 each
+      # run in a process of its own (Logex.Compiler.Worker).
       assert Enum.sort(Logex.Compiler.__info__(:functions)) == [
                compile: 2,
                compile_file: 1,

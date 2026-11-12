@@ -5157,7 +5157,10 @@ defmodule Logex.Compiler do
   defp file_read({:error, reason}, _path, _held, state),
     do: {{{:error, [file_problem(SourceFile.unreadable(reason))]}, [], false}, state}
 
+  # Decision 520 (RV-20): the text is held by the program or type it gives, so the
+  # loader's process raises its allowance by it (`Logex.Compiler.Worker`).
   defp file_read({:ok, source}, path, held, state) do
+    Logex.Compiler.Worker.allowed(source)
     name = Path.rootname(Path.basename(path))
     from_file(name_problem(name), {name, path}, source, {held, state})
   end

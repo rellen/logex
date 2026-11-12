@@ -34,11 +34,36 @@ defmodule Logex do
       iex> {:error, [diagnostic]} = Logex.compile("var_input a bool\\nxyz a", name: "seal")
       iex> Logex.Diagnostic.format(diagnostic)
       "line 2: unknown instruction `xyz`"
+
+  **A compile's own process** (decision 520). Each of `compile/2`, `compile_file/1` and
+  `compile_files/1` compiles in a process of its own and hands its result back, so that
+  the host sees what it would have seen compiling itself: the same program or type, the
+  same diagnostics in the same order and the same warnings. The process is given an
+  allowance of binaries off its heap, its `min_bin_vheap_size`, sized to its text, twice
+  its words beside the caller's own, and the loader's raises its own to twice what it
+  holds as it reads each file: a program keeps its source text (decision 54), so a long
+  text held over the compile, with its refusals' messages, outgrew the VM's allowance and
+  turned most of the compile's collections into full ones, each copying the whole heap:
+  7,095 of them for a box counter's 280 KB program, refused in 50 s, where the allowance
+  leaves 28 and 32 s, before the did-you-mean was bounded (`compile/2`). It takes the
+  caller's priority and heap settings, `min_heap_size`, `max_heap_size` and
+  `fullsweep_after`, and its group leader, as a spawn always does, and reads and writes no
+  process dictionary, the caller's or its own. It is linked to the caller and unlinks
+  itself before it answers, so a caller that traps exits is sent nothing of it, its links
+  as they were. A mistake it raises, a host's `ArgumentError` among them, is raised again
+  in the caller, its message and stack unchanged; a compile killed from outside takes its
+  caller with it, with the same reason, trapping exits or not, as a compile killed in the
+  caller would have; and a caller that exits, killed by a host's own time limit among
+  them, takes the compile with it, its work never left running. The caller is charged the
+  reductions the compile spent, so that its own count, `Process.info(self(),
+  :reductions)`, holds the whole compile, as when it ran there.
   """
 
-  # Decision 432 (RV-15): the three are Logex.Compiler's, delegated, so that the loader and
-  # its own compile of a file over the blocks it compiled itself are private code of the
-  # module that compiles, which nothing a host hands in reaches.
+  # Decision 432 (RV-15): the three are Logex.Compiler's, so that the loader and its own
+  # compile of a file over the blocks it compiled itself are private code of the module
+  # that compiles, which nothing a host hands in reaches. Since decision 520 (RV-20) each
+  # runs them in a process of its own, Logex.Compiler.Worker's, which hands the result
+  # back.
 
   @doc """
   Compiles `source` into a program named `name`: `{:ok, %Logex.Program{}}`, or
@@ -64,7 +89,7 @@ defmodule Logex do
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises
   `ArgumentError`; nothing in the source does.
   """
-  defdelegate compile(source, options), to: Logex.Compiler
+  defdelegate compile(source, options), to: Logex.Compiler.Worker
 
   @doc """
   Reads and compiles the file at `path`, naming the program after the file:
@@ -123,7 +148,7 @@ defmodule Logex do
   a deleted directory's among them, is a `:file` diagnostic, "cannot be located: the
   working directory cannot be read", and nothing is read (decision 478).
   """
-  defdelegate compile_file(path), to: Logex.Compiler
+  defdelegate compile_file(path), to: Logex.Compiler.Worker
 
   @doc """
   Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
@@ -139,5 +164,5 @@ defmodule Logex do
   `paths` that is not a proper list of binaries is the host's mistake, raised as
   `ArgumentError` before any file is read.
   """
-  defdelegate compile_files(paths), to: Logex.Compiler
+  defdelegate compile_files(paths), to: Logex.Compiler.Worker
 end

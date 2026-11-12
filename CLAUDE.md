@@ -70,6 +70,9 @@ own documentation holds:
   gives a program, a block type or diagnostics; `signature/2` for the walks; `lowered?/1`
   and `recompiled/4` for a type given; and the loader behind `Logex`'s three, its own
   compile private.
+- `lib/logex/compiler/worker.ex` — `Logex.Compiler.Worker`, internal: the process of its
+  own each of `Logex`'s three compiles in, its allowance sized to its text, its result,
+  a mistake it raised and its reductions handed back to the caller.
 - `lib/logex/declarations.ex` — `Logex.Declarations`, declaration lines to tags: sections,
   qualifiers, the one table of elementary types (`table/0`) with Figure 11's widenings,
   IEC's generic classes, arrays' sizes and initial lists, `check/1` for a line and for
@@ -158,9 +161,9 @@ Each file holds the rules of its part, a host mistake's message pinned whole; a 
 asserts its reach, and a growth test compares reductions at two sizes, never time.
 
 - `test/test_helper.exs` — starts ExUnit.
-- `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
-  file server is held, with the working directory deleted and with no home set, and
-  Milestones 1 to 3's done sentences from files on disk.
+- `test/logex_test.exs` — `Logex`'s API and loader, the compile's own process, the loaders
+  finishing while the VM's file server is held, with the working directory deleted and
+  with no home set, and Milestones 1 to 3's done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded
