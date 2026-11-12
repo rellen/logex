@@ -574,11 +574,11 @@ defmodule Logex.Runner do
   and so finds the runner running, refused (decision 133), or still tripped where the
   first was refused, and made, and since RV-19's review one the first's own first round
   trips before it is taken is refused by that trip, a restart asked before it, as
-  decision 354 refuses any (`restart/2`; decision 508). The readings no decision has
-  taken yet are provisional: an edit's step meanwhile is served at once, the restart
-  made on the resource it leaves; a trip's notice meanwhile changes nothing, the runner
-  tripped already; and a stop meanwhile answers the restart as one to a runner that is
-  not running, as it answers the requests behind the write. A stop
+  decision 354 refuses any (`restart/2`; decision 508). A stop meanwhile answers the
+  restart as one to a runner that is not running, as it answers every request behind the
+  write (decision 467). The readings no decision has taken yet are provisional: an edit's
+  step meanwhile is served at once, the restart made on the resource it leaves; and a
+  trip's notice meanwhile changes nothing, the runner tripped already. A stop
   waits for it to its own limit, after its zeros and its closes, and answers its callers
   as it ends, a force waiting behind it answered as to a runner that is not running
   (decision 467); one it cuts at that limit may still land once the disk answers, as any

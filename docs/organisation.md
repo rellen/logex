@@ -14095,6 +14095,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as to a runner not running, is this decision's number.)*
      *(RV-8, 2026-11-12: the mark RV-16 left on it, in `stalled_disk_test.exs`'s comment
      on a stop while a force's write is out, is this decision's number.)*
+     *(RV-8's review, 2026-11-12: a restart that waits for the write since decision 500
+     is a request behind it, so a stop answers it as to a runner not running by this
+     decision, as decision 500's landed note states it as built; the marks RV-19 left
+     provisional on it, in `Logex.Runner`'s moduledoc, README and
+     `stalled_disk_test.exs`, are this decision's number.)*
 
 468. **A force's write that lands after a restart (the review after Milestone 6),**
      RV-16's question 4, as its review restated it (decision 437): a restart reads the

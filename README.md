@@ -344,8 +344,8 @@ refutation tried in turn: of 203 findings 13 were refuted and 190 survived, 12 h
 medium and 143 low, about 60 defects, gathered where code read again the names the lexer
 had cut, at features combined late, in the runner's own work against a real-time deadline
 and in a configuration edit's held outputs, while the evaluator, the front end's round
-trip, the lone edit and the runner's scheduling held. Nineteen items, RV-1 to RV-19,
-built the maintainer's answers, decisions 347–512 in
+trip, the lone edit and the runner's scheduling held. Eighteen items, RV-1 to RV-7 and
+RV-9 to RV-19, built the maintainer's answers, decisions 347–512 in
 [`docs/organisation.md`](docs/organisation.md) §7: every source text compiles or is told
 why, and a rung that writes nothing and jumps nowhere, such as the first half of a rung
 wrapped onto two lines, is refused at its line (decision 351); a held output holds; a
@@ -355,10 +355,10 @@ device trips the line however late the runner, its own lateness named as such; a
 short is refused, a fresh start that drops anything keeps a numbered copy of the store, and
 two runners of one VM are refused one file; the runner's own long work is cheaper, bounded
 and named when it trips; and the suite's cost pins are bounds measured within the run. Its
-close, `PLAN.md`'s item RV-8 ("The review after Milestone 6"), accounts for every finding:
-177 closed, each by a fix a test holds or a document made true, 20 kept by a decision or a
-recorded reason, the 13 refuted among them, and 6 put to the maintainer as questions (the
-review's "The close").
+close, `PLAN.md`'s item RV-8 ("The review after Milestone 6"), builds no answer and
+accounts for every finding: 177 closed, each by a fix a test holds or a document made
+true, 18 kept by a decision or a recorded reason, the 13 refuted among them, and 8 put to
+the maintainer as questions (the review's "The close").
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -4383,62 +4383,63 @@ stage: nil
   write limit; a force asked during the wait is written after the restart (decision
   509), a second restart asked meanwhile finds the line running once the first is made
   and is refused, or, where the first's own first round trips the line again, is refused
-  by that trip, asked before it (decisions 354 and 508), and, provisional, an edit's step
-  is served at once and a stop answers the waiting restart as a runner not running; a write the restart's wait cut leaves the set it held unknown through
-  the restart's read, since it may still land, until a later write of the file ends
-  (decision 502); and a stop waits for it to its limit and answers its caller (decision
-  467). A write cut at its limit, at a stop as at any time, may still land once the disk
-  answers, so a runner that ends gives the file up only once every write of it it began
-  has ended: the file is held for it until the cut write's last call of the file system
-  is answered, and a start on it meanwhile is refused, naming the file, the runner that
-  ended and the process holding the file, so no runner starts on a file a late write
-  then changes under it (decision 475): a runner that crashes holds it so too. A runner
-  killed, which can hand nothing on, leaves its files to the next start, which takes one
-  only once the VM's file server has answered a look behind every call the killed
-  runner's writes left in its queue, at once on a healthy disk, and on a stalled one is
-  refused past its write limit, the file named left by the killed runner. On a disk that
-  never answers the hold lasts as long, a holder the host kills leaving the file to that
-  same look, until the VM stops (decision 495). A start reads the file raw, off the VM's file
-  server, as a restart does, so a FIFO or a stalled disk in its place holds no other
-  process's file calls. A file that cannot
-  be read, one the disk has not answered within the write limit or one the file system
-  refuses, a directory in its place among them, starts a fresh start with no force and
-  keeps at a restart the forces the runner holds, the restart going on and the line
-  coming back, and `status/1` names it, `forces_unread: {"packing.forces", :timeout}`,
-  until a force's or an unforce's write of it lands, no restart reading it meanwhile
-  (decisions 390 and 445); with no such file to name, `status/1`'s `forces_unread` is
-  nil, the key always there (decision 440). A restart that reads the file takes what it
-  holds, as every start does; but while `forces_unread` stands a restart keeps the
-  forces the runner holds and takes none from the file, and the next force's or
-  unforce's write writes the runner's set over it (decision 445): so a level switch
-  forced to 7 before a crash, a start on a stalled disk that could not read the file,
-  the disk back, a trip and a restart, and the level reads its input, never the 7 no one
-  has forced since; an orderly stop while `forces_unread` stands, `stop/2` or a
-  supervisor's shutdown, writes the runner's own set over the file before it ends, so
-  the next start brings back no force the HMI was not showing either, a `stop/2` whose
-  write fails or is cut answering `{:error, {:forces, reason}}`, and a crash writes
-  nothing (decision 472); a `stop/2` whose store's write fails too answers both, `{:error,
-  [forces: reason, retain: reason]}`, in the order written, and every orderly end, a
-  supervisor's shutdown that answers no one among them, publishes the forces file's
-  failure, `{:forces, {:error, reason}}`, as it publishes the store's, so an HMI or a log
-  can warn that the next start may bring back an old force (decision 493; the list's
-  shape decision 506, and the event a kind of its own, sent by default and published by a
-  stop as well as answered, decision 507); and a relative `forces:` whose working directory the disk does
-  not answer for in time refuses the start, the file "cannot be located", as a relative
-  store's does (decision 446), an absolute path the advice. A
-  runner started without `forces:` takes no force, and an output point, or a value that
-  does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
-  a force on a point the configuration does not have as an input, is refused, every
-  such force named, and the runner does not start; the file is read exactly as the runner
-  writes it, a comment or a blank line refused, a value any number the lexer reads as
-  one literal and the point's type holds (decisions 218 and 226), and an unforce of a
+  by that trip, asked before it (decisions 354 and 508), a stop answers the waiting
+  restart as a runner not running, as it answers every request behind the write (decision
+  467), and, provisional, an edit's step is served at once and a trip's notice changes
+  nothing, the line tripped already; a write the restart's wait cut leaves the set it
+  held unknown through the restart's read, since it may still land, until a later write
+  of the file ends (decision 502); and a stop waits for it to its limit and answers its
+  caller (decision 467). A write cut at its limit, at a stop as at any time, may still
+  land once the disk answers, so a runner that ends gives the file up only once every
+  write of it it began has ended: the file is held for it until the cut write's last call
+  of the file system is answered, and a start on it meanwhile is refused, naming the
+  file, the runner that ended and the process holding the file, so no runner starts on a
+  file a late write then changes under it (decision 475): a runner that crashes holds it
+  so too. A runner killed, which can hand nothing on, leaves its files to the next start,
+  which takes one only once the VM's file server has answered a look behind every call the
+  killed runner's writes left in its queue, at once on a healthy disk, and on a stalled
+  one is refused past its write limit, the file named left by the killed runner. On a disk
+  that never answers the hold lasts as long, a holder the host kills leaving the file to
+  that same look, until the VM stops (decision 495). A start reads the file raw, off the
+  VM's file server, as a restart does, so a FIFO or a stalled disk in its place holds no
+  other process's file calls. A file that cannot be read, one the disk has not answered
+  within the write limit or one the file system refuses, a directory in its place among
+  them, starts a fresh start with no force and keeps at a restart the forces the runner
+  holds, the restart going on and the line coming back, and `status/1` names it,
+  `forces_unread: {"packing.forces", :timeout}`, until a force's or an unforce's write of
+  it lands, no restart reading it meanwhile (decisions 390 and 445); with no such file to
+  name, `status/1`'s `forces_unread` is nil, the key always there (decision 440). A
+  restart that reads the file takes what it holds, as every start does; but while
+  `forces_unread` stands a restart keeps the forces the runner holds and takes none from
+  the file, and the next force's or unforce's write writes the runner's set over it
+  (decision 445): so a level switch forced to 7 before a crash, a start on a stalled disk
+  that could not read the file, the disk back, a trip and a restart, and the level reads
+  its input, never the 7 no one has forced since; an orderly stop while `forces_unread`
+  stands, `stop/2` or a supervisor's shutdown, writes the runner's own set over the file
+  before it ends, so the next start brings back no force the HMI was not showing either, a
+  `stop/2` whose write fails or is cut answering `{:error, {:forces, reason}}`, and a
+  crash writes nothing (decision 472); a `stop/2` whose store's write fails too answers
+  both, `{:error, [forces: reason, retain: reason]}`, in the order written, and every
+  orderly end, a supervisor's shutdown that answers no one among them, publishes the
+  forces file's failure, `{:forces, {:error, reason}}`, as it publishes the store's, so an
+  HMI or a log can warn that the next start may bring back an old force (decision 493; the
+  list's shape decision 506, and the event a kind of its own, sent by default and
+  published by a stop as well as answered, decision 507); and a relative `forces:` whose
+  working directory the disk does not answer for in time refuses the start, the file
+  "cannot be located", as a relative store's does (decision 446), an absolute path the
+  advice. A runner started without `forces:` takes no force, and an output point, or a
+  value that does not fit, is the host's mistake, raised in the caller. A file a start
+  cannot take, a force on a point the configuration does not have as an input, is refused,
+  every such force named, and the runner does not start; the file is read exactly as the
+  runner writes it, a comment or a blank line refused, a value any number the lexer reads
+  as one literal and the point's type holds (decisions 218 and 226), and an unforce of a
   point not forced is accepted (decision 140); with no runner, deleting the file clears
   every force. Since RV-5 a refusal names at most the first 50 problems and then counts
-  the rest, each text of the file it quotes at most 60 bytes, a point's name and a
-  value's spelling among them, a control byte or one past ASCII but a tab shown as
-  `\xFF`, and the file's path printable. A line ends at LF, CRLF or a lone CR alike, as
-  in a program, so a file a technician saved with CRLF line ends forces as written, `hz
-  1.5` forcing 1.5, and the next force writes it with LF (decision 410).
+  the rest, each text of the file it quotes at most 60 bytes, a point's name and a value's
+  spelling among them, a control byte or one past ASCII but a tab shown as `\xFF`, and the
+  file's path printable. A line ends at LF, CRLF or a lone CR alike, as in a program, so a
+  file a technician saved with CRLF line ends forces as written, `hz 1.5` forcing 1.5, and
+  the next force writes it with LF (decision 410).
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's

@@ -6182,9 +6182,9 @@ defmodule Logex.ConfigurationTest do
     # RV-8's review (b6-configuration-9): compile/3 held its source text over the whole
     # compile, to lex it again for the spellings its refusals quote, and a text of more than
     # some 370 KB, with the messages of its refused lines, outgrew what binaries off its
-    # heap a process holds before each of its garbage collections is a full one: 2,000
-    # refused connections took 95 s and 13,583 full collections, against 22 s and 17 where
-    # the text was let go after its read. The same text with and without a comment of 400
+    # heap a process holds before its garbage collections turn full ones: 2,000 refused
+    # connections took 95 s and 13,583 full collections, against 22 s and 17 where the
+    # text was let go after its read. The same text with and without a comment of 400
     # KB, its full collections counted as the compile's own process makes them: 5 and 5
     # over six runs since, 379 against 6 with the text held; the bound twice the short
     # text's and ten.

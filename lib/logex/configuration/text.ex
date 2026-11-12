@@ -227,8 +227,9 @@ defmodule Logex.Configuration.Text do
   # literal as the line writes it (b6-configuration-8), so that the compile does not hold
   # the source text to lex it again: a text of more than some 370 KB held through the
   # compile, with the messages of its refused lines, outgrew the process's allowance of
-  # binaries off its heap and made each garbage collection a full one, 13,583 of them in
-  # 95 s against 17 in 22 s for 2,000 refused connections (b6-configuration-9).
+  # binaries off its heap, past which its garbage collections turn full ones, 13,583 of
+  # some 51,000 in 95 s against 17 in 22 s for 2,000 refused connections
+  # (b6-configuration-9).
   def read_rounded(source) when is_binary(source) do
     tokenized = Logex.Lexer.tokenize(source)
     {lexed, spelled} = stood_in(tokenized)

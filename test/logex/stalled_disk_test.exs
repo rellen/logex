@@ -2416,10 +2416,10 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # Decision 500 (RV-19), provisional: an edit's step asked during the wait is served at
-    # once, the restart made on the resource it leaves; and a stop meanwhile answers the
-    # restart as one to a runner that is not running, as decision 467 answers the requests
-    # behind the write, the stop waiting for the write to its limit and answering its
+    # Decision 500 (RV-19): an edit's step asked during the wait is served at once, the
+    # restart made on the resource it leaves (provisional); and a stop meanwhile answers
+    # the restart as one to a runner that is not running, a request behind the write as
+    # decision 467 has it, the stop waiting for the write to its limit and answering its
     # callers as it ends.
     test "an edit's step during the wait is served at once, and a stop answers the waiting " <>
            "restart as not running",
