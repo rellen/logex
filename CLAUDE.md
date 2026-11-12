@@ -73,7 +73,8 @@ own documentation holds:
 - `lib/logex/declarations.ex` — `Logex.Declarations`, declaration lines to tags: sections,
   qualifiers, the one table of elementary types (`table/0`) with Figure 11's widenings,
   IEC's generic classes, arrays' sizes and initial lists, `check/1` for a line and for
-  `Logex.Tag.new!/5`, reserved words and the type messages.
+  `Logex.Tag.new!/5`, reserved words, the type messages and the did-you-mean, a compile's
+  bounded.
 - `lib/logex/tag.ex` — `Logex.Tag`, a declared tag (name, section, type, initial value,
   qualifier, line), and `new!/4,5` to declare one from Elixir.
 - `lib/logex/fb_type.ex` — `Logex.FbType` and `Logex.FbType.Member`, a function block
@@ -175,7 +176,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   gives, from source.
 - `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
   name readers, a number's bounds, a rung that writes nothing, the compile's cost against
-  twins compiled in the same run, and a seeded mutation walk that nothing escapes.
+  twins compiled in the same run, a refusal of many names gone near their count, and a
+  seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
 - `test/logex/loading_test.exs` — the loader tests that read many files, run alone, `async:

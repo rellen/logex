@@ -1767,8 +1767,10 @@ defmodule Logex.Compiler do
 
   # A declaration after the first rung is reported where it stands, so the two lists are
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
+  # Decision 520 (RV-20): the did-you-means are made here, in line order, the first hundred
+  # offered a suggestion (`Logex.Declarations.offered/1`).
   defp lowered(_kind, _rungs, _tags, diagnostics, _routine),
-    do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+    do: {:error, Declarations.offered(Enum.sort_by(diagnostics, & &1.line))}
 
   # The warnings of the lowered rungs and, since decision 227, of the declaration lines'
   # real initial values, read from the parse tree, where each keeps its spelling, merged by
@@ -1996,11 +1998,9 @@ defmodule Logex.Compiler do
   # The nearest label is suggested among those on a later rung alone, since one on an
   # earlier rung or this one would be refused as a jump back.
   defp targeted(:label, :error, {name, line, from}, {labels, kind}, diagnostics) do
-    later = for {label, {_at, to}} <- labels, to > from, do: label
-
-    message =
-      "`jmp #{name}` names no label: no rung of this #{routine(kind)} begins `lbl #{name}`" <>
-        Declarations.suggest(name, later, & &1, "labels")
+    later = fn -> for {label, {_at, to}} <- labels, to > from, do: label end
+    named = "`jmp #{name}` names no label: no rung of this #{routine(kind)} begins `lbl #{name}`"
+    message = Declarations.offer(name, later, & &1, "labels", &(named <> &1))
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -3843,11 +3843,16 @@ defmodule Logex.Compiler do
   # and IEC's `t1.et` would come out nearest to `t1.tt`.
   defp resolve(nil, {:unknown_member, tag, part}, _slot, {:name, line, name}, _at, diagnostics) do
     names = Enum.map(FbType.public(tag.type), & &1.name)
-    suggestion = Declarations.suggest(part, names, &"#{tag.name}.#{&1}", "members")
+    member = "`#{name}` is not a member of `#{tag.name}`, #{Declarations.instance_of(tag.type)}"
 
     message =
-      "`#{name}` is not a member of `#{tag.name}`, #{Declarations.instance_of(tag.type)}" <>
-        members(suggestion, names)
+      Declarations.offer(
+        part,
+        names,
+        &"#{tag.name}.#{&1}",
+        "members",
+        &(member <> members(&1, names))
+      )
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -4914,10 +4919,20 @@ defmodule Logex.Compiler do
   # A member of an undeclared name reports the name (M1-6), but unless an instruction runs
   # it, is not told how to declare it, since the name is likely an instance's and not a
   # bool's or a dint's: the note waits for the next undeclared name reported.
+  # Decision 520 (RV-20): the did-you-mean is offered at the compile's end, to the first
+  # hundred names it cannot find (`Logex.Declarations.offered/1`), the tag table's names
+  # listed only for those.
   defp first_use(false, line, {name, slot}, tags, {seen, note?}) do
+    how = how(note?, slot, name)
+
     message =
-      "`#{name}` is not declared" <>
-        Declarations.suggest(name, Map.keys(tags)) <> how(note?, slot, name)
+      Declarations.offer(
+        name,
+        fn -> Map.keys(tags) end,
+        & &1,
+        "tags",
+        &("`#{name}` is not declared" <> &1 <> how)
+      )
 
     {[diagnostic(line, message)], {MapSet.put(seen, name), note? and slot == :member}}
   end

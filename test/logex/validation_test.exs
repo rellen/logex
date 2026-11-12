@@ -745,13 +745,25 @@ defmodule Logex.ValidationTest do
                "line 2: `lmp_x` is not declared"
              ]
 
-      # Either side of the 0.8 cut-off: a Jaro distance of 0.815, and of 0.790.
+      # Either side of the 0.8 cut-off: a Jaro distance of 0.815, and of 0.790. Since
+      # decision 520 (RV-20) a name is offered the nearest of the names of a like length
+      # alone, within one character of its own, so `stop`, five shorter than `stop_hold`,
+      # is offered no more, and `start` is not looked at for `stat_pb`.
       assert source_errors("var stop bool\nxic stop_hold ote stop") == [
-               "line 2: `stop_hold` is not declared — did you mean `stop`?"
+               "line 2: `stop_hold` is not declared"
              ]
 
       assert source_errors("var start bool\nxic stat_pb ote start") == [
                "line 2: `stat_pb` is not declared"
+             ]
+
+      # Either side of the cut-off among names of a like length: 0.810 and 0.783.
+      assert source_errors("var pump_on bool\nxic pxxp_on ote pump_on") == [
+               "line 2: `pxxp_on` is not declared — did you mean `pump_on`?"
+             ]
+
+      assert source_errors("var stop bool\nxic stort ote stop") == [
+               "line 2: `stort` is not declared"
              ]
     end
 
@@ -1588,15 +1600,19 @@ defmodule Logex.ValidationTest do
 
     test "a jmp's nearest label is suggested among the labels on later rungs alone, since " <>
            "one back is refused" do
+      # Since decision 520 (RV-20) among the labels of a like length alone, within one
+      # character of the name's, so `end`, two shorter than `ender`, is offered no more,
+      # and `end` for `endd`.
       assert source_errors(
                "var a bool\nlbl done xic a ote a\nxic a jmp donee\nxic a jmp Done\n" <>
-                 "lbl here xic a jmp her\nxic a jmp ender\nlbl end xic a ote a"
+                 "lbl here xic a jmp her\nxic a jmp ender\nxic a jmp endd\nlbl end xic a ote a"
              ) == [
                "line 3: `jmp donee` names no label: no rung of this program begins `lbl donee`",
                "line 4: `jmp Done` names no label: no rung of this program begins `lbl Done`",
                "line 5: `jmp her` names no label: no rung of this program begins `lbl her`",
-               "line 6: `jmp ender` names no label: no rung of this program begins " <>
-                 "`lbl ender` — did you mean `end`?"
+               "line 6: `jmp ender` names no label: no rung of this program begins `lbl ender`",
+               "line 7: `jmp endd` names no label: no rung of this program begins `lbl endd` " <>
+                 "— did you mean `end`?"
              ]
     end
 

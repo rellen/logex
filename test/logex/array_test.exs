@@ -1001,8 +1001,13 @@ defmodule Logex.ArrayTest do
         Enum.map(diagnostics, &Logex.Diagnostic.format/1)
       end
 
-      assert messages("var t ton\nvar x dint\nmove t.acc[0] x") ==
-               ["line 3: `t.acc[0]` is not a member of `t`, a ton — did you mean `t.acc`?"]
+      # Since decision 520 (RV-20) a member is offered among the members of a like length
+      # alone, within one character of the name's, and `acc` is three shorter than
+      # `acc[0]`, so the members are listed, as for a name none is near.
+      assert messages("var t ton\nvar x dint\nmove t.acc[0] x") == [
+               "line 3: `t.acc[0]` is not a member of `t`, a ton: its members are `pre`, " <>
+                 "`acc`, `dn`, `tt` and `en`"
+             ]
 
       assert messages("var t ton\nvar x bool\nxic t.dn[0] ote x") == [
                "line 3: `t.dn[0]` is not a member of `t`, a ton: its members are `pre`, " <>

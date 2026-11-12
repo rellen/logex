@@ -372,6 +372,58 @@ defmodule Logex.Declarations do
   defp near(true, best), do: " — did you mean `#{best}`?"
   defp near(false, _best), do: ""
 
+  # Decision 520 (c, RV-20): a compile's did-you-means are bounded, a program's and a
+  # configuration's alike, so a refusal of many names it cannot find costs near their
+  # count, where each was matched against every name the text declares, 50 s for 2,000 of
+  # them among a box counter's 4,000 tags. Both the decision's forms, together, since
+  # together they cost least: the first hundred names a compile cannot find, in line
+  # order, are each offered the nearest name of a like length, within one character of
+  # its own, as suggest/4 finds it among those, a name differing only in case always
+  # among them; every name after them is told what a name with none near it is told, and
+  # looked for among nothing. A site that would suggest gives its diagnostic `offer/5` as
+  # its message, which holds the look-up and what the message is made of around the
+  # suggestion, and the compile's last pass over its diagnostics in line order,
+  # `offered/1`, makes each message (provisional: which names are offered one, and which,
+  # the figures of each form in `PLAN.md`'s RV-20, is the maintainer's to say). A host's
+  # call that names what is not there, `Logex.Runtime`'s, the runner's and `Logex.IO`'s,
+  # is no compile's refusal, and suggest/4 offers it the nearest of every name, as ever.
+  @offered 100
+
+  @doc false
+  # A did-you-mean deferred to the compile's last pass: `build` makes the message from the
+  # suggestion, "" where none is offered. `names` may be a function that gives them, so a
+  # name past the hundredth costs no list of every name.
+  def offer(name, names, shown, kind, build), do: {:offer, name, names, {shown, kind}, build}
+
+  @doc false
+  # Decision 520: each message `offer/5` deferred, made in the order given, line order, the
+  # first hundred offered a suggestion and the rest none.
+  def offered(diagnostics) do
+    {diagnostics, _count} = Enum.map_reduce(diagnostics, 0, &offering/2)
+    diagnostics
+  end
+
+  defp offering(%Diagnostic{message: {:offer, name, names, {shown, kind}, build}} = d, count)
+       when count < @offered,
+       do:
+         {%{d | message: build.(suggest(name, alike(candidates(names), name), shown, kind))},
+          count + 1}
+
+  defp offering(%Diagnostic{message: {:offer, _name, _names, _how, build}} = d, count),
+    do: {%{d | message: build.("")}, count}
+
+  defp offering(diagnostic, count), do: {diagnostic, count}
+
+  defp candidates(names) when is_function(names, 0), do: names.()
+  defp candidates(names), do: names
+
+  # Decision 520's second form: the names within a byte of the name's length, so a name
+  # one character longer or shorter, or as long, a case twin among them.
+  defp alike(names, name) do
+    size = byte_size(name)
+    Enum.filter(names, &(abs(byte_size(&1) - size) <= 1))
+  end
+
   @doc """
   The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
   types", M5-1), in its order: `word`, `type`, `kind` (`:boolean`, `:signed` or

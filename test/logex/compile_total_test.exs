@@ -859,6 +859,81 @@ defmodule Logex.CompileTotalTest do
     end
   end
 
+  # Decision 520 (c, RV-20): a refusal of many names gone costs near their count. Each name
+  # a compile cannot find was matched against every name the program declares for a
+  # did-you-mean, so a box counter's 4,000 tags and 2,000 rungs naming a renamed tag took
+  # 50 s; now the first hundred alone are offered the nearest name, among those of a like
+  # length. A box counter of `n` buttons and coils whose `n` rungs each name a button
+  # renamed, compiled at 4x the names and the rungs, counted in a process of its own whose
+  # heap no collection visits, the least of three.
+  describe "a refusal of many names gone (decision 520)" do
+    test "costs near the count of the names, not the names times those declared" do
+      counter = fn n ->
+        IO.iodata_to_binary([
+          for(i <- 1..n, do: "var lane_#{i} bool\nvar pushbutton_start_#{i} bool\n"),
+          for(i <- 1..n, do: "xic pushbuton_start_#{i} ote lane_#{i}\n")
+        ])
+      end
+
+      cost = fn n ->
+        source = counter.(n)
+        parent = self()
+
+        Enum.min(
+          for _ <- 1..3 do
+            {_pid, ref} =
+              :erlang.spawn_opt(
+                fn ->
+                  {:reductions, before} = Process.info(self(), :reductions)
+                  {:error, diagnostics} = Logex.compile(source, name: "counter")
+                  {:reductions, later} = Process.info(self(), :reductions)
+                  send(parent, {:reductions, later - before, diagnostics})
+                end,
+                [:monitor, min_heap_size: 8_000_000]
+              )
+
+            assert_receive {:reductions, r, diagnostics}, 60_000
+            assert_receive {:DOWN, ^ref, :process, _, :normal}, 60_000
+
+            assert Enum.map(diagnostics, &(&1.message =~ "did you mean")) ==
+                     List.duplicate(true, min(n, 100)) ++ List.duplicate(false, n - min(n, 100))
+
+            r
+          end
+        )
+      end
+
+      # 1.25x at the tip, the hundred names offered a suggestion at both sizes costing the
+      # same; a refusal linear in its names would read 4x, and the match of every name
+      # against every name declared, as before decision 520, 16x. The bound lets the
+      # linear pass and turns the quadratic red.
+      ratio = cost.(400) / cost.(100)
+      assert ratio < 6.0, "4x the names gone took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # The first hundred in line order, whatever check finds them: a jump's label, which the
+    # jump checks find after every tag, is offered one on its line before a hundred names
+    # gone, and the hundredth name none.
+    test "the first hundred names gone in line order are offered one, a label's among them" do
+      source =
+        IO.iodata_to_binary([
+          "var a bool\n",
+          for(i <- 1..100, do: "var pushbutton_start_#{i} bool\n"),
+          "xic a jmp donee\n",
+          for(i <- 1..100, do: "xic pushbuton_start_#{i} ote a\n"),
+          "lbl done xic a ote a\n"
+        ])
+
+      assert {:error, [jump | names]} = Logex.compile(source, name: "p")
+      assert jump.line == 102
+      assert jump.message =~ "— did you mean `done`?"
+      assert length(names) == 100
+
+      assert Enum.map(names, &(&1.message =~ "did you mean")) ==
+               List.duplicate(true, 99) ++ [false]
+    end
+  end
+
   describe "Logex.Name, the one reading of a lexed name's parts" do
     test "element/1 reads one word and one pair of brackets closing it, and nothing else" do
       assert Name.element("grid[1,7]") == {"grid", ["1", "7"]}
