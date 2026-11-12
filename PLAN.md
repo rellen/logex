@@ -18796,6 +18796,252 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   adapter example in README beside `Logex.IO.Sim`, what a real device's code must do
   under `Logex.IO`'s behaviour, run or parsed by `readme_test.exs` as every block is;
   "What logex is not" kept true. It runs first, beside RV-20.
+
+  **RV-21 as built** (2026-11-12, branch `rv21` over `681e326`). Each part of decision 517
+  that changes what logex does has a test that fails when it is reverted, judged by the
+  full suite (the mutation table below), and the life walk restates the store's warning.
+  No test, walk or oracle was deleted or weakened; the pins the store's new lines change
+  and the leave of 517 (e) are named below, each line of them changed so and only so.
+
+  - *Decision 517 (c), the program a store names* (`dc66f5b`; `retain_store_test.exs`'s
+    "the program a store names" describe, seven tests): every write of the store, the
+    start's, a period's, each event's and each edit step's, names after the
+    configuration's line the program the runner ran as it wrote, `resource <md5>`, the
+    MD5 of the configuration's own lines as `Logex.Configuration.Text.print/1` prints them
+    with no line of their own (a comment, an empty line or the order of kinds no change),
+    and a `program <type> <md5>` line a type, in name order, of its source text and its
+    user blocks', so that `md5sum conveyor.ld` gives a type with no blocks; the end line
+    counts them. A warm fresh start lays the program the store names beside the one it was
+    given and, where the configuration's lines or a type's text differ, a type only one
+    side has among them, warns in `status/1`'s `retain`, `warning`, always there and nil
+    otherwise, one message naming the store as the host spelled it and each difference,
+    the first ten and a count: "plant.retain: the store was written by another program
+    than the one this start was given: `tally`'s text differs; an edit tested or
+    assembled online that was never written to the files is not in this start, which
+    runs the program it was given with the store's retained values laid over it by name
+    and type". It changes nothing else (decision 277), and it is the start's, kept through
+    rounds, trips and restarts until the runner ends; a test or an assemble writes the
+    candidate's program and an untest or a cancel the original's, so the store always
+    names what the resource runs. A store written before RV-21, which names none, is read
+    as before and warns of nothing, and so does a cold start; a resource or program line
+    that is none, a digest that is no 32 lowercase hexadecimal digits or a line given
+    twice is the host's mistake, refused a line each as every line of the store is. The
+    readings are provisional, questions 1 and 2 below. The store's text, README's
+    `kept.exs`, before and after:
+
+    ```
+    logex retain 2                                   logex retain 2
+    configuration tally written 2026-10-30T14:00:08Z configuration tally written 2026-10-30T14:00:08Z
+    global total_boxes dint 4                        resource 013cc059392445fdcc1e84c9b0de6118
+    instance t1 tally                                program tally 79283a3df1f759ac3c077ad9de67c863
+    ...                                              global total_boxes dint 4
+    end 13 lines                                     ...
+                                                     end 15 lines
+    ```
+
+    The pins the new lines change, each changed so and only so: three exact retain
+    reports in `retain_store_test.exs` gain `warning:`, nil, or the retyped store's
+    warning; its two "no line of a store" messages name the two new lines; "a store's
+    last line counts its lines" reads the two lines and `end 10 lines`; two
+    `Retain.encode/2` comparisons are `encode/3` with the configuration's `written_by/1`;
+    `runtime_test.exs`'s list of `Logex.Retain`'s functions gains `decoded!/2`,
+    `encode/3`, `warning/3` and `written_by/1`; and `stalled_disk_test.exs` traces
+    `encode/3` where it traced `encode/2` (four lines and two comments). The life walk's
+    model holds the program its shelf's store names, `shelf_by`, and restates each fresh
+    start's warning from the programs' own text and every store's lines
+    (`:life_warned`, `:life_unwarned`, `:life_warned_changed`, `:life_warned_stepped`).
+    README's `kept.exs` assembles an edit online and starts again from the files, showing
+    the warning.
+  - *Decision 517 (e), the simulator's addresses* (`ee4187f`; `io_test.exs`'s "its
+    addresses once a runner has opened it" describe, six tests): `Logex.IO.Sim`'s `set/3`,
+    `set/2`, `outputs/1` and `writes/1` take and give an address as the configuration
+    writes it, `"panel.i.0"` and `"drive.q.0"`, once a runner's device, a
+    `Logex.Runner.Device` process, has opened the sim, and the adapter's list, `[0]`, for
+    a sim no runner has opened, a test that calls the callbacks itself among them. The
+    sim keeps the name of the device a runner last opened it for, across a stop and a
+    test's own open, and spells every write by it, those before a reopen for another
+    device among them. The other form, an output's text, another device's and a text of
+    no location in its one spelling, `"panel.I.0"` or `"panel.i.00"`, are the test's
+    mistakes, each message pinned; an input past `inputs:` is refused in the form given,
+    "the sim has 4 inputs, at the addresses "panel.i.0" to "panel.i.3", got:
+    "panel.i.9"". A set takes its addresses by the name the sim has as the set reaches
+    it, taken again where a runner opened the sim between its look and its set (the
+    describe's last test suspends the setter there). `fail/3`'s `{:value, address,
+    value}` stays the adapter's list, which the runner names as decision 399 has it. The
+    reading is provisional, question 3. The walks' tables, `@inputs` and `@outputs`, hold
+    the text. The leave, every test and walk that sets, reads or pins a sim a runner has
+    opened changed to the configuration's text and only so, lines added and removed
+    (`git diff --numstat dc66f5b ee4187f`), `mix format`'s rewrapping of a longer address
+    among them: `api_contract_test.exs` 18/12, `bit_string_test.exs` 4/4,
+    `ceiling_test.exs` 1/1, `end_to_end_test.exs` 119/74, `force_test.exs` 36/36,
+    `integer_width_test.exs` 2/2, `located_array_test.exs` 21/14, `long_timer_test.exs`
+    1/1, `real_test.exs` 6/6, `retain_configuration_test.exs` 6/6, `retain_edit_test.exs`
+    2/2, `retain_period_test.exs` 2/2, `retain_store_test.exs` 24/24, `retain_test.exs`
+    2/2, `runner_edit_test.exs` 13/13, `runner_test.exs` 95/82, `stalled_disk_test.exs`
+    16/16 and `trip_test.exs` 349/305, whose `zeroed_once/2` takes the output's text as
+    `zeroed_once/3`; `io_test.exs` is unchanged but for its new describe, the list form's
+    tests standing for a sim no runner has opened. README's runner examples set and read
+    the text, and a bullet after `on_the_clock.exs` says so.
+  - *Decision 517 (b), the examples as files* (`1d0ec85`; `readme_test.exs`): every
+    example README runs is a file under `examples/`, each script a `$ mix run` follows,
+    every file one reads, the files README describes rather than shows (`faster/`,
+    `warm/`, `moved/`, `boxes_v2.ld`) and `a_trip.exs`, which README shows as the rest of
+    `on_the_clock.exs`, whole, beside `examples/mix.exs`, a project naming logex in the
+    directory above, so that `mix run scan.exs` from there runs one as README does, and
+    `examples/.gitignore` for what a run leaves. The second file README marked
+    `broken.logex` is `broken_retain.logex`, so that one directory holds them.
+    `readme_test.exs` runs each example from its files there, copied to its own
+    directory under `tmp/readme/` so that the examples that write a store or a forces
+    file run side by side; holds every block README shows to its file and `examples/` to
+    nothing else, a path marked twice refused; and runs `scan.exs` through the project
+    with `mix compile` and `mix run`, its build under `tmp/readme/_examples_build/`
+    (`MIX_BUILD_PATH`), some 11 s. `clauses_test.exs` holds every script there to the
+    clauses rule; README's two conditionals, `edit_plant.exs`'s `case` and the
+    fragment's, are clauses now. README, `CONTRIBUTING.md` and CLAUDE.md say where the
+    examples live, and README's "Running it" says the fragment is run (decision 365).
+  - *Decision 517 (d), an adapter of a host's own* (`4f6c3aa`; README's "A device's
+    adapter", `examples/line_device.exs`): `LineDevice`, an adapter for a card on a TCP
+    socket that answers lines, run on `packing.logex` with the card played by the script
+    on the loopback interface and the manual clock: `check/3` refuses a binding with no
+    host in the host's process; `init/3` connects in the device's process; `read/1` gives
+    the inputs by address and `write/2` is given every output; a lost line is `{:error,
+    reason, state}`, never a raise, its state given back so that the next call connects
+    again, so the read that finds the line dropped trips the plant, `{:io, "panel",
+    {:error, :closed}}`, the trip's zeros go out on a new connection and a cold restart
+    reads the card through it; and `close/1` closes the socket. `readme_test.exs` runs it
+    as every example, its output exact (15 runs alike before it landed). "What logex is
+    not" stays true: `Logex.IO.Sim` is the one adapter logex ships, and README says
+    `LineDevice` is an example to copy, not an adapter logex ships.
+  - *The close* (the commit that records this entry): `Logex.IO.Sim`'s `writes/1` spells
+    each address once for all the writes it gives, half its cost; "every write names the
+    program" reads a period's write too, which the mutation table's `c04_period_no_by`
+    found reached by the life walk alone; README's "What has landed" says what RV-21
+    built, and "What logex is not", checked claim by claim, says that the store's digests
+    are its program's and no checksum of the store, and that a fresh start from a store
+    another program wrote is warned of and refused nothing; `docs/organisation.md`'s
+    §4.11 and §4.13 notes and decision 517's landed note.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite, the patches
+    and logs under `scratchpad/rv/mut21/`, `mut21e/` and `mut21bd/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `c01_no_by_lines` | a write names no program | red, 8 (store 6, life walk, README) |
+    | `c02_no_warning` | a fresh start warns of nothing | red, 6 (store 3, life walk, README, runtime's surface) |
+    | `c03_step_keeps_by` | an edit's step leaves the program the next write names | red, 5 (store 2, life walk, README 2) |
+    | `c04_period_no_by` | a period's write names no program | red, 1 (life walk); the store's test reads it since the close |
+    | `c05_lines_counted` | the resource's digest of the configuration with its lines | red, 4 (store, life walk, README 2) |
+    | `c06_blocks_ignored` | a type's user blocks left out of its digest | red, 2 (store, life walk) |
+    | `c07_bare_empty` | a program with no text named by nothing | red, 3 (store, README, a frontend cost pin) |
+    | `c08_decoded_no_by` | the store read back names no writer | red, 5 (store 3, life walk, README) |
+    | `c09_by_shown` | `status/1`'s `retain` shows the writer | red, 4 (store 4) |
+    | `c10_resource_silent` | the configuration's difference not told | red, 2 (store, life walk) |
+    | `c11_sides_swapped` | a type only the store has told as the start's, and the other way | red, 2 (store, life walk) |
+    | `c12_upper_digest` | a digest in capitals taken | red, 1 (store) |
+    | `c13_by_twice` | a line given twice taken | red, 2 (store, README) |
+    | `c14_cold_warns` | a cold start warns | red, 2 (store, life walk) |
+    | `e01_never_runner` | no runner's open names the sim | red, 342 (trip 132, store 59, runner 34, stalled disk 27, retain period 21, io 5, walks 3, and 13 files more) |
+    | `e02_always_runner` | a test's own open names the sim | red, 21 (io 20, end to end) |
+    | `e03_first_name_kept` | a reopen for another device keeps the first name | red, 1 (io) |
+    | `e04_outputs_unspelled` | `outputs/1` gives the list | red, 108 (trip 52, runner 11, end to end 9, walks 3, io 2, and 7 files more) |
+    | `e05_writes_unspelled` | `writes/1` gives the list | red, 100 (trip 66, runner 16, end to end 4, walks 3, io 2, and 4 files more) |
+    | `e06_past_listed` | an input past `inputs:` told as a list after the open | red, 2 (io, README's project) |
+    | `e07_set_unguarded` | a set made by the name the sim had at its look | red, 2 (io's suspended setter, README's project) |
+    | `e08_output_taken` | an output's text set as an input | red, 1 (io) |
+    | `e09_any_device` | another device's text taken | red, 2 (io 2) |
+    | `e10_text_before_open` | a text taken before any open | red, 1 (io) |
+    | `e11_outputs_as_inputs` | outputs spelled `i` | red, 108 (as `e04`) |
+    | `e12_set2_unnamed` | `set/2` takes no text | red, 50 (trip 26, located array 6, end to end 5, io 3, and 4 files more) |
+    | `e13_respelling_taken` | `"panel.I.0"` taken | red, 1 (io) |
+    | `e14_renamed_dropped` | a set the open overtook dropped, answered `:ok` | red, 1 (io's suspended setter) |
+    | `e15_list_after_open` | a list taken after the open | red, 3 (io 3) |
+    | `b01_example_drifts` | `examples/motor.ld` drifts from README | red, 4 (README's hold, project, `scan.exs` and `plant.exs`) |
+    | `b02_stray_file` | a file under `examples/` README does not show | red, 1 (README's hold) |
+    | `b03_mix_dep_wrong` | `examples/mix.exs` names the wrong directory | red, 1 (README's project) |
+    | `b04_if_in_example` | an `if` in `scan.exs`'s first lines, in its file and wherever README shows them | red, 2 (clauses, README's hold) |
+    | `b05_derived_drift` | `faster/packing.logex` drifts from what README describes | red, 2 (README) |
+    | `b06_continued_partial` | `a_trip.exs` shipped as README shows it, without its setup | red, 2 (README) |
+    | `b07_marked_twice` | README marks `broken.logex` twice again | red, 2 (README's hold) |
+    | `d01_raise_on_lost` | `LineDevice` raises on a lost line, README and the file alike | red, 1 (README) |
+    | `d02_socket_kept` | `LineDevice` keeps its dead socket | red, 2 (README, and a runner test this item does not touch) |
+    | `d03_check_silent` | `LineDevice`'s `check/3` refuses nothing | red, 1 (README) |
+
+    No mutant survived. README's project test, `mix run scan.exs` from `examples/`, also
+    went red under each mutant that leaves a compiler warning in `lib/` (`c03`, `c05`,
+    `c07`, `c13`, `e06`, `e07`): Mix prints the dependency's banner, `==> logex`, on
+    standard output as it reports the warning again, which a tree with no warning, as
+    CI's `--warnings-as-errors` gate holds it, never prints; the counts above include it.
+    `c07`'s frontend cost pin (`frontend_test.exs:678`, 33.57 against 33.07 reductions)
+    and `d02`'s runner test (`runner_test.exs:1061`, decision 398's opening limit on the
+    real clock) failed under the load of this table run beside a sibling item's own;
+    neither touches what its mutant changed.
+
+  - *Cost against the parent* (`681e326`), reductions on the manual clock, two runs each,
+    the scripts under `scratchpad/rv/p21cost/`: a round of three tasks 2075.5 to 2076.5
+    changing and 1771.5 to 1772.0 unchanged at the parent, 2075.7 to 2075.8 and 1771.5
+    here; a period's write, its text made and written, 447,206 at the parent and 447,209
+    here, a whole period's write in the VM 8,693,171 to 8,694,739 and 8,694,285 to
+    8,702,428; a fresh start from a store of 1,000 retained counters, the runner's
+    155,701 at both and the caller's 4,670,775 to 4,671,152 at the parent and 6,154,627 to
+    6,205,072 here, the MD5 of the program's 38,855 bytes of text, which the VM charges
+    some 40 reductions a byte and which takes some 0.2 ms (209 µs measured beside a
+    `Logex.Runtime.start/1` of 4.2 ms), and so an edit's step with a store; a sim's own
+    reductions a poll, its adapter's read and write again, 135.8 at both; the test's
+    side of a sim a runner opened, caller and sim together: `set/3` 111.1 at the parent
+    and 249.2 here, its look at the name and the location's reading, `set/2` of four
+    inputs 241.2 and 665.0, `outputs/1` 62.2 and 131.6, and `writes/1` of 100 writes
+    297 and 3,997, each spelled at the call (7,529 before the close spelled each address
+    once).
+  - *Load runs* (`scripts/load.sh`, four busy loops on four cores, beside a sibling item's
+    own suites, the machine's load average 8 to 18): the store's new describe 0 of 50 at
+    `dc66f5b`; the 219 tests RV-21 wrote or whose bodies the leave of 517 (e) changed,
+    the store's and the sim's describes among them (`scratchpad/rv/load21-targets-tip.txt`),
+    7 of 50 runs red at the close's tree: `end_to_end_test.exs`'s "on the real clock the
+    plant runs for 2 s and stops in order" five times, 15 rounds against its 20, the
+    failure its own comment records under RV-7's review's load; `trip_test.exs`'s
+    decision 124 test, "latches on its deadline while it waits", once; and the sim's
+    race test once, its receives given the default 100 ms, now 5 s, and 0 of 50 since.
+    Against the parent: the plant test, 30 runs of each taken in turn under the same busy
+    loops, red 7 times at the parent and 2 here; and in runs of their own, 50 each, the
+    plant test red 3 times at the parent and 10 here, the load average then 18, and the
+    decision 124 test none at the parent and once here. Neither test reaches what RV-21
+    changed beyond the sim's open and its addresses, and the runner's round costs what
+    it did (above). The runner walks and the life walk 0 of 5.
+  - *CLAUDE.md*: the "How to work here" line names `examples/` and `examples/mix.exs`;
+    `clauses_test.exs`'s line adds the examples; `readme_test.exs`'s line says it runs
+    each example from its files there, holds each block to its file and runs
+    `examples/scan.exs` through the project; and the Conventions' "The README is
+    checked" says each block is its file under `examples/`, changed with it.
+  - *Provisional readings, and questions for the maintainer.* Each is marked
+    provisional where it stands, the closest reading of the record, IEC 61131-3 and Logix
+    that could be found; each question says what an operator or a host sees.
+    1. *What counts as another program* (decision 517 (c)). An engineer fixes a typo in a
+       comment of `conveyor.ld` and restarts the line from its store: the start warns
+       "`conveyor`'s text differs", though the rungs are the same. (a) As built, any byte
+       of a program type's text or a change of the configuration's own lines, a comment
+       or an empty line of the configuration file excepted, so a deploy of changed files
+       warns once, until the store is next written; (b) the compiled program, its rungs
+       and tags, so that a comment or a reflowed rung in a `.ld` warns of nothing, at the
+       cost of a digest of terms rather than of a file an operator can `md5sum`; (c) the
+       program types alone, a configuration's changed task or connection never warned.
+       IEC 61131-3 is silent; how Logix tells an offline file from the controller's
+       project was not verified here.
+    2. *How the warning reaches the operator* (decision 517 (c)). The line restarts from a
+       store an online edit wrote: the plant runs at once, and `status/1`'s `retain`
+       reads the warning until the runner ends; nothing else tells anyone. (a) As built,
+       the status alone, the start refused nothing, as decision 277 lays any store over
+       any program; (b) also an event to the subscribers, `{:retain, {:warning,
+       message}}`, so a host that logs events logs it; (c) a warm start from such a store
+       refused unless the host says so, `start: :warm_anyway`, as a programming tool asks
+       the engineer to upload or download where its project and the controller differ
+       (Logix's going online so, unverified here).
+    3. *When a simulator takes the configuration's text* (decision 517 (e)). A test
+       starts a sim, sets `[0]` before the runner opens it, starts the runner and then
+       sets `"panel.i.0"`: both work; `[0]` after the open is refused, naming the text.
+       (a) As built, the open of a runner's device names the sim, and the name stays
+       across a stop; (b) both forms taken once named, the list never refused, so an old
+       test runs as it was; (c) the device's name given at `start_link/1`, `device:
+       "panel"`, the text from the start and the list never, so a test reads one form
+       throughout, at the cost of every test naming its device twice.
 - **RV-22 — CI and the release step** (decision 515, (e) and (b)). CI's test step naming
   each failed test of a red run, `scripts/gate.sh`, or `scripts/failed.exs` after a red
   `mix test`, shown on a run made red on a branch of its own; and a release step before

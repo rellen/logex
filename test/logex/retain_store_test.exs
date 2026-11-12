@@ -2546,6 +2546,14 @@ defmodule Logex.RetainStoreTest do
 
       assert Retain.written_by(configured(laid_out)) == by
       pressed(rig, [1, 0, 1])
+
+      # A period's write, the writer's own, names it too.
+      started = File.read!(rig.store)
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      assert File.read!(rig.store) != started
+      assert named(rig.store) == named_by(@tally)
+
       assert Runner.stop(runner) == :ok
       assert named(rig.store) == named_by(@tally)
     end

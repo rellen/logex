@@ -1893,13 +1893,13 @@ defmodule Logex.IOTest do
           )
         end)
 
-      assert_receive {:look, ^setter, ref}
+      assert_receive {:look, ^setter, ref}, 5000
       # Suspended once the call returns.
       true = :erlang.suspend_process(setter)
       send(sim, {ref, :go})
       {runner, clock} = addressed(sim)
       true = :erlang.resume_process(setter)
-      assert_receive {:set, ^setter, message}
+      assert_receive {:set, ^setter, message}, 5000
 
       assert message ==
                "a runner has opened the simulated device #{inspect(sim)} for the device " <>

@@ -444,10 +444,8 @@ defmodule Logex.IO.Sim do
   def handle_call(:writes, _from, state),
     do:
       {:reply,
-       state.writes
-       |> Enum.take(state.kept)
-       |> Enum.reverse()
-       |> Enum.map(&spelled(state.named, :output, &1)), state}
+       state.writes |> Enum.take(state.kept) |> Enum.reverse() |> each_spelled(state.named),
+       state}
 
   def handle_call(:named, _from, state), do: {:reply, state.named, state}
 
@@ -578,6 +576,15 @@ defmodule Logex.IO.Sim do
 
   defp spelled(named, direction, values),
     do: Map.new(values, fn {address, value} -> {at(named, direction, address), value} end)
+
+  # Every write, each address spelled once for them all, so that a sim that keeps 100,000
+  # writes of a few outputs spells a few, not 100,000 of each.
+  defp each_spelled(writes, nil), do: writes
+
+  defp each_spelled(writes, named) do
+    names = Map.new(Enum.uniq(Enum.flat_map(writes, &Map.keys/1)), &{&1, at(named, :output, &1)})
+    Enum.map(writes, &Map.new(&1, fn {address, value} -> {Map.fetch!(names, address), value} end))
+  end
 
   # Opened by the process that holds it, or by any once none does.
   defp opening({holder, held}, pid, _device, state) when holder != pid,

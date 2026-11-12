@@ -3163,6 +3163,11 @@ Logex.Runner.Clock.Manual.advance(clock, 10)     # each timer due on the way, in
 assert Logex.IO.Sim.outputs(panel)[[0]] == 1     # k1, at panel.q.0
 ```
 
+*(Decision 517 (e), RV-21, 2026-11-12: a sim a runner has opened is set and read as the
+configuration writes its points, `Logex.IO.Sim.set(panel, "panel.i.0", 1)` and
+`Logex.IO.Sim.outputs(panel)["panel.q.0"]`; the list above is the form of a sim no runner
+has opened, and the other form of each is the test's mistake.)*
+
 `advance/2` runs in the test's process. It takes each timer due on the way from the clock,
 earliest first and ties in the order they were set, sets the clock to its time, sends its
 message, and then calls the receiver through `:sys`, from the same process, so that it
@@ -4708,7 +4713,13 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   forces file a hand edit saved with CRLF line ends is read as written, `hz 1.5` forcing
   1.5, where RV-5 refused the store at its first carriage return and M5-11's review read
   a carriage return after a value as no force; a store saved so and cut short is refused
-  as any cut store is, and logex writes both with LF.)*
+  as any cut store is, and logex writes both with LF.)* *(Decision 517 (c), RV-21,
+  2026-11-12: after the configuration's line, the program the runner ran as it wrote,
+  `resource <md5>`, of the configuration's own lines as `Logex.Configuration.Text.print/1`
+  prints them, and a `program <type> <md5>` line a program type, of its source text and
+  its user blocks', in name order, counted among the store's lines; a warm fresh start
+  whose own differ warns in `status/1`'s `retain`, `warning`, and changes nothing else;
+  a store with none, written before RV-21, is read as before and warns of nothing.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -14835,6 +14846,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      README beside `Logex.IO.Sim`, what a real device's code must do. IEC 61131-3 writes
      an address one way everywhere, `%IX0.0`, and Logix `Local:1:I.Data.0` in the program
      and its tools alike. RV-21 builds them, keeping "What logex is not" true.
+     *(Landed with RV-21, 2026-11-12: (c) `dc66f5b`, every write of the store names the
+     program the runner ran, `resource <md5>` and `program <type> <md5>` after the
+     configuration's line, and a warm fresh start whose own program differs, the
+     configuration's lines or a type's text, warns in `status/1`'s `retain`, `warning`,
+     naming the store and each that differs, the start otherwise as decision 277 has it,
+     a store written before RV-21 warning of nothing; (e) `ee4187f`, `Logex.IO.Sim`'s
+     `set/3`, `set/2`, `outputs/1` and `writes/1` take and give `"panel.i.0"` once a
+     runner's device has opened the sim, the list before, each other form the test's
+     pinned mistake, every test and walk that sets or reads a sim a runner opened changed
+     to the text and only so; (b) `1d0ec85`, every example under `examples/` beside
+     `examples/mix.exs`, run by `readme_test.exs` from there, each README block held to
+     its file, the clauses rule held on each script; (d) `4f6c3aa`, README's "A device's
+     adapter", `LineDevice` on a TCP socket, run as every example is. The readings the
+     record leaves are marked provisional and are `PLAN.md`'s RV-21 questions 1 to 3.)*
 
 518. **Decision 500's readings no question asked (the review after Milestone 6),** RV-8's
      question 5: while a restart waits for a force's write on a slow disk, an engineer's

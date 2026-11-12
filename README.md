@@ -359,12 +359,15 @@ close, `PLAN.md`'s item RV-8 ("The review after Milestone 6"), builds no answer 
 accounts for every finding: 177 closed, each by a fix a test holds or a document made
 true, 18 kept by a decision or a recorded reason, the 13 refuted among them, and 8 put to
 the maintainer as questions (the review's "The close"). The maintainer answered them on
-2026-11-12, decisions 513–521, and took the review as done (decision 521); what the
-answers build waits as `PLAN.md`'s RV-20 to RV-25: a refusal of many unknown names
-costing near its count and the compile in a process of its own, a fresh start warning
-that an edit never reached the files, the simulator taking the configuration's
-addresses, the examples as files beside an adapter's, CI naming a failed test, a release
-step, typespecs with Dialyzer, and the runner split by concern.
+2026-11-12, decisions 513–521, and took the review as done (decision 521). `PLAN.md`'s
+RV-21 built the host's frictions (decision 517): a fresh start that warns where its store
+was written by another program than the files', an edit that never reached them; the
+simulator taking and giving the configuration's addresses once a runner has opened it;
+the examples as files under `examples/`; and an adapter of a host's own beside the
+simulator ("A device's adapter", below). What the other answers build waits as RV-20
+and RV-22 to RV-25: a refusal of many unknown names costing near its count and the
+compile in a process of its own, CI naming a failed test, a release step, typespecs with
+Dialyzer, and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -5561,7 +5564,8 @@ in every cycle's outputs at the value it holds.
   prescan; no hot restart; no warm restart that starts named paths cold; one store a
   runner, never one a program instance, and no checksum or encryption of it beyond its
   grammar and its count of lines, which tells a store cut short but not a value changed
-  in place; and no retained force, the forces having a file of their own.
+  in place, the digests it names its program by being the program's and not its own;
+  and no retained force, the forces having a file of their own.
 - **Not battery-backed memory, and no safety memory.** What a program marks `retain`
   is kept on the host's disk, by a runner given a store, `retain:`, and only there; in
   the core, `Logex.Runtime.restart/2,3` with `:warm`, it is kept in memory alone. The
@@ -5591,9 +5595,12 @@ in every cycle's outputs at the value it holds.
   retained bit, count or timer writes its outputs from it in that first round, so a warm
   start can switch an output on at once, as `a_warm_trip.exs`'s case-full lamp does
   above; the configuration warns only of a retained var_output wired straight to an
-  output point (decision 272). And a host's own child spec that restarts a crashed runner
-  restarts it warm wherever it names a store, since a fresh start reads its store warm
-  unless `start: :cold`.
+  output point (decision 272). A fresh start from a store another program wrote, an edit
+  made online that never reached the files, is warned of in `status/1` and refused
+  nothing: the store's values are laid over the program the start was given, by name and
+  type, and run at once (decision 517 (c)). And a host's own child spec that restarts a
+  crashed runner restarts it warm wherever it names a store, since a fresh start reads
+  its store warm unless `start: :cold`.
 
 ## Running it
 
