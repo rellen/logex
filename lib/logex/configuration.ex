@@ -605,6 +605,19 @@ defmodule Logex.Configuration do
   config.programs) == {:ok, config}`, each element on its line, but for decision 227's
   warning of a real initial value written with more digits than its real keeps, which
   the printed text, the value the global holds, no longer earns.
+
+  **The cost that remains** (decision 520). It runs in the caller, and holds no source
+  text over its work (RV-8's review): it grows linearly in its text, and a refusal costs
+  near the count of its mistakes, since the first hundred names it cannot find, in line
+  order, a global, an instance, a task, a member or a program type, are each offered the
+  nearest name of a like length, within one character of its own, a name differing only
+  in case always among them, and every name after them none, looked for among nothing
+  (provisional, `Logex.Declarations`), as `Logex.compile/2`'s are. So 1,000, 2,000 and
+  4,000 connections naming a renamed button among twice as many globals are refused in
+  some 0.13, 0.39 and 0.81 s, 10 to 30 million reductions, where they took 4.7, 21 and
+  82 s, 480 to 7,931 million reductions, each name matched against every global (RV-20's
+  figures, the least of three on one machine). `compile_file/1` compiles its program
+  types through `Logex.compile_files/1`, in a process of its own.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)

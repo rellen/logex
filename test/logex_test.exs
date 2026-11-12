@@ -1300,8 +1300,9 @@ defmodule LogexTest do
     end
 
     # `fun` run in a process of its own, P, after `setup`, which this one traces for the
-    # processes it spawns: P, the process P's compile runs in, and P's answer once it has
-    # one. P waits for `:done` before it ends.
+    # processes it spawns and theirs, so that the compile's process's own exit is seen:
+    # P, the process P's compile runs in, and P's answer once it has one. P waits for
+    # `:done` before it ends.
     defp compiling(fun, setup \\ fn -> :ok end) do
       parent = self()
 
@@ -1315,7 +1316,7 @@ defmodule LogexTest do
           end
         end)
 
-      :erlang.trace(p, true, [:procs])
+      :erlang.trace(p, true, [:procs, :set_on_spawn])
       send(p, :go)
       assert_receive {:trace, ^p, :spawn, worker, {Logex.Compiler.Worker, :serve, [_]}}, 10_000
       {p, worker}
@@ -1334,9 +1335,8 @@ defmodule LogexTest do
              fn -> Logex.Compiler.compile_files([path, path]) end}
           ] do
         {p, worker} = compiling(call)
-        ref = Process.monitor(worker)
         assert_receive {:compiled, ^p, result}, 10_000
-        assert_receive {:DOWN, ^ref, :process, ^worker, :normal}, 10_000
+        assert_receive {:trace, ^worker, :exit, :normal}, 10_000
         assert result == here.()
         assert Process.info(p, :links) == {:links, []}
         send(p, :done)
@@ -1387,7 +1387,7 @@ defmodule LogexTest do
           ] do
         {p, worker} = compiling(fn -> {:raised, assert_raise(ArgumentError, message, call)} end)
         assert_receive {:compiled, ^p, {:raised, %ArgumentError{}}}, 10_000
-        refute Process.alive?(worker)
+        assert_receive {:trace, ^worker, :exit, :normal}, 10_000
         send(p, :done)
       end
     end
@@ -1449,14 +1449,31 @@ defmodule LogexTest do
         assert gone == killed(reason)
       end
 
-      task = Task.async(fn -> Logex.compile(long, name: "p") end)
-      assert Task.yield(task, 0) == nil
-      assert Task.shutdown(task, :brutal_kill) == nil
-      assert Enum.filter(Process.list(), &serving?/1) == []
-    end
+      # A host's own time limit, a task's: its owner, P, traced with every process it
+      # spawns, the task and the task's compile among them, shuts it down unanswered.
+      parent = self()
 
-    defp serving?(pid),
-      do: Process.info(pid, :initial_call) == {:initial_call, {Logex.Compiler.Worker, :serve, 1}}
+      p =
+        spawn(fn ->
+          receive do
+            :go ->
+              task = Task.async(fn -> Logex.compile(long, name: "p") end)
+
+              receive do
+                :shut ->
+                  send(parent, {:shut, Task.yield(task, 0), Task.shutdown(task, :brutal_kill)})
+              end
+          end
+        end)
+
+      :erlang.trace(p, true, [:procs, :set_on_spawn])
+      send(p, :go)
+      assert_receive {:trace, _task, :spawn, worker, {Logex.Compiler.Worker, :serve, [_]}}, 10_000
+      ref = Process.monitor(worker)
+      send(p, :shut)
+      assert_receive {:shut, nil, nil}, 30_000
+      assert_receive {:DOWN, ^ref, :process, ^worker, :killed}, 30_000
+    end
 
     test "the compile's process takes the caller's group leader, priority and heap, and no " <>
            "process dictionary" do

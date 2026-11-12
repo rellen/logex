@@ -4403,8 +4403,8 @@ stage: nil
   and is refused, or, where the first's own first round trips the line again, is refused
   by that trip, asked before it (decisions 354 and 508), a stop answers the waiting
   restart as a runner not running, as it answers every request behind the write (decision
-  467), and, provisional, an edit's step is served at once and a trip's notice changes
-  nothing, the line tripped already; a write the restart's wait cut leaves the set it
+  467), and an edit's step is served at once and a trip's notice changes nothing, the
+  line tripped already (decision 518); a write the restart's wait cut leaves the set it
   held unknown through the restart's read, since it may still land, until a later write
   of the file ends (decision 502); and a stop waits for it to its limit and answers its
   caller (decision 467). A write cut at its limit, at a stop as at any time, may still

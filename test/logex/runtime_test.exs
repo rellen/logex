@@ -2299,6 +2299,37 @@ add e i y",
                "`Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and " <>
                "`Logex.Tag.new!/5` (decision 514)."
 
+    # Decisions 513, 518 and 520 (RV-20) are documents: the cost an accept pays over a
+    # large array, in each of the three accepts' docs; decision 500's two readings no
+    # longer provisional, in the runner's moduledoc; and a compile's own process and the
+    # cost a compile's refusal leaves, in `Logex`'s and the configuration's.
+    test "the docs decisions 513, 518 and 520 owe say what they decided" do
+      doc = fn module, name, arity ->
+        {:docs_v1, _, :elixir, _, _, _, docs} = Code.fetch_docs(module)
+        [text] = for {{:function, ^name, ^arity}, _, _, %{"en" => text}, _} <- docs, do: text
+        String.replace(text, ~r/\s+/, " ")
+      end
+
+      moduledoc = fn module ->
+        {:docs_v1, _, :elixir, _, %{"en" => text}, _, _} = Code.fetch_docs(module)
+        String.replace(text, ~r/\s+/, " ")
+      end
+
+      for {module, arity} <- [{Logex.Edit, 3}, {Logex.Configuration.Edit, 3}, {Logex.Runner, 2}] do
+        assert doc.(module, :accept, arity) =~ "**Its cost** (decision 513)"
+        assert doc.(module, :accept, arity) =~ "`var lane_t ton[4096]` with 40 such rungs"
+      end
+
+      assert moduledoc.(Logex.Runner) =~
+               "and a trip's notice meanwhile changes nothing, the runner tripped already " <>
+                 "(decision 518)"
+
+      refute moduledoc.(Logex.Runner) =~ "The readings no decision has taken yet"
+      assert moduledoc.(Logex) =~ "**A compile's own process** (decision 520)"
+      assert doc.(Logex, :compile, 2) =~ "**The cost that remains** (decision 520)"
+      assert doc.(Logex.Configuration, :compile, 3) =~ "**The cost that remains** (decision 520)"
+    end
+
     test "every documented module outside the host contract says so, and none inside it" do
       documented =
         for module <- Application.spec(:logex, :modules),

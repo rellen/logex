@@ -57,6 +57,9 @@ defmodule Logex do
   them, takes the compile with it, its work never left running. The caller is charged the
   reductions the compile spent, so that its own count, `Process.info(self(),
   :reductions)`, holds the whole compile, as when it ran there.
+
+  Outside its own process a compile costs what it did: README's motor 8,712 reductions,
+  63 more than when the caller compiled itself, the handing over.
   """
 
   # Decision 432 (RV-15): the three are Logex.Compiler's, so that the loader and its own
@@ -88,6 +91,21 @@ defmodule Logex do
   A name is required, because a configuration refers to a program type by its name. It is
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises
   `ArgumentError`; nothing in the source does.
+
+  **The cost that remains** (decision 520). A compile grows linearly in its text: its
+  declarations, its rungs, the depth of its groups and the types it holds. A refusal costs
+  near the count of its mistakes: the first hundred names it cannot find, in line order,
+  a tag, a label or a member, are each offered the nearest name of a like length, within
+  one character of its own, a name differing only in case always among them, and every
+  name after them is told what a name with none near it is told, looked for among nothing
+  (provisional, `Logex.Declarations`). So a box counter of 4,000 tags in which a renamed
+  tag leaves 1,000, 2,000 and 4,000 rungs naming a tag that is gone is refused in some
+  0.38, 0.45 and 0.44 s, 34 to 37 million reductions and 10 or 11 full collections, where
+  it took 13, 50 and 253 s, 1,257 to 5,706 million reductions and up to 48,353 full
+  collections, each name matched against all 4,000 (RV-20's figures, the least of three on
+  one machine). What is left is the text's own compile and the hundred suggestions, each
+  matched against the names of its like length, some 30 million reductions of them among
+  4,000 tags; the engineer waits for it, and nothing runs meanwhile.
   """
   defdelegate compile(source, options), to: Logex.Compiler.Worker
 
