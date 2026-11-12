@@ -1168,7 +1168,8 @@ defmodule Logex.StalledDiskTest do
   # its own process with no limit (b3-store-image-4), so that a store too big to make and
   # write within the limit is cut off at it and told, `{:retain, {:error, :timeout}}`,
   # never killed by its supervisor in the making. Traced: the runner itself calls neither
-  # `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2` as it ends, and a process it
+  # `Logex.Runtime.retained/1` nor `Logex.Retain.encode/2`, since decision 517 (c) (RV-21)
+  # `encode/3`, which names the program that wrote the store, as it ends, and a process it
   # starts, the write's, calls both, the store then written. A trace pattern moves every
   # process's reductions, and this module is not async (CONTRIBUTING.md).
   describe "the end's write within its limit (decision 414)" do
@@ -1181,12 +1182,12 @@ defmodule Logex.StalledDiskTest do
         Process.unlink(runner)
         eye(rig, 1)
         ref = Process.monitor(runner)
-        assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
+        assert :erlang.trace_pattern({Logex.Retain, :encode, 3}, true, [:local]) == 1
         assert :erlang.trace_pattern({Logex.Runtime, :retained, 1}, true, [:local]) == 1
         :erlang.trace(runner, true, [:call, :set_on_spawn])
         ended_by(ending, runner)
         assert_receive {:DOWN, ^ref, :process, ^runner, _reason}, @answers
-        :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
+        :erlang.trace_pattern({Logex.Retain, :encode, 3}, false, [:local])
         :erlang.trace_pattern({Logex.Runtime, :retained, 1}, false, [:local])
         calls = traced_all()
         refute Enum.any?(calls, &match?({^runner, _mfa}, &1)), inspect(calls)
@@ -1194,7 +1195,7 @@ defmodule Logex.StalledDiskTest do
         assert [{write, {Logex.Runtime, :retained, [_runtime]}}] =
                  for({_pid, {Logex.Runtime, :retained, _}} = call <- calls, do: call)
 
-        assert [{^write, {Logex.Retain, :encode, [_image, _at]}}] =
+        assert [{^write, {Logex.Retain, :encode, [_image, _at, _by]}}] =
                  for({_pid, {Logex.Retain, :encode, _}} = call <- calls, do: call)
 
         assert File.read!(rig.store) =~ "t1.boxes.cv dint 1\n"
@@ -1210,7 +1211,7 @@ defmodule Logex.StalledDiskTest do
   # answering on, where a trip of 131,072 retained timers kept it some 11 s making the text
   # (RV-13's question 7). Traced, each process the test and the runner start traced too:
   # the runner calls neither `Logex.Runtime.retained_image/1` nor `Logex.Retain.encode/2`,
-  # and one process calls both, each write's own, the period's the writer's. Since
+  # since decision 517 (c) (RV-21) `encode/3`, and one process calls both, each write's own, the period's the writer's. Since
   # decision 488 (RV-18) the image is made by `retained_image/1`, `retained/1` through it,
   # and the period's writer makes it of the retained values the runner sends, where the
   # trace named `retained/1`, which the writer called on the whole resource.
@@ -1218,12 +1219,12 @@ defmodule Logex.StalledDiskTest do
     # The work traced in `traced`, the runner or the test that starts one, and every process
     # either starts.
     defp texts_made(traced, work) do
-      assert :erlang.trace_pattern({Logex.Retain, :encode, 2}, true, [:local]) == 1
+      assert :erlang.trace_pattern({Logex.Retain, :encode, 3}, true, [:local]) == 1
       assert :erlang.trace_pattern({Logex.Runtime, :retained_image, 1}, true, [:local]) == 1
       :erlang.trace(traced, true, [:call, :set_on_spawn])
       runner = work.()
       :erlang.trace(traced, false, [:call, :set_on_spawn])
-      :erlang.trace_pattern({Logex.Retain, :encode, 2}, false, [:local])
+      :erlang.trace_pattern({Logex.Retain, :encode, 3}, false, [:local])
       :erlang.trace_pattern({Logex.Runtime, :retained_image, 1}, false, [:local])
       ref = :erlang.trace_delivered(:all)
       assert_receive {:trace_delivered, :all, ^ref}, @answers

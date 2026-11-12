@@ -3329,8 +3329,9 @@ A runner given `retain:` keeps the plant's retained image in a file on the host'
 the stand-in for a controller's battery-backed memory. `kept.exs` runs `tally.logex`,
 above, through the runner on the manual clock, its panel a simulated device: it counts
 four boxes and stops the runner, which writes the store; starts it fresh, warm from the
-store; starts it again with `start: :cold`; and starts it from a store edited to name
-another configuration:
+store; starts it again with `start: :cold`; edits it online, `full` made a coil, assembles
+the edit and stops, then starts it fresh from `tally.ld` on disk, which the edit never
+reached; and starts it from a store edited to name another configuration:
 
 ```elixir
 alias Logex.IO.Sim
@@ -3377,6 +3378,19 @@ IO.inspect(Runner.status(runner).retain.written_at, label: "written_at")
 show.(runner, "start: :cold")
 :ok = Runner.stop(runner)
 
+# An edit made online and assembled, never written to tally.ld.
+{:ok, coil} = Logex.compile(String.replace(File.read!("tally.ld"), "otl full", "ote full"), name: "tally")
+{:ok, edited} = Logex.Configuration.compile("tally", File.read!("tally.logex"), %{"tally" => coil})
+{:ok, runner} = Runner.start_link(opts)
+{:ok, _forecast} = Runner.accept(runner, edited)
+{:ok, _report} = Runner.test(runner)
+{:ok, _report} = Runner.assemble(runner)
+:ok = Runner.stop(runner)
+
+{:ok, runner} = Runner.start_link(opts)
+IO.puts(Runner.status(runner).retain.warning)
+:ok = Runner.stop(runner)
+
 File.write!("tally.retain", String.replace(File.read!("tally.retain"), "configuration tally", "configuration line_2"))
 
 try do
@@ -3392,6 +3406,8 @@ four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
 logex retain 2
 configuration tally written 2026-10-30T14:00:08Z
+resource 013cc059392445fdcc1e84c9b0de6118
+program tally 79283a3df1f759ac3c077ad9de67c863
 global total_boxes dint 4
 instance t1 tally
 t1.boxes ctu
@@ -3402,10 +3418,11 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 1
 t1.boxes.r bool 0
 t1.full bool 1
-end 13 lines
+end 15 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
+tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; an edit tested or assembled online that was never written to the files is not in this start, which runs the program it was given with the store's retained values laid over it by name and type
 tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
 ```
 
@@ -3413,13 +3430,18 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   tripped the plant (decision 284, below): a header, `logex retain 2`; the
   configuration's name and the time of the write on the host's wall clock, in UTC, which
   a clock gives through its `wall_ms/1` (the manual clock's own time, read from the
-  epoch); each retained global;
+  epoch); the program the runner ran as it wrote the store (decision 517 (c), RV-21),
+  `resource`, the MD5 of the configuration's own lines, its tasks, globals, instances and
+  connections as `Logex.Configuration.Text.print/1` prints them with no line numbers, so
+  that a comment or an empty line changes nothing, and `program` a program type, the MD5
+  of its text, what `md5sum tally.ld` prints, and of each user block's after it where it
+  holds one; each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
   text that reads back to it, and never a timer's `last` (`PLAN.md`'s M6-5; decisions 275
   and 276 in [`docs/organisation.md`](docs/organisation.md) §7); and last its count of
-  lines, `end 13 lines`, the header and the end line among them, as `wc -l` counts them
+  lines, `end 15 lines`, the header and the end line among them, as `wc -l` counts them
   (decision 355). A store cut short, at a line's end or inside a number, as a copy cut off
   or a file system that loses a file's tail can leave one, has lost its end line or cut
   it, and is refused at a fresh start, naming the file and its last line, so that no
@@ -3572,6 +3594,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   at the store and the forces file for a link before either is read, so that a store on a
   stalled disk, or a FIFO in its place, refuses the start as a store that cannot be read
   (decision 415).
+- An edit made online lives in the runner and its store, not in the files: once tested
+  or assembled, every write of the store names the edited program, so a fresh start from
+  files the edit never reached, as `kept.exs` makes above, finds its store written by
+  another program than the one it is given and warns of it, `status/1`'s `retain` giving
+  `warning`, one message naming the store and what differs, the configuration's own lines
+  or a program type's text, or a type only the store or only the start has (decision 517
+  (c), RV-21). It changes nothing else: the store's values are laid over the program the
+  start was given by name and type, as at any start, so the operator who sees it either
+  writes the edit to the files and starts again, or lets the start stand, its next write
+  naming the files' program, after which nothing warns. A deploy of changed files warns
+  the same way, the store having been written by the program before it; a store an
+  earlier logex wrote names no program and warns of nothing, and a cold start, which lays
+  nothing over, warns of nothing. `warning` is always in the report, nil where nothing
+  warned, for the runner's life, as `dropped` is.
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),

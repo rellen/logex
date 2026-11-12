@@ -10,6 +10,8 @@ defmodule Logex.Retain do
   #
   #     logex retain 2
   #     configuration plant written 2026-10-27T14:00:00Z
+  #     resource 3c59dc048e8850243be8079a5c74d079
+  #     program motor 7d793037a0760186574b0282f2f435e7
   #     global total_boxes dint 41
   #     trigger arm 0
   #     instance m1 motor
@@ -17,11 +19,16 @@ defmodule Logex.Retain do
   #     m1.boxes.cu bool 1
   #     m1.boxes.cv dint 41
   #     m1.weights int[8] 0 0 12 14 0 0 0 0
-  #     end 10 lines
+  #     end 12 lines
   #
   # a header, `logex retain 2`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
-  # timer; each retained global, `global <name> <type> <value>`; since decision 313 each
+  # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
+  # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
+  # of each program type's text, in name order (written_by/1), which a warm fresh start
+  # lays beside the program it is given and warns where they differ (warning/3), a store
+  # written before RV-21 naming none and read as it was; each retained global, `global
+  # <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
   # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
   # each instance whose
@@ -84,23 +91,86 @@ defmodule Logex.Retain do
   # ---- written ------------------------------------------------------------------------
 
   # A resource's retained image as the store's text, written at `at`, a UTC DateTime, its
-  # last line its count of lines (decision 355).
-  def encode(%{configuration: name, globals: globals, instances: instances} = image, at) do
+  # last line its count of lines (decision 355), naming no program (a store's text as it
+  # was before decision 517).
+  def encode(image, at), do: encode(image, at, nil)
+
+  # Decision 517 (c), RV-21: and the program that wrote it, `by` (written_by/1), its
+  # `resource` line and a `program` line a program type, in name order, after the
+  # configuration's line, so that a fresh start can tell a store written by another program
+  # than the one it was given (warning/3).
+  def encode(%{configuration: name, globals: globals, instances: instances} = image, at, by) do
+    by = by_lines(by)
     globals = for {name, entry} <- Enum.sort(globals), do: ["global #{name} ", entry(entry), "\n"]
     triggers = for {name, sample} <- Enum.sort(image.triggers), do: "trigger #{name} #{sample}\n"
     instances = for {name, lone} <- Enum.sort(instances), do: instance(name, lone)
-    count = 3 + length(globals) + length(triggers) + Enum.sum(Enum.map(instances, &length/1))
+
+    count =
+      3 + length(by) + length(globals) + length(triggers) +
+        Enum.sum(Enum.map(instances, &length/1))
 
     IO.iodata_to_binary([
       @header,
       "\n",
       "configuration #{name} written #{DateTime.to_iso8601(at)}\n",
+      by,
       globals,
       triggers,
       instances,
       "end #{count} lines\n"
     ])
   end
+
+  defp by_lines(nil), do: []
+
+  defp by_lines(%{resource: resource, programs: programs}),
+    do: [
+      "resource #{resource}\n"
+      | for({name, digest} <- Enum.sort(programs), do: "program #{name} #{digest}\n")
+    ]
+
+  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 question 1): the program a
+  # configuration runs, as a store names it, `%{resource: digest, programs: %{type =>
+  # digest}}`, each digest the MD5 of a text in 32 lowercase hexadecimal digits. A program
+  # type's is of its source text, the bytes of the file it was read from, so that `md5sum
+  # conveyor.ld` gives it, and where it holds user blocks, of each block's name and source
+  # text after it, in name order, so that a block edited is its holder's text changed too;
+  # one with no source text, built by hand, of its rungs and tags as data. The resource's
+  # is of the configuration's own lines, its tasks, globals, instances and connections, as
+  # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
+  # comment or an empty line added to the file changes nothing and a task, a global, an
+  # instance's type or task, a connection or their order does. The configuration's name is
+  # the store's second line already (decision 285).
+  def written_by(%Logex.Configuration{programs: programs} = configuration),
+    do: %{
+      resource: digest(Logex.Configuration.Text.print(unlined(configuration))),
+      programs: Map.new(programs, fn {name, program} -> {name, digest(texts(program))} end)
+    }
+
+  defp unlined(configuration),
+    do: %{
+      configuration
+      | tasks: Enum.map(configuration.tasks, &%{&1 | line: nil}),
+        globals: Enum.map(configuration.globals, &%{&1 | line: nil}),
+        instances: Enum.map(configuration.instances, &%{&1 | line: nil}),
+        connections: Enum.map(configuration.connections, &%{&1 | line: nil})
+    }
+
+  defp texts(%Logex.Program{source: source, blocks: blocks} = program),
+    do: [
+      own_text(source, program)
+      | for(
+          {name, %Logex.FbType{body: %Logex.Program{} = body}} <- Enum.sort(blocks),
+          do: ["\n", name, "\n", own_text(body.source, body)]
+        )
+    ]
+
+  defp own_text(source, _program) when is_binary(source), do: source
+
+  defp own_text(nil, program),
+    do: :erlang.term_to_binary({program.rungs, program.tags}, [:deterministic])
+
+  defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)
 
   defp instance(name, %{program: program, kinds: kinds, values: values}) do
     lines =
@@ -243,13 +313,22 @@ defmodule Logex.Retain do
   # is not one, or is of another configuration, is the host's mistake, every problem a line
   # of one ArgumentError, `<path>: line <n>: …` (decisions 276 and 285). What its image
   # holds is judged by `Logex.Runtime.start/2`, which forgives a changed configuration.
-  def decode!(text, {path, name}) do
+  def decode!(text, named) do
+    {image, written_at, _by} = decoded!(text, named)
+    {image, written_at}
+  end
+
+  # Decision 517 (c), RV-21: the same, and the program the store names as its writer, as
+  # written_by/1 gives one, nil for a store that names none, one written before RV-21 among
+  # them, which is read as it was and warns of nothing.
+  def decoded!(text, {path, name}) do
     {marked, lines} = text |> lines() |> unended() |> Enum.with_index(1) |> marked()
     {written_at, problems} = headed(lines, name)
     {body, ending, last} = ended(lines)
 
     acc = %{
       image: empty(name),
+      by: nil,
       instance: nil,
       seen: %{},
       problems: Enum.reverse(marked ++ before_end(problems, last)),
@@ -259,8 +338,51 @@ defmodule Logex.Retain do
 
     acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
     refused!(Enum.reverse(acc.problems) ++ ending, path)
-    {acc.image, written_at}
+    {acc.image, written_at, acc.by}
   end
+
+  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 questions 1 and 2): what a warm
+  # fresh start warns of, nil where the store names no program, written before RV-21, or
+  # the very program the start was given; otherwise one message, naming the start's store
+  # as the host spelled it, the configuration's own lines where their digest differs and
+  # each program type whose digest differs, is only the store's or only the start's, in
+  # name order, the first ten and then a count, so that the operator learns that an edit
+  # tested or assembled online, which lives in the runner and the store, never reached
+  # the files the start was given. It changes nothing else: the image is laid over the
+  # start's configuration by name and type as decision 277 has it.
+  def warning(nil, _by, _path), do: nil
+
+  def warning(stored, by, path),
+    do:
+      told(
+        resource_differs(stored.resource == by.resource) ++
+          Enum.flat_map(
+            Enum.sort(Enum.uniq(Map.keys(stored.programs) ++ Map.keys(by.programs))),
+            &program_differs(Map.get(stored.programs, &1), Map.get(by.programs, &1), &1)
+          ),
+        path
+      )
+
+  defp resource_differs(true), do: []
+
+  defp resource_differs(false),
+    do: ["the configuration's tasks, globals, instances or connections differ"]
+
+  defp program_differs(same, same, _name), do: []
+  defp program_differs(nil, _digest, name), do: ["`#{name}` is not in the store"]
+  defp program_differs(_digest, nil, name), do: ["`#{name}` is not in this start"]
+  defp program_differs(_stored, _digest, name), do: ["`#{name}`'s text differs"]
+
+  defp told([], _path), do: nil
+
+  defp told(differences, path),
+    do:
+      "#{Refusal.path(path)}: the store was written by another program than the one this " <>
+        "start was given: " <>
+        Enum.join(Array.capped(differences, &"and #{&1} more"), ", ") <>
+        "; an edit tested or assembled online that was never written to the files is not in " <>
+        "this start, which runs the program it was given with the store's retained values " <>
+        "laid over it by name and type"
 
   # RV-5's review: a store that begins with a byte-order mark, as an editor that saves
   # UTF-8 with one writes it, told so in plain words at its first line, and the rest of
@@ -477,6 +599,26 @@ defmodule Logex.Retain do
 
   defp line(["instance", name, program], at, acc), do: instance(name, program, at, acc)
 
+  # Decision 517 (c), RV-21: the program that wrote the store, its resource's digest and a
+  # program type's, each once, each digest 32 lowercase hexadecimal digits, as encode/3
+  # writes it; a word that is no path, having no `.`, so that no instance's line is one.
+  defp line(["resource", digest], at, acc), do: by_entered(digested(digest), :resource, at, acc)
+
+  defp line(["program", name, digest], {_text, n} = at, acc),
+    do:
+      by_entered(
+        digested(digest),
+        {:program, name},
+        at,
+        named_problem(acc, name, n, "program type")
+      )
+
+  defp line(["resource" | _words], {text, n}, acc),
+    do: problem(acc, n, "#{quoted(text)} is no resource's line: it is `resource <digest>`")
+
+  defp line(["program" | _words], {text, n}, acc),
+    do: problem(acc, n, "#{quoted(text)} is no program's line: it is `program <type> <digest>`")
+
   # Decision 355: an end line anywhere but last, which no path is, having no `.`; and since
   # RV-5's review one in a store not judged by version 2's rule, its header not `logex
   # retain 2`, told so, where its last line was told as one before the store's last.
@@ -509,8 +651,8 @@ defmodule Logex.Retain do
         acc,
         n,
         "#{quoted(text)} is no line of a store: a line is `global <name> <type> <value>`, " <>
-          "`trigger <name> <sample>`, `instance <name> <program type>`, `<path> <kind>` or " <>
-          "`<path> <type> <value>`"
+          "`trigger <name> <sample>`, `resource <digest>`, `program <type> <digest>`, " <>
+          "`instance <name> <program type>`, `<path> <kind>` or `<path> <type> <value>`"
       )
 
   defp problem(acc, n, message), do: %{acc | problems: [{n, message} | acc.problems]}
@@ -693,6 +835,31 @@ defmodule Logex.Retain do
     acc = named_problem(acc, name, n, "global")
     once(acc, key, at, &put_entry(kind, name, entry, &1))
   end
+
+  # Decision 517 (c), RV-21: a digest, as encode/3 writes one.
+  defp digested(digest) when byte_size(digest) == 32,
+    do: hex(Base.decode16(digest, case: :lower), digest)
+
+  defp digested(digest), do: no_digest(digest)
+
+  defp hex({:ok, _bytes}, digest), do: {:ok, digest}
+  defp hex(:error, digest), do: no_digest(digest)
+
+  defp no_digest(digest),
+    do: {:error, "#{quoted(digest)} is no digest: a store's is 32 lowercase hexadecimal digits"}
+
+  defp by_entered({:error, message}, _key, {_text, n}, acc), do: problem(acc, n, message)
+
+  defp by_entered({:ok, digest}, key, at, acc),
+    do: once(acc, key, at, &%{&1 | by: put_by(key, digest, by_of(&1.by))})
+
+  defp by_of(nil), do: %{resource: nil, programs: %{}}
+  defp by_of(by), do: by
+
+  defp put_by(:resource, digest, by), do: %{by | resource: digest}
+
+  defp put_by({:program, name}, digest, by),
+    do: %{by | programs: Map.put(by.programs, name, digest)}
 
   defp put_entry(:global, name, {:value, entry}, acc),
     do: %{acc | image: %{acc.image | globals: Map.put(acc.image.globals, name, entry)}}

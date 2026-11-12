@@ -306,7 +306,13 @@ defmodule Logex.Runner do
     the way to a value with its kind, `m1.boxes ctu`, and each value with its type,
     `m1.boxes.cv dint 41`, an array's elements in the elements' order, `m1.weights int[8]
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
-    `last` never; and since decision 355 its end line, `end 9 lines`, its count of lines,
+    `last` never; since decision 517 (c) (RV-21), after the configuration's line, the
+    program the runner ran as it wrote the store, `resource <digest>`, the MD5 of the
+    configuration's own lines, its tasks, globals, instances and connections as
+    `Logex.Configuration.Text.print/1` prints them with no line of their own, and
+    `program <type> <digest>` a program type, in name order, the MD5 of its source text,
+    `md5sum`'s of the file it was read from, and of each user block's after it where it
+    holds one; and since decision 355 its end line, `end 11 lines`, its count of lines,
     the header and the end line among them (the words decision 409's), so that a store
     cut short anywhere, at a line's end or inside a number, is refused at a fresh start,
     never read short. A store of `logex retain 1`, which has no end line, is read as
@@ -475,7 +481,18 @@ defmodule Logex.Runner do
     configuration's is, or since decision 355 one of `logex retain 2` cut short, its last
     line no end line or its end line's count not its lines', the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
-    device opened. `start: :cold` starts from none of it, a broken one among them, and
+    device opened. Since decision 517 (c) (RV-21) a warm fresh start lays the program the
+    store names as its writer beside the one it was given, and where they differ, the
+    configuration's own lines or a program type's text, a type only the store has or only
+    the start, warns of it in `status/1`'s `retain`, `warning`, one message naming the
+    store as the host spelled it and each that differs, so that the operator learns that
+    an edit tested or assembled online, which lives in the runner and its store and not in
+    the files, never reached the files the start was given (provisional, `PLAN.md`'s RV-21
+    questions 1 and 2: any difference warns, a deploy of changed files among them); it
+    changes nothing else, the image laid over the configuration by name and type as
+    decision 277 has it, and a store written before RV-21, which names no program, warns
+    of nothing and is read as before. A cold start, which lays nothing over, warns of
+    nothing. `start: :cold` starts from none of it, a broken one among them, and
     writes a new store at once; since decision 417 it reads the store first, as a warm
     start does, and one that stands and that a warm start would refuse, cut short or
     refused by any line of it or its image, it copies first, under the next of its
@@ -1087,7 +1104,7 @@ defmodule Logex.Runner do
     do:
       Writer.written(
         path,
-        fn -> Logex.Retain.encode(Runtime.retained(runtime), at) end,
+        fn -> Logex.Retain.encode(Runtime.retained(runtime), at, start.retain.by) end,
         start.write_limit
       )
 
@@ -1277,12 +1294,16 @@ defmodule Logex.Runner do
   first write, since decision 418 `<store>.dropped.<n>`, its own number, as the host
   spelled the store, nil where the start dropped nothing, and nil while the copy is owed,
   its write having failed, its reason then `failed` as any failed write's, until a write
-  over the store makes it first, `dropped` and `failed` telling the two nils apart; and
+  over the store makes it first, `dropped` and `failed` telling the two nils apart;
   since decision 391 `unknown`, where the last write over the store or its copy ran past
   its limit and may yet land, that file's path as the host spelled it, `failed` then nil,
   until a later write lands or fails, and since decision 440 always there, nil where no
   such write stands, as `copy` is since decision 412, so that a display that reads the
-  three keys finds each on a healthy plant.
+  three keys finds each on a healthy plant; and since decision 517 (c) (RV-21) `warning`,
+  always there, nil but where a warm fresh start found its store written by another
+  program than the one it was given, an edit tested or assembled online that never reached
+  the files among the causes, the message that says which differs (the moduledoc's "A
+  fresh start"), for the runner's life, as `dropped` is.
   """
   def status(runner), do: call(runner, :status)
 
@@ -2142,10 +2163,19 @@ defmodule Logex.Runner do
       |> Map.merge(timing(configuration))
       |> recounted(state.untimed)
       |> longest()
+      |> written_by(configuration)
 
     published(state, [{:edit, step, report}])
     replanned(state)
   end
+
+  # Decision 517 (c), RV-21: after every step the program the resource runs, as the next
+  # write of the store names it, so that a store written after a test or an assemble names
+  # the candidate and one after an untest or a cancel the original; with no store, none.
+  defp written_by(%{retain: nil} = state, _configuration), do: state
+
+  defp written_by(%{retain: retain} = state, configuration),
+    do: %{state | retain: %{retain | by: Logex.Retain.written_by(configuration)}}
 
   # Decision 396 (RV-11's review): the share's count is of the continuous task's rounds,
   # or with no untimed program of the periodic rounds whole, so a step that adds the
@@ -3062,7 +3092,16 @@ defmodule Logex.Runner do
   # then too (released/2); and read only by
   # the look, which names the runner's lateness where it comes more than decision 484's
   # cap after it; a trip, a stop and an edit's step leave it as it is, no look being made
-  # while tripped.
+  # while tripped. Decision 517 (c) (RV-21): the store's `by`, under `retain`, the program
+  # the resource runs as every write of the store names it, made at the start from the
+  # configuration given and at every edit's step from the configuration the step leaves
+  # running, a test's or an assemble's the candidate and an untest's or a cancel's the
+  # original, an accept leaving it; a round, a trip, a restart and a stop leave it as it
+  # is, each write, the period's, a trip's, a cold restart's and a stop's, naming it, so
+  # that the write after an assembled edit names the edited program and the next fresh
+  # start from files the edit never reached warns; and `warning`, under `retain` too, the
+  # fresh start's, which a round, a trip, a restart, an edit's step and a stop leave as it
+  # is, as `dropped` is.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -3974,7 +4013,7 @@ defmodule Logex.Runner do
   end
 
   defp stamped({:ok, at}, retain, made, state),
-    do: noted(store_written(retain, text_of(made, at), state.write_limit), at, state)
+    do: noted(store_written(retain, text_of(made, at, retain.by), state.write_limit), at, state)
 
   defp stamped(failed, _retain, _made, state), do: noted(failed, nil, state)
 
@@ -3994,8 +4033,8 @@ defmodule Logex.Runner do
   # cut off at it and reported, `{:retain, {:error, :timeout}}`, the host raising
   # `write_limit:`, where a trip's write of 131,072 retained timers kept the runner some
   # 15 s making its text before the write the limit bounds.
-  defp text_of({runtime, _ending}, at),
-    do: fn -> Logex.Retain.encode(Runtime.retained(runtime), at) end
+  defp text_of({runtime, _ending}, at, by),
+    do: fn -> Logex.Retain.encode(Runtime.retained(runtime), at, by) end
 
   # An event's write of the store, the owed copy first where one is (decision 360).
   defp store_written(%{owed: nil, at: path}, text, ms), do: Writer.written(path, text, ms)
@@ -4081,7 +4120,7 @@ defmodule Logex.Runner do
     do: %{state | retain: %{retain | period: period}}
 
   defp shown_store(nil), do: nil
-  defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed])
+  defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed, :by])
 
   # Decision 391: the file a write past its limit may yet land in, the store or its copy,
   # as the host spelled it, `failed` nil; since decision 440 (RV-16) a key of `retain`'s
@@ -4152,7 +4191,10 @@ defmodule Logex.Runner do
   defp taken_out(taker, runtime), do: {:image, taker.retained(runtime)}
 
   # A period whose wall clock gives no time is a write that fails, reported as one.
-  defp period_stamped({:ok, at}, image, state), do: handed(state, {at, image})
+  # Decision 517 (c), RV-21: the program the resource runs handed beside it, so that the
+  # period's write names it as every write does.
+  defp period_stamped({:ok, at}, image, state),
+    do: handed(state, {at, {image, state.retain.by}})
 
   # Decision 394 (RV-11): a wall clock no store's header holds, once the runner runs, a
   # write that fails reported as one, and a trip naming the clock, taken as the runner next
@@ -5521,7 +5563,8 @@ defmodule Logex.Runner do
   # its reason, `{:unread, reason}`, which no copy can be made of.
   defp store_read!({_given, at} = path, :cold, configuration, runtime, clock, ms),
     do:
-      {runtime, retained(path, nil, []), wall!(clock),
+      {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
+       wall!(clock),
        cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration)}
 
   defp store_read!({_given, at} = path, :warm, configuration, runtime, clock, ms),
@@ -5554,8 +5597,10 @@ defmodule Logex.Runner do
     ArgumentError -> true
   end
 
-  defp store_text!({:error, :enoent}, path, _configuration, runtime, clock),
-    do: {runtime, retained(path, nil, []), wall!(clock), nil}
+  defp store_text!({:error, :enoent}, path, configuration, runtime, clock),
+    do:
+      {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
+       wall!(clock), nil}
 
   defp store_text!({:error, {:timeout, ms}}, {path, _at}, _configuration, _runtime, _clock),
     do:
@@ -5572,10 +5617,15 @@ defmodule Logex.Runner do
         "#{Logex.Refusal.path(path)}: the store cannot be read: #{:file.format_error(reason)}"
       )
 
+  # Decision 517 (c), RV-21: the program the store names as its writer laid beside the one
+  # the start was given, a warning where they differ (`Logex.Retain.warning/3`), which
+  # changes nothing else: the image laid over the configuration as decision 277 has it.
   defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
-    {image, written_at} = Logex.Retain.decode!(text, {given, configuration.name})
+    {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
-    {runtime, retained(path, written_at, dropped), nil, copied(dropped, text)}
+    by = Logex.Retain.written_by(configuration)
+    warning = Logex.Retain.warning(stored, by, given)
+    {runtime, retained(path, written_at, dropped, by, warning), nil, copied(dropped, text)}
   end
 
   # Decision 360: the store's text kept for its copy where the start dropped anything,
@@ -5606,8 +5656,13 @@ defmodule Logex.Runner do
   # report's other keys are always there (dropped_copy/1); and, kept from status/1, the
   # path every read and write of the store is made through, resolved once at the start,
   # and since RV-5's review the copy of the store a fresh start owes, its text, where its
-  # own write failed, nil otherwise (decision 360, dropped_copy/1).
-  defp retained({path, at}, written_at, dropped),
+  # own write failed, nil otherwise (decision 360, dropped_copy/1). Decision 517 (c),
+  # RV-21: and `warning`, the fresh start's, nil where its store was written by the program
+  # it was given, by a program before RV-21 or by none, always there as decisions 412 and
+  # 440 have the report's keys; and, kept from status/1, `by`, the program the resource
+  # runs as every write of the store names it (`Logex.Retain.written_by/1`), made here
+  # from the configuration given and again at every edit's step (edited/6).
+  defp retained({path, at}, written_at, dropped, by, warning),
     do: %{
       path: path,
       at: at,
@@ -5616,7 +5671,9 @@ defmodule Logex.Runner do
       dropped: dropped,
       copy: nil,
       unknown: nil,
-      owed: nil
+      warning: warning,
+      owed: nil,
+      by: by
     }
 
   # The host's wall clock, to the second, for a store's header, `{:ok, at}`; since RV-4

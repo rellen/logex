@@ -336,8 +336,8 @@ defmodule Logex.Runner.Writer do
   def init(state), do: {:ok, state}
 
   @impl GenServer
-  def handle_cast({:write, at, taken, owed}, {path, runner} = state) do
-    result = copied_first(path, fn -> Logex.Retain.encode(image(taken), at) end, owed, nil)
+  def handle_cast({:write, at, {taken, by}, owed}, {path, runner} = state) do
+    result = copied_first(path, fn -> Logex.Retain.encode(image(taken), at, by) end, owed, nil)
     send(runner, {__MODULE__, self(), at, result})
     {:noreply, state}
   end

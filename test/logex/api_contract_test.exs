@@ -14885,6 +14885,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # configuration's changes and a store whose writes fail.
       life: life,
       shelf_stored: nil,
+      # Decision 517 (c) (RV-21): the configuration the resource ran at the last write, the
+      # program that write names.
+      shelf_by: nil,
       # M6-8's review: the trigger `g`'s last sample, the one its task's cycle took last.
       g_sample: 0,
       start: nil,
@@ -15461,6 +15464,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     standing = copies_standing(w)
     late = late_open()
     unreadable = start_unreadable(w)
+    warning = life_warning(w, config, text)
     {:ok, runner} = Runner.start_link(opts)
     reach(:start_forces_unread, unreadable)
     w = unread_started(unreadable, %{w | unread: unread_after(unreadable, w)})
@@ -15503,6 +15507,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
+    life_warned!(warning, w)
     w = copied_at(w, saved, standing, cold)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
@@ -16541,7 +16546,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :files_left_at_kill,
     # Decision 350: the trigger `g`'s rise kept back by a trip that stops its round before
     # `l`'s step, its last sample, a store's `trigger` line, as it was.
-    :rise_kept_by_trip
+    :rise_kept_by_trip,
+    # Decision 517 (c) (RV-21): a warm fresh start warned that its store was written by
+    # another program, a changed configuration's and one an edit's step left behind the
+    # last write, and one warned of nothing.
+    :life_warned,
+    :life_unwarned,
+    :life_warned_changed,
+    :life_warned_stepped
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -17108,7 +17120,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_store!(w) do
     text = on_disk(w)
     life_counts!(w, text)
-    life_body!(w.shelf_stored, text)
+    life_body!(w.shelf_stored, w.shelf_by, text)
     reach(:life_changed_store, w.change != nil)
   end
 
@@ -17119,24 +17131,114 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_counts!(_w, _text), do: :ok
 
-  defp life_body!(nil, _text), do: :ok
+  defp life_body!(nil, _by, _text), do: :ok
 
   # Since decision 355 the header `logex retain 2` and the last line the count of every
-  # line, the header, the configuration's line and the end line among them.
-  defp life_body!(image, text) do
+  # line, the header, the configuration's line and the end line among them; and since
+  # decision 517 (c) (RV-21) after the configuration's line the program that wrote it, the
+  # configuration the resource ran at the model's last write (`life_by/1`).
+  defp life_body!(image, by, text) do
     [_text, body, count] =
       Regex.run(
         ~r/\Alogex retain 2\nconfiguration plant written \S+\n(.*)end (\d+) lines\n\z/s,
         text
       )
 
-    assert body == life_body(image)
+    assert body == life_by(by) <> life_body(image)
     assert String.to_integer(count) == 3 + length(:binary.matches(body, "\n"))
 
     reach(
       :life_trigger_kept,
       body =~ ~r/\ntrigger g 1\n/ or String.starts_with?(body, "trigger g 1")
     )
+  end
+
+  # Decision 517 (c) (RV-21), restated: the program a configuration runs as a store names
+  # it, `resource` the MD5 of the configuration's own lines as its text prints them with
+  # no line of their own, and `program` a type, in name order, the MD5 of its source text
+  # and of each user block's after it, by name.
+  defp life_by(config),
+    do:
+      "resource #{life_md5(life_lines(config))}\n" <>
+        Enum.map_join(Enum.sort(config.programs), fn {name, program} ->
+          "program #{name} #{life_md5(life_texts(program))}\n"
+        end)
+
+  defp life_md5(text), do: Base.encode16(:erlang.md5(text), case: :lower)
+
+  defp life_lines(config),
+    do:
+      Logex.Configuration.Text.print(%{
+        config
+        | tasks: Enum.map(config.tasks, &%{&1 | line: nil}),
+          globals: Enum.map(config.globals, &%{&1 | line: nil}),
+          instances: Enum.map(config.instances, &%{&1 | line: nil}),
+          connections: Enum.map(config.connections, &%{&1 | line: nil})
+      })
+
+  defp life_texts(program),
+    do:
+      program.source <>
+        Enum.map_join(Enum.sort(program.blocks), fn {name, block} ->
+          "\n#{name}\n#{block.body.source}"
+        end)
+
+  # Decision 517 (c) (RV-21), restated: a warm fresh start whose store's last write was made
+  # by another configuration than the one it is given warns, naming the configuration's
+  # own lines where they differ and each program type whose text differs or that only one
+  # of the two has, in name order; a cold start, a start with no store or none written yet
+  # warns of nothing.
+  defp life_warning(%{life: false}, _config, _text), do: :unread
+  defp life_warning(%{store: nil}, _config, _text), do: :unread
+  defp life_warning(%{start: :cold}, _config, _text), do: nil
+  defp life_warning(_w, _config, nil), do: nil
+
+  defp life_warning(w, config, _text),
+    do:
+      life_warned(
+        life_lines_differ(life_lines(w.shelf_by) == life_lines(config)) ++
+          Enum.flat_map(
+            Enum.sort(Enum.uniq(Map.keys(w.shelf_by.programs) ++ Map.keys(config.programs))),
+            &life_type_differs(&1, life_text_of(w.shelf_by, &1), life_text_of(config, &1))
+          ),
+        w.store
+      )
+
+  defp life_lines_differ(true), do: []
+
+  defp life_lines_differ(false),
+    do: ["the configuration's tasks, globals, instances or connections differ"]
+
+  defp life_text_of(config, name), do: life_text_or_none(Map.get(config.programs, name))
+
+  defp life_text_or_none(nil), do: nil
+  defp life_text_or_none(program), do: life_texts(program)
+
+  defp life_type_differs(_name, same, same), do: []
+  defp life_type_differs(name, nil, _text), do: ["`#{name}` is not in the store"]
+  defp life_type_differs(name, _text, nil), do: ["`#{name}` is not in this start"]
+  defp life_type_differs(name, _stored, _text), do: ["`#{name}`'s text differs"]
+
+  defp life_warned([], _store), do: nil
+
+  defp life_warned(differences, store),
+    do:
+      "#{store}: the store was written by another program than the one this start was " <>
+        "given: #{Enum.join(differences, ", ")}; an edit tested or assembled online that " <>
+        "was never written to the files is not in this start, which runs the program it " <>
+        "was given with the store's retained values laid over it by name and type"
+
+  # The warning the start gave, as the model restated it, its reach by whether the start
+  # was given the walk's own configuration, an edit's step since the last write, or a
+  # changed one.
+  defp life_warned!(:unread, _w), do: :ok
+
+  defp life_warned!(expected, w) do
+    assert Runner.status(w.runner).retain.warning == expected
+    reach(:life_warned, expected != nil)
+    reach(:life_unwarned, expected == nil and w.stored != nil)
+    reach(:life_warned_changed, expected != nil and w.change != nil)
+    reach(:life_warned_stepped, expected != nil and w.change == nil)
   end
 
   defp life_body(image),
@@ -17197,7 +17299,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # retains it, and the shelf's array, timers and block's instances whole, each member but
   # a timer's `last`.
   defp shelved(%{life: false} = w, _rt), do: w
-  defp shelved(w, rt), do: %{w | shelf_stored: life_image(rt, w)}
+  defp shelved(w, rt), do: %{w | shelf_stored: life_image(rt, w), shelf_by: w.config}
 
   defp life_image(rt, w) do
     change = w.change || %{kt: nil, k1: nil, s1: nil}

@@ -2704,9 +2704,21 @@ add e i y",
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Runner.Device)
 
-      # M6-5: the store, internal (no moduledoc), which the runner alone reads and writes.
+      # M6-5: the store, internal (no moduledoc), which the runner alone reads and writes;
+      # since decision 517 (c) (RV-21) the program a store names, written and read, and the
+      # warning a fresh start gives where it is another than the start's.
       assert Enum.sort(Logex.Retain.__info__(:functions)) ==
-               [at: 1, decode!: 2, encode: 2, number: 1, written: 2]
+               [
+                 at: 1,
+                 decode!: 2,
+                 decoded!: 2,
+                 encode: 2,
+                 encode: 3,
+                 number: 1,
+                 warning: 3,
+                 written: 2,
+                 written_by: 1
+               ]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Retain)
     end
