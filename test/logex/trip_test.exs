@@ -2174,10 +2174,10 @@ defmodule Logex.TripTest do
     test "an accept's hold of the edit names accept" do
       candidate = configured(String.replace(@relayed, "interval 10", "interval 20"))
       %{runner: runner, clock: clock, ticks: ticks, panel: panel} = ticking()
-      {edits, runtime, elapsed} = GenServer.call(runner, :resource)
+      {edits, runtime, elapsed, false} = GenServer.call(runner, :resource)
       {:ok, edit, forecast} = Logex.Configuration.Edit.accept(runtime, candidate, elapsed)
       Agent.update(ticks, fn _ -> 3 end)
-      called(fn -> GenServer.call(runner, {:accept, edits, edit, forecast}) end, clock)
+      called(fn -> GenServer.call(runner, {:accept, edits, edit, forecast, nil}) end, clock)
       Agent.update(ticks, fn _ -> 0 end)
       assert {:watchdog, {:idle, took, :accept}} = Runner.status(runner).trip
       assert took > 2

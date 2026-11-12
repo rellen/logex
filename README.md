@@ -3444,7 +3444,8 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   connections as `Logex.Configuration.Text.print/1` prints them with no line numbers, so
   that a comment or an empty line changes nothing, and `program` a program type, the MD5
   of its text, what `md5sum tally.ld` prints, and of each user block's after it where it
-  holds one; each retained global;
+  holds one, a store with a `program` line and no `resource` line refused a line, as a
+  hand edit that took the one away and kept the other leaves it; each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
@@ -3458,7 +3459,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   number cut in its digits read as a smaller one; a hand edit that changes a line in
   place keeps the count, and one that adds or takes away a line changes it too. A store
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. The runner ends each line with LF
+  before, and the next write makes it `logex retain 2`. A store that names its program is
+  `logex retain 2` too, so a logex from before RV-21, put back over a store this one
+  wrote, refuses it at a warm start, its `resource` line told as one that comes before
+  any `instance` line, and starts it only cold, copying it first (provisional, `PLAN.md`'s
+  RV-21 question 4). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
@@ -4853,14 +4858,15 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
 `Logex.IO.Sim` is the one adapter logex ships ("What logex is not", below). A real
 device's adapter is the host's own, a module written to `Logex.IO`'s behaviour and bound
 to its device by name as a sim is (decision 517 (d)). `line_device.exs` writes one,
-`LineDevice`, for a card on a TCP socket that answers lines, `read` with its inputs,
-`0=1 2=0 7=0 8=0`, and `write 0=1 4=0` with `ok`, and runs `packing.logex`, above, on it,
-the card played by the script itself on the loopback interface; it presses start, drops
-the card's line and restarts:
+`LineDevice`, for a card on a TCP socket that answers lines, `read` with its sixteen
+inputs, `0=1 1=0 2=0 ...`, `write 0=1 4=0` with `ok` and `quit` with `bye`, and runs
+`packing.logex`, above, on it, the card played by the script itself on the loopback
+interface; it presses start, drops the card's line and restarts, garbles an answer and
+restarts, and stops:
 
 ```elixir
 # LineDevice: an adapter for a card on a TCP socket that speaks lines, `read` answered by
-# its inputs, `0=1 2=0`, and `write 0=1 4=0` answered `ok`.
+# its inputs, `0=1 2=0`, `write 0=1 4=0` answered `ok`, and `quit` answered `bye`.
 defmodule LineDevice do
   @behaviour Logex.IO
 
@@ -4873,26 +4879,37 @@ defmodule LineDevice do
   defp given(key, nil), do: ["LineDevice needs #{key}:, the card's address"]
   defp given(_key, _value), do: []
 
-  # In the device's process, from here on: the connection, made at once.
+  # In the device's process, from here on: the connection, made at once, and the inputs
+  # the configuration wires, which are all a read gives.
   @impl true
-  def init(_device, _points, opts),
-    do: opened(connected(%{host: opts[:host], port: opts[:port], socket: nil}))
+  def init(_device, points, opts) do
+    inputs = for %Logex.IO.Point{direction: :input, address: at} <- points, do: at
+    opened(connected(%{host: opts[:host], port: opts[:port], socket: nil, inputs: inputs}))
+  end
 
   defp opened({:ok, state}), do: {:ok, state}
   defp opened({:error, reason, _state}), do: {:error, reason}
 
-  # Every input, by address; a failure is given back, never raised, and the call after a
-  # lost line connects again.
+  # The wired inputs, by address, the card's other channels left out; a failure is given
+  # back, never raised, and the call after a lost line, or an answer that is no answer,
+  # connects again.
   @impl true
-  def read(state), do: asked(connected(state), "read", &values/1)
+  def read(state), do: asked(connected(state), "read", &values(&1, state.inputs))
 
   # Every output, by address, at each write: a snapshot.
   @impl true
   def write(values, state), do: asked(connected(state), "write " <> line(values), &ok/1)
 
+  # After the last write of zeros: the card told the controller is leaving, so that it
+  # frees its line at once, and the socket closed.
   @impl true
   def close(%{socket: nil}), do: :ok
-  def close(%{socket: socket}), do: :gen_tcp.close(socket)
+
+  def close(%{socket: socket}) do
+    _ = :gen_tcp.send(socket, "quit\n")
+    _ = :gen_tcp.recv(socket, 0, 1000)
+    :gen_tcp.close(socket)
+  end
 
   defp connected(%{socket: nil} = state),
     do: socket(:gen_tcp.connect(state.host, state.port, @connect, 1000), state)
@@ -4915,6 +4932,7 @@ defmodule LineDevice do
 
   defp given_back({:ok, values}, state), do: {:ok, values, state}
   defp given_back(:ok, state), do: {:ok, state}
+  defp given_back({:garbled, text}, state), do: lost({:garbled, text}, state)
   defp given_back({:error, reason}, state), do: {:error, reason, state}
 
   defp lost(reason, state) do
@@ -4922,8 +4940,15 @@ defmodule LineDevice do
     {:error, reason, %{state | socket: nil}}
   end
 
-  # `0=1 2.1=7` is %{[0] => 1, [2, 1] => 7}: an address is its location's fields.
-  defp values(text), do: {:ok, Map.new(String.split(text), &value/1)}
+  # `0=1 2.1=7` is %{[0] => 1, [2, 1] => 7}: an address is its location's fields. Only the
+  # wired inputs are given, since an address that is no point of the device is an I/O
+  # fault; any other line is no answer.
+  @answer ~r/\A(\d+(\.\d+)*=-?\d+( \d+(\.\d+)*=-?\d+)*)?\n\z/
+
+  defp values(text, inputs), do: parsed(Regex.match?(@answer, text), text, inputs)
+
+  defp parsed(true, text, inputs), do: {:ok, Map.take(Map.new(String.split(text), &value/1), inputs)}
+  defp parsed(false, text, _inputs), do: {:garbled, text}
 
   defp value(pair) do
     [at, value] = String.split(pair, "=")
@@ -4937,8 +4962,9 @@ defmodule LineDevice do
     do: Enum.map_join(Enum.sort(values), " ", fn {at, v} -> "#{Enum.join(at, ".")}=#{v}" end)
 end
 
-# The card, played by the script on the loopback interface: its inputs set, its outputs
-# read and its line dropped by calls.
+# The card, sixteen inputs of which the plant wires four, played by the script on the
+# loopback interface: its inputs set, its outputs read, its line dropped, an answer
+# garbled and its leaving controller told by calls.
 defmodule Card do
   use GenServer
 
@@ -4947,13 +4973,16 @@ defmodule Card do
   def set(card, at, value), do: GenServer.call(card, {:set, at, value})
   def outputs(card), do: GenServer.call(card, :outputs)
   def drop(card), do: GenServer.call(card, :drop)
+  def garble(card), do: GenServer.call(card, :garble)
+  def left?(card), do: GenServer.call(card, :left)
 
   @impl true
   def init(nil) do
     {:ok, listen} = :gen_tcp.listen(0, [:binary, packet: :line, active: false, ip: {127, 0, 0, 1}])
     card = self()
     spawn_link(fn -> accepting(listen, card) end)
-    {:ok, %{listen: listen, socket: nil, inputs: %{0 => 0, 2 => 0, 7 => 0, 8 => 0}, outputs: %{}}}
+    inputs = Map.new(0..15, &{&1, 0})
+    {:ok, %{listen: listen, socket: nil, inputs: inputs, outputs: %{}, garbled: false, left: false}}
   end
 
   defp accepting(listen, card) do
@@ -4967,6 +4996,8 @@ defmodule Card do
   def handle_call(:port, _from, state), do: {:reply, elem(:inet.port(state.listen), 1), state}
   def handle_call({:set, at, value}, _from, state), do: {:reply, :ok, put_in(state.inputs[at], value)}
   def handle_call(:outputs, _from, state), do: {:reply, state.outputs, state}
+  def handle_call(:garble, _from, state), do: {:reply, :ok, %{state | garbled: true}}
+  def handle_call(:left, _from, state), do: {:reply, state.left, state}
 
   def handle_call(:drop, _from, state) do
     :gen_tcp.close(state.socket)
@@ -4976,7 +5007,12 @@ defmodule Card do
   @impl true
   def handle_info({:accepted, socket}, state) do
     :ok = :inet.setopts(socket, active: true)
-    {:noreply, %{state | socket: socket}}
+    {:noreply, %{state | socket: socket, left: false}}
+  end
+
+  def handle_info({:tcp, socket, "read\n"}, %{garbled: true} = state) do
+    :gen_tcp.send(socket, "huh\n")
+    {:noreply, %{state | garbled: false}}
   end
 
   def handle_info({:tcp, socket, "read\n"}, state) do
@@ -4987,6 +5023,11 @@ defmodule Card do
   def handle_info({:tcp, socket, "write " <> line}, state) do
     :gen_tcp.send(socket, "ok\n")
     {:noreply, %{state | outputs: Map.new(String.split(line), &output/1)}}
+  end
+
+  def handle_info({:tcp, socket, "quit\n"}, state) do
+    :gen_tcp.send(socket, "bye\n")
+    {:noreply, %{state | left: true}}
   end
 
   def handle_info({:tcp_closed, _socket}, state), do: {:noreply, state}
@@ -5016,6 +5057,7 @@ end
 
 {:ok, runner} = Runner.start_link(opts.(host: {127, 0, 0, 1}, port: Card.port(card)))
 Card.set(card, 0, 1)                        # start pressed, read at the next poll, at 10
+Card.set(card, 12, 1)                       # a channel the plant does not wire, left out
 Manual.advance(clock, 10)
 IO.inspect(Card.outputs(card), label: "the card's outputs")
 Card.set(card, 0, 0)
@@ -5027,8 +5069,16 @@ IO.inspect(Card.outputs(card), label: "the card's outputs")
 
 :ok = Runner.restart(runner, :cold)         # the adapter connects again for the restart's read
 IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
-:ok = Runner.stop(runner)
+
+Card.garble(card)                           # the next read answered with no answer
+Manual.advance(clock, 10)
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+:ok = Runner.restart(runner, :cold)
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+
+:ok = Runner.stop(runner)                   # the last zeros, then close/1's quit
 IO.inspect(Card.outputs(card), label: "the card's outputs")
+IO.inspect(Card.left?(card), label: "the card told the controller left")
 ```
 
 ```
@@ -5038,19 +5088,30 @@ the card's outputs: %{0 => 1, 4 => 0}
 %{status: :tripped, trip: {:io, "panel", {:error, :closed}}}
 the card's outputs: %{0 => 0, 4 => 0}
 %{status: :running, trip: nil}
+%{status: :tripped, trip: {:io, "panel", {:error, {:garbled, "huh\n"}}}}
+%{status: :running, trip: nil}
 the card's outputs: %{0 => 0, 4 => 0}
+the card told the controller left: true
 ```
 
 - What every adapter does, in the device's process, which the runner starts for it:
   `init/3` opens the device, given its name, its points and the options it was bound
   with, and gives its state or `{:error, reason}`; `read/1` gives the inputs by address,
-  the location's fields, `panel.i.8`'s `[8]`, some or all of them; `write/2` is given
-  every output by address at each write, a snapshot; and `close/1`, optional, closes it
-  after the last write of zeros. A callback that fails gives `{:error, reason, state}`
-  and does not raise, its state given back, so that the next call can connect again, as
-  `LineDevice`'s do: the read that found the line dropped tripped the plant, `{:io,
-  "panel", {:error, :closed}}`, the trip's zeros went out on a new connection, and the
-  cold restart read the card through it.
+  the location's fields, `panel.i.8`'s `[8]`, some or all of the device's input points
+  and only those, since an address that is no point of the device is an I/O fault that
+  trips the plant (`Logex.IO`), so `LineDevice` keeps its input points' addresses from
+  `init/3` and gives those of the card's sixteen, channel 12, which no global is at,
+  left out; `write/2` is given every output by address at each write, a snapshot; and
+  `close/1`, optional, releases the device after the last write of zeros, as
+  `LineDevice`'s tells the card it is leaving, so that the card frees its line at once,
+  and closes the socket. A callback that fails gives `{:error, reason, state}` and does
+  not raise, whatever the device answers, its state given back, so that the next call
+  can connect again, as `LineDevice`'s do: the read that found the line dropped tripped
+  the plant, `{:io, "panel", {:error, :closed}}`, the trip's zeros went out on a new
+  connection, and the cold restart read the card through it; and a read answered with
+  no answer, `huh`, tripped it too, `{:error, {:garbled, "huh\n"}}`, its line dropped
+  so that the next call starts afresh, where a parse that raised would have tripped it
+  `{:raised, ...}` with nothing said of the card. (RV-21's review.)
 - `check/3`, optional, runs in the host's process as the runner starts, before anything
   opens, so a binding's mistake is an `ArgumentError` there, a line each, as above. An
   adapter whose device sends its changes implements `report/2`, optional, given each

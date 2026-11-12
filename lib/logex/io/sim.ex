@@ -19,9 +19,11 @@ defmodule Logex.IO.Sim do
   test sets the button the configuration writes `panel.i.0` as `"panel.i.0"` and reads the
   motor it writes `drive.q.0` as `%{"drive.q.0" => 1}`. A sim is opened by a runner when
   `init/3` is called from a runner's device, a `Logex.Runner.Device` process, and keeps
-  that device's name once the device closes it, between runners and after a stop; a test
-  that calls the callbacks itself opens no runner's, and its sim keeps the list
-  (provisional, `PLAN.md`'s RV-21 question 3):
+  that device's name once the device closes it, between runners and after a stop; an open
+  refused, another device holding the sim, names nothing, the sim keeping its holder's
+  name, its addresses and its writes' spelling (RV-21's review); a test that calls the
+  callbacks itself opens no runner's, and its sim keeps the list (provisional,
+  `PLAN.md`'s RV-21 question 3):
   - `set/3` and `set/2` take a list before a runner's open and the text after it; the
     other form is the test's mistake, its message naming the form the sim takes, and so
     is a text of an output, of another device or of no location in its one spelling,
@@ -29,11 +31,12 @@ defmodule Logex.IO.Sim do
     `inputs:`, is set as a list would be, read by no point;
   - `outputs/1` and `writes/1` give lists before and the text after, every write spelled
     by the device a runner last opened the sim for, those made before a reopen among
-    them, since a sim is one device's;
-  - `fail/3`'s `{:value, address, value}` is the adapter's own term, which the runner
-    names as the configuration writes it where it is a list of whole numbers (decision
-    399) and as the adapter gave it otherwise (decision 443), so it stays a list, or any
-    term a test means as an address no configuration writes;
+    them, since a sim is one device's, `writes/1` spelling them in the caller's process,
+    so that the sim's own work for it is the list's (RV-21's review);
+  - `fail/3`'s `{:value, address, value}` is the adapter's own term, a list of whole
+    numbers as before a runner's open, any other the test's mistake, which the runner
+    names as the configuration writes it (decision 399), so it stays a list, an address
+    no point reads among them;
   - the sim's own refusal of an address past `inputs:` names it in the form the test gave,
     `the sim has 8 inputs, at the addresses "card.i.0" to "card.i.7", got: "card.i.9"`
     after a runner's open (decision 443's refusal, in the new form).
@@ -169,7 +172,10 @@ defmodule Logex.IO.Sim do
   Every write, in order, each the values `write/2` was given, by address as `outputs/1`
   gives them.
   """
-  def writes(sim), do: GenServer.call(sim!(sim), :writes)
+  def writes(sim) do
+    {writes, named} = GenServer.call(sim!(sim), :writes)
+    each_spelled(writes, named)
+  end
 
   @doc "The number of reads made, failed ones among them."
   def reads(sim), do: GenServer.call(sim!(sim), :reads)
@@ -441,11 +447,12 @@ defmodule Logex.IO.Sim do
   def handle_call(:outputs, _from, state),
     do: {:reply, spelled(state.named, :output, state.outputs), state}
 
+  # RV-21's review (F5): the writes as they are kept and the name they are spelled by, the
+  # spelling the caller's (writes/1), so that a sim keeping 100,000 writes spends no more
+  # of its own time on writes/1 once a runner has opened it than before, a runner's device
+  # waiting on it meanwhile.
   def handle_call(:writes, _from, state),
-    do:
-      {:reply,
-       state.writes |> Enum.take(state.kept) |> Enum.reverse() |> each_spelled(state.named),
-       state}
+    do: {:reply, {Enum.reverse(Enum.take(state.writes, state.kept)), state.named}, state}
 
   def handle_call(:named, _from, state), do: {:reply, state.named, state}
 
@@ -495,7 +502,7 @@ defmodule Logex.IO.Sim do
     do: {:reply, match?({:holding, _from, _monitor}, state.hold), state}
 
   def handle_call({:opened, pid, device, runner}, _from, state),
-    do: opening(holder(state), pid, device, named(runner, device, state))
+    do: opening(holder(state), pid, {device, runner}, state)
 
   def handle_call(:holder, _from, state), do: {:reply, holder(state), state}
   def handle_call(:sizes, _from, state), do: {:reply, state.sizes, state}
@@ -578,7 +585,8 @@ defmodule Logex.IO.Sim do
     do: Map.new(values, fn {address, value} -> {at(named, direction, address), value} end)
 
   # Every write, each address spelled once for them all, so that a sim that keeps 100,000
-  # writes of a few outputs spells a few, not 100,000 of each.
+  # writes of a few outputs spells a few, not 100,000 of each; in the caller's process,
+  # writes/1's, since RV-21's review (F5).
   defp each_spelled(writes, nil), do: writes
 
   defp each_spelled(writes, named) do
@@ -586,12 +594,17 @@ defmodule Logex.IO.Sim do
     Enum.map(writes, &Map.new(&1, fn {address, value} -> {Map.fetch!(names, address), value} end))
   end
 
-  # Opened by the process that holds it, or by any once none does.
-  defp opening({holder, held}, pid, _device, state) when holder != pid,
+  # Opened by the process that holds it, or by any once none does; named for the device
+  # only where it is opened, since RV-21's review (F4), so that an open refused, another
+  # device holding the sim, leaves the name its holder's, where it renamed the sim for the
+  # device it refused.
+  defp opening({holder, held}, pid, _opener, state) when holder != pid,
     do: {:reply, {:held, holder, held}, state}
 
-  defp opening(_holder, pid, device, state),
-    do: {:reply, :ok, %{state | reporter: pid, device: device, closed: false}}
+  defp opening(_holder, pid, {device, runner}, state),
+    do:
+      {:reply, :ok,
+       named(runner, device, %{state | reporter: pid, device: device, closed: false})}
 
   # The device a sim reports to: the one that opened it, where it reports and an input
   # changed.

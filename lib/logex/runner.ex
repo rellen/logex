@@ -312,8 +312,12 @@ defmodule Logex.Runner do
     `Logex.Configuration.Text.print/1` prints them with no line of their own, and
     `program <type> <digest>` a program type, in name order, the MD5 of its source text,
     `md5sum`'s of the file it was read from, and of each user block's after it where it
-    holds one; and since decision 355 its end line, `end 11 lines`, its count of lines,
-    the header and the end line among them (the words decision 409's), so that a store
+    holds one, a `program` line with no `resource` line refused, and each read wherever
+    it stands, as a global's line is (RV-21's review); the header `logex retain 2` still,
+    so that a logex before RV-21 refuses such a store at a warm start (provisional,
+    `PLAN.md`'s RV-21 question 4); and since decision 355 its end line, `end 11 lines`,
+    its count of lines, the header and the end line among them (the words decision
+    409's), so that a store
     cut short anywhere, at a line's end or inside a number, is refused at a fresh start,
     never read short. A store of `logex retain 1`, which has no end line, is read as
     before. The runner writes each line ended by LF, and since decision 410 reads a line
@@ -1381,14 +1385,26 @@ defmodule Logex.Runner do
   caller.
   """
   def accept(runner, candidate) do
-    {edits, runtime, elapsed} = call(runner, :resource)
-    accepting(Edit.accept(runtime, candidate, elapsed), edits, runner, candidate)
+    {edits, runtime, elapsed, stored} = call(runner, :resource)
+    accepting(Edit.accept(runtime, candidate, elapsed), {edits, stored}, runner, candidate)
   end
 
-  defp accepting({:ok, edit, forecast}, edits, runner, candidate),
-    do: held(call(runner, {:accept, edits, edit, forecast}), runner, candidate)
+  # RV-21's review (F1): where the runner keeps a store, the candidate's program as the
+  # store names it (`Logex.Retain.written_by/1`), made here, in the caller, once, with
+  # accept's own work, and held with the edit, so that no step of it makes one in the
+  # runner's process; nil where it keeps none.
+  defp accepting({:ok, edit, forecast}, {edits, stored}, runner, candidate),
+    do:
+      held(
+        call(runner, {:accept, edits, edit, forecast, named_by(stored, candidate)}),
+        runner,
+        candidate
+      )
 
   defp accepting(refused, _edits, _runner, _candidate), do: refused
+
+  defp named_by(true, candidate), do: Logex.Retain.written_by(candidate)
+  defp named_by(false, _candidate), do: nil
 
   defp held(:stale, runner, candidate), do: accept(runner, candidate)
   defp held(reply, _runner, _candidate), do: reply
@@ -1978,7 +1994,7 @@ defmodule Logex.Runner do
   defp work_of({:unforce, _name}), do: :unforce
   defp work_of(:unforce_all), do: :unforce_all
   defp work_of(:resource), do: :accept
-  defp work_of({:accept, _edits, _edit, _forecast}), do: :accept
+  defp work_of({:accept, _edits, _edit, _forecast, _by}), do: :accept
   defp work_of({:edit, step}), do: {:edit, step}
   defp work_of(_other), do: :request
 
@@ -2036,14 +2052,15 @@ defmodule Logex.Runner do
   # handed it with the count of steps the runner has taken, which the edit it accepted is
   # held by only where no step came between, a second accept superseding the first
   # (decision 66); each other step is taken here, between two rounds, on the edit held.
-  defp serve(:resource, state), do: {{state.edits, state.runtime, step_time(state)}, state}
+  defp serve(:resource, state),
+    do: {{state.edits, state.runtime, step_time(state), state.retain != nil}, state}
 
-  defp serve({:accept, edits, edit, forecast}, %{edits: edits} = state) do
+  defp serve({:accept, edits, edit, forecast, by}, %{edits: edits} = state) do
     published(state, [{:edit, :accept, forecast}])
-    {{:ok, forecast}, %{state | edit: edit}}
+    {{:ok, forecast}, edit_named(%{state | edit: edit}, by)}
   end
 
-  defp serve({:accept, _edits, _edit, _forecast}, state), do: {:stale, state}
+  defp serve({:accept, _edits, _edit, _forecast, _by}, state), do: {:stale, state}
 
   defp serve({:edit, step}, %{edit: nil}),
     do:
@@ -2163,19 +2180,39 @@ defmodule Logex.Runner do
       |> Map.merge(timing(configuration))
       |> recounted(state.untimed)
       |> longest()
-      |> written_by(configuration)
+      |> written_by(step)
 
     published(state, [{:edit, step, report}])
     replanned(state)
   end
 
-  # Decision 517 (c), RV-21: after every step the program the resource runs, as the next
-  # write of the store names it, so that a store written after a test or an assemble names
-  # the candidate and one after an untest or a cancel the original; with no store, none.
-  defp written_by(%{retain: nil} = state, _configuration), do: state
+  # Decision 517 (c), RV-21: the program the resource runs as an edit's two, the original's
+  # the program the store names as the edit is accepted and the candidate's made in the
+  # caller with accept's work (accepting/4), held with the edit; with no store, none.
+  defp edit_named(%{retain: nil} = state, _by), do: state
 
-  defp written_by(%{retain: retain} = state, configuration),
-    do: %{state | retain: %{retain | by: Logex.Retain.written_by(configuration)}}
+  defp edit_named(%{retain: retain} = state, by),
+    do: %{state | retain: %{retain | edit_by: %{original: retain.by, candidate: by}}}
+
+  # After every step the program the resource runs, as the next write of the store names
+  # it, so that a store written after a test or an assemble names the candidate and one
+  # after an untest or a cancel the original, an assemble or a cancel ending the edit and
+  # its two; since RV-21's review (F1) the one of the two the step leaves running, where
+  # each step made the digest of the configuration it left running in the runner's
+  # process, a print and an MD5 of every line of it, the rounds waiting.
+  defp written_by(%{retain: nil} = state, _step), do: state
+
+  defp written_by(%{retain: %{edit_by: by} = retain} = state, step),
+    do: %{
+      state
+      | retain: %{retain | by: Map.fetch!(by, run_side(step)), edit_by: held_by(step, by)}
+    }
+
+  defp run_side(step) when step in [:test, :assemble], do: :candidate
+  defp run_side(step) when step in [:untest, :cancel], do: :original
+
+  defp held_by(step, by) when step in [:test, :untest], do: by
+  defp held_by(step, _by) when step in [:assemble, :cancel], do: nil
 
   # Decision 396 (RV-11's review): the share's count is of the continuous task's rounds,
   # or with no untimed program of the periodic rounds whole, so a step that adds the
@@ -3094,14 +3131,18 @@ defmodule Logex.Runner do
   # cap after it; a trip, a stop and an edit's step leave it as it is, no look being made
   # while tripped. Decision 517 (c) (RV-21): the store's `by`, under `retain`, the program
   # the resource runs as every write of the store names it, made at the start from the
-  # configuration given and at every edit's step from the configuration the step leaves
+  # configuration given and at every edit's step the one of the edit's two the step leaves
   # running, a test's or an assemble's the candidate and an untest's or a cancel's the
-  # original, an accept leaving it; a round, a trip, a restart and a stop leave it as it
-  # is, each write, the period's, a trip's, a cold restart's and a stop's, naming it, so
-  # that the write after an assembled edit names the edited program and the next fresh
-  # start from files the edit never reached warns; and `warning`, under `retain` too, the
-  # fresh start's, which a round, a trip, a restart, an edit's step and a stop leave as it
-  # is, as `dropped` is.
+  # original, an accept leaving it; and since RV-21's review (F1) `edit_by`, under
+  # `retain` too, the edit's two, `%{original: by, candidate: by}`, made at accept, the
+  # original's the `by` it found and the candidate's made in the caller with accept's work,
+  # kept by a test and an untest and ended, nil, by an assemble and a cancel, so that no
+  # step makes a digest in the runner's process; a round, a trip, a restart and a stop
+  # leave both as they are, each write, the period's, a trip's, a cold restart's and a
+  # stop's, naming `by`, so that the write after an assembled edit names the edited program
+  # and the next fresh start from files the edit never reached warns; and `warning`, under
+  # `retain` too, the fresh start's, which a round, a trip, a restart, an edit's step and a
+  # stop leave as it is, as `dropped` is.
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
@@ -4120,7 +4161,7 @@ defmodule Logex.Runner do
     do: %{state | retain: %{retain | period: period}}
 
   defp shown_store(nil), do: nil
-  defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed, :by])
+  defp shown_store(retain), do: Map.drop(retain, [:period, :at, :owed, :by, :edit_by])
 
   # Decision 391: the file a write past its limit may yet land in, the store or its copy,
   # as the host spelled it, `failed` nil; since decision 440 (RV-16) a key of `retain`'s
@@ -5673,7 +5714,8 @@ defmodule Logex.Runner do
       unknown: nil,
       warning: warning,
       owed: nil,
-      by: by
+      by: by,
+      edit_by: nil
     }
 
   # The host's wall clock, to the second, for a store's header, `{:ok, at}`; since RV-4

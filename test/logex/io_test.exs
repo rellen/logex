@@ -1688,6 +1688,12 @@ defmodule Logex.IOTest do
   """
 
   defp addressed(sim, device \\ "panel") do
+    {{:ok, runner}, clock} = addressing(sim, device)
+    {runner, clock}
+  end
+
+  # The runner's start for `device`, whatever it gives, and its clock.
+  defp addressing(sim, device) do
     {:ok, pass} =
       Logex.compile(
         "var_input a bool\nvar_input n dint\nvar_output q bool\nvar_output m dint\n" <>
@@ -1699,14 +1705,14 @@ defmodule Logex.IOTest do
     {:ok, config} = Logex.Configuration.compile("plant", text, %{"pass" => pass})
     {:ok, clock} = Manual.start_link()
 
-    {:ok, runner} =
+    started =
       Runner.start_link(
         configuration: config,
         io: %{device => {Sim, sim: sim}},
         clock: {Manual, clock}
       )
 
-    {runner, clock}
+    {started, clock}
   end
 
   describe "its addresses once a runner has opened it (decision 517 (e), RV-21)" do
@@ -1909,6 +1915,84 @@ defmodule Logex.IOTest do
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "a") == 0
       assert Runner.stop(runner) == :ok
+    end
+
+    # RV-21's review (F4): two runners' devices opening one sim at once, the second's look
+    # for a holder made before the first opens it and its open after: the second is
+    # refused, as a sim is one device's, and the sim keeps its holder's name, where it took
+    # the name of the device it refused and turned its holder's addresses away.
+    test "an open refused, another device holding the sim, leaves it named for its holder" do
+      sim = sim(reports: true)
+      test = self()
+
+      # As the sim takes the `drive` device's init/3 take, its last call before it opens,
+      # the test suspends that device before the sim answers it.
+      :ok =
+        :sys.install(
+          sim,
+          {fn
+             _once, {:in, {:"$gen_call", {pid, _tag}, {:take, :init}}}, _state ->
+               ref = make_ref()
+               send(test, {:take, pid, ref})
+               receive do: ({^ref, :go} -> :done)
+
+             once, _event, _state ->
+               once
+           end, :once}
+        )
+
+      spawn(fn -> send(test, {:drive, elem(addressing(sim, "drive"), 0)}) end)
+      assert_receive {:take, drive, ref}, 5000
+      true = :erlang.suspend_process(drive)
+      send(sim, {ref, :go})
+      {runner, clock} = addressed(sim)
+      true = :erlang.resume_process(drive)
+      assert_receive {:drive, refused}, 5000
+      assert {:error, {:io_init, "drive", {:raised, held}}} = refused
+
+      assert held =~
+               ~r/^the simulated device #{Regex.escape(inspect(sim))} is the device `panel`'s, opened by #PID<[0-9.]+>, which has not closed it: a sim is one device's$/
+
+      assert Sim.set(sim, "panel.i.0", 1) == :ok
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "a") == 1
+      assert Sim.outputs(sim) == %{"panel.q.0" => 1, "panel.q.1" => 0}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-21's review (F5): writes/1 of a sim a runner has opened spells its writes in the
+    # caller's process, so the sim's own work for it is what it is for a sim no runner has
+    # opened, the writes taken in order, where it spelled them in its own, a runner's
+    # device waiting on it meanwhile. The same writes in two sims, one named, one not.
+    test "writes/1 spells in the caller, the sim's own work the same named or not" do
+      named = sim(reports: true)
+      {runner, _clock} = addressed(named)
+      assert Runner.stop(runner) == :ok
+      unnamed = sim(reports: true)
+      write = %{[0] => 1, [1] => 7}
+
+      for sim <- [named, unnamed] do
+        state = opened(sim)
+        for _ <- 1..2000, do: {:ok, _} = Sim.write(write, state)
+        assert Sim.close(state) == :ok
+      end
+
+      assert List.last(Sim.writes(named)) == %{"panel.q.0" => 1, "panel.q.1" => 7}
+      assert List.last(Sim.writes(unnamed)) == write
+
+      own = fn sim ->
+        Enum.min(
+          for _ <- 1..5 do
+            {:reductions, before} = Process.info(sim, :reductions)
+            Sim.writes(sim)
+            {:reductions, now} = Process.info(sim, :reductions)
+            now - before
+          end
+        )
+      end
+
+      {named, unnamed} = {own.(named), own.(unnamed)}
+      assert named <= unnamed * 1.25 + 500, "named #{named}, unnamed #{unnamed}"
     end
   end
 end

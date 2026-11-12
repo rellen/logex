@@ -253,13 +253,13 @@ defmodule Logex.RunnerEditTest do
     test "an accept that another step overtook is done again against the resource as it " <>
            "is then" do
       %{runner: runner} = started()
-      {edits, runtime, _elapsed} = GenServer.call(runner, :resource)
+      {edits, runtime, _elapsed, false} = GenServer.call(runner, :resource)
       {:ok, edit, forecast} = Edit.accept(runtime, faster())
       {:ok, _} = Runner.accept(runner, faster())
       {:ok, _} = Runner.cancel(runner)
 
       # The edit accepted before the cancel is held by no runner: it is told stale.
-      assert GenServer.call(runner, {:accept, edits, edit, forecast}) == :stale
+      assert GenServer.call(runner, {:accept, edits, edit, forecast, nil}) == :stale
       assert Runner.status(runner).edit == nil
     end
 

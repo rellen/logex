@@ -27,7 +27,10 @@ defmodule Logex.Retain do
   # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
   # of each program type's text, in name order (written_by/1), which a warm fresh start
   # lays beside the program it is given and warns where they differ (warning/3), a store
-  # written before RV-21 naming none and read as it was; each retained global, `global
+  # written before RV-21 naming none and read as it was, and one that names a type and no
+  # resource refused (RV-21's review); the version still 2, so a logex before RV-21 refuses
+  # such a store at a warm start, its `resource` line told as one before any `instance`
+  # line (provisional, `PLAN.md`'s RV-21 question 4); each retained global, `global
   # <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
   # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
@@ -140,7 +143,12 @@ defmodule Logex.Retain do
   # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
   # comment or an empty line added to the file changes nothing and a task, a global, an
   # instance's type or task, a connection or their order does. The configuration's name is
-  # the store's second line already (decision 285).
+  # the store's second line already (decision 285). Since RV-21's review (F1) its elements
+  # are printed as one list, in the order `print/1` gives a configuration of no lines,
+  # its tasks, globals, instances and connections, the same text checked once where the
+  # configuration's printing checked each part and then the whole; and the runner makes
+  # it at a fresh start and, for an edit's candidate, at accept in the caller, never in
+  # its own process at a step (`Logex.Runner`'s state).
   def written_by(%Logex.Configuration{programs: programs} = configuration),
     do: %{
       resource: digest(Logex.Configuration.Text.print(unlined(configuration))),
@@ -148,13 +156,17 @@ defmodule Logex.Retain do
     }
 
   defp unlined(configuration),
-    do: %{
-      configuration
-      | tasks: Enum.map(configuration.tasks, &%{&1 | line: nil}),
-        globals: Enum.map(configuration.globals, &%{&1 | line: nil}),
-        instances: Enum.map(configuration.instances, &%{&1 | line: nil}),
-        connections: Enum.map(configuration.connections, &%{&1 | line: nil})
-    }
+    do:
+      for(
+        part <- [
+          configuration.tasks,
+          configuration.globals,
+          configuration.instances,
+          configuration.connections
+        ],
+        entry <- part,
+        do: %{entry | line: nil}
+      )
 
   defp texts(%Logex.Program{source: source, blocks: blocks} = program),
     do: [
@@ -336,8 +348,8 @@ defmodule Logex.Retain do
       ended: last != nil
     }
 
-    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2)
-    refused!(Enum.reverse(acc.problems) ++ ending, path)
+    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced()
+    refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending, path)
     {acc.image, written_at, acc.by}
   end
 
@@ -602,6 +614,12 @@ defmodule Logex.Retain do
   # Decision 517 (c), RV-21: the program that wrote the store, its resource's digest and a
   # program type's, each once, each digest 32 lowercase hexadecimal digits, as encode/3
   # writes it; a word that is no path, having no `.`, so that no instance's line is one.
+  # Each is read wherever it stands, as a global's and a trigger's line are, a line's kind
+  # its first word; and a type's name is any name, as an `instance` line's is, `ton` and
+  # `end` naming types a configuration may hold. Since RV-21's review (F7) a store that
+  # names a program type names its resource too (resourced/1), so that a store whose
+  # `resource` line a hand edit took away is refused, where it was read and warned that the
+  # configuration's lines differed, which nothing said.
   defp line(["resource", digest], at, acc), do: by_entered(digested(digest), :resource, at, acc)
 
   defp line(["program", name, digest], {_text, n} = at, acc),
@@ -656,6 +674,24 @@ defmodule Logex.Retain do
       )
 
   defp problem(acc, n, message), do: %{acc | problems: [{n, message} | acc.problems]}
+
+  # RV-21's review (F7): a store that names its writer's program types names its resource
+  # too, a problem of the first `program` line where it does not, as the reader read it.
+  # The line is the three words the reader took it as, each one space apart.
+  defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do
+    {name, n} = Enum.min_by(for({{:program, name}, n} <- acc.seen, do: {name, n}), &elem(&1, 1))
+
+    problem(
+      acc,
+      n,
+      "#{quoted("program #{name} #{Map.fetch!(programs, name)}")} names a program type of " <>
+        "the store's writer, and the store names no resource: a store that names the " <>
+        "program that wrote it gives `resource <digest>` straight after its configuration's " <>
+        "line, and then a `program <type> <digest>` a type"
+    )
+  end
+
+  defp resourced(acc), do: acc
 
   defp instance(name, program, {_text, n} = at, acc) do
     acc =

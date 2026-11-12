@@ -172,6 +172,29 @@ defmodule Logex.RetainStoreTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # RV-21's review (F1): a plant of `n` instances of `copy`, each wired twice.
+  @copy "var_input i bool\nvar_output o bool\nvar retain c dint\nxic i ote o\nxic i add c 1 c"
+
+  defp copies(n),
+    do:
+      "task fast interval 10 priority 1\nvar_global a bool at panel.i.0\n" <>
+        "var_global q bool at panel.q.0\n" <>
+        Enum.map_join(1..n, &"var_global g#{&1} bool\n") <>
+        Enum.map_join(1..n, &"program p#{&1} copy with fast\n  p#{&1}.i a\n  p#{&1}.o g#{&1}\n")
+
+  defp reductions_of(pid) do
+    {:reductions, n} = Process.info(pid, :reductions)
+    n
+  end
+
+  # The store's lines naming its writer as a trip writes them, the runner restarted warm.
+  defp tripped_named(rig, runner) do
+    tripped(rig, runner)
+    named = named(rig.store)
+    assert Runner.restart(runner, :warm) == :ok
+    named
+  end
+
   # Decision 517 (c) (RV-21): the MD5 of a text as `md5sum` prints it, restated.
   defp md5(text), do: Base.encode16(:erlang.md5(text), case: :lower)
 
@@ -2743,6 +2766,152 @@ defmodule Logex.RetainStoreTest do
       refute bare.(tally) == named.(tally).programs["tally"]
     end
 
+    # RV-21's review (F1): a second accept while a first candidate runs under test takes
+    # that candidate as its original, as the resource runs it: an untest of the second
+    # names the first, never the files', and a cancel then keeps naming it.
+    test "an accept that supersedes one under test names the candidate it found running",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      again = String.replace(@edited, "xic clear otu lamp", "xic clear xio eye otu lamp")
+      trip_named = fn -> tripped_named(rig, runner) end
+
+      assert {:ok, _} = Runner.accept(runner, edited())
+      assert {:ok, _} = Runner.test(runner)
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.accept(runner, configured(@plant, programs(again)))
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.test(runner)
+      assert trip_named.() == named_by(again)
+      assert {:ok, _} = Runner.untest(runner)
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.cancel(runner)
+      assert trip_named.() == named_by(@edited)
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@edited)
+    end
+
+    # RV-21's review (F1): no step of an edit makes the store's digest in the runner's
+    # process, the rounds waiting on it, where each made one of the whole configuration,
+    # a print and an MD5 of every line: the candidate's is made once, in the caller, with
+    # accept's own work, and only where the runner keeps a store. A plant of 150 copies of
+    # one program, each wired twice, its steps' cost in the runner's process with a store
+    # and without, and its accept's in the caller's, in the same run, the least of three.
+    test "an edit's steps make no digest in the runner, its accept one in the caller with a " <>
+           "store alone",
+         %{tmp_dir: dir} do
+      {:ok, copy} = Logex.compile(@copy, name: "copy")
+
+      {:ok, flipped} =
+        Logex.compile(String.replace(@copy, "xic i ote o", "xio i ote o"), name: "copy")
+
+      plant = copies(150)
+      original = configured(plant, %{"copy" => copy})
+      candidate = configured(plant, %{"copy" => flipped})
+
+      runs =
+        for run <- 1..3, store <- [nil, Path.join(dir, "copies#{run}.retain")] do
+          {:ok, clock} = Manual.start_link(now: @wall)
+          {:ok, panel} = Sim.start_link(clock: clock)
+
+          {:ok, runner} =
+            Runner.start_link(
+              configuration: original,
+              io: %{"panel" => {Sim, sim: panel}},
+              clock: {Manual, clock},
+              retain: store
+            )
+
+          caller = reductions_of(self())
+          own = reductions_of(runner)
+          {:ok, _} = Runner.accept(runner, candidate)
+          caller = reductions_of(self()) - caller
+
+          for step <- [:test, :untest, :test, :assemble],
+              do: assert({:ok, _} = apply(Runner, step, [runner]))
+
+          own = reductions_of(runner) - own
+          assert Runner.stop(runner) == :ok
+          {store != nil, {own, caller}}
+        end
+
+      least = fn stored, at ->
+        for({^stored, costs} <- runs, do: elem(costs, at)) |> Enum.min()
+      end
+
+      # Accept's own work, made here as accept/2 makes it in the caller.
+      direct =
+        Enum.min(
+          for _ <- 1..3 do
+            runtime = Runtime.start(original)
+            before = reductions_of(self())
+            {:ok, _edit, _forecast} = Configuration.Edit.accept(runtime, candidate)
+            reductions_of(self()) - before
+          end
+        )
+
+      {stored, unstored} = {least.(true, 0), least.(false, 0)}
+
+      assert stored <= unstored * 1.25 + 10_000,
+             "the steps with a store #{stored}, without #{unstored}"
+
+      caller = least.(false, 1)
+
+      assert caller <= direct * 1.25 + 10_000,
+             "accept with no store #{caller}, its work #{direct}"
+    end
+
+    # RV-21's review (F7): a store names its writer whole: a `program` line with no
+    # `resource` line, a hand edit's, is refused at the first `program` line, where it was
+    # read and warned that the configuration's lines differed, which nothing said; each
+    # line is read wherever it stands, as a global's is; and a type is any name, `ton` and
+    # `end` among them, which a configuration may hold.
+    test "a store that names its program types names its resource, each line read where " <>
+           "it stands" do
+      {:ok, ton} =
+        Logex.compile("var_input i bool\nvar retain c dint\nxic i add c 1 c", name: "ton")
+
+      {:ok, ending} =
+        Logex.compile("var_input i bool\nvar retain d dint\nxic i add d 1 d", name: "end")
+
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global a bool\n" <>
+            "program m1 ton with fast\n  m1.i a\nprogram m2 end with fast\n  m2.i a\n",
+          %{"ton" => ton, "end" => ending}
+        )
+
+      at = ~U[2026-10-30 14:00:00Z]
+      by = Retain.written_by(config)
+      text = Retain.encode(Runtime.retained(Runtime.start(config)), at, by)
+      [header, named, resource, program_end, program_ton | rest] = String.split(text, "\n")
+      assert program_end == "program end " <> by.programs["end"]
+      assert program_ton == "program ton " <> by.programs["ton"]
+      assert {_image, ^at, ^by} = Retain.decoded!(text, {"s", "plant"})
+      assert Retain.warning(by, by, "s") == nil
+
+      # Its lines moved among the values, before the end line, it reads the same.
+      {values, ["end " <> _ | _]} = Enum.split(rest, -2)
+      moved = Enum.join([header, named | values] ++ [program_ton, resource, program_end], "\n")
+      moved = moved <> "\nend #{length(String.split(text, "\n")) - 1} lines\n"
+      assert {_image, ^at, ^by} = Retain.decoded!(moved, {"s", "plant"})
+
+      # Its `resource` line taken away and the count made good, it is refused.
+      [_, count] = Regex.run(~r/end (\d+) lines\n\z/, text)
+
+      unresourced =
+        String.replace(text, resource <> "\n", "")
+        |> String.replace("end #{count} lines", "end #{String.to_integer(count) - 1} lines")
+
+      raises(
+        "s: line 3: `#{program_end}` names a program type of the store's writer, and the " <>
+          "store names no resource: a store that names the program that wrote it gives " <>
+          "`resource <digest>` straight after its configuration's line, and then a `program " <>
+          "<type> <digest>` a type",
+        fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
+      )
+    end
+
     # The two lines a hand edit may break, each refused as a line of the store, and a
     # program's line naming one type twice.
     test "a resource's or a program's line that is none is refused, a line each" do
@@ -4025,6 +4194,46 @@ defmodule Logex.RetainStoreTest do
       {encode_large, decode_large} = large
       assert encode_large < 5 * encode_small, inspect({small, large})
       assert decode_large < 5 * decode_small, inspect({small, large})
+    end
+
+    # RV-21's review (F11): and as the runner writes and reads it, naming its writer,
+    # encode/3 and decoded!/2, with written_by/1, which a fresh start and an accept make:
+    # n program types each with an instance, and 4n, each type a `program` line, each
+    # instance an `instance` line and a value's, the configuration two lines an instance.
+    test "encode/3, decoded!/2 and written_by/1 grow linearly in the store's lines" do
+      [small, large] =
+        for n <- [16, 64] do
+          programs =
+            Map.new(1..n, fn k ->
+              {:ok, program} =
+                Logex.compile("var_input i bool\nvar retain c dint\nxic i add c #{k} c",
+                  name: "p#{k}"
+                )
+
+              {"p#{k}", program}
+            end)
+
+          config =
+            configured(
+              "task fast interval 10 priority 1\nvar_global a bool\n" <>
+                Enum.map_join(1..n, &"program m#{&1} p#{&1} with fast\n  m#{&1}.i a\n"),
+              programs
+            )
+
+          image = Runtime.retained(Runtime.start(config))
+          by = Retain.written_by(config)
+          at = ~U[2026-10-30 14:00:00Z]
+          text = Retain.encode(image, at, by)
+          assert length(Regex.scan(~r/^program /m, text)) == n
+          assert Retain.decoded!(text, {"s", "plant"}) == {image, at, by}
+
+          {reductions(fn -> Retain.encode(image, at, by) end),
+           reductions(fn -> Retain.decoded!(text, {"s", "plant"}) end),
+           reductions(fn -> Retain.written_by(config) end)}
+        end
+
+      for at <- 0..2,
+          do: assert(elem(large, at) < 5 * elem(small, at), inspect({at, small, large}))
     end
   end
 
