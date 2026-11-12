@@ -561,7 +561,7 @@ defmodule Logex.IOTest do
     end
 
     # RV-17's review: a held reread whose process goes down, as the runner kills a device
-    # whose reread it gave up, spends the hold (provisional): nothing waits in it, a hold
+    # whose reread it gave up, spends the hold (decision 479): nothing waits in it, a hold
     # may be armed again, and a let-go holds nothing.
     test "a held reread whose process goes down spends the hold" do
       sim = sim()

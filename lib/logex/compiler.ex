@@ -2100,7 +2100,7 @@ defmodule Logex.Compiler do
 
   # A rung of empty groups alone holds no line in the parse tree, so it is cited at the
   # first line it can stand on, the one after the rung before it, a declaration among them
-  # (provisional). A marker says that a routine holds one, so a routine of none is not
+  # (decision 368). A marker says that a routine holds one, so a routine of none is not
   # walked again; then every rung of the parse tree whose `rung_line/1` is nil is cited,
   # each where it stands, and the markers are dropped, so the citing never depends on how
   # many markers there are (RV-2's review).

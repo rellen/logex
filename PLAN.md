@@ -25,7 +25,10 @@ decisions 437–447, for RV-16, which landed on 2026-11-07, and to RV-13's and R
 decisions 448–464, for RV-6 and RV-17, which landed on 2026-11-08 and 2026-11-07, and
 to RV-16's, RV-17's and RV-6's, decisions 465–488, for RV-18, which landed on
 2026-11-09, and to RV-18's, decisions 489–502, for RV-19, which landed on 2026-11-12,
-and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)*
+and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)* *(Since
+2026-11-12, RV-8: the paragraph is a short account of the review, what it found, what it
+changed and what its close puts to the maintainer, RV-8's questions, eight since RV-8's
+review.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -14181,6 +14184,268 @@ and CI checked; each fix with a test that fails when it is reverted.
   findings each closed or kept by a recorded reason, and the review's done sentence put to
   the maintainer. It also makes the marks RV-19 left provisional the numbers of decisions
   503–512, which took each as built.
+  **RV-8 as built** (2026-11-12, branch `rv8` over `56d4176`, three commits). RV-8 builds
+  no new rule: where it found a finding neither closed nor kept by a decision it says so
+  and puts it to the maintainer, and the one defect a recorded rule already settled it
+  fixed, with a test that fails when its fix is reverted. No test, walk or oracle was
+  deleted or weakened.
+
+  - *The ledger.* Each of the report's 203 rows traced to what became of it, through the
+    items' records above, decisions 347–512 and the commits, and each reviewer's probes,
+    copied out of their read-only directories with their paths rewritten, run again at
+    `56d4176`, 276 of them over 169 rows, one VM each. Of the 190 rows that survived: the
+    12 high and 35 medium all closed; of the 143 low, 130 closed, 5 kept (decisions 274,
+    377, 379 and 397, and RV-3's recorded reason for c5-tests-5's total form) and 8 open,
+    as RV-8's review corrected them (below), which found b7-premortem-project-4's CI half
+    and -7's real adapter taken up by no decision, where RV-8 had counted them kept by
+    decision 337 and by the backlog line the finding quotes; the 13 refuted kept by the
+    decisions their refutations cite. Every behavioural row closed was found fixed at the
+    tip by its probe, but a7-docs-9, open at the tip and closed here (below); a probe that
+    ran into a refusal the fix brought, a source refused that the probe meant to scan,
+    counts as fixed. The probes the code outgrew were run adapted, c1-runner-rounds-1's
+    waiting on a queue the runner keeps no more (a restart asked while it runs is refused
+    at once), c3-io-contract-10's calling `Manual.start/1` where the clock has
+    `start_link/1`, and the runner's logic probe matching `cycle/3`'s three results as
+    two, and a4-warnings-walk's cost probes with their arguments. The ledger's table, a
+    row a finding with its item, decision, test, commit and what its probe gave at the
+    tip, is kept with RV-8's working files; the report's new section "The close" gives its
+    counts, every high and medium a line, the lows by area, the PMI's items and both
+    pre-mortems'.
+  - *a7-docs-9, made true* (`clauses_test.exs`, "lib/ holds no case, cond, if or unless,
+    inline or in a block, but the parser's three"): the rule of decision 264 for `lib/`
+    was held by `instance_array_test.exs`'s reading of lines, which took an example in
+    `Logex.Runner`'s moduledoc for "the runner's one" and could see no conditional written
+    inline. `lib/` is now read as the walks are, from each file's syntax tree, and holds
+    the parser's three `case`s alone; `name/1` reads a function `lib/` names by `unquote`.
+    An inline `if` put into `lib/logex/real.ex` is red in the new test and green in the
+    old, whose assertion stands and whose comment now says what it reads; decision 264 has
+    a dated note.
+  - *The leftovers named for RV-8.* (1) c4-api-fuzz-11, the documented surface wider than
+    the host contract, which RV-3 left for this pass: at the tip 118 cases in 40 functions
+    of `Logex.Declarations`, `Logex.Program`, `Logex.Walk`, `Logex.FbType`,
+    `Logex.Warnings`, the parser's and lexer's readers and `Logex.Diagnostic.format/1`
+    raise other than a pinned `ArgumentError` given what logex never makes, 127 at the
+    review; no decision says where the host contract ends, so it is question 2. (2) The
+    runner walk that restates decision 461, which RV-6 left "RV-8's to judge": since
+    RV-6's review the walk holds a late wake and the hung device's turn after it
+    (`:hang_late_turn`), since RV-18 decision 484's cap (`:hang_late_cap`) and since
+    RV-19's review decision 490's lateness with its own `looked` (`:late_look_spared`,
+    `:late_look_names_device`, `:late_look_after_refresh`, `{:trip, :late}`), each a reach
+    the walk asserts: closed. (3) The marks RV-19 left on decisions 503–512, below. Every
+    other "RV-8" in the record names those marks or this item's place in the order.
+  - *What held, run again at the tip* at the sizes the review ran: the evaluator's fuzzer
+    and metamorphic relations, 1,200 programs each, and its IEC oracles; the front end's
+    180,000 mutated sources and its corpus, 200,000 random trees and 48,364 columns; the
+    lone-instance edit's walk, 380,000 steps; and the runner's 20,000 paths, 400 callers,
+    1e9 ms jump, 1,000 toggles and 11 walks. Nothing wrong, as at the review, and the
+    front end's fuzzers, which found the H5 crashes then, find none; "The close" gives
+    each.
+  - *README* (`readme_test.exs` runs every example): "What logex is not" checked claim by
+    claim against the tip, a jump back, a type IEC has and logex has not, an online edit
+    of a tag's type or an array's size and a force of an output each refused, the one
+    adapter `Logex.IO.Sim`, nothing compiled to BEAM, the store's events, its write limit
+    and the refusals of two runners of one VM and of a link: each true, nothing changed.
+    "What has landed"'s running list of every item and answer is a short account of the
+    review now, what it found, what changed and where the record is; and the module count,
+    forty, which RV-1 had made true, is forty-four, with `Logex.Refusal`,
+    `Logex.Runner.Paths`, `Logex.Runner.Writer` and `Logex.Name` since.
+  - *The marks.* Every "provisional" in `lib/`, the tests, README, `CONTRIBUTING.md` and
+    `docs/` judged against decisions 347–512. Made the decision's number, with a dated
+    note on each decision: RV-19's on 503 and 504 (the late runner's figure and gap), 506
+    and 507 (a stop's two failures and the `:forces` event), 508 to 510 (a restart that
+    waits) and 512 (a restart's read heard), in `Logex.Runner`'s moduledoc and comments,
+    README and `stalled_disk_test.exs`; and seven an earlier item left: 368 in
+    `Logex.Compiler`, 369 in `compile_total_test.exs`, 392 in `Logex.Retain`, 465 and 467
+    in `stalled_disk_test.exs`, 479 in `io_test.exs` and 481 in `CONTRIBUTING.md`.
+    Decisions 505 and 511 had no mark to make. Left provisional, each a question below:
+    decision 500's readings no question asked (an edit's step and a trip's notice during
+    a restart's wait; a stop's answer to it is decision 467's since RV-8's review), the
+    loader memo's linked directory, `Logex.IO.Sim`'s 100,000 writes, and the marks of
+    Milestones 5 and 6 that no decision of the review settles, some 85 in `lib/`, the
+    tests and README, 7 in `docs/naming.md` and some 30 in `docs/organisation.md`'s design
+    (§4). RV-8 had called `docs/`'s marks the record's history, which RV-8's review found
+    untrue of those two; §7's are the decisions' own readings and their history.
+  - *CLAUDE.md*: `clauses_test.exs`'s line names `lib/` among what it reads.
+  - *The gate*: `scripts/gate.sh` GATE-OK before each of the three commits, 2,939 tests
+    (11 doctests), the 2,938 of `56d4176` and the new one for `lib/`; no runner or
+    real-clock test is new, so `scripts/load.sh` was owed none. The commits change
+    comments, documents and one test file's tests alone, and the suite ran in 210 s, the
+    base's in 213 s.
+
+  *The review's done sentence, put to the maintainer.* "The review after Milestone 6 is
+  done when each of its 203 findings is closed by a fix a test holds or a document made
+  true, or kept by a decision or a recorded reason, and each item of the PMI and of both
+  pre-mortems likewise; when the fuzzers, walks and oracles the report credits hold at the
+  tip at the sizes they ran; when README's 'What logex is not' is true of the code and
+  every README example runs as shown; when no mark a decision of 347–512 settles still
+  says provisional; and when every finding and reading no decision settles has been put to
+  the maintainer and answered." The record held no done sentence for the review before
+  RV-8 wrote this one, so question 7 asks whether it is the right test as well as when
+  it is met. Clause by clause at the tip, as RV-8's review corrected it: the findings,
+  195 of 203 closed or kept and 8 open, questions 1 to 3 (not yet met); the PMI and the
+  pre-mortems, every item accounted for but the host's frictions, question 4, and the
+  open findings they share, question 3 (not yet met); what held, met (above, and at twice
+  the sizes in RV-8's review); README, met (`readme_test.exs` green, every claim of "What
+  logex is not" tried); the marks, met for decisions 347–512 since RV-8's review made
+  decision 467's number the mark of a stop's answer to a waiting restart, the readings
+  none settles questions 5 and 6; the questions, put here, with question 8 the defect
+  RV-8's review found and no decision settles, not yet answered. So the review is not
+  done until the answers come.
+
+  *Questions for the maintainer*, by what an operator or a maintainer sees:
+  1. *An edit's accept over a large array* (a4-warnings-walk-5). A sorter with `var lane_t
+     ton[4096]` and 40 rungs like `xic a move x lane_t[i].pre` takes some 0.55 s to accept
+     an online edit, and one of `ton[65536]` with 10 such rungs 4.3 s, the walk counting
+     each write through a tag subscript as a write of every element. The runner goes on
+     meanwhile, the accept being the host's in its own process (decision 141); the HMI
+     waits. (a) As built, the cost the host's, these figures given in the docs of
+     `Logex.Edit.accept/3` and `Logex.Runner.accept/2`; (b) a write through a tag
+     subscript kept as one write of the array's member, so an accept costs its writes, a
+     change to `Logex.Walk` and the edit's plans.
+  2. *Where the host contract ends* (c4-api-fuzz-11). `Logex.Program.initial_env(:x)` or
+     `Logex.Walk.writes(nil)` raises `FunctionClauseError`, `Logex.Diagnostic.format/1` of
+     a diagnostic whose message is a charlist a raw `ArgumentError`, where the convention
+     says a host's mistake is a pinned `ArgumentError`: 118 cases in 40 documented
+     functions that take what logex makes. (a) As built, the host contract the modules
+     README and CLAUDE.md name as the way in, `Logex`, `Logex.Runtime`, `Logex.Edit`,
+     `Logex.Configuration` and its edit, `Logex.Runner`, `Logex.IO` and
+     `Logex.Tag.new!/5`, each other module's moduledoc saying it takes logex's own data
+     unguarded; (b) those modules' helpers made `@doc false`, the documented surface the
+     contract; (c) every documented function guarded, each mistake a pinned message.
+  3. *The project's own findings* (b7-premortem-project-4, -6, -7, -9 and -10,
+     c6-pmi-10). One agent session writes the code and the record and one maintainer
+     answers in batches; `runner.ex` is some 5,700 lines and `api_contract_test.exs`
+     21,700; the version is still 0.1.0 with no changelog or tag across changes that alter
+     a running program's outputs; there are no typespecs or static analysis; a red CI run
+     on a box counter's change prints `Result: 2938/2939 passed` and names no test, CI
+     running a bare `mix test` where the commit gate reads ExUnit's manifest (decision 359;
+     337 left the flake noted and built nothing else); and there is still no adapter for a
+     real device, only `Logex.IO.Sim`, so no plant can run on logex. (a) Each left as it
+     is, the record saying so; (b) a release step before any publish, a version, a
+     changelog from §7's decisions and a tag; (c) typespecs on the host contract and
+     Dialyzer in CI; (d) the runner and the contract file split by concern; (e) CI naming
+     a red run's failed tests, its test step `scripts/gate.sh` or `scripts/failed.exs` run
+     after a red `mix test`; (f) a real adapter given a milestone, Modbus TCP or OPC UA
+     first. Any of (b) to (f) is an item of its own, (f) a milestone.
+  4. *The host's frictions the PMI met* (PMI). README's examples are not files a host can
+     copy; an edit's candidate configuration must be a file of the same name in a parallel
+     directory; an assembled edit lives in memory and the store, so a fresh start from the
+     files on disk runs the old program again; a test of a conveyor sets the panel's start
+     button with `Sim.set(panel, [0], 1)` and reads the motor with `Sim.outputs(drive)`
+     as `%{[0] => 1}`, where the configuration writes `panel.i.0` and `drive.q.0`
+     (decision 399 names a trip's address as the configuration writes it, and 443 keeps
+     the sim's own refusal naming the list a test gave, but neither takes up the sim's
+     calls); README shows no adapter. (a) As built, README saying each; (b) the examples
+     shipped as files, `examples/`; (c) a fresh start that finds the store written by
+     another program than the files' warns of it (the store names its configuration
+     already); (d) an adapter example in README beside `Logex.IO.Sim`; (e) the sim's
+     `set/3`, `outputs/1` and `writes/1` taking and giving the configuration's text once a
+     runner has opened it, the list kept for a sim no runner has opened.
+  5. *Decision 500's readings no question asked.* While a restart waits for a force's
+     write on a slow disk, an edit's step is served at once and the restart made on the
+     resource it leaves; and a trip's notice changes nothing, the line tripped already. A
+     stop meanwhile answers the waiting restart "the runner is not running", which since
+     RV-8's review cites decision 467, the restart a request behind the write, and is not
+     asked again. (a) As built; (b) an edit's step refused while a restart waits, the
+     operator told to wait for it.
+  6. *Marks no decision of the review settles.* The loader's memo takes a directory
+     reached through a link as another path, so a block reached both ways compiles twice
+     and its warnings come twice (RV-2); `Logex.IO.Sim` keeps its newest 100,000 writes
+     (RV-4, c6-pmi-7); and the marks of Milestones 5 and 6 stand, some 85 in `lib/`, the
+     tests and README, 7 in `docs/naming.md`, a bit-string conversion "defined for every
+     value" and a bool shifted as a one-bit pattern among them, and some 30 in
+     `docs/organisation.md`'s design, readings their milestones put to the maintainer or
+     left, which the review's decisions do not reach. (a) Each taken as built, a later
+     pass making the marks the readings' records; (b) a pass that traces each against
+     decisions 144–346 first, as RV-1 did for 343–345, and lists what none settles.
+  7. *The done sentence.* RV-8 wrote it; the record held none. (a) The sentence as
+     written, the review done once questions 1 to 6 and 8 are answered, whatever the
+     answers build being items of their own; (b) done now, the eight open findings carried
+     as backlog entries in §4; (c) not done until what the answers build has landed; (d)
+     another test, the maintainer's, a findings-only sentence, say, that leaves the marks
+     of Milestones 5 and 6 to a pass of their own.
+  8. *A long program's refusals* (found by RV-8's review). A sorter's program of some
+     280 KB in which a renamed tag leaves 2,000 rungs naming a tag that is gone takes 52 s
+     to refuse, each unknown name matched against 4,000 for a did-you-mean, where 1,000
+     such rungs take 5.9 s and the quadratic match alone would take some 24 s: the
+     program keeps its text (decision 54), so `Logex.compile/2` holds it over its work,
+     and with its refusals' messages it outgrows what a process may hold off its heap
+     before its garbage collections turn full ones, 7,096 of some 54,000. A configuration's
+     compile paid the same since RV-3 and no longer does (RV-8's review); a program's
+     always has, at the review's base too. The engineer waits; nothing runs meanwhile. (a)
+     As built, `Logex.compile/2`'s doc giving the cost; (b) the compile run with an
+     allowance sized to its text, in a process of its own whose result is handed back,
+     the host seeing the same result; (c) the did-you-mean bounded, offered for the first
+     hundred unknown names alone, or matched only against names of a like length, so a
+     refusal of many costs near its count, a program's and a configuration's alike.
+
+  **RV-8's review** (2026-11-12, at `d7f9d5a`, `scratchpad/rv/rev8work/`): the gate green,
+  2,939 tests, CI green on all three commits; a sample of 69 rows, every high and medium
+  and 22 lows, reproduced by 129 of the reviewers' probes, and the fuzzers at twice the
+  sizes above with new seeds, 360,000 front-end sources, 2,400 programs and 760,000 steps
+  of the lone edit's walk, nothing wrong. Eight findings, each fixed here with a test that
+  fails when it is reverted or with the documents made true (`96beba0`, and the commit
+  after it, this record's):
+  1. *b6-configuration-9's regression* (medium). 2,000 refused connections, the
+     reviewer's `p24` with its reductions counted, took 93 s where the review read 22 s,
+     reductions 12% higher, and the bisect named `a262819`, RV-3's commit the ledger cites
+     for the row's fix; the review ruled out a larger heap, the lex, the respelling's
+     regular expressions and the literals, and did not find the cause. Traced here: the
+     compile's garbage collections, 13,583 of them full against 17 at `a262819`'s parent,
+     each such collection copying the whole compile's heap. RV-3's respelling lexed the
+     source text again after the compile, so the text, a binary of some 340 KB off the
+     process's heap, was held over the whole compile; with the binaries of the refusals'
+     messages the binaries the process held passed its allowance (46,422 words), and while
+     they stayed past it each young collection that moved them back to the old heap was
+     followed by a full one, 13,583 of some 51,000; a larger minimum heap, the review's
+     trial, leaves that allowance as it was. `Logex.Configuration.Text.read_rounded/1`
+     now gives a fourth element, the text's literal tokens as it lexed them, from which
+     `compile/3` and `compile_file/1` respell a refusal, so the text is let go after its
+     read: 2,000 connections 19.8 s and 1,962 M reductions, 18 full collections, as at
+     the review. `configuration_test.exs`'s "compile/3 holds no source text over its
+     work, so a long one's collections stay young" counts, from the compile's own process
+     traced, the full collections of a text of 100 refused connections with and without a
+     comment of 400 KB: 5 and 5 over six runs; the fix reverted (`f1_revert.patch`), 379
+     against 6, red in the full suite there alone:
+
+     | patch | named files | full suite | failed tests |
+     |---|---|---|---|
+     | f1_revert.patch | rc=2 163/164 | rc=2 2939/2940 | configuration_test.exs (1) |
+
+     Not a real-clock or runner test: it counts collections, which no load moves.
+     `Logex.compile/2` pays the same where a program's text and its refusals pass the
+     allowance, as at the review's base, since a program keeps its text (decision 54):
+     question 8.
+  2. *Sim's addresses credited to decision 399* (low-medium). The PMI's friction of
+     `Logex.IO.Sim`'s list addresses was counted dealt with by 399, which changed how a
+     trip names an address alone, and question 4 left it out: now in question 4, and "The
+     close"'s PMI line says what 399 and 443 do and do not take up.
+  3. *Decision 467 settles a stop's answer to a waiting restart* (low). Decision 500's
+     landed note stated it as built and 467 answers every request behind the write as to
+     a runner not running; RV-8 left it provisional and asked it again in question 5.
+     `Logex.Runner`'s moduledoc, README and `stalled_disk_test.exs` now cite 467, question
+     5 asks only an edit's step and a trip's notice, README's list naming the trip's
+     notice as the moduledoc does, and 467 has a dated note.
+  4. *H2 cited decision 400* (low), the runner's file writes' limit, where a device's own
+     limit is 348's: "The close" and the ledger corrected.
+  5. *Two project findings counted kept* (low): b7-premortem-project-7, kept by the very
+     backlog line it quotes, and -4, whose CI half (CI's bare `mix test` names no failed
+     test) no decision takes up, 337 predating the finding. Both open, in question 3:
+     18 kept and 8 open.
+  6. *Live marks counted nowhere* (low): `docs/naming.md`'s seven, a binary transfer
+     "defined for every value" and a bool shifted as a one-bit pattern among them, and
+     some 30 in `docs/organisation.md`'s design, where RV-8 called `docs/`'s marks the
+     record's history: counted in question 6 and in "The close"'s pre-mortem 1.
+  7. *The ledger's evidence* (low): c3-io-contract-5 cited `probe_append.exs`, which
+     times Elixir's `++` and never calls logex; its evidence is `probe_many_changes_big`,
+     45.2 and 46.9 runner reductions a point at 32,768 and 65,535 points. c6-pmi-9 read
+     "true at the tip" where its module count was stale at `56d4176` until RV-8.
+  8. *Nits.* README's "What has landed" said nineteen items built the answers, RV-8
+     among them, which built none: eighteen, RV-8 the close. The done sentence was RV-8's
+     own, the record holding none, so question 7 asks whether it is the right test too.
+  The gate: `scripts/gate.sh` GATE-OK at `96beba0`, 2,940 tests (11 doctests), the
+  2,939 of `d7f9d5a` and the new one, and again at this record's commit.
+
 - **RV-9 — the answers to RV-1's and RV-2's questions** (decisions 363, 365, 367, 370, 371
   and 372). `wired.logex` shown in README as a file of its own; README's one fragment run
   in a setup the test makes; a rung that is a label alone accepted where a jump of its

@@ -6178,5 +6178,72 @@ defmodule Logex.ConfigurationTest do
       ratio = compile.(1000) / compile.(250)
       assert ratio < 5.03, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
     end
+
+    # RV-8's review (b6-configuration-9): compile/3 held its source text over the whole
+    # compile, to lex it again for the spellings its refusals quote, and a text of more than
+    # some 370 KB, with the messages of its refused lines, outgrew what binaries off its
+    # heap a process holds before its garbage collections turn full ones: 2,000 refused
+    # connections took 95 s and 13,583 full collections, against 22 s and 17 where the
+    # text was let go after its read. The same text with and without a comment of 400
+    # KB, its full collections counted as the compile's own process makes them: 5 and 5
+    # over six runs since, 379 against 6 with the text held; the bound twice the short
+    # text's and ten.
+    test "compile/3 holds no source text over its work, so a long one's collections stay young" do
+      programs = plant_programs()
+
+      text = fn comment ->
+        Enum.join(
+          [
+            "// " <> String.duplicate("x", comment)
+            | Enum.flat_map(1..100, fn i ->
+                ["var_global pb_#{i} bool", "program m#{i} motor", "m#{i}.start bp_#{i}"]
+              end)
+          ],
+          "\n"
+        )
+      end
+
+      full = fn text ->
+        compiler =
+          spawn(fn ->
+            receive do
+              {:compile, from, source} -> send(from, {:compiled, compiled(source, programs)})
+            end
+          end)
+
+        :erlang.trace(compiler, true, [:garbage_collection])
+        send(compiler, {:compile, self(), text})
+        full_collections(compiler, 0)
+      end
+
+      long = full.(text.(400 * 1024))
+      short = full.(text.(0))
+
+      assert long <= 2 * short + 10,
+             "#{long} full collections with the long text, #{short} without"
+    end
+  end
+
+  # The full collections a traced process makes until it has compiled, each of its trace
+  # messages taken, those still on their way when its result comes awaited.
+  defp full_collections(compiler, full) do
+    receive do
+      {:compiled, {:error, [_ | _]}} ->
+        delivered(compiler, :erlang.trace_delivered(compiler), full)
+
+      {:trace, ^compiler, :gc_major_start, _info} ->
+        full_collections(compiler, full + 1)
+
+      {:trace, ^compiler, _event, _info} ->
+        full_collections(compiler, full)
+    end
+  end
+
+  defp delivered(compiler, ref, full) do
+    receive do
+      {:trace_delivered, ^compiler, ^ref} -> full
+      {:trace, ^compiler, :gc_major_start, _info} -> delivered(compiler, ref, full + 1)
+      {:trace, ^compiler, _event, _info} -> delivered(compiler, ref, full)
+    end
   end
 end
