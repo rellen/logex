@@ -68,6 +68,11 @@ defmodule Logex.Parser do
   231): the parser takes each, and the compiler's slot refuses it. No text yet puts an
   element on a line other than its rung's, which line continuations will; the compiler
   already cites an element at its own line, ready for them, but nothing reaches that.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   @doc """

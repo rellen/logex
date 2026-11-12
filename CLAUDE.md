@@ -70,10 +70,14 @@ own documentation holds:
   gives a program, a block type or diagnostics; `signature/2` for the walks; `lowered?/1`
   and `recompiled/4` for a type given; and the loader behind `Logex`'s three, its own
   compile private.
+- `lib/logex/compiler/worker.ex` — `Logex.Compiler.Worker`, internal: the process of its
+  own each of `Logex`'s three compiles in, its allowance sized to its text, its result,
+  a mistake it raised and its reductions handed back to the caller.
 - `lib/logex/declarations.ex` — `Logex.Declarations`, declaration lines to tags: sections,
   qualifiers, the one table of elementary types (`table/0`) with Figure 11's widenings,
   IEC's generic classes, arrays' sizes and initial lists, `check/1` for a line and for
-  `Logex.Tag.new!/5`, reserved words and the type messages.
+  `Logex.Tag.new!/5`, reserved words, the type messages and the did-you-mean, a compile's
+  bounded.
 - `lib/logex/tag.ex` — `Logex.Tag`, a declared tag (name, section, type, initial value,
   qualifier, line), and `new!/4,5` to declare one from Elixir.
 - `lib/logex/fb_type.ex` — `Logex.FbType` and `Logex.FbType.Member`, a function block
@@ -157,9 +161,9 @@ Each file holds the rules of its part, a host mistake's message pinned whole; a 
 asserts its reach, and a growth test compares reductions at two sizes, never time.
 
 - `test/test_helper.exs` — starts ExUnit.
-- `test/logex_test.exs` — `Logex`'s API and loader, the loaders finishing while the VM's
-  file server is held, with the working directory deleted and with no home set, and
-  Milestones 1 to 3's done sentences from files on disk.
+- `test/logex_test.exs` — `Logex`'s API and loader, the compile's own process, the loaders
+  finishing while the VM's file server is held, with the working directory deleted and
+  with no home set, and Milestones 1 to 3's done sentences from files on disk.
 - `test/logex/lex_and_parse_test.exs` — the lexer and parser from source strings.
 - `test/logex/frontend_test.exs` — the front end's columns, newlines and messages.
 - `test/logex/frontend_golden_test.exs` — `tokenize/1` and `parse/1` held to the recorded
@@ -175,7 +179,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   gives, from source.
 - `test/logex/compile_total_test.exs` — every source text compiles or is told why: the
   name readers, a number's bounds, a rung that writes nothing, the compile's cost against
-  twins compiled in the same run, and a seeded mutation walk that nothing escapes.
+  twins compiled in the same run, a refusal of many names gone near their count in its
+  reductions, its words and its text, and a seeded mutation walk that nothing escapes.
 - `test/logex/review_lows_test.exs` — the compiler's, the warnings', the walk's and the
   loader's lesser fixes, each by its reviewer's label.
 - `test/logex/loading_test.exs` — the loader tests that read many files, run alone, `async:
@@ -189,7 +194,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   each item's Done-when and Milestones 5 and 6's done sentences, from text and files on
   disk, against oracles that know nothing of logex; its assertions name no IR tag.
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
-  surface and the checks made where a program is first handed in.
+  surface, every moduledoc held to the host contract, and the checks made where a program
+  is first handed in.
 - `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.

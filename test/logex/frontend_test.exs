@@ -614,6 +614,12 @@ defmodule Logex.FrontendTest do
       line = fn word, n -> lexed(String.duplicate("mov #{word} hh\n", n)) end
       per = fn word -> (line.(word, 200) - line.(word, 100)) / 100 end
 
+      # Every module a spelling's read calls loaded before any count: a process that loads
+      # one counts the loading's reductions, and the first count of a VM in which no test
+      # had lexed yet read 1.13 more a literal (RV-20's review, CI at `a312652`).
+      for word <- ["abcd", "1234", "-1234", "1_234", "16#04d2", "2#1_0011_0100_10", "-1_234"],
+          do: {:ok, _, _} = Compiler.tokenize("mov #{word} hh\n")
+
       assert per.("1234") <= per.("abcd") + 2
       assert per.("-1234") <= per.("abcd") + 2
 

@@ -38,6 +38,11 @@ defmodule Logex.Scan do
   A `cal` runs its block's body with this scan narrowed to its instance: `tags` and
   `units` and `reals` the body's own and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged. So
   every instruction of one routine, a program's rungs or one run of a body, sees one scan.
+
+  Outside the host contract, this module takes logex's own data unguarded, and anything
+  else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,
+  `Logex.Configuration` and `Logex.Configuration.Edit`, `Logex.Runner`, `Logex.IO` and
+  `Logex.Tag.new!/5` (decision 514).
   """
 
   @enforce_keys [:now, :first]

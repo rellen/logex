@@ -473,7 +473,7 @@ defmodule Logex.Configuration do
     raised(
       fields(fields) ++
         problems ++
-        Enum.reverse(lined) ++ mistakes ++ Enum.map(diagnostics, &Diagnostic.format/1),
+        Enum.reverse(lined) ++ mistakes ++ Enum.map(finished(diagnostics), &Diagnostic.format/1),
       %{config | warnings: warnings}
     )
   end
@@ -605,6 +605,21 @@ defmodule Logex.Configuration do
   config.programs) == {:ok, config}`, each element on its line, but for decision 227's
   warning of a real initial value written with more digits than its real keeps, which
   the printed text, the value the global holds, no longer earns.
+
+  **The cost that remains** (decision 520). It runs in the caller, and holds no source
+  text over its work (RV-8's review): it grows linearly in its text, and a refusal costs
+  near the count of its mistakes, since the first hundred names it cannot find, in line
+  order, a global, an instance, a task, a member or a program type, are each offered the
+  nearest of every name it could be, a name differing only in case always the one, and
+  every name after them none, looked for among nothing (provisional,
+  `Logex.Declarations`), as `Logex.compile/2`'s are, its loader's absent program types
+  counted with them; and each list of names a message would end with is given once, as
+  ever. So 1,000, 2,000 and 4,000 connections naming a renamed button among twice as many
+  globals are refused in some 0.5, 1.3 and 2.7 s, 52 to 215 million reductions, the
+  hundred matched against every global, where they took 4.7, 21 and 82 s, 480 to 7,931
+  million reductions, each name matched against every global (RV-20's review's figures,
+  the least of three on one machine). `compile_file/1` compiles its program types through
+  `Logex.compile_files/1`, in a process of its own.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
@@ -938,13 +953,11 @@ defmodule Logex.Configuration do
 
   defp beside({:error, _reason}), do: []
 
-  defp absent({type, line}, beside, names),
-    do:
-      diagnostic(
-        line,
-        "unknown program type `#{type}`: there is no `#{type}.ld` beside `#{beside}`" <>
-          Declarations.suggest(type, Enum.sort(names), & &1, "program types")
-      )
+  defp absent({type, line}, beside, names) do
+    unknown = "unknown program type `#{type}`: there is no `#{type}.ld` beside `#{beside}`"
+    sorted = fn -> Enum.sort(names) end
+    diagnostic(line, Declarations.offer(type, sorted, & &1, "program types", &(unknown <> &1)))
+  end
 
   # A block several program types hold gives each the same mistakes: each is listed once.
   defp with_theirs({:error, diagnostics}, theirs),
@@ -982,7 +995,7 @@ defmodule Logex.Configuration do
     {mistakes, diagnostics, warnings} = problems(config, declared, types)
 
     read_back(
-      checked(mistakes, Enum.sort_by(unread ++ diagnostics, &line_order/1)),
+      checked(mistakes, finished(Enum.sort_by(unread ++ diagnostics, &line_order/1))),
       config,
       warnings
     )
@@ -1005,7 +1018,7 @@ defmodule Logex.Configuration do
 
   defp checking(true, config) do
     {mistakes, diagnostics, _warnings} = problems(config, [], MapSet.new())
-    checked(mistakes, diagnostics)
+    checked(mistakes, finished(diagnostics))
   end
 
   defp checking(false, other),
@@ -1084,8 +1097,6 @@ defmodule Logex.Configuration do
       ]
       |> Enum.concat()
       |> Enum.sort_by(&line_order/1)
-      |> Enum.map_reduce(MapSet.new(), &listed_once/2)
-      |> elem(0)
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
      Enum.map(
@@ -1097,6 +1108,18 @@ defmodule Logex.Configuration do
      )
      |> Enum.sort_by(&line_order/1)}
   end
+
+  # Each message made, in line order: since decision 520 (RV-20) the did-you-means, the
+  # first hundred names the configuration cannot find offered a suggestion
+  # (`Logex.Declarations.offered/1`), and then the lists, each given once. A configuration
+  # compiled from a file's text makes them once its loader's diagnostics are among them,
+  # so one count runs over all.
+  defp finished(diagnostics),
+    do:
+      diagnostics
+      |> Declarations.offered()
+      |> Enum.map_reduce(MapSet.new(), &listed_once/2)
+      |> elem(0)
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
   # in line order that needs it, so that n instances of unknown program types among n
@@ -1982,7 +2005,7 @@ defmodule Logex.Configuration do
     do: element_named(Map.get(world.names, array), array, name)
 
   defp untriggered([_whole], name, world),
-    do: declare(Declarations.suggest(name, world.bools, & &1, "names"), :global, name, :bool)
+    do: Declarations.offer(name, world.bools, & &1, "names", &declare(&1, :global, name, :bool))
 
   defp triggered({:ok, %Global{name: name, type: :bool}}, _task), do: {[], MapSet.new([name])}
 
@@ -2002,9 +2025,17 @@ defmodule Logex.Configuration do
   defp triggered({:ok, %Global{name: name}}, _task), do: {[], MapSet.new([name])}
 
   defp triggered({:error, message}, task),
-    do: {[diagnostic(task.line, "the single of `#{task.name}`: " <> message)], MapSet.new()}
+    do:
+      {[diagnostic(task.line, prefixed("the single of `#{task.name}`: ", message))], MapSet.new()}
 
   defp triggered(:skip, _task), do: {[], MapSet.new()}
+
+  # Decision 520 (RV-20): a message whose did-you-mean waits for the last pass is prefixed
+  # as it will be made.
+  defp prefixed(prefix, {:offer, name, names, {shown, kind}, build}),
+    do: Declarations.offer(name, names, shown, kind, &(prefix <> build.(&1)))
+
+  defp prefixed(prefix, message), do: prefix <> message
 
   # M6-3 (decision 272): a located global takes no `retain`, so no output comes back on
   # from a kept value, and an input point is read again at every start.
@@ -2605,10 +2636,12 @@ defmodule Logex.Configuration do
     [
       diagnostic(
         instance.line,
-        types_hint(
-          unknown,
-          Declarations.suggest(instance.type, names, & &1, "program types"),
-          names
+        Declarations.offer(
+          instance.type,
+          names,
+          & &1,
+          "program types",
+          &types_hint(unknown, &1, names)
         )
       )
     ]
@@ -2647,10 +2680,12 @@ defmodule Logex.Configuration do
 
   # A name with `.` parts after `with` is no task's: a task's name has none, so it is told
   # that, never a global's or a member's reading (§4.7).
-  defp no_task(true, task, world),
-    do:
-      "no task `#{task}`: a task's name has no `.`, which is kept for a path and a location" <>
-        Declarations.suggest(task, world.tasks, & &1, "names")
+  defp no_task(true, task, world) do
+    dotted =
+      "no task `#{task}`: a task's name has no `.`, which is kept for a path and a location"
+
+    Declarations.offer(task, world.tasks, & &1, "names", &(dotted <> &1))
+  end
 
   defp no_task(false, task, world), do: no_named(:task, task, world, nil)
 
@@ -2750,18 +2785,20 @@ defmodule Logex.Configuration do
     do: subscripted(String.split(name, "[", parts: 2), name, world, type)
 
   defp unnamed(false, kind, name, world, type),
-    do: declare(Declarations.suggest(name, known(world, kind), & &1, "names"), kind, name, type)
+    do:
+      Declarations.offer(name, known(world, kind), & &1, "names", &declare(&1, kind, name, type))
 
   defp subscripted([array, _subscripts], name, world, _type),
     do: element_named(Map.get(world.names, array), array, name)
 
   defp subscripted([_whole], name, world, type),
     do:
-      declare(
-        Declarations.suggest(name, known(world, :global), & &1, "names"),
-        :global,
+      Declarations.offer(
         name,
-        type
+        known(world, :global),
+        & &1,
+        "names",
+        &declare(&1, :global, name, type)
       )
 
   defp element_named({:global, _line, %Global{type: type} = global}, array, name)
@@ -2963,14 +3000,17 @@ defmodule Logex.Configuration do
     names = for {name, %Tag{section: s}} <- program.tags, s in [:var_input, :var_output], do: name
     names = Enum.sort(names)
 
+    declares_no = declares_no(connection, program)
+
     problem(
       acc,
       connection,
-      connects(
-        declares_no(connection, program),
-        Declarations.suggest(connection.member, names, & &1, "members"),
+      Declarations.offer(
+        connection.member,
         names,
-        program.name
+        & &1,
+        "members",
+        &connects(declares_no, &1, names, program.name)
       )
     )
   end
@@ -3240,10 +3280,10 @@ defmodule Logex.Configuration do
   # M6-3's review: `retain[0]` at a far end is told `retain` is a keyword, as `retain` is.
   defp no_array(true, array, name, _world), do: keyword_named(array, name)
 
-  defp no_array(false, array, name, world),
-    do:
-      "no global `#{name}`: there is no global array `#{array}`" <>
-        Declarations.suggest(array, world.globals, & &1, "names")
+  defp no_array(false, array, name, world) do
+    no_array = "no global `#{name}`: there is no global array `#{array}`"
+    Declarations.offer(array, world.globals, & &1, "names", &(no_array <> &1))
+  end
 
   defp global_subscripts(subscripts, {global, etype, dims}, name) do
     tags = for {:tag, tag} <- subscripts, do: tag
@@ -3345,11 +3385,10 @@ defmodule Logex.Configuration do
        when binary_part(first, byte_size(first) - 1, 1) == "]",
        do: element_member(global_held(nil, first, type, world), name, first)
 
-  defp member_held(false, nil, :error, {name, first, _type}, world),
-    do:
-      {:error,
-       "`#{name}` names a member of an instance, and there is no instance `#{first}`" <>
-         Declarations.suggest(first, world.instances, & &1, "names")}
+  defp member_held(false, nil, :error, {name, first, _type}, world) do
+    no_instance = "`#{name}` names a member of an instance, and there is no instance `#{first}`"
+    {:error, Declarations.offer(first, world.instances, & &1, "names", &(no_instance <> &1))}
+  end
 
   defp element_member({:ok, %Global{} = element}, name, first) do
     [array | _] = String.split(first, "[")
@@ -3625,7 +3664,9 @@ defmodule Logex.Configuration do
   defp binding(tag, typed, world), do: bound_to(Map.get(world.names, tag.name), tag, typed, world)
 
   defp bound_to(nil, tag, {_writes, program}, world),
-    do: [no_global(Declarations.suggest(tag.name, world.globals, & &1, "names"), tag, program)]
+    do: [
+      Declarations.offer(tag.name, world.globals, & &1, "names", &no_global(&1, tag, program))
+    ]
 
   defp bound_to({:global, _line, :declared}, _tag, _typed, _world), do: []
 

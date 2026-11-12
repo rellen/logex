@@ -2417,7 +2417,7 @@ defmodule Logex.StalledDiskTest do
     end
 
     # Decision 500 (RV-19): an edit's step asked during the wait is served at once, the
-    # restart made on the resource it leaves (provisional); and a stop meanwhile answers
+    # restart made on the resource it leaves (decision 518); and a stop meanwhile answers
     # the restart as one to a runner that is not running, a request behind the write as
     # decision 467 has it, the stop waiting for the write to its limit and answering its
     # callers as it ends.
