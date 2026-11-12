@@ -609,12 +609,12 @@ defmodule Logex.Configuration do
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
     checked(configuration_name(name) ++ mistakes, [])
-    {read, rounded, spelled} = Text.read_rounded(source)
+    {read, rounded, spelled, literals} = Text.read_rounded(source)
 
     read
     |> compiled(name, programs, {nil, [], MapSet.new()})
     |> with_rounded(rounded)
-    |> respelled(spelled, source)
+    |> respelled(spelled, literals)
   end
 
   def compile(_name, source, _programs),
@@ -686,13 +686,15 @@ defmodule Logex.Configuration do
   # (b6-configuration-8) so is a value a message quotes whole, `` `65535` ``, that its own
   # line writes one way alone and other than as its plain text, `16#ffff`, as a program's
   # messages quote it (decision 202), but where it is quoted as another line's, "(line 3)".
-  defp respelled({:error, diagnostics}, spelled, source) do
+  # The literals are the text's literal tokens as `Text.read_rounded/1` lexed them, so that
+  # no compile holds its source text over its work (RV-8's review, b6-configuration-9).
+  defp respelled({:error, diagnostics}, spelled, literals) do
     stand_ins = Map.new(spelled, fn {_line, shown, spelling} -> {shown, spelling} end)
-    by_line = spelled_by_line(Logex.Lexer.tokenize(source))
+    by_line = spelled_by_line(literals)
     {:error, Enum.map(diagnostics, &respelled_at(&1, stand_ins, by_line))}
   end
 
-  defp respelled(compiled, _spelled, _source), do: compiled
+  defp respelled(compiled, _spelled, _literals), do: compiled
 
   # A stand-in's text may be quoted at another line, `m1.a[1]` told it is connected already
   # "by `m1.a` to `1.0e-400` (line 3)", or in a longer quote, "as in `m1.a[0] 1.0e-400`":
@@ -718,21 +720,12 @@ defmodule Logex.Configuration do
   # `1.5e1`, each value's text as a message quotes it, `65535` or `15.0`, to its spelling,
   # where the line writes that value one way alone; a stand-in of decision 237 is left out,
   # `Text.read_rounded/1`'s. Read only for a configuration that does not compile.
-  defp spelled_by_line({:ok, tokens, _end_line}),
+  defp spelled_by_line(literals),
     do:
-      tokens
-      |> Enum.filter(&(literal_token?(&1) and not Logex.Parser.underflowed?(&1)))
+      literals
+      |> Enum.reject(&Logex.Parser.underflowed?/1)
       |> Enum.group_by(&elem(elem(&1, 1), 0), &{shown_literal(&1), Logex.Parser.spelling(&1)})
       |> Map.new(fn {line, pairs} -> {line, spelled_once(pairs)} end)
-
-  defp spelled_by_line(_error), do: %{}
-
-  defp literal_token?({kind, _at, _value}) when kind in [:int_lit, :real_lit], do: true
-
-  defp literal_token?({kind, _at, _value, _spelling}) when kind in [:int_lit, :real_lit],
-    do: true
-
-  defp literal_token?(_token), do: false
 
   defp shown_literal(literal), do: shown_number(Logex.Parser.value(literal))
 
@@ -876,7 +869,7 @@ defmodule Logex.Configuration do
   # The program types the `program` lines name, each loaded once from beside the file,
   # through one memo, and what is cited at the line of each one's first instance.
   defp loaded_file(name, source, path) do
-    {read, rounded, spelled} = Text.read_rounded(source)
+    {read, rounded, spelled, literals} = Text.read_rounded(source)
     types = program_types(read)
     file = &Path.join(Path.dirname(path), &1 <> ".ld")
 
@@ -901,7 +894,7 @@ defmodule Logex.Configuration do
     read
     |> compiled(name, programs, loaded)
     |> with_rounded(rounded)
-    |> respelled(spelled, source)
+    |> respelled(spelled, literals)
     |> with_theirs(Enum.reverse(theirs))
   end
 

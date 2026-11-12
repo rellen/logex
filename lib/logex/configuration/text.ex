@@ -221,11 +221,23 @@ defmodule Logex.Configuration.Text do
   # as it refuses any real there, so that it is quoted as written, as a `.ld` line's is
   # (a3-compiler2-9's twin); and a line's qualifier is passed over, so that decision 227's
   # warning is given on `var_global retain sp real 16777217.0` too.
+  #
+  # Since RV-8's review its fourth element is the text's literal tokens as lexed, before
+  # any stand-in, which `Logex.Configuration.compile/3` reads to quote a refused line's
+  # literal as the line writes it (b6-configuration-8), so that the compile does not hold
+  # the source text to lex it again: a text of more than some 370 KB held through the
+  # compile, with the messages of its refused lines, outgrew the process's allowance of
+  # binaries off its heap and made each garbage collection a full one, 13,583 of them in
+  # 95 s against 17 in 22 s for 2,000 refused connections (b6-configuration-9).
   def read_rounded(source) when is_binary(source) do
-    {lexed, spelled} = stood_in(Logex.Lexer.tokenize(source))
+    tokenized = Logex.Lexer.tokenize(source)
+    {lexed, spelled} = stood_in(tokenized)
     {read, rounded} = lexed_rounded(lexed)
-    {read, rounded, spelled}
+    {read, rounded, spelled, literals(tokenized)}
   end
+
+  defp literals({:ok, tokens, _end_line}), do: Enum.filter(tokens, &is_literal/1)
+  defp literals(_error), do: []
 
   # Decision 237: each underflowed literal, in source order, stood in for by a subnormal
   # double, the next `k * 5.0e-324`, k from 7919, that no real literal of the text holds, so
