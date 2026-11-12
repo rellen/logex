@@ -423,7 +423,7 @@ choice, not an oversight to fix.
   under twice a figure recorded with it, the one bound of logex's against a figure alone,
   and wide on purpose; and, since RV-17's review, each stage a rung, the same over the
   motor's five rungs written sixteen times over less over eight, a rung of the forty
-  between, under twice a figure of its own (provisional). The whole stage is mostly what
+  between, under twice a figure of its own (decision 481). The whole stage is mostly what
   it pays a call and a tag, a scan's checks of its state or a round's devices, so a rung's
   work made four times as dear read 1.44 of a whole scan's figure; a rung's cost cancels
   those, the tags the same at both sizes, and holds a rung's lowering or evaluation at its

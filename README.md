@@ -4056,7 +4056,7 @@ closed: true
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's
   write that failed, `{:retain, {:error, reason}}`, and a forces file's write an orderly
   end made that failed, `{:forces, {:error, reason}}` (decision 493, below; a kind of its
-  own, by default, provisional); and `stop/2`
+  own, by default, decision 507); and `stop/2`
   writes every output 0 once and closes every device before it returns.
 - The share is served in slots, the conventional table's: at 20%, at the end of each
   4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. With no
@@ -4208,14 +4208,14 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   healthy card, where it named the first device in name order: one wake 211 ms late at
   idle 50 and a poll of 10, every card healthy, trips `{:watchdog, {:late, 221}}`, 221 ms
   after the round before it, `latest_wake` 211 (decision 490; `ms` the gap and not the
-  wake's lateness provisional). A hung card on such a look takes no 0 and is killed by
+  wake's lateness, decision 503). A hung card on such a look takes no 0 and is killed by
   the trip's 0, named in `unzeroed`, as any device that does not answer it. Where the
   late look finds a card heard within the cap, the hung card beside it is named, `{:io,
   device, :timeout}`, however late the look, and where it finds no card unheard past its
   limit nothing trips: one wake 201 ms late, every card heard at the poll before it, 201
   ms unheard, trips nothing (RV-19's review). The runner's own work past `idle:` trips
   first, named by that work (decision 482), a host's request no look, and a round's long
-  step is no lateness, the gap counted from the round's end (provisional). One that
+  step is no lateness, the gap counted from the round's end (decision 504). One that
   answers a round's write late is `:timeout` too, but answered, so the trip writes it its
   0, as it writes any device whose own callback failed and that still takes a write
   (decision 135). A device whose adapter does not take the trip's 0 is written its 0 again
@@ -4240,7 +4240,7 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   `open:`, so that a gateway that stayed up and answers its reread in 700 ms lets the
   restart through (decision 439), every device heard then, having answered that read, so
   the first round's look finds none unheard by the time the line stood tripped (RV-19's
-  review, provisional), restarts the resource, which keeps its
+  review, decision 512), restarts the resource, which keeps its
   input image and puts every other global back to its initial value, a warm restart
   keeping what each program marks `retain` (M6-2), and runs the first
   round at once, on what was read, the stopped time not counted: the conveyor stays off
@@ -4464,12 +4464,12 @@ stage: nil
   the HMI never shows a force that then vanishes (decision 468), the wait off the
   runner's path, `status/1` and every other request answered meanwhile, the line shown
   tripped and the force on its way in `forcing`, the restart made and answered once the
-  write has ended (decision 500), where the HMI's status froze for up to the write limit;
-  a force asked during the wait is written after the restart, a second restart asked
-  meanwhile finds the line running once the first is made and is refused, or, where the
-  first's own first round trips the line again, is refused by that trip, asked before
-  it (decision 354), an edit's step is served at once, and a stop answers the waiting
-  restart as a runner not running (provisional); a write the restart's wait cut leaves the set it held unknown through
+  write has ended (decisions 500 and 510), where the HMI's status froze for up to the
+  write limit; a force asked during the wait is written after the restart (decision
+  509), a second restart asked meanwhile finds the line running once the first is made
+  and is refused, or, where the first's own first round trips the line again, is refused
+  by that trip, asked before it (decisions 354 and 508), and, provisional, an edit's step
+  is served at once and a stop answers the waiting restart as a runner not running; a write the restart's wait cut leaves the set it held unknown through
   the restart's read, since it may still land, until a later write of the file ends
   (decision 502); and a stop waits for it to its limit and answers its caller (decision
   467). A write cut at its limit, at a stop as at any time, may still land once the disk
@@ -4507,8 +4507,8 @@ stage: nil
   supervisor's shutdown that answers no one among them, publishes the forces file's
   failure, `{:forces, {:error, reason}}`, as it publishes the store's, so an HMI or a log
   can warn that the next start may bring back an old force (decision 493; the list's
-  shape, and the event a kind of its own, sent by default and published by a stop as well
-  as answered, provisional); and a relative `forces:` whose working directory the disk does
+  shape decision 506, and the event a kind of its own, sent by default and published by a
+  stop as well as answered, decision 507); and a relative `forces:` whose working directory the disk does
   not answer for in time refuses the start, the file "cannot be located", as a relative
   store's does (decision 446), an absolute path the advice. A
   runner started without `forces:` takes no force, and an output point, or a value that

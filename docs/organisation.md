@@ -12643,12 +12643,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
 
      **Taken: as built (a)** (the maintainer, 2026-11-01); the parse tree keeps no group's
      line and the front end's golden record stays.
+     *(RV-8, 2026-11-12: the mark RV-2's review left on it, in `Logex.Compiler`'s comment
+     on a rung of empty groups alone, is this decision's number.)*
 
 369. **A number's length (the review after Milestone 6),** RV-2's question 3: a literal
      past 10,000 characters, or a real whose exponent is past 9,999, is a lex error at its
      column, and a store or forces file that holds one is refused at start.
 
      **Taken: 10,000 characters and 9,999 (a)** (the maintainer, 2026-11-01), as built.
+     *(RV-8, 2026-11-12: the mark RV-2 left on it, in `compile_total_test.exs`'s comment
+     on the bounds, is this decision's number.)*
 
 370. **An instance's size at every depth (the review after Milestone 6),** RV-2's question
      4: each array is held to 65,536 elements, but nothing counts through nested ones, so
@@ -12977,6 +12981,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: as built (a)** (the maintainer, 2026-11-01): at most one `.tmp` beside a
      store, and nothing piles up. *(RV-11, 2026-11-03: the mark RV-4 left on it is this
      decision's number.)*
+     *(RV-8, 2026-11-12: the mark RV-4 left on it, in `Logex.Retain.written/2`'s comment,
+     is this decision's number.)*
 
 393. **A card whose first read fails (the review after Milestone 6),** RV-4's question 5:
      an adapter opened whose first read fails is written 0 once and closed.
@@ -14062,6 +14068,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      point a joined change unforces reads its device again, the last change's or not; the
      changes joined at a cost in their number, not its square; and a trigger forced and
      unforced in one joined write makes no round (provisional, RV-18's questions).)*
+     *(RV-8, 2026-11-12: the mark RV-16 left on it, in `stalled_disk_test.exs`'s comment
+     on a second force behind a write, is this decision's number.)*
 
 466. **What `status/1` shows while a force is written (the review after Milestone 6),**
      RV-16's question 2 (decisions 437 and 440): only the forces in effect, so a force
@@ -14085,6 +14093,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the force's caller is told the truth. RV-18 makes the mark the decision's number.
      *(RV-18, 2026-11-09: the mark RV-16 left on it, the requests behind a write answered
      as to a runner not running, is this decision's number.)*
+     *(RV-8, 2026-11-12: the mark RV-16 left on it, in `stalled_disk_test.exs`'s comment
+     on a stop while a force's write is out, is this decision's number.)*
 
 468. **A force's write that lands after a restart (the review after Milestone 6),**
      RV-16's question 4, as its review restated it (decision 437): a restart reads the
@@ -14250,6 +14260,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision's number.
      *(RV-18, 2026-11-09: the marks RV-17 left on it, in `Logex.IO.Sim`, are this
      decision's number.)*
+     *(RV-8, 2026-11-12: the mark RV-17's review left on it, in `io_test.exs`'s comment on
+     a held reread whose process goes down, is this decision's number.)*
 
 480. **The loader test on a crowded machine (the review after Milestone 6),** RV-17's
      question 5 (decision 464): a loader test of 250 program types can pass ExUnit's 60 s
@@ -14273,6 +14285,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision's number.
      *(RV-18, 2026-11-09: the mark RV-17 left on it, in `ceiling_test.exs`, is this
      decision's number.)*
+     *(RV-8, 2026-11-12: the mark RV-17's review left on it, in `CONTRIBUTING.md`'s
+     ceilings, is this decision's number, RV-18 having made `ceiling_test.exs`'s.)*
 
 482. **What a trip names of the runner's own work (the review after Milestone 6),** RV-6's
      question 1 (decision 352): an idle watchdog's trip met in the runner's own work names
@@ -14614,6 +14628,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      figure the cap was weighed against, always past it, and `latest_wake` still shows the
      wake's own lateness, so the operator sees both; neither IEC 61131-3 nor Logix has
      such a figure. RV-8 makes the mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in `Logex.Runner`'s moduledoc and the
+     late look's comment, and in README's late runner passage, are this decision's
+     number.)*
 
 504. **Where a lateness's gap counts from (the review after Milestone 6),** RV-19's
      question 2 (decision 490): a lamp test's step runs 250 ms, its task's watchdog 1000,
@@ -14625,6 +14642,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      within its watchdog is not the computer late, and the operator is sent to the card;
      Logix runs its I/O apart from its logic, the closer to this reading. RV-8 makes the
      mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in `Logex.Runner`'s moduledoc and
+     README's late runner passage, are this decision's number.)*
 
 505. **A device's own watchdog the host's lateness ran out (the review after Milestone
      6),** RV-19's question 3 (decisions 125, 137 and 490): a loaded host holds the whole
@@ -14637,6 +14656,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      operator sees both; Logix logs a module's connection fault naming the module, and IEC
      61131-3 leaves a controller's I/O faults to the implementer. RV-8 makes the mark the
      decision's number.
+     *(RV-8, 2026-11-12: no mark of it stood in the code, the tests or README, the
+     question being the load failure's; nothing to make.)*
 
 506. **The shape of a stop's two failures (the review after Milestone 6),** RV-19's
      question 4 (decision 493): a stop on a disk that refuses both of its end's writes
@@ -14647,6 +14668,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: a list in the order written, as built (a)** (the maintainer, 2026-11-12):
      neither IEC 61131-3 nor Logix has an external forces file. RV-8 makes the mark the
      decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in `stop/2`'s doc, the comment on the
+     stop's answer and README's forcing passage, are this decision's number.)*
 
 507. **Who hears of the forces file's failure (the review after Milestone 6),** RV-19's
      question 5 (decision 493): every orderly end whose write of the forces file fails, a
@@ -14657,6 +14680,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      maintainer, 2026-11-12): an HMI or a log warns that the next start may bring back an
      old force even when the stop's caller is another program; neither IEC 61131-3 nor
      Logix has an external forces file. RV-8 makes the mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in `Logex.Runner`'s moduledoc,
+     `stop/2`'s and `subscribe/2`'s docs, and README's two passages, are this decision's
+     number.)*
 
 508. **A second restart asked while one waits (the review after Milestone 6),** RV-19's
      question 6 (decisions 133, 354 and 500): an operator presses restart twice on a
@@ -14670,6 +14696,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      press never clears a trip it was asked before, as decision 354 has it, and one
      restart is made for one tripped line; Logix's reading is unverified. RV-8 makes the
      mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in `Logex.Runner`'s moduledoc, the
+     restart's wait's comment and README's forcing passage, and `stalled_disk_test.exs`'s
+     comment, are this decision's number.)*
 
 509. **A force asked while a restart waits (the review after Milestone 6),** RV-19's
      question 7 (decisions 465 and 500): the HMI forces a box counter's `eye` while a
@@ -14681,6 +14710,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      restart starts on the file as the write it waited for left it, and a later force
      cannot keep putting the restart off; Logix applies forces in controller memory at
      once. RV-8 makes the mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19 left on it, in the same places as decision 508's,
+     are this decision's number.)*
 
 510. **A restart waiting, as `status/1` shows it (the review after Milestone 6),** RV-19's
      question 8 (decision 500): while a restart waits for a force's write, `status/1`
@@ -14691,6 +14722,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      2026-11-12): no key of its own for a restart on its way; Logix keeps answering status
      during a mode change, and whether it shows the change pending is unverified. RV-8
      makes the mark the decision's number.
+     *(RV-8, 2026-11-12: the moduledoc's and README's passage on the wait cites it; RV-19
+     had marked it with the readings decision 500 left.)*
 
 511. **The short heard-at-each-poll test's status read (the review after Milestone 6),**
      RV-19's question 9 (RV-19's review, finding 7): the test that holds a box counter's
@@ -14702,6 +14735,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: both checks kept, as it stands (a)** (the maintainer, 2026-11-12): nothing
      is taken out of the test; it bears on no operator's view, and neither IEC 61131-3 nor
      Logix has a bearing. RV-8 makes the mark the decision's number.
+     *(RV-8, 2026-11-12: no mark of it stood in the code or README, the test's two checks
+     kept as they stand; nothing to make.)*
 
 512. **A restart's read as a device's word (the review after Milestone 6),** RV-19's
      question 10 (RV-19's review, finding 5): a conveyor trips when its panel's read fails;
@@ -14715,6 +14750,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      :timeout}`. A Logix module's connection, once opened again, times its RPI from that
      opening, the closer reading (unverified); IEC 61131-3 leaves a controller's I/O faults
      to the implementer. RV-8 makes the mark the decision's number.
+     *(RV-8, 2026-11-12: the marks RV-19's review left on it, in `restart/2`'s doc, the
+     release's comment and README's restart passage, are this decision's number.)*
 
 ---
 

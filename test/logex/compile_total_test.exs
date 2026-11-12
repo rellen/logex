@@ -926,7 +926,7 @@ defmodule Logex.CompileTotalTest do
       assert message =~ "names bit #{digits} of `w`"
     end
 
-    # Provisional: a number is at most 10,000 characters, an exponent at most 9,999.
+    # Decision 369: a number is at most 10,000 characters, an exponent at most 9,999.
     test "a literal of more than 10,000 characters is a located lex error, quoted by its start" do
       assert Logex.Lexer.longest_number() == 10_000
 

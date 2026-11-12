@@ -160,7 +160,7 @@ defmodule Logex.Retain do
   # removed, never written through; a directory there cannot be, and the write fails,
   # `:eisdir`. Only the rename, and a delete where something stands, go through the file
   # server, whose queue every other process's file calls share; the rest is raw.
-  # (Provisional: one name, its file new each write, where the review suggested a unique
+  # (Decision 392: one name, its file new each write, where the review suggested a unique
   # name a write, which would leave each killed write's file beside the store and change
   # the name decision 325 and the documents give.)
   def written(path, text) when is_binary(path) do

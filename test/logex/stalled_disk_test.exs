@@ -1746,8 +1746,8 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # The record is silent on a second force while one's write is out: it waits behind it,
-    # in order, its write built on the set the first left (provisional).
+    # A second force while one's write is out waits behind it, in order, its write built
+    # on the set the first left (decision 465).
     test "a force asked while another's write is out waits behind it, its write built on " <>
            "the set the first left",
          %{tmp_dir: dir} do
@@ -1930,7 +1930,7 @@ defmodule Logex.StalledDiskTest do
 
     # A stop made while a force's write is out waits for it, to its own limit, and answers
     # its caller as it ends, the files given up only after it (decision 356); a force that
-    # waited behind it is answered as to a runner that is not running (provisional).
+    # waited behind it is answered as to a runner that is not running (decision 467).
     test "a stop made while it is out waits for it and answers its caller, every output 0",
          %{tmp_dir: dir} do
       rig = rig(dir, retain: nil, retain_period: nil, write_limit: @out)
@@ -2321,9 +2321,9 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # Decision 500 (RV-19), the readings the record leaves (provisional): a force asked
-    # during the wait joins the next write, as decision 465 has every request behind a
-    # write, and the restart reads the file the write it waited for left, the force
+    # Decision 500 (RV-19), the readings decisions 509 and 508 take as built: a force
+    # asked during the wait joins the next write, as decision 465 has every request behind
+    # a write, and the restart reads the file the write it waited for left, the force
     # written after it; and a second restart asked meanwhile is taken once the first is
     # made, as it was when the wait was the runner's own, and finds the runner running,
     # refused as decision 133 refuses any.
