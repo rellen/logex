@@ -172,7 +172,7 @@ defmodule Logex.RetainStoreTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
-  # RV-21's review (F1): a plant of `n` instances of `copy`, each wired twice.
+  # RV-21's review: a plant of `n` instances of `copy`, each wired twice.
   @copy "var_input i bool\nvar_output o bool\nvar retain c dint\nxic i ote o\nxic i add c 1 c"
 
   defp copies(n),
@@ -2766,7 +2766,7 @@ defmodule Logex.RetainStoreTest do
       refute bare.(tally) == named.(tally).programs["tally"]
     end
 
-    # RV-21's review (F1): a second accept while a first candidate runs under test takes
+    # RV-21's review: a second accept while a first candidate runs under test takes
     # that candidate as its original, as the resource runs it: an untest of the second
     # names the first, never the files', and a cancel then keeps naming it.
     test "an accept that supersedes one under test names the candidate it found running",
@@ -2791,7 +2791,7 @@ defmodule Logex.RetainStoreTest do
       assert named(rig.store) == named_by(@edited)
     end
 
-    # RV-21's review (F1): no step of an edit makes the store's digest in the runner's
+    # RV-21's review: no step of an edit makes the store's digest in the runner's
     # process, the rounds waiting on it, where each made one of the whole configuration,
     # a print and an MD5 of every line: the candidate's is made once, in the caller, with
     # accept's own work, and only where the runner keeps a store. A plant of 150 copies of
@@ -2861,7 +2861,7 @@ defmodule Logex.RetainStoreTest do
              "accept with no store #{caller}, its work #{direct}"
     end
 
-    # RV-21's review (F7): a store names its writer whole: a `program` line with no
+    # RV-21's review: a store names its writer whole: a `program` line with no
     # `resource` line, a hand edit's, is refused at the first `program` line, where it was
     # read and warned that the configuration's lines differed, which nothing said; each
     # line is read wherever it stands, as a global's is; and a type is any name, `ton` and
@@ -4196,7 +4196,7 @@ defmodule Logex.RetainStoreTest do
       assert decode_large < 5 * decode_small, inspect({small, large})
     end
 
-    # RV-21's review (F11): and as the runner writes and reads it, naming its writer,
+    # RV-21's review: and as the runner writes and reads it, naming its writer,
     # encode/3 and decoded!/2, with written_by/1, which a fresh start and an accept make:
     # n program types each with an instance, and 4n, each type a `program` line, each
     # instance an `instance` line and a value's, the configuration two lines an instance.

@@ -143,7 +143,7 @@ defmodule Logex.Retain do
   # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
   # comment or an empty line added to the file changes nothing and a task, a global, an
   # instance's type or task, a connection or their order does. The configuration's name is
-  # the store's second line already (decision 285). Since RV-21's review (F1) its elements
+  # the store's second line already (decision 285). Since RV-21's review its elements
   # are printed as one list, in the order `print/1` gives a configuration of no lines,
   # its tasks, globals, instances and connections, the same text checked once where the
   # configuration's printing checked each part and then the whole; and the runner makes
@@ -616,7 +616,7 @@ defmodule Logex.Retain do
   # writes it; a word that is no path, having no `.`, so that no instance's line is one.
   # Each is read wherever it stands, as a global's and a trigger's line are, a line's kind
   # its first word; and a type's name is any name, as an `instance` line's is, `ton` and
-  # `end` naming types a configuration may hold. Since RV-21's review (F7) a store that
+  # `end` naming types a configuration may hold. Since RV-21's review a store that
   # names a program type names its resource too (resourced/1), so that a store whose
   # `resource` line a hand edit took away is refused, where it was read and warned that the
   # configuration's lines differed, which nothing said.
@@ -675,7 +675,7 @@ defmodule Logex.Retain do
 
   defp problem(acc, n, message), do: %{acc | problems: [{n, message} | acc.problems]}
 
-  # RV-21's review (F7): a store that names its writer's program types names its resource
+  # RV-21's review: a store that names its writer's program types names its resource
   # too, a problem of the first `program` line where it does not, as the reader read it.
   # The line is the three words the reader took it as, each one space apart.
   defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do

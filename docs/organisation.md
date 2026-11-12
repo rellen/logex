@@ -3166,7 +3166,10 @@ assert Logex.IO.Sim.outputs(panel)[[0]] == 1     # k1, at panel.q.0
 *(Decision 517 (e), RV-21, 2026-11-12: a sim a runner has opened is set and read as the
 configuration writes its points, `Logex.IO.Sim.set(panel, "panel.i.0", 1)` and
 `Logex.IO.Sim.outputs(panel)["panel.q.0"]`; the list above is the form of a sim no runner
-has opened, and the other form of each is the test's mistake.)*
+has opened, and the other form of each is the test's mistake.)* *(RV-21's review,
+2026-11-12: an open refused, another device holding the sim, leaves it named for its
+holder, where it took the refused device's name; and `writes/1` spells its writes in the
+caller's process, the sim's own work for it the list's.)*
 
 `advance/2` runs in the test's process. It takes each timer due on the way from the clock,
 earliest first and ties in the order they were set, sets the clock to its time, sends its
@@ -4720,6 +4723,15 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   its user blocks', in name order, counted among the store's lines; a warm fresh start
   whose own differ warns in `status/1`'s `retain`, `warning`, and changes nothing else;
   a store with none, written before RV-21, is read as before and warns of nothing.)*
+  *(RV-21's review, 2026-11-12: the digests are made at a fresh start and, for an edit's
+  candidate, once at accept in the caller, an edit's steps switching between the two in
+  the runner, where each step printed and digested the whole configuration in the
+  runner's process, the rounds waiting, some 10 ms a step at 1,000 instances; a store
+  with a `program` line and no `resource` line is refused at the first `program` line,
+  and each line is read wherever it stands, as a global's is; the header stays `logex
+  retain 2`, so a logex before RV-21 refuses such a store at a warm start, its
+  `resource` line told as one before any `instance` line, provisional, `PLAN.md`'s RV-21
+  question 4.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -14878,6 +14890,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      its file, the clauses rule held on each script; (d) `4f6c3aa`, README's "A device's
      adapter", `LineDevice` on a TCP socket, run as every example is. The readings the
      record leaves are marked provisional and are `PLAN.md`'s RV-21 questions 1 to 3.)*
+     *(RV-21's review, 2026-11-12: (c) an edit's steps make no digest in the runner's
+     process, the candidate's made once at accept in the caller, and a store naming a
+     program type and no resource refused, the header still 2, provisional, question 4,
+     and the reading of the store's partial lines question 5; (e) an open refused leaves
+     the sim its holder's name, and `writes/1` spells in the caller; (d) `LineDevice`
+     gives only its own input points, gives back an answer that is none, `{:garbled,
+     text}`, and tells the card it is leaving at `close/1`, `quit`, each run by
+     `readme_test.exs`. `PLAN.md`'s RV-21 entry, "RV-21's review", has each finding.)*
 
 518. **Decision 500's readings no question asked (the review after Milestone 6),** RV-8's
      question 5: while a restart waits for a force's write on a slow disk, an engineer's

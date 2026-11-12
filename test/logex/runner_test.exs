@@ -1091,15 +1091,18 @@ defmodule Logex.RunnerTest do
 
       # The least is a limit taken, never the host's mistake, though an opening meets 1 ms
       # only now and then: CI's first run of this test, which asserted the start, met a
-      # drive's opening past it.
-      for value <- [1, %{"drive" => 1}] do
+      # drive's opening past it. Since RV-21's review, which RV-20's record handed it, a
+      # limit of 1 for every device is the panel's too, so a start may meet the panel's
+      # opening past it, the drive's met in time, where only the drive's was taken.
+      for {value, limited} <- [{1, ["drive", "panel"]}, {%{"drive" => 1}, ["drive"]}] do
         {opts, _rig} = plant_rig()
         started = Runner.start_link(Keyword.put(opts, :open, value))
-
-        assert match?({:ok, _runner}, started) or
-                 started == {:error, {:io_init, "drive", :timeout}}
+        assert match?({:ok, _runner}, started) or timed_out(started) in limited
       end
     end
+
+    defp timed_out({:error, {:io_init, device, :timeout}}), do: device
+    defp timed_out(_other), do: nil
 
     test "a poll period, a share or an idle watchdog out of its range" do
       {opts, _rig} = rig()

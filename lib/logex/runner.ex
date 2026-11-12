@@ -1397,7 +1397,7 @@ defmodule Logex.Runner do
     accepting(Edit.accept(runtime, candidate, elapsed), {edits, stored}, runner, candidate)
   end
 
-  # RV-21's review (F1): where the runner keeps a store, the candidate's program as the
+  # RV-21's review: where the runner keeps a store, the candidate's program as the
   # store names it (`Logex.Retain.written_by/1`), made here, in the caller, once, with
   # accept's own work, and held with the edit, so that no step of it makes one in the
   # runner's process; nil where it keeps none.
@@ -2205,7 +2205,7 @@ defmodule Logex.Runner do
   # After every step the program the resource runs, as the next write of the store names
   # it, so that a store written after a test or an assemble names the candidate and one
   # after an untest or a cancel the original, an assemble or a cancel ending the edit and
-  # its two; since RV-21's review (F1) the one of the two the step leaves running, where
+  # its two; since RV-21's review the one of the two the step leaves running, where
   # each step made the digest of the configuration it left running in the runner's
   # process, a print and an MD5 of every line of it, the rounds waiting.
   defp written_by(%{retain: nil} = state, _step), do: state
@@ -3142,7 +3142,7 @@ defmodule Logex.Runner do
   # the resource runs as every write of the store names it, made at the start from the
   # configuration given and at every edit's step the one of the edit's two the step leaves
   # running, a test's or an assemble's the candidate and an untest's or a cancel's the
-  # original, an accept leaving it; and since RV-21's review (F1) `edit_by`, under
+  # original, an accept leaving it; and since RV-21's review `edit_by`, under
   # `retain` too, the edit's two, `%{original: by, candidate: by}`, made at accept, the
   # original's the `by` it found and the candidate's made in the caller with accept's work,
   # kept by a test and an untest and ended, nil, by an assemble and a cancel, so that no

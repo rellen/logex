@@ -447,7 +447,7 @@ defmodule Logex.IO.Sim do
   def handle_call(:outputs, _from, state),
     do: {:reply, spelled(state.named, :output, state.outputs), state}
 
-  # RV-21's review (F5): the writes as they are kept and the name they are spelled by, the
+  # RV-21's review: the writes as they are kept and the name they are spelled by, the
   # spelling the caller's (writes/1), so that a sim keeping 100,000 writes spends no more
   # of its own time on writes/1 once a runner has opened it than before, a runner's device
   # waiting on it meanwhile.
@@ -586,7 +586,7 @@ defmodule Logex.IO.Sim do
 
   # Every write, each address spelled once for them all, so that a sim that keeps 100,000
   # writes of a few outputs spells a few, not 100,000 of each; in the caller's process,
-  # writes/1's, since RV-21's review (F5).
+  # writes/1's, since RV-21's review.
   defp each_spelled(writes, nil), do: writes
 
   defp each_spelled(writes, named) do
@@ -595,7 +595,7 @@ defmodule Logex.IO.Sim do
   end
 
   # Opened by the process that holds it, or by any once none does; named for the device
-  # only where it is opened, since RV-21's review (F4), so that an open refused, another
+  # only where it is opened, since RV-21's review, so that an open refused, another
   # device holding the sim, leaves the name its holder's, where it renamed the sim for the
   # device it refused.
   defp opening({holder, held}, pid, _opener, state) when holder != pid,

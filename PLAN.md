@@ -19266,8 +19266,9 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
 
   - *Decision 517 (c), the program a store names* (`dc66f5b`; `retain_store_test.exs`'s
     "the program a store names" describe, seven tests): every write of the store, the
-    start's, a period's, each event's and each edit step's, names after the
-    configuration's line the program the runner ran as it wrote, `resource <md5>`, the
+    start's, a period's and each event's, a stop's, a shutdown's, a trip's, a cold
+    restart's and a refused restart's write-back (no edit step writes it, RV-21's review),
+    names after the configuration's line the program the runner ran as it wrote, `resource <md5>`, the
     MD5 of the configuration's own lines as `Logex.Configuration.Text.print/1` prints them
     with no line of their own (a comment, an empty line or the order of kinds no change),
     and a `program <type> <md5>` line a type, in name order, of its source text and its
@@ -19445,7 +19446,10 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     155,701 at both and the caller's 4,670,775 to 4,671,152 at the parent and 6,154,627 to
     6,205,072 here, the MD5 of the program's 38,855 bytes of text, which the VM charges
     some 40 reductions a byte and which takes some 0.2 ms (209 µs measured beside a
-    `Logex.Runtime.start/1` of 4.2 ms), and so an edit's step with a store; a sim's own
+    `Logex.Runtime.start/1` of 4.2 ms), and so an edit's step with a store (RV-21's
+    review: wrong at scale, its measure one instance; the configuration's print and its
+    MD5 grow with every line, 3.67M reductions and some 8 ms at 1,000 instances, which
+    every step paid in the runner's process, below); a sim's own
     reductions a poll, its adapter's read and write again, 135.8 at both; the test's
     side of a sim a runner opened, caller and sim together: `set/3` 111.1 at the parent
     and 249.2 here, its look at the name and the location's reading, `set/2` of four
@@ -19503,6 +19507,191 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
        test runs as it was; (c) the device's name given at `start_link/1`, `device:
        "panel"`, the text from the start and the list never, so a test reads one form
        throughout, at the cost of every test naming its device twice.
+
+  **RV-21's review** (2026-11-12, of `08218bb`, the review's clone `rv/review21` and its
+  probes under `rv/rev21work/`): eleven findings, each closed below by a fix a test holds
+  or a document made true, or put to the maintainer; the fixes in `76a1ba3`, main merged
+  in `85bd18c`, the record in the commit after it.
+
+  - *F1 (medium): every edit step, and every warm fresh start, paid a digest of the whole
+    configuration.* Each step, test, untest, assemble and cancel, made
+    `Logex.Retain.written_by/1` in the runner's own process, a print of every line of the
+    configuration and an MD5 of it, some 1,250 reductions a line, the rounds waiting: at
+    1,000 instances a test went from 620,347 to 4,284,433 of the runner's reductions and
+    from 10 to 20 ms. Fixed: the runner holds the edit's two, `edit_by`, `%{original,
+    candidate}`, under `retain`, the original the program it was running at accept and
+    the candidate's made once, in the caller, with accept's own work, and only where the
+    runner keeps a store (`:resource` answers whether it does, and accept's hold of the
+    edit carries the candidate's); a test or an assemble names the candidate and an
+    untest or a cancel the original, an assemble or a cancel ending the two, so that no
+    step makes a digest in the runner's process. An accept that supersedes one under test
+    takes the candidate running as its original. `written_by/1` prints the configuration's
+    elements as one list, checked once where printing the configuration checked each part
+    and then the whole, which halves its time (7.7 ms to some 4 ms at 1,000 instances);
+    its reductions stay most of them the MD5's, some 40 a byte, 2.78M of the 3.67M at
+    1,000 instances for a hash of 0.28 ms. Tests (`retain_store_test.exs`): "an accept
+    that supersedes one under test names the candidate it found running", and "an edit's
+    steps make no digest in the runner, its accept one in the caller with a store alone",
+    150 instances, the runner's reductions over an accept and four steps with a store and
+    without in the same run (317,431 and 317,970 here; 2,196,954 with the digest made at
+    each step), and the caller's accept with no store against accept's own work made
+    directly (506,753 and 503,225; 974,054 were it made with none). Four test lines copy
+    accept/2's own requests and changed with them, so and only so: `trip_test.exs`'s
+    "an accept's hold of the edit names accept" and `runner_edit_test.exs`'s "an accept
+    that another step overtook ...", each `GenServer.call(runner, :resource)` matching
+    the fourth element, `false`, the runner keeping no store, and each `{:accept, edits,
+    edit, forecast}` given `nil`, the candidate's digest a runner with no store makes
+    none of. The life walk restates the rule unchanged, the store naming the
+    configuration the resource runs (`shelf_by`); a reach for a write after an untest of
+    an accept that superseded a candidate differing from its own original was tried and
+    is never drawn in its twenty walks, so that path is the store test's alone.
+  - *F2 (medium): `LineDevice` was not what a real device's code must do.* (a) It passed
+    on every channel the card answered, so a card of more channels than the plant wires
+    tripped the plant at its first read, `{:unknown_address, ...}`; (b) an answer that
+    was none raised in its parse, the trip `{:raised, ...}`; (c) nothing checked
+    `close/1`. Fixed in README and `examples/line_device.exs` alike: `init/3` keeps its
+    input points' addresses and a read gives only those, the card now answering sixteen
+    channels, four wired, channel 12 set and left out; an answer that is no answer is
+    given back, `{:garbled, text}`, the line dropped so that the next call starts afresh,
+    the example garbling one read and restarting, `{:io, "panel", {:error, {:garbled,
+    "huh\n"}}}`; and `close/1` tells the card it is leaving, `quit`, answered `bye`, and
+    closes the socket, the card saying so after the stop. README's bullets say an
+    adapter's read gives only the device's input points and that a failure is given back
+    whatever the device answers. The reviewer's `r15`, `close/1` leaving the socket open,
+    is now `d07` below, which survives as an equivalent: the socket's owner is the
+    device's process, which ends as soon as `close/1` returns on every path that calls
+    it, its port closed with it.
+  - *F3 (medium-low, a question): the store's grammar grew under `logex retain 2`.* A
+    logex from before RV-21 refuses a store this one wrote at a warm start, its
+    `resource` line told as one before any `instance` line. Kept as built and documented,
+    provisional, in `Logex.Retain`'s head, `Logex.Runner`'s moduledoc, README's store and
+    §4.13; question 4 below.
+  - *F4 (low): a refused open renamed the sim.* `{:opened, ...}` named the sim before it
+    looked for a holder, so an open refused, two runners' devices opening one sim at
+    once, renamed it for the device it refused. Fixed: the name is taken only where the
+    open is. Test (`io_test.exs`): "an open refused, another device holding the sim,
+    leaves it named for its holder", the `drive` device suspended between its look and
+    its open (`:sys.install` on its `init/3` take) while `panel`'s runner opens the sim,
+    its start refused `{:io_init, "drive", {:raised, ...}}` and `panel`'s addresses and
+    writes kept.
+  - *F5 (low): `writes/1` spelled in the sim's process.* At 100,000 writes the sim spent
+    175 ms and 5.72M reductions on it, a runner's device waiting. Fixed: the sim answers
+    its writes and its name, and `writes/1` spells them in the caller. Test: "writes/1
+    spells in the caller, the sim's own work the same named or not", 2,000 writes in a
+    named sim and an unnamed one, the sim's own reductions within a quarter of each other
+    (some 4,100 each; 79,464 where the sim spells).
+  - *F6 (low): the Sim moduledoc's `fail/3` line was false.* It now says the address of
+    `{:value, address, value}` is a list of whole numbers, any other the test's mistake.
+  - *F7 (low): a store that names its program in part had no rule.* A `program` line with
+    no `resource` line, as a hand edit that took the one away leaves it, is refused at the
+    first `program` line, where it was read and warned that the configuration's lines
+    differed; each line is read wherever it stands, as a global's line is, a line's kind
+    its first word; and a type's name is any name, as an `instance` line's is, `ton` and
+    `end` naming types a configuration may hold (both tried). Test: "a store that names
+    its program types names its resource, each line read where it stands". Provisional,
+    question 5.
+  - *F8 (low, record)*: the entry above said each edit step writes the store and put the
+    fresh start's added cost down to the program's MD5; both corrected where they stand.
+  - *F9 (refines question 1)*: the configuration's side is read as printed, so a comment,
+    an empty line, CRLF, spacing or a literal respelt in a `.logex` changes nothing, while
+    the same in a `.ld` warns that the type's text differs; and the message names one
+    cause, an online edit that never reached the files, for every difference, the
+    commonest, a planned deploy of changed files, among them. Both are question 1's now.
+  - *F10 (merge note)*: RV-20 and RV-21 each rewrote README's "What has landed", each
+    calling the other's work waiting. RV-20 landed on main first (`7aa7954`), and the
+    merge of main into `rv21` (`85bd18c`) conflicted there alone, the runner and the rest
+    merging clean: README now says both have landed, RV-22 to RV-25 the work that waits.
+  - *F11 (observations)*: `encode/2` and `decode!/2` stay in `lib/` as the store's text
+    with no writer named, which 71 tests of the store's grammar call, `encode/3` and
+    `decoded!/2` the runner's; the store's growth test now measures `encode/3`,
+    `decoded!/2` and `written_by/1` too, n program types and 4n ("encode/3, decoded!/2
+    and written_by/1 grow linearly in the store's lines", which a `written_by/1` that
+    digests every type with every type's name fails, `g01`); and `written_by/1`'s
+    runner-level cost is F1's test.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite, the patches
+    and logs under `scratchpad/rv/fix21/mut/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `s01_refused_open_renames` | a refused open names the sim for the device it refused | red, 1 (io) |
+    | `s02_writes_spelled_in_sim` | `writes/1` spells in the sim's process | red, 1 (io) |
+    | `f01_steps_digest_in_runner` | each edit step digests the configuration in the runner | red, 1 (store) |
+    | `f02_candidate_digest_always` | accept digests the candidate with no store too | red, 1 (store) |
+    | `f03_superseding_accept_keeps_first_original` | an accept under test keeps the first edit's original | red, 1 (store) |
+    | `f04_untest_names_candidate` | an untest names the candidate | red, 2 (store 2) |
+    | `g01_written_by_quadratic` | each type's digest takes every type's name | red, 9 (store 7, life walk, README) |
+    | `v01_program_lines_without_resource` | `program` lines with no `resource` line read | red, 2 (store, README's project) |
+    | `d04_unwired_channel_passed` | `LineDevice` gives every channel the card answers | red, 1 (README) |
+    | `d05_answer_parsed_raising` | `LineDevice` parses any answer, raising on none | red, 1 (README) |
+    | `d06_close_without_quit` | `LineDevice`'s `close/1` closes without telling the card | red, 1 (README) |
+    | `d07_close_keeps_socket` | `LineDevice`'s `close/1` tells the card and leaves the socket open | survived: equivalent, the device's process owning the socket and ending as `close/1` returns |
+
+    `v01`'s README count is the project test's, a compiler warning in `lib/` printing
+    Mix's `==> logex` banner, as the table above records of others.
+
+  - *Load runs* (`scripts/load.sh`, four busy loops): the eight tests this review wrote or changed, the
+    two sim tests, the store's four, `trip_test.exs`'s "an accept's hold of the edit names
+    accept" and `runner_edit_test.exs`'s "an accept that another step overtook ...",
+    0 of 50 runs red (`scratchpad/rv/fix21/load_new.log`); and README's suite, whose
+    `line_device.exs` talks over the loopback interface, 0 of 10.
+  - *Cost against the parent* (`08218bb`), the scripts under `scratchpad/rv/fix21/`:
+    reductions, the least of several runs, two runs each (`cost.txt` there; the mutation
+    table ran beside, so the wall times are only a guide). Unchanged: a round of three
+    tasks, 2075.5 to 2077.9 changing and 1771.5 to 1772.1 unchanged at the parent, 2075.5
+    to 2076.2 and 1771.5 to 1771.9 here; a period's write of 1,000 retained counters,
+    447,209 at both; a fresh start from that store, the caller's 6,184,047 to 6,188,569 at
+    the parent and 6,146,786 to 6,185,946 here, the runner's 155,701 at both; a sim's own
+    reductions a poll, 135.8 at both; the test's side of a sim, caller and sim together,
+    `set/3` 249.2, `set/2` 665.0, `outputs/1` 131.6 and `writes/1` of 100 writes 3,991 to
+    4,009, at both. Changed, at 1,000 instances each wired twice, with a store: a test's
+    reductions in the runner 4,287,099 at the parent and 619,605 here, an untest's
+    4,246,354 and 582,654, some 20 and 10 ms, 17 and 7.5 ms; an accept's in the caller
+    3,353,225 and 6,607,892, the candidate's digest made there once, some 65 and 70 ms; a
+    warm fresh start's caller 11,498,524 and 11,096,034, the configuration printed once;
+    and `writes/1` of a sim holding 100,000 writes, the sim's own 3,855,304 and 204,033,
+    the caller spelling them.
+  - *What RV-20's record handed RV-21* (its review's two flakes, "put here for RV-21"):
+    `runner_test.exs`'s "an opening limit out of its range, or naming no device bound
+    (decision 398)" took a start under `open: 1` that met the drive's opening past 1 ms
+    and no other, though a limit of 1 for every device is the panel's too; it now takes
+    a timeout of either device the limit names, the drive's alone under `%{"drive" =>
+    1}`, a limit taken and never the host's mistake as before, 0 of 50 runs red under four busy loops. And
+    `stalled_disk_test.exs`'s "a runner killed while a force's write is out takes the
+    write down with it", whose monitor met `:noproc` once under RV-20's review's `r06`: at
+    this tip the writer is linked to the runner and held in the file server's rename when
+    it is monitored, so it cannot end before the kill; it met the race under that mutant
+    alone, and is left as it is.
+  - *The labels*: the review's finding numbers, F1 to F11, are this entry's alone; the
+    code and the tests cite "RV-21's review", never a finding's number, which §7's fixes
+    of the same numbers would be read as.
+  - *CLAUDE.md*: unchanged; no file was added, and each line stays true.
+  - *Questions for the maintainer*, added to the three above, each provisional where it
+    stands:
+    1. *What counts as another program*, refined (F9): (d) a `.ld`'s text read as the
+       configuration's is, printed canonically before its digest (`Logex.Printer`), so a
+       comment, an empty line, CRLF, spacing or a respelt literal warns of nothing on
+       either side, at the cost of a digest `md5sum` no longer gives; and the message
+       naming both causes, "a deploy of changed files, or an edit tested or assembled
+       online that never reached the files", where it names the second alone.
+    4. *The store's version* (F3). A box counter's logex is put back to the version
+       before RV-21 after an upgrade went wrong: its warm start refuses the store the
+       newer logex wrote, "line 3: `resource ...` comes before any `instance` line", and
+       the line starts only cold, the count lost unless the copy is put back by hand.
+       (a) As built: the grammar grew under `logex retain 2`; (b) `logex retain 3` for a
+       store that names its program, still reading 2 and 1, so the older logex says "the
+       store is of version 3, which this logex does not read", plain where (a) points at
+       a line's order; (c) the record saying that a version's grammar may grow by lines
+       an older reader refuses, as built, and README telling a rollback so. IEC 61131-3
+       has no store; Logix keeps retained data in the controller's memory and a project
+       file whose revision its tools check, not verified here.
+    5. *A store that names its program in part* (F7). A hand edit deletes the
+       `resource` line of a fan's store and fixes the count: (a) as built, refused at
+       the first `program` line, the line not started warm until the line is put back or
+       the start is cold; (b) read, the programs compared and the configuration's lines
+       not, warning of what the `program` lines say; (c) read as a store that names no
+       program, warning of nothing. And `resource` and `program` lines among the values
+       are read as built, as a global's line is anywhere; or refused unless straight
+       after the configuration's line, as the runner writes them.
 - **RV-22 — CI and the release step** (decision 515, (e) and (b)). CI's test step naming
   each failed test of a red run, `scripts/gate.sh`, or `scripts/failed.exs` after a red
   `mix test`, shown on a run made red on a branch of its own; and a release step before

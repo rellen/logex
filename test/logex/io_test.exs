@@ -1917,7 +1917,7 @@ defmodule Logex.IOTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # RV-21's review (F4): two runners' devices opening one sim at once, the second's look
+    # RV-21's review: two runners' devices opening one sim at once, the second's look
     # for a holder made before the first opens it and its open after: the second is
     # refused, as a sim is one device's, and the sim keeps its holder's name, where it took
     # the name of the device it refused and turned its holder's addresses away.
@@ -1960,7 +1960,7 @@ defmodule Logex.IOTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # RV-21's review (F5): writes/1 of a sim a runner has opened spells its writes in the
+    # RV-21's review: writes/1 of a sim a runner has opened spells its writes in the
     # caller's process, so the sim's own work for it is what it is for a sim no runner has
     # opened, the writes taken in order, where it spelled them in its own, a runner's
     # device waiting on it meanwhile. The same writes in two sims, one named, one not.
