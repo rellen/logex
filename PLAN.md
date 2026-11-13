@@ -19759,6 +19759,245 @@ and RV-26 side by side; then RV-23 and RV-24 side by side; and RV-25 last, alone
   529 and 531 settle made their numbers. It runs beside RV-22, before RV-23 traces the
   marks.
 
+  **RV-26 as built** (2026-11-13, branch `rv26` over `b7cddce`). Each decision that
+  changes what logex does has a test that fails when it is reverted, judged by the full
+  suite (the mutation table below), and the store's life walk restates each in its model.
+  No test, walk or oracle was deleted or weakened; the pins decisions 527 and 530 change,
+  and the one line decision 528 adds to an existing test, are named below, each changed so
+  and only so.
+
+  - *Decision 527, a program's text read as it prints* (`47a2fd7`; `retain_store_test.exs`'s
+    "the program a store names" describe): `Logex.Retain.written_by/1` digests what it
+    digested, each program type's text and, after it in name order, each user block's
+    name and text, now each as `Logex.Printer` prints its parse tree, one rung a line, one
+    space between its elements and each literal by its value (`16#FF` and `2_5_5` print
+    `255`, `1.50e0` prints `1.5`), as the configuration's own lines are printed before
+    theirs. So a comment, an empty line, CRLF or a lone CR, spacing, a group's spacing
+    `(xic a|xic b)` or a literal respelt in a program's `.ld` or a block's warns of
+    nothing, and a rung changed, moved, a value changed or a word written in another case
+    does; a block file's comment is its holder's and changes nothing either. A text that
+    does not lex or parse, which only a program built by hand holds, is digested as its
+    bytes, never raising; one with no text, as its rungs and tags as before. The warning
+    names both causes: "tally.retain: the store was written by another program than the
+    one this start was given: `tally`'s text differs; whether by a deploy of changed
+    files, or an edit tested or assembled online that never reached the files, this start
+    runs the program it was given, with the store's retained values laid over it by name
+    and type", pinned whole. Tests: "a program type's text read as it prints: its layout
+    and a literal's spelling no change" (each variant, the digest the MD5 of the text as
+    the test restates its print, a block's, and three texts that do not lex or parse); "a
+    fresh start from files laid out anew warns of nothing, from a rung changed of both
+    causes"; and "a fresh start and an accept make the program's digest once, at its
+    printed texts' cost", a box counter of 1,000 retained counters, its 38,855-byte text,
+    the digest within a quarter of its texts printed and digested directly, a warm fresh
+    start's caller within its reading, start and digest of the caller with no store, and
+    an accept's caller within the candidate's digest of the caller with no store, the
+    least of five in the same run (a digest made twice at the start, 8.25 million
+    reductions against a bound of 7.7, fails it). The life walk's model digests each text
+    as it prints, restated from the text (`life_printed/1`: lines, comments, words, a
+    base-16 literal by its value), and one crashed warm start in two, by the store's own
+    text, is given its types compiled again from their texts laid out anew, each line where
+    it was, its words two spaces apart behind two spaces, a comment after them, each whole
+    number in base 16 and CRLF line ends (`life_laid_out/1`), the walk running on with
+    them: `:life_laid_out_unwarned`, a start warned of nothing whose every type's bytes
+    differ from its store's writer's.
+  - *Decision 528, the warning an event too* (`ea0fe70`; the describe's "the warning is
+    sent to each subscription that takes :retain, once, as it subscribes"): a fresh
+    start's warning stays in `status/1`'s `retain` and is sent as `{Logex.Runner, runner,
+    {:retain, {:warning, message}}}`. No subscriber can exist before `start_link/1`
+    returns (decision 324), so, provisional, question 2 below: each subscription that
+    takes `:retain`, by `subscribe/1`'s default kinds or by name, is sent it as it
+    subscribes, before `subscribe/2` answers, so that it is in the subscriber's mailbox as
+    the call returns, for as long as the warning stands, which is the runner's life as
+    `status/1`'s is; once a subscription, subscribing again with `:retain` among the kinds
+    sending nothing more, a subscription that adds `:retain` hearing it, and one made
+    after `unsubscribe/1` a new one. A round, a period's write, a trip, a warm or cold
+    `restart/2`, an edit's step and a stop send it to no one and leave it standing; a
+    start that warns of nothing sends nothing. The life walk subscribes a process of its
+    own to `:retain` after each fresh start and again after a changed configuration's
+    start has run on and written, each hearing the model's warning once and a second
+    subscription nothing (`:life_warning_heard`, `:life_warning_heard_later`). One line
+    added to an existing test, "a copy that fails is owed, and no write replaces the store
+    until it is made": its start on a retyped program warns, so its default subscription
+    is now sent the warning, which the test asserts before its unchanged refusal of any
+    other `:retain` event.
+  - *Decision 530, `logex retain 3`* (`eb57b4a`; "a store that names its program is version
+    3, and versions 3, 2 and 1 read alike" and "a store RV-21's logex wrote is compared by
+    its types' bytes, and written again as version 3"): every store the runner writes
+    names its program and is `logex retain 3`; `encode/2`, which names none, writes
+    `logex retain 2`; versions 2 and 1 are read as before, every test of reading them
+    unchanged. Version 3's grammar is version 2's: its end line (decision 355), a cut
+    store refused naming its own header; CRLF read as LF (decision 410); a `program` line
+    with no `resource` line refused at the first `program` line and each line read
+    wherever it stands (decision 531). The store's text, README's `kept.exs`, before and
+    after:
+
+    ```
+    logex retain 2                                   logex retain 3
+    configuration tally written 2026-10-30T14:00:08Z configuration tally written 2026-10-30T14:00:08Z
+    resource 013cc059392445fdcc1e84c9b0de6118        resource 013cc059392445fdcc1e84c9b0de6118
+    program tally 79283a3df1f759ac3c077ad9de67c863   program tally bd882e28a8159d8e8a4ea56ade7b36b6
+    global total_boxes dint 4                        global total_boxes dint 4
+    ...                                              ...
+    end 15 lines                                     end 15 lines
+    ```
+
+    What each older store gives at a fresh start: one of `logex retain 1`, or of `logex
+    retain 2` written before RV-21, names no program and warns of nothing, its next write
+    `logex retain 3`; one RV-21's logex wrote, `logex retain 2` with its `resource` and
+    `program` lines, each type's digest of its text's bytes, is compared, provisional,
+    question 3, by the bytes of the start's texts (`Logex.Retain.compared/3`), so that
+    the very files warn of nothing and files changed, in their layout too, warn as RV-21's
+    logex would have, once, its next write `logex retain 3`; one of `logex retain 3` with
+    no `resource` or `program` line, a hand edit's, is read as naming none, provisional,
+    question 4. A version past 3 is told plainly, "the store is of version 4, which this
+    logex does not read: it reads `logex retain 3`, `logex retain 2` and `logex retain
+    1`"; an empty store's and a first line that is no header's messages name `logex
+    retain 3`; a byte-order mark's names the header after it where it is one logex reads;
+    an end line in a store of another header is told as before, naming version 2, which
+    stays true, so that version 1's test is unchanged. What the older logexes say of a
+    version 3 store, run at a warm start through the runner on README's tally
+    (`scratchpad/rv/p26/old/`): at `7aa7954` (before RV-21), "tally.retain: line 1: the
+    store is of version 3, which this logex does not read: it reads `logex retain 2` and
+    `logex retain 1`", its lines 3 and 4, `resource ...` and `program tally ...`, each
+    "comes before any `instance` line", and line 15, `end 15 lines`, "is an end line,
+    which a store whose first line is `logex retain 2` ends with, and this store's first
+    line is not"; at `4fd9d97` (RV-21), lines 1 and 15 alone. A cold start, at either,
+    copies the store to `tally.retain.dropped.1`, byte for byte, and starts the count at
+    0; that copy is read again by this logex as it is, and by the older one once a hand
+    edit makes its first line `logex retain 2` and, for a logex before RV-21, takes away
+    its `resource` and `program` lines and makes its end line's count two fewer (each
+    tried: 4 boxes read back at both). README's rollback passage says exactly that. The
+    life walk's model holds every write as version 3 and, one warm start in two by the
+    store's text, saves the store before it as RV-21's logex wrote it, `logex retain 2`
+    with each type's digest of its bytes (`life_rv21/2`), and restates the start's
+    warning by bytes for such a store, its differences capped at ten and a count as the
+    runner's are (`:life_rv21_read`, `:life_rv21_laid_out_warned`, a start warned by its
+    types' bytes alone, their texts as they print the same).
+  - *The marks* (`06a7203`), each made the decision's number: 522, `Logex`'s moduledoc,
+    `Logex.Configuration.compile/3`'s doc and `Logex.Declarations`' comment at `offer/5`;
+    523, README's contract passage and `runtime_test.exs`'s list of the modules inside
+    the contract, `@decided` where it was `@provisional`; 524, three in `Logex`'s
+    moduledoc and `Logex.Compiler.Worker`'s comment; 525 and 526, cited in `Logex`'s
+    moduledoc, where the rules stood unmarked; 529, `Logex.IO.Sim`'s moduledoc and its
+    comment at `addressed!/3`, and README's simulator passage; 527, 528, 530 and 531,
+    `Logex.Retain`'s three marks and `Logex.Runner`'s two, README's store passage and
+    §4.13's mark, made true by the three commits before, §4.13 with a dated note. §7's
+    notes of decisions 514, 517 and 520 keep their marks as history, the settling
+    decisions' notes naming them. No mark of RV-20's or RV-21's questions is left; none
+    was in `CONTRIBUTING.md` or `docs/naming.md`.
+  - *The close* (the commit that records this entry): the test of a text that does not
+    lex or parse; §7's notes on decisions 517 and 522 to 531; README's "What has landed",
+    which says RV-26 has landed, and "What logex is not", checked claim by claim, whose
+    warm start passage says the warning reaches the subscribers of `:retain` too and that
+    a deploy of changed files is warned of as an edit that never reached them is.
+  - *The leave*, lines removed and added (`git diff --numstat b7cddce`), each changed as
+    decisions 527 and 530 say and no other way, but the one line 528 adds:
+    `retain_store_test.exs`, 27 lines replaced: 12 by decision 527 (the warning's pinned
+    message, three lines in `warned/1` and four in the message test; the program's
+    digest made of its printed text, `printed/1`, in five), 15 by decision 530 (the
+    runner's header pinned in two places; the version 1 and the pre-RV-21 version 2
+    stores derived from the runner's write, two; the messages naming the header, nine;
+    two refused headers, version 3 now read, made version 4), and 3 lines added by 528;
+    `api_contract_test.exs`'s life walk, its model's warning message (3 lines) and its
+    header (1 line), the rest of its 33 lines removed a restatement extended, each
+    assertion kept; `runtime_test.exs`, `Logex.Retain`'s functions gaining `compared/3`
+    (one line) and decision 523's mark (three); `stalled_disk_test.exs`, its header pin
+    (one line); README's `kept.exs` output, its header, its digest and its warning.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at `06a7203`
+    with the close's test of a text that does not lex, the patches and logs under
+    `scratchpad/rv/p26/mut/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `m527a_bytes_digested` | a type's text digested as its bytes | red, 12 (store 9, README 2, life walk) |
+    | `m527b_spelling_kept` | a literal's spelling kept in the print | red, 3 (store 2, life walk) |
+    | `m527c_block_bytes` | a block's text digested as its bytes | red, 2 (store, life walk) |
+    | `m527d_one_cause` | the warning names the online edit alone | red, 8 (store 6, README, life walk) |
+    | `m527e_digest_twice_at_start` | a warm fresh start digests the program twice | red, 1 (store's cost) |
+    | `m527f_digest_twice_at_accept` | an accept digests the candidate twice | red, 1 (store's cost) |
+    | `m527g_unparsed_raises` | a text that does not lex raises | red, 1 (store) |
+    | `m528a_never_sent` | no subscription is sent the warning | red, 3 (store 2, life walk) |
+    | `m528b_sent_every_subscribe` | every subscribe sends it, a subscription that took `:retain` again | red, 2 (store, life walk) |
+    | `m528c_any_kinds` | a subscription of any kinds is sent it | red, 3 (store, life walk 2) |
+    | `m530a_written_2` | the runner writes `logex retain 2` | red, 15 (store 12, stalled disk, README, life walk) |
+    | `m530b_3_unread` | version 3 refused | red, 67 (store 49, stalled disk 6, retain period 3, life walk 3, and four files more) |
+    | `m530c_no_bytes_mark` | a version 2 store's program read as printed | red, 3 (store 2, life walk) |
+    | `m530d_rv21_printed` | RV-21's store compared with the printed digests | red, 2 (store, life walk) |
+    | `m530e_3_no_end_line` | version 3 read without decision 355's end line | red, 67 (as `m530b`, its end line told as one its header does not take) |
+    | `m530f_cut_names_2` | a cut version 3 store told as one of version 2 | red, 2 (store, README's project) |
+    | `m530g_bom_names_3` | a byte-order mark's message names version 3 whatever follows | red, 2 (store, README's project) |
+
+    No mutant survived. README's project test, `mix run scan.exs` from `examples/`, went
+    red under `m530f` and `m530g` for the compiler warning each leaves in `lib/`, Mix
+    printing the dependency's banner, as RV-21's tables record of others.
+  - *Cost against the parent* (`b7cddce`), reductions on the manual clock, the least of
+    several runs, two runs each, the scripts `scratchpad/rv/p21cost/round3.exs` and
+    `store.exs`, `fix21/cost/edit.exs` and `p26/cost527.exs`, the figures in
+    `p26/cost/cost.txt` (a sibling item's suites ran beside, so wall times are a guide
+    only): a round of three tasks, 2075.5 to 2078.2 changing and 1771.5 to 1772.0
+    unchanged at the parent, 2075.5 to 2076.7 and 1771.5 to 1771.8 here; a period's write
+    of 1,000 retained counters, its text made and written, 447,209 to 447,211 at both; a
+    fresh start from that store, the runner's 155,700 at both, the caller's 6,137,357 to
+    6,226,942 at the parent and 6,387,492 to 6,423,448 here, the program's 38,855 bytes
+    printed before their MD5; that program's digest alone, `written_by/1`, 1,556,070 at
+    the parent, the MD5 of its bytes, and 1,839,093 to 1,839,293 here, some 3 ms where the
+    MD5 took 0.2; a warm fresh start's caller with a store, 6,166,326 to 6,169,473 and
+    6,405,559 to 6,437,597, with none 703 thousand at both; an accept's caller with a
+    store, 5,032,264 to 5,035,776 and 5,271,524 to 5,291,304, with none 3.45 million at
+    both; and at 1,000 instances of a small type each wired twice, an edit's test in the
+    runner 617 to 618 thousand, an untest 581 thousand, an accept's caller 6.57 to 6.60
+    million and a warm fresh start's caller 11.03 to 11.09 million, alike at both. A
+    subscription costs the runner a look at the warning, and one send where it stands.
+  - *Load runs* (`scripts/load.sh`, four busy loops on four cores, beside a sibling item's
+    mutation tables, the machine's load average 7 to 12, the logs `p26/load_store.log`
+    and `p26/load_life.log`): the runner's tests this item wrote or whose bodies it
+    changed, the fifteen of `retain_store_test.exs` (the six new, the five of the program
+    a store names whose `named_by/1` its print changed, the copy owed the warning, the
+    copy's bytes, the store cut at any byte and its last line counted) and
+    `stalled_disk_test.exs`'s late `.tmp`, 0 of 50 runs red; the life walk, at its line
+    with the two tests ExUnit's line filter takes beside it, 0 of 10, as RV-19's were run,
+    some 4 minutes a run.
+  - *CLAUDE.md*: `Logex.Retain`'s line names `logex retain 3`, 2 and 1 read too; no file
+    was added.
+  - *Provisional readings, and questions for the maintainer*, each marked provisional
+    where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
+    be found; each question says what an operator or a host sees:
+    1. *A word's case in a program's text* (decision 527). An engineer retypes `xic
+       start` as `XIC start` in `conveyor.ld`, which logex reads the same, and restarts
+       the line from its store: it warns "`conveyor`'s text differs". (a) As built: the
+       text as `Logex.Printer` prints it, which keeps every word's case, since it cannot
+       tell a mnemonic from a tag, and a tag's case is its name; (b) the words logex
+       reads in any case, the mnemonics and the declaration, type and qualifier words,
+       lowercased before the digest, as the configuration's print lowercases its
+       keywords, so that only a tag's case warns. IEC 61131-3 reads keywords in any case;
+       how Logix treats an instruction's case in its text forms is unverified.
+    2. *How a subscriber hears the warning* (decision 528). The line restarts from a
+       store an online edit wrote; the HMI connects a second after `start_link/1`
+       returns, and a log process an hour later. (a) As built: each subscription that
+       takes `:retain` is sent it as it subscribes, for the runner's life, once a
+       subscription, so the HMI and the log both show it, and an HMI that resubscribes
+       after an unsubscribe shows it again; (b) sent only while the store still names
+       another program, until its next write, a period at most, so the log an hour later
+       shows nothing though `status/1` still says it; (c) sent at most once to a process
+       for the runner's life, so an HMI that unsubscribes and subscribes again shows it
+       once only. IEC is silent; Logix's tools tell the engineer where the project and
+       the controller differ as they go online, unverified.
+    3. *A store RV-21's logex wrote* (decision 530). A box counter upgraded from RV-21's
+       logex restarts from its store, its files unchanged but for a comment added in the
+       same deploy: (a) as built: the store's digests read as of its texts' bytes, as
+       RV-21 made them, and the start's texts digested so for it, so the comment warns
+       once, as RV-21's logex would have, and an online edit under RV-21 that never
+       reached the files is told; (b) the store read as naming no program, so nothing
+       warns, that edit included; (c) compared with this logex's printed digests, so
+       every type is told "text differs" at the upgrade's first start, once. IEC 61131-3
+       has no store; Logix keeps retained data in the controller, unverified.
+    4. *A version 3 store that names no program* (decision 530). A hand edit takes away
+       a fan's store's `resource` and `program` lines and mends the count: (a) as built,
+       read as naming none, the start warning of nothing, as a version 2 store naming
+       none is read; (b) refused, version 3 being a store that names its program, the
+       line started only cold until the lines are put back. Decision 531 refuses a store
+       that names its program in part; neither IEC nor Logix has a store edited by hand.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

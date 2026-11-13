@@ -14912,6 +14912,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      gives only its own input points, gives back an answer that is none, `{:garbled,
      text}`, and tells the card it is leaving at `close/1`, `quit`, each run by
      `readme_test.exs`. `PLAN.md`'s RV-21 entry, "RV-21's review", has each finding.)*
+     *(RV-26, 2026-11-13: its questions, `PLAN.md`'s RV-21 questions 1 to 5, are
+     decisions 527 to 531, each built or made its marks' number by RV-26.)*
 
 518. **Decision 500's readings no question asked (the review after Milestone 6),** RV-8's
      question 5: while a restart waits for a force's write on a slow disk, an engineer's
@@ -15015,6 +15017,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and `jmp ender` told `end`. IEC 61131-3 says nothing of a compiler's messages;
      whether Studio 5000's verify offers a near name is unverified. RV-26 makes the marks
      this decision's number.
+     *(RV-26, 2026-11-13, `06a7203`: the marks, in `Logex`'s moduledoc, the doc of
+     `Logex.Configuration.compile/3` and `Logex.Declarations`' comment at `offer/5`, are
+     this decision's number.)*
 
 523. **Where the host contract ends, for what README's examples call (RV-20),** RV-20's
      question 2: decision 514 names eight modules the host contract, and README's
@@ -15031,6 +15036,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      given anything but a diagnostic raises `FunctionClauseError`. IEC says nothing of a
      host's API, and the record cites no Logix SDK. RV-26 makes the marks this
      decision's number.
+     *(RV-26, 2026-11-13, `06a7203`: the marks, README's contract passage and
+     `runtime_test.exs`'s list of the modules inside the contract, `@decided` where it was
+     `@provisional`, are this decision's number.)*
 
 524. **A compile's own process (RV-20),** RV-20's question 3: decision 520 (b) runs
      `Logex`'s three compiles in a process of their own, and leaves how it meets its
@@ -15046,6 +15054,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      VM's own priority and heap uncharged. IEC says nothing of compile time; Logix
      compiles on the workstation, in Studio 5000. RV-26 makes the marks this decision's
      number.
+     *(RV-26, 2026-11-13, `06a7203`: the marks, three in `Logex`'s moduledoc and one in
+     `Logex.Compiler.Worker`'s comment, are this decision's number.)*
 
 525. **Whose hundred (RV-20),** RV-20's question 4: decision 522's hundred is counted a
      text at a time, a block file's and each path's of `compile_files/1` its own, or once
@@ -15058,6 +15068,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      alone and the program's own typo, read last, none. IEC 61131-3 is silent; how
      Studio 5000 counts its verify's errors across routines is unverified. RV-26 makes
      the marks this decision's number.
+     *(RV-26, 2026-11-13, `06a7203`: `Logex`'s moduledoc, where the rule stood
+     unmarked, cites this decision; decision 520's note keeps its mark as history.)*
 
 526. **What a name past the hundred is told of a list (RV-20),** RV-20's question 5: a box
      counter's block `lane` of 300 members, and 4,000 rungs naming members it does not
@@ -15070,6 +15082,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      messages; a timer named twice with unknown members still lists `pre`, `acc`, `dn`,
      `tt` and `en` in each message of the hundred. IEC and Logix have no bearing
      (unverified for Logix). RV-26 makes the marks this decision's number.
+     *(RV-26, 2026-11-13, `06a7203`: `Logex`'s moduledoc, where the rule stood
+     unmarked, cites this decision; decision 520's note keeps its mark as history.)*
 
 527. **What counts as another program (RV-21),** RV-21's question 1 and its review's
      refinement: decision 517 (c)'s fresh start warns where its store was written by
@@ -15089,6 +15103,19 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      both causes, "a deploy of changed files, or an edit tested or assembled online that
      never reached the files". IEC 61131-3 is silent; how Logix tells an offline file
      from the controller's project is unverified. RV-26 builds it.
+     *(Landed with RV-26, 2026-11-13, `47a2fd7`: `Logex.Retain.written_by/1` digests each
+     program type's text and each user block's, as before, each as `Logex.Printer` prints
+     its parse tree with each literal by its value, so that a comment, an empty line,
+     CRLF, spacing or a literal respelt, `16#3E8` for `1000` or `1.50e0` for `1.5`, in a
+     program's or a block's file warns of nothing and a rung changed, moved or written in
+     another case does; a text that does not lex or parse, a hand-built program's alone,
+     digested as its bytes; the warning "...; whether by a deploy of changed files, or an
+     edit tested or assembled online that never reached the files, this start runs the
+     program it was given, with the store's retained values laid over it by name and
+     type". A name's case kept, as the printer keeps it, is provisional, `PLAN.md`'s
+     RV-26. The digest costs some 1.84 million reductions and 3 ms for a 38,855-byte
+     program where its bytes' MD5 cost 1.55 million and 0.2 ms, at a fresh start and
+     at an accept in the caller, held by a same-run bound.)*
 
 528. **How the stale store's warning reaches the operator (RV-21),** RV-21's question 2:
      as built, a fresh start from a store another program wrote runs the plant at once
@@ -15103,6 +15130,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      RV-26 settles provisionally and puts to the maintainer. IEC is silent; Logix's tools
      ask the engineer to upload or download where the project and the controller differ,
      unverified. RV-26 builds it.
+     *(Landed with RV-26, 2026-11-13, `ea0fe70`, the reading provisional, `PLAN.md`'s
+     RV-26: each subscription that takes `:retain`, by the default kinds or by name, is
+     sent `{:retain, {:warning, message}}` as it subscribes, before `subscribe/2` answers,
+     for as long as the warning stands, the runner's life, as `status/1`'s; once a
+     subscription, subscribing again with `:retain` among the kinds sending nothing more,
+     one that adds `:retain` hearing it, and one made after `unsubscribe/1` a new one; a
+     round, a trip, a restart, an edit's step, the store's next write and a stop send it
+     to no one.)*
 
 529. **When a simulator takes the configuration's text (RV-21),** RV-21's question 3: a
      test sets a lamp's sim at `[0]` before the runner opens it and at `"panel.i.0"`
@@ -15112,6 +15147,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      names the sim, the name kept across a stop, and from then on it takes and gives the
      configuration's text alone; a sim no runner has opened takes the list. Neither IEC
      nor Logix has a rule for a simulator. RV-26 makes the marks this decision's number.
+     *(RV-26, 2026-11-13, `06a7203`: the marks, `Logex.IO.Sim`'s moduledoc and its
+     comment at `addressed!/3`, and README's simulator passage, are this decision's
+     number.)*
 
 530. **The store's version (RV-21),** RV-21's question 4: RV-21's `resource` and `program`
      lines grew the store's grammar under `logex retain 2`, so a box counter's logex put
@@ -15126,6 +15164,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      is put back, as README says. IEC 61131-3 has no store; Logix keeps retained data in
      the controller's memory and checks a project's revision, unverified. RV-26 builds
      it.
+     *(Landed with RV-26, 2026-11-13, `eb57b4a`: every store the runner writes is `logex
+     retain 3`, `encode/2`, which names no program, `logex retain 2`, and versions 2 and 1
+     read as before; version 3's grammar is version 2's, end line and CRLF and decision
+     531 alike. A logex before RV-26, run at `7aa7954` and `4fd9d97`, refuses a version 3
+     store at a warm start, line 1 "the store is of version 3, which this logex does not
+     read: it reads `logex retain 2` and `logex retain 1`" and its end line as one its
+     header does not take, the one before RV-21 its `resource` and `program` lines too as
+     lines before any `instance` line; a cold start copies it to the next `.dropped.<n>`
+     and starts from the initial values; README's rollback passage says so and how the
+     copy is put back. Provisional, `PLAN.md`'s RV-26: a `logex retain 2` store that names
+     its program, RV-21's, compared by the bytes of the start's texts as it was written,
+     and a `logex retain 3` store that names none read as naming none.)*
 
 531. **A store that names its program in part, and where its lines stand (RV-21),**
      RV-21's question 5: a hand edit deletes the `resource` line of a fan's store and
@@ -15138,6 +15188,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      wherever they stand, as a global's line is, where the runner writes them straight
      after the configuration's. IEC and Logix have no store edited by hand. RV-26 makes
      the marks this decision's number.
+     *(RV-26, 2026-11-13, `eb57b4a`: `Logex.Retain`'s head comment, `Logex.Runner`'s
+     moduledoc and README's store passage cite this decision, and its rules hold for a
+     store of `logex retain 3` too, decision 530: a version 3 store with a `program` line
+     and no `resource` line refused at the first `program` line, and its lines read
+     wherever they stand, `retain_store_test.exs`'s "a store that names its program is
+     version 3, and versions 3, 2 and 1 read alike".)*
 
 ---
 

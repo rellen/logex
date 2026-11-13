@@ -2952,6 +2952,16 @@ defmodule Logex.RetainStoreTest do
       assert both == md5(printed(holder) <> "\ngate\n" <> printed(block))
       assert held.("// the gate\r\n\r\n" <> String.replace(block, "\n", "\r\n")) == both
       refute held.(String.replace(block, "add k 1 k", "add k 2 k")) == both
+
+      # A text that does not lex or parse, which only a program built by hand holds, is
+      # digested as its bytes, never raising.
+      {:ok, program} = Logex.compile(text, name: "p")
+
+      for bytes <- ["xic a $", "( xic a", "xic a | xic b )"] do
+        config = configured("program p1 p\n  p1.a 0\n  p1.b 0\n", %{"p" => program})
+        config = %{config | programs: %{"p" => %{program | source: bytes}}}
+        assert Retain.written_by(config).programs["p"] == md5(bytes)
+      end
     end
 
     # Decision 527 (RV-26), through the runner: a fresh start from files laid out anew, a

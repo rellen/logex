@@ -381,10 +381,10 @@ another program than the files', an edit that never reached them; the simulator 
 and giving the configuration's addresses once a runner has opened it; the examples as
 files under `examples/`; and an adapter of a host's own beside the simulator ("A
 device's adapter", below). The maintainer answered RV-20's and RV-21's questions on
-2026-11-13, decisions 522–531. Waiting: CI naming a failed test, a release step,
-typespecs with Dialyzer, the runner split by concern, and RV-26: a program's text read
-canonically before the store compares it, the stale store's warning naming both causes
-and sent to the subscribers too, and the store written as `logex retain 3`.
+2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
+before the store compares it, the stale store's warning naming both causes and sent to
+the subscribers too, and the store written as `logex retain 3`. Waiting: CI naming a
+failed test, a release step, typespecs with Dialyzer, and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3489,15 +3489,16 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   retain 3` with no `resource` or `program` line, a hand edit's, is read as naming no
   program (provisional). A logex from before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
-  `tally.retain: line 1: the store is of version 3, which this logex does not read: it
-  reads `logex retain 2` and `logex retain 1``, and its end line as one its header does
+  ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
+  reads `logex retain 2` and `logex retain 1` ``, and its end line as one its header does
   not take; one from before RV-21 tells its `resource` and `program` lines too, as lines
   that come before any `instance` line. It starts the store only `start: :cold`, which
   copies it first, to `tally.retain.dropped.1`, and starts the count at 0: the count is
   lost unless the copy is put back, either once this logex is back, which reads it as
   it is, or by hand for the older one, its first line made `logex retain 2` and, for a
   logex from before RV-21, its `resource` and `program` lines taken away and its end
-  line's count made two fewer. The runner ends each line with LF
+  line's count made two fewer, RV-21's logex then warning that each type's text differs,
+  the digests being this logex's. The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
@@ -5702,9 +5703,10 @@ in every cycle's outputs at the value it holds.
   start can switch an output on at once, as `a_warm_trip.exs`'s case-full lamp does
   above; the configuration warns only of a retained var_output wired straight to an
   output point (decision 272). A fresh start from a store another program wrote, an edit
-  made online that never reached the files, is warned of in `status/1` and refused
-  nothing: the store's values are laid over the program the start was given, by name and
-  type, and run at once (decision 517 (c)). And a host's own child spec that restarts a
+  made online that never reached the files or a deploy of changed files, is warned of in
+  `status/1` and to each subscription that takes `:retain`, and refused nothing: the
+  store's values are laid over the program the start was given, by name and type, and
+  run at once (decisions 517 (c), 527 and 528). And a host's own child spec that restarts a
   crashed runner restarts it warm wherever it names a store, since a fresh start reads
   its store warm unless `start: :cold`.
 
