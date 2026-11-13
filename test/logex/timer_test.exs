@@ -51,6 +51,7 @@ defmodule Logex.TimerTest do
     test "energised, `.dn` and `.en` set and `.acc` and `.tt` 0; the falling edge starts " <>
            "the delay, adding nothing; `.dn` drops at the preset, and stays off at rest" do
       p = c!(@fan)
+      unused = 1
 
       assert members(p, levels("motor", [1, 1, 0, 0, 0, 0, 0, 0]), "run_on") == [
                {0, 1, 0, 1},
