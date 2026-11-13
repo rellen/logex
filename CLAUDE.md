@@ -35,9 +35,9 @@ own documentation holds:
 - `scripts/gate.sh [log]` — the four gates of `CONTRIBUTING.md`'s "Before you commit" in
   order, by exit code, printing `GATE-OK` or `GATE-FAIL rc=<n>` and the tests that failed;
   `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, `file:line:
-  Module: test name`, as CI's test step does after a red run; the manifest keeps a test's
-  failure until a run passes it, so after runs by hand it may name an earlier run's; the
-  scripts delete the manifest before each run.
+  Module: test name`, and with `--exit N` judges a run, as CI's test step does; the
+  manifest keeps a test's failure until a run passes it, so after runs by hand it may name
+  an earlier run's; the scripts delete the manifest before each run.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -271,7 +271,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   names and parses, and runs in a setup it makes where it gives one, held to README's
   prose (`CONTRIBUTING.md`, "Landing work stales the plan").
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
-  each test's line read from its file, and CI's test step run as the workflow writes it.
+  each test's line read from its file, CI's workflow held to every gate and its test step
+  run as written, and `scripts/gate.sh` over a stand-in `mix`.
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
   repository, every check passed and each taken back.

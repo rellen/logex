@@ -1,7 +1,8 @@
 # The four gates CONTRIBUTING.md asks of every commit (PLAN.md §4·B3), each a step of its
 # own, so each is judged by its own exit code, the suite's step naming the tests a red run
-# failed. The toolchain is the pair mix.exs and shell.nix pin: Erlang/OTP 28 and Elixir
-# 1.20.4.
+# failed. Every push and pull request runs them all, no step skipped and no failure let
+# pass (test/logex/scripts_test.exs). The toolchain is the pair mix.exs and shell.nix pin:
+# Erlang/OTP 28 and Elixir 1.20.4.
 name: CI
 
 on:
@@ -47,19 +48,19 @@ jobs:
         env:
           MIX_ENV: test
 
-      # The suite, judged by its exit code, and after a red run the tests that failed, a line
-      # each, `file:line: Module: test name` (decision 515 (e)): ExUnit's own summary,
-      # `Result: 2938/2939 passed`, names none. `scripts/failed.exs` reads ExUnit's failures
-      # manifest, deleted first, as `scripts/gate.sh` deletes it, so that it names this
-      # run's failures alone and none a cached `_build` kept. The step exits with mix test's
-      # code; test/logex/scripts_test.exs runs it as written here.
+      # The suite, and after it the tests that failed, a line each, `file:line: Module: test
+      # name` (decision 515 (e)): ExUnit's own summary, `Result: 2938/2939 passed`, names
+      # none. `scripts/failed.exs --exit` reads ExUnit's failures manifest, deleted first, as
+      # `scripts/gate.sh` deletes it, so that it names this run's failures alone and none a
+      # cached `_build` kept; after a red run it names them, or says why it names none, and
+      # exits with mix test's code, and after a green one it exits 1 where ExUnit wrote no
+      # manifest, a suite a test halted. No key but these three, so that nothing skips the
+      # step or lets its failure pass; test/logex/scripts_test.exs holds this file to that
+      # and runs the step as written here.
       - name: mix test --warnings-as-errors
         shell: bash
         run: |
           rm -f _build/test/lib/logex/.mix/.mix_test_failures
-          mix test --warnings-as-errors || {
-            rc=$?
-            echo "mix test exited $rc; the tests that failed:"
-            elixir scripts/failed.exs
-            exit "$rc"
-          }
+          rc=0
+          mix test --warnings-as-errors || rc=$?
+          elixir scripts/failed.exs --exit "$rc"

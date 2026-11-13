@@ -3,28 +3,44 @@
 # passed` and, under a busy log, the failures can be hard to find). Run from the project's
 # root:
 #
-#     elixir scripts/failed.exs
+#     elixir scripts/failed.exs             # by hand: the failures the manifest holds
+#     elixir scripts/failed.exs --exit N    # after a run: N, mix test's exit code
 #
 # It reads the manifest of the test build, `_build/test/lib/logex/.mix/.mix_test_failures`
-# (MIX_BUILD_PATH or MIX_BUILD_ROOT, where set, moves it), and prints nothing for a
-# manifest that holds no failure. The manifest is ExUnit's own, kept across runs: a test's
-# failure stays in it until a run passes that test, so after a run of one file by hand it
-# may still name a failure of another file's earlier run. `scripts/gate.sh`,
-# `scripts/mutate.sh` and `scripts/load.sh` delete it before each run, and so does CI's
-# test step, which runs this after a red `mix test` (decision 515 (e)), so after them it
-# names that run's failures alone. A suite whose test files fail to compile or load runs
-# no test, and ExUnit marks it failed whole, which is told in one line beginning `suite:`.
+# (MIX_BUILD_PATH or MIX_BUILD_ROOT, where set, moves it), and by hand prints nothing for a
+# manifest that holds no failure, or for none. The manifest is ExUnit's own, kept across
+# runs: a test's failure stays in it until a run passes that test, so after a run of one
+# file by hand it may still name a failure of another file's earlier run. A suite whose
+# test files fail to compile or load runs no test, and ExUnit marks it failed whole, which
+# is told in one line beginning `suite:`.
+#
+# `--exit N` is for a run made with the manifest deleted before it, as `scripts/gate.sh`
+# and CI's test step make theirs (decision 515 (e)): it judges the run and exits with the
+# run's verdict. ExUnit writes the manifest as the suite finishes, `{1, %{}}` for a run
+# that passed, so a run that wrote none did not finish. After a red run, N not 0, it
+# prints `mix test exited N; the tests that failed:` and the tests, or, where it names
+# none, why: no manifest, the suite did not finish (a test halted the VM, or mix test
+# stopped before the suite ran); or a manifest of no failure, every test that ran passed
+# and mix test exited N for another reason, a warning under `--warnings-as-errors` for
+# one; and it exits N. After a run that exited 0 it prints nothing and exits 0 where the
+# manifest is there and names no failure; where there is none, the suite did not finish,
+# a test having halted the VM with code 0, and it says so and exits 1, as it does for a
+# manifest that names a failure.
 #
 # The manifest gives a test's module, name and file but not its line, so the line is read
 # from the file's syntax tree: the `test` or `doctest` call in that module whose name, its
 # `describe`'s before it, gives the test's, as ExUnit builds it, a part interpolated or
 # not a string matching any text, a module whose name the compile makes, as
 # `Module.concat/2` in a comprehension does, any module, and a name ExUnit cut to 255
-# bytes cut alike. A test
-# no call names so, one a helper or macro of the file's own defines, is printed with its
-# file alone, `file: Module: test name`, as is one whose file is gone or does not parse.
-# The line is the call's, the line `mix test file:line` runs and ExUnit's report gives.
-# A script, not a test: it uses `case` freely.
+# bytes cut alike. Where more than one call could name a test, the surest is taken: a call
+# in the test's own module before one in a module the compile names, and in each a call
+# whose name is all literal text, exactly the test's, before one whose name the compile
+# makes; and where the surest are more than one, as two comprehensions' tests whose names
+# both match are, the file alone is given, never a line that may be another test's. A
+# test no call names so, one a helper or macro of the file's own defines, is printed with
+# its file alone, `file: Module: test name`, as is one whose file is gone or does not
+# parse. The line is the call's, the line `mix test file:line` runs and ExUnit's report
+# gives. A script, not a test: it uses `case` freely.
 defmodule Failed.Lines do
   @moduledoc false
 
@@ -39,17 +55,37 @@ defmodule Failed.Lines do
     end
   end
 
-  # Where the test `{module, name}` among a file's `tests` is: `file:line`, or the file
-  # alone where no call names it.
+  # Where the test `{module, name}` among a file's `tests` is: `file:line` where one call
+  # alone is the surest that could name it, else the file alone.
   def at(file, tests, module, name) do
     text = Atom.to_string(name)
     module = inspect(module)
 
-    tests
-    |> Enum.find_value(fn {in_module, match, line} ->
-      in_module in [module, :any] and matches?(match, name, text) and line
-    end)
+    for {in_module, match, line} <- tests,
+        in_module in [module, :any],
+        matches?(match, name, text) do
+      {{sureness(in_module), sureness(match)}, line}
+    end
+    |> surest()
     |> located(file)
+  end
+
+  # A call in the test's own module before one in a module the compile names; a name of
+  # literal text alone before one the compile makes.
+  defp sureness(:any), do: 1
+  defp sureness({:exact, _}), do: 0
+  defp sureness({:regex, _}), do: 1
+  defp sureness(_module), do: 0
+
+  defp surest([]), do: nil
+
+  defp surest(found) do
+    best = found |> Enum.map(&elem(&1, 0)) |> Enum.min()
+
+    case for({^best, line} <- found, uniq: true, do: line) do
+      [line] -> line
+      _ -> nil
+    end
   end
 
   defp located(nil, file), do: file
@@ -78,8 +114,14 @@ defmodule Failed.Lines do
   defp collect({:doctest, meta, [documented | _]}, module, _, acc) when module != nil do
     documented = Macro.to_string(documented)
 
+    # ExUnit's names, `doctest module M (n)` and `doctest M.fun/arity (n)`, a function's
+    # name never beginning as a module's does, so that `M.Sub`'s are not `M`'s.
     regex =
-      Regex.compile!("^doctest (module )?" <> Regex.escape(documented) <> "[ .]")
+      Regex.compile!(
+        "^doctest (module #{Regex.escape(documented)}|#{Regex.escape(documented)}\\.[^A-Z].*" <>
+          "/\\d+) \\(\\d+\\)$",
+        "s"
+      )
 
     [{module, {:regex, regex}, meta[:line]} | acc]
   end
@@ -139,28 +181,77 @@ build =
 
 path = Path.join([build, "lib", "logex", ".mix", ".mix_test_failures"])
 
-case File.read(path) do
-  {:ok, binary} ->
-    case :erlang.binary_to_term(binary) do
-      {_version, :all} ->
-        IO.puts(
-          "suite: no test ran: a test file failed to compile or load, so ExUnit marked " <>
-            "the whole suite failed; mix test's output names the file"
-        )
+manifest =
+  case File.read(path) do
+    {:ok, binary} -> :erlang.binary_to_term(binary)
+    {:error, :enoent} -> :none
+  end
 
-      {_version, failures} ->
-        tests =
-          failures
-          |> Map.values()
-          |> Enum.uniq()
-          |> Map.new(&{&1, Failed.Lines.tests(&1)})
+named =
+  case manifest do
+    :none ->
+      []
 
-        for {{module, name}, file} <- Enum.sort(failures) do
-          at = Failed.Lines.at(Path.relative_to_cwd(file), tests[file], module, name)
-          IO.puts("#{at}: #{inspect(module)}: #{name}")
-        end
-    end
+    {_version, :all} ->
+      [
+        "suite: no test ran: a test file failed to compile or load, so ExUnit marked " <>
+          "the whole suite failed; mix test's output names the file"
+      ]
 
-  {:error, :enoent} ->
-    :ok
+    {_version, failures} ->
+      tests =
+        failures
+        |> Map.values()
+        |> Enum.uniq()
+        |> Map.new(&{&1, Failed.Lines.tests(&1)})
+
+      for {{module, name}, file} <- Enum.sort(failures) do
+        at = Failed.Lines.at(Path.relative_to_cwd(file), tests[file], module, name)
+        "#{at}: #{inspect(module)}: #{name}"
+      end
+  end
+
+# After a run of the suite, `code` its exit code: what to print, and the run's verdict.
+judged = fn
+  0, :none, [] ->
+    {[
+       "mix test exited 0, and ExUnit wrote no failures manifest: the suite did not " <>
+         "finish, a test having halted the VM, so the run is red; the output above names " <>
+         "any test that failed before it stopped"
+     ], 1}
+
+  0, _manifest, [] ->
+    {[], 0}
+
+  code, _manifest, [_ | _] = named ->
+    {["mix test exited #{code}; the tests that failed:" | named], max(code, 1)}
+
+  code, :none, [] ->
+    {[
+       "mix test exited #{code}; the tests that failed:",
+       "none named: ExUnit wrote no failures manifest, so the suite did not finish: a " <>
+         "test halted the VM, or mix test stopped before the suite ran; the output above " <>
+         "names any test that failed before it stopped"
+     ], code}
+
+  code, _manifest, [] ->
+    {[
+       "mix test exited #{code}; the tests that failed:",
+       "none named: every test that ran passed, and mix test exited #{code} for another " <>
+         "reason, above: a warning under --warnings-as-errors, for one"
+     ], code}
+end
+
+case {System.argv(), Integer.parse(Enum.at(System.argv(), 1, ""))} do
+  {[], _} ->
+    Enum.each(named, &IO.puts/1)
+
+  {["--exit", _], {code, ""}} when code >= 0 ->
+    {lines, verdict} = judged.(code, manifest, named)
+    Enum.each(lines, &IO.puts/1)
+    System.halt(verdict)
+
+  _ ->
+    IO.puts(:stderr, "usage: elixir scripts/failed.exs [--exit N]")
+    System.halt(2)
 end

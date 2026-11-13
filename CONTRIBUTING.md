@@ -586,9 +586,15 @@ exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 th
 item's report says so. Its test step ends a red run's log with each test that failed,
 `file:line: Module: test name` a line, as `scripts/gate.sh` does here: it deletes ExUnit's
 failures manifest, runs `mix test --warnings-as-errors` with its output in the log, and
-after a red run `elixir scripts/failed.exs`, exiting with the suite's code (decision 515
-(e)); `test/logex/scripts_test.exs` runs the step as the workflow writes it. A push runs CI on the commit it ends at alone, so push each commit
-you want checked, and read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
+then `elixir scripts/failed.exs --exit` with the suite's code, which names the tests a red
+run failed, or says why it names none, and exits with that code, and makes a run that
+exited 0 and wrote no manifest, a suite a test halted, red (decision 515 (e)).
+`test/logex/scripts_test.exs` runs the step as the workflow writes it, and holds the
+workflow to every gate on every push and pull request, no step carrying a key, an `if:`
+or `continue-on-error:` for one, that could skip it or let its failure pass: on GitHub a
+failing suite under `continue-on-error: true` is a green job (RV-22's review, run 7). A
+push runs CI on the commit it ends at alone, so push each commit you want checked, and
+read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
 warning in a file you did not touch still fails the build. `mix compile` never compiles the
 tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
 checker printed two warnings on every run of `runtime_test.exs`, across six commits that
@@ -650,10 +656,13 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
 - **`scripts/gate.sh [log] [mix test args]`** runs the four gates of "Before you commit"
   in order, the first that fails stopping the rest, writes what they print to the log
   (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
-  rc=<n>`, and exits with the gates' code. A failed suite is followed by the tests that
-  failed, `file:line: Module: test name` a line, read from ExUnit's failures manifest by
-  `scripts/failed.exs`, since `Result: 2406/2407 passed` names none, and a long log hides
-  them. CI's test step names them the same way ("Before you commit").
+  rc=<n>`, and exits with the gates' code. The suite is judged by `elixir
+  scripts/failed.exs --exit`, as CI's test step judges it ("Before you commit"): a failed
+  suite is followed by the tests that failed, `file:line: Module: test name` a line, read
+  from ExUnit's failures manifest, since `Result: 2406/2407 passed` names none, and a long
+  log hides them, or by why none is named; and a suite that exits 0 with no manifest
+  written, one a test halted with `System.halt(0)`, is `GATE-FAIL rc=1`, where `mix test`
+  alone reports it green.
 - **`elixir scripts/failed.exs`** prints the tests ExUnit's failures manifest holds. The
   manifest is ExUnit's own and kept across runs: a test's failure stays in it until a run
   passes that test, so after a failing run of one file and a passing run of another it
@@ -664,8 +673,18 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   its file's syntax tree, the `test` or `doctest` call whose name, its `describe`'s before
   it, is the test's, a part the compile makes matching any text; it is the line ExUnit's
   own report gives, which `mix test file:line` runs again, the same for each of the
-  suite's 2,988 tests when RV-22 compared them. A test no such call names, one a helper of
-  a test file's own defines, is given its file alone.
+  suite's 3,013 tests when RV-22's review compared them. Where more than one call could
+  name a test, the surest gives the line, a call in the test's own module before one in a
+  module the compile names, and a name all literal before one the compile makes; where
+  the surest are more than one, as a literal-named loop's `test name` and another loop's
+  test both match, the file alone is given, never a line that may be another test's. A
+  test no such call names, one a helper of a test file's own defines, is given its file
+  alone. With `--exit N`, after a run made with the manifest deleted before it, `N` the
+  run's exit code, it judges the run: a red one's tests under the heading `mix test exited
+  N; the tests that failed:`, or why none is named, no manifest (the suite did not finish)
+  or a manifest of no failure (a warning under `--warnings-as-errors`, for one), exiting
+  `N`; and a run that exited 0, silent and 0 where the manifest is there and names no
+  failure, red, 1, where there is none.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
   mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
   then restore the tree; the script applies each patch in turn (`git apply`), runs the
