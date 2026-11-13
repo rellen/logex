@@ -218,6 +218,42 @@ defmodule Logex.RetainStoreTest do
       |> String.split()
       |> Enum.join(" ")
 
+  # Decision 528 (RV-26): the warnings a process of its own is sent as it subscribes by
+  # each list of kinds in turn, `:default` the default kinds and `:unsubscribe` an
+  # unsubscribe, each step's heard before the next, the runner sending it before it answers.
+  defp warnings_heard(runner, steps) do
+    test = self()
+
+    pid =
+      spawn(fn -> send(test, {:heard, self(), Enum.map(steps, &warning_step(runner, &1))}) end)
+
+    assert_receive {:heard, ^pid, heard}, 5000
+    heard
+  end
+
+  defp warning_step(runner, :unsubscribe) do
+    :ok = Runner.unsubscribe(runner)
+    warnings_received([])
+  end
+
+  defp warning_step(runner, :default) do
+    :ok = Runner.subscribe(runner)
+    warnings_received([])
+  end
+
+  defp warning_step(runner, kinds) do
+    :ok = Runner.subscribe(runner, kinds)
+    warnings_received([])
+  end
+
+  defp warnings_received(heard) do
+    receive do
+      {Runner, _runner, {:retain, {:warning, message}}} -> warnings_received([message | heard])
+    after
+      0 -> Enum.reverse(heard)
+    end
+  end
+
   # Decision 517 (c) (RV-21): a fresh start's warning that its store was written by
   # another text of `tally` than the one it was given, the store named as the host spelled
   # it.
@@ -1720,6 +1756,9 @@ defmodule Logex.RetainStoreTest do
 
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, retyped()))
       :ok = Runner.subscribe(runner)
+      # Decision 528 (RV-26): the subscription hears the start's warning, its program
+      # retyped, as it subscribes.
+      assert_received {Runner, ^runner, {:retain, {:warning, _warning}}}
 
       assert %{status: :running, retain: %{failed: :eisdir, copy: nil, dropped: [_drop]}} =
                Runner.status(runner)
@@ -2657,6 +2696,68 @@ defmodule Logex.RetainStoreTest do
       opener_down(rig.panel)
       {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, edited()))
       assert Runner.status(runner).retain.warning == nil
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 528 (RV-26): the warning is an event to the subscribers too, `{:retain,
+    # {:warning, message}}`, and since none can exist before `start_link/1` returns
+    # (decision 324), each subscription that takes `:retain`, by default or by name, is sent
+    # it as it subscribes, before subscribe/2 answers, while the warning stands, for the
+    # runner's life as `status/1`'s does, and once: subscribing again with `:retain` among
+    # the kinds sends nothing more, one that adds it hears it, and one made after an
+    # unsubscribe is a new one. Nothing else sends it, a round, a period's write, a trip, a
+    # warm and a cold restart, an edit's steps or a stop; and a start that warns of nothing
+    # sends nothing (provisional, `PLAN.md`'s RV-26).
+    test "the warning is sent to each subscription that takes :retain, once, as it " <>
+           "subscribes",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert {:ok, _forecast} = Runner.accept(runner, edited())
+      assert {:ok, _report} = Runner.test(runner)
+      assert {:ok, _report} = Runner.assemble(runner)
+      assert Runner.stop(runner) == :ok
+
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      warning = warned(rig.store)
+      assert Runner.subscribe(runner) == :ok
+      assert_received {Runner, ^runner, {:retain, {:warning, ^warning}}}
+
+      assert warnings_heard(runner, [
+               [:round],
+               [:round, :retain],
+               [:retain, :trip],
+               :unsubscribe,
+               :default,
+               :default
+             ]) == [[], [warning], [], [], [warning], []]
+
+      # Nothing else sends it: a round, a period's write, a trip, a warm and a cold
+      # restart and an edit's steps, the warning standing in status/1 throughout.
+      pressed(rig, [0, 1])
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      tripped(rig, runner)
+      assert Runner.restart(runner, :warm) == :ok
+      tripped(rig, runner)
+      assert Runner.restart(runner, :cold) == :ok
+      assert {:ok, _forecast} = Runner.accept(runner, configured())
+      for step <- [:test, :untest, :cancel], do: assert({:ok, _} = apply(Runner, step, [runner]))
+      assert Runner.status(runner).retain.warning == warning
+      refute_received {Runner, ^runner, {:retain, {:warning, _}}}
+
+      # A subscription made after them all hears it, the warning standing.
+      assert warnings_heard(runner, [[:retain]]) == [[warning]]
+      assert Runner.stop(runner) == :ok
+      refute_received {Runner, ^runner, {:retain, {:warning, _}}}
+
+      # The store the stop wrote names the files' program: a start from it warns of
+      # nothing, and sends nothing.
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.status(runner).retain.warning == nil
+      assert warnings_heard(runner, [:default, [:retain]]) == [[], []]
       assert Runner.stop(runner) == :ok
     end
 

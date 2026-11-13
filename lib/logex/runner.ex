@@ -274,7 +274,10 @@ defmodule Logex.Runner do
     default, with `{:edit, step, report}`, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
     `{:round, now, outputs}`, each round's output points, since decision 474 those its
     writes reached where the round is cut once they have begun; and since M6-5, by default,
-    `{:retain, {:error, reason}}`, a store write that failed, and since decision 493
+    `{:retain, {:error, reason}}`, a store write that failed, and since decision 528
+    (RV-26) `{:retain, {:warning, message}}`, the fresh start's warning that its store was
+    written by another program, sent to a subscription that takes `:retain` as it
+    subscribes (below), and since decision 493
     (RV-19) `{:forces, {:error, reason}}`, the write of the runner's own set an orderly
     end made while the forces file stood unread (decision 472) that failed or was cut, a
     shutdown's, which answers no caller, among them (decision 507: a kind of its own, sent
@@ -495,7 +498,14 @@ defmodule Logex.Runner do
     naming the store as the host spelled it, each that differs and both causes, a deploy
     of changed files, or an edit tested or assembled online, which lives in the runner and
     its store and not in the files, that never reached the files the start was given
-    (decision 527); it
+    (decision 527), and since decision 528 tells it to the subscribers, `{:retain,
+    {:warning, message}}`: since none can exist before `start_link/1` returns (decision
+    324), each subscription that takes `:retain`, by default or by name, is sent it as it
+    subscribes, before `subscribe/2` answers, for as long as the warning stands, the
+    runner's life, and once, subscribing again with `:retain` among the kinds sending
+    nothing more, one that adds it hearing it and one made after an unsubscribe a new one;
+    a round, a trip, a restart, an edit's step, the store's next write and a stop send it
+    to no one (provisional, `PLAN.md`'s RV-26); it
     changes nothing else, the image laid over the configuration by name and type as
     decision 277 has it, and a store written before RV-21, which names no program, warns
     of nothing and is read as before. A cold start, which lays nothing over, warns of
@@ -523,7 +533,8 @@ defmodule Logex.Runner do
     written through it, and a clock with no `wall_ms/1` (decision 322). The first round's
     `{:retain, ...}` news, the store's age and its drops, reaches no subscriber, since
     none can exist before `start_link/1` returns: `status/1`'s `retain` carries both
-    (decision 324).
+    (decision 324); its warning that the store was written by another program is sent to
+    each subscription as it takes `:retain` (decision 528, above).
 
   **Forcing** (M4-5; decisions 117 and 127). `force(runner, point, value)` makes the
   runner read an input point, by its name, at `value`, whatever its device says: every
@@ -1309,9 +1320,11 @@ defmodule Logex.Runner do
   such write stands, as `copy` is since decision 412, so that a display that reads the
   three keys finds each on a healthy plant; and since decision 517 (c) (RV-21) `warning`,
   always there, nil but where a warm fresh start found its store written by another
-  program than the one it was given, an edit tested or assembled online that never reached
-  the files among the causes, the message that says which differs (the moduledoc's "A
-  fresh start"), for the runner's life, as `dropped` is.
+  program than the one it was given, by a deploy of changed files or an edit tested or
+  assembled online that never reached the files (decision 527), the message that says
+  which differs (the moduledoc's "A fresh start"), for the runner's life, as `dropped` is,
+  and since decision 528 sent to each subscription that takes `:retain` as it subscribes,
+  `{:retain, {:warning, message}}` (`subscribe/2`).
   """
   def status(runner), do: call(runner, :status)
 
@@ -1319,7 +1332,13 @@ defmodule Logex.Runner do
   Subscribes the caller to the runner's events of the kinds named, each sent as
   `{Logex.Runner, runner, event}`: `:overlap` and `:fault`, the resource's own, and
   `:trip`, `:restart`, `:edit` and `:retain`, `{:retain, {:error, reason}}`, a store write
-  that failed, and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
+  that failed, and since decision 528 (RV-26) `{:retain, {:warning, message}}`, the fresh
+  start's warning that its store was written by another program than the one it was
+  given (`status/1`'s `warning`), sent as the subscription takes `:retain`, before this
+  answers, since no subscriber could exist when the start found it (decision 324), for
+  as long as it stands, the runner's life, and once a subscription: subscribing again
+  with `:retain` among the kinds sends it no more, and one made after `unsubscribe/1` is
+  a new one (provisional), and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
   of the runner's own set over a forces file it could not read (decision 472) that an
   orderly end made and that failed or was cut, a shutdown's among them, which answers no
   caller, so that an HMI or a log can warn that the next start may bring back an old
@@ -2020,8 +2039,17 @@ defmodule Logex.Runner do
   defp serve({:get!, path}, %{runtime: runtime} = state), do: {Runtime.get!(runtime, path), state}
   defp serve(:status, state), do: {status_of(state), state}
 
+  # Decision 528 (RV-26): a subscription that takes `:retain` is sent the fresh start's
+  # warning as it subscribes, `{:retain, {:warning, message}}`, while the warning stands,
+  # which is the runner's life, as `status/1`'s does, before the subscription is answered;
+  # once a subscription, so that subscribing again with `:retain` among the kinds sends
+  # nothing more, where one that adds it hears it, and one made after an unsubscribe is a
+  # new one (provisional, `PLAN.md`'s RV-26: no subscriber exists before start_link/1
+  # returns, decision 324, so the start's own publishing reaches no one).
   defp serve({:subscribe, pid, kinds}, %{subscribers: subscribers} = state) do
-    demonitor(Map.get(subscribers, pid))
+    held = Map.get(subscribers, pid)
+    demonitor(held)
+    warned(state.retain, taken?(held), :retain in kinds, pid)
     {:ok, %{state | subscribers: Map.put(subscribers, pid, {Process.monitor(pid), kinds})}}
   end
 
@@ -2960,6 +2988,16 @@ defmodule Logex.Runner do
   defp forcing_of(nil), do: nil
   defp forcing_of(%{forces: forces}), do: forces
 
+  # Decision 528 (RV-26): the warning sent to a subscription taking `:retain` that did not
+  # take it before (serve/2's `:subscribe`).
+  defp warned(%{warning: message}, false, true, pid) when is_binary(message),
+    do: send(pid, {__MODULE__, self(), {:retain, {:warning, message}}})
+
+  defp warned(_retain, _taken, _takes, _pid), do: :ok
+
+  defp taken?({_ref, kinds}), do: :retain in kinds
+  defp taken?(nil), do: false
+
   # Each event of a kind its subscriber named, sent, never awaited.
   defp published(%{subscribers: subscribers}, events),
     do:
@@ -3153,8 +3191,10 @@ defmodule Logex.Runner do
   # leave both as they are, each write, the period's, a trip's, a cold restart's and a
   # stop's, naming `by`, so that the write after an assembled edit names the edited program
   # and the next fresh start from files the edit never reached warns; and `warning`, under
-  # `retain` too, the fresh start's, which a round, a trip, a restart, an edit's step and a
-  # stop leave as it is, as `dropped` is.
+  # `retain` too, the fresh start's, which a round, a trip, a restart, an edit's step, the
+  # store's next write and a stop leave as it is, as `dropped` is, and since decision 528
+  # (RV-26) each subscription is sent as it takes `:retain`, none of them sending it again
+  # (serve/2's `:subscribe`, provisional).
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}

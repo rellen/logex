@@ -3645,7 +3645,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   comments, empty lines, line ends, spacing or a literal's spelling alone does not; a
   store an earlier logex wrote names no program and warns of nothing, and a cold start,
   which lays nothing over, warns of nothing. `warning` is always in the report, nil where
-  nothing warned, for the runner's life, as `dropped` is.
+  nothing warned, for the runner's life, as `dropped` is. The warning is an event too,
+  `{:retain, {:warning, message}}` (decision 528): since no subscriber can exist before
+  `start_link/1` returns, an HMI or a log that subscribes to `:retain`, as `subscribe/1`'s
+  default kinds do, is sent it as it subscribes, before `subscribe/2` returns, whenever it
+  subscribes in the runner's life, once a subscription; nothing else sends it again, a
+  round, a trip, a restart, an edit's step or the store's next write
+  (provisional).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),
@@ -4054,7 +4060,9 @@ closed: true
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's
-  write that failed, `{:retain, {:error, reason}}`, and a forces file's write an orderly
+  write that failed, `{:retain, {:error, reason}}`, a fresh start's warning that its store
+  was written by another program, `{:retain, {:warning, message}}`, sent as a
+  subscription takes `:retain` (decision 528, below), and a forces file's write an orderly
   end made that failed, `{:forces, {:error, reason}}` (decision 493, below; a kind of its
   own, by default, decision 507); and `stop/2`
   writes every output 0 once and closes every device before it returns.

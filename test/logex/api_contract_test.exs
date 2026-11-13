@@ -14894,6 +14894,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       # Decision 517 (c) (RV-21): the configuration the resource ran at the last write, the
       # program that write names.
       shelf_by: nil,
+      # Decision 528 (RV-26): the warning the last fresh start gave, as the model restated
+      # it, which every subscription that takes `:retain` hears once as it subscribes.
+      life_warning: nil,
       # M6-8's review: the trigger `g`'s last sample, the one its task's cycle took last.
       g_sample: 0,
       start: nil,
@@ -15513,7 +15516,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     w = shelved_at_start(image, w, rt)
     life_drops!(w)
-    life_warned!(warning, w)
+    w = life_warned!(warning, w)
     w = copied_at(w, saved, standing, cold)
     # The first round's record came before the subscription: it ends with no event, and
     # where a fresh start reads forces that make a major fault, as M5-12's element can
@@ -16562,7 +16565,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_warned_stepped,
     # Decision 527 (RV-26): a warm start given types laid out anew, every one's bytes other
     # than the store's writer's and its text as it prints the same, warned of nothing.
-    :life_laid_out_unwarned
+    :life_laid_out_unwarned,
+    # Decision 528 (RV-26): a subscription of `:retain` sent the warning once as it
+    # subscribed, after the start and later in the runner's life.
+    :life_warning_heard,
+    :life_warning_heard_later
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -16912,7 +16919,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_held(w) do
     w = writer_settled(settled(wait(w, w.period)))
-    life_hold(writers(w.runner), w)
+    w = life_hold(writers(w.runner), w)
+    life_heard!(w)
+    w
   end
 
   defp life_hold([], w), do: w
@@ -17044,6 +17053,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     owing = copy_blocked(rem(:erlang.phash2({File.read!(w.store), :owed}), 2), w)
     config = life_configured(w.draws.running, change, w.programs)
     w = copy_owed(started(%{w | change: change, owing: owing}, config))
+    # Decision 528 (RV-26): the changed start's warning heard again by a subscription made
+    # once the runner has run on, its writes made.
+    life_heard!(w)
+    reach(:life_warning_heard_later, w.life_warning != nil and w.rounds > 0)
     life_ended(:stop, %{w | owing: false}, :cold, configured(w.draws.running, w.programs))
   end
 
@@ -17302,7 +17315,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # The warning the start gave, as the model restated it, its reach by whether the start
   # was given the walk's own configuration, an edit's step since the last write, or a
   # changed one.
-  defp life_warned!(:unread, _w), do: :ok
+  defp life_warned!(:unread, w), do: w
 
   defp life_warned!(expected, w) do
     assert Runner.status(w.runner).retain.warning == expected
@@ -17311,6 +17324,42 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_warned_changed, expected != nil and w.change != nil)
     reach(:life_warned_stepped, expected != nil and w.change == nil)
     reach(:life_laid_out_unwarned, expected == nil and life_relaid_since?(w.shelf_by, w.config))
+    w = %{w | life_warning: expected}
+    life_heard!(w)
+    w
+  end
+
+  # Decision 528 (RV-26), restated: a subscription of `:retain`, in a process of its own so
+  # that the walk's own kinds stay as they are, is sent the warning the model restated
+  # as it subscribes, and nothing where there is none; subscribing again with `:retain`
+  # among the kinds, nothing more. Made after the start and again later in the runner's
+  # life (`life_held/1`), the warning standing for it.
+  defp life_heard!(w) do
+    walk = self()
+    runner = w.runner
+
+    listener =
+      spawn(fn ->
+        :ok = Runner.subscribe(runner, [:retain])
+        first = life_warnings([])
+        :ok = Runner.subscribe(runner, [:trip, :retain])
+        send(walk, {:warnings, self(), first, life_warnings([])})
+      end)
+
+    assert_receive {:warnings, ^listener, first, again}, 5000
+    assert {first, again} == {life_heard(w.life_warning), []}
+    reach(:life_warning_heard, w.life_warning != nil)
+  end
+
+  defp life_heard(nil), do: []
+  defp life_heard(warning), do: [warning]
+
+  defp life_warnings(heard) do
+    receive do
+      {Runner, _runner, {:retain, {:warning, message}}} -> life_warnings([message | heard])
+    after
+      0 -> Enum.reverse(heard)
+    end
   end
 
   # Decision 527 (RV-26): the store's writer and the start's programs of one text as it
