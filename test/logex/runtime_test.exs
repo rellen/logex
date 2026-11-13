@@ -2265,7 +2265,7 @@ add e i y",
     # `Logex.Tag.new!/5`; every other documented module of lib/ says in one sentence, the
     # same everywhere, that it takes logex's own data unguarded and names the contract.
     # Read from every module the application holds, its moduledoc as compiled. Inside the
-    # contract too, provisional readings each put to the maintainer (`PLAN.md`'s RV-20):
+    # contract too, decision 523's, taken as built (RV-20's readings):
     # the configuration's elements, `Logex.Configuration`'s own data which its `new!/1`
     # checks; `Logex.IO.Point`, what `Logex.IO`'s behaviour hands an adapter; and the
     # host's tools README's examples call, each of which refuses a host's mistake with a
@@ -2281,7 +2281,7 @@ add e i y",
       Logex.Tag
     ]
 
-    @provisional [
+    @decided [
       Logex.Configuration.Task,
       Logex.Configuration.Global,
       Logex.Configuration.Instance,
@@ -2336,7 +2336,7 @@ add e i y",
             {:docs_v1, _, :elixir, _, %{"en" => doc}, _, _} <- [Code.fetch_docs(module)],
             do: {module, String.replace(doc, ~r/\s+/, " ")}
 
-      inside = @contract ++ @provisional
+      inside = @contract ++ @decided
 
       assert Enum.sort(for {module, _doc} <- documented, module not in inside, do: module) ==
                Enum.sort([

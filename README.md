@@ -65,7 +65,7 @@ and `Connection`, which `Logex.Configuration.new!/1` checks, `Logex.IO.Sim`, the
 simulated device, and the runner's clocks, `Logex.Runner.Clock.Manual` the one a test
 moves; and outside it, on logex's own data, unguarded, `Logex.Diagnostic.format/1` on the
 diagnostics logex gives, `Logex.FbType.ctu/0` beside a tag's type and a `%Logex.Scan{}`
-that `Logex.Runtime.call/4` checks (provisional readings, `PLAN.md`'s RV-20, question 2).
+that `Logex.Runtime.call/4` checks (decision 523).
 
 ## The dialect
 
@@ -4068,8 +4068,8 @@ closed: true
 - Once a runner has opened it, a sim is set and read at the configuration's addresses,
   as `packing.logex` writes them: `set(panel, "panel.i.8", 1)` sets the eye, and
   `outputs/1` and `writes/1` give `case_full` under `"panel.q.4"`. A sim no runner has
-  opened knows no device's name, and is set by the adapter's list, `[8]` (decision 517
-  (e), provisional).
+  opened knows no device's name, and is set by the adapter's list, `[8]` (decisions 517
+  (e) and 529).
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's

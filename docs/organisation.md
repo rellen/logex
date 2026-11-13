@@ -4731,7 +4731,21 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   and each line is read wherever it stands, as a global's is; the header stays `logex
   retain 2`, so a logex before RV-21 refuses such a store at a warm start, its
   `resource` line told as one before any `instance` line, provisional, `PLAN.md`'s RV-21
-  question 4.)*
+  question 4.)* *(Decisions 527, 528, 530 and 531, RV-26, 2026-11-13: a `program` line's
+  digest is of each text as `Logex.Printer` prints its parse tree, one rung a line, one
+  space between its elements and each literal by its value, as the configuration's lines
+  are printed, so that a comment, an empty line, CRLF, spacing or a literal respelt in a
+  `.ld` changes nothing, and the warning names both causes, a deploy of changed files or
+  an edit tested or assembled online that never reached the files (527); the warning is
+  also an event, `{:retain, {:warning, message}}`, sent to each subscription as it takes
+  `:retain`, while it stands, once a subscription, no subscriber existing when the start
+  finds it (528, its delivery provisional); every store the runner writes is `logex
+  retain 3`, versions 2 and 1 read as before, so that a logex before RV-26 says at line 1
+  that it does not read version 3, a `logex retain 2` store that names its program,
+  RV-21's, compared by its types' bytes and a `logex retain 3` store that names none read
+  as naming none (530, provisional); and a store that names a type and no resource
+  refused, each line read wherever it stands, as built (531). The header's version, the
+  mark above, is decision 530's.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

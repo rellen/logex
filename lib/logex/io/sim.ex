@@ -22,8 +22,7 @@ defmodule Logex.IO.Sim do
   that device's name once the device closes it, between runners and after a stop; an open
   refused, another device holding the sim, names nothing, the sim keeping its holder's
   name, its addresses and its writes' spelling (RV-21's review); a test that calls the
-  callbacks itself opens no runner's, and its sim keeps the list (provisional,
-  `PLAN.md`'s RV-21 question 3):
+  callbacks itself opens no runner's, and its sim keeps the list (decision 529):
   - `set/3` and `set/2` take a list before a runner's open and the text after it; the
     other form is the test's mistake, its message naming the form the sim takes, and so
     is a text of an output, of another device or of no location in its one spelling,
@@ -860,7 +859,7 @@ defmodule Logex.IO.Sim do
   # `panel.i.0`, read as the configuration reads a location (`Logex.Configuration.
   # location/1`), its one spelling, and taken as its list, `[0]`; the other form, and a
   # text that is no input of the device's, the test's mistake, its message naming the
-  # form the sim takes (provisional, `PLAN.md`'s RV-21 question 3).
+  # form the sim takes (decision 529).
   defp addressed!(nil, address, _sim) when is_list(address), do: address!(address)
 
   defp addressed!(nil, address, sim) when is_binary(address),
