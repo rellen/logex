@@ -508,8 +508,10 @@ defmodule Logex.Runner do
     {:warning, message}}`: since none can exist before `start_link/1` returns (decision
     324), each subscription that takes `:retain`, by default or by name, is sent it as it
     subscribes, before `subscribe/2` answers, for as long as the warning stands, the
-    runner's life, and once, subscribing again with `:retain` among the kinds sending
-    nothing more, one that adds it hearing it and one made after an unsubscribe a new one;
+    runner's life, and once while the subscription takes `:retain`, subscribing again with
+    `:retain` among the kinds sending nothing more, one that adds it hearing it, one that
+    took it away by subscribing to other kinds among them, and one made after an
+    unsubscribe a new one;
     a round, a trip, a restart, an edit's step, the store's next write and a stop send it
     to no one (provisional, `PLAN.md`'s RV-26); it
     changes nothing else, the image laid over the configuration by name and type as
@@ -1342,9 +1344,10 @@ defmodule Logex.Runner do
   start's warning that its store was written by another program than the one it was
   given (`status/1`'s `warning`), sent as the subscription takes `:retain`, before this
   answers, since no subscriber could exist when the start found it (decision 324), for
-  as long as it stands, the runner's life, and once a subscription: subscribing again
-  with `:retain` among the kinds sends it no more, and one made after `unsubscribe/1` is
-  a new one (provisional), and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
+  as long as it stands, the runner's life, and once while the subscription takes
+  `:retain`: subscribing again with `:retain` among the kinds sends it no more, one that
+  takes `:retain` away by subscribing to other kinds and then takes it back hears it
+  again, and one made after `unsubscribe/1` is a new one (provisional), and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
   of the runner's own set over a forces file it could not read (decision 472) that an
   orderly end made and that failed or was cut, a shutdown's among them, which answers no
   caller, so that an HMI or a log can warn that the next start may bring back an old
@@ -2048,8 +2051,9 @@ defmodule Logex.Runner do
   # Decision 528 (RV-26): a subscription that takes `:retain` is sent the fresh start's
   # warning as it subscribes, `{:retain, {:warning, message}}`, while the warning stands,
   # which is the runner's life, as `status/1`'s does, before the subscription is answered;
-  # once a subscription, so that subscribing again with `:retain` among the kinds sends
-  # nothing more, where one that adds it hears it, and one made after an unsubscribe is a
+  # once while a subscription takes `:retain`, so that subscribing again with `:retain`
+  # among the kinds sends nothing more, where one that adds it hears it, one that took it
+  # away by subscribing to other kinds among them, and one made after an unsubscribe is a
   # new one (provisional, `PLAN.md`'s RV-26: no subscriber exists before start_link/1
   # returns, decision 324, so the start's own publishing reaches no one).
   defp serve({:subscribe, pid, kinds}, %{subscribers: subscribers} = state) do

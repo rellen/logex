@@ -4739,8 +4739,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   size, changes nothing, and the warning names both causes, a deploy of changed files or
   an edit tested or assembled online that never reached the files (527); the warning is
   also an event, `{:retain, {:warning, message}}`, sent to each subscription as it takes
-  `:retain`, while it stands, once a subscription, no subscriber existing when the start
-  finds it (528, its delivery provisional); every store the runner writes is `logex
+  `:retain`, while it stands, once while the subscription takes it, no subscriber existing
+  when the start finds it (528, its delivery provisional; since RV-26's review, one that
+  takes `:retain` away and back hears it again, as it was built); every store the runner writes is `logex
   retain 3`, versions 2 and 1 read as before, so that a logex before RV-26 says at line 1
   that it does not read version 3, a `logex retain 2` store that names its program,
   RV-21's, compared by its types' bytes and a `logex retain 3` store that names none read
@@ -15116,7 +15117,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      type". A name's case kept, as the printer keeps it, is provisional, `PLAN.md`'s
      RV-26. The digest costs some 1.84 million reductions and 3 ms for a 38,855-byte
      program where its bytes' MD5 cost 1.55 million and 0.2 ms, at a fresh start and
-     at an accept in the caller, held by a same-run bound.)*
+     at an accept in the caller, held by a same-run bound. RV-26's review, `709dab6`: a
+     number written inside a name, a subscript, a bit's number or an array's size,
+     `arr[16#2]`, `w.03` or `int[004]`, is read by its value too
+     (`Logex.Name.each_by_value/1`), where it warned though the program was the same, as
+     the configuration's own lines already read `int[16#4]`; a bit written `w.[4]` for
+     `w.4` stays the text's, as a word's case does, provisional, `PLAN.md`'s RV-26
+     question 1.)*
 
 528. **How the stale store's warning reaches the operator (RV-21),** RV-21's question 2:
      as built, a fresh start from a store another program wrote runs the plant at once
@@ -15138,7 +15145,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      subscription, subscribing again with `:retain` among the kinds sending nothing more,
      one that adds `:retain` hearing it, and one made after `unsubscribe/1` a new one; a
      round, a trip, a restart, an edit's step, the store's next write and a stop send it
-     to no one.)*
+     to no one. RV-26's review: "once a subscription" is once while the subscription
+     takes `:retain`, a subscription that takes it away, subscribing to other kinds, and
+     back hearing it again, as built and now tested, put to the maintainer with
+     `PLAN.md`'s RV-26 question 2.)*
 
 529. **When a simulator takes the configuration's text (RV-21),** RV-21's question 3: a
      test sets a lamp's sim at `[0]` before the runner opens it and at `"panel.i.0"`
@@ -15176,7 +15186,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and starts from the initial values; README's rollback passage says so and how the
      copy is put back. Provisional, `PLAN.md`'s RV-26: a `logex retain 2` store that names
      its program, RV-21's, compared by the bytes of the start's texts as it was written,
-     and a `logex retain 3` store that names none read as naming none.)*
+     and a `logex retain 3` store that names none read as naming none. RV-26's review:
+     in a store whose first line is no header this logex reads, `logex retain 3 ` or
+     `Logex retain 3` as a hand edit mistypes it, or a version past 3, an end line is
+     told as one that a store of `logex retain 3` or `logex retain 2` ends with, where it
+     named version 2 alone and so pointed a hand edit of a version 3 store at version 2's
+     header, under which its digests read as RV-21's and warn; one of `logex retain 1` is
+     told as decision 355 told it, provisional, `PLAN.md`'s RV-26 question 5.)*
 
 531. **A store that names its program in part, and where its lines stand (RV-21),**
      RV-21's question 5: a hand edit deletes the `resource` line of a fan's store and

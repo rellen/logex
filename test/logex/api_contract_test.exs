@@ -17405,8 +17405,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Decision 528 (RV-26), restated: a subscription of `:retain`, in a process of its own so
   # that the walk's own kinds stay as they are, is sent the warning the model restated
   # as it subscribes, and nothing where there is none; subscribing again with `:retain`
-  # among the kinds, nothing more. Made after the start and again later in the runner's
-  # life (`life_held/1`), the warning standing for it.
+  # among the kinds, nothing more; and since RV-26's review, the same subscription made
+  # of other kinds, nothing, and of `:retain` once more, the warning again, as it takes
+  # it again. Made after the start and again later in the runner's life (`life_held/1`),
+  # the warning standing for it.
   defp life_heard!(w) do
     walk = self()
     runner = w.runner
@@ -17416,11 +17418,16 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         :ok = Runner.subscribe(runner, [:retain])
         first = life_warnings([])
         :ok = Runner.subscribe(runner, [:trip, :retain])
-        send(walk, {:warnings, self(), first, life_warnings([])})
+        again = life_warnings([])
+        :ok = Runner.subscribe(runner, [:trip])
+        away = life_warnings([])
+        :ok = Runner.subscribe(runner, [:retain])
+        send(walk, {:warnings, self(), {first, again, away, life_warnings([])}})
       end)
 
-    assert_receive {:warnings, ^listener, first, again}, 5000
-    assert {first, again} == {life_heard(w.life_warning), []}
+    assert_receive {:warnings, ^listener, heard}, 5000
+    warned = life_heard(w.life_warning)
+    assert heard == {warned, [], [], warned}
     reach(:life_warning_heard, w.life_warning != nil)
   end
 

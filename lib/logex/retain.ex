@@ -87,7 +87,9 @@ defmodule Logex.Retain do
   # left last; an end line in a store whose header is not `logex retain 2`, which only
   # version 2's rule reads, and since RV-26 version 3's, is told as one that header does
   # not take, never as one before the store's last, its message naming version 2 alone as
-  # it did, which stays true; and the message for a store cut short said that `start: :cold`
+  # it did in a store of `logex retain 1`, and since RV-26's review naming versions 3 and
+  # 2 in a store of a header this logex does not read, `logex retain 3 ` mistyped among
+  # them (provisional, `PLAN.md`'s RV-26, question 5); and the message for a store cut short said that `start: :cold`
   # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
   # to the next of its numbered copies (decision 418), and then writes over it, as a cold
   # start over any store a fresh start would refuse does (`Logex.Runner`).
@@ -426,13 +428,20 @@ defmodule Logex.Retain do
       seen: %{},
       problems: Enum.reverse(marked ++ before_end(problems, last)),
       unprintable: Refusal.pattern(),
-      ended: last != nil
+      ended: last != nil,
+      unread: unread?(lines)
     }
 
     acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced()
     refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending, path)
     {acc.image, written_at, versioned(acc.by, lines)}
   end
+
+  # RV-26's review: a store whose first line is no header this logex reads, a version
+  # past 3 or one mistyped, `logex retain 3 ` or `Logex retain 3`, its end line told so
+  # (line/2).
+  defp unread?([{first, 1} | _rest]) when first in @headers, do: false
+  defp unread?(_lines), do: true
 
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
@@ -747,6 +756,22 @@ defmodule Logex.Retain do
         n,
         "#{quoted(text)} comes before the store's last line: a store's end line is its last " <>
           "line"
+      )
+
+  # RV-26's review: in a store whose first line is no header this logex reads, an end line
+  # is told as one of either header that takes one, `logex retain 3`, which the runner
+  # writes since decision 530, or `logex retain 2`, which it wrote before, where it named
+  # version 2 alone, so that a hand edit that mistyped a version 3 store's header is not
+  # pointed at version 2's, which would read its digests as RV-21's; in one of `logex
+  # retain 1`, which has none, as decision 355 told it (provisional, `PLAN.md`'s RV-26,
+  # question 5).
+  defp line(["end", _count, "lines"], {text, n}, %{unread: true} = acc),
+    do:
+      problem(
+        acc,
+        n,
+        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` or " <>
+          "`#{@unnamed}` ends with, and this store's first line is neither"
       )
 
   defp line(["end", _count, "lines"], {text, n}, acc),

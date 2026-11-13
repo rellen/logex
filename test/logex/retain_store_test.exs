@@ -883,8 +883,8 @@ defmodule Logex.RetainStoreTest do
              "`logex retain 2 ` is no store's header: a store's first line is `logex retain 3`"}
           ] do
         raises(
-          "s: line 1: #{first}\ns: line 4: #{end_told} `logex retain 2` ends with, and this " <>
-            "store's first line is not",
+          "s: line 1: #{first}\ns: line 4: #{end_told} `logex retain 3` or `logex retain 2` " <>
+            "ends with, and this store's first line is neither",
           fn -> Retain.decode!(header <> "\n" <> body <> "end 4 lines\n", {"s", "plant"}) end
         )
       end
@@ -911,6 +911,50 @@ defmodule Logex.RetainStoreTest do
           )
         end
       )
+    end
+
+    # RV-26's review: in a store whose first line is no header this logex reads, a version
+    # 3 store's mistyped by a hand edit among them, an end line is told as one of either
+    # header that takes one, `logex retain 3` or `logex retain 2`, so that the edit is not
+    # pointed at version 2's alone, which reads a store's program as RV-21's digests of its
+    # bytes; in a store of `logex retain 1`, which takes none, as decision 355 told it
+    # (provisional, `PLAN.md`'s RV-26, question 5).
+    test "an end line under a header this logex does not read names both headers that take " <>
+           "one" do
+      body =
+        "configuration plant written 2026-10-30T14:00:00Z\nresource #{String.duplicate("a", 32)}\n" <>
+          "program tally #{String.duplicate("b", 32)}\nglobal total dint 0\nend 6 lines\n"
+
+      header_told = fn header ->
+        "`#{header}` is no store's header: a store's first line is `logex retain 3`"
+      end
+
+      for {header, first} <- [
+            {"logex retain 3 ", header_told.("logex retain 3 ")},
+            {"Logex retain 3", header_told.("Logex retain 3")},
+            {"logex retain 03",
+             "the store is of version 03, which this logex does not read: it reads `logex " <>
+               "retain 3`, `logex retain 2` and `logex retain 1`"},
+            {"logex retain 4",
+             "the store is of version 4, which this logex does not read: it reads `logex " <>
+               "retain 3`, `logex retain 2` and `logex retain 1`"}
+          ] do
+        raises(
+          "s: line 1: #{first}\ns: line 6: `end 6 lines` is an end line, which a store whose " <>
+            "first line is `logex retain 3` or `logex retain 2` ends with, and this store's " <>
+            "first line is neither",
+          fn -> Retain.decode!(header <> "\n" <> body, {"s", "plant"}) end
+        )
+      end
+
+      raises(
+        "s: line 6: `end 6 lines` is an end line, which a store whose first line is " <>
+          "`logex retain 2` ends with, and this store's first line is not",
+        fn -> Retain.decode!("logex retain 1\n" <> body, {"s", "plant"}) end
+      )
+
+      assert {_image, _at, %{programs: %{"tally" => _}}} =
+               Retain.decoded!("logex retain 3\n" <> body, {"s", "plant"})
     end
 
     # RV-5's review: a store cut after its header, at its end or inside the line naming its
@@ -2732,6 +2776,12 @@ defmodule Logex.RetainStoreTest do
                :default,
                :default
              ]) == [[], [warning], [], [], [warning], []]
+
+      # RV-26's review: one subscription that takes `:retain`, then takes it away by
+      # subscribing to other kinds, then takes it again, no unsubscribe between, hears it
+      # again as it takes it again: once while it takes `:retain`, not once in its life.
+      assert warnings_heard(runner, [[:retain], [:round], [:round, :trip], [:retain]]) ==
+               [[warning], [], [], [warning]]
 
       # Nothing else sends it: a round, a period's write, a trip, a warm and a cold
       # restart and an edit's steps, the warning standing in status/1 throughout.

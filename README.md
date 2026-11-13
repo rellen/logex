@@ -3501,7 +3501,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   it is, or by hand for the older one, its first line made `logex retain 2` and, for a
   logex from before RV-21, its `resource` and `program` lines taken away and its end
   line's count made two fewer, RV-21's logex then warning that each type's text differs,
-  the digests being this logex's. The runner ends each line with LF
+  the digests being this logex's. A copy whose first line a hand edit made `logex retain
+  2` and that this logex reads again, no older logex having written over it, is read as
+  RV-21's and warns once that each type's text differs, for the same reason
+  (provisional, `PLAN.md`'s RV-26, question 3). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
@@ -3666,9 +3669,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `{:retain, {:warning, message}}` (decision 528): since no subscriber can exist before
   `start_link/1` returns, an HMI or a log that subscribes to `:retain`, as `subscribe/1`'s
   default kinds do, is sent it as it subscribes, before `subscribe/2` returns, whenever it
-  subscribes in the runner's life, once a subscription; nothing else sends it again, a
-  round, a trip, a restart, an edit's step or the store's next write
-  (provisional).
+  subscribes in the runner's life, once while the subscription takes `:retain`:
+  subscribing again with `:retain` among the kinds sends nothing more, and one that takes
+  `:retain` away, subscribing to other kinds, and then back, or one made after an
+  unsubscribe, hears it again; nothing else sends it again, a round, a trip, a restart,
+  an edit's step or the store's next write (provisional).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),
