@@ -583,7 +583,11 @@ below).
 CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
 exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 through
 `erlef/setup-beam`: a red run there is a red commit, whatever ran green here, and a work
-item's report says so. A push runs CI on the commit it ends at alone, so push each commit
+item's report says so. Its test step ends a red run's log with each test that failed,
+`file:line: Module: test name` a line, as `scripts/gate.sh` does here: it deletes ExUnit's
+failures manifest, runs `mix test --warnings-as-errors` with its output in the log, and
+after a red run `elixir scripts/failed.exs`, exiting with the suite's code (decision 515
+(e)); `test/logex/scripts_test.exs` runs the step as the workflow writes it. A push runs CI on the commit it ends at alone, so push each commit
 you want checked, and read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
 warning in a file you did not touch still fails the build. `mix compile` never compiles the
 tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
@@ -610,16 +614,21 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   in order, the first that fails stopping the rest, writes what they print to the log
   (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
   rc=<n>`, and exits with the gates' code. A failed suite is followed by the tests that
-  failed, `file: Module: test name` a line, read from ExUnit's failures manifest by
+  failed, `file:line: Module: test name` a line, read from ExUnit's failures manifest by
   `scripts/failed.exs`, since `Result: 2406/2407 passed` names none, and a long log hides
-  them.
+  them. CI's test step names them the same way ("Before you commit").
 - **`elixir scripts/failed.exs`** prints the tests ExUnit's failures manifest holds. The
   manifest is ExUnit's own and kept across runs: a test's failure stays in it until a run
   passes that test, so after a failing run of one file and a passing run of another it
   still names the first; after the scripts here, which delete it first, it names that
   run's alone. A suite whose test files fail to compile or load runs no test, and ExUnit
   marks it failed whole: the script says so in one line beginning `suite:`
-  (`test/logex/scripts_test.exs`).
+  (`test/logex/scripts_test.exs`). The manifest holds no line, so each test's is read from
+  its file's syntax tree, the `test` or `doctest` call whose name, its `describe`'s before
+  it, is the test's, a part the compile makes matching any text; it is the line ExUnit's
+  own report gives, which `mix test file:line` runs again, the same for each of the
+  suite's 2,988 tests when RV-22 compared them. A test no such call names, one a helper of
+  a test file's own defines, is given its file alone.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
   mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
   then restore the tree; the script applies each patch in turn (`git apply`), runs the

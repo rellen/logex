@@ -34,9 +34,10 @@ own documentation holds:
 - `mix format` — format before a commit; CI runs `mix format --check-formatted`.
 - `scripts/gate.sh [log]` — the four gates of `CONTRIBUTING.md`'s "Before you commit" in
   order, by exit code, printing `GATE-OK` or `GATE-FAIL rc=<n>` and the tests that failed;
-  `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, which keeps a
-  test's failure until a run passes it, so after runs by hand it may name an earlier
-  run's; the scripts delete the manifest before each run.
+  `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, `file:line:
+  Module: test name`, as CI's test step does after a red run; the manifest keeps a test's
+  failure until a run passes it, so after runs by hand it may name an earlier run's; the
+  scripts delete the manifest before each run.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -264,7 +265,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   `mix run` through `examples/mix.exs`, and every other `elixir` block a fragment it
   names and parses, and runs in a setup it makes where it gives one, held to README's
   prose (`CONTRIBUTING.md`, "Landing work stales the plan").
-- `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes.
+- `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
+  each test's line read from its file, and CI's test step run as the workflow writes it.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
