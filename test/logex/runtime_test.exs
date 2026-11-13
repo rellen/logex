@@ -2813,10 +2813,12 @@ add e i y",
 
       # M6-5: the store, internal (no moduledoc), which the runner alone reads and writes;
       # since decision 517 (c) (RV-21) the program a store names, written and read, and the
-      # warning a fresh start gives where it is another than the start's.
+      # warning a fresh start gives where it is another than the start's; and since decision
+      # 530 (RV-26) the program a store of version 2 names, compared by its types' bytes.
       assert Enum.sort(Logex.Retain.__info__(:functions)) ==
                [
                  at: 1,
+                 compared: 3,
                  decode!: 2,
                  decoded!: 2,
                  encode: 2,

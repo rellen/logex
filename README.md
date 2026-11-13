@@ -3430,7 +3430,7 @@ end
 $ mix run kept.exs
 four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
-logex retain 2
+logex retain 3
 configuration tally written 2026-10-30T14:00:08Z
 resource 013cc059392445fdcc1e84c9b0de6118
 program tally bd882e28a8159d8e8a4ea56ade7b36b6
@@ -3453,7 +3453,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
-  tripped the plant (decision 284, below): a header, `logex retain 2`; the
+  tripped the plant (decision 284, below): a header, `logex retain 3` (decision 530); the
   configuration's name and the time of the write on the host's wall clock, in UTC, which
   a clock gives through its `wall_ms/1` (the manual clock's own time, read from the
   epoch); the program the runner ran as it wrote the store (decision 517 (c), RV-21),
@@ -3478,13 +3478,26 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   it, and is refused at a fresh start, naming the file and its last line, so that no
   store is read short, its lost values started at their initial values unreported or a
   number cut in its digits read as a smaller one; a hand edit that changes a line in
-  place keeps the count, and one that adds or takes away a line changes it too. A store
-  of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. A store that names its program is
-  `logex retain 2` too, so a logex from before RV-21, put back over a store this one
-  wrote, refuses it at a warm start, its `resource` line told as one that comes before
-  any `instance` line, and starts it only cold, copying it first (provisional, `PLAN.md`'s
-  RV-21 question 4). The runner ends each line with LF
+  place keeps the count, and one that adds or takes away a line changes it too. Every
+  store the runner writes names its program and is `logex retain 3` (decision 530); a
+  store of `logex retain 2`, which a logex from RV-5 until RV-26 wrote, and one of `logex
+  retain 1`, which an earlier logex wrote and which has no end line, are read as before,
+  and the next write makes either `logex retain 3`. A `logex retain 2` store that names
+  its program, as RV-21's logex wrote it, names each type by the MD5 of its file's bytes,
+  so a fresh start from it compares the bytes of the files it is given, as that logex
+  did, and warns where they differ (provisional, `PLAN.md`'s RV-26); a store of `logex
+  retain 3` with no `resource` or `program` line, a hand edit's, is read as naming no
+  program (provisional). A logex from before RV-26, put back over a store this one wrote
+  after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
+  `tally.retain: line 1: the store is of version 3, which this logex does not read: it
+  reads `logex retain 2` and `logex retain 1``, and its end line as one its header does
+  not take; one from before RV-21 tells its `resource` and `program` lines too, as lines
+  that come before any `instance` line. It starts the store only `start: :cold`, which
+  copies it first, to `tally.retain.dropped.1`, and starts the count at 0: the count is
+  lost unless the copy is put back, either once this logex is back, which reads it as
+  it is, or by hand for the older one, its first line made `logex retain 2` and, for a
+  logex from before RV-21, its `resource` and `program` lines taken away and its end
+  line's count made two fewer. The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one

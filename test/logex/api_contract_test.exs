@@ -15083,7 +15083,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp line_ended!(w, text) do
     ending = Enum.at(["\n", "\r\n", "\r"], rem(:erlang.phash2(text), 3))
-    saved = String.replace(text, "\n", ending)
+    saved = String.replace(life_rv21(w, text), "\n", ending)
     File.write!(w.store, saved)
     forces_ended!(w.file, ending)
     reach(:store_crlf_read, ending == "\r\n")
@@ -15473,7 +15473,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     standing = copies_standing(w)
     late = late_open()
     unreadable = start_unreadable(w)
-    warning = life_warning(w, config, text)
+    warning = life_warning(w, config, saved)
     {:ok, runner} = Runner.start_link(opts)
     reach(:start_forces_unread, unreadable)
     w = unread_started(unreadable, %{w | unread: unread_after(unreadable, w)})
@@ -16569,7 +16569,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # Decision 528 (RV-26): a subscription of `:retain` sent the warning once as it
     # subscribed, after the start and later in the runner's life.
     :life_warning_heard,
-    :life_warning_heard_later
+    :life_warning_heard_later,
+    # Decision 530 (RV-26): a warm start that read the store as RV-21's logex wrote it,
+    # `logex retain 2`, and one that warned by its types' bytes where their texts as they
+    # print were the same.
+    :life_rv21_read,
+    :life_rv21_laid_out_warned
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -17199,11 +17204,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Since decision 355 the header `logex retain 2` and the last line the count of every
   # line, the header, the configuration's line and the end line among them; and since
   # decision 517 (c) (RV-21) after the configuration's line the program that wrote it, the
-  # configuration the resource ran at the model's last write (`life_by/1`).
+  # configuration the resource ran at the model's last write (`life_by/1`), and since
+  # decision 530 (RV-26) under the header `logex retain 3`, a store that names its program.
   defp life_body!(image, by, text) do
     [_text, body, count] =
       Regex.run(
-        ~r/\Alogex retain 2\nconfiguration plant written \S+\n(.*)end (\d+) lines\n\z/s,
+        ~r/\Alogex retain 3\nconfiguration plant written \S+\n(.*)end (\d+) lines\n\z/s,
         text
       )
 
@@ -17271,32 +17277,78 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # by another configuration than the one it is given warns, naming the configuration's
   # own lines where they differ and each program type whose text differs or that only one
   # of the two has, in name order; a cold start, a start with no store or none written yet
-  # warns of nothing.
-  defp life_warning(%{life: false}, _config, _text), do: :unread
-  defp life_warning(%{store: nil}, _config, _text), do: :unread
-  defp life_warning(%{start: :cold}, _config, _text), do: nil
+  # warns of nothing. Since decision 530 (RV-26) a type's text as it prints for a store of
+  # `logex retain 3`, and its bytes for one of `logex retain 2` that names its program, as
+  # RV-21's logex wrote it (`life_rv21/2`), read from the bytes the start read.
+  defp life_warning(%{life: false}, _config, _saved), do: :unread
+  defp life_warning(%{store: nil}, _config, _saved), do: :unread
+  defp life_warning(%{start: :cold}, _config, _saved), do: nil
   defp life_warning(_w, _config, nil), do: nil
 
-  defp life_warning(w, config, _text),
+  defp life_warning(w, config, saved) do
+    form = life_form(saved)
+    reach(:life_rv21_read, form == :bytes)
+
+    reach(
+      :life_rv21_laid_out_warned,
+      form == :bytes and life_differences(w, config, :bytes) != [] and
+        life_differences(w, config, :printed) == []
+    )
+
+    life_warned(life_differences(w, config, form), w.store)
+  end
+
+  defp life_form("logex retain 2" <> _rest), do: :bytes
+  defp life_form(_saved), do: :printed
+
+  defp life_differences(w, config, form),
     do:
-      life_warned(
-        life_lines_differ(life_lines(w.shelf_by) == life_lines(config)) ++
-          Enum.flat_map(
-            Enum.sort(Enum.uniq(Map.keys(w.shelf_by.programs) ++ Map.keys(config.programs))),
-            &life_type_differs(&1, life_text_of(w.shelf_by, &1), life_text_of(config, &1))
-          ),
-        w.store
-      )
+      life_lines_differ(life_lines(w.shelf_by) == life_lines(config)) ++
+        Enum.flat_map(
+          Enum.sort(Enum.uniq(Map.keys(w.shelf_by.programs) ++ Map.keys(config.programs))),
+          &life_type_differs(
+            &1,
+            life_text_of(w.shelf_by, &1, form),
+            life_text_of(config, &1, form)
+          )
+        )
 
   defp life_lines_differ(true), do: []
 
   defp life_lines_differ(false),
     do: ["the configuration's tasks, globals, instances or connections differ"]
 
-  defp life_text_of(config, name), do: life_text_or_none(Map.get(config.programs, name))
+  defp life_text_of(config, name, form),
+    do: life_text_or_none(Map.get(config.programs, name), form)
 
-  defp life_text_or_none(nil), do: nil
-  defp life_text_or_none(program), do: life_texts(program)
+  defp life_text_or_none(nil, _form), do: nil
+  defp life_text_or_none(program, :printed), do: life_texts(program)
+  defp life_text_or_none(program, :bytes), do: life_bytes(program)
+
+  # Decision 517 (c) (RV-21), restated as RV-21's logex digested a type: its text's bytes
+  # and each block's, by name.
+  defp life_bytes(program),
+    do:
+      program.source <>
+        Enum.map_join(Enum.sort(program.blocks), fn {name, block} ->
+          "\n#{name}\n#{block.body.source}"
+        end)
+
+  # Decision 530 (RV-26, provisional), restated: one warm start in two of the life walk's,
+  # by the store's own text, so that no draw is taken, reads the store as RV-21's logex
+  # wrote it, `logex retain 2` with each type's digest of its text's bytes, which the model
+  # reads as the same last write (`on_disk/1`) and the start compares by the bytes.
+  defp life_rv21(%{shelf_by: nil}, text), do: text
+  defp life_rv21(w, text), do: life_rewritten(rem(:erlang.phash2({text, :rv21}), 2), w, text)
+
+  defp life_rewritten(0, w, "logex retain 3\n" <> rest),
+    do:
+      "logex retain 2\n" <>
+        Regex.replace(~r/^program (\S+) [0-9a-f]{32}$/m, rest, fn _line, name ->
+          "program #{name} #{life_md5(life_bytes(Map.fetch!(w.shelf_by.programs, name)))}"
+        end)
+
+  defp life_rewritten(_draw, _w, text), do: text
 
   defp life_type_differs(_name, same, same), do: []
   defp life_type_differs(name, nil, _text), do: ["`#{name}` is not in the store"]
@@ -17308,9 +17360,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_warned(differences, store),
     do:
       "#{store}: the store was written by another program than the one this start was " <>
-        "given: #{Enum.join(differences, ", ")}; whether by a deploy of changed files, or an " <>
+        "given: #{Enum.join(life_capped(differences), ", ")}; whether by a deploy of changed files, or an " <>
         "edit tested or assembled online that never reached the files, this start runs the " <>
         "program it was given, with the store's retained values laid over it by name and type"
+
+  # The first ten differences and then their count, as every list a refusal or a warning
+  # gives is capped (RV-26: types laid out anew beside a store of RV-21's form differ in
+  # every one, eleven).
+  defp life_capped(differences) when length(differences) > 10,
+    do: Enum.take(differences, 10) ++ ["and #{length(differences) - 10} more"]
+
+  defp life_capped(differences), do: differences
 
   # The warning the start gave, as the model restated it, its reach by whether the start
   # was given the walk's own configuration, an edit's step since the last write, or a

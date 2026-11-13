@@ -300,7 +300,8 @@ defmodule Logex.Runner do
   resource's retained image (`Logex.Runtime.retained/1`), in a file on the host's disk,
   which stands in for battery-backed memory:
   - *Its text* is a person's to read, and to edit by hand where a retained value tripped
-    the plant (decision 284): `logex retain 2`; `configuration <name> written <time>`,
+    the plant (decision 284): `logex retain 3`, since decision 530 (RV-26), where it was
+    `logex retain 2`; `configuration <name> written <time>`,
     the time of the write on the host's wall clock, in UTC to the second, read through
     the clock's `wall_ms/1` (`Logex.Runner.Clock`), for a person and for `status/1`, never
     for a timer; each retained global, `global total_boxes dint 41`; each retained
@@ -319,14 +320,17 @@ defmodule Logex.Runner do
     literal by its value, so that a comment, an empty line, CRLF, spacing or a literal
     respelt in a `.ld` file changes nothing, where `md5sum` of the file gave it before; a
     `program` line with no `resource` line refused, and each read wherever it stands, as a
-    global's line is (decision 531); the header `logex retain 2` still,
-    so that a logex before RV-21 refuses such a store at a warm start (provisional,
-    `PLAN.md`'s RV-21 question 4); and since decision 355 its end line, `end 11 lines`,
+    global's line is (decision 531); since decision 530 the header `logex retain 3`, which
+    a logex before RV-26 refuses at a warm start saying that it does not read the store's
+    version, a `logex retain 2` store that names its program, RV-21's, compared by its
+    types' bytes as it was written and one of `logex retain 3` that names none read as
+    naming none (provisional, `PLAN.md`'s RV-26); and since decision 355 its end line,
+    `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
     cut short anywhere, at a line's end or inside a number, is refused at a fresh start,
-    never read short. A store of `logex retain 1`, which has no end line, is read as
-    before. The runner writes each line ended by LF, and since decision 410 reads a line
+    never read short. A store of `logex retain 2` and one of `logex retain 1`, which has no
+    end line, are read as before. The runner writes each line ended by LF, and since decision 410 reads a line
     ended by LF, CRLF or a lone CR alike, as the source's and a configuration file's
     readers do, so that a store a hand edit saved with CRLF line ends starts, its lines
     counted however they end, where RV-5 refused it at its first carriage return; a
@@ -5713,11 +5717,17 @@ defmodule Logex.Runner do
   # Decision 517 (c), RV-21: the program the store names as its writer laid beside the one
   # the start was given, a warning where they differ (`Logex.Retain.warning/3`), which
   # changes nothing else: the image laid over the configuration as decision 277 has it.
+  # Since decision 530 (RV-26) a store of version 2 or 1 that names its program, RV-21's,
+  # is laid beside the start's program digested by its texts' bytes, as it was written
+  # (`Logex.Retain.compared/3`, provisional), every write naming the program printed.
   defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
     {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
     by = Logex.Retain.written_by(configuration)
-    warning = Logex.Retain.warning(stored, by, given)
+
+    warning =
+      Logex.Retain.warning(stored, Logex.Retain.compared(stored, by, configuration), given)
+
     {runtime, retained(path, written_at, dropped, by, warning), nil, copied(dropped, text)}
   end
 
