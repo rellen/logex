@@ -43,10 +43,11 @@ own documentation holds:
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
   core, for a new real-clock or runner test (`-n 50`) before it lands.
 - `scripts/release.sh [--dry-run] [--push]` — the release step of `CONTRIBUTING.md`'s
-  "Releasing": tags `vX.Y.Z` once the tree is clean, `CHANGELOG.md` names that version,
-  `mix.exs`'s, and every decision of `docs/organisation.md` §7, each once
-  (`elixir scripts/changelog.exs --release`), the tag is absent and the gate green;
-  `--dry-run` tags nothing, `--push` pushes the tag.
+  "Releasing": tags `vX.Y.Z` once the tree is clean, the commit is on origin's `main` and
+  CI's runs on it passed (`gh api`), `CHANGELOG.md` names that version, `mix.exs`'s, and
+  every decision of `docs/organisation.md` §7, each once (`elixir scripts/changelog.exs
+  --release`), the tag is absent and the gate green; `--dry-run` tags nothing, `--push`
+  pushes the tag.
 - `mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/` —
   regenerate the golden record, only in a commit that changes the language on purpose,
   and read the diff.
@@ -275,7 +276,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   run as written, and `scripts/gate.sh` over a stand-in `mix`.
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
-  repository, every check passed and each taken back.
+  repository with a stand-in `gh`, every check passed and each taken back.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 

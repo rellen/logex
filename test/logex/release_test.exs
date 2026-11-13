@@ -4,10 +4,11 @@ defmodule Logex.ReleaseTest do
   is, by running it: `scripts/changelog.exs` on CHANGELOG.md as it stands, every decision
   `docs/organisation.md` §7 records named by an entry, each once; on changelogs of every
   shape it refuses; and `scripts/release.sh` in a scratch repository of its own, with a
-  mix.exs, a changelog, a §7 of three decisions, a gate that stands in for the suite and
-  an origin, a bare repository beside it: with every check passed it tags, pushes only
-  when told, and a dry run does neither; and each check taken back in turn refuses, tagging
-  and pushing nothing.
+  mix.exs, a changelog, a §7 of three decisions, a gate that stands in for the suite, a
+  `gh` that stands in for GitHub's CLI, giving CI's runs on the commit, and an origin, a
+  bare repository beside it holding the commit on its `main`: with every check passed it
+  tags, pushes only when told, and a dry run does neither; and each check taken back in
+  turn refuses, tagging and pushing nothing.
   """
   use ExUnit.Case, async: true
 
@@ -96,14 +97,28 @@ defmodule Logex.ReleaseTest do
 
   # A scratch repository holding the two scripts as committed here, a gate that prints and
   # exits as `GATE_RC` says, mix.exs, CHANGELOG.md and docs/organisation.md, each as given
-  # or else as above, all committed, its origin a bare repository beside it.
+  # or else as above, all committed, its origin a bare repository beside it, the commit
+  # pushed to its `main`; and beside them a `gh` that notes its arguments in `gh.args`, one
+  # a line, prints `GH_RUNS`, CI's runs on the commit as `gh api --jq` gives them, one
+  # passed run where it is unset and none where it is `none`, and exits `GH_RC`.
   defp scratch(dir, files \\ %{}) do
     File.mkdir_p!(dir)
     repo = Path.join(dir, "repo")
     origin = Path.join(dir, "origin.git")
     File.mkdir_p!(Path.join(repo, "scripts"))
     File.mkdir_p!(Path.join(repo, "docs"))
+    File.mkdir_p!(Path.join(dir, "bin"))
     git(dir, ["init", "-q", "--bare", origin])
+
+    File.write!(Path.join(dir, "bin/gh"), """
+    #!/usr/bin/env bash
+    printf '%s\\n' "$@" > "#{Path.join(dir, "gh.args")}"
+    runs=${GH_RUNS:-1 completed success}
+    [ "$runs" = none ] || printf '%s\\n' "$runs"
+    exit "${GH_RC:-0}"
+    """)
+
+    File.chmod!(Path.join(dir, "bin/gh"), 0o755)
 
     for script <- ["release.sh", "changelog.exs"] do
       File.cp!(Path.join(@root, "scripts/#{script}"), Path.join(repo, "scripts/#{script}"))
@@ -129,13 +144,18 @@ defmodule Logex.ReleaseTest do
     git(repo, ["add", "-A"])
     git(repo, ["commit", "-q", "-m", "scratch"])
     git(repo, ["remote", "add", "origin", origin])
+    git(repo, ["push", "-q", "origin", "main"])
     {repo, origin}
   end
 
+  # The release step run in `repo`, the scratch's `gh` first on the path.
   defp release(repo, args, extra \\ []) do
+    bin = Path.join(Path.dirname(repo), "bin")
+    [{"PATH", path} | rest] = env(extra)
+
     System.cmd("bash", ["scripts/release.sh" | args],
       cd: repo,
-      env: env(extra),
+      env: [{"PATH", bin <> ":" <> path} | rest],
       stderr_to_stdout: true
     )
   end
@@ -144,7 +164,11 @@ defmodule Logex.ReleaseTest do
 
   # What a run that reaches every check prints before its verdict, the gate passed.
   defp checked(repo, gate \\ "GATE-OK") do
-    "release: the tree at #{git(repo, ["rev-parse", "HEAD"])}\n" <>
+    head = git(repo, ["rev-parse", "HEAD"])
+
+    "release: the tree at #{head}\n" <>
+      "release: origin's main, fetched now\n" <>
+      "release: CI's runs on #{head} (gh api)\n" <>
       "release: CHANGELOG.md, docs/organisation.md §7 and mix.exs\n" <>
       "release: the tag v0.2.0, here and on origin\n" <>
       "release: the gate (scripts/gate.sh)\n" <>
@@ -211,6 +235,30 @@ defmodule Logex.ReleaseTest do
                   "changelog: decision 3 is named twice, by the entries at lines 5 and 17\n" <>
                   "changelog: decision 2 is recorded in §7 and named by no entry\n" <>
                   "changelog: decision 5 is named by an entry and recorded nowhere in §7\n", 1}
+    end
+
+    test "it refuses a range of one decision, and a `Decisions:` that does not begin its line",
+         %{tmp_dir: dir} do
+      {repo, _} =
+        scratch(dir, %{
+          "CHANGELOG.md" => """
+          # Changelog
+
+          ## 0.2.0 — 2026-11-20
+
+          Decisions: 2–2, 3.
+
+          ## 0.1.0 — 2026-10-01
+
+          See Decisions: 1.
+          """
+        })
+
+      assert changelog(repo) ==
+               {"changelog: line 5: the range `2–2` does not rise\n" <>
+                  "changelog: line 9: the entry's first line is not `Decisions: ` and the " <>
+                  "decisions it carries, `1–14, 30.`, or `none.`: \"See Decisions: 1.\"\n" <>
+                  "changelog: decision 1–2 is recorded in §7 and named by no entry\n", 1}
     end
 
     test "with --release it refuses an Unreleased newest entry and a version not mix.exs's",
@@ -330,8 +378,93 @@ defmodule Logex.ReleaseTest do
       git(repo, ["remote", "set-url", "origin", Path.join(dir, "nowhere.git")])
 
       assert_refused(repo, nil, [], [
+        "refused: origin's main cannot be fetched (git fetch exited 128)",
         "refused: origin's tags cannot be read (git ls-remote exited 128)"
       ])
+    end
+
+    test "a commit origin's main does not hold is refused, a commit made here and never " <>
+           "pushed, or one on a branch of its own",
+         %{tmp_dir: dir} do
+      {repo, origin} = scratch(dir)
+      main = git(repo, ["rev-parse", "HEAD"])
+      git(repo, ["commit", "-q", "--allow-empty", "-m", "made here"])
+      head = git(repo, ["rev-parse", "HEAD"])
+
+      refusal =
+        "refused: the commit #{head} is not on origin's main, #{main}: push it to main, " <>
+          "and read CI's run on it, first"
+
+      assert_refused(repo, origin, [], [refusal])
+      git(repo, ["push", "-q", "origin", "HEAD:refs/heads/elsewhere"])
+      assert_refused(repo, origin, [], [refusal])
+      git(repo, ["push", "-q", "origin", "HEAD:refs/heads/main"])
+      git(repo, ["commit", "-q", "--allow-empty", "-m", "later on main"])
+      git(repo, ["push", "-q", "origin", "HEAD:refs/heads/main"])
+      git(repo, ["checkout", "-q", head])
+      assert {_, 0} = release(repo, ["--dry-run"])
+    end
+
+    test "CI's runs on the commit are read through gh, every run of the workflow on it", %{
+      tmp_dir: dir
+    } do
+      {repo, _} = scratch(dir)
+      head = git(repo, ["rev-parse", "HEAD"])
+      assert {_, 0} = release(repo, ["--dry-run"])
+
+      assert File.read!(Path.join(dir, "gh.args")) ==
+               "api\nrepos/{owner}/{repo}/actions/runs?head_sha=#{head}&per_page=100\n--jq\n" <>
+                 ~S'.workflow_runs[] | select(.path == ".github/workflows/ci.yml") | ' <>
+                 ~S'"\(.id) \(.status) \(.conclusion)"' <> "\n"
+    end
+
+    test "a commit CI has not run on, or whose runs have not all passed, is refused, and so " <>
+           "is one whose runs cannot be read",
+         %{tmp_dir: dir} do
+      {repo, origin} = scratch(dir)
+      head = git(repo, ["rev-parse", "HEAD"])
+
+      assert_refused(repo, origin, [{"GH_RUNS", "none"}], [
+        "refused: CI has no run on #{head}: push it to main, and wait for its run"
+      ])
+
+      assert_refused(repo, origin, [{"GH_RUNS", "7 completed success\n8 completed failure"}], [
+        "refused: CI's run 8 on #{head} has not passed: completed, failure"
+      ])
+
+      assert_refused(repo, origin, [{"GH_RUNS", "9 in_progress null\n10 completed cancelled"}], [
+        "refused: CI's run 9 on #{head} has not passed: in_progress, null",
+        "refused: CI's run 10 on #{head} has not passed: completed, cancelled"
+      ])
+
+      assert_refused(
+        repo,
+        origin,
+        [{"GH_RUNS", "gh: HTTP 401: Bad credentials"}, {"GH_RC", "1"}],
+        [
+          "refused: CI's runs on #{head} cannot be read (gh api exited 1): gh: HTTP 401: " <>
+            "Bad credentials"
+        ]
+      )
+    end
+
+    test "a push that fails leaves the tag here, says how to push it, and exits 1", %{
+      tmp_dir: dir
+    } do
+      {repo, origin} = scratch(dir)
+      head = git(repo, ["rev-parse", "HEAD"])
+      hook = Path.join(origin, "hooks/pre-receive")
+      File.write!(hook, "#!/usr/bin/env bash\necho no tags here\nexit 1\n")
+      File.chmod!(hook, 0o755)
+      {out, code} = release(repo, ["--push"])
+
+      assert {code, out |> String.split("\n", trim: true) |> Enum.take(-2) |> List.last()} ==
+               {1,
+                "release: v0.2.0 is here and the push failed; push it with: git push origin " <>
+                  "refs/tags/v0.2.0"}
+
+      assert out =~ "release: tagged v0.2.0 at #{head}\n"
+      assert {tags(repo), tags(origin)} == {"v0.2.0", ""}
     end
 
     test "a red gate is refused", %{tmp_dir: dir} do
