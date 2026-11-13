@@ -19,8 +19,11 @@ defmodule Logex.Printer do
 
   The output is canonical rather than faithful — see `print/1`. Since decision 527 (RV-26) a
   runner's store names each program type it runs by the MD5 of this print of the type's
-  text, each literal printed by its value, so that a comment, an empty line, a line's end,
-  spacing or a literal's spelling in a `.ld` is not the program (`Logex.Runner`'s store).
+  text, each literal printed by its value, and each number in a name, `arr[2]` for
+  `arr[16#2]`, `w.3` for `w.03` and `int[4]` for `int[004]` (RV-26's review), so that a
+  comment, an empty line, a line's end, spacing or a literal's spelling in a `.ld` is not
+  the program (`Logex.Runner`'s store). This module's own print keeps every name as
+  written.
 
   Outside the host contract, this module takes logex's own data unguarded, and anything
   else may raise as Elixir does: a host's way in is `Logex`, `Logex.Runtime`, `Logex.Edit`,

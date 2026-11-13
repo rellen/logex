@@ -3462,9 +3462,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   that a comment or an empty line changes nothing, and `program` a program type, the MD5
   of its text and of each user block's after it where it holds one, each as
   `Logex.Printer` prints it, one rung a line, one space between its elements and each
-  literal by its value, so that a comment, an empty line, CRLF line ends, spacing or a
-  literal respelt, `16#3E8` for `1000`, in a `.ld` file changes nothing either (decision
-  527), where `md5sum tally.ld` gave the digest before it; a store with a `program` line
+  literal by its value, a number in a name too, a subscript, a bit's number or an
+  array's size, so that a comment, an empty line, CRLF line ends, spacing or a literal
+  respelt, `16#3E8` for `1000` or `temps[03]` for `temps[3]`, in a `.ld` file changes
+  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; a
+  word's case and a bit written `w.[4]` for `w.4` are the text's (provisional); a store
+  with a `program` line
   and no `resource` line refused a line, as a hand edit that took the one away and kept
   the other leaves it (decision 531); each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program

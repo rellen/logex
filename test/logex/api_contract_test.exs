@@ -16991,7 +16991,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Decision 527 (RV-26): a program's text laid out anew, each line where it was, so that
   # every rung keeps its line: its elements two spaces apart behind two spaces and a
   # comment after them, each whole number written in base 16, CRLF line ends, and an empty
-  # line and a comment after the last.
+  # line and a comment after the last; and since RV-26's review each number in a name's
+  # brackets too, the shelf's subscripts and sizes, `bins[16#0]`, `tl[16#1].dn` and
+  # `int[16#3]`, which every shelf holds.
   defp life_laid_out(text),
     do:
       Enum.map_join(String.split(text, "\n"), "\r\n", fn line ->
@@ -17001,7 +17003,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_hex(word), do: life_hexed(Integer.parse(word), word)
 
   defp life_hexed({n, ""}, _word) when n >= 0, do: "16#" <> Integer.to_string(n, 16)
-  defp life_hexed(_other, word), do: word
+
+  defp life_hexed(_other, word),
+    do:
+      Regex.replace(~r/\[(\d+)\]/, word, fn _all, n ->
+        "[16#" <> Integer.to_string(String.to_integer(n), 16) <> "]"
+      end)
 
   # The store's writes made to fail, its `.tmp` a directory, for a period or more: each
   # write reported and the store left as it was, the plant running on; then a crash half
@@ -17256,7 +17263,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Decision 527 (RV-26), restated from a program's text: each rung a line, a line's end
   # LF, CRLF or a lone CR alike, a comment and an empty line dropped, each element one
   # space from the next, and a literal by its value, the walk's texts writing each as its
-  # decimal or, laid out anew (`life_laid_out/1`), in base 16.
+  # decimal or, laid out anew (`life_laid_out/1`), in base 16; and since RV-26's review a
+  # number in a name's brackets by its value too.
   defp life_printed(text),
     do:
       text
@@ -17271,7 +17279,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       |> Enum.join("\n")
 
   defp life_valued("16#" <> hex), do: Integer.to_string(String.to_integer(hex, 16))
-  defp life_valued(word), do: word
+
+  defp life_valued(word),
+    do:
+      Regex.replace(~r/\[16#([0-9A-F]+)\]/, word, fn _all, hex ->
+        "[" <> Integer.to_string(String.to_integer(hex, 16)) <> "]"
+      end)
 
   # Decision 517 (c) (RV-21), restated: a warm fresh start whose store's last write was made
   # by another configuration than the one it is given warns, naming the configuration's

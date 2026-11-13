@@ -162,7 +162,9 @@ defmodule Logex.Retain do
   # is the one `Logex.Printer` prints of its parse tree, each literal by its value
   # (canonical/1), as the configuration's own lines are printed before theirs, so that a
   # comment, an empty line, CRLF, spacing or a literal respelt, `16#ff` for `255`, in a
-  # program's `.ld` or a block's warns of nothing, where the bytes of each file were
+  # name too since RV-26's review, `arr[16#2]` for `arr[2]`, `w.03` for `w.3` and
+  # `int[004]` for `int[4]`, in a program's `.ld` or a block's warns of nothing, where
+  # the bytes of each file were
   # digested and `md5sum conveyor.ld` gave a type with no blocks; a name's case is the
   # text's, as the printer keeps it (provisional, `PLAN.md`'s RV-26). One with no source
   # text, built by hand, of its rungs and tags as data. The resource's is of the
@@ -229,7 +231,9 @@ defmodule Logex.Retain do
 
   # Decision 527 (RV-26): a program's or a block's text as `Logex.Printer` prints its parse
   # tree, one rung a line and one space between its elements, each literal by its value,
-  # `255` for `16#ff` and `1.0` for `1.0e0` (by_value/1), so that what the lexer skips, a
+  # `255` for `16#ff` and `1.0` for `1.0e0`, and since RV-26's review each number in a
+  # name, a subscript, a bit's number or an array's size (by_value/1), so that what the
+  # lexer skips, a
   # comment, an empty line, a line's end and its spacing, and a literal's spelling are not
   # the program's; the declarations are rungs to the parser, and printed so too. A text
   # that does not lex or parse, which only a program built by hand holds, every compile's
@@ -251,6 +255,12 @@ defmodule Logex.Retain do
 
   defp by_value({:int_lit, line, value, _spelling}), do: {:int_lit, line, value}
   defp by_value({:real_lit, line, value, _spelling}), do: {:real_lit, line, value}
+
+  # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
+  # by its value too (`Logex.Name.each_by_value/1`), so that `arr[16#2]`, `w.03` and
+  # `int[004]` are `arr[2]`, `w.3` and `int[4]`, as the configuration's own lines read
+  # `int[16#4]`.
+  defp by_value({:name, line, name}), do: {:name, line, Logex.Name.each_by_value(name)}
   defp by_value(element), do: element
 
   defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)

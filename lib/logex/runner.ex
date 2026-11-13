@@ -317,8 +317,10 @@ defmodule Logex.Runner do
     `program <type> <digest>` a program type, in name order, the MD5 of its text, and of
     each user block's after it where it holds one, each since decision 527 (RV-26) as
     `Logex.Printer` prints it, one rung a line, one space between its elements and each
-    literal by its value, so that a comment, an empty line, CRLF, spacing or a literal
-    respelt in a `.ld` file changes nothing, where `md5sum` of the file gave it before; a
+    literal by its value, a number in a name too, a subscript, a bit's number or an
+    array's size (RV-26's review), so that a comment, an empty line, CRLF, spacing or a
+    literal respelt, `16#3E8` for `1000` or `arr[02]` for `arr[2]`, in a `.ld` file
+    changes nothing, where `md5sum` of the file gave it before; a
     `program` line with no `resource` line refused, and each read wherever it stands, as a
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's

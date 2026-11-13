@@ -2937,6 +2937,56 @@ defmodule Logex.RetainStoreTest do
           ],
           do: refute(digest.(other, []) == own, inspect(other))
 
+      # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
+      # is read by its value too, and a literal in a group as one outside it; another
+      # number, in a name or a group, is another text, and so, provisional, is a bit
+      # written in brackets for its plain number (`PLAN.md`'s RV-26, question 1).
+      named =
+        "var_input a bool\nvar_input b bool\nvar arr int[4]\nvar g int[2,3]\nvar i int\n" <>
+          "var w word\nvar t ton[2]\nxic a move 255 arr[2]\nxic a move 1 g[1,i]\n" <>
+          "( xic a add i 1 i | xic t[1].dn move 2 g[1,2] ) ote w.3\n" <>
+          "xic b xic w.[4] ton t[0] 100\nxic t[0].dn ton t[1] 200\n"
+
+      own = digest.(named, [])
+      assert own == md5(printed(named))
+
+      for {written, as} <- [
+            {"arr[2]", "arr[16#2]"},
+            {"arr[2]", "arr[02]"},
+            {"arr[2]", "arr[0_2]"},
+            {"g[1,i]", "g[01,i]"},
+            {"g[1,2]", "g[16#1,0_2]"},
+            {"w.3", "w.03"},
+            {"w.[4]", "w.[16#4]"},
+            {"w.[4]", "w.[04]"},
+            {"int[4]", "int[004]"},
+            {"int[4]", "int[16#4]"},
+            {"int[2,3]", "int[02,3]"},
+            {"ton[2]", "ton[16#2]"},
+            {"t[1].dn", "t[01].dn"},
+            {"add i 1 i", "add i 16#1 i"},
+            {"move 2 g", "move 2#10 g"}
+          ],
+          do:
+            assert(
+              digest.(String.replace(named, written, as), []) == own,
+              "#{written} written #{as}"
+            )
+
+      for {written, as} <- [
+            {"arr[2]", "arr[3]"},
+            {"g[1,i]", "g[0,i]"},
+            {"w.3", "w.5"},
+            {"int[4]", "int[5]"},
+            {"add i 1 i", "add i 2 i"},
+            {"xic w.[4]", "xic w.4"}
+          ],
+          do:
+            refute(
+              digest.(String.replace(named, written, as), []) == own,
+              "#{written} written #{as}"
+            )
+
       # A block's file: its comment, an empty line and its line ends no change, a rung one.
       block = "function_block gate\nvar_input go bool\nvar retain k dint\nxic go add k 1 k\n"
 

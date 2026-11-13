@@ -4735,7 +4735,8 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   digest is of each text as `Logex.Printer` prints its parse tree, one rung a line, one
   space between its elements and each literal by its value, as the configuration's lines
   are printed, so that a comment, an empty line, CRLF, spacing or a literal respelt in a
-  `.ld` changes nothing, and the warning names both causes, a deploy of changed files or
+  `.ld`, in a name too since RV-26's review, a subscript, a bit's number or an array's
+  size, changes nothing, and the warning names both causes, a deploy of changed files or
   an edit tested or assembled online that never reached the files (527); the warning is
   also an event, `{:retain, {:warning, message}}`, sent to each subscription as it takes
   `:retain`, while it stands, once a subscription, no subscriber existing when the start

@@ -1214,6 +1214,32 @@ defmodule Logex.CompileTotalTest do
       assert Name.word("temps[2") == "temps"
       assert Name.word("temps") == nil
     end
+
+    # RV-26's review (decision 527): a name as a store's digest reads it, each number in
+    # it by its value, a tag's name and a word as written; total on a text, as the other
+    # readers are.
+    test "each_by_value/1 reads each number in a name by its value, and is total" do
+      for {text, valued} <- [
+            {"arr[16#2]", "arr[2]"},
+            {"arr[0_2]", "arr[2]"},
+            {"a[-0]", "a[0]"},
+            {"g[01,i]", "g[1,i]"},
+            {"int[004]", "int[4]"},
+            {"w.03", "w.3"},
+            {"w.[16#4]", "w.[4]"},
+            {"w.[n]", "w.[n]"},
+            {"lines[01].gates[0_0].q", "lines[1].gates[0].q"},
+            {"Tl[1].DN", "Tl[1].DN"},
+            {"x", "x"},
+            {"x.y", "x.y"}
+          ],
+          do: assert(Name.each_by_value(text) == valued, text)
+
+      for text <-
+            ["", ".", "a.", "a..b", "[", "[]", "a[", "a[]", "a[1,,2]", "t.[", "w.3x"] ++
+              ["x[1]y", "a[1 ]", "a[3//x]"],
+          do: assert(Name.each_by_value(text) == text, inspect(text))
+    end
   end
 
   describe "M13: a number past what logex reads" do
