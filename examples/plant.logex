@@ -1,0 +1,30 @@
+// plant.logex -- two conveyors, one program type (motor.ld)
+task fast interval 10 priority 1
+task slow interval 50 priority 2
+
+var_global pb_start_1 bool at panel.i.0
+var_global pb_stop_1  bool at panel.i.1
+var_global tt_1       bool at panel.i.2
+var_global pb_start_2 bool at panel.i.3
+var_global pb_stop_2  bool at panel.i.4
+var_global pb_reset   bool at panel.i.5
+var_global k1         bool at panel.q.0
+var_global k2         bool at panel.q.1
+var_global sp_1       dint at drive.q.0
+var_global sp_2       dint at drive.q.1
+
+program m1 motor with fast
+  m1.start    pb_start_1
+  m1.stop     pb_stop_1
+  m1.overtemp tt_1
+  m1.reset    pb_reset
+  m1.motor    k1
+  m1.speed_sp sp_1
+
+program m2 motor with slow
+  m2.start    pb_start_2
+  m2.stop     pb_stop_2
+  m2.overtemp 0
+  m2.reset    0
+  m2.motor    k2
+  m2.speed_sp sp_2

@@ -8,6 +8,8 @@ defmodule Logex.ReadmeTest.Examples do
   # every later example, until a later block marked with the same path replaces it.
 
   @readme Path.expand("../../README.md", __DIR__)
+  # Decision 517 (b): where README's examples are shipped, each a file a host can copy.
+  @examples Path.expand("../../examples", __DIR__)
   @mark ~r/^\s*<!-- file: (\S+) -->\s*$/
   @fence ~r/^(\s*)```(\w*)\s*$/
   @run ~r/\A\$ mix run (\S+)\n/
@@ -110,6 +112,7 @@ defmodule Logex.ReadmeTest.Examples do
   def async?(_name), do: true
 
   def readme, do: File.read!(@readme)
+  def dir, do: @examples
   def derived, do: @derived
   def continues, do: @continues
   def fragments, do: Enum.map(@fragments, &elem(&1, 0))
@@ -125,6 +128,7 @@ defmodule Logex.ReadmeTest.Examples do
         do: %{
           name: "#{Path.rootname(from)}.fragment_#{n}.exs",
           line: n,
+          run: :made,
           script: setup <> "\nvalue = (\n" <> body <> ")\n\n" <> check,
           files: Map.fetch!(by_name, from).files,
           expected: prints,
@@ -191,6 +195,7 @@ defmodule Logex.ReadmeTest.Examples do
     example = %{
       name: name,
       line: n,
+      run: :shipped,
       script: script(previous, name),
       files: with_derived(files),
       expected: String.replace_prefix(body, shown, "")
@@ -237,8 +242,10 @@ end
 defmodule Logex.ReadmeTest do
   @moduledoc """
   README's examples, each run as README runs it and its output compared with what README
-  prints (decision 359). Each example's files are written to a directory of its own under
-  `tmp/readme/`, its script beside them, and the script run in a fresh VM by the `elixir`
+  prints (decision 359), from its files under `examples/`, which README's blocks are held
+  to (decision 517 (b)). Each example's files are copied from there to a directory of its
+  own under `tmp/readme/`, so that examples that write a store or a forces file run side
+  by side, its script beside them, and the script run in a fresh VM by the `elixir`
   the suite runs on, with this build's code on its path, as `mix run` runs it; what it
   prints on standard output must be README's text exactly, but for the lines README says
   are this run's alone, compared by their beginning, and it must exit 0. Each example is a
@@ -264,12 +271,12 @@ defmodule Logex.ReadmeTest do
     dir = Path.join([@root, "tmp", "readme", example.name])
     File.rm_rf!(dir)
 
-    for {path, text} <- example.files do
+    for path <- Map.keys(example.files) do
       File.mkdir_p!(Path.dirname(Path.join(dir, path)))
-      File.write!(Path.join(dir, path), text)
+      File.cp!(Path.join(Examples.dir(), path), Path.join(dir, path))
     end
 
-    File.write!(Path.join(dir, example.name), example.script)
+    File.write!(Path.join(dir, example.name), script(example))
 
     {output, status} =
       System.cmd(@elixir, ["-pa", Mix.Project.compile_path(), example.name], cd: dir)
@@ -283,6 +290,13 @@ defmodule Logex.ReadmeTest do
     assert {at, Examples.comparable(output, example.name)} ==
              {at, Examples.comparable(example.expected, example.name)}
   end
+
+  # Decision 517 (b): an example runs its script as shipped under `examples/`, which the
+  # hold below keeps README's; a fragment the script the test makes of it.
+  defp script(%{run: :shipped, name: name}), do: File.read!(Path.join(Examples.dir(), name))
+  defp script(%{run: :made, script: script}), do: script
+
+  def elixir, do: @elixir
 end
 
 for example <- Logex.ReadmeTest.Examples.all() do
@@ -311,6 +325,37 @@ for fragment <- Logex.ReadmeTest.Examples.run_fragments() do
     test "README's fragment at line #{@fragment.line} does what README's prose says" do
       Logex.ReadmeTest.check(@fragment)
     end
+  end
+end
+
+# Decision 517 (b): `examples/` is a project a host runs an example in, as README says,
+# `mix run scan.exs` from there, logex the directory above; its build is kept under `tmp/`,
+# so that the run leaves nothing beside the examples.
+defmodule Logex.ReadmeTest.Project do
+  @moduledoc false
+  alias Logex.ReadmeTest.Examples
+  use ExUnit.Case, async: true
+
+  @build Path.expand("../../tmp/readme/_examples_build/dev", __DIR__)
+
+  test "`mix run scan.exs` from examples/ prints what README shows, logex its dependency" do
+    mix = Path.join(Path.dirname(Logex.ReadmeTest.elixir()), "mix")
+    env = [{"MIX_ENV", "dev"}, {"MIX_BUILD_PATH", @build}]
+    File.rm_rf!(@build)
+
+    {compiled, status} =
+      System.cmd(Logex.ReadmeTest.elixir(), [mix, "compile"], cd: Examples.dir(), env: env)
+
+    assert status == 0, compiled
+
+    {output, status} =
+      System.cmd(Logex.ReadmeTest.elixir(), [mix, "run", "scan.exs"],
+        cd: Examples.dir(),
+        env: env
+      )
+
+    assert status == 0, output
+    assert output == Enum.find(Examples.all(), &(&1.name == "scan.exs")).expected
   end
 end
 
@@ -359,6 +404,32 @@ defmodule Logex.ReadmeTest.Extraction do
 
     for {n, _first, body} <- unrun,
         do: assert(match?({:ok, _}, Code.string_to_quoted(body)), "README.md line #{n}")
+  end
+
+  # Decision 517 (b): README's examples are shipped as files under `examples/`, each block
+  # README shows its file there, each file README describes made as the test makes it,
+  # each script README shows as the rest of another there whole, and nothing else there
+  # but the project they run in; a path is marked once, so that one directory holds them.
+  test "each file and script README shows is its file under examples/, which holds no other" do
+    examples = Examples.all()
+    shown = Map.merge(List.last(examples).files, Map.new(examples, &{&1.name, &1.script}))
+
+    for {path, text} <- shown,
+        do: assert({path, File.read(Path.join(Examples.dir(), path))} == {path, {:ok, text}})
+
+    on_disk =
+      for path <- Path.wildcard(Path.join(Examples.dir(), "**"), match_dot: true),
+          File.regular?(path),
+          relative <- [Path.relative_to(path, Examples.dir())],
+          not String.starts_with?(relative, ["_build/", "deps/"]),
+          do: relative
+
+    assert Enum.sort(on_disk) == Enum.sort(Map.keys(shown) ++ [".gitignore", "mix.exs"])
+
+    marked =
+      for [_, path] <- Regex.scan(~r/^\s*<!-- file: (\S+) -->$/m, Examples.readme()), do: path
+
+    assert marked -- Enum.uniq(marked) == [], "a path README marks twice"
   end
 
   test "every `$ mix run` README shows is an example, and every file a mark names is one" do

@@ -375,10 +375,13 @@ the maintainer as questions (the review's "The close"). The maintainer answered 
 2026-11-12, decisions 513–521, and took the review as done (decision 521); what the
 answers build runs as `PLAN.md`'s RV-20 to RV-25. RV-20 has landed: a refusal of many
 unknown names costs near its count, a compile runs in a process of its own, and every
-module outside the host contract says so (decisions 514 and 520). Waiting: a fresh start
-warning that an edit never reached the files, the simulator taking the configuration's
-addresses, the examples as files beside an adapter's, CI naming a failed test, a release
-step, typespecs with Dialyzer, and the runner split by concern.
+module outside the host contract says so (decisions 514 and 520). RV-21 has landed, the
+host's frictions (decision 517): a fresh start that warns where its store was written by
+another program than the files', an edit that never reached them; the simulator taking
+and giving the configuration's addresses once a runner has opened it; the examples as
+files under `examples/`; and an adapter of a host's own beside the simulator ("A
+device's adapter", below). Waiting: CI naming a failed test, a release step, typespecs
+with Dialyzer, and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -459,7 +462,13 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 
 ## An example
 
-Neither file below is in the repository — create them to follow along.
+Every example in this file is in the repository, under `examples/`: each script a `$ mix
+run` block follows, and every file one reads, `motor.ld` and `scan.exs` below among them,
+and the files the prose describes rather than shows, `faster/packing.logex` among them.
+From that directory, `mix run scan.exs` runs one as it is run here, `examples/mix.exs`
+naming logex, the directory above, as its one dependency; a script shown here as the
+continuation of another, `a_trip.exs`, is there whole. The suite runs every one of them
+there and holds each block shown here to its file (decision 517 (b)).
 
 `motor.ld` — a seal-in motor starter with a latched fault. Every tag is declared before the
 first rung: what it holds (`bool`, `dint` or another type), and whether it is supplied from outside
@@ -1414,11 +1423,11 @@ Logex.Runtime.instance(selected)
     clock: {Logex.Runner.Clock.Manual, clock}
   )
 
-Logex.IO.Sim.set(drive, [0], 0x0010)
-Logex.IO.Sim.set(panel, [0], 4)
+Logex.IO.Sim.set(drive, "drive.i.0", 0x0010)
+Logex.IO.Sim.set(panel, "panel.i.0", 4)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("bit 4:  the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
-Logex.IO.Sim.set(panel, [0], 16)
+Logex.IO.Sim.set(panel, "panel.i.0", 16)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("bit 16: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
 IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
@@ -1447,8 +1456,8 @@ $ mix run selected.exs
 16#0010, bit 16  %{"checked" => 0, "lamp" => 0}
     %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}
     %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xio, path: nil, file: "selected.ld", line: 7, read: 16}
-bit 4:  the lamp %{[0] => 1}
-bit 16: the lamp %{[0] => 0}, :tripped
+bit 4:  the lamp %{"panel.q.0" => 1}
+bit 16: the lamp %{"panel.q.0" => 0}, :tripped
     {:fault, "fast", "lamp1", %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}}
 line 5: `status.[code]` takes its bit number from `code`, a word (declared on line 2), which is no integer: a bit number is held in a tag of an integer type, so convert it first, with `word_to_uint`
 line 6: `on.[n]` names a bit of `on`, a bool, which has no bits
@@ -1896,11 +1905,11 @@ Logex.Runtime.instance(scales)
     clock: {Logex.Runner.Clock.Manual, clock}
   )
 
-Logex.IO.Sim.set(drive, [0], 730)
-Logex.IO.Sim.set(panel, %{[0] => 1, [1] => 4})
+Logex.IO.Sim.set(drive, "drive.i.0", 730)
+Logex.IO.Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 4})
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("box 730 in slot 4: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
-Logex.IO.Sim.set(panel, [1], 8)
+Logex.IO.Sim.set(panel, "panel.i.1", 8)
 Logex.Runner.Clock.Manual.advance(clock, 10)
 IO.puts("slot 8: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
 IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
@@ -1936,8 +1945,8 @@ gone, slot 2      %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 410,
 slot 8            %{"heavy" => 0, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
     %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}
     %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: {8}}
-box 730 in slot 4: the lamp %{[0] => 1}
-slot 8: the lamp %{[0] => 0}, :tripped
+box 730 in slot 4: the lamp %{"panel.q.0" => 1}
+slot 8: the lamp %{"panel.q.0" => 0}, :tripped
     {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}}
 grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: {1, 9}}]
 line 8: `weights[code]` takes a subscript from `code`, a word (declared on line 5), which is no integer: a subscript is a literal or a tag of an integer type, so convert it first, with `word_to_uint`
@@ -3112,9 +3121,9 @@ program t1 tally
   t1.full case_lamp
 ```
 
-and `broken.logex`, a mistake on each of its last five lines:
+and `broken_retain.logex`, a mistake on each of its last five lines:
 
-<!-- file: broken.logex -->
+<!-- file: broken_retain.logex -->
 ```
 var_global eye_1              bool at panel.i.0
 var_global retain case_lamp   bool at panel.q.0
@@ -3172,7 +3181,7 @@ IO.inspect(dropped)
 {:ok, wired} = Logex.Configuration.compile_file("wired.logex")
 Enum.each(wired.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
 
-{:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
+{:error, diagnostics} = Logex.Configuration.compile_file("broken_retain.logex")
 Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
 ```
 
@@ -3187,11 +3196,11 @@ from image     total_boxes=5 t1.boxes.cv=5 case_full=0
 a ctu_int      total_boxes=5 t1.boxes.cv=0 case_full=0
 [{"t1.boxes", {:retyped, "ctu", "ctu_int"}}]
 wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_lamp`: after a warm start it is written in the first round
-broken.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
-broken.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
-broken.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
-broken.logex: line 5: `program` is a keyword and cannot name a device
-broken.logex: line 6: `retain` is a keyword and cannot name an instance
+broken_retain.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
+broken_retain.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
+broken_retain.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
+broken_retain.logex: line 5: `program` is a keyword and cannot name a device
+broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
 ```
 
 - A warm restart, `Logex.Runtime.restart(runtime, :warm)`, keeps a global its line marks
@@ -3343,8 +3352,9 @@ A runner given `retain:` keeps the plant's retained image in a file on the host'
 the stand-in for a controller's battery-backed memory. `kept.exs` runs `tally.logex`,
 above, through the runner on the manual clock, its panel a simulated device: it counts
 four boxes and stops the runner, which writes the store; starts it fresh, warm from the
-store; starts it again with `start: :cold`; and starts it from a store edited to name
-another configuration:
+store; starts it again with `start: :cold`; edits it online, `full` made a coil, assembles
+the edit and stops, then starts it fresh from `tally.ld` on disk, which the edit never
+reached; and starts it from a store edited to name another configuration:
 
 ```elixir
 alias Logex.IO.Sim
@@ -3374,7 +3384,7 @@ end
 {:ok, runner} = Runner.start_link(opts)
 
 for eye <- [1, 0, 1, 0, 1, 0, 1, 0] do
-  Sim.set(panel, [0], eye)
+  Sim.set(panel, "panel.i.0", eye)
   Manual.advance(clock, 1000)
 end
 
@@ -3389,6 +3399,19 @@ IO.inspect(Runner.status(runner).retain.written_at, label: "written_at")
 
 {:ok, runner} = Runner.start_link(opts ++ [start: :cold])
 show.(runner, "start: :cold")
+:ok = Runner.stop(runner)
+
+# An edit made online and assembled, never written to tally.ld.
+{:ok, coil} = Logex.compile(String.replace(File.read!("tally.ld"), "otl full", "ote full"), name: "tally")
+{:ok, edited} = Logex.Configuration.compile("tally", File.read!("tally.logex"), %{"tally" => coil})
+{:ok, runner} = Runner.start_link(opts)
+{:ok, _forecast} = Runner.accept(runner, edited)
+{:ok, _report} = Runner.test(runner)
+{:ok, _report} = Runner.assemble(runner)
+:ok = Runner.stop(runner)
+
+{:ok, runner} = Runner.start_link(opts)
+IO.puts(Runner.status(runner).retain.warning)
 :ok = Runner.stop(runner)
 
 File.write!("tally.retain", String.replace(File.read!("tally.retain"), "configuration tally", "configuration line_2"))
@@ -3406,6 +3429,8 @@ four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
 logex retain 2
 configuration tally written 2026-10-30T14:00:08Z
+resource 013cc059392445fdcc1e84c9b0de6118
+program tally 79283a3df1f759ac3c077ad9de67c863
 global total_boxes dint 4
 instance t1 tally
 t1.boxes ctu
@@ -3416,10 +3441,11 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 1
 t1.boxes.r bool 0
 t1.full bool 1
-end 13 lines
+end 15 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
+tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; an edit tested or assembled online that was never written to the files is not in this start, which runs the program it was given with the store's retained values laid over it by name and type
 tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
 ```
 
@@ -3427,13 +3453,19 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   tripped the plant (decision 284, below): a header, `logex retain 2`; the
   configuration's name and the time of the write on the host's wall clock, in UTC, which
   a clock gives through its `wall_ms/1` (the manual clock's own time, read from the
-  epoch); each retained global;
+  epoch); the program the runner ran as it wrote the store (decision 517 (c), RV-21),
+  `resource`, the MD5 of the configuration's own lines, its tasks, globals, instances and
+  connections as `Logex.Configuration.Text.print/1` prints them with no line numbers, so
+  that a comment or an empty line changes nothing, and `program` a program type, the MD5
+  of its text, what `md5sum tally.ld` prints, and of each user block's after it where it
+  holds one, a store with a `program` line and no `resource` line refused a line, as a
+  hand edit that took the one away and kept the other leaves it; each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
   text that reads back to it, and never a timer's `last` (`PLAN.md`'s M6-5; decisions 275
   and 276 in [`docs/organisation.md`](docs/organisation.md) §7); and last its count of
-  lines, `end 13 lines`, the header and the end line among them, as `wc -l` counts them
+  lines, `end 15 lines`, the header and the end line among them, as `wc -l` counts them
   (decision 355). A store cut short, at a line's end or inside a number, as a copy cut off
   or a file system that loses a file's tail can leave one, has lost its end line or cut
   it, and is refused at a fresh start, naming the file and its last line, so that no
@@ -3441,7 +3473,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   number cut in its digits read as a smaller one; a hand edit that changes a line in
   place keeps the count, and one that adds or takes away a line changes it too. A store
   of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. The runner ends each line with LF
+  before, and the next write makes it `logex retain 2`. A store that names its program is
+  `logex retain 2` too, so a logex from before RV-21, put back over a store this one
+  wrote, refuses it at a warm start, its `resource` line told as one that comes before
+  any `instance` line, and starts it only cold, copying it first (provisional, `PLAN.md`'s
+  RV-21 question 4). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
@@ -3586,6 +3622,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   at the store and the forces file for a link before either is read, so that a store on a
   stalled disk, or a FIFO in its place, refuses the start as a store that cannot be read
   (decision 415).
+- An edit made online lives in the runner and its store, not in the files: once tested
+  or assembled, every write of the store names the edited program, so a fresh start from
+  files the edit never reached, as `kept.exs` makes above, finds its store written by
+  another program than the one it is given and warns of it, `status/1`'s `retain` giving
+  `warning`, one message naming the store and what differs, the configuration's own lines
+  or a program type's text, or a type only the store or only the start has (decision 517
+  (c), RV-21). It changes nothing else: the store's values are laid over the program the
+  start was given by name and type, as at any start, so the operator who sees it either
+  writes the edit to the files and starts again, or lets the start stand, its next write
+  naming the files' program, after which nothing warns. A deploy of changed files warns
+  the same way, the store having been written by the program before it; a store an
+  earlier logex wrote names no program and warns of nothing, and a cold start, which lays
+  nothing over, warns of nothing. `warning` is always in the report, nil where nothing
+  warned, for the runner's life, as `dropped` is.
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),
@@ -3914,25 +3964,25 @@ alias Logex.IO.Sim
 show = fn label ->
   %{now: now, rounds: rounds} = Runner.status(runner)
   out = Sim.outputs(panel)
-  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.count")}")
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.count")}")
 end
 
 show.("started        ")
-Sim.set(panel, [0], 1)                      # pb_start_1, reported and merged at once
+Sim.set(panel, "panel.i.0", 1)              # pb_start_1, reported and merged at once
 Manual.advance(clock, 10)                   # a round each millisecond, the conveyor's at 10
 show.("start pressed  ")
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)                    # a box on the eye...
+  Sim.set(panel, "panel.i.8", 1)            # a box on the eye...
   Manual.advance(clock, 2)
-  Sim.set(panel, [8], 0)                    # ...and past it
+  Sim.set(panel, "panel.i.8", 0)            # ...and past it
   Manual.advance(clock, 2)
 end
 
 show.("three boxes    ")
 :ok = Runner.subscribe(runner, [:ran])
-Sim.set(panel, [7], 1)                      # the e-stop, which the conveyor reads at 30
+Sim.set(panel, "panel.i.7", 1)              # the e-stop, which the conveyor reads at 30
 Manual.advance(clock, 10)
 show.("e-stop at 22   ")
 IO.inspect(for({Runner, ^runner, {:ran, "fast", i, at}} <- Process.info(self(), :messages) |> elem(1), do: {i, at}), label: "the conveyor ran")
@@ -3955,7 +4005,7 @@ the conveyor ran: [{"c1", 30}]
   overlaps: %{"fast" => 0, "main" => 0},
   latest_wake: 0
 ]
-the last two writes: [%{[0] => 0, [4] => 1}, %{[0] => 0, [4] => 0}]
+the last two writes: [%{"panel.q.0" => 0, "panel.q.4" => 1}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
 closed: true
 ```
 
@@ -3986,6 +4036,11 @@ closed: true
   one with no output point among them, is written nothing at a poll.
 - The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
   at 30, which latched its fault and stopped it.
+- Once a runner has opened it, a sim is set and read at the configuration's addresses,
+  as `packing.logex` writes them: `set(panel, "panel.i.8", 1)` sets the eye, and
+  `outputs/1` and `writes/1` give `case_full` under `"panel.q.4"`. A sim no runner has
+  opened knows no device's name, and is set by the adapter's list, `[8]` (decision 517
+  (e), provisional).
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's
@@ -4017,18 +4072,16 @@ closed: true
   ```elixir
   task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
 
-  answered = fn answered ->
-    case Task.yield(task, 10) do
-      {:ok, value} ->
-        value
+  answered = fn
+    _answered, {:ok, value} ->
+      value
 
-      nil ->
-        Manual.advance(clock, 0)              # one owed round; at most 4 bring the slot
-        answered.(answered)
-    end
+    answered, nil ->
+      Manual.advance(clock, 0)                # one owed round; at most 4 bring the slot
+      answered.(answered, Task.yield(task, 10))
   end
 
-  answered.(answered)
+  answered.(answered, Task.yield(task, 10))
   ```
 
 A trip (M4-4, decisions 110 to 115, 125, 126 and 128) has one path, whatever caused it:
@@ -4044,9 +4097,9 @@ status = fn keys ->                         # the fields named, in the order nam
   IO.inspect(for(key <- keys, do: {key, Map.fetch!(Runner.status(runner), key)}))
 end
 
-Sim.set(panel, [0], 1)                      # start pressed
+Sim.set(panel, "panel.i.0", 1)              # start pressed
 Manual.advance(clock, 10)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 Sim.fail(panel, :read, {:error, :eio})      # the panel's next read, at its poll at 20, fails
 Manual.advance(clock, 15)
@@ -4068,10 +4121,10 @@ $ mix run a_trip.exs
 [status: :tripped, trip: {:io, "panel", {:error, :eio}}, now: 19, rounds: 20]
 events: [trip: {:io, "panel", {:error, :eio}}]
 k1 in the resource: 1
-the panel's last two writes: [%{[0] => 1, [4] => 0}, %{[0] => 0, [4] => 0}]
+the panel's last two writes: [%{"panel.q.0" => 1, "panel.q.4" => 0}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
 [status: :tripped, now: 19, rounds: 20]
 [status: :running, trip: nil, now: 19, rounds: 21]
-the panel's outputs: %{[0] => 0, [4] => 0}
+the panel's outputs: %{"panel.q.0" => 0, "panel.q.4" => 0}
 ```
 
 - The reasons: `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run longer
@@ -4220,17 +4273,17 @@ alias Logex.IO.Sim
 show = fn label ->
   %{status: status, now: now} = Runner.status(runner)
   out = Sim.outputs(panel)
-  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
 end
 
-Sim.set(panel, [0], 1)                      # start pressed
+Sim.set(panel, "panel.i.0", 1)              # start pressed
 Manual.advance(clock, 10)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)
+  Sim.set(panel, "panel.i.8", 1)
   Manual.advance(clock, 2)
-  Sim.set(panel, [8], 0)
+  Sim.set(panel, "panel.i.8", 0)
   Manual.advance(clock, 2)
 end
 
@@ -4303,8 +4356,8 @@ end
 :ok = Runner.force(runner, "eye", 1)           # the photo-eye forced blocked
 Manual.advance(clock, 2)
 show.(runner, "eye forced     ")
-Sim.set(panel, [8], 1)                         # the real eye: blocked, then clear
-Sim.set(panel, [8], 0)
+Sim.set(panel, "panel.i.8", 1)                 # the real eye: blocked, then clear
+Sim.set(panel, "panel.i.8", 0)
 Manual.advance(clock, 2)
 show.(runner, "eye moved      ")
 IO.inspect(File.read!("packing.forces"), label: "packing.forces")
@@ -4492,14 +4545,14 @@ alias Logex.IO.Sim
 # No clock: the machine's, Logex.Runner.Clock.Monotonic.
 {:ok, runner} = Runner.start_link(configuration: plant, io: %{"panel" => {Sim, sim: panel}})
 
-Sim.set(panel, [0], 1)                      # start pressed for 100 ms
+Sim.set(panel, "panel.i.0", 1)              # start pressed for 100 ms
 Process.sleep(100)
-Sim.set(panel, [0], 0)
+Sim.set(panel, "panel.i.0", 0)
 
 for _box <- 1..3 do
-  Sim.set(panel, [8], 1)                    # a box on the eye for 20 ms, then 20 ms clear
+  Sim.set(panel, "panel.i.8", 1)            # a box on the eye for 20 ms, then 20 ms clear
   Process.sleep(20)
-  Sim.set(panel, [8], 0)
+  Sim.set(panel, "panel.i.8", 0)
   Process.sleep(20)
 end
 
@@ -4534,7 +4587,7 @@ $ mix run on_the_real_clock.exs
   no_more_rounds_than_milliseconds: true
 ]
 this run's figures: now=1230 rounds=1229 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
-the last write: %{[0] => 0, [4] => 0}
+the last write: %{"panel.q.0" => 0, "panel.q.4" => 0}
 closed: true
 ```
 
@@ -4659,15 +4712,15 @@ end
 
 {:ok, runner} = start.()
 
-lamps = fn -> Enum.map(0..7, &Sim.outputs(card)[[&1]]) end
+lamps = fn -> Enum.map(0..7, &Sim.outputs(card)["card.q.#{&1}"]) end
 
-Sim.set(card, %{[0] => 175.5, [1] => 182, [2] => 179.9, [3] => 201.25, [5] => 190})
+Sim.set(card, %{"card.i.0" => 175.5, "card.i.1" => 182, "card.i.2" => 179.9, "card.i.3" => 201.25, "card.i.5" => 190})
 Manual.advance(clock, 10)
 IO.inspect(Runner.get!(runner, "zone_t"), label: "zone_t  ")
 IO.inspect(lamps.(), label: "lamps   ")
 
 :ok = Runner.force(runner, "zone_t[3]", 150)
-Sim.set(card, [3], 205.0)
+Sim.set(card, "card.i.3", 205.0)
 Manual.advance(clock, 10)
 IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "forced  ")
 IO.inspect(lamps.(), label: "lamps   ")
@@ -4813,6 +4866,272 @@ line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a l
   in the candidate: located I/O changes only with a restart" (decision 244), where an
   unlocated array grown is told its type; an element an edit stops driving
   is held at its point by its name, `{:held, "zone_hot[4]", 1}`.
+
+### A device's adapter
+
+`Logex.IO.Sim` is the one adapter logex ships ("What logex is not", below). A real
+device's adapter is the host's own, a module written to `Logex.IO`'s behaviour and bound
+to its device by name as a sim is (decision 517 (d)). `line_device.exs` writes one,
+`LineDevice`, for a card on a TCP socket that answers lines, `read` with its sixteen
+inputs, `0=1 1=0 2=0 ...`, `write 0=1 4=0` with `ok` and `quit` with `bye`, and runs
+`packing.logex`, above, on it, the card played by the script itself on the loopback
+interface; it presses start, drops the card's line and restarts, garbles an answer and
+restarts, and stops:
+
+```elixir
+# LineDevice: an adapter for a card on a TCP socket that speaks lines, `read` answered by
+# its inputs, `0=1 2=0`, `write 0=1 4=0` answered `ok`, and `quit` answered `bye`.
+defmodule LineDevice do
+  @behaviour Logex.IO
+
+  @connect [:binary, packet: :line, active: false]
+
+  # In the host's process, as the runner starts: the options' mistakes, a line each.
+  @impl true
+  def check(_device, _points, opts), do: Enum.flat_map([:host, :port], &given(&1, opts[&1]))
+
+  defp given(key, nil), do: ["LineDevice needs #{key}:, the card's address"]
+  defp given(_key, _value), do: []
+
+  # In the device's process, from here on: the connection, made at once, and the inputs
+  # the configuration wires, which are all a read gives.
+  @impl true
+  def init(_device, points, opts) do
+    inputs = for %Logex.IO.Point{direction: :input, address: at} <- points, do: at
+    opened(connected(%{host: opts[:host], port: opts[:port], socket: nil, inputs: inputs}))
+  end
+
+  defp opened({:ok, state}), do: {:ok, state}
+  defp opened({:error, reason, _state}), do: {:error, reason}
+
+  # The wired inputs, by address, the card's other channels left out; a failure is given
+  # back, never raised, and the call after a lost line, or an answer that is no answer,
+  # connects again.
+  @impl true
+  def read(state), do: asked(connected(state), "read", &values(&1, state.inputs))
+
+  # Every output, by address, at each write: a snapshot.
+  @impl true
+  def write(values, state), do: asked(connected(state), "write " <> line(values), &ok/1)
+
+  # After the last write of zeros: the card told the controller is leaving, so that it
+  # frees its line at once, and the socket closed.
+  @impl true
+  def close(%{socket: nil}), do: :ok
+
+  def close(%{socket: socket}) do
+    _ = :gen_tcp.send(socket, "quit\n")
+    _ = :gen_tcp.recv(socket, 0, 1000)
+    :gen_tcp.close(socket)
+  end
+
+  defp connected(%{socket: nil} = state),
+    do: socket(:gen_tcp.connect(state.host, state.port, @connect, 1000), state)
+
+  defp connected(state), do: {:ok, state}
+
+  defp socket({:ok, socket}, state), do: {:ok, %{state | socket: socket}}
+  defp socket({:error, reason}, state), do: {:error, reason, state}
+
+  defp asked({:ok, state}, line, answer),
+    do: answered(sent(:gen_tcp.send(state.socket, line <> "\n"), state.socket), answer, state)
+
+  defp asked(error, _line, _answer), do: error
+
+  defp sent(:ok, socket), do: :gen_tcp.recv(socket, 0, 1000)
+  defp sent(error, _socket), do: error
+
+  defp answered({:ok, text}, answer, state), do: given_back(answer.(text), state)
+  defp answered({:error, reason}, _answer, state), do: lost(reason, state)
+
+  defp given_back({:ok, values}, state), do: {:ok, values, state}
+  defp given_back(:ok, state), do: {:ok, state}
+  defp given_back({:garbled, text}, state), do: lost({:garbled, text}, state)
+  defp given_back({:error, reason}, state), do: {:error, reason, state}
+
+  defp lost(reason, state) do
+    :gen_tcp.close(state.socket)
+    {:error, reason, %{state | socket: nil}}
+  end
+
+  # `0=1 2.1=7` is %{[0] => 1, [2, 1] => 7}: an address is its location's fields. Only the
+  # wired inputs are given, since an address that is no point of the device is an I/O
+  # fault; any other line is no answer.
+  @answer ~r/\A(\d+(\.\d+)*=-?\d+( \d+(\.\d+)*=-?\d+)*)?\n\z/
+
+  defp values(text, inputs), do: parsed(Regex.match?(@answer, text), text, inputs)
+
+  defp parsed(true, text, inputs), do: {:ok, Map.take(Map.new(String.split(text), &value/1), inputs)}
+  defp parsed(false, text, _inputs), do: {:garbled, text}
+
+  defp value(pair) do
+    [at, value] = String.split(pair, "=")
+    {Enum.map(String.split(at, "."), &String.to_integer/1), String.to_integer(value)}
+  end
+
+  defp ok("ok\n"), do: :ok
+  defp ok(other), do: {:error, {:refused, other}}
+
+  defp line(values),
+    do: Enum.map_join(Enum.sort(values), " ", fn {at, v} -> "#{Enum.join(at, ".")}=#{v}" end)
+end
+
+# The card, sixteen inputs of which the plant wires four, played by the script on the
+# loopback interface: its inputs set, its outputs read, its line dropped, an answer
+# garbled and its leaving controller told by calls.
+defmodule Card do
+  use GenServer
+
+  def start_link, do: GenServer.start_link(__MODULE__, nil)
+  def port(card), do: GenServer.call(card, :port)
+  def set(card, at, value), do: GenServer.call(card, {:set, at, value})
+  def outputs(card), do: GenServer.call(card, :outputs)
+  def drop(card), do: GenServer.call(card, :drop)
+  def garble(card), do: GenServer.call(card, :garble)
+  def left?(card), do: GenServer.call(card, :left)
+
+  @impl true
+  def init(nil) do
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, packet: :line, active: false, ip: {127, 0, 0, 1}])
+    card = self()
+    spawn_link(fn -> accepting(listen, card) end)
+    inputs = Map.new(0..15, &{&1, 0})
+    {:ok, %{listen: listen, socket: nil, inputs: inputs, outputs: %{}, garbled: false, left: false}}
+  end
+
+  defp accepting(listen, card) do
+    {:ok, socket} = :gen_tcp.accept(listen)
+    :ok = :gen_tcp.controlling_process(socket, card)
+    send(card, {:accepted, socket})
+    accepting(listen, card)
+  end
+
+  @impl true
+  def handle_call(:port, _from, state), do: {:reply, elem(:inet.port(state.listen), 1), state}
+  def handle_call({:set, at, value}, _from, state), do: {:reply, :ok, put_in(state.inputs[at], value)}
+  def handle_call(:outputs, _from, state), do: {:reply, state.outputs, state}
+  def handle_call(:garble, _from, state), do: {:reply, :ok, %{state | garbled: true}}
+  def handle_call(:left, _from, state), do: {:reply, state.left, state}
+
+  def handle_call(:drop, _from, state) do
+    :gen_tcp.close(state.socket)
+    {:reply, :ok, %{state | socket: nil}}
+  end
+
+  @impl true
+  def handle_info({:accepted, socket}, state) do
+    :ok = :inet.setopts(socket, active: true)
+    {:noreply, %{state | socket: socket, left: false}}
+  end
+
+  def handle_info({:tcp, socket, "read\n"}, %{garbled: true} = state) do
+    :gen_tcp.send(socket, "huh\n")
+    {:noreply, %{state | garbled: false}}
+  end
+
+  def handle_info({:tcp, socket, "read\n"}, state) do
+    :gen_tcp.send(socket, Enum.map_join(state.inputs, " ", fn {at, v} -> "#{at}=#{v}" end) <> "\n")
+    {:noreply, state}
+  end
+
+  def handle_info({:tcp, socket, "write " <> line}, state) do
+    :gen_tcp.send(socket, "ok\n")
+    {:noreply, %{state | outputs: Map.new(String.split(line), &output/1)}}
+  end
+
+  def handle_info({:tcp, socket, "quit\n"}, state) do
+    :gen_tcp.send(socket, "bye\n")
+    {:noreply, %{state | left: true}}
+  end
+
+  def handle_info({:tcp_closed, _socket}, state), do: {:noreply, state}
+
+  defp output(pair) do
+    [at, value] = String.split(pair, "=")
+    {String.to_integer(at), String.to_integer(value)}
+  end
+end
+
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+{:ok, card} = Card.start_link()
+{:ok, clock} = Manual.start_link()
+
+opts = fn options ->
+  [configuration: plant, io: %{"panel" => {LineDevice, options}}, clock: {Manual, clock}]
+end
+
+try do
+  Runner.start_link(opts.(port: Card.port(card)))
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:ok, runner} = Runner.start_link(opts.(host: {127, 0, 0, 1}, port: Card.port(card)))
+Card.set(card, 0, 1)                        # start pressed, read at the next poll, at 10
+Card.set(card, 12, 1)                       # a channel the plant does not wire, left out
+Manual.advance(clock, 10)
+IO.inspect(Card.outputs(card), label: "the card's outputs")
+Card.set(card, 0, 0)
+
+Card.drop(card)                             # the line lost: the next read fails
+Manual.advance(clock, 10)
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+IO.inspect(Card.outputs(card), label: "the card's outputs")
+
+:ok = Runner.restart(runner, :cold)         # the adapter connects again for the restart's read
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+
+Card.garble(card)                           # the next read answered with no answer
+Manual.advance(clock, 10)
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+:ok = Runner.restart(runner, :cold)
+IO.inspect(Map.take(Runner.status(runner), [:status, :trip]))
+
+:ok = Runner.stop(runner)                   # the last zeros, then close/1's quit
+IO.inspect(Card.outputs(card), label: "the card's outputs")
+IO.inspect(Card.left?(card), label: "the card told the controller left")
+```
+
+```
+$ mix run line_device.exs
+the device `panel`'s adapter options: LineDevice needs host:, the card's address
+the card's outputs: %{0 => 1, 4 => 0}
+%{status: :tripped, trip: {:io, "panel", {:error, :closed}}}
+the card's outputs: %{0 => 0, 4 => 0}
+%{status: :running, trip: nil}
+%{status: :tripped, trip: {:io, "panel", {:error, {:garbled, "huh\n"}}}}
+%{status: :running, trip: nil}
+the card's outputs: %{0 => 0, 4 => 0}
+the card told the controller left: true
+```
+
+- What every adapter does, in the device's process, which the runner starts for it:
+  `init/3` opens the device, given its name, its points and the options it was bound
+  with, and gives its state or `{:error, reason}`; `read/1` gives the inputs by address,
+  the location's fields, `panel.i.8`'s `[8]`, some or all of the device's input points
+  and only those, since an address that is no point of the device is an I/O fault that
+  trips the plant (`Logex.IO`), so `LineDevice` keeps its input points' addresses from
+  `init/3` and gives those of the card's sixteen, channel 12, which no global is at,
+  left out; `write/2` is given every output by address at each write, a snapshot; and
+  `close/1`, optional, releases the device after the last write of zeros, as
+  `LineDevice`'s tells the card it is leaving, so that the card frees its line at once,
+  and closes the socket. A callback that fails gives `{:error, reason, state}` and does
+  not raise, whatever the device answers, its state given back, so that the next call
+  can connect again, as `LineDevice`'s do: the read that found the line dropped tripped
+  the plant, `{:io, "panel", {:error, :closed}}`, the trip's zeros went out on a new
+  connection, and the cold restart read the card through it; and a read answered with
+  no answer, `huh`, tripped it too, `{:error, {:garbled, "huh\n"}}`, its line dropped
+  so that the next call starts afresh, where a parse that raised would have tripped it
+  `{:raised, ...}` with nothing said of the card. (RV-21's review.)
+- `check/3`, optional, runs in the host's process as the runner starts, before anything
+  opens, so a binding's mistake is an `ArgumentError` there, a line each, as above. An
+  adapter whose device sends its changes implements `report/2`, optional, given each
+  message the device's process receives, as `Logex.IO.Sim` does (`Logex.IO`).
+- `LineDevice` is an example to copy, not an adapter logex ships: a real card's
+  protocol, its timeouts and how it connects again are the host's to get right.
 
 ## Changing a running program
 
@@ -5143,13 +5462,12 @@ cycle = fn rt, elapsed, label, inputs ->
   {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
   ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
   # `horn` is a global of the candidate's alone.
-  horn =
-    case Logex.Runtime.get(rt, "horn") do
-      {:ok, value} -> " horn=#{value}"
-      {:error, _reason} -> ""
-    end
+  horn = fn
+    {:ok, value} -> " horn=#{value}"
+    {:error, _reason} -> ""
+  end
 
-  IO.puts("#{label}k1=#{out["k1"]} k1_at_trip=#{Logex.Runtime.get!(rt, "k1_at_trip")}#{horn}  ran #{Enum.join(ran, ", ")}")
+  IO.puts("#{label}k1=#{out["k1"]} k1_at_trip=#{Logex.Runtime.get!(rt, "k1_at_trip")}#{horn.(Logex.Runtime.get(rt, "horn"))}  ran #{Enum.join(ran, ", ")}")
   rt
 end
 
@@ -5290,7 +5608,9 @@ in every cycle's outputs at the value it holds.
   changes a program.
 - **Not wired to real I/O out of the box.** The one adapter logex ships is
   `Logex.IO.Sim`, a simulated device for tests and examples. A fieldbus or a card's
-  adapter is the host's, written to the `Logex.IO` behaviour.
+  adapter is the host's, written to the `Logex.IO` behaviour; `line_device.exs`, under
+  `examples/`, shows the shape of one, for a card on a TCP socket the script itself
+  plays, an example to copy and not an adapter logex ships ("A device's adapter", above).
 - **Not IEC 61131-3 text.** It is a ladder dialect written as text, with IEC's names
   where IEC names the operation ("The dialect", above); there is no Structured Text,
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
@@ -5319,7 +5639,8 @@ in every cycle's outputs at the value it holds.
   prescan; no hot restart; no warm restart that starts named paths cold; one store a
   runner, never one a program instance, and no checksum or encryption of it beyond its
   grammar and its count of lines, which tells a store cut short but not a value changed
-  in place; and no retained force, the forces having a file of their own.
+  in place, the digests it names its program by being the program's and not its own;
+  and no retained force, the forces having a file of their own.
 - **Not battery-backed memory, and no safety memory.** What a program marks `retain`
   is kept on the host's disk, by a runner given a store, `retain:`, and only there; in
   the core, `Logex.Runtime.restart/2,3` with `:warm`, it is kept in memory alone. The
@@ -5349,9 +5670,12 @@ in every cycle's outputs at the value it holds.
   retained bit, count or timer writes its outputs from it in that first round, so a warm
   start can switch an output on at once, as `a_warm_trip.exs`'s case-full lamp does
   above; the configuration warns only of a retained var_output wired straight to an
-  output point (decision 272). And a host's own child spec that restarts a crashed runner
-  restarts it warm wherever it names a store, since a fresh start reads its store warm
-  unless `start: :cold`.
+  output point (decision 272). A fresh start from a store another program wrote, an edit
+  made online that never reached the files, is warned of in `status/1` and refused
+  nothing: the store's values are laid over the program the start was given, by name and
+  type, and run at once (decision 517 (c)). And a host's own child spec that restarts a
+  crashed runner restarts it warm wherever it names a store, since a fresh start reads
+  its store warm unless `start: :cold`.
 
 ## Running it
 
@@ -5384,9 +5708,10 @@ CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 `MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
 Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`); `scripts/gate.sh` runs the
 same four here. The suite runs every example in this file, each script a `$ mix run`
-block follows, and compares what it prints with what is printed here; the one `elixir`
-block shown with no output, the call made from another process in "Running a plant on
-the clock", is a fragment, which it only parses (`test/logex/readme_test.exs`).
+block follows, from its file under `examples/`, and compares what it prints with what is
+printed here, each block shown here held to its file; the one `elixir` block shown with
+no output, the call made from another process in "Running a plant on the clock", is a
+fragment, which it runs in the state its prose describes (`test/logex/readme_test.exs`).
 
 ## Documents
 

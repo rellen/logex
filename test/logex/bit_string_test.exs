@@ -2177,7 +2177,7 @@ defmodule Logex.BitStringTest do
       for {type, n} <- Enum.with_index(@strings), bad <- [:past, :negative, :float] do
         {{:ok, runner}, clock, sim} = run_card(Path.join(dir, "forces"))
         {_low, high} = limits(type)
-        Sim.set(sim, [n], high)
+        Sim.set(sim, "card.i.#{n}", high)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "g_#{type}") == high
 
@@ -2194,7 +2194,7 @@ defmodule Logex.BitStringTest do
     defp bad_value(:float, _high), do: 37.5
 
     defp bad_read(:float, sim, n, value), do: Sim.fail(sim, :read, {:value, [n], value})
-    defp bad_read(_integer, sim, n, value), do: Sim.set(sim, [n], value)
+    defp bad_read(_integer, sim, n, value), do: Sim.set(sim, "card.i.#{n}", value)
 
     test "a force of each is held to its values, and the forces file reads back exactly",
          %{tmp_dir: dir} do
@@ -2227,10 +2227,10 @@ defmodule Logex.BitStringTest do
       assert written =~ "p_word 65535\n"
 
       # Across a restart: a bad value trips the runner, which restarts with every force on.
-      Sim.set(sim, [0], 256)
+      Sim.set(sim, "card.i.0", 256)
       Manual.advance(clock, 10)
       assert %{status: :tripped} = Runner.status(runner)
-      Sim.set(sim, [0], 0)
+      Sim.set(sim, "card.i.0", 0)
       assert Runner.restart(runner, :cold) == :ok
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "g_word") == 65_535

@@ -1,0 +1,22 @@
+// line.logex -- two conveyors, one e-stop
+task fast interval 10 priority 1
+task slow interval 50 priority 2
+
+var_global estop      bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global pb_start_2 bool at panel.i.1
+var_global pb_reset   bool at panel.i.2
+var_global k1         bool at panel.q.0
+var_global k2         bool at panel.q.1
+
+program c1 conveyor with fast
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset pb_reset
+  c1.motor k1
+
+program c2 conveyor with slow
+  c2.start pb_start_2
+  c2.stop  0
+  c2.reset pb_reset
+  c2.motor k2

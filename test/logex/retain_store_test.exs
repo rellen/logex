@@ -131,7 +131,7 @@ defmodule Logex.RetainStoreTest do
 
   defp pressed(%{panel: panel, clock: clock}, eyes) do
     for eye <- eyes do
-      Sim.set(panel, [0], eye)
+      Sim.set(panel, "panel.i.0", eye)
       Manual.advance(clock, 10)
     end
   end
@@ -171,6 +171,43 @@ defmodule Logex.RetainStoreTest do
     do: for(path <- ~w(total_boxes t1.boxes.cv t1.lamp shown), do: Runner.get!(runner, path))
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
+
+  # RV-21's review: a plant of `n` instances of `copy`, each wired twice.
+  @copy "var_input i bool\nvar_output o bool\nvar retain c dint\nxic i ote o\nxic i add c 1 c"
+
+  defp copies(n),
+    do:
+      "task fast interval 10 priority 1\nvar_global a bool at panel.i.0\n" <>
+        "var_global q bool at panel.q.0\n" <>
+        Enum.map_join(1..n, &"var_global g#{&1} bool\n") <>
+        Enum.map_join(1..n, &"program p#{&1} copy with fast\n  p#{&1}.i a\n  p#{&1}.o g#{&1}\n")
+
+  defp reductions_of(pid) do
+    {:reductions, n} = Process.info(pid, :reductions)
+    n
+  end
+
+  # The store's lines naming its writer as a trip writes them, the runner restarted warm.
+  defp tripped_named(rig, runner) do
+    tripped(rig, runner)
+    named = named(rig.store)
+    assert Runner.restart(runner, :warm) == :ok
+    named
+  end
+
+  # Decision 517 (c) (RV-21): the MD5 of a text as `md5sum` prints it, restated.
+  defp md5(text), do: Base.encode16(:erlang.md5(text), case: :lower)
+
+  # Decision 517 (c) (RV-21): a fresh start's warning that its store was written by
+  # another text of `tally` than the one it was given, the store named as the host spelled
+  # it.
+  defp warned(store),
+    do:
+      store <>
+        ": the store was written by another program than the one this start was given: " <>
+        "`tally`'s text differs; an edit tested or assembled online that was never written " <>
+        "to the files is not in this start, which runs the program it was given with the " <>
+        "store's retained values laid over it by name and type"
 
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
@@ -347,11 +384,12 @@ defmodule Logex.RetainStoreTest do
             "s: line 14: `9p` names no program type",
             "s: line 15: `on` is no number",
             "s: line 16: `m2.f  dint 1` is no line of a store: a line is `global <name> " <>
-              "<type> <value>`, `trigger <name> <sample>`, `instance <name> <program type>`, " <>
-              "`<path> <kind>` or `<path> <type> <value>`",
+              "<type> <value>`, `trigger <name> <sample>`, `resource <digest>`, `program " <>
+              "<type> <digest>`, `instance <name> <program type>`, `<path> <kind>` or `<path> " <>
+              "<type> <value>`",
             "s: line 17: `` is no line of a store: a line is `global <name> <type> <value>`, " <>
-              "`trigger <name> <sample>`, `instance <name> <program type>`, `<path> <kind>` " <>
-              "or `<path> <type> <value>`"
+              "`trigger <name> <sample>`, `resource <digest>`, `program <type> <digest>`, " <>
+              "`instance <name> <program type>`, `<path> <kind>` or `<path> <type> <value>`"
           ],
           "\n"
         ),
@@ -561,7 +599,9 @@ defmodule Logex.RetainStoreTest do
     end
 
     # Every store the runner writes is of version 2, its last line counting its lines as
-    # `wc -l` does, the header and the end line among them.
+    # `wc -l` does, the header and the end line among them; since decision 517 (c) (RV-21)
+    # the program that wrote it among them, its configuration's own lines, here its whole
+    # text, and its one program type's text.
     test "a store's last line counts its lines", %{tmp_dir: dir} do
       rig = counted_rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -572,12 +612,14 @@ defmodule Logex.RetainStoreTest do
       assert text == """
              logex retain 2
              configuration plant written 2026-10-30T14:00:01Z
+             resource #{md5(@counted)}
+             program counting #{md5(@counting)}
              global total dint 123557
              instance t1 counting
              t1.lamp bool 1
              t1.n dint 101
              t1.w real[3] 0.25 -2.5 3.4e38
-             end 8 lines
+             end 10 lines
              """
 
       lines = String.split(text, "\n", trim: true)
@@ -1244,13 +1286,13 @@ defmodule Logex.RetainStoreTest do
          %{tmp_dir: dir} do
       rig = slotted(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 100)
 
       assert %{status: :tripped, trip: {:fault, "fast", "s1", %{read: {8}}}} =
                Runner.status(runner)
 
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
       assert File.read!(rig.store) =~ "\ns1.slot dint 8\n"
 
       # Edited while tripped: a warm restart keeps what the runner holds, 8, and trips
@@ -1336,14 +1378,16 @@ defmodule Logex.RetainStoreTest do
       copy = rig.store <> ".dropped.1"
 
       # Decision 440 (RV-16), the leave for `unknown` absent: always there, nil where no
-      # write is unknown.
+      # write is unknown; and decision 517 (c) (RV-21) `warning`, the store written by
+      # another text of `tally` than the retyped one the start was given.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:00Z],
                failed: nil,
                dropped: [{"t1.boxes", {:retyped, "ctu", "ctu_int"}}],
                copy: copy,
-               unknown: nil
+               unknown: nil,
+               warning: warned(rig.store)
              }
 
       # The store itself as it was until the first write over it, the period's, which
@@ -2137,19 +2181,27 @@ defmodule Logex.RetainStoreTest do
       {:ok, runner} = Runner.start_link(rig.opts)
       config = configured()
 
+      # Decision 517 (c) (RV-21): the store names the program that wrote it, the
+      # configuration's (Retain.written_by/1).
       assert File.read!(rig.store) ==
-               Retain.encode(Runtime.retained(Runtime.start(config)), ~U[2026-10-30 14:00:00Z])
+               Retain.encode(
+                 Runtime.retained(Runtime.start(config)),
+                 ~U[2026-10-30 14:00:00Z],
+                 Retain.written_by(config)
+               )
 
       # Decision 412 (RV-13), the leave for `copy` absent: `copy` always there, nil where
       # the start made no copy; and decision 440 (RV-16) `unknown` so, nil where no write
-      # is unknown.
+      # is unknown; and decision 517 (c) (RV-21) `warning`, nil where the start warned of
+      # nothing.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:00Z],
                failed: nil,
                dropped: [],
                copy: nil,
-               unknown: nil
+               unknown: nil,
+               warning: nil
              }
 
       assert Runner.stop(runner) == :ok
@@ -2172,14 +2224,16 @@ defmodule Logex.RetainStoreTest do
       # first (decision 274): the counter and the total kept, `shown` from the count.
       assert values(runner) == kept
 
-      # Decision 440 (RV-16), the leave for `unknown` absent: nil where no write is unknown.
+      # Decision 440 (RV-16), the leave for `unknown` absent: nil where no write is unknown;
+      # and decision 517 (c) (RV-21) `warning`, nil where the store names the start's program.
       assert Runner.status(runner).retain == %{
                path: rig.store,
                written_at: ~U[2026-10-30 14:00:02Z],
                failed: nil,
                dropped: [],
                copy: nil,
-               unknown: nil
+               unknown: nil,
+               warning: nil
              }
 
       assert Runner.stop(runner) == :ok
@@ -2271,10 +2325,12 @@ defmodule Logex.RetainStoreTest do
       {:ok, runner} = Runner.start_link(rig.opts)
       assert values(runner) == [0, 0, 0, 0]
 
+      # Decision 517 (c) (RV-21): the new store names the program that wrote it.
       assert File.read!(rig.store) ==
                Retain.encode(
                  Runtime.retained(Runtime.start(configured())),
-                 ~U[2026-10-30 14:00:00Z]
+                 ~U[2026-10-30 14:00:00Z],
+                 Retain.written_by(configured())
                )
 
       copy = rig.store <> ".dropped.1"
@@ -2462,6 +2518,430 @@ defmodule Logex.RetainStoreTest do
     end
   end
 
+  describe "the program a store names (decision 517 (c), RV-21)" do
+    # An edit the files never hold: `tally`'s lamp latched only while `clear` is off, a rung
+    # that changes no declaration, so that the store's values all fit it and nothing is
+    # dropped.
+    @edited String.replace(@tally, "xic eye otl lamp", "xic eye xio clear otl lamp")
+
+    defp edited, do: configured(@plant, programs(@edited))
+
+    # The store's lines naming its writer, in order.
+    defp named(store),
+      do: for([line] <- Regex.scan(~r/^(?:resource|program) .*$/m, File.read!(store)), do: line)
+
+    # The configuration's own lines as the record has them, its text with no indentation,
+    # comment or empty line, and the program type's text.
+    defp named_by(tally),
+      do: [
+        "resource " <> md5(String.replace(@plant, "\n  ", "\n")),
+        "program tally " <> md5(tally)
+      ]
+
+    test "every write names the program the resource runs, after the configuration's line",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+
+      # The start's own write, the store's lines 3 and 4, the digests' text the files'.
+      assert named(rig.store) == named_by(@tally)
+
+      assert [
+               "logex retain 2",
+               "configuration plant " <> _,
+               "resource " <> _,
+               "program " <> _ | _
+             ] =
+               String.split(File.read!(rig.store), "\n")
+
+      # Read back, the image is the image encode/2 wrote, and decoded!/2 names the writer.
+      text = File.read!(rig.store)
+      by = Retain.written_by(configured())
+      assert {image, _at, ^by} = Retain.decoded!(text, {rig.store, "plant"})
+      assert Retain.decode!(text, {rig.store, "plant"}) |> elem(0) == image
+
+      # A comment, an empty line and the elements' order in kind are not the program: the
+      # same configuration written so names the same.
+      laid_out =
+        "// the plant\n\n" <>
+          String.replace(@plant, "var_global shown dint\n", "") <>
+          "var_global shown dint\n"
+
+      assert Retain.written_by(configured(laid_out)) == by
+      pressed(rig, [1, 0, 1])
+
+      # A period's write, the writer's own, names it too.
+      started = File.read!(rig.store)
+      Manual.advance(rig.clock, 1000)
+      period_written(runner)
+      assert File.read!(rig.store) != started
+      assert named(rig.store) == named_by(@tally)
+
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+    end
+
+    # The PMI's friction: an edit assembled online lives in the runner and the store, and a
+    # fresh start from the files on disk, which the edit never reached, runs the old
+    # program. It warns, in status/1's `retain`, and changes nothing else: the values laid
+    # over by name and type, nothing dropped, no copy; the warning the start's, which a
+    # round, a trip and a restart leave; and the store its next write makes names the
+    # files' program, so the start after it warns of nothing.
+    test "an assembled edit's store warns a fresh start from the files it never reached",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert {:ok, _forecast} = Runner.accept(runner, edited())
+      assert {:ok, _report} = Runner.test(runner)
+      assert {:ok, _report} = Runner.assemble(runner)
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@edited)
+
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      warning = warned(rig.store)
+
+      assert Runner.status(runner).retain == %{
+               path: rig.store,
+               written_at: ~U[2026-10-30 14:00:00Z],
+               failed: nil,
+               dropped: [],
+               copy: nil,
+               unknown: nil,
+               warning: warning
+             }
+
+      assert values(runner) == kept
+      pressed(rig, [0, 1])
+      assert Runner.status(runner).retain.warning == warning
+      tripped(rig, runner)
+      assert Runner.status(runner).retain.warning == warning
+      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.status(runner).retain.warning == warning
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.status(runner).retain.warning == nil
+      assert Runner.stop(runner) == :ok
+
+      # And a start given the edited files, the edit written to them, warns of nothing.
+      File.write!(rig.store, String.replace(File.read!(rig.store), md5(@tally), md5(@edited)))
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, edited()))
+      assert Runner.status(runner).retain.warning == nil
+      assert Runner.stop(runner) == :ok
+    end
+
+    # Each write names the program the resource runs as it writes: an accept changes
+    # nothing, a test and an assemble the candidate, an untest and a cancel the original,
+    # a trip's write, a cold restart's and a stop's alike.
+    test "each step of an edit leaves the program the next write names", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+
+      tripped_named = fn ->
+        tripped(rig, runner)
+        named = named(rig.store)
+        assert Runner.restart(runner, :warm) == :ok
+        named
+      end
+
+      assert {:ok, _} = Runner.accept(runner, edited())
+      assert tripped_named.() == named_by(@tally)
+      assert {:ok, _} = Runner.test(runner)
+      assert tripped_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.untest(runner)
+      assert tripped_named.() == named_by(@tally)
+      assert {:ok, _} = Runner.test(runner)
+      tripped(rig, runner)
+      assert Runner.restart(runner, :cold) == :ok
+      assert named(rig.store) == named_by(@edited)
+      assert {:ok, _} = Runner.untest(runner)
+      assert {:ok, _} = Runner.cancel(runner)
+      assert tripped_named.() == named_by(@tally)
+      assert {:ok, _} = Runner.accept(runner, edited())
+      assert {:ok, _} = Runner.test(runner)
+      assert {:ok, _} = Runner.assemble(runner)
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@edited)
+    end
+
+    # A store written before RV-21 names no program: read as it was, warning of nothing,
+    # its values laid over as ever; and a cold start, which lays nothing over, warns of
+    # nothing whatever wrote the store.
+    test "a store that names no program, and a cold start, warn of nothing", %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :configuration, edited()))
+      pressed(rig, [1, 0, 1])
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      written = File.read!(rig.store)
+
+      [head, by_lines, rest] =
+        String.split(written, ~r/\nresource .*\nprogram .*\n/, include_captures: true)
+
+      assert by_lines =~ md5(@edited)
+      [count] = Regex.run(~r/end (\d+) lines\n\z/, rest, capture: :all_but_first)
+
+      before =
+        head <>
+          "\n" <>
+          String.replace(rest, "end #{count} lines", "end #{String.to_integer(count) - 2} lines")
+
+      File.write!(rig.store, before)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: [], copy: nil} = Runner.status(runner).retain
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+
+      File.write!(rig.store, written)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(Keyword.put(rig.opts, :start, :cold))
+      assert %{warning: nil, dropped: []} = Runner.status(runner).retain
+      assert values(runner) == [0, 0, 1, 0]
+      assert Runner.stop(runner) == :ok
+    end
+
+    # What differs, each told: the configuration's own lines, a type only the store has
+    # and one only the start has, in name order after the resource, the first ten and then
+    # a count, the store named as the host spelled it.
+    test "the warning names what differs, the configuration's lines first" do
+      a = String.duplicate("a", 32)
+      b = String.duplicate("b", 32)
+      by = %{resource: a, programs: %{"fan" => a, "motor" => a, "tally" => b}}
+      assert Retain.warning(nil, by, "s") == nil
+      assert Retain.warning(by, by, "s") == nil
+
+      stored = %{resource: b, programs: %{"lamp" => a, "motor" => a, "tally" => a}}
+
+      assert Retain.warning(stored, by, "./s\n") ==
+               "./s\\x0A: the store was written by another program than the one this start " <>
+                 "was given: the configuration's tasks, globals, instances or connections " <>
+                 "differ, `fan` is not in the store, `lamp` is not in this start, `tally`'s " <>
+                 "text differs; an edit tested or assembled online that was never written to " <>
+                 "the files is not in this start, which runs the program it was given with " <>
+                 "the store's retained values laid over it by name and type"
+
+      many = %{resource: a, programs: Map.new(1..12, &{"p#{&1 + 10}", a})}
+      warned = Retain.warning(many, %{by | programs: %{}}, "s")
+
+      assert warned =~
+               "the store was written by another program than the one this start was " <>
+                 "given: `p11` is not in this start, `p12` is not in this start"
+
+      assert warned =~ "`p20` is not in this start, and 2 more; an edit tested"
+    end
+
+    # A program type's digest is of its text and of each user block's it holds, so that a
+    # block edited is its holder changed though the holder's own text is not; one built by
+    # hand with no source text, which a configuration takes, of its rungs and tags.
+    test "a block's text is its holder's, and a program with no text is named by its rungs" do
+      gate = fn body ->
+        {:ok, gate} = Logex.compile("function_block gate\n" <> body, name: "gate")
+        gate
+      end
+
+      holder = "var_input eye bool\nvar g gate\nxic eye cal g eye\n"
+      named_with = fn type -> Logex.compile(holder, name: "tally", types: [type]) end
+      {:ok, one} = named_with.(gate.("var_input go bool\nvar retain k dint\nxic go add k 1 k"))
+      {:ok, two} = named_with.(gate.("var_input go bool\nvar retain k dint\nxic go add k 2 k"))
+      assert one.source == two.source
+      plant = "task fast interval 10 priority 1\nprogram t1 tally with fast\n  t1.eye 0\n"
+      by = fn program -> Retain.written_by(configured(plant, %{"tally" => program})) end
+      refute by.(one).programs == by.(two).programs
+      assert by.(one).resource == by.(two).resource
+      refute by.(one).programs["tally"] == md5(holder)
+
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+      {:ok, edited} = Logex.compile(@edited, name: "tally")
+      named = fn program -> Retain.written_by(configured(@plant, %{"tally" => program})) end
+      bare = fn program -> named.(%{program | source: nil}).programs["tally"] end
+      assert bare.(tally) == bare.(tally)
+      refute bare.(tally) == bare.(edited)
+      refute bare.(tally) == named.(tally).programs["tally"]
+    end
+
+    # RV-21's review: a second accept while a first candidate runs under test takes
+    # that candidate as its original, as the resource runs it: an untest of the second
+    # names the first, never the files', and a cancel then keeps naming it.
+    test "an accept that supersedes one under test names the candidate it found running",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      again = String.replace(@edited, "xic clear otu lamp", "xic clear xio eye otu lamp")
+      trip_named = fn -> tripped_named(rig, runner) end
+
+      assert {:ok, _} = Runner.accept(runner, edited())
+      assert {:ok, _} = Runner.test(runner)
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.accept(runner, configured(@plant, programs(again)))
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.test(runner)
+      assert trip_named.() == named_by(again)
+      assert {:ok, _} = Runner.untest(runner)
+      assert trip_named.() == named_by(@edited)
+      assert {:ok, _} = Runner.cancel(runner)
+      assert trip_named.() == named_by(@edited)
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@edited)
+    end
+
+    # RV-21's review: no step of an edit makes the store's digest in the runner's
+    # process, the rounds waiting on it, where each made one of the whole configuration,
+    # a print and an MD5 of every line: the candidate's is made once, in the caller, with
+    # accept's own work, and only where the runner keeps a store. A plant of 150 copies of
+    # one program, each wired twice, its steps' cost in the runner's process with a store
+    # and without, and its accept's in the caller's, in the same run, the least of three.
+    test "an edit's steps make no digest in the runner, its accept one in the caller with a " <>
+           "store alone",
+         %{tmp_dir: dir} do
+      {:ok, copy} = Logex.compile(@copy, name: "copy")
+
+      {:ok, flipped} =
+        Logex.compile(String.replace(@copy, "xic i ote o", "xio i ote o"), name: "copy")
+
+      plant = copies(150)
+      original = configured(plant, %{"copy" => copy})
+      candidate = configured(plant, %{"copy" => flipped})
+
+      runs =
+        for run <- 1..3, store <- [nil, Path.join(dir, "copies#{run}.retain")] do
+          {:ok, clock} = Manual.start_link(now: @wall)
+          {:ok, panel} = Sim.start_link(clock: clock)
+
+          {:ok, runner} =
+            Runner.start_link(
+              configuration: original,
+              io: %{"panel" => {Sim, sim: panel}},
+              clock: {Manual, clock},
+              retain: store
+            )
+
+          caller = reductions_of(self())
+          own = reductions_of(runner)
+          {:ok, _} = Runner.accept(runner, candidate)
+          caller = reductions_of(self()) - caller
+
+          for step <- [:test, :untest, :test, :assemble],
+              do: assert({:ok, _} = apply(Runner, step, [runner]))
+
+          own = reductions_of(runner) - own
+          assert Runner.stop(runner) == :ok
+          {store != nil, {own, caller}}
+        end
+
+      least = fn stored, at ->
+        for({^stored, costs} <- runs, do: elem(costs, at)) |> Enum.min()
+      end
+
+      # Accept's own work, made here as accept/2 makes it in the caller.
+      direct =
+        Enum.min(
+          for _ <- 1..3 do
+            runtime = Runtime.start(original)
+            before = reductions_of(self())
+            {:ok, _edit, _forecast} = Configuration.Edit.accept(runtime, candidate)
+            reductions_of(self()) - before
+          end
+        )
+
+      {stored, unstored} = {least.(true, 0), least.(false, 0)}
+
+      assert stored <= unstored * 1.25 + 10_000,
+             "the steps with a store #{stored}, without #{unstored}"
+
+      caller = least.(false, 1)
+
+      assert caller <= direct * 1.25 + 10_000,
+             "accept with no store #{caller}, its work #{direct}"
+    end
+
+    # RV-21's review: a store names its writer whole: a `program` line with no
+    # `resource` line, a hand edit's, is refused at the first `program` line, where it was
+    # read and warned that the configuration's lines differed, which nothing said; each
+    # line is read wherever it stands, as a global's is; and a type is any name, `ton` and
+    # `end` among them, which a configuration may hold.
+    test "a store that names its program types names its resource, each line read where " <>
+           "it stands" do
+      {:ok, ton} =
+        Logex.compile("var_input i bool\nvar retain c dint\nxic i add c 1 c", name: "ton")
+
+      {:ok, ending} =
+        Logex.compile("var_input i bool\nvar retain d dint\nxic i add d 1 d", name: "end")
+
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global a bool\n" <>
+            "program m1 ton with fast\n  m1.i a\nprogram m2 end with fast\n  m2.i a\n",
+          %{"ton" => ton, "end" => ending}
+        )
+
+      at = ~U[2026-10-30 14:00:00Z]
+      by = Retain.written_by(config)
+      text = Retain.encode(Runtime.retained(Runtime.start(config)), at, by)
+      [header, named, resource, program_end, program_ton | rest] = String.split(text, "\n")
+      assert program_end == "program end " <> by.programs["end"]
+      assert program_ton == "program ton " <> by.programs["ton"]
+      assert {_image, ^at, ^by} = Retain.decoded!(text, {"s", "plant"})
+      assert Retain.warning(by, by, "s") == nil
+
+      # Its lines moved among the values, before the end line, it reads the same.
+      {values, ["end " <> _ | _]} = Enum.split(rest, -2)
+      moved = Enum.join([header, named | values] ++ [program_ton, resource, program_end], "\n")
+      moved = moved <> "\nend #{length(String.split(text, "\n")) - 1} lines\n"
+      assert {_image, ^at, ^by} = Retain.decoded!(moved, {"s", "plant"})
+
+      # Its `resource` line taken away and the count made good, it is refused.
+      [_, count] = Regex.run(~r/end (\d+) lines\n\z/, text)
+
+      unresourced =
+        String.replace(text, resource <> "\n", "")
+        |> String.replace("end #{count} lines", "end #{String.to_integer(count) - 1} lines")
+
+      raises(
+        "s: line 3: `#{program_end}` names a program type of the store's writer, and the " <>
+          "store names no resource: a store that names the program that wrote it gives " <>
+          "`resource <digest>` straight after its configuration's line, and then a `program " <>
+          "<type> <digest>` a type",
+        fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
+      )
+    end
+
+    # The two lines a hand edit may break, each refused as a line of the store, and a
+    # program's line naming one type twice.
+    test "a resource's or a program's line that is none is refused, a line each" do
+      digest = String.duplicate("0", 32)
+
+      text =
+        "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\n" <>
+          "resource #{String.upcase(String.duplicate("a", 32))}\nprogram tally #{digest}\n" <>
+          "program tally #{digest}\nprogram 9p #{digest}\nprogram tally 0\nresource\n" <>
+          "program tally\nresource #{digest}\nresource #{digest}\nend 12 lines\n"
+
+      raises(
+        Enum.join(
+          [
+            "s: line 3: `#{String.upcase(String.duplicate("a", 32))}` is no digest: a " <>
+              "store's is 32 lowercase hexadecimal digits",
+            "s: line 5: `program tally #{digest}` names what line 4 names already",
+            "s: line 6: `9p` names no program type",
+            "s: line 7: `0` is no digest: a store's is 32 lowercase hexadecimal digits",
+            "s: line 8: `resource` is no resource's line: it is `resource <digest>`",
+            "s: line 9: `program tally` is no program's line: it is `program <type> <digest>`",
+            "s: line 11: `resource #{digest}` names what line 10 names already"
+          ],
+          "\n"
+        ),
+        fn -> Retain.decode!(text, {"s", "plant"}) end
+      )
+    end
+  end
+
   describe "the writes at events (decisions 275, 291 and 292)" do
     # A trip writes the resource as the trip left it; the runner killed, a fresh start
     # restores that write, never the older one a stop made.
@@ -2533,7 +3013,7 @@ defmodule Logex.RetainStoreTest do
       assert values(runner) == [2, 2, 1, 2]
       Process.unlink(runner)
       ref = Process.monitor(runner)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 10)
       assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
       assert Sim.closed?(rig.panel)
@@ -2564,7 +3044,7 @@ defmodule Logex.RetainStoreTest do
       Process.exit(runner, :shutdown)
       assert_receive {:DOWN, ^ref, :process, ^runner, :shutdown}, 5000
       assert_received {:written, %{[0] => 0}, {:ok, ^started}}
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(store) =~ "global total_boxes dint 2\n"
       opener_down(rig.panel)
@@ -3047,7 +3527,7 @@ defmodule Logex.RetainStoreTest do
       started = File.read!(store)
       assert started =~ "global total_boxes dint 0\n"
       flush()
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 10)
       assert %{status: :tripped, trip: {:fault, "fast", "t1", _fault}} = Runner.status(runner)
       assert_received {:written, %{[0] => 0}, {:ok, ^started}}
@@ -3065,7 +3545,7 @@ defmodule Logex.RetainStoreTest do
 
       assert Runner.stop(runner, :shutdown) == {:error, {:retain, :eisdir}}
       assert_receive {:EXIT, ^runner, :shutdown}, 5000
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       assert Sim.closed?(rig.panel)
       assert File.read!(rig.store) == written
     end
@@ -3138,7 +3618,7 @@ defmodule Logex.RetainStoreTest do
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert File.read!(rig.store) == written
       assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == {reads, writes}
-      assert List.last(writes) == %{[0] => 0}
+      assert List.last(writes) == %{"panel.q.0" => 0}
       assert values(runner) == [2, 2, 1, 2]
 
       # Put right, the next restart writes, runs, and clears the failure.
@@ -3182,7 +3662,7 @@ defmodule Logex.RetainStoreTest do
       back = File.read!(rig.store)
       assert back =~ "configuration plant written 2026-10-30T14:00:02Z\n"
       assert String.replace(back, "14:00:02Z", "14:00:00Z") == at_trip
-      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(rig.panel)) == %{"panel.q.0" => 0}
       killed(runner)
       opener_down(rig.panel)
 
@@ -3235,7 +3715,7 @@ defmodule Logex.RetainStoreTest do
       assert %{status: :tripped, trip: ^trip, retain: %{failed: :eisdir}} = Runner.status(runner)
       assert values(runner) == [2, 2, 1, 2]
       assert File.read!(rig.store) =~ "global total_boxes dint 0\n"
-      assert List.last(Sim.writes(rig.panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(rig.panel)) == %{"panel.q.0" => 0}
       File.rm_rf!(tmp)
       Agent.update(agent, fn _ -> fn -> :ok end end)
       assert Runner.stop(runner) == :ok
@@ -3273,28 +3753,28 @@ defmodule Logex.RetainStoreTest do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
       pressed(rig, [1, 0])
-      assert Sim.outputs(rig.panel) == %{[0] => 1}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 1}
       killed(runner)
       opener_down(rig.panel)
-      assert Sim.outputs(rig.panel) == %{[0] => 0}
+      assert Sim.outputs(rig.panel) == %{"panel.q.0" => 0}
       before = Sim.writes(rig.panel)
 
       # The store is the start's, which held the lamp off: a fresh start's first round
       # writes it off.
       {:ok, runner} = Runner.start_link(rig.opts)
-      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{[0] => 0}]
+      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{"panel.q.0" => 0}]
       tripped(rig, runner)
       assert Runner.restart(runner, :warm) == :ok
       pressed(rig, [1])
       tripped(rig, runner)
       killed(runner)
       opener_down(rig.panel)
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       before = Sim.writes(rig.panel)
 
       # The trip's store holds the lamp on: the first round's write is the one that lights it.
       {:ok, runner} = Runner.start_link(rig.opts)
-      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{[0] => 1}]
+      assert Enum.drop(Sim.writes(rig.panel), length(before)) == [%{"panel.q.0" => 1}]
       assert Runner.stop(runner) == :ok
     end
 
@@ -3321,13 +3801,13 @@ defmodule Logex.RetainStoreTest do
       config = configured(source, %{"scale" => scale})
       rig = rig(dir, configuration: config)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 100)
       assert %{status: :tripped, trip: {:fault, "fast", "s1", fault}} = Runner.status(runner)
       assert %{kind: :index_out_of_range, read: {8}} = fault
       killed(runner)
       opener_down(rig.panel)
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
 
       {:ok, runner} = Runner.start_link(rig.opts)
 
@@ -3409,11 +3889,11 @@ defmodule Logex.RetainStoreTest do
     defp cut_off(rig) do
       {:ok, runner} = Runner.start_link(rig.opts)
       Manual.advance(rig.clock, 30)
-      Sim.set(rig.panel, [0], 1)
+      Sim.set(rig.panel, "panel.i.0", 1)
       Manual.advance(rig.clock, 30)
       assert %{status: :tripped, trip: {:fault, "fast", "f1", _}} = Runner.status(runner)
       assert {Runner.get!(runner, "arm"), Runner.get!(runner, "hits")} == {1, 0}
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       Manual.advance(rig.clock, 10)
       runner
     end
@@ -3595,14 +4075,14 @@ defmodule Logex.RetainStoreTest do
 
       rig = rig(dir, configuration: config)
       {:ok, runner} = Runner.start_link(rig.opts)
-      Sim.set(rig.panel, [0], 1)
-      Sim.set(rig.panel, [1], 1)
+      Sim.set(rig.panel, "panel.i.0", 1)
+      Sim.set(rig.panel, "panel.i.1", 1)
       Manual.advance(rig.clock, 20)
-      Sim.set(rig.panel, [1], 0)
+      Sim.set(rig.panel, "panel.i.1", 0)
       Manual.advance(rig.clock, 20)
       assert {Runner.get!(runner, "k"), Runner.get!(runner, "l")} == {1, 1}
       killed(runner)
-      Sim.set(rig.panel, [0], 0)
+      Sim.set(rig.panel, "panel.i.0", 0)
       opener_down(rig.panel)
 
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -3610,7 +4090,7 @@ defmodule Logex.RetainStoreTest do
 
       seen =
         for g <- [0, 1, 1] do
-          Sim.set(rig.panel, [1], g)
+          Sim.set(rig.panel, "panel.i.1", g)
           Manual.advance(rig.clock, 10)
           {Runner.get!(runner, "k"), Runner.get!(runner, "l")}
         end
@@ -3714,6 +4194,46 @@ defmodule Logex.RetainStoreTest do
       {encode_large, decode_large} = large
       assert encode_large < 5 * encode_small, inspect({small, large})
       assert decode_large < 5 * decode_small, inspect({small, large})
+    end
+
+    # RV-21's review: and as the runner writes and reads it, naming its writer,
+    # encode/3 and decoded!/2, with written_by/1, which a fresh start and an accept make:
+    # n program types each with an instance, and 4n, each type a `program` line, each
+    # instance an `instance` line and a value's, the configuration two lines an instance.
+    test "encode/3, decoded!/2 and written_by/1 grow linearly in the store's lines" do
+      [small, large] =
+        for n <- [16, 64] do
+          programs =
+            Map.new(1..n, fn k ->
+              {:ok, program} =
+                Logex.compile("var_input i bool\nvar retain c dint\nxic i add c #{k} c",
+                  name: "p#{k}"
+                )
+
+              {"p#{k}", program}
+            end)
+
+          config =
+            configured(
+              "task fast interval 10 priority 1\nvar_global a bool\n" <>
+                Enum.map_join(1..n, &"program m#{&1} p#{&1} with fast\n  m#{&1}.i a\n"),
+              programs
+            )
+
+          image = Runtime.retained(Runtime.start(config))
+          by = Retain.written_by(config)
+          at = ~U[2026-10-30 14:00:00Z]
+          text = Retain.encode(image, at, by)
+          assert length(Regex.scan(~r/^program /m, text)) == n
+          assert Retain.decoded!(text, {"s", "plant"}) == {image, at, by}
+
+          {reductions(fn -> Retain.encode(image, at, by) end),
+           reductions(fn -> Retain.decoded!(text, {"s", "plant"}) end),
+           reductions(fn -> Retain.written_by(config) end)}
+        end
+
+      for at <- 0..2,
+          do: assert(elem(large, at) < 5 * elem(small, at), inspect({at, small, large}))
     end
   end
 

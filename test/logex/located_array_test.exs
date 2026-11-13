@@ -591,13 +591,20 @@ defmodule Logex.LocatedArrayTest do
           clock: {Manual, clock}
         )
 
-      Sim.set(card, %{[1] => 100, [3] => 200, [5] => 300})
+      Sim.set(card, %{"card.i.1" => 100, "card.i.3" => 200, "card.i.5" => 300})
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "ti") == [[0, 100, 0], [200, 0, 300]]
       assert Runner.get!(runner, "tq[1,2]") == 312
 
       assert Sim.outputs(card) ==
-               %{[0] => 0, [1] => 101, [2] => 2, [3] => 210, [4] => 11, [5] => 312}
+               %{
+                 "card.q.0" => 0,
+                 "card.q.1" => 101,
+                 "card.q.2" => 2,
+                 "card.q.3" => 210,
+                 "card.q.4" => 11,
+                 "card.q.5" => 312
+               }
 
       Runner.stop(runner)
     end
@@ -888,24 +895,24 @@ defmodule Logex.LocatedArrayTest do
       %{runner: runner, clock: clock, card: card, file: Path.join(dir, "forces")}
     end
 
-    defp lamps(card), do: for(i <- 0..7, do: Map.get(Sim.outputs(card), [i]))
+    defp lamps(card), do: for(i <- 0..7, do: Map.get(Sim.outputs(card), "card.q.#{i}"))
 
     test "reads and writes each element at its own address", %{tmp_dir: dir} do
       %{runner: runner, clock: clock, card: card} = running(dir, reports: true)
-      Sim.set(card, %{[1] => 120, [6] => 99.5, [7] => 100.5})
+      Sim.set(card, %{"card.i.1" => 120, "card.i.6" => 99.5, "card.i.7" => 100.5})
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "temps") == [0.0, 120.0, 0.0, 0.0, 0.0, 0.0, 99.5, 100.5]
       assert lamps(card) == [0, 1, 0, 0, 0, 0, 0, 1]
 
       # A read device, as a reporting one: its change of one element reaches that element.
-      Sim.set(card, [1], 80)
+      Sim.set(card, "card.i.1", 80)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "temps[1]") === 80.0
       assert lamps(card) == [0, 0, 0, 0, 0, 0, 0, 1]
       Runner.stop(runner)
 
       %{runner: runner, clock: clock, card: card} = running(dir)
-      Sim.set(card, %{[3] => 300})
+      Sim.set(card, %{"card.i.3" => 300})
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "temps[3]") === 300.0
       assert lamps(card) == [0, 0, 0, 1, 0, 0, 0, 0]
@@ -916,7 +923,7 @@ defmodule Logex.LocatedArrayTest do
       tmp_dir: dir
     } do
       %{runner: runner, clock: clock, card: card, file: file} = running(dir, reports: true)
-      Sim.set(card, %{[3] => 50, [4] => 20})
+      Sim.set(card, %{"card.i.3" => 50, "card.i.4" => 20})
       assert Runner.force(runner, "temps[3]", 150) == :ok
       assert Runner.status(runner).forces == %{"temps[3]" => 150.0}
       assert File.read!(file) == "temps[3] 150.0\n"
@@ -925,7 +932,7 @@ defmodule Logex.LocatedArrayTest do
       assert lamps(card) == [0, 0, 0, 1, 0, 0, 0, 0]
 
       # Held against its device; the elements beside it still read the device.
-      Sim.set(card, %{[3] => 10, [4] => 200})
+      Sim.set(card, %{"card.i.3" => 10, "card.i.4" => 200})
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "temps") == [0.0, 0.0, 0.0, 150.0, 200.0, 0.0, 0.0, 0.0]
 
@@ -1131,7 +1138,7 @@ defmodule Logex.LocatedArrayTest do
       tmp_dir: dir
     } do
       %{runner: runner, clock: clock, card: card, file: file} = running(dir, reports: true)
-      Sim.set(card, %{[1] => 11, [6] => 66})
+      Sim.set(card, %{"card.i.1" => 11, "card.i.6" => 66})
       Manual.advance(clock, 10)
       assert Runner.force(runner, "temps[7]", 7) == :ok
 
@@ -1152,7 +1159,7 @@ defmodule Logex.LocatedArrayTest do
       assert lamps(card) == [1, 0, 1, 0, 0, 0, 0, 0]
 
       # Held against the device; an unforce of one element keeps the rest forced.
-      Sim.set(card, %{[1] => 12, [6] => 67})
+      Sim.set(card, %{"card.i.1" => 12, "card.i.6" => 67})
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "temps") == forced
       assert Runner.unforce(runner, "temps[6]") == :ok
@@ -1302,18 +1309,18 @@ defmodule Logex.LocatedArrayTest do
     @tag :capture_log
     test "a force holds across a restart, a crash and a fresh start", %{tmp_dir: dir} do
       %{runner: runner, clock: clock, card: card, file: file} = running(dir, reports: true)
-      Sim.set(card, %{[3] => 50, [5] => 60})
+      Sim.set(card, %{"card.i.3" => 50, "card.i.5" => 60})
       Runner.force(runner, "temps[3]", 150)
       Manual.advance(clock, 10)
 
       # A value that does not fit at another element trips the plant; put right, it
       # restarts on what the card gives now, the force still on.
-      Sim.set(card, [5], 1.0e39)
+      Sim.set(card, "card.i.5", 1.0e39)
 
       assert %{status: :tripped, trip: {:io, "card", {:bad_value, "card.i.5", 1.0e39}}} =
                Runner.status(runner)
 
-      Sim.set(card, [5], 70)
+      Sim.set(card, "card.i.5", 70)
       assert Runner.restart(runner, :cold) == :ok
       assert Runner.get!(runner, "temps") == [0.0, 0.0, 0.0, 150.0, 0.0, 70.0, 0.0, 0.0]
       Manual.advance(clock, 10)
@@ -1347,7 +1354,7 @@ defmodule Logex.LocatedArrayTest do
          %{tmp_dir: dir} do
       %{runner: runner, clock: clock, card: card} = running(dir)
       Sim.fail(card, :read, {:value, [2], 1.0e39})
-      Sim.set(card, %{[1] => 11.0, [3] => 33.0})
+      Sim.set(card, %{"card.i.1" => 11.0, "card.i.3" => 33.0})
       Manual.advance(clock, 10)
 
       assert %{status: :tripped, trip: {:io, "card", {:bad_value, "card.i.2", 1.0e39}}} =

@@ -8,7 +8,8 @@ defmodule Logex.ClausesTest do
   oracle and the harness that compares it with logex, and every other form of a module's
   body, a `setup`, a module attribute's anonymous function or the body's own code, is
   clauses. `end_to_end_test.exs` holds none, nor does `readme_test.exs`, the harness that
-  runs README's examples, and in each file the code outside every module, its top level, is
+  runs README's examples, nor any example, a script under `examples/` (decision 517 (b)),
+  and in each file the code outside every module, its top level, is
   read as a module's body is. The files are read as syntax trees, so that a
   conditional in a string, a comment or a heredoc is none and one written inline,
   `if(x, do: 1, else: 0)`, or through its module, `Kernel.if(x, do: 1)`, is one.
@@ -60,6 +61,18 @@ defmodule Logex.ClausesTest do
 
     for {module, %{conditionals: conditionals}} <- modules,
         do: assert(conditionals == [], inspect(module))
+  end
+
+  # Decision 517 (b): README's examples, shipped as scripts under `examples/`, are held to
+  # the rule as their harness is, each script read whole, a module it defines and its top
+  # level alike.
+  test "README's examples, each script under examples/, hold no conditional" do
+    scripts = Path.wildcard(Path.join(@root, "examples/**/*.exs"))
+    assert Enum.map(scripts, &Path.basename/1) -- ["mix.exs"] != []
+
+    for path <- scripts,
+        {module, %{conditionals: conditionals}} <- modules(path),
+        do: assert(conditionals == [], "#{Path.relative_to(path, @root)}: #{inspect(module)}")
   end
 
   # The rule in `lib/` itself (decision 264, CLAUDE.md's Conventions), read as the walks'

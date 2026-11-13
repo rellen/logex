@@ -126,7 +126,7 @@ defmodule Logex.RetainPeriodTest do
   end
 
   defp eye(%{panel: panel, clock: clock}, eye, ms) do
-    Sim.set(panel, [0], eye)
+    Sim.set(panel, "panel.i.0", eye)
     Manual.advance(clock, ms)
   end
 
@@ -1001,7 +1001,7 @@ defmodule Logex.RetainPeriodCostTest do
     rounds = Runner.status(runner).rounds
 
     for i <- 1..20 do
-      Sim.set(panel, [0], rem(i, 2))
+      Sim.set(panel, "panel.i.0", rem(i, 2))
       Manual.advance(clock, 100)
     end
 

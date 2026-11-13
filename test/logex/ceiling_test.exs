@@ -248,7 +248,7 @@ defmodule Logex.CeilingTest do
     rounds = Runner.status(runner).rounds
 
     for i <- 1..20 do
-      Sim.set(panel, %{[0] => rem(i, 2), [3] => rem(i, 2)})
+      Sim.set(panel, %{"panel.i.0" => rem(i, 2), "panel.i.3" => rem(i, 2)})
       Manual.advance(clock, 100)
     end
 

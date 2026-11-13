@@ -176,7 +176,7 @@ defmodule Logex.RunnerEditTest do
            "sent to the subscribers, the status giving the stage" do
       %{runner: runner, clock: clock, panel: panel} = started()
       Runner.subscribe(runner)
-      Sim.set(panel, [0], 1)
+      Sim.set(panel, "panel.i.0", 1)
       Manual.advance(clock, 60)
       assert Runner.status(runner).edit == nil
 
@@ -253,13 +253,13 @@ defmodule Logex.RunnerEditTest do
     test "an accept that another step overtook is done again against the resource as it " <>
            "is then" do
       %{runner: runner} = started()
-      {edits, runtime, _elapsed} = GenServer.call(runner, :resource)
+      {edits, runtime, _elapsed, false} = GenServer.call(runner, :resource)
       {:ok, edit, forecast} = Edit.accept(runtime, faster())
       {:ok, _} = Runner.accept(runner, faster())
       {:ok, _} = Runner.cancel(runner)
 
       # The edit accepted before the cancel is held by no runner: it is told stale.
-      assert GenServer.call(runner, {:accept, edits, edit, forecast}) == :stale
+      assert GenServer.call(runner, {:accept, edits, edit, forecast, nil}) == :stale
       assert Runner.status(runner).edit == nil
     end
 
@@ -292,7 +292,7 @@ defmodule Logex.RunnerEditTest do
     test "a step may be taken while tripped, and the restart runs what it switched to" do
       %{runner: runner, clock: clock, panel: panel} = started()
       Manual.advance(clock, 50)
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       assert Runner.status(runner).status == :tripped
       Runner.subscribe(runner, [:edit])
       {:ok, forecast} = Runner.accept(runner, faster())
@@ -300,7 +300,7 @@ defmodule Logex.RunnerEditTest do
 
       # Each step's event is sent while tripped, as while running.
       assert drained(runner) == [{:edit, :accept, forecast}, {:edit, :test, report}]
-      Sim.set(panel, [1], 0)
+      Sim.set(panel, "panel.i.1", 0)
       assert Runner.restart(runner, :cold) == :ok
 
       # The restart keeps the edit's stage (decision 65), and runs the candidate's 20 ms.
@@ -402,7 +402,7 @@ defmodule Logex.RunnerEditTest do
            "counting the time it is stopped" do
       %{runner: runner, clock: clock, panel: panel} = started()
       Manual.advance(clock, 50)
-      Sim.set(panel, [1], 5)
+      Sim.set(panel, "panel.i.1", 5)
       assert Runner.status(runner).status == :tripped
       Manual.advance(clock, 500)
       assert resource(runner).now == 50
@@ -632,9 +632,9 @@ defmodule Logex.RunnerEditTest do
         %{runner: runner, clock: clock, panel: panel, drive: drive} =
           started(motors(@motors, spare))
 
-        Sim.set(panel, [0], pb)
+        Sim.set(panel, "panel.i.0", pb)
         Manual.advance(clock, 30)
-        assert Sim.outputs(drive) == %{[0] => pb, [1] => 0}
+        assert Sim.outputs(drive) == %{"drive.q.0" => pb, "drive.q.1" => 0}
 
         candidate =
           motors(
@@ -650,11 +650,11 @@ defmodule Logex.RunnerEditTest do
         assert Runner.test(runner) == {:ok, forecast}
 
         # The button released and pressed again: nothing drives k1, which holds.
-        Sim.set(panel, [0], 1 - pb)
+        Sim.set(panel, "panel.i.0", 1 - pb)
         Manual.advance(clock, 30)
-        Sim.set(panel, [0], pb)
+        Sim.set(panel, "panel.i.0", pb)
         Manual.advance(clock, 30)
-        assert Sim.outputs(drive) == %{[0] => pb, [1] => 0}
+        assert Sim.outputs(drive) == %{"drive.q.0" => pb, "drive.q.1" => 0}
         assert Runner.get(runner, "k1") == {:ok, pb}
       end
     end
@@ -696,19 +696,19 @@ defmodule Logex.RunnerEditTest do
         %{runner: runner, clock: clock, panel: panel, drive: drive} =
           started(spare_motors(from))
 
-        Sim.set(panel, [0], 1)
+        Sim.set(panel, "panel.i.0", 1)
         Manual.advance(clock, 30)
-        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+        assert Sim.outputs(drive) == %{"drive.q.0" => 1, "drive.q.1" => held}
 
         assert {:ok, forecast} = Runner.accept(runner, spare_motors(to))
         assert {:held, "k2", held} in forecast
         assert Runner.test(runner) == {:ok, forecast}
         Manual.advance(clock, 30)
-        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+        assert Sim.outputs(drive) == %{"drive.q.0" => 1, "drive.q.1" => held}
 
         assert {:ok, _report} = Runner.untest(runner)
         Manual.advance(clock, 30)
-        assert Sim.outputs(drive) == %{[0] => 1, [1] => held}
+        assert Sim.outputs(drive) == %{"drive.q.0" => 1, "drive.q.1" => held}
         Runner.stop(runner)
       end
     end

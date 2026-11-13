@@ -1,0 +1,7 @@
+task trip single sp priority 0
+task tick priority 1
+task late single pb interval 0 priority 2
+var_global sp dint
+var_global pb bool at panel.i.0
+program d debounce with late
+  d.in pb

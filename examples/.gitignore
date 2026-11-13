@@ -1,0 +1,8 @@
+# What a run of the examples leaves here: a project's build, and the stores and forces
+# files the scripts write (README, "The store on disk" and "Forcing").
+/_build/
+/deps/
+*.retain
+*.retain.*
+*.forces
+*.forces.*

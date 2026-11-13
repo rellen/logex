@@ -1153,12 +1153,12 @@ defmodule Logex.IntegerWidthTest do
         {{:ok, runner}, clock, sim} = run_card(Path.join(dir, "forces"))
         {low, high} = limits(type)
         limit = elem({low, high}, at)
-        Sim.set(sim, [n], limit)
+        Sim.set(sim, "card.i.#{n}", limit)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "g_#{type}") == limit
 
         past = elem({low - 1, high + 1}, at)
-        Sim.set(sim, [n], past)
+        Sim.set(sim, "card.i.#{n}", past)
         Manual.advance(clock, 10)
         assert Runner.status(runner).trip == {:io, "card", {:bad_value, "card.i.#{n}", past}}
         Runner.stop(runner)

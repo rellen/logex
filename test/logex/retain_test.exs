@@ -1680,10 +1680,10 @@ defmodule Logex.RetainTest do
     test "Runner.restart/2 :warm keeps what is retained, not counting the time it stood " <>
            "tripped, and :cold loses it" do
       %{runner: runner, clock: clock, panel: panel} = plant()
-      Sim.set(panel, [1], 1)
+      Sim.set(panel, "panel.i.1", 1)
 
       for eye <- [1, 0, 1, 0, 1, 0] do
-        Sim.set(panel, [0], eye)
+        Sim.set(panel, "panel.i.0", eye)
         Manual.advance(clock, 10)
       end
 

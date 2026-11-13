@@ -1347,21 +1347,21 @@ defmodule Logex.RealTest do
             {1.0e-40, 0.0},
             {3.4028235e38, @single_max}
           ] do
-        Sim.set(sim, [0], reading)
+        Sim.set(sim, "drive.i.0", reading)
         Manual.advance(clock, 10)
         assert Runner.get!(runner, "hz") === stored, inspect(reading)
       end
 
-      Sim.set(sim, [0], 37.5)
-      Sim.set(sim, [1], Integer.pow(2, 53) + 1)
+      Sim.set(sim, "drive.i.0", 37.5)
+      Sim.set(sim, "drive.i.1", Integer.pow(2, 53) + 1)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "big") === Integer.pow(2, 53) * 1.0
-      Sim.set(sim, [1], 0.1)
+      Sim.set(sim, "drive.i.1", 0.1)
       Manual.advance(clock, 10)
       assert Runner.get!(runner, "big") === 0.1
-      assert Sim.outputs(sim) == %{[0] => 75.0}
+      assert Sim.outputs(sim) == %{"drive.q.0" => 75.0}
 
-      Sim.set(sim, [0], Integer.pow(2, 128))
+      Sim.set(sim, "drive.i.0", Integer.pow(2, 128))
       Manual.advance(clock, 10)
 
       assert Runner.status(runner).trip ==

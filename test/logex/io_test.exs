@@ -1671,4 +1671,328 @@ defmodule Logex.IOTest do
              "16x the devices and bindings took #{Float.round(ratio, 1)}x the reductions"
     end
   end
+
+  # Decision 517 (e) (RV-21): a sim a runner has opened takes and gives the configuration's
+  # text, `"panel.i.0"`, and one no runner has opened the adapter's list, `[0]`.
+  @addressed """
+  task fast interval 10 priority 1
+  var_global a bool at panel.i.0
+  var_global n dint at panel.i.2
+  var_global q bool at panel.q.0
+  var_global m dint at panel.q.1
+  program p pass with fast
+    p.a a
+    p.n n
+    p.q q
+    p.m m
+  """
+
+  defp addressed(sim, device \\ "panel") do
+    {{:ok, runner}, clock} = addressing(sim, device)
+    {runner, clock}
+  end
+
+  # The runner's start for `device`, whatever it gives, and its clock.
+  defp addressing(sim, device) do
+    {:ok, pass} =
+      Logex.compile(
+        "var_input a bool\nvar_input n dint\nvar_output q bool\nvar_output m dint\n" <>
+          "xic a ote q\nmove n m",
+        name: "pass"
+      )
+
+    text = String.replace(@addressed, "panel.", device <> ".")
+    {:ok, config} = Logex.Configuration.compile("plant", text, %{"pass" => pass})
+    {:ok, clock} = Manual.start_link()
+
+    started =
+      Runner.start_link(
+        configuration: config,
+        io: %{device => {Sim, sim: sim}},
+        clock: {Manual, clock}
+      )
+
+    {started, clock}
+  end
+
+  describe "its addresses once a runner has opened it (decision 517 (e), RV-21)" do
+    test "a sim no runner has opened takes the adapter's list and refuses the text, which " <>
+           "names a device it does not know" do
+      sim = sim(reports: true)
+
+      unopened =
+        "no runner has opened the simulated device #{inspect(sim)}, so it knows no device's " <>
+          "name: until one has, an input's address is a list of whole numbers, [0], got: " <>
+          "\"panel.i.0\""
+
+      assert_raise ArgumentError, unopened, fn -> Sim.set(sim, "panel.i.0", 1) end
+      assert_raise ArgumentError, unopened, fn -> Sim.set(sim, %{"panel.i.0" => 1}) end
+
+      # A test's own open, from its process, is no runner's: the sim keeps the list.
+      state = opened(sim)
+      assert Sim.set(sim, [0], 1) == :ok
+      assert Sim.set(sim, %{[2, 1] => 7}) == :ok
+      assert {:ok, %{[0] => 1, [2, 1] => 7}, state} = Sim.read(state)
+      assert {:ok, state} = Sim.write(%{[0] => 1}, state)
+      assert Sim.outputs(sim) == %{[0] => 1}
+      assert Sim.writes(sim) == [%{[0] => 1}]
+      assert_raise ArgumentError, unopened, fn -> Sim.set(sim, "panel.i.0", 0) end
+      assert Sim.close(state) == :ok
+    end
+
+    test "a sim a runner has opened takes and gives the configuration's text, and the " <>
+           "adapter's side keeps the list" do
+      sim = sim(reports: true)
+      {runner, clock} = addressed(sim)
+
+      assert Sim.set(sim, "panel.i.0", 1) == :ok
+      assert Sim.set(sim, %{"panel.i.2" => 7}) == :ok
+      Manual.advance(clock, 10)
+      assert {Runner.get!(runner, "a"), Runner.get!(runner, "n")} == {1, 7}
+      assert Sim.outputs(sim) == %{"panel.q.0" => 1, "panel.q.1" => 7}
+      assert hd(Sim.writes(sim)) == %{"panel.q.0" => 0, "panel.q.1" => 0}
+      assert List.last(Sim.writes(sim)) == %{"panel.q.0" => 1, "panel.q.1" => 7}
+
+      for write <- Sim.writes(sim),
+          do: assert(Map.keys(write) -- ["panel.q.0", "panel.q.1"] == [])
+
+      # An input no point reads, within no `inputs:`, is set as a list would be, at any depth.
+      assert Sim.set(sim, %{"panel.i.5" => 1, "panel.i.6.2" => 1}) == :ok
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a sim a runner has opened refuses the list, an output, another device's input " <>
+           "and a text of no location in its one spelling, each message pinned, nothing set" do
+      sim = sim(reports: true)
+      {runner, clock} = addressed(sim)
+
+      listed =
+        "a runner has opened the simulated device #{inspect(sim)} for the device `panel`: " <>
+          "an input's address is the configuration's text from then on, \"panel.i.0\", got: "
+
+      assert_raise ArgumentError, listed <> "[0]", fn -> Sim.set(sim, [0], 1) end
+      assert_raise ArgumentError, listed <> "[2, 1]", fn -> Sim.set(sim, %{[2, 1] => 7}) end
+      assert_raise ArgumentError, listed <> ":a", fn -> Sim.set(sim, opaque(:a), 1) end
+
+      assert_raise ArgumentError,
+                   "\"panel.q.0\" is an output of the device `panel`, and set/2 and set/3 set " <>
+                     "the simulated device #{inspect(sim)}'s inputs",
+                   fn -> Sim.set(sim, "panel.q.0", 1) end
+
+      assert_raise ArgumentError,
+                   "\"drive.i.0\" is the device `drive`'s, and the simulated device " <>
+                     "#{inspect(sim)} is the device `panel`'s, its inputs \"panel.i.0\" and on",
+                   fn -> Sim.set(sim, "drive.i.0", 1) end
+
+      for text <- ["panel.I.0", "panel.i.00", "panel.x.0", "panel", "panel.i.", ""] do
+        assert_raise ArgumentError,
+                     "#{inspect(text)} is no address as the configuration writes one, an " <>
+                       "input of the device `panel` as \"panel.i.0\"",
+                     fn -> Sim.set(sim, text, 1) end
+      end
+
+      # The first refused, nothing set.
+      assert_raise ArgumentError, listed <> "[0]", fn ->
+        Sim.set(sim, %{"panel.i.0" => 1, [0] => 1})
+      end
+
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "a") == 0
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a sim a runner has opened refuses an input past `inputs:` in the text, the first " <>
+           "in order, nothing set" do
+      sim = sim(reports: true, inputs: 4)
+      {runner, clock} = addressed(sim)
+
+      assert_raise ArgumentError,
+                   "the sim has 4 inputs, at the addresses \"panel.i.0\" to \"panel.i.3\", " <>
+                     "got: \"panel.i.9\"",
+                   fn -> Sim.set(sim, "panel.i.9", 1) end
+
+      assert_raise ArgumentError,
+                   "the sim has 4 inputs, at the addresses \"panel.i.0\" to \"panel.i.3\", " <>
+                     "got: \"panel.i.5.2\"",
+                   fn ->
+                     Sim.set(sim, %{"panel.i.0" => 1, "panel.i.9" => 1, "panel.i.5.2" => 1})
+                   end
+
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "a") == 0
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a sim keeps the device's name once its runner has stopped, a test's own open " <>
+           "among them, and a runner that opens it for another device renames every write" do
+      sim = sim(reports: true)
+      {runner, clock} = addressed(sim)
+      assert Sim.set(sim, "panel.i.0", 1) == :ok
+      Manual.advance(clock, 10)
+      assert Runner.stop(runner) == :ok
+
+      assert Sim.outputs(sim) == %{"panel.q.0" => 0, "panel.q.1" => 0}
+      assert Sim.set(sim, "panel.i.0", 0) == :ok
+
+      state = opened(sim)
+      assert {:ok, %{[0] => 0}, state} = Sim.read(state)
+
+      assert_raise ArgumentError, ~r/^a runner has opened .* for the device `panel`/, fn ->
+        Sim.set(sim, [0], 1)
+      end
+
+      assert Sim.close(state) == :ok
+      writes = length(Sim.writes(sim))
+
+      {runner, clock} = addressed(sim, "drive")
+      assert Sim.set(sim, "drive.i.0", 1) == :ok
+      Manual.advance(clock, 10)
+      assert Sim.outputs(sim) == %{"drive.q.0" => 1, "drive.q.1" => 0}
+
+      assert Enum.uniq(Enum.flat_map(Sim.writes(sim), &Map.keys/1)) -- ["drive.q.0", "drive.q.1"] ==
+               []
+
+      assert length(Sim.writes(sim)) > writes
+
+      assert_raise ArgumentError,
+                   "\"panel.i.0\" is the device `panel`'s, and the simulated device " <>
+                     "#{inspect(sim)} is the device `drive`'s, its inputs \"drive.i.0\" and on",
+                   fn -> Sim.set(sim, "panel.i.0", 1) end
+
+      assert Runner.stop(runner) == :ok
+    end
+
+    # A set looks at the name, takes its addresses by it, and sets them: a runner that opens
+    # the sim between the look and the set has them taken again, by the name it has now, so
+    # that the list taken while no runner had opened it is refused, never set.
+    test "a runner that opens the sim between a set's look and its set has the addresses " <>
+           "taken again" do
+      sim = sim(reports: true)
+      test = self()
+
+      # As the sim takes the setter's look, once, the test suspends the setter before the
+      # sim answers it.
+      :ok =
+        :sys.install(
+          sim,
+          {fn
+             _once, {:in, {:"$gen_call", {pid, _tag}, :named}}, _state ->
+               ref = make_ref()
+               send(test, {:look, pid, ref})
+               receive do: ({^ref, :go} -> :done)
+
+             once, _event, _state ->
+               once
+           end, :once}
+        )
+
+      setter =
+        spawn(fn ->
+          send(
+            test,
+            {:set, self(),
+             try do
+               Sim.set(sim, [0], 1)
+             rescue
+               error in ArgumentError -> Exception.message(error)
+             end}
+          )
+        end)
+
+      assert_receive {:look, ^setter, ref}, 5000
+      # Suspended once the call returns.
+      true = :erlang.suspend_process(setter)
+      send(sim, {ref, :go})
+      {runner, clock} = addressed(sim)
+      true = :erlang.resume_process(setter)
+      assert_receive {:set, ^setter, message}, 5000
+
+      assert message ==
+               "a runner has opened the simulated device #{inspect(sim)} for the device " <>
+                 "`panel`: an input's address is the configuration's text from then on, " <>
+                 "\"panel.i.0\", got: [0]"
+
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "a") == 0
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-21's review: two runners' devices opening one sim at once, the second's look
+    # for a holder made before the first opens it and its open after: the second is
+    # refused, as a sim is one device's, and the sim keeps its holder's name, where it took
+    # the name of the device it refused and turned its holder's addresses away.
+    test "an open refused, another device holding the sim, leaves it named for its holder" do
+      sim = sim(reports: true)
+      test = self()
+
+      # As the sim takes the `drive` device's init/3 take, its last call before it opens,
+      # the test suspends that device before the sim answers it.
+      :ok =
+        :sys.install(
+          sim,
+          {fn
+             _once, {:in, {:"$gen_call", {pid, _tag}, {:take, :init}}}, _state ->
+               ref = make_ref()
+               send(test, {:take, pid, ref})
+               receive do: ({^ref, :go} -> :done)
+
+             once, _event, _state ->
+               once
+           end, :once}
+        )
+
+      spawn(fn -> send(test, {:drive, elem(addressing(sim, "drive"), 0)}) end)
+      assert_receive {:take, drive, ref}, 5000
+      true = :erlang.suspend_process(drive)
+      send(sim, {ref, :go})
+      {runner, clock} = addressed(sim)
+      true = :erlang.resume_process(drive)
+      assert_receive {:drive, refused}, 5000
+      assert {:error, {:io_init, "drive", {:raised, held}}} = refused
+
+      assert held =~
+               ~r/^the simulated device #{Regex.escape(inspect(sim))} is the device `panel`'s, opened by #PID<[0-9.]+>, which has not closed it: a sim is one device's$/
+
+      assert Sim.set(sim, "panel.i.0", 1) == :ok
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "a") == 1
+      assert Sim.outputs(sim) == %{"panel.q.0" => 1, "panel.q.1" => 0}
+      assert Runner.stop(runner) == :ok
+    end
+
+    # RV-21's review: writes/1 of a sim a runner has opened spells its writes in the
+    # caller's process, so the sim's own work for it is what it is for a sim no runner has
+    # opened, the writes taken in order, where it spelled them in its own, a runner's
+    # device waiting on it meanwhile. The same writes in two sims, one named, one not.
+    test "writes/1 spells in the caller, the sim's own work the same named or not" do
+      named = sim(reports: true)
+      {runner, _clock} = addressed(named)
+      assert Runner.stop(runner) == :ok
+      unnamed = sim(reports: true)
+      write = %{[0] => 1, [1] => 7}
+
+      for sim <- [named, unnamed] do
+        state = opened(sim)
+        for _ <- 1..2000, do: {:ok, _} = Sim.write(write, state)
+        assert Sim.close(state) == :ok
+      end
+
+      assert List.last(Sim.writes(named)) == %{"panel.q.0" => 1, "panel.q.1" => 7}
+      assert List.last(Sim.writes(unnamed)) == write
+
+      own = fn sim ->
+        Enum.min(
+          for _ <- 1..5 do
+            {:reductions, before} = Process.info(sim, :reductions)
+            Sim.writes(sim)
+            {:reductions, now} = Process.info(sim, :reductions)
+            now - before
+          end
+        )
+      end
+
+      {named, unnamed} = {own.(named), own.(unnamed)}
+      assert named <= unnamed * 1.25 + 500, "named #{named}, unnamed #{unnamed}"
+    end
+  end
 end
