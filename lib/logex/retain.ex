@@ -25,7 +25,8 @@ defmodule Logex.Retain do
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
   # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
-  # of each program type's text, in name order (written_by/1), which a warm fresh start
+  # of each program type's text, in name order, since decision 527 (RV-26) as
+  # `Logex.Printer` prints it (written_by/1), which a warm fresh start
   # lays beside the program it is given and warns where they differ (warning/3), a store
   # written before RV-21 naming none and read as it was, and one that names a type and no
   # resource refused (RV-21's review); the version still 2, so a logex before RV-21 refuses
@@ -132,14 +133,19 @@ defmodule Logex.Retain do
       | for({name, digest} <- Enum.sort(programs), do: "program #{name} #{digest}\n")
     ]
 
-  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 question 1): the program a
-  # configuration runs, as a store names it, `%{resource: digest, programs: %{type =>
-  # digest}}`, each digest the MD5 of a text in 32 lowercase hexadecimal digits. A program
-  # type's is of its source text, the bytes of the file it was read from, so that `md5sum
-  # conveyor.ld` gives it, and where it holds user blocks, of each block's name and source
-  # text after it, in name order, so that a block edited is its holder's text changed too;
-  # one with no source text, built by hand, of its rungs and tags as data. The resource's
-  # is of the configuration's own lines, its tasks, globals, instances and connections, as
+  # Decision 517 (c), RV-21, and decision 527 (RV-26): the program a configuration runs, as
+  # a store names it, `%{resource: digest, programs: %{type => digest}}`, each digest the
+  # MD5 of a text in 32 lowercase hexadecimal digits. A program type's is of its text and,
+  # where it holds user blocks, of each block's name and text after it, in name order, so
+  # that a block edited is its holder's text changed too; and since decision 527 each text
+  # is the one `Logex.Printer` prints of its parse tree, each literal by its value
+  # (canonical/1), as the configuration's own lines are printed before theirs, so that a
+  # comment, an empty line, CRLF, spacing or a literal respelt, `16#ff` for `255`, in a
+  # program's `.ld` or a block's warns of nothing, where the bytes of each file were
+  # digested and `md5sum conveyor.ld` gave a type with no blocks; a name's case is the
+  # text's, as the printer keeps it (provisional, `PLAN.md`'s RV-26). One with no source
+  # text, built by hand, of its rungs and tags as data. The resource's is of the
+  # configuration's own lines, its tasks, globals, instances and connections, as
   # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
   # comment or an empty line added to the file changes nothing and a task, a global, an
   # instance's type or task, a connection or their order does. The configuration's name is
@@ -152,7 +158,8 @@ defmodule Logex.Retain do
   def written_by(%Logex.Configuration{programs: programs} = configuration),
     do: %{
       resource: digest(Logex.Configuration.Text.print(unlined(configuration))),
-      programs: Map.new(programs, fn {name, program} -> {name, digest(texts(program))} end)
+      programs:
+        Map.new(programs, fn {name, program} -> {name, digest(texts(program, :canonical))} end)
     }
 
   defp unlined(configuration),
@@ -168,19 +175,45 @@ defmodule Logex.Retain do
         do: %{entry | line: nil}
       )
 
-  defp texts(%Logex.Program{source: source, blocks: blocks} = program),
+  defp texts(%Logex.Program{source: source, blocks: blocks} = program, form),
     do: [
-      own_text(source, program)
+      own_text(source, program, form)
       | for(
           {name, %Logex.FbType{body: %Logex.Program{} = body}} <- Enum.sort(blocks),
-          do: ["\n", name, "\n", own_text(body.source, body)]
+          do: ["\n", name, "\n", own_text(body.source, body, form)]
         )
     ]
 
-  defp own_text(source, _program) when is_binary(source), do: source
+  defp own_text(source, _program, :canonical) when is_binary(source), do: canonical(source)
 
-  defp own_text(nil, program),
+  defp own_text(nil, program, _form),
     do: :erlang.term_to_binary({program.rungs, program.tags}, [:deterministic])
+
+  # Decision 527 (RV-26): a program's or a block's text as `Logex.Printer` prints its parse
+  # tree, one rung a line and one space between its elements, each literal by its value,
+  # `255` for `16#ff` and `1.0` for `1.0e0` (by_value/1), so that what the lexer skips, a
+  # comment, an empty line, a line's end and its spacing, and a literal's spelling are not
+  # the program's; the declarations are rungs to the parser, and printed so too. A text
+  # that does not lex or parse, which only a program built by hand holds, every compile's
+  # text doing both, is digested as its bytes.
+  defp canonical(source), do: lexed(Logex.Lexer.tokenize(source), source)
+
+  defp lexed({:ok, tokens, _end_line}, source), do: parsed(Logex.Parser.parse(tokens), source)
+  defp lexed(_error, source), do: source
+
+  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source),
+    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value/1)}})
+
+  defp parsed(_error, source), do: source
+
+  defp by_value({:rung, elements}), do: {:rung, Enum.map(elements, &by_value/1)}
+
+  defp by_value({:branches, legs}),
+    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e) end))}
+
+  defp by_value({:int_lit, line, value, _spelling}), do: {:int_lit, line, value}
+  defp by_value({:real_lit, line, value, _spelling}), do: {:real_lit, line, value}
+  defp by_value(element), do: element
 
   defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)
 
@@ -353,15 +386,16 @@ defmodule Logex.Retain do
     {acc.image, written_at, acc.by}
   end
 
-  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 questions 1 and 2): what a warm
-  # fresh start warns of, nil where the store names no program, written before RV-21, or
-  # the very program the start was given; otherwise one message, naming the start's store
-  # as the host spelled it, the configuration's own lines where their digest differs and
-  # each program type whose digest differs, is only the store's or only the start's, in
-  # name order, the first ten and then a count, so that the operator learns that an edit
-  # tested or assembled online, which lives in the runner and the store, never reached
-  # the files the start was given. It changes nothing else: the image is laid over the
-  # start's configuration by name and type as decision 277 has it.
+  # Decision 517 (c), RV-21, and decision 527 (RV-26): what a warm fresh start warns of,
+  # nil where the store names no program, written before RV-21, or the very program the
+  # start was given; otherwise one message, naming the start's store as the host spelled
+  # it, the configuration's own lines where their digest differs and each program type
+  # whose digest differs, is only the store's or only the start's, in name order, the
+  # first ten and then a count, and since decision 527 both causes, a deploy of changed
+  # files, or an edit tested or assembled online, which lives in the runner and the store,
+  # that never reached the files the start was given, where it named the edit alone. It
+  # changes nothing else: the image is laid over the start's configuration by name and type
+  # as decision 277 has it.
   def warning(nil, _by, _path), do: nil
 
   def warning(stored, by, path),
@@ -392,9 +426,9 @@ defmodule Logex.Retain do
       "#{Refusal.path(path)}: the store was written by another program than the one this " <>
         "start was given: " <>
         Enum.join(Array.capped(differences, &"and #{&1} more"), ", ") <>
-        "; an edit tested or assembled online that was never written to the files is not in " <>
-        "this start, which runs the program it was given with the store's retained values " <>
-        "laid over it by name and type"
+        "; whether by a deploy of changed files, or an edit tested or assembled online that " <>
+        "never reached the files, this start runs the program it was given, with the " <>
+        "store's retained values laid over it by name and type"
 
   # RV-5's review: a store that begins with a byte-order mark, as an editor that saves
   # UTF-8 with one writes it, told so in plain words at its first line, and the rest of

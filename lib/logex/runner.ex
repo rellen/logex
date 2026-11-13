@@ -310,10 +310,13 @@ defmodule Logex.Runner do
     program the runner ran as it wrote the store, `resource <digest>`, the MD5 of the
     configuration's own lines, its tasks, globals, instances and connections as
     `Logex.Configuration.Text.print/1` prints them with no line of their own, and
-    `program <type> <digest>` a program type, in name order, the MD5 of its source text,
-    `md5sum`'s of the file it was read from, and of each user block's after it where it
-    holds one, a `program` line with no `resource` line refused, and each read wherever
-    it stands, as a global's line is (RV-21's review); the header `logex retain 2` still,
+    `program <type> <digest>` a program type, in name order, the MD5 of its text, and of
+    each user block's after it where it holds one, each since decision 527 (RV-26) as
+    `Logex.Printer` prints it, one rung a line, one space between its elements and each
+    literal by its value, so that a comment, an empty line, CRLF, spacing or a literal
+    respelt in a `.ld` file changes nothing, where `md5sum` of the file gave it before; a
+    `program` line with no `resource` line refused, and each read wherever it stands, as a
+    global's line is (decision 531); the header `logex retain 2` still,
     so that a logex before RV-21 refuses such a store at a warm start (provisional,
     `PLAN.md`'s RV-21 question 4); and since decision 355 its end line, `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
@@ -487,12 +490,12 @@ defmodule Logex.Runner do
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
     device opened. Since decision 517 (c) (RV-21) a warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
-    configuration's own lines or a program type's text, a type only the store has or only
-    the start, warns of it in `status/1`'s `retain`, `warning`, one message naming the
-    store as the host spelled it and each that differs, so that the operator learns that
-    an edit tested or assembled online, which lives in the runner and its store and not in
-    the files, never reached the files the start was given (provisional, `PLAN.md`'s RV-21
-    questions 1 and 2: any difference warns, a deploy of changed files among them); it
+    configuration's own lines or a program type's text as it prints, a type only the store
+    has or only the start, warns of it in `status/1`'s `retain`, `warning`, one message
+    naming the store as the host spelled it, each that differs and both causes, a deploy
+    of changed files, or an edit tested or assembled online, which lives in the runner and
+    its store and not in the files, that never reached the files the start was given
+    (decision 527); it
     changes nothing else, the image laid over the configuration by name and type as
     decision 277 has it, and a store written before RV-21, which names no program, warns
     of nothing and is read as before. A cold start, which lays nothing over, warns of

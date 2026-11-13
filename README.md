@@ -3433,7 +3433,7 @@ stop: :ok
 logex retain 2
 configuration tally written 2026-10-30T14:00:08Z
 resource 013cc059392445fdcc1e84c9b0de6118
-program tally 79283a3df1f759ac3c077ad9de67c863
+program tally bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 4
 instance t1 tally
 t1.boxes ctu
@@ -3448,7 +3448,7 @@ end 15 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
-tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; an edit tested or assembled online that was never written to the files is not in this start, which runs the program it was given with the store's retained values laid over it by name and type
+tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; whether by a deploy of changed files, or an edit tested or assembled online that never reached the files, this start runs the program it was given, with the store's retained values laid over it by name and type
 tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
 ```
 
@@ -3460,9 +3460,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `resource`, the MD5 of the configuration's own lines, its tasks, globals, instances and
   connections as `Logex.Configuration.Text.print/1` prints them with no line numbers, so
   that a comment or an empty line changes nothing, and `program` a program type, the MD5
-  of its text, what `md5sum tally.ld` prints, and of each user block's after it where it
-  holds one, a store with a `program` line and no `resource` line refused a line, as a
-  hand edit that took the one away and kept the other leaves it; each retained global;
+  of its text and of each user block's after it where it holds one, each as
+  `Logex.Printer` prints it, one rung a line, one space between its elements and each
+  literal by its value, so that a comment, an empty line, CRLF line ends, spacing or a
+  literal respelt, `16#3E8` for `1000`, in a `.ld` file changes nothing either (decision
+  527), where `md5sum tally.ld` gave the digest before it; a store with a `program` line
+  and no `resource` line refused a line, as a hand edit that took the one away and kept
+  the other leaves it (decision 531); each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
@@ -3630,15 +3634,18 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   files the edit never reached, as `kept.exs` makes above, finds its store written by
   another program than the one it is given and warns of it, `status/1`'s `retain` giving
   `warning`, one message naming the store and what differs, the configuration's own lines
-  or a program type's text, or a type only the store or only the start has (decision 517
-  (c), RV-21). It changes nothing else: the store's values are laid over the program the
-  start was given by name and type, as at any start, so the operator who sees it either
-  writes the edit to the files and starts again, or lets the start stand, its next write
-  naming the files' program, after which nothing warns. A deploy of changed files warns
-  the same way, the store having been written by the program before it; a store an
-  earlier logex wrote names no program and warns of nothing, and a cold start, which lays
-  nothing over, warns of nothing. `warning` is always in the report, nil where nothing
-  warned, for the runner's life, as `dropped` is.
+  or a program type's text as it prints, or a type only the store or only the start has,
+  and both causes it may have, a deploy of changed files or an edit tested or assembled
+  online that never reached the files (decisions 517 (c) and 527). It changes nothing
+  else: the store's values are laid over the program the start was given by name and
+  type, as at any start, so the operator who sees it either writes the edit to the files
+  and starts again, or lets the start stand, its next write naming the files' program,
+  after which nothing warns. A deploy of changed files warns the same way, the store
+  having been written by the program before it, but a deploy that changes a file's
+  comments, empty lines, line ends, spacing or a literal's spelling alone does not; a
+  store an earlier logex wrote names no program and warns of nothing, and a cold start,
+  which lays nothing over, warns of nothing. `warning` is always in the report, nil where
+  nothing warned, for the runner's life, as `dropped` is.
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),
