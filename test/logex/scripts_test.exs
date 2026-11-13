@@ -145,6 +145,10 @@ defmodule Logex.ScriptsTest do
       test "lamp \#{n} passes", do: assert(false)
       test "the test lamp \#{n} passes", do: assert(false)
     end
+
+    for side <- ["left", "right"] do
+      test "the \#{side} belt runs", do: assert(false)
+    end
   end
 
   defmodule Logex.HornTest do
@@ -236,9 +240,12 @@ defmodule Logex.ScriptsTest do
 
   defp exunit_name(name), do: name
 
-  test "where more than one call could name a test, the surest gives its line: a name all " <>
-         "literal before one the compile makes, each anchored at both ends; and where the " <>
-         "surest are more than one, the file alone",
+  # Where more than one call could name a test, the surest gives its line: one in the
+  # test's own module before one in a module the compile names, a name all literal before
+  # one the compile makes, each anchored at both ends; where the surest are more than one,
+  # the file alone.
+  test "the surest call that could name a test gives its line, and the file alone where " <>
+         "the surest are more than one",
        %{tmp_dir: build} do
     file = Path.join(build, "box_test.exs")
     File.write!(file, @shapes)
@@ -259,6 +266,7 @@ defmodule Logex.ScriptsTest do
          {Logex.SignalTest, :"doctest Logex.Signal.blink/0 (2)"} => file,
          {Logex.SignalTest, :"doctest module Logex.Signal (1)"} => file,
          {Logex.SignalTest, :"test lamp 1 passes"} => file,
+         {Logex.SignalTest, :"test the left belt runs"} => file,
          {Logex.SignalTest, :"test the green lamp blinks"} => file,
          {Logex.SignalTest, :"test the red lamp blinks twice"} => file,
          {Logex.SignalTest, :"test the test lamp 2 passes"} => file
@@ -278,6 +286,7 @@ defmodule Logex.ScriptsTest do
                 "#{at}:61: Logex.SignalTest: doctest module Logex.Signal (1)\n" <>
                 "#{at}:70: Logex.SignalTest: test lamp 1 passes\n" <>
                 "#{at}:65: Logex.SignalTest: test the green lamp blinks\n" <>
+                "#{at}:75: Logex.SignalTest: test the left belt runs\n" <>
                 "#{at}:66: Logex.SignalTest: test the red lamp blinks twice\n" <>
                 "#{at}:71: Logex.SignalTest: test the test lamp 2 passes\n", 0}
   end

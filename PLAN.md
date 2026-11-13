@@ -19710,9 +19710,11 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
 
   **RV-22 as built** (2026-11-13, branch `rv22` over `b7cddce`). Each part of decision 515
   that RV-22 builds has a test that fails when it is reverted, judged by the full suite
-  (the mutation tables below). No test, walk or oracle was deleted or weakened, and no test
-  line removed. `mix.exs` is untouched, its Elixir bound and its version, 0.1.0, which
-  waits for the maintainer's first number (question 1); no tag was made or pushed.
+  (the mutation tables below). No test, walk or oracle was deleted or weakened, and no
+  assertion removed; one line of `scripts_test.exs`'s moduledoc was rewritten to name CI's
+  step beside `scripts/failed.exs` (RV-22's review, finding 10). `mix.exs` is untouched,
+  its Elixir bound and its version, 0.1.0, which waits for the maintainer's first number
+  (question 1); no tag was made or pushed.
 
   - *Decision 515 (e), CI naming a red run's failed tests* (`4646b65`;
     `scripts_test.exs`'s "CI's test step" describe, three tests, and two of
@@ -19910,20 +19912,38 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
        and a GitHub release made from the entry's text, so a watcher of the repository is
        told. The publish itself, to Hex, is a step after the tag in each.
     3. *The changelog held at every commit.* The commit that records the answers to these
-       questions, decisions 532 to 535, must add `Decisions: 532–535.` under a fresh
-       `## Unreleased` above the released entry, or the suite is red. (a) As built, the
-       suite holding every decision §7 records to an entry at every commit, as CLAUDE.md
-       is held to every file; (b) the release step alone, the suite checking only that
-       the changelog reads, so a decision recorded today is named when the next release
-       is made, from §7, all at once.
+       questions, decisions 532 onward, must name them in the newest entry or the suite is
+       red: recorded before the release, `Decisions: 1–531.` of the one `## Unreleased`
+       becomes `Decisions: 1–535.`; recorded after it, a fresh `## Unreleased` above the
+       released entry carries `Decisions: 532–535.` (RV-22's review, finding 10). (a) As
+       built, the suite holding every decision §7 records to an entry at every commit, as
+       CLAUDE.md is held to every file; (b) the release step alone, the suite checking
+       only that the changelog reads, so a decision recorded today is named when the next
+       release is made, from §7, all at once.
     4. *What the first release says changed.* An engineer who ran `main` at M3-3 upgrades
-       to the release: a `dint` `add` at its limit now wraps (decision 146, replacing 77),
-       and the entry says nothing of it, "no release came before it". (a) As built, no
-       change listed, §7's notes saying what each landed decision replaced; (b) each
-       decision §7 records as replacing an earlier rule that changed a running program's
-       outputs listed under "What changes a running program's outputs", found by a pass
-       through §7, as RV-23 traces the marks; (c) the same from the runner on, Milestone
-       4, the first point at which a plant could run on logex.
+       to the release: a `dint` `add` at its limit now wraps (decision 146, replacing 77).
+       (a) No change listed, "no release came before it", §7's notes saying what each
+       landed decision replaced, as RV-22 first built it; (b) each decision §7 records as
+       replacing an earlier rule that changed a running program's outputs listed under
+       "What changes a running program's outputs", found by a pass through §7, as RV-23
+       traces the marks, provisionally the record's reading since RV-22's review (finding
+       6: the review's own failure case, b7-premortem-project-10, is "saturation becoming
+       wrap" with no changelog), built so: thirteen items, decisions 130 to 486; (c) the
+       same from the runner on, Milestone 4, the first point at which a plant could run on
+       logex, which drops none of the thirteen, each made once Milestone 4's runner was on
+       `main`.
+    5. *Whether the release step reads CI's runs itself* (RV-22's review, finding 1).
+       CONTRIBUTING.md asks a release "from `main`, its CI run green"; the record names no
+       check. The maintainer sets `mix.exs` to the first number in a commit on a laptop,
+       forgets to push it and runs `scripts/release.sh --push`: as RV-22 first built it,
+       the tag went to GitHub naming a commit no branch held and CI never ran. (a)
+       Provisionally the reading closest to the procedure, as built since the review: the
+       commit refused unless origin's `main`, fetched as the step runs, holds it, and
+       unless every run of `.github/workflows/ci.yml` on it has concluded `success`, read
+       through GitHub's CLI, `gh api`, so the one releasing needs `gh` signed in; (b) the
+       `main` check alone, CI's run read by eye as the procedure's step 1 says, no `gh`
+       needed; (c) neither, the procedure's words alone. IEC 61131-3 says nothing of a
+       release; Logix firmware ships signed, from its vendor's own build.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of

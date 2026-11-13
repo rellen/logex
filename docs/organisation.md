@@ -14856,13 +14856,23 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      file, line and name. (b), `5949be0`: `CHANGELOG.md` drawn from §7, each entry's
      first line naming the decisions it carries, its one entry `## Unreleased` carrying
      1–531; `scripts/changelog.exs` holding it to §7 at every commit, through the suite,
-     and to `mix.exs`'s version at a release; and `scripts/release.sh [--dry-run] [--push]` tagging `vX.Y.Z` once the
-     tree is clean, the changelog names that version and every decision, the tag is absent
-     here and on origin and the gate is green, `CONTRIBUTING.md`'s "Releasing" its
-     procedure and `release_test.exs` its checks, run in a scratch repository. `mix.exs`'s
-     version stays 0.1.0 and no tag is made: the first number, whether its tag is pushed,
-     the changelog held at every commit and what the first release says changed are
-     `PLAN.md`'s RV-22, questions 1 to 4, provisional.)*
+     and to `mix.exs`'s version at a release; and `scripts/release.sh [--dry-run]
+     [--push]` tagging `vX.Y.Z` once the tree is clean, the changelog names that version
+     and every decision, the tag is absent here and on origin and the gate is green,
+     `CONTRIBUTING.md`'s "Releasing" its procedure and `release_test.exs` its checks, run
+     in a scratch repository. `mix.exs`'s version stays 0.1.0 and no tag is made: the
+     first number, whether its tag is pushed, the changelog held at every commit and what
+     the first release says changed are `PLAN.md`'s RV-22, questions 1 to 4,
+     provisional.)* *(RV-22's review, 2026-11-13: CI's test step and `scripts/gate.sh`
+     judge the suite by `scripts/failed.exs --exit`, which names a red run's tests or
+     says why it names none, and makes a run that exited 0 with no failures manifest, a
+     suite a test halted, red; `scripts_test.exs` holds the workflow to every gate on
+     every push and pull request, no step skipped or its failure let pass; a test's line
+     is the surest call's, the file alone where two could name it; `scripts/release.sh`
+     refuses a commit origin's `main` does not hold, and one whose CI runs have not all
+     passed, read through `gh api` (provisional, `PLAN.md`'s RV-22, question 5); and the
+     changelog's first entry lists thirteen changes to a running program's outputs, its
+     question 4's reading (b), provisional.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the
