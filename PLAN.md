@@ -30,7 +30,9 @@ and to RV-19's, decisions 503–512, each as built, their marks made in RV-8.)* 
 changed and what its close puts to the maintainer, RV-8's questions, eight since RV-8's
 review; and since their answers the same day, decisions 513–521, it says the review is
 done, decision 521, and names what waits, RV-20 to RV-25.)* *(Since RV-20, 2026-11-12:
-it says RV-20 has landed, and names what still waits.)*
+it says RV-20 has landed, and names what still waits.)* *(Since RV-21 and the answers to RV-20's and
+RV-21's questions, 2026-11-13: it says RV-21 has landed, names decisions 522–531, and
+names what still waits, RV-22 to RV-26.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -18994,7 +18996,9 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     so a panel whose opening passes 1 ms first fails it; k1's run met it too. The runner's
     start is RV-21's, beside this item, so it is left, put here for RV-21.
 
-  *Questions for the maintainer*, by what an operator or an engineer sees:
+  *Questions for the maintainer*, by what an operator or an engineer sees *(put again,
+  as they stood after RV-20's review, below, and answered on 2026-11-13, decisions
+  522–526)*:
   1. *A long refusal's did-you-mean* (decision 520 (c), as built provisional). A box
      counter's tag `pushbutton_start` renamed leaves 2,000 rungs naming
      `pushbuton_start_1` to `_2000`: (a) as built, both forms, the first hundred offered
@@ -19196,7 +19200,8 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   and 7 the handing over (`scratchpad/rv/w20/probes/motorplant.exs`, the least of nine).
 
   *Questions for the maintainer*, as they now stand, by what an operator or an engineer
-  sees (questions 2 and 3 as put above, with what the review adds; 4 and 5 new):
+  sees (questions 2 and 3 as put above, with what the review adds; 4 and 5 new) *(all five
+  answered on 2026-11-13, each as built: decisions 522–526)*:
   1. *A long refusal's did-you-mean* (decision 520 (c), as built provisional, put again).
      A box counter's tag `pushbutton_start` renamed leaves 2,000 rungs naming
      `pushbuton_start_1` to `_2000` among 4,000 tags: (a) as built since the review, the
@@ -19476,8 +19481,9 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     each example from its files there, holds each block to its file and runs
     `examples/scan.exs` through the project; and the Conventions' "The README is
     checked" says each block is its file under `examples/`, changed with it.
-  - *Provisional readings, and questions for the maintainer.* Each is marked
-    provisional where it stands, the closest reading of the record, IEC 61131-3 and Logix
+  - *Provisional readings, and questions for the maintainer* *(answered on 2026-11-13,
+    with the review's below: decisions 527–531)*. Each is marked provisional where it
+    stands, the closest reading of the record, IEC 61131-3 and Logix
     that could be found; each question says what an operator or a host sees.
     1. *What counts as another program* (decision 517 (c)). An engineer fixes a typo in a
        comment of `conveyor.ld` and restarts the line from its store: the start warns
@@ -19666,7 +19672,8 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     of the same numbers would be read as.
   - *CLAUDE.md*: unchanged; no file was added, and each line stays true.
   - *Questions for the maintainer*, added to the three above, each provisional where it
-    stands:
+    stands *(answered on 2026-11-13, decisions 527–531: question 1 and its refinement
+    527, 2 528, 3 529, 4 530, and 5 531)*:
     1. *What counts as another program*, refined (F9): (d) a `.ld`'s text read as the
        configuration's is, printed canonically before its digest (`Logex.Printer`), so a
        comment, an empty line, CRLF, spacing or a respelt literal warns of nothing on
@@ -19698,19 +19705,23 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   any publish, a version, a changelog drawn from §7's decisions and a tag, its procedure
   written in `CONTRIBUTING.md` and checked as the gate is; the first version's number, and
   whether its tag is pushed, put to the maintainer before any tag is. `mix.exs`'s Elixir
-  bound is not touched. It runs after RV-20 and RV-21, beside RV-23.
+  bound is not touched. It runs after RV-20 and RV-21, beside RV-26 *(so since the answers
+  of 2026-11-13, where it was to run beside RV-23)*.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of
   §7, as RV-1 did for 343–345; a mark a decision settles made the decision's number, with
   a dated note on it; the rest, the loader memo's linked directory and `Logex.IO.Sim`'s
   100,000 writes among them, put to the maintainer grouped by what an operator sees. It
-  builds no rule. It runs after RV-20 and RV-21, whose marks it traces too, beside RV-22.
+  builds no rule. It runs after RV-22 and RV-26, and traces RV-20's, RV-21's and RV-26's marks
+  too, beside RV-24 *(so since the answers of 2026-11-13, where it was to run beside
+  RV-22)*.
 - **RV-24 — typespecs and Dialyzer** (decision 515, (c)). Typespecs on the host
   contract's functions, decision 514's modules, and Dialyzer, OTP's own `dialyzer` over
   the compiled modules with a table of the toolchain's applications, no dependency added,
   run in CI, each warning it gives fixed with a test where it is a defect or recorded
-  with its reason. It runs after RV-23.
+  with its reason. It runs beside RV-23 *(so since the answers of 2026-11-13, where it was
+  to run after it)*, leaving every mark to RV-23.
 - **RV-25 — the runner and the contract test file split by concern** (decision 515,
   (d)). `Logex.Runner`'s 5,700 lines into internal modules by concern, the public module
   and every message unchanged, each new module a line in CLAUDE.md; and
@@ -19718,6 +19729,35 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   no behaviour changed, the suite's count the same, and the mutation tables of the
   runner's recent items still red. It runs last and alone, since it touches every file the
   others do.
+
+**RV-20's and RV-21's questions answered, 2026-11-13** (decisions 522–531). The
+maintainer took RV-20's five as built: the first hundred names a text cannot find offered
+the nearest of every name (522), the host contract ending where RV-20 read it (523), the
+compile's own process meeting its caller as built (524), each text its own hundred (525)
+and a list given once after the hundred (526). Of RV-21's seven, the sim's addresses
+(529) and a store that names its program in part, its lines read wherever they stand
+(531), as built; and three to build: a program type's text printed canonically before its
+digest and the warning naming both causes, a deploy of changed files or an edit online
+that never reached them (527); the warning an event to the subscribers too (528); and a
+store that names its program written as `logex retain 3` (530). The order from here: RV-22
+and RV-26 side by side; then RV-23 and RV-24 side by side; and RV-25 last, alone.
+
+- **RV-26 — the answers to RV-20's and RV-21's questions** (decisions 522–531). A
+  program type's text printed canonically (`Logex.Printer`) before its digest, as the
+  configuration's is, so a comment, an empty line, CRLF, spacing or a respelt literal in a
+  `.ld` warns of nothing, and the warning naming both causes, "a deploy of changed files,
+  or an edit tested or assembled online that never reached the files" (527); the warning
+  sent to the subscribers too, `{:retain, {:warning, message}}`, and, since none can exist
+  before `start_link/1` returns (decision 324), how one comes to hear it, at its
+  subscribing while the warning stands or otherwise, a reading settled provisionally and
+  put to the maintainer (528); a store that names its program written as `logex retain
+  3`, versions 2 and 1 still read, a store RV-21's logex wrote, version 2 with its
+  `resource` and `program` lines and digests of the bytes, still read and what a fresh
+  start then says a reading settled provisionally, and a logex from before RV-21 shown to
+  refuse a version 3 store plainly, README's rollback passage made true (530); the store's
+  life walk and README's store passage restating each; and the marks decisions 522–526,
+  529 and 531 settle made their numbers. It runs beside RV-22, before RV-23 traces the
+  marks.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

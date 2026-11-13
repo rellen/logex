@@ -14985,6 +14985,146 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      built, reviewed and fixed as every item is. The review after Milestone 6 is done on
      2026-11-12. IEC and Logix have no bearing.
 
+522. **A long refusal's did-you-mean (RV-20),** RV-20's question 1: decision 520 (c)
+     named two forms, the first hundred unknown names alone offered a near name, or
+     candidates of a like length alone matched; RV-20 first built both together, which
+     narrowed every compile's suggestions to names within one character of a typo's
+     length, so a program with one typo was offered nothing for `stp_buttn`,
+     `conveyor_run` or `jmp ender`; its review measured the first form alone, the compile
+     in its own process, at 1.3 to 1.8 s for 1,000 to 16,000 names gone among a box
+     counter's 4,000 tags, flat.
+
+     **Taken: the first hundred, any name (a)** (the maintainer, 2026-11-13): as built
+     since RV-20's review, the first hundred names a text cannot find each offered the
+     nearest of every name, as before decision 520, and every name after them none, so a
+     single typo anywhere is offered what it was before, `stp_buttn` told `stop_button`
+     and `jmp ender` told `end`. IEC 61131-3 says nothing of a compiler's messages;
+     whether Studio 5000's verify offers a near name is unverified. RV-26 makes the marks
+     this decision's number.
+
+523. **Where the host contract ends, for what README's examples call (RV-20),** RV-20's
+     question 2: decision 514 names eight modules the host contract, and README's
+     examples call more, `Logex.Diagnostic.format/1`, `Logex.IO.Sim`, the runner's
+     clocks, the configuration's elements and `Logex.FbType.ctu/0`; RV-20 read the host's
+     tools inside the contract and the rest outside, provisional.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-13): `Logex.IO.Sim`, the runner's
+     clocks (`Logex.Runner.Clock`, `Clock.Manual` and `Clock.Monotonic`), the
+     configuration's elements (`Task`, `Global`, `Instance` and `Connection`) and
+     `Logex.IO.Point` are inside the contract, each refusing a host's mistake with a
+     pinned message; `Logex.Diagnostic`, `Logex.FbType` and `Logex.Scan` are outside,
+     taking logex's own data unguarded as their moduledocs say, so `Diagnostic.format/1`
+     given anything but a diagnostic raises `FunctionClauseError`. IEC says nothing of a
+     host's API, and the record cites no Logix SDK. RV-26 makes the marks this
+     decision's number.
+
+524. **A compile's own process (RV-20),** RV-20's question 3: decision 520 (b) runs
+     `Logex`'s three compiles in a process of their own, and leaves how it meets its
+     caller: the caller charged the compile's reductions, its wait some 16% longer beside
+     eight busy loops; a compile killed from outside taking its caller with it, though
+     the caller traps exits; and the compile taking the caller's priority and heap, so a
+     caller with a large minimum heap holds two while it compiles.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-13): a host that counts its own
+     work counts its compile's, a caller's limit of its heap limits its compile, and a
+     compile killed from outside takes its caller with it, its reason kept; a caller that
+     traps exits is not answered `{:error, ...}` instead, nor is the compile run at the
+     VM's own priority and heap uncharged. IEC says nothing of compile time; Logix
+     compiles on the workstation, in Studio 5000. RV-26 makes the marks this decision's
+     number.
+
+525. **Whose hundred (RV-20),** RV-20's question 4: decision 522's hundred is counted a
+     text at a time, a block file's and each path's of `compile_files/1` its own, or once
+     for the whole compile; a plant compiled from a file whose 40 block files each name
+     1,000 renamed tags.
+
+     **Taken: each text its own (a)** (the maintainer, 2026-11-13): as built, each block
+     file's first hundred names gone are offered a near name, 4,000 in all, some 9 s;
+     one hundred for the whole compile, some 1 s, would offer the first block file's
+     alone and the program's own typo, read last, none. IEC 61131-3 is silent; how
+     Studio 5000 counts its verify's errors across routines is unverified. RV-26 makes
+     the marks this decision's number.
+
+526. **What a name past the hundred is told of a list (RV-20),** RV-20's question 5: a box
+     counter's block `lane` of 300 members, and 4,000 rungs naming members it does not
+     have; as RV-20 first built it, every message after the hundredth listed every
+     member, 174.5 MB of messages at 1,000 members and 16,000 references.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-13): each of the first hundred
+     messages lists `lane`'s members, and after them the list is given once, by the first
+     message that would give it and by none where one before did, some 240 KB of
+     messages; a timer named twice with unknown members still lists `pre`, `acc`, `dn`,
+     `tt` and `en` in each message of the hundred. IEC and Logix have no bearing
+     (unverified for Logix). RV-26 makes the marks this decision's number.
+
+527. **What counts as another program (RV-21),** RV-21's question 1 and its review's
+     refinement: decision 517 (c)'s fresh start warns where its store was written by
+     another program than the files'; as built, any byte of a program type's `.ld`
+     counts while the configuration's own text is printed canonically before its digest,
+     so an engineer who fixes a typo in a comment of `conveyor.ld` and restarts the line
+     from its store is told "`conveyor`'s text differs" though its rungs are the same,
+     where the same comment in the configuration's file warns of nothing; and the warning
+     names an edit tested or assembled online that never reached the files, where a
+     planned deploy of changed files gives it too.
+
+     **Taken: the canonical text, and both causes named ((d) and the message)** (the
+     maintainer, 2026-11-13): a program type's text is printed canonically
+     (`Logex.Printer`) before its digest, as the configuration's is, so a comment, an
+     empty line, CRLF, spacing or a respelt literal warns of nothing on either side, at
+     the cost of a digest `md5sum` of the file no longer gives; and the warning names
+     both causes, "a deploy of changed files, or an edit tested or assembled online that
+     never reached the files". IEC 61131-3 is silent; how Logix tells an offline file
+     from the controller's project is unverified. RV-26 builds it.
+
+528. **How the stale store's warning reaches the operator (RV-21),** RV-21's question 2:
+     as built, a fresh start from a store another program wrote runs the plant at once
+     and says so in `status/1`'s `retain` report alone, until the runner ends.
+
+     **Taken: the status and an event (b)** (the maintainer, 2026-11-13): the warning
+     stays in `status/1`'s `retain` and is also an event to the subscribers, `{:retain,
+     {:warning, message}}`, so a host that logs or shows events shows it; the start is
+     refused nothing, as decision 277 lays any store over any program. No subscriber can
+     exist before `start_link/1` returns (decision 324), so how one comes to hear the
+     warning, at its subscribing while the warning stands or otherwise, is a reading
+     RV-26 settles provisionally and puts to the maintainer. IEC is silent; Logix's tools
+     ask the engineer to upload or download where the project and the controller differ,
+     unverified. RV-26 builds it.
+
+529. **When a simulator takes the configuration's text (RV-21),** RV-21's question 3: a
+     test sets a lamp's sim at `[0]` before the runner opens it and at `"panel.i.0"`
+     after; once a runner has opened the sim, `[0]` is refused, naming the text.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-13): the open of a runner's device
+     names the sim, the name kept across a stop, and from then on it takes and gives the
+     configuration's text alone; a sim no runner has opened takes the list. Neither IEC
+     nor Logix has a rule for a simulator. RV-26 makes the marks this decision's number.
+
+530. **The store's version (RV-21),** RV-21's question 4: RV-21's `resource` and `program`
+     lines grew the store's grammar under `logex retain 2`, so a box counter's logex put
+     back to a version before RV-21 after a bad upgrade refuses the newer store at a warm
+     start, "line 3: `resource ...` comes before any `instance` line", and the line starts
+     only cold, its count lost unless the copy is put back by hand.
+
+     **Taken: `logex retain 3` (b)** (the maintainer, 2026-11-13): a store that names its
+     program is written as version 3, and versions 2 and 1 are still read, so an older
+     logex says plainly that it does not read version 3, where version 2's grammar
+     pointed at a line's order; the count is still lost after a rollback unless the copy
+     is put back, as README says. IEC 61131-3 has no store; Logix keeps retained data in
+     the controller's memory and checks a project's revision, unverified. RV-26 builds
+     it.
+
+531. **A store that names its program in part, and where its lines stand (RV-21),**
+     RV-21's question 5: a hand edit deletes the `resource` line of a fan's store and
+     mends its count; and the `resource` and `program` lines are read wherever they
+     stand among the values.
+
+     **Taken: as built, both (a)** (the maintainer, 2026-11-13): such a store is refused
+     at its first `program` line, the line not started warm until the `resource` line is
+     put back or the start is cold; and the `resource` and `program` lines are read
+     wherever they stand, as a global's line is, where the runner writes them straight
+     after the configuration's. IEC and Logix have no store edited by hand. RV-26 makes
+     the marks this decision's number.
+
 ---
 
 ## 8. Sources, and what is unverified

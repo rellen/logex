@@ -380,8 +380,11 @@ host's frictions (decision 517): a fresh start that warns where its store was wr
 another program than the files', an edit that never reached them; the simulator taking
 and giving the configuration's addresses once a runner has opened it; the examples as
 files under `examples/`; and an adapter of a host's own beside the simulator ("A
-device's adapter", below). Waiting: CI naming a failed test, a release step, typespecs
-with Dialyzer, and the runner split by concern.
+device's adapter", below). The maintainer answered RV-20's and RV-21's questions on
+2026-11-13, decisions 522–531. Waiting: CI naming a failed test, a release step,
+typespecs with Dialyzer, the runner split by concern, and RV-26: a program's text read
+canonically before the store compares it, the stale store's warning naming both causes
+and sent to the subscribers too, and the store written as `logex retain 3`.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
