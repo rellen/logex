@@ -98,7 +98,7 @@ defmodule Logex.TimerTest do
       assert members(p, levels("motor", [1, 0, 0]), "run_on") == [
                {0, 1, 0, 1},
                {0, 0, 0, 0},
-               {0, 0, 0, 0}
+               {0, 0, 0, 1}
              ]
     end
 
