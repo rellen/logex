@@ -14848,6 +14848,21 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      versioned release notes. RV-22 builds (e) and (b), putting the first version's number
      and its tag to the maintainer before any tag is pushed; RV-24 builds (c); RV-25
      builds (d), last and alone, since it touches every file the others do.
+     *(Landed, (e) and (b), with RV-22, 2026-11-13. (e), `4646b65`: CI's test step deletes
+     ExUnit's failures manifest, runs the suite and after a red run `scripts/failed.exs`,
+     so that its log ends with each failed test, `file:line: Module: test name`, the line
+     read from the test file's syntax tree, and exits with the suite's code; shown on
+     `backup/rv22-red`, CI run 43467639943, a box counter's count off by one named by its
+     file, line and name. (b), `5949be0`: `CHANGELOG.md` drawn from §7, each entry's
+     first line naming the decisions it carries, its one entry `## Unreleased` carrying
+     1–531; `scripts/changelog.exs` holding it to §7 at every commit, through the suite,
+     and to `mix.exs`'s version at a release; and `scripts/release.sh [--dry-run] [--push]` tagging `vX.Y.Z` once the
+     tree is clean, the changelog names that version and every decision, the tag is absent
+     here and on origin and the gate is green, `CONTRIBUTING.md`'s "Releasing" its
+     procedure and `release_test.exs` its checks, run in a scratch repository. `mix.exs`'s
+     version stays 0.1.0 and no tag is made: the first number, whether its tag is pushed,
+     the changelog held at every commit and what the first release says changed are
+     `PLAN.md`'s RV-22, questions 1 to 4, provisional.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the

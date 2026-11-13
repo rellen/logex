@@ -19707,6 +19707,223 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   whether its tag is pushed, put to the maintainer before any tag is. `mix.exs`'s Elixir
   bound is not touched. It runs after RV-20 and RV-21, beside RV-26 *(so since the answers
   of 2026-11-13, where it was to run beside RV-23)*.
+
+  **RV-22 as built** (2026-11-13, branch `rv22` over `b7cddce`). Each part of decision 515
+  that RV-22 builds has a test that fails when it is reverted, judged by the full suite
+  (the mutation tables below). No test, walk or oracle was deleted or weakened, and no test
+  line removed. `mix.exs` is untouched, its Elixir bound and its version, 0.1.0, which
+  waits for the maintainer's first number (question 1); no tag was made or pushed.
+
+  - *Decision 515 (e), CI naming a red run's failed tests* (`4646b65`;
+    `scripts_test.exs`'s "CI's test step" describe, three tests, and two of
+    `scripts/failed.exs`'s; b7-premortem-project-4). CI's last step deletes ExUnit's
+    failures manifest, runs `mix test --warnings-as-errors` with its output in the log,
+    and after a red run `elixir scripts/failed.exs`, under a heading, exiting with the
+    suite's code, a `shell: bash` step. Of the decision's two forms, `scripts/failed.exs`
+    after a red `mix test`: CI runs the four gates as steps of their own, each judged by
+    its own exit code (the workflow's head, PLAN.md §4·B3), which `scripts/gate.sh` as the
+    test step would run again, and the gate writes the suite's output to a log file and
+    prints its last five lines, so that a run's page would lose each assertion and its
+    diff with the runner's disk; the step does what the gate does around its fourth gate,
+    the manifest deleted first, so that it names that run's failures alone and none a
+    cached `_build` kept. `scripts/failed.exs` gives each test's line too, `file:line:
+    Module: test name`, the line ExUnit's report gives and `mix test file:line` takes:
+    ExUnit's manifest holds a test's module, name and file and no line, so the script
+    reads the test file's syntax tree for the `test` or `doctest` call whose name, its
+    `describe`'s before it, is the test's as ExUnit builds it, a part the compile makes
+    (an interpolation, a variable, `@example.name`) matching any text, a module the
+    compile names (`Module.concat/2` in a comprehension, `readme_test.exs`'s examples)
+    any module, and a name over 255 bytes cut and hashed as ExUnit cuts it. Over a
+    manifest naming every one of the suite's 2,988 tests, each test's file and line read
+    from its compiled module's tags, it gave ExUnit's own line for each; a test no call
+    names, one a helper of a test file's own defines, keeps its file alone, as before, so
+    `scripts/mutate.sh`'s count by file reads the same. `scripts_test.exs` reads the step
+    from `.github/workflows/ci.yml` and runs it as GitHub runs a `shell: bash` step,
+    `bash --noprofile --norc -eo pipefail`, over a `mix` of its own that notes its
+    arguments, writes a manifest and exits as a run would: a red run's output ends with
+    the heading and each failed test's file, line and name, the step exiting 2; a green
+    run names nothing and exits 0; a manifest an earlier run left is gone before the
+    suite runs, so a red run that writes none names nothing of it. And `failed.exs` over a
+    test file of every shape a name takes: a `describe`'s test, a comprehension's
+    interpolated name and `<>`, a top-level test of the same name, a name cut at 255
+    bytes, two doctests, a nested module and a module named by `Module.concat/2`.
+  - *The red run* (`backup/rv22-red`, `a7a2a4a` over `4646b65`, on no other branch):
+    `counter_test.exs`'s "counts each rising edge of its rung once, and none while it
+    stays true" made to expect a fourth box where the eye gave three. CI run 43467639943
+    (job 132030905914) failed at the test step, the three gates before it green, and the
+    step's log ends:
+
+    ```
+    Result: 2987/2988 passed (11/11 doctests, 2976/2977 tests)
+    Failed: 1 test
+    mix test exited 2; the tests that failed:
+    test/logex/counter_test.exs:43: Logex.CounterTest: test ctu counts each rising edge of its rung once, and none while it stays true
+    ##[error]Process completed with exit code 2.
+    ```
+
+    where the run on `4646b65` itself, 43467576177, is green.
+  - *Decision 515 (b), the release step* (`5949be0`; `release_test.exs`, twelve tests;
+    b7-premortem-project-10). `CHANGELOG.md`, drawn from §7: its head says how an entry
+    reads, `## X.Y.Z — YYYY-MM-DD` or `## Unreleased` above the newest release, the
+    entry's first line `Decisions: ` naming by number and range every decision it
+    carries, each once in the file, and under it what a host who upgrades must know
+    first, "What changes a running program's outputs", "What no longer compiles, loads or
+    starts", "The host's API" and "Added". Its one entry is `## Unreleased`,
+    `Decisions: 1–531.`, the first release, its number the maintainer's, carrying every
+    decision §7 records, by the work that built them: decisions 1–29, 30–54, 55–66,
+    67–107, 108–143, 144–265 and 286–290, 266–285 and 291–346, and 347–531, RV-26's
+    527, 528 and 530 named as waiting. `scripts/changelog.exs` reads it so: it refuses a
+    heading of another form or an impossible date, an `Unreleased` below the newest
+    entry, a version twice, an entry whose first line is no such list, a range that does
+    not rise or an item that is no number, a decision named twice, a decision §7 records
+    that no entry names and one named that §7 does not record, §7 the section headed
+    `## 7.` and each decision a line `N. **`; and with `--release`, an `Unreleased`
+    newest entry or one whose version is not mix.exs's as Mix reads it
+    (`Mix.Project.in_project/4`), printing that version alone. `scripts/release.sh
+    [--dry-run] [--push]` runs every check whatever another found, each refusal a line
+    `refused: ...`: the tree clean, nothing changed or untracked; the changelog naming
+    this release, mix.exs's version, and every decision of §7, each once
+    (`changelog.exs --release`); the tag `vX.Y.Z` absent here and on origin, an origin
+    whose tags cannot be read refused too; the gate green (`scripts/gate.sh`, its log
+    `_build/release-gate.log`). With none, it makes the annotated tag, "logex X.Y.Z", on
+    the commit checked out, and pushes it to origin only with `--push`; `--dry-run` runs
+    every check, tags nothing, pushes nothing and says what it would tag and whether it
+    would push. `release_test.exs` runs `changelog.exs` on the tree, every decision §7
+    records named once, and on changelogs of every shape it refuses, each refusal a line
+    pinned whole; and `release.sh` in a scratch repository of its own, a mix.exs, a
+    changelog, a §7 of three decisions between a §6 and a §8 each holding a numbered
+    bold line, a gate that stands in for the suite and an origin, a bare repository
+    beside it: every check passed, a dry run tags and pushes nothing and says so, a
+    release tags here and pushes only with `--push`; and each check taken back in turn,
+    a tree not clean, a mix.exs version the changelog does not name, a decision no entry
+    names, a tag here, a tag on origin, an origin that cannot be read and a red gate,
+    each refused, a dry run or not, nothing tagged or pushed. `CONTRIBUTING.md`'s
+    "Releasing" gives the procedure, between releases and to release; README's
+    "Documents" names `CHANGELOG.md`.
+  - *A change that alters a running program's outputs*, as an entry reads it (the
+    changelog's head, b7-premortem-project-10's concern): "An integer result past its
+    type's limit wraps, with no power out of the instruction, where a `dint` stopped at
+    its limit before (decision 146, replacing 77). A box counter's `add boxes 1 boxes` at
+    2,147,483,647 gives −2,147,483,648 on the next box, where the count stayed at
+    2,147,483,647; the `add` passes no power on that scan in both. Look for: every
+    arithmetic instruction whose destination can reach its type's limit, and every rung
+    that reads that destination." The rule before and after with its decisions, a plant
+    that shows it, and how to find a program it reaches; a word newly reserved, which
+    breaks a program with a tag of that name, goes under "What no longer compiles, loads
+    or starts".
+  - *The dry runs.* `scripts/release.sh --dry-run` at `5949be0`, the
+    tree as committed, `## Unreleased` its newest entry and `mix.exs` 0.1.0, refuses,
+    exit code 1, the gate run whatever the changelog found:
+
+    ```
+    release: the tree at 5949be0dc28739602fbf1fb2f2f2c357edbb5f36
+    release: CHANGELOG.md, docs/organisation.md §7 and mix.exs
+    changelog: line 29: the newest entry is `## Unreleased`; a release names its version and date, `## X.Y.Z — YYYY-MM-DD`, the version mix.exs's
+    refused: CHANGELOG.md does not name this release (above)
+    release: the gate (scripts/gate.sh)
+    ...
+    Result: 3000 passed (11 doctests, 2989 tests)
+    GATE-OK
+    release: refused; nothing tagged, nothing pushed
+    ```
+
+    And in a scratch clone of it, `scratchpad/rv/p22/relsim`, the maintainer's answer
+    stood in for by one local commit, never pushed, `mix.exs` at 0.2.0 and the heading
+    `## 0.2.0 — 2026-11-13`, its origin GitHub's, read and never written, every check
+    passes, exit code 0, and nothing is tagged here or there:
+
+    ```
+    release: the tree at d0bc3bada692f8534896b5f59f13316152abb102
+    release: CHANGELOG.md, docs/organisation.md §7 and mix.exs
+    release: the tag v0.2.0, here and on origin
+    release: the gate (scripts/gate.sh)
+    ...
+    Result: 3000 passed (11 doctests, 2989 tests)
+    GATE-OK
+    release: every check passed; a dry run, so nothing tagged and nothing pushed
+    release: would tag v0.2.0 at d0bc3bada692f8534896b5f59f13316152abb102, annotated "logex 0.2.0"
+    release: would not push v0.2.0 (no --push)
+    ```
+  - *The mutation tables* (`scripts/mutate.sh`, each judged by the full suite, the
+    patches and logs under `scratchpad/rv/p22/mut1p/` and `mut2p/`): 38 mutants, every one
+    red by the full suite's exit code, each in the file its rule's test is in. Step 1's,
+    at `4646b65`, by `scripts_test.exs` (failed tests in brackets): the CI step taken back
+    to a bare `mix test --warnings-as-errors` (2), the manifest kept (1), the suite's exit
+    code not passed on (2), `--warnings-as-errors` dropped (3), the step's shell GitHub's
+    default (3); `failed.exs` giving no line (2), no `describe` before a name (2), a long
+    name not cut (3), no doctest (1), a nested module named alone (2), no module the
+    compile names (1), an interpolation dropped from a name (1), any module taken (7, and
+    again warning-free at `5949be0`, 2), a `<>` read as any text (4). Step 2's, at
+    `5949be0`, by `release_test.exs`: the changelog one decision short, 1–530 (1); a
+    heading of any form (1), an impossible date (1), an entry with no `Decisions:` line
+    (1), a range that falls (1), an item that is no number (1), `Unreleased` below a
+    release (1), a version twice (1), a decision twice (1), a decision no entry names (2),
+    one §7 does not record (1), `--release` passing `Unreleased` (1) or a version not
+    mix.exs's (2), the whole file read as §7 (7); and in `release.sh`, each check taken
+    back, the tree's (1), the changelog's (2), the local tag's (1), origin's tag (1), an
+    origin that cannot be read (1), the gate's (1), a refusal that tags anyway (6), a dry
+    run that tags (1) and a push without `--push` (1). Once, in the full suite of the
+    row of an item that is no number, `logex_test.exs`'s "the caller is charged the
+    reductions its compile spent" (decision 520) failed too, "1454673 charged, 1454694
+    here", 21 reductions
+    under its lower bound, while a sibling's suites loaded the machine (load average 6 to
+    12 on four cores); alone, 20 runs under the same load, it held each time. Its two
+    counts are each the least of three made apart, which CONTRIBUTING.md's "A count moves
+    with the VM's own state" says to count in pairs; RV-22 changed no file it reads, and
+    leaves it noted here.
+  - *The gate*: `scripts/gate.sh` GATE-OK before each commit: 2,988 tests (11 doctests)
+    at `4646b65`, 3,000 at `5949be0` and at this record's commit, where the base,
+    `b7cddce`, had 2,983, the seventeen new five in `scripts_test.exs` and twelve in
+    `release_test.exs`; CI green on `4646b65` (43467576177) and `5949be0` (43476916885).
+    No runner or real-clock test is new, so `scripts/load.sh` was owed none, and `lib/` is
+    unchanged, so no cost was owed.
+  - *CLAUDE.md*: the Commands' `scripts/gate.sh` line gives `failed.exs`'s line form, and
+    a line names `scripts/release.sh` and `scripts/changelog.exs`; `scripts_test.exs`'s
+    line names CI's step; `release_test.exs` has its line.
+  - *Provisional readings, and questions for the maintainer*, each marked provisional
+    where it stands, the closest reading of the record; each says what an engineer, an
+    operator or a host sees. The readings no question asks: the test step's form, above;
+    `failed.exs`'s line, which the decision does not name and a red run is read by; the
+    file `CHANGELOG.md`, the name the common convention gives it; the tag `vX.Y.Z`, as
+    Elixir's own releases are tagged; and the entry's sections, the head's four.
+    1. *The first version's number.* A host adds `{:logex, "~> X"}` to a plant's
+       `mix.exs`, or pins a tag, and reads the number for what the next release may do to
+       its program. (a) 0.1.0, what `mix.exs` has said since the first commit: every
+       build from `main` since September reports 0.1.0 (`Application.spec(:logex, :vsn)`),
+       so the number would name many logexes, and 0.x promises nothing; (b) 0.2.0,
+       provisionally the record's reading, the first number no earlier commit carried, so
+       a build that says 0.2.0 is this release; still 0.x, so a later release that
+       changes a running program's outputs or reserves a word moves the minor, 0.3.0,
+       and a fix alone the patch, and a host pins `~> 0.2.0` and reads the changelog
+       before each minor; (c) 1.0.0, the language and API called stable: under semantic
+       versioning each later change that alters outputs or reserves a word, as every new
+       instruction does, is a new major, so Milestones 7 to 13 would climb to 8.0.0 or
+       break the promise; (d) a date, 2026.11.0: says when, not what, a valid number for
+       Hex, but `~>` then says nothing of what a release breaks. Whichever is taken,
+       `mix.exs`'s `version:` and the changelog's heading change together, in one commit,
+       before `scripts/release.sh`.
+    2. *Whether its tag is pushed.* (a) Pushed to GitHub at the release,
+       `scripts/release.sh --push`: a host pins `{:logex, github: "rellen/logex", tag:
+       "v0.2.0"}` and gets exactly that tree; a pushed tag is never moved, a fix is the
+       next patch; (b) kept here, made and not pushed, until a publish to Hex is decided:
+       a host pins a commit meanwhile and the number is only the changelog's; (c) pushed,
+       and a GitHub release made from the entry's text, so a watcher of the repository is
+       told. The publish itself, to Hex, is a step after the tag in each.
+    3. *The changelog held at every commit.* The commit that records the answers to these
+       questions, decisions 532 to 535, must add `Decisions: 532–535.` under a fresh
+       `## Unreleased` above the released entry, or the suite is red. (a) As built, the
+       suite holding every decision §7 records to an entry at every commit, as CLAUDE.md
+       is held to every file; (b) the release step alone, the suite checking only that
+       the changelog reads, so a decision recorded today is named when the next release
+       is made, from §7, all at once.
+    4. *What the first release says changed.* An engineer who ran `main` at M3-3 upgrades
+       to the release: a `dint` `add` at its limit now wraps (decision 146, replacing 77),
+       and the entry says nothing of it, "no release came before it". (a) As built, no
+       change listed, §7's notes saying what each landed decision replaced; (b) each
+       decision §7 records as replacing an earlier rule that changed a running program's
+       outputs listed under "What changes a running program's outputs", found by a pass
+       through §7, as RV-23 traces the marks; (c) the same from the runner on, Milestone
+       4, the first point at which a plant could run on logex.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of
