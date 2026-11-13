@@ -604,6 +604,43 @@ change is wrong, not the record.
 
 ---
 
+## Releasing
+
+A release is a version, a changelog entry drawn from `docs/organisation.md` §7's decisions
+and a tag, made before anything is published (decision 515 (b)). `CHANGELOG.md`'s head says
+how an entry reads; `scripts/release.sh` checks a release and makes its tag; and
+`test/logex/release_test.exs` holds both, as `scripts_test.exs` holds the gate: it runs
+`scripts/changelog.exs` on the tree, and on changelogs of every shape it refuses, and
+`scripts/release.sh` in a scratch repository of its own, with a gate that stands in for
+the suite and an origin of its own, every check passed and each taken back in turn.
+
+- **Between releases.** A commit that records a decision in §7 names it in the newest
+  entry, `## Unreleased`, opening one above the newest release where there is none: the
+  entry's first line, `Decisions: 532–534.`, names every decision it carries, each once in
+  the file. The suite is red until every decision §7 records is named
+  (`release_test.exs`, provisional: `PLAN.md`'s RV-22, question 3). A change that alters
+  what a running program writes to its outputs gets an item under "What changes a running
+  program's outputs": the rule before and after, a plant that shows it, and how to find a
+  program it reaches, as the changelog's head shows for decision 146; a word newly
+  reserved or a form newly refused, one under "What no longer compiles, loads or starts".
+- **To release**, from `main`, its CI run green:
+  1. The version is the maintainer's to give (the first's, and what a number says of the
+     release after it, are `PLAN.md`'s RV-22, question 1). In one commit, `mix.exs`'s
+     `version:` is set to it and `## Unreleased` becomes `## X.Y.Z — YYYY-MM-DD`, the
+     release's day; push it and read CI's run on it.
+  2. `scripts/release.sh --dry-run` runs every check, tags nothing, pushes nothing, and
+     says what it would tag. Read it.
+  3. `scripts/release.sh` makes the annotated tag `vX.Y.Z` on the commit checked out, and
+     `scripts/release.sh --push` pushes it to origin too (whether a tag is pushed is the
+     maintainer's, `PLAN.md`'s RV-22, question 2). Each check refuses, a line
+     `refused: ...`, and tags nothing: the tree not clean; the changelog's newest entry
+     not that version, or a decision of §7 no entry names, each once
+     (`elixir scripts/changelog.exs --release`); the tag here or on origin already; the
+     gate red (`scripts/gate.sh`, its log `_build/release-gate.log`).
+  4. A publish, to Hex or anywhere, comes only after the tag, a step of its own.
+
+---
+
 ## Scripts
 
 `scripts/` holds the checks this file asks for, each run from anywhere in the checkout,
@@ -645,3 +682,6 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   and then how many failed, its logs in `_build/load/`. A new real-clock or runner test
   runs under it before it lands, `scripts/load.sh -n 50 test/logex/runner_test.exs`
   ("Wait for a process's `DOWN`…", above).
+- **`scripts/release.sh [--dry-run] [--push]`** and **`elixir scripts/changelog.exs
+  [--release]`** are the release step and its checks of the documents ("Releasing",
+  above).
