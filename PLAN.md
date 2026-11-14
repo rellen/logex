@@ -19928,7 +19928,9 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
        "What changes a running program's outputs", found by a pass through §7, as RV-23
        traces the marks, provisionally the record's reading since RV-22's review (finding
        6: the review's own failure case, b7-premortem-project-10, is "saturation becoming
-       wrap" with no changelog), built so: thirteen items, decisions 130 to 486; (c) the
+       wrap" with no changelog), built so: thirteen items, decisions 130 to 486, decision
+       339's resume, superseding 56 in part, left out, how the earlier rule counted a set
+       aside timer's time not settled from §7's text alone (provisional); (c) the
        same from the runner on, Milestone 4, the first point at which a plant could run on
        logex, which drops none of the thirteen, each made once Milestone 4's runner was on
        `main`.
@@ -19944,6 +19946,155 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
        `main` check alone, CI's run read by eye as the procedure's step 1 says, no `gh`
        needed; (c) neither, the procedure's words alone. IEC 61131-3 says nothing of a
        release; Logix firmware ships signed, from its vendor's own build.
+
+  **RV-22's review** (2026-11-13, of `639ac0a`, in a clone of its own): ten findings, seven
+  of its ten mutants surviving the full suite, seven red runs on
+  `backup/rv22-review-red`. What each became, in `80b3e0d` (findings 2, 3 and 4),
+  `29d1a06` (1, 5 and 9), `41af5a0` (6, 7, 8 and 10, and a fixture for 3) and this
+  record's commit:
+
+  1. *A tag on a commit `main` does not hold, CI never run on it* (medium; in a scratch
+     repository `release.sh --push` put `v0.2.0` on origin at a commit no branch held).
+     `scripts/release.sh` fetches origin's `main` and refuses a commit it does not hold,
+     "the commit … is not on origin's main, …: push it to main, and read CI's run on it,
+     first", and an origin whose `main` cannot be fetched; and refuses a commit CI has not
+     run on, or whose runs of `.github/workflows/ci.yml` have not all concluded `success`,
+     each run named, read through `gh api` (provisional, question 5). `release_test.exs`
+     runs it with a `gh` of its own: a commit made here and never pushed and one pushed to
+     a branch of its own, refused, and one `main` holds below its tip, released; no run,
+     a failed, a cancelled and a running run, and runs that cannot be read, each refused;
+     the query `gh` is given pinned whole.
+  2. *The workflow's keys unchecked* (medium-low; run 7, a failing suite under
+     `continue-on-error: true` a green job). `scripts_test.exs` holds the workflow to its
+     keys: the triggers `push` and `pull_request`, unfiltered; one job, its keys `runs-on`,
+     `env` and `steps`; each step's keys, the test step's `name`, `shell` and `run` alone,
+     so that an `if:`, a `continue-on-error:` or a `timeout-minutes:` on any step or on
+     the job is red; and the three gates before the suite each running the command
+     CONTRIBUTING.md names, the third under `MIX_ENV=test`. The reviewer's m01 and m10
+     are c01 and c02 below.
+  3. *A wrong line* (medium-low; run 1 named `counter_test.exs:311` for the test at 306).
+     The surest call that could name a test gives its line: one in the test's own module
+     before one in a module the compile names, a name of literal text before one the
+     compile makes; where the surest are more than one, the file alone, never a line that
+     may be another test's. A doctest's pattern is ExUnit's name whole, so `M.Sub`'s are
+     not `M`'s. New fixtures: the reviewer's case, a literal test and a later `test name`
+     loop; names only a pattern without its `$` or its `^` would take; names of 255 bytes,
+     kept whole, and 256, cut; two doctests of nested modules; a loop's test in its own
+     module beside a module the compile names; and a name two loops could both make, its
+     file alone. Over a manifest of every one of the suite's 3,013 tests at `80b3e0d`,
+     each test's file and line read from its compiled module, every line equals ExUnit's.
+     The reviewer's m04, m05 and m06 are f03, f04 and f06 below.
+  4. *A red run naming nothing, a halted suite green* (low-medium; runs 2, 3 and 6).
+     `elixir scripts/failed.exs --exit N` judges a run made with the manifest deleted
+     first: after a red one, its tests under `mix test exited N; the tests that failed:`,
+     or why none is named, no manifest, "the suite did not finish: a test halted the VM,
+     or mix test stopped before the suite ran", or a manifest of no failure, "every test
+     that ran passed, and mix test exited N for another reason, above: a warning under
+     --warnings-as-errors, for one", exiting N; after one that exited 0, nothing where the
+     manifest is there, and red, exit 1, where it is not, "the suite did not finish, a
+     test having halted the VM". CI's test step is `rc=0; mix test --warnings-as-errors ||
+     rc=$?; elixir scripts/failed.exs --exit "$rc"`, and `scripts/gate.sh` judges its
+     fourth gate so too, so a release's gate is no longer green over a halted suite;
+     `scripts_test.exs` runs `gate.sh` over a stand-in `mix`. The one existing test
+     changed, the CI step's "a manifest an earlier run left …", now asserts the reason
+     line after its heading, ", and says why" added to its name; nothing it asserted is
+     gone.
+  5. *CONTRIBUTING.md's step 3* (low). A plain run or `--push`, not one after the other,
+     a plain run's tag pushed by the command it prints; a `--push` whose push fails
+     leaves the tag here, says so with that command, and exits 1 (`release_test.exs`, an
+     origin whose pre-receive hook refuses the push).
+  6. *Question 4's reading* (low). The reading closest to the record is now (b),
+     provisional: the first entry lists, under "What changes a running program's
+     outputs", thirteen items, decisions 130, 146, 214, 347 with 386 and 387, 348, 349,
+     350, 354, 378, 382, 437, 441 and 461 with 484 and 486, each the rule before and
+     after, a plant and what to look for, oldest first; decision 339's resume, which
+     superseded 56 in part, is left out, its earlier rule's effect on a timer's time not
+     settled from §7's text alone (question 4).
+  7. *The first group* (low). It names decisions 1 to 29 each, the direction of 2026-09-28
+     among them.
+  8. *Merging with RV-26* (low). The entry's sentence on decisions 527, 528 and 530 holds
+     before and after RV-26 lands, the release made once it is on `main`. A trial merge
+     of `41af5a0` with `backup/rv26` (`e4a5d17`) conflicts in README's "What has landed"
+     paragraph alone, PLAN.md and §7 merging clean and the changelog's check passing.
+     RV-26 landed first, `75b8b3d`, adding no decision to §7; the merge of `origin/main`
+     into `rv22`, this item's last commit, writes that paragraph's end so: "…decisions
+     522–531. RV-22 has landed (decision 515 (e) and (b)): CI ends a red run's log with
+     each failed test's file, line and name, and a release step tags a version once
+     [`CHANGELOG.md`](CHANGELOG.md), drawn from §7's decisions, names it, the first
+     version's number and its tag the maintainer's to give. RV-26 has landed: a program's
+     text read canonically before the store compares it, the stale store's warning naming
+     both causes and sent to the subscribers too, and the store written as `logex retain
+     3`. Waiting: typespecs with Dialyzer, and the runner split by concern."
+  9. *The changelog's lesser rules* (low). A range of one decision, `2–2`, and a
+     `Decisions:` that does not begin its line are refused, each pinned (l01 and l02
+     below, the reviewer's m07 and m08).
+  10. *Nits.* The as-built sentence on test lines made true; CONTRIBUTING.md's and §7's
+      long lines rewrapped; question 3's example given for answers recorded before and
+      after the release.
+
+  - *The mutation table* (`scripts/mutate.sh` at `41af5a0`, each mutant judged by the full
+    suite, the patches and logs under `scratchpad/rv/p22r/mut/`): 37 mutants, every one
+    red by the full suite's exit code, each in the file its rule's test is in (failed
+    tests in brackets). `scripts/failed.exs`, by `scripts_test.exs`: an exact name no
+    surer than a pattern (1), a module the compile names as sure as the test's own (1),
+    the first of two surest calls taken (1), a pattern without its `$` (1) or its `^` (1),
+    a name of 255 bytes cut (1), one of 256 kept whole (5), a doctest's function any text
+    (1), a halted run that exited 0 passed (3), a red run's code given as 1 (3), the
+    reason for no manifest dropped (2), the reason for a manifest of no failure dropped
+    (2), a run that exited 0 with failures named passed (1), a negative code taken (1, and
+    `logex_test.exs`'s decision 520 test, below). The workflow, by `scripts_test.exs`:
+    `continue-on-error: true` on the test step (1, the reviewer's m01) or on the job (1,
+    and `stalled_disk_test.exs`, below), an `if:` keeping the step to `main` (1, the
+    reviewer's m10), the pull request trigger dropped (1), the push trigger kept to `main`
+    (1), `failed.exs` without `--exit` (4), `mix format` that formats rather than checks
+    (1), the test build without `MIX_ENV=test` (2). `scripts/gate.sh`, by
+    `scripts_test.exs`: the suite judged by mix test's code alone (1), the suite run after
+    a gate that failed (1), the named tests not printed (2). `scripts/release.sh`, by
+    `release_test.exs`: the `main` check dropped (1) or turned round (1), a fetch that
+    fails passed (1), the CI check dropped (1), the first run alone read (1), no run
+    passed (1), runs that cannot be read passed (1), any workflow's runs read (1), a
+    failed push's command not given (1) or the push's failure exiting 0 (1).
+    `scripts/changelog.exs`, by `release_test.exs`: a range of one taken (1, the
+    reviewer's m07), a `Decisions:` read anywhere in its line (1, m08). Three times a test
+    outside the file of the mutant's rule failed beside it, the machine held by another
+    session's suites (load average 9 to 17 on four cores): `logex_test.exs`'s decision 520
+    test, "the caller is charged the reductions its compile spent", twice, "1454677
+    charged, 1454681 here" and "1454686 charged, 1454691 here", four and five under its
+    lower bound, as RV-22's first table saw it once, twenty-one under; and
+    `stalled_disk_test.exs:2331` once, decision 468's "a force asked during the wait is
+    written after the restart", its restart refused "the runner is running". Neither file
+    is touched by this work; each passed in every gate here and in CI, and the two run
+    together alone after the table, five times at a load average under 2, passed each
+    time. They are left noted, the decision 520 test's lower bound now seen missed three
+    times under load, by 4 to 21 reductions.
+  - *The red runs* (`backup/rv22-red`, each over `29d1a06` and on no other branch, its
+    three gates before the suite green). `c9909ea`, run 43511058142: the ctu test made to
+    expect a fourth box, and after it in the same describe a loop's `test name`; the
+    step's log ends `mix test exited 2; the tests that failed:` and
+    `test/logex/counter_test.exs:43: Logex.CounterTest: test ctu counts each rising edge
+    of its rung once, and none while it stays true`, the literal test's own line, exit 2.
+    `133e653`, run 43511151391: a fan's `tof` test failing, `timer_test.exs:51`, named by
+    ExUnit as it failed, and a test of the sync `loading_test.exs` that halts the VM with
+    code 0: `mix test exited 0, and ExUnit wrote no failures manifest: the suite did not
+    finish, a test having halted the VM, so the run is red; …`, exit 1, where `639ac0a`'s
+    step was green (the review's run 6); the line follows the progress dots on the line
+    they were cut off on. `0585e34`, run 43511217635: an unused variable in a timer test,
+    every test passing, `Result: 3018 passed`: `mix test exited 1; the tests that
+    failed:` and `none named: every test that ran passed, and mix test exited 1 for
+    another reason, above: a warning under --warnings-as-errors, for one`, exit 1.
+  - *The gate*: `scripts/gate.sh` GATE-OK at `80b3e0d`, 3,013 tests (11 doctests), CI
+    green (43509879472); at `29d1a06` once GATE-FAIL, `trip_test.exs:2078`, decision
+    486's "a device the step left unheard past the cap trips at the next round's look",
+    its `assert_receive` past 100 ms on the manual clock, while a run of `scripts_test.exs`
+    of this work and another session's suites (`rv/review26`) held the machine, load 9 to
+    12 on four cores, named by the gate as `file:line`; run again with nothing of this
+    work beside it, GATE-OK, 3,018 tests, CI green (43511613654); at `41af5a0` GATE-OK,
+    3,018, CI green (43512391956); and at this record's commit, 3,018. `lib/` is unchanged
+    and no runner or real-clock test is new, so no cost and no load run was owed.
+  - *CLAUDE.md*: the Commands' `scripts/gate.sh` line names `failed.exs --exit`, and the
+    `scripts/release.sh` line the commit on origin's `main` and CI's runs passed;
+    `scripts_test.exs`'s line names the workflow held to every gate and `gate.sh`, and
+    `release_test.exs`'s the stand-in `gh`.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of

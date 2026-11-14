@@ -65,8 +65,8 @@ README's, so this first entry lists neither apart.
 - **A held output stays held at a configuration edit's switch** (decisions 347, 386 and
   387, with the refusals of 374, 388 and 428): a point a var_output no rung writes is
   wired to, wired anew or rewired, keeps its value until a rung writes the var_output,
-  reported held, where the var_output's initial value was copied over it at the first
-  cycle under test, a conveyor's contactor reported held coming on; and an edit that
+  reported held, where the var_output's value was copied over it at the first cycle
+  under test, a conveyor's contactor reported held coming on; and an edit that
   would hold a var_output a rung reads, one of another type than its point, or one
   wired to a second point, is refused at accept, where it was taken. Look for: every
   configuration edit that wires a global from a var_output its program does not write.
@@ -86,8 +86,8 @@ README's, so this first entry lists neither apart.
   retained.
 - **A restart asked while the runner runs is refused, whatever comes before it is
   served** (decision 354), where one that waited for its slot while a round was owed was
-  served by a trip that came first and cleared it: the line came back on after the trip
-  with no restart asked after it. Look for: a host that calls `restart/2` without
+  served after a trip that round made, and cleared it: the line came back on after the
+  trip with no restart asked after it. Look for: a host that calls `restart/2` without
   reading `status/1` first.
 - **A retained timer's preset no instruction gives is kept at a start from the store**
   (decision 378), as a warm restart keeps it, where it started at 0, reported `{:preset,
