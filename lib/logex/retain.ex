@@ -527,10 +527,9 @@ defmodule Logex.Retain do
   # miscounted, is told that alone (decision 355), and the naming lines only once the count
   # reads, since a cut before the configuration's line's end takes the lines that name its
   # program with it and a store told cut is not also told what the cut took (decision
-  # 538). A store of
-  # `logex retain 2` or `logex retain 1` that names none is read as it was, one relabelled
-  # so by hand among them; and one whose `resource` or `program` line does not read is told
-  # that line, and not that it names none (unread_by/2).
+  # 538). A store of `logex retain 2` or `logex retain 1` that names none is read as it
+  # was, one relabelled so by hand among them; and one whose `resource` or `program` line
+  # does not read is told that line, and not that it names none (unread_by/2).
   defp naming(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest], [])
        when map_size(unread) == 0,
        do:
@@ -551,9 +550,9 @@ defmodule Logex.Retain do
   # line, wherever it stands, the line that names the program in part, as decision 531
   # tells its refusal at the first `program` line and decision 537 tells 535's at the
   # header only where no line names any of it (provisional, the line, `PLAN.md`'s RV-28),
-  # and only once the count reads, as 535's (decision 538), a cut after the `resource` line
-  # taking the `program` lines with it. A `program` line that does not read is told as itself,
-  # and the store not told also that it names no program type (unread_by/2).
+  # and only once the count reads, as 535's (decision 538), a cut after the `resource`
+  # line taking the `program` lines with it. A `program` line that does not read is told
+  # as itself, and the store not told also that it names no program type (unread_by/2).
   defp naming(
          %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
          [{@header, 1} | _rest],

@@ -20690,6 +20690,191 @@ and RV-24 side by side; and RV-25 last, alone.
   RV-28's entries as RV-22's procedure says. It runs beside RV-22 as RV-22 finishes,
   before RV-23 traces the marks.
 
+  **RV-28 as built** (2026-11-14, branch `rv28` over `1965506`). Each decision that
+  changes what logex does has a test that fails when it is reverted, judged by the full
+  suite (the mutation table below), and the store's life walk restates 539 and 540 in its
+  model. No test, walk or oracle was deleted or weakened; the pins decisions 539 and 540
+  change are named below, each changed so and only so.
+
+  - *Decision 539, a version 3 store that names its resource and no program type*
+    (`9555c67`; `retain_store_test.exs`'s "a store of version 3 that names its resource
+    and no program type is refused at its resource line, and a cold start copies it
+    first", RV-27's review's test made its refusal): `Logex.Retain`'s naming/3 refuses a
+    `logex retain 3` store that gives its `resource` line and no `program` line, located
+    at its `resource` line wherever it stands (provisional, the line, question 1 below),
+    "`resource <digest>` names the resource of the store's writer, and the store names no
+    program type: a store that names the program that wrote it gives `resource <digest>`
+    straight after its configuration's line, and then a `program <type> <digest>` a type",
+    in decisions 531's and 535's words, the three refusals sharing what a store that names
+    its program gives (`unnamed/1`); pinned whole at line 3 and, the line moved after the
+    values, at its own line; a byte-order mark before it told too; told only once the
+    count reads (decision 538), the count not mended or the store cut after its `resource`
+    line told that alone; a `program` line that does not read, `program tally zz`, told as
+    itself and not as one missing (RV-27's review's `unread_by/2`, which told such a line
+    as itself before, the store then read); a warm start through the runner refused,
+    naming the store, each sim's reads and writes as they were and the store as it was; a
+    cold start copying it byte for byte to `plant.retain.dropped.1`, `status/1`'s `copy`
+    naming it, starting from the initial values and writing the program whole; the
+    `program` line put back, a warm start reading it with the values kept; and versions 2
+    and 1 read as before, `decoded!/2` naming the resource and no type, marked as
+    digested by bytes, and a warm start from the store relabelled `logex retain 2` by hand
+    laying its values over and warning "`tally` is not in the store; ...", its next write
+    naming the program whole, RV-27's review's assertions kept for the version they still
+    hold for.
+  - *Decision 540, the way out* (`63a6d5b`; "each refusal of the naming lines ends with the
+    cut-short store's way out, within the refusal's bounds"): each refusal of the naming
+    lines, 531's, 535's and 539's, ends ": start it with start: :cold to start over it,
+    which copies it first to the next `.dropped.<n>` beside it and then writes a new store
+    over it", joined by the colon the cut-short store's message is, the way out a module
+    attribute of `Logex.Retain`, `@way_out`, which the cut-short message reads too, so one
+    place tells it four times. The test takes each of the four forms, neither line, a
+    `program` line alone, a `resource` line alone and a store cut short, and holds each
+    to one line ending ": " and the way out; 539's refusal among 61 problems told first and
+    whole, the next 49 and "and 11 more problems, not listed"; 531's with a type's name of
+    200 bytes, its quote cut at 60 and ended `…`, the way out whole; and 535's under a
+    path of 5,000 bytes, shown as `…` and its last 4,096, the line whole. Pinned whole in
+    every test that pinned a naming refusal: the store test's `@names_none`, 531's two
+    pins and the life walk's 535 pin.
+  - *What each partial form of a version 3 store gives now*, at a warm fresh start and
+    at `start: :cold`: neither naming line, refused at line 1 (535, the line 537's), a
+    cold start copying it first and starting from the initial values; `program` lines and
+    no `resource` line, refused at the first `program` line (531), the same cold start;
+    the `resource` line and no `program` line, refused at the `resource` line (539), the
+    same cold start, where it was read and warned; a naming line that does not read,
+    `resource xyz` or `program tally zz`, told as itself, alone, at that line, the same
+    cold start; each refusal ending with the way out (540); a store whose count does not
+    read, told that alone where it names none or its resource alone, and the naming lines
+    at the next try (538), while 531's refusal is told beside the count (provisional,
+    question 2 below). A store of `logex retain 2` or `logex retain 1` in any of these
+    forms is read as before.
+  - *The marks* (`5e25b2d`): each "provisional" RV-27's questions left is its settling
+    decision's number: 537, the line 535 refuses at, `Logex.Retain`'s comment at naming/3,
+    `Logex.Runner`'s moduledoc and README's store passage; 538, the end line told alone,
+    `Logex.Retain`'s comment at naming/3, `retain_store_test.exs`'s decision 535 test and
+    the new 539 test; `docs/organisation.md` §4.13 with a dated note, and dated notes on
+    decisions 537 and 538, §7's note of decision 535 and §4.13's RV-27 note keeping their
+    marks as history. Question 3's mark (the resource alone read, `Logex.Retain`'s comment
+    at naming/3, `Logex.Runner`'s moduledoc, README, §4.13 and the store test) went with
+    the reading in `9555c67`, made decision 539's; question 4 left no mark. None was in
+    `CONTRIBUTING.md`, `docs/naming.md`, the life walk or `examples/`. Left as it stands:
+    `Logex.Runner`'s comment at `store_text!/5`, "(`Logex.Retain.compared/3`,
+    provisional)", a mark of RV-26's question 3 that decision 534 settles and RV-27
+    missed, which none of 537–540 settles, for RV-23's trace. The new marks are this
+    item's two questions below: the line 539 refuses at, in `Logex.Retain`'s comment at
+    naming/3, `Logex.Runner`'s moduledoc, README's store passage, the 539 test and §4.13's
+    note; and 531's refusal told beside a count that does not read, in `Logex.Retain`'s
+    comment at resourced/1, README's store passage, the test that pins it ("a store whose
+    count does not read is told its naming lines once it does, 531's beside it", `5e25b2d`),
+    §4.13's note and decision 538's.
+  - *The life walk* (`86e1cfe`): of the warm fresh starts that read a version 3 store,
+    the half RV-27's restatement of 535 leaves, by the same draw on the store's text, is
+    first given the store with its `program` lines taken away, its `resource` line kept
+    and its count mended, and is refused at the `resource` line's place in the text, the
+    message restated whole from the text with the way out, each sim's reads and writes as
+    they were, the store then put back (`:life_unprogrammed_refused`); 535's restatement
+    pins its message with the way out too. Its time below.
+  - *The close* (the commit that records this entry): §7's landed notes on decisions 539
+    and 540 and the commits on 537's and 538's; the comments at naming/3 reflowed;
+    README's "What has landed", which says RV-28 has landed, one line of its paragraph
+    changed and the next two reflowed, and "What logex is not", checked claim by claim,
+    which needs no change: its store passage's "no checksum or encryption of it beyond its
+    grammar and its count of lines" holds, decision 539 a rule of the grammar.
+  - *The leave*, lines removed and added (`git diff --numstat 1965506`), each changed as
+    decisions 539 and 540 say and no other way: `retain_store_test.exs`, 238 added and 18
+    removed, of whose 18 removed lines 12 are RV-27's test of the resource alone read,
+    made its refusal (its comment, six lines; its name, two; the store made, two lines
+    made one; the read asserted, two), 3 the pinned messages decision 540 ends
+    (`@names_none`'s last line and 531's two pins' last lines), and 3 comments
+    (`@names_none`'s and decision 535's test's two lines of marks); `api_contract_test.exs`,
+    43 added and 2 removed, its 2 removed lines the life walk's 535 pin's last line, ended
+    so, and the reach list's last entry, given its comma. Every other test of reading a
+    store is as it was, versions 2 and 1 among them.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at `86e1cfe`,
+    the patches and logs under `scratchpad/rv/p28/mut/`; `store` is
+    `retain_store_test.exs`, each count the failed tests the failures manifest names):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `m539a_resource_alone_read` | naming/3's clause of decision 539 taken away, the store read as before | red, 3 (store 2, life walk) |
+    | `m539b_v2_v1_refused` | the clause not held to the header `logex retain 3`, versions 2 and 1 refused too | red, 1 (store) |
+    | `m539c_told_with_cut` | the clause told whatever the end line, beside a count that does not read | red, 2 (store 2) |
+    | `m539d_located_at_header` | the refusal located at line 1, as 535's | red, 3 (store 2, life walk) |
+    | `m539e_located_at_line_3` | the refusal located at line 3, wherever the `resource` line stands | red, 1 (store, the line moved) |
+    | `m539f_unread_program_told_too` | told too where a `program` line does not read | red, 2 (store, and README's project test) |
+    | `m540a_531_no_way_out` | 531's refusal without the way out, as before | red, 3 (store 3) |
+    | `m540b_535_no_way_out` | 535's refusal without the way out, as before | red, 4 (store 3, life walk) |
+    | `m540c_539_no_way_out` | 539's refusal without the way out | red, 3 (store 2, life walk) |
+    | `m540d_joined_by_semicolon` | the way out joined by `; ` in place of the cut-short store's `: ` | red, 6 (store 5, life walk) |
+    | `m538a_531_waits_for_count` | 531's refusal told only once the count reads, as 535's and 539's | red, 1 (store, question 2's pin) |
+
+    No mutant survived. `m539f`'s README failure is the dependency's rebuild banner over
+    `scan.exs`'s output, as earlier tables record of a change to `lib/`; its store failure
+    is the one that holds the rule. `m539e` is red in the store test alone, the life walk
+    always finding the `resource` line at line 3, where the runner writes it.
+
+  - *Cost against the parent* (`1965506`), reductions, the least of several runs, two runs
+    each, the scripts of RV-27's entry (`p21cost/round3.exs` and `store.exs`,
+    `fix21/cost/edit.exs`, `p26/cost527.exs`) and one of this item's, `p28/cost/decode.exs`,
+    `decoded!/2` of a 1,000-counter store of 7,007 lines (`p28/cost/cost.txt`): a round of
+    three tasks, 2075.5 to 2078.9 changing and 1771.5 to 1771.7 unchanged at the parent,
+    2075.5 to 2076.8 and 1772.1 to 1772.8 here; a period's write of 1,000 retained
+    counters, 447,209 at both (447,211 once here); that store's fresh start, the runner's
+    155,700 at both and the caller's 6.51 to 6.53 million and 6.52; at 1,000 instances of a
+    small type, an edit's test 617.7 to 619.8 thousand and 617.2 to 618.1, an untest 581
+    to 582 thousand at both, an accept's caller 6.60 to 6.61 million and 6.60, a warm fresh
+    start's caller 11.07 to 11.10 million and 11.08 to 11.11; the box counter's digest
+    1.90 million at both, its fresh start's caller 6.52 to 6.56 million and 6.52 to 6.60,
+    its accept's 5.37 to 5.38 million and 5.36 to 5.37; and the store's read, `decoded!/2`,
+    708,264 to 708,692 at the parent and 708,688 to 709,996 here, the least 0.06 per cent
+    more, naming/3's clause of decision 539. The life walk, alone at its line on a quiet
+    machine, 65.9 and 68.8 s at the parent and 64.9 and 66.0 s here, what it adds a refused
+    start before some warm starts; in the gates, 65.8 s at the parent and 65.4 to 68.7 s
+    here.
+  - *Load runs* (`scripts/load.sh`, four busy loops on four cores, in a clone of their
+    own, `p28/loadtree`, at `86e1cfe`, the logs `scratchpad/rv/p28/load_store.log`,
+    `load_life_a.log` and `load_life_b.log`, each run's beside them): the two store tests
+    this item wrote or whose pins it changed that start a runner, decision 539's and
+    decision 535's, 0 of 50 runs red, the mutation table's full suites beside them, the
+    load average 9 to 12; the store's life walk, at its line with the two tests ExUnit's
+    line filter takes beside it, 0 of 50 runs red in two batches of 25, the first with the
+    mutation table beside it for its first eleven runs, the load average 7 to 12, the
+    three tests' time 225.8 to 266.7 s, 252.0 s the median, under the walk's own 300 s
+    timeout, as RV-27's record found it (some four minutes on a loaded machine): no
+    bound widened, and what this item adds to the walk, a refused start before some warm
+    starts, below a second on a quiet machine, the walk's time there within the parent's
+    spread.
+  - *CLAUDE.md*: unchanged; no file was added, and `Logex.Retain`'s line, the store's text
+    to its end line, versions 2 and 1 read too, `retain_store_test.exs`'s and
+    `api_contract_test.exs`'s stay true.
+  - *The changelog*: RV-22 had not landed on `origin/main` by this entry's commit
+    (`CHANGELOG.md` absent there), so RV-28 is given no changelog entry; RV-22's
+    procedure gives it one once both have.
+  - *Provisional readings, and questions for the maintainer*, each marked provisional
+    where it stands, the closest reading of the record that could be found; IEC 61131-3
+    and Logix have no store a person edits:
+    1. *Which line a version 3 store with its `resource` line and no `program` line is
+       refused at* (decision 539). A hand edit takes `program tally ...` out of
+       `tally.retain` and mends its count; the warm start is refused, "tally.retain: line
+       3: `resource 013cc059392445fdcc1e84c9b0de6118` names the resource of the store's
+       writer, and the store names no program type: ...". (a) As built: the `resource`
+       line, wherever it stands, the line that names the program in part, as decision 531
+       tells its refusal at the first `program` line, decision 537's header kept for a
+       store with no naming line at all; (b) line 1, the header that makes the naming
+       lines owed, as decision 535's is, the operator always sent to the top of the file;
+       (c) line 3, where the runner writes the `resource` line, whatever the store holds
+       there.
+    2. *Decision 531's refusal beside a count that does not read* (decision 538). A hand
+       edit takes `resource ...` out of `tally.retain` and leaves `end 15 lines` where the
+       store now has 14; the start is told both, "line 3: `program tally ...` names a
+       program type of the store's writer, and the store names no resource: ..." and
+       "line 14: the store's end line counts 15 lines, and the store has 14: ...", where a
+       store that names none or its resource alone is told the count alone and its naming
+       lines at the next try. (a) As built since RV-21's review: both at once, since no cut
+       makes this store, the `resource` line standing before every `program` line the
+       runner writes, so the operator mends both in one edit; (b) the count alone, the
+       naming lines at the next try, as decision 538 has it for 535's and 539's, one rule
+       for the three refusals.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

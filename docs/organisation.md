@@ -15402,7 +15402,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the naming lines owed, as decision 531 tells its refusal at the line that names a
      program in part. Neither IEC 61131-3 nor Logix has a store a person edits. RV-28
      makes the marks this decision's number.
-     *(RV-28, 2026-11-14: the marks, `Logex.Retain`'s comment at naming/3,
+     *(RV-28, 2026-11-14, `5e25b2d`: the marks, `Logex.Retain`'s comment at naming/3,
      `Logex.Runner`'s moduledoc, README's store passage and §4.13's note, are this
      decision's number; decision 535's note keeps its mark as history.)*
 
@@ -15417,7 +15417,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      store told cut is not also told what the cut took; a store cut straight after its
      header is so told once at its first line. Neither IEC 61131-3 nor Logix has a store a
      person edits. RV-28 makes the marks this decision's number.
-     *(RV-28, 2026-11-14: the marks, `Logex.Retain`'s comment at naming/3,
+     *(RV-28, 2026-11-14, `5e25b2d`: the marks, `Logex.Retain`'s comment at naming/3,
      `retain_store_test.exs`'s decision 535 test and §4.13's note, are this decision's
      number, and decision 539's refusal is told so too, only once the count reads, a cut
      after the `resource` line taking the `program` lines with it; decision 535's note
@@ -15441,6 +15441,24 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      from its initial value. No configuration may hold no program type, so no store the
      runner writes is refused by it. Neither IEC 61131-3 nor Logix has a store a person
      edits. RV-28 builds it.
+     *(Landed with RV-28, 2026-11-14, `9555c67`: such a store is refused at its `resource`
+     line, wherever it stands, the line that names the program in part, "`resource
+     <digest>` names the resource of the store's writer, and the store names no program
+     type: a store that names the program that wrote it gives `resource <digest>` straight
+     after its configuration's line, and then a `program <type> <digest>` a type", in
+     decisions 531's and 535's words, the line provisional, `PLAN.md`'s RV-28, where the
+     readings were the header, as decision 537 locates 535's; told only once the count
+     reads (decision 538), a cut after the `resource` line taking the `program` lines with
+     it, and not where a `program` line does not read, which is told as itself; a warm
+     start refused before any device is read or written, a cold start copying it byte for
+     byte to the next `.dropped.<n>`, `status/1` naming the copy, and starting from the
+     initial values, and the `program` line put back, a warm start reading it. A store of
+     `logex retain 2` or `logex retain 1` naming its resource and no type is read as
+     before, and warns that each type the start runs is not in the store. RV-27's pin of
+     the old reading is made the refusal. The life walk takes a version 3 store's `program`
+     lines away, its `resource` line kept, before the other warm start in two that RV-27's
+     restatement of decision 535 leaves, and asserts the refusal whole
+     (`:life_unprogrammed_refused`, `86e1cfe`).)*
 
 540. **The way out of a refusal of the naming lines (RV-27),** RV-27's question 4, from its
      review: decision 531's and decision 535's refusals name what is missing and what a
@@ -15453,6 +15471,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `.dropped.<n>` beside it and then writes a new store over it", one way out told for
      every refused store; decision 531's pinned message changes by this decision. Neither
      IEC 61131-3 nor Logix has a store a person edits. RV-28 builds it.
+     *(Landed with RV-28, 2026-11-14, `63a6d5b`: each of the three refusals ends ":
+     start it with start: :cold to start over it, which copies it first to the next
+     `.dropped.<n>` beside it and then writes a new store over it", joined by the colon
+     the cut-short store's is, the way out told from one place in `Logex.Retain`, which
+     the cut-short message reads too; decision 531's two pinned messages and decision
+     535's, the store test's and the life walk's, changed so and only so. A store told
+     several problems is told within `Logex.Refusal`'s bounds as ever, the first 50 and
+     a count, each quoted text at most 60 bytes and each line at most 1,000 after the
+     path.)*
 
 ---
 

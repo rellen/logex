@@ -510,7 +510,8 @@ defmodule Logex.Runner do
     device opened, a cut store's line and since decision 540 (RV-28) each refusal of the
     naming lines, decisions 531's, 535's and 539's, ending with the way out, "start it
     with start: :cold to start over it, which copies it first to the next `.dropped.<n>`
-    beside it and then writes a new store over it". Since decision 517 (c) (RV-21) a warm fresh start lays the program the
+    beside it and then writes a new store over it". Since decision 517 (c) (RV-21) a
+    warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
     configuration's own lines or a program type's text as it prints, a type only the store
     has or only the start, warns of it in `status/1`'s `retain`, `warning`, one message

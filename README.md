@@ -389,9 +389,9 @@ case and a bit's brackets in a program's text read as logex reads them before th
 compares it, a version 3 store that names no program refused, and one message for an end
 line under every header that takes none. The maintainer answered RV-27's questions the
 same day, decisions 537–540. Waiting: CI naming a failed test, a release step, typespecs
-with Dialyzer, the runner split by concern, and RV-28: a version 3 store that names its
-resource and no program refused, and every refusal of the lines that name a store's
-program ending with the way to start cold.
+with Dialyzer, the runner split by concern. RV-28 has landed: a version 3 store that
+names its resource and no program refused, and every refusal of the lines that name a
+store's program ending with the way to start cold.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3523,7 +3523,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the store. Each of the three refusals, 531's, 535's and 539's, ends as a cut store's
   does, with the way to start anyway, "start it with start: :cold to start over it, which
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
-  it" (decision 540). A `resource` or `program` line that does not read, its digest
+  it" (decision 540). Where the count of a store that names no program, or its resource
+  alone, does not read either, the count is told alone, and the missing lines once it is
+  mended (decision 538); one with a `program` line and no `resource` line is told both at
+  once (provisional). A `resource` or `program` line that does not read, its digest
   mistyped, is told as itself, not as one missing. A logex from
   before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
