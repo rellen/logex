@@ -15379,6 +15379,60 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      two tests, "a hand edit's end line, its count and its place" and RV-26's review's,
      changed so and only so.)*
 
+537. **The line a version 3 store that names no program is refused at (RV-27),** RV-27's
+     question 1: decision 535 refuses a `logex retain 3` store with neither a `resource`
+     nor a `program` line, and RV-27 located the refusal at line 1, the header,
+     provisional, where the readings were line 3, where every store the runner writes gives
+     its `resource` line, and line 2, the configuration's line the naming lines follow.
+
+     **Taken: as built, line 1 (a)** (the maintainer, 2026-11-14): the refusal is told at
+     the store's first line, "`logex retain 3` heads a store that names the program that
+     wrote it, and the store names none: ...", the header being the one line that makes
+     the naming lines owed, as decision 531 tells its refusal at the line that names a
+     program in part. Neither IEC 61131-3 nor Logix has a store a person edits. RV-28
+     makes the marks this decision's number.
+
+538. **A store that names no program and whose end line does not read (RV-27),** RV-27's
+     question 2: the same hand edit leaves the count at `end 15 lines` where the store now
+     has 13; RV-27 told the end line alone, provisional, and line 1's refusal at the next
+     try, where the reading was both at once.
+
+     **Taken: as built, one at a time (a)** (the maintainer, 2026-11-14): a store cut
+     short or miscounted is told its end line alone, and the naming lines only once the
+     count reads, since a cut before the third line takes the naming lines with it and a
+     store told cut is not also told what the cut took; a store cut straight after its
+     header is so told once at its first line. Neither IEC 61131-3 nor Logix has a store a
+     person edits. RV-28 makes the marks this decision's number.
+
+539. **A version 3 store with its `resource` line and no `program` line (RV-27),** RV-27's
+     question 3, from its review: decision 531 refuses a store whose `program` lines come
+     without a `resource` line, and decision 535 one with neither, while one with its
+     `resource` line and no `program` line was read, the warm start run and the box count
+     kept, and told "`tally` is not in the store; whether by a deploy of changed files, or
+     an edit tested or assembled online that never reached the files, ...", a cause that
+     is not a hand edit's, as RV-27 pinned it, provisional.
+
+     **Taken: refused (b)** (the maintainer, 2026-11-14): a `logex retain 3` store that
+     gives its `resource` line and no `program` line is refused, located, as decisions 531
+     and 535 refuse the other two partial forms, the operator told what is missing and
+     what a store that names its program gives; a cold start copies it to its next
+     `.dropped.<n>` first, as any store refused is (decision 417), and starts the count
+     from its initial value. No configuration may hold no program type, so no store the
+     runner writes is refused by it. Neither IEC 61131-3 nor Logix has a store a person
+     edits. RV-28 builds it.
+
+540. **The way out of a refusal of the naming lines (RV-27),** RV-27's question 4, from its
+     review: decision 531's and decision 535's refusals name what is missing and what a
+     good store gives, and say nothing of how to start anyway, where a store cut short is
+     told to start with `start: :cold`, which copies it first.
+
+     **Taken: as the cut-short store's (b)** (the maintainer, 2026-11-14): each refusal of
+     the naming lines, 531's, 535's and 539's, ends as the cut-short store's does, "start
+     it with start: :cold to start over it, which copies it first to the next
+     `.dropped.<n>` beside it and then writes a new store over it", one way out told for
+     every refused store; decision 531's pinned message changes by this decision. Neither
+     IEC 61131-3 nor Logix has a store a person edits. RV-28 builds it.
+
 ---
 
 ## 8. Sources, and what is unverified

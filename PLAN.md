@@ -34,7 +34,9 @@ it says RV-20 has landed, and names what still waits.)* *(Since RV-21 and the an
 RV-21's questions, 2026-11-13: it says RV-21 has landed, names decisions 522–531, and
 names what still waits, RV-22 to RV-26.)* *(Since RV-26 and the answers to its questions,
 2026-11-14: it says RV-26 has landed, names decisions 532–536, and names what still
-waits, RV-22 to RV-25 and RV-27.)*
+waits, RV-22 to RV-25 and RV-27.)* *(Since RV-27 and the answers to its questions,
+2026-11-14: it says RV-27 has landed, names decisions 537–540, and names what still
+waits, RV-22 to RV-25 and RV-28.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -19709,7 +19711,7 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   whether its tag is pushed, put to the maintainer before any tag is. `mix.exs`'s Elixir
   bound is not touched. It runs after RV-20 and RV-21, beside RV-26 *(so since the answers
   of 2026-11-13, where it was to run beside RV-23)*, and finishes beside RV-27 *(so since
-  the answers of 2026-11-14)*.
+  the answers of 2026-11-14)* and RV-28 *(so since RV-27's answers, the same day)*.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of
@@ -19718,7 +19720,8 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   100,000 writes among them, put to the maintainer grouped by what an operator sees. It
   builds no rule. It runs after RV-22 and RV-26, and traces RV-20's, RV-21's and RV-26's marks
   too, beside RV-24 *(so since the answers of 2026-11-13, where it was to run beside
-  RV-22)*, and after RV-27 too, tracing its marks *(so since the answers of 2026-11-14)*.
+  RV-22)*, and after RV-27 too, tracing its marks *(so since the answers of 2026-11-14)*,
+  and RV-28's *(so since RV-27's answers, the same day)*.
 - **RV-24 — typespecs and Dialyzer** (decision 515, (c)). Typespecs on the host
   contract's functions, decision 514's modules, and Dialyzer, OTP's own `dialyzer` over
   the compiled modules with a table of the toolchain's applications, no dependency added,
@@ -20364,7 +20367,8 @@ and RV-24 side by side; and RV-25 last, alone.
     kind. No file was added.
   - *Provisional readings, and questions for the maintainer*, each marked provisional
     where it stands, the closest reading of the record that could be found; IEC 61131-3
-    and Logix have no store a person edits:
+    and Logix have no store a person edits *(both answered on 2026-11-14: 1 decision 537,
+    2 decision 538)*:
     1. *Which line a version 3 store that names no program is refused at* (decision 535).
        A hand edit takes `resource ...` and `program fan ...` out of `fan.retain` and
        mends its count; the warm start is refused, "fan.retain: line 1: `logex retain 3`
@@ -20612,7 +20616,8 @@ and RV-24 side by side; and RV-25 last, alone.
     fixes add no feature, the case reading gives the digests it gave, and the store
     passage's "no checksum ... beyond its grammar and its count of lines" holds.
   - *Questions for the maintainer, added by the review*, each marked provisional where it
-    stands (questions 1 and 2 above stand as they were):
+    stands (questions 1 and 2 above stand as they were) *(both answered on 2026-11-14: 3
+    decision 539, 4 decision 540)*:
     3. *A version 3 store with its `resource` line and no `program` line* (F2). A hand
        edit takes `program tally ...` out of `tally.retain`, keeps `resource ...` and the
        count of boxes, and mends the end line. (a) As built: the warm start runs, the
@@ -20662,6 +20667,28 @@ caller's heap settings not taken (the pairs, some 42,000 over). The test's logic
 times in one VM, 3,600 compiles: every check held, the most of the differences 54 to 272,
 the least -131 to 66. 52 runs of the test alone on a quiet machine and 30 under the
 busy loops green. Only the test changed, no file of `lib/`.
+
+**RV-27's questions answered, 2026-11-14** (decisions 537–540). The maintainer took two
+as built: a version 3 store that names no program refused at its first line, the header
+(537), and a store miscounted or cut short told its end line alone, the naming lines
+once the count reads (538); and two to build: a version 3 store that gives its `resource`
+line and no `program` line refused, as the other two partial forms are (539); and each
+refusal of the naming lines ending as the cut-short store's does, with `start: :cold` and
+its copy (540). The order from here: RV-22, finishing, and RV-28 side by side; then RV-23
+and RV-24 side by side; and RV-25 last, alone.
+
+- **RV-28 — the answers to RV-27's questions** (decisions 537–540). A `logex retain 3`
+  store that gives its `resource` line and no `program` line refused, located, as
+  decisions 531 and 535 refuse the other two partial forms, a warm start refused with no
+  device read and a cold start copying it to its next `.dropped.<n>` first, and RV-27's
+  pin of its reading made the refusal (539); each refusal of the naming lines, 531's,
+  535's and 539's, ending "start it with start: :cold to start over it, which copies it
+  first to the next `.dropped.<n>` beside it and then writes a new store over it",
+  decision 531's pinned message changed by this decision alone (540); the store's life
+  walk and README's store passage restating each; the marks decisions 537–540 settle made
+  their numbers, 537's and 538's as built; and, once RV-22 has landed, the changelog given
+  RV-28's entries as RV-22's procedure says. It runs beside RV-22 as RV-22 finishes,
+  before RV-23 traces the marks.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
