@@ -15072,6 +15072,43 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:store_cut_refused, true)
   end
 
+  # Decision 535, restated (RV-27): in the life walk, one warm fresh start in two that
+  # reads a store, by the store's own text, so that no draw is taken, is first given the
+  # store with its `resource` and `program` lines taken away and its count mended, as a
+  # hand edit leaves it, and is refused at its first line, which says that a store of
+  # `logex retain 3` names the program that wrote it, no device opened; the store put
+  # back, the start is made from it.
+  defp unnamed_refused!(%{life: false}, _text, _opts), do: :ok
+  defp unnamed_refused!(%{start: :cold}, _text, _opts), do: :ok
+  defp unnamed_refused!(_w, nil, _opts), do: :ok
+
+  defp unnamed_refused!(w, text, opts),
+    do: unnamed_drawn!(rem(:erlang.phash2({text, :unnamed}), 2), w, text, opts)
+
+  defp unnamed_drawn!(0, w, "logex retain 3\n" <> _ = text, opts) do
+    [header, configuration | rest] = String.split(text, "\n")
+    kept = Enum.reject(rest, &String.match?(&1, ~r/\A(resource|program) /))
+    {lines, ["end " <> _, ""]} = Enum.split(kept, -2)
+    count = 3 + length(lines)
+
+    File.write!(
+      w.store,
+      Enum.join([header, configuration | lines], "\n") <> "\nend #{count} lines\n"
+    )
+
+    assert_raise ArgumentError,
+                 "#{w.store}: line 1: `logex retain 3` heads a store that names the program " <>
+                   "that wrote it, and the store names none: a store that names the program " <>
+                   "that wrote it gives `resource <digest>` straight after its configuration's " <>
+                   "line, and then a `program <type> <digest>` a type",
+                 fn -> Runner.start_link(opts) end
+
+    File.write!(w.store, text)
+    reach(:life_unnamed_refused, true)
+  end
+
+  defp unnamed_drawn!(_draw, _w, _text, _opts), do: :ok
+
   # Decision 410, restated (RV-13): a store and a forces file saved with CRLF line ends,
   # or a lone CR's, are read as the runner wrote them, with LF. Before each warm fresh
   # start that reads a store, the store, and the forces file where it holds a force, are
@@ -15467,6 +15504,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     reach(:write_limit_given, w.write_limit != nil)
     cut_refused!(w, text, opts)
+    unnamed_refused!(w, text, opts)
     saved = line_ended!(w, text)
     w = %{w | saved: saved_as(saved, text)}
     cold = cold_cut!(w)
@@ -16574,7 +16612,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # `logex retain 2`, and one that warned by its types' bytes where their texts as they
     # print were the same.
     :life_rv21_read,
-    :life_rv21_laid_out_warned
+    :life_rv21_laid_out_warned,
+    # Decision 532 (RV-27): a warm start given types laid out anew whose words logex reads
+    # in any case and bits in brackets are written otherwise than its store's writer's,
+    # warned of nothing; and decision 535: a store of version 3 whose naming lines a hand
+    # edit took away, refused at its first line.
+    :life_cased_unwarned,
+    :life_unnamed_refused
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -16988,17 +17032,47 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     relaid
   end
 
+  # Decision 532 (RV-27): the words logex reads in any case that the walk's texts hold, which
+  # a type laid out anew writes in upper case (`life_laid_out/1`) and the model reads
+  # lowercased (`life_printed/2`), with the word `function_block` that heads a block's.
+  @life_any_case ~w(var var_input var_output var_external retain bool int dint real lreal) ++
+                   ~w(word uint ton ton_ltime ctd ctd_udint xic ote add div gt move cal) ++
+                   ~w(word_to_uint)
+
   # Decision 527 (RV-26): a program's text laid out anew, each line where it was, so that
   # every rung keeps its line: its elements two spaces apart behind two spaces and a
   # comment after them, each whole number written in base 16, CRLF line ends, and an empty
   # line and a comment after the last; and since RV-26's review each number in a name's
   # brackets too, the shelf's subscripts and sizes, `bins[16#0]`, `tl[16#1].dn` and
-  # `int[16#3]`, which every shelf holds.
+  # `int[16#3]`, which every shelf holds. Decision 532 (RV-27): and each word logex reads
+  # in any case, of those the walk's texts hold, in upper case, `XIC`, `VAR_INPUT`,
+  # `TON[16#2]` and a block's `FUNCTION_BLOCK`, and a bit's number in brackets, `w.[16#3]`
+  # for `w.3`, which the mix's text holds.
   defp life_laid_out(text),
     do:
       Enum.map_join(String.split(text, "\n"), "\r\n", fn line ->
-        "  " <> Enum.map_join(String.split(line, " "), "  ", &life_hex/1) <> "  // laid out"
+        "  " <>
+          Enum.map_join(String.split(line, " "), "  ", &life_shouted(life_hex(&1))) <>
+          "  // laid out"
       end) <> "\r\n\r\n// laid out anew\r\n"
+
+  defp life_shouted(word),
+    do:
+      Regex.replace(~r/\A([A-Za-z_]\S*)\.(\d+)\z/, word, fn _all, name, n ->
+        name <> ".[16#" <> Integer.to_string(String.to_integer(n), 16) <> "]"
+      end)
+      |> String.split("[", parts: 2)
+      |> life_upper()
+
+  defp life_upper([word | sizes]),
+    do:
+      Enum.join(
+        [life_up(String.downcase(word) in ["function_block" | @life_any_case], word) | sizes],
+        "["
+      )
+
+  defp life_up(true, word), do: String.upcase(word)
+  defp life_up(false, word), do: word
 
   defp life_hex(word), do: life_hexed(Integer.parse(word), word)
 
@@ -17255,17 +17329,21 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_texts(program),
     do:
-      life_printed(program.source) <>
+      life_printed(program.source, :program) <>
         Enum.map_join(Enum.sort(program.blocks), fn {name, block} ->
-          "\n#{name}\n#{life_printed(block.body.source)}"
+          "\n#{name}\n#{life_printed(block.body.source, :block)}"
         end)
 
   # Decision 527 (RV-26), restated from a program's text: each rung a line, a line's end
   # LF, CRLF or a lone CR alike, a comment and an empty line dropped, each element one
   # space from the next, and a literal by its value, the walk's texts writing each as its
   # decimal or, laid out anew (`life_laid_out/1`), in base 16; and since RV-26's review a
-  # number in a name's brackets by its value too.
-  defp life_printed(text),
+  # number in a name's brackets by its value too. Decision 532 (RV-27): and each word
+  # logex reads in any case lowercased, of the words the walk's texts hold
+  # (`@life_any_case`), whole or before an array's sizes, and in a block's text the word
+  # that heads it; and a literal bit number in brackets the plain bit, `w.[16#3]` as
+  # `w.3`, the walk's texts holding no tag's in brackets but the bit program's `w.[n]`.
+  defp life_printed(text, kind),
     do:
       text
       |> String.split(["\r\n", "\r", "\n"])
@@ -17273,10 +17351,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         line
         |> String.replace(~r{//.*}, "")
         |> String.split()
-        |> Enum.map_join(" ", &life_valued/1)
+        |> Enum.map_join(" ", &life_read(life_valued(&1), kind))
       end)
       |> Enum.reject(&(&1 == ""))
       |> Enum.join("\n")
+
+  defp life_read(word, kind),
+    do:
+      Regex.replace(~r/\.\[(\d+)\]/, word, ".\\1")
+      |> String.split("[", parts: 2)
+      |> life_lowered(kind)
+
+  defp life_lowered([word | sizes], kind),
+    do: Enum.join([life_lower(String.downcase(word), word, kind) | sizes], "[")
+
+  defp life_lower(lower, _word, _kind) when lower in @life_any_case, do: lower
+  defp life_lower("function_block", _word, :block), do: "function_block"
+  defp life_lower(_lower, word, _kind), do: word
 
   defp life_valued("16#" <> hex), do: Integer.to_string(String.to_integer(hex, 16))
 
@@ -17397,6 +17488,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_warned_changed, expected != nil and w.change != nil)
     reach(:life_warned_stepped, expected != nil and w.change == nil)
     reach(:life_laid_out_unwarned, expected == nil and life_relaid_since?(w.shelf_by, w.config))
+
+    reach(:life_cased_unwarned, expected == nil and life_cased_apart?(w.shelf_by, w.config))
+
     w = %{w | life_warning: expected}
     life_heard!(w)
     w
@@ -17454,6 +17548,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp life_source(nil), do: nil
   defp life_source(program), do: program.source
+
+  # Decision 532 (RV-27): whether the store's writer's types and the start's were one laid
+  # out anew and the other not, `XIC` and the mix's `w.[16#3]` in the texts of the one
+  # where the other writes `xic` and `w.3`; never where no store names its writer.
+  defp life_cased_apart?(nil, _config), do: false
+  defp life_cased_apart?(by, config), do: life_cased?(by) != life_cased?(config)
+
+  defp life_cased?(config),
+    do: Enum.any?(config.programs, fn {_name, p} -> p.source =~ ~r/\bXIC\b|\.\[16#/ end)
 
   defp life_body(image),
     do:
