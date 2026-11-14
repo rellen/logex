@@ -15079,6 +15079,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # `logex retain 3` names the program that wrote it, no device read or written, each
   # sim's reads and writes as they were (RV-27's review, where this said no device
   # opened and asserted none of it); the store put back, the start is made from it.
+  # Decision 539, restated (RV-28): the other warm fresh start in two, by the same draw, is
+  # first given the store with its `program` lines taken away and its `resource` line kept,
+  # its count mended, and is refused at that line, which names the program in part,
+  # wherever the store's text puts it, no device read or written, and then given the store
+  # back. Decision 540 (RV-28): each refusal ends with the way to start anyway, `start:
+  # :cold`, which copies the store first, as the cut-short store's does.
   defp unnamed_refused!(%{life: false}, _text, _opts), do: :ok
   defp unnamed_refused!(%{start: :cold}, _text, _opts), do: :ok
   defp unnamed_refused!(_w, nil, _opts), do: :ok
@@ -15113,6 +15119,36 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     File.write!(w.store, text)
     reach(:life_unnamed_refused, true)
+  end
+
+  defp unnamed_drawn!(1, w, "logex retain 3\n" <> _ = text, opts) do
+    [header, configuration | rest] = String.split(text, "\n")
+    kept = Enum.reject(rest, &String.starts_with?(&1, "program "))
+    {lines, ["end " <> _, ""]} = Enum.split(kept, -2)
+    "resource " <> _ = resource = Enum.find(lines, &String.starts_with?(&1, "resource "))
+    at = 3 + Enum.find_index(lines, &(&1 == resource))
+
+    File.write!(
+      w.store,
+      Enum.join([header, configuration | lines], "\n") <> "\nend #{3 + length(lines)} lines\n"
+    )
+
+    devices = for {_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}
+
+    assert_raise ArgumentError,
+                 "#{w.store}: line #{at}: `#{resource}` names the resource of the store's " <>
+                   "writer, and the store names no program type: a store that names the " <>
+                   "program that wrote it gives `resource <digest>` straight after its " <>
+                   "configuration's line, and then a `program <type> <digest>` a type: start " <>
+                   "it with start: :cold to start over it, which copies it first to the next " <>
+                   "`.dropped.<n>` beside it and then writes a new store over it",
+                 fn -> Runner.start_link(opts) end
+
+    assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==
+             devices
+
+    File.write!(w.store, text)
+    reach(:life_unprogrammed_refused, true)
   end
 
   defp unnamed_drawn!(_draw, _w, _text, _opts), do: :ok
@@ -16626,7 +16662,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # warned of nothing; and decision 535: a store of version 3 whose naming lines a hand
     # edit took away, refused at its first line.
     :life_cased_unwarned,
-    :life_unnamed_refused
+    :life_unnamed_refused,
+    # Decision 539 (RV-28): a store of version 3 whose `program` lines a hand edit took
+    # away, its `resource` line kept, refused at that line.
+    :life_unprogrammed_refused
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
