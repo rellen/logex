@@ -384,11 +384,11 @@ device's adapter", below). The maintainer answered RV-20's and RV-21's questions
 2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
 before the store compares it, the stale store's warning naming both causes and sent to
 the subscribers too, and the store written as `logex retain 3`. The maintainer answered
-RV-26's questions on 2026-11-14, decisions 532–536. Waiting: CI naming a failed test, a
-release step, typespecs with Dialyzer, the runner split by concern, and RV-27: a
-keyword's case and a bit's brackets in a program's text read as logex reads them before
-the store compares it, a version 3 store that names no program refused, and one message
-for an end line under every header that takes none.
+RV-26's questions on 2026-11-14, decisions 532–536, and RV-27 has landed: a keyword's
+case and a bit's brackets in a program's text read as logex reads them before the store
+compares it, a version 3 store that names no program refused, and one message for an end
+line under every header that takes none. Waiting: CI naming a failed test, a release
+step, typespecs with Dialyzer and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3469,8 +3469,17 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   literal by its value, a number in a name too, a subscript, a bit's number or an
   array's size, so that a comment, an empty line, CRLF line ends, spacing or a literal
   respelt, `16#3E8` for `1000` or `temps[03]` for `temps[3]`, in a `.ld` file changes
-  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; a
-  word's case and a bit written `w.[4]` for `w.4` are the text's (provisional); a store
+  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; and
+  each word logex reads in any case, a mnemonic, a section, a qualifier, a type's word or
+  the word that heads a block's file, is read lowercased, and a bit written in brackets
+  for its plain number as that number, so that `XIC` for `xic`, `DINT` for `dint` or
+  `w.[4]` for `w.4` changes nothing either, where a tag's name is the text's, its case
+  among it, `Start` another tag than `start`, and so are a member's, a label's and a user
+  block's name, each read by its exact name (decision 532); a store RV-26's logex wrote,
+  whose digest kept every word's case and a bit's brackets, is told once that a type's
+  text differs where its words were written in another case than lowercase or a bit in
+  brackets for its plain number, and its next write names the type as this logex reads
+  it, a program written in lowercase, as every one here is, named alike by both; a store
   with a `program` line
   and no `resource` line refused a line, as a hand edit that took the one away and kept
   the other leaves it (decision 531); each retained global;
@@ -3492,9 +3501,20 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   and the next write makes either `logex retain 3`. A `logex retain 2` store that names
   its program, as RV-21's logex wrote it, names each type by the MD5 of its file's bytes,
   so a fresh start from it compares the bytes of the files it is given, as that logex
-  did, and warns where they differ (provisional, `PLAN.md`'s RV-26); a store of `logex
-  retain 3` with no `resource` or `program` line, a hand edit's, is read as naming no
-  program (provisional). A logex from before RV-26, put back over a store this one wrote
+  did, and warns where they differ (decision 534); a store of `logex retain 3` with
+  neither a `resource` nor a `program` line, a hand edit's, is refused at its first line
+  (provisional, the line),
+  ``tally.retain: line 1: `logex retain 3` heads a store that names the program that
+  wrote it, and the store names none: ...``, as one with a `program` line and no
+  `resource` line is refused at that line (decisions 531 and 535), and starts warm once
+  the lines are put back, or `start: :cold`, which copies it first to the next
+  `.dropped.<n>`; its first line made `logex retain 2` by hand, its count kept, it is
+  read as any store of version 2 that names no program is, and warns of nothing. A
+  `resource` or `program` line that does not read, its digest mistyped, is told as
+  itself, not as one missing; and a store of `logex retain 3` with its `resource` line and
+  no `program` line, which no configuration gives, each declaring a program, is read, and
+  warns that each type the start runs is not in the store (provisional). A logex from
+  before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
   reads `logex retain 2` and `logex retain 1` ``, and its end line as one its header does
@@ -3508,12 +3528,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the digests being this logex's. A copy whose first line a hand edit made `logex retain
   2` and that this logex reads again, no older logex having written over it, is read as
   RV-21's and warns once that each type's text differs, for the same reason
-  (provisional, `PLAN.md`'s RV-26, question 3). The runner ends each line with LF
+  (decision 534). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
   saved with a byte-order mark before its header is told so, the rest of it read as if
-  the mark were not there; a comment, a tab and a byte
+  the mark were not there; an end line in a store whose first line takes none, `logex
+  retain 1` or a header mistyped, is told as one that a store of `logex retain 3` or
+  `logex retain 2` ends with (decision 536); a comment, a tab and a byte
   past ASCII are each refused, told as what they are; and a refusal names at most the
   first 50 problems and then counts the rest, each text of the store it quotes at most 60
   bytes and printable, and the store's path printable too, each line's 1,000 bytes
@@ -3677,7 +3699,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   subscribing again with `:retain` among the kinds sends nothing more, and one that takes
   `:retain` away, subscribing to other kinds, and then back, or one made after an
   unsubscribe, hears it again; nothing else sends it again, a round, a trip, a restart,
-  an edit's step or the store's next write (provisional).
+  an edit's step or the store's next write (decision 533).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),

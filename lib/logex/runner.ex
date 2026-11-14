@@ -318,15 +318,22 @@ defmodule Logex.Runner do
     each user block's after it where it holds one, each since decision 527 (RV-26) as
     `Logex.Printer` prints it, one rung a line, one space between its elements and each
     literal by its value, a number in a name too, a subscript, a bit's number or an
-    array's size (RV-26's review), so that a comment, an empty line, CRLF, spacing or a
-    literal respelt, `16#3E8` for `1000` or `arr[02]` for `arr[2]`, in a `.ld` file
-    changes nothing, where `md5sum` of the file gave it before; a
+    array's size (RV-26's review), and since decision 532 (RV-27) each word logex reads
+    in any case lowercased and a literal bit number in brackets as the plain bit, so that
+    a comment, an empty line, CRLF, spacing, a literal respelt, `16#3E8` for `1000` or
+    `arr[02]` for `arr[2]`, or a keyword's case, `XIC` for `xic`, or `w.[4]` for `w.4`, in a
+    `.ld` file changes nothing, where `md5sum` of the file gave it before, and a tag's
+    case, a member's, a label's or a user block's name changed does; a
     `program` line with no `resource` line refused, and each read wherever it stands, as a
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
-    types' bytes as it was written and one of `logex retain 3` that names none read as
-    naming none (provisional, `PLAN.md`'s RV-26); and since decision 355 its end line,
+    types' bytes as it was written (decision 534), and one of `logex retain 3` that names
+    none, a hand edit's, refused at its first line (provisional, the line), as one that
+    names it in part is (decision 535, RV-27), where one that names its resource and no
+    program type, which no configuration gives, is read, and warns that each type is not
+    in the store (provisional, RV-27's review), and a naming line that does not read is
+    told as itself; and since decision 355 its end line,
     `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
@@ -494,8 +501,9 @@ defmodule Logex.Runner do
     `plant.retain.dropped.2`; a file that does not exist none, written at once; and one
     that cannot be read, that is no store, a line of no store's shape, an image
     `Logex.Runtime.start/2` refuses, a store of another configuration, which a renamed
-    configuration's is, or since decision 355 one of `logex retain 2` cut short, its last
-    line no end line or its end line's count not its lines', the host's mistake, one
+    configuration's is, since decision 355 one of `logex retain 2` cut short, its last
+    line no end line or its end line's count not its lines', or since decision 535 one of
+    `logex retain 3` that names no program, the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
     device opened. Since decision 517 (c) (RV-21) a warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
@@ -513,7 +521,7 @@ defmodule Logex.Runner do
     took it away by subscribing to other kinds among them, and one made after an
     unsubscribe a new one;
     a round, a trip, a restart, an edit's step, the store's next write and a stop send it
-    to no one (provisional, `PLAN.md`'s RV-26); it
+    to no one (decision 533); it
     changes nothing else, the image laid over the configuration by name and type as
     decision 277 has it, and a store written before RV-21, which names no program, warns
     of nothing and is read as before. A cold start, which lays nothing over, warns of
@@ -1347,7 +1355,8 @@ defmodule Logex.Runner do
   as long as it stands, the runner's life, and once while the subscription takes
   `:retain`: subscribing again with `:retain` among the kinds sends it no more, one that
   takes `:retain` away by subscribing to other kinds and then takes it back hears it
-  again, and one made after `unsubscribe/1` is a new one (provisional), and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
+  again, and one made after `unsubscribe/1` is a new one (decision 533), and since
+  decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
   of the runner's own set over a forces file it could not read (decision 472) that an
   orderly end made and that failed or was cut, a shutdown's among them, which answers no
   caller, so that an HMI or a log can warn that the next start may bring back an old
@@ -2054,8 +2063,8 @@ defmodule Logex.Runner do
   # once while a subscription takes `:retain`, so that subscribing again with `:retain`
   # among the kinds sends nothing more, where one that adds it hears it, one that took it
   # away by subscribing to other kinds among them, and one made after an unsubscribe is a
-  # new one (provisional, `PLAN.md`'s RV-26: no subscriber exists before start_link/1
-  # returns, decision 324, so the start's own publishing reaches no one).
+  # new one (decision 533: no subscriber exists before start_link/1 returns, decision 324,
+  # so the start's own publishing reaches no one).
   defp serve({:subscribe, pid, kinds}, %{subscribers: subscribers} = state) do
     held = Map.get(subscribers, pid)
     demonitor(held)
@@ -3204,7 +3213,7 @@ defmodule Logex.Runner do
   # `retain` too, the fresh start's, which a round, a trip, a restart, an edit's step, the
   # store's next write and a stop leave as it is, as `dropped` is, and since decision 528
   # (RV-26) each subscription is sent as it takes `:retain`, none of them sending it again
-  # (serve/2's `:subscribe`, provisional).
+  # (serve/2's `:subscribe`, decision 533).
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
