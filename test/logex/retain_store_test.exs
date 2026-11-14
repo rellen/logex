@@ -3287,8 +3287,8 @@ defmodule Logex.RetainStoreTest do
       assert digest <= direct * 1.25 + 10_000, "the digest #{digest}, its texts #{direct}"
 
       # Decision 532 (RV-27): a program written in lowercase pays one search a name for a
-      # capital letter, within a sixth of its texts printed and digested here, where a
-      # look-up of every name in the table that reserves its words cost near a quarter;
+      # capital letter, within 15 per cent of its texts printed and digested here, where
+      # a look-up of every name in the table that reserves its words cost near a quarter;
       # and the same program with each word logex reads in any case in upper case, each
       # such word looked up and lowercased, named alike, at its texts' cost too.
       assert digest <= direct * 1.15 + 10_000, "the digest #{digest}, its texts #{direct}"

@@ -15238,6 +15238,30 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      or a tag's case changed, still warns, its name being changed. IEC 61131-3 reads
      keywords in any case; Logix reads a tag's name in any case, and how it treats
      `tag.[4]` is unverified. RV-27 builds it.
+     *(Landed with RV-27, 2026-11-14, `9bc9a16`: `Logex.Retain.written_by/1` prints each
+     program type's text and each user block's with every word logex reads in any case
+     lowercased, wherever it stands in the parse tree, a word `Logex.Declarations.
+     reserved/1` names, a mnemonic, a conversion's among them, a section, a qualifier, an
+     elementary type's word or a built-in block's type, whole or as the word before an
+     array's sizes, `TON[4]` as `ton[4]`, and in a block's text the word that heads its
+     file, `Logex.Declarations.kinds/0`'s, which a program's text may hold as a tag's
+     name and keeps as written there; and a literal bit number in brackets as the plain
+     bit, `w.[4]`, `w.[16#4]` and `t[1].acc.[04]` as `w.4` and `t[1].acc.4`, read through
+     `Logex.Name.bracketed/1` as the compiler reads it, a tag's in brackets, `w.[n]`, as
+     written. A tag's name, its case among it, a member's, a label's and a user block's
+     name are the text's, each read by its exact name (README's "tags are
+     case-sensitive"), so `Start` for `start` still warns. A program written in lowercase
+     pays one search a name for a capital letter, its digest within 15 per cent of its
+     texts printed and digested directly; one written in upper case, each such word looked
+     up once, within a quarter. A store RV-26's logex wrote, whose digest kept every word's
+     case, is read as any version 3 store: where a type's words were written in another
+     case than lowercase, or a bit in brackets, its first fresh start here is told once
+     that the type's text differs, and its next write names the type as this logex reads
+     it; a program in lowercase, as README's are, is named alike by both. No logex has
+     been released, so no such store stands outside a checkout of main between RV-26 and
+     RV-27; README's store passage says so. The life walk lays types out anew with such
+     words in upper case and the mix's `w.3` as `w.[16#3]`, warned of nothing
+     (`:life_cased_unwarned`). Decision 527's note keeps its marks as history.)*
 
 533. **Who hears the stale store's warning (RV-26),** RV-26's question 2: decision 528
      sends the warning to the subscribers too, and none can exist before
@@ -15256,6 +15280,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      screen switched away and back each show it. IEC 61131-3 has no runner or
      subscription; Studio 5000 tells an engineer the project differs from the
      controller's each time it goes online. RV-27 makes the marks this decision's number.
+     *(RV-27, 2026-11-14, `4bad701`: the marks, `Logex.Runner`'s moduledoc, `subscribe/2`'s
+     doc, the comment at `serve/2`'s `:subscribe` and the state's comment,
+     `retain_store_test.exs`'s decision 528 test and README's subscription passage, are
+     this decision's number; decision 528's note keeps its mark as history.)*
 
 534. **A store RV-21's logex wrote (RV-26),** RV-26's question 3: RV-21's logex wrote
      `logex retain 2` stores whose digests are of the program files' bytes, where
@@ -15272,6 +15300,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      once though nothing differs, as README's rollback passage says. Neither IEC 61131-3
      nor Logix keeps retained values in a file carried across an upgrade. RV-27 makes the
      marks this decision's number.
+     *(RV-27, 2026-11-14, `f181d22` and `4bad701`: the marks, `Logex.Retain`'s head comment
+     and its comment at `compared/3`, `Logex.Runner`'s moduledoc, README's store passage
+     twice, `retain_store_test.exs`'s test of RV-21's store and the life walk's
+     `life_rv21/2`, are this decision's number; decision 530's note keeps its mark as
+     history.)*
 
 535. **A version 3 store that names no program (RV-26),** RV-26's question 4: every
      `logex retain 3` store the runner writes names its configuration and programs in its
@@ -15284,6 +15317,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      fan's line starts warm once the lines are put back, or cold, the store copied to
      its next `.dropped.<n>` as any store refused is (decision 417). Neither IEC 61131-3
      nor Logix has a store a person edits. RV-27 builds it.
+     *(Landed with RV-27, 2026-11-14, `f181d22`: such a store is refused at its first line,
+     the header that says it names its program, "`logex retain 3` heads a store that
+     names the program that wrote it, and the store names none: a store that names the
+     program that wrote it gives `resource <digest>` straight after its configuration's
+     line, and then a `program <type> <digest>` a type", in decision 531's words; a warm
+     start refused before any device is opened, a cold start copying it byte for byte to
+     the next `.dropped.<n>` and starting from the initial values, and the lines put
+     back, a warm start reading it. A store whose end line does not read, cut short or
+     its count not mended, is told that alone, a cut before the third line taking the
+     naming lines with it, and its line 1 named once (provisional, `PLAN.md`'s RV-27, as
+     is the line the refusal names). A store of `logex retain 2` or `logex retain 1`
+     naming none is read as before. The life walk takes a version 3 store's naming lines
+     away before one warm start in two and asserts the refusal whole
+     (`:life_unnamed_refused`).)*
 
 536. **An end line under `logex retain 1` (RV-26),** RV-26's question 5, from its
      review: in a store whose first line is a header this logex does not read, an end
@@ -15298,6 +15345,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      version 1's pinned message changes by this decision, and every other test of
      reading version 1 stays as it is. Neither IEC 61131-3 nor Logix has a store a person
      edits. RV-27 builds it.
+     *(Landed with RV-27, 2026-11-14, `f181d22`: one clause tells an end line in any store
+     not judged by version 3's or 2's rule, "`end 15 lines` is an end line, which a store
+     whose first line is `logex retain 3` or `logex retain 2` ends with, and this store's
+     first line is neither", the store's `unread` mark gone; version 1's message pinned in
+     two tests, "a hand edit's end line, its count and its place" and RV-26's review's,
+     changed so and only so.)*
 
 ---
 

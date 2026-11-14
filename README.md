@@ -384,11 +384,11 @@ device's adapter", below). The maintainer answered RV-20's and RV-21's questions
 2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
 before the store compares it, the stale store's warning naming both causes and sent to
 the subscribers too, and the store written as `logex retain 3`. The maintainer answered
-RV-26's questions on 2026-11-14, decisions 532–536. Waiting: CI naming a failed test, a
-release step, typespecs with Dialyzer, the runner split by concern, and RV-27: a
-keyword's case and a bit's brackets in a program's text read as logex reads them before
-the store compares it, a version 3 store that names no program refused, and one message
-for an end line under every header that takes none.
+RV-26's questions on 2026-11-14, decisions 532–536, and RV-27 has landed: a keyword's
+case and a bit's brackets in a program's text read as logex reads them before the store
+compares it, a version 3 store that names no program refused, and one message for an end
+line under every header that takes none. Waiting: CI naming a failed test, a release
+step, typespecs with Dialyzer and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3476,10 +3476,10 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `w.[4]` for `w.4` changes nothing either, where a tag's name is the text's, its case
   among it, `Start` another tag than `start`, and so are a member's, a label's and a user
   block's name, each read by its exact name (decision 532); a store RV-26's logex wrote,
-  whose digest kept every word's case, is told once that a type's text differs where its
-  words were written in another case than lowercase, and its next write names the type
-  as this logex reads it, a program written in lowercase, as every one here is, named
-  alike by both; a store
+  whose digest kept every word's case and a bit's brackets, is told once that a type's
+  text differs where its words were written in another case than lowercase or a bit in
+  brackets for its plain number, and its next write names the type as this logex reads
+  it, a program written in lowercase, as every one here is, named alike by both; a store
   with a `program` line
   and no `resource` line refused a line, as a hand edit that took the one away and kept
   the other leaves it (decision 531); each retained global;
