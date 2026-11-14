@@ -3512,11 +3512,16 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   `resource` line is refused at that line (decisions 531 and 535), and starts warm once
   the lines are put back, or `start: :cold`, which copies it first to the next
   `.dropped.<n>`; its first line made `logex retain 2` by hand, its count kept, it is
-  read as any store of version 2 that names no program is, and warns of nothing. A
-  `resource` or `program` line that does not read, its digest mistyped, is told as
-  itself, not as one missing; and a store of `logex retain 3` with its `resource` line and
-  no `program` line, which no configuration gives, each declaring a program, is read, and
-  warns that each type the start runs is not in the store (provisional). A logex from
+  read as any store of version 2 that names no program is, and warns of nothing. A store
+  of `logex retain 3` with its `resource` line and no `program` line, which no
+  configuration gives, each declaring a program, is refused too, at its `resource` line
+  (provisional, the line), ``tally.retain: line 3: `resource
+  013cc059392445fdcc1e84c9b0de6118` names the resource of the store's writer, and the
+  store names no program type: ...`` (decision 539), and starts warm once its `program`
+  lines are put back, or `start: :cold`, which copies it first; its first line made
+  `logex retain 2` by hand, it is read, and warns that each type the start runs is not in
+  the store. A `resource` or `program` line that does not read, its digest mistyped, is
+  told as itself, not as one missing. A logex from
   before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it

@@ -294,6 +294,15 @@ defmodule Logex.RetainStoreTest do
                 "`resource <digest>` straight after its configuration's line, and then a " <>
                 "`program <type> <digest>` a type"
 
+  # Decision 539 (RV-28): what a store of `logex retain 3` that names its resource and no
+  # program type is told at its `resource` line, the line given.
+  defp names_no_program(resource),
+    do:
+      "`#{resource}` names the resource of the store's writer, and the store names no " <>
+        "program type: a store that names the program that wrote it gives `resource " <>
+        "<digest>` straight after its configuration's line, and then a `program <type> " <>
+        "<digest>` a type"
+
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
     # a trigger's last sample (decision 313), an instance with a built-in, an array of a
@@ -3759,14 +3768,23 @@ defmodule Logex.RetainStoreTest do
       )
     end
 
-    # RV-27's review (provisional, `PLAN.md`'s RV-27, question 3): a store of `logex
-    # retain 3` with its `resource` line and no `program` line, a hand edit's, as no
-    # configuration the runner runs gives one, every configuration declaring a program, is
-    # read, its resource named and no type, and a warm start from it lays its values over
-    # and warns that each type the start runs is not in the store, as a store naming the
-    # very resource and other types would; its next write names the program whole.
-    test "a store of version 3 that names its resource and no program type is read, and " <>
-           "warns that each type is not in the store",
+    # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no
+    # `program` line, a hand edit's, as no configuration the runner runs gives one, every
+    # configuration declaring a program, is refused, located at its `resource` line,
+    # wherever it stands, the line that names its program in part (provisional, the line,
+    # `PLAN.md`'s RV-28), as decisions 531 and 535 refuse the other two partial forms,
+    # where RV-27's review read it and a warm start from it warned that each type it runs
+    # was not in the store, a cause no hand edit is; a warm start refused, no device read or
+    # written; a cold start copying it first, byte for byte, to its next `.dropped.<n>`
+    # (decision 417), and starting from the initial values; its `program` line put back, a
+    # warm start reading it. Its count not mended, or the store cut after its `resource`
+    # line, it is told that alone, as 535's is (provisional, `PLAN.md`'s RV-27); a `program`
+    # line that does not read is told as itself, not as one missing; and one of `logex
+    # retain 2`, its first line so made by hand, or of `logex retain 1` is read as before, a
+    # warm start from it laying its values over and warning that each type is not in the
+    # store, its next write naming the program whole.
+    test "a store of version 3 that names its resource and no program type is refused at " <>
+           "its resource line, and a cold start copies it first",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -3779,17 +3797,107 @@ defmodule Logex.RetainStoreTest do
         String.split(whole, "\n")
 
       count = length(String.split(whole, "\n", trim: true))
+      values = Enum.drop(rest, -2)
 
       unprogrammed =
-        Enum.join([header, named, resource | Enum.drop(rest, -2)], "\n") <>
-          "\nend #{count - 1} lines\n"
+        Enum.join([header, named, resource | values], "\n") <> "\nend #{count - 1} lines\n"
 
       refute unprogrammed =~ program
-      "resource " <> digest = resource
-      assert {_image, _at, by} = Retain.decoded!(unprogrammed, {"s", "plant"})
-      assert by == %{resource: digest, programs: %{}}
 
+      raises("s: line 3: #{names_no_program(resource)}", fn ->
+        Retain.decoded!(unprogrammed, {"s", "plant"})
+      end)
+
+      # Its `resource` line moved after the values, refused at that line.
+      moved = Enum.join([header, named | values] ++ [resource], "\n")
+
+      raises("s: line #{count - 2}: #{names_no_program(resource)}", fn ->
+        Retain.decoded!(moved <> "\nend #{count - 1} lines\n", {"s", "plant"})
+      end)
+
+      # A byte-order mark before it, told too; the count not mended, or the store cut after
+      # its `resource` line, told alone; its `program` line's digest mistyped, that line
+      # told alone.
+      raises(
+        "s: line 1: the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor " <>
+          "that saves UTF-8 with one writes it: a store is ASCII and begins `logex retain 3`, " <>
+          "so save it without one\ns: line 3: #{names_no_program(resource)}",
+        fn -> Retain.decoded!("\xEF\xBB\xBF" <> unprogrammed, {"s", "plant"}) end
+      )
+
+      unmended = String.replace(unprogrammed, "end #{count - 1} lines", "end #{count} lines")
+
+      raises(
+        "s: line #{count - 1}: the store's end line counts #{count} lines, and the store has " <>
+          "#{count - 1}: a line was lost or doubled, or a hand edit added or removed one " <>
+          "without changing the count, which counts every line, the end line among them, " <>
+          "and the store is not read",
+        fn -> Retain.decoded!(unmended, {"s", "plant"}) end
+      )
+
+      raises(
+        "s: line 3: `#{resource}` is the store's last line, and no end line: a store of " <>
+          "`logex retain 3` ends with `end <count> lines`, its count of lines, so this one " <>
+          "was cut short, and a store cut short is not read: start it with start: :cold to " <>
+          "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
+          "then writes a new store over it",
+        fn -> Retain.decoded!(Enum.join([header, named, resource, ""], "\n"), {"s", "plant"}) end
+      )
+
+      mistyped = String.replace(whole, program, "program tally zz")
+
+      raises("s: line 4: `zz` is no digest: a store's is 32 lowercase hexadecimal digits", fn ->
+        Retain.decoded!(mistyped, {"s", "plant"})
+      end)
+
+      # Its version 2 and 1 read as before, its resource named and no type.
+      "resource " <> digest = resource
+      v2 = String.replace(unprogrammed, "logex retain 3", "logex retain 2")
+
+      v1 =
+        String.replace(v2, "logex retain 2", "logex retain 1")
+        |> String.replace(~r/end \d+ lines\n\z/, "")
+
+      for text <- [v2, v1] do
+        assert {_image, _at, by} = Retain.decoded!(text, {"s", "plant"})
+        assert by == %{resource: digest, programs: %{}, bytes: true}
+      end
+
+      # Through the runner: a warm start refused, naming the store, no device read or
+      # written.
       File.write!(rig.store, unprogrammed)
+      opener_down(rig.panel)
+      devices = {Sim.reads(rig.panel), Sim.writes(rig.panel)}
+
+      raises("#{rig.store}: line 3: #{names_no_program(resource)}", fn ->
+        Runner.start_link(rig.opts)
+      end)
+
+      assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == devices
+      assert File.read!(rig.store) == unprogrammed
+
+      # A cold start copies it, byte for byte, then starts from the initial values.
+      {:ok, runner} = Runner.start_link(rig.opts ++ [start: :cold])
+      copy = rig.store <> ".dropped.1"
+      assert Runner.status(runner).retain.copy == copy
+      assert File.read!(copy) == unprogrammed
+      assert [0, 0 | _lamp_and_shown] = values(runner)
+      assert [2, 2 | _] = kept
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+
+      # Its `program` line put back, the copy starts warm with the values it kept.
+      File.write!(rig.store, whole)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: []} = Runner.status(runner).retain
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+
+      # Relabelled `logex retain 2` by hand, its count kept, a warm start reads it as
+      # before: its values laid over, and told that `tally` is not in the store; its next
+      # write names the program whole.
+      File.write!(rig.store, v2)
       opener_down(rig.panel)
       {:ok, runner} = Runner.start_link(rig.opts)
 

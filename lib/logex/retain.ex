@@ -39,9 +39,11 @@ defmodule Logex.Retain do
   # `logex retain 2` that names its program, RV-21's, names each type by its text's bytes,
   # and is laid beside the start's program digested so (compared/3, decision 534); one of
   # `logex retain 3` that names none, a hand edit's, is refused at its first line, as one
-  # that names it in part is (decision 535, RV-27), where it was read as naming none;
-  # encode/2, which names no program, writes `logex retain 2`; each retained global, `global
-  # <name> <type> <value>`; since decision 313 each
+  # that names it in part is (decision 535, RV-27), where it was read as naming none, and
+  # since decision 539 (RV-28) one that names its resource and no program type at its
+  # `resource` line, where it was read and warned that each type was not in the store
+  # (naming/3); encode/2, which names no program, writes `logex retain 2`; each retained
+  # global, `global <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
   # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
   # each instance whose
@@ -515,10 +517,7 @@ defmodule Logex.Retain do
   # that alone (decision 355), since a cut before the configuration's line's end takes the
   # lines that name its program with it (provisional, `PLAN.md`'s RV-27). A store of
   # `logex retain 2` or `logex retain 1` that names none is read as it was, one relabelled
-  # so by hand among them. One of `logex retain 3` that names its resource and no program
-  # type, which no configuration gives, each declaring a program, is read, and a warm start
-  # from it warns that each type it runs is not in the store (provisional, `PLAN.md`'s
-  # RV-27, question 3); and one whose `resource` or `program` line does not read is told
+  # so by hand among them; and one whose `resource` or `program` line does not read is told
   # that line, and not that it names none (unread_by/2).
   defp naming(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest], [])
        when map_size(unread) == 0,
@@ -526,13 +525,48 @@ defmodule Logex.Retain do
          problem(
            acc,
            1,
-           "`#{@header}` heads a store that names the program that wrote it, and the store " <>
-             "names none: a store that names the program that wrote it gives `resource " <>
-             "<digest>` straight after its configuration's line, and then a `program <type> " <>
-             "<digest>` a type"
+           unnamed(
+             "`#{@header}` heads a store that names the program that wrote it, and the " <>
+               "store names none"
+           )
+         )
+
+  # Decision 539 (RV-28): one of `logex retain 3` that names its resource and no program
+  # type, which no configuration gives, each declaring a program, a hand edit's that took
+  # its `program` lines away, is refused too, as decisions 531 and 535 refuse the other
+  # two partial forms, where it was read and a warm start from it warned that each type
+  # it runs was not in the store, a cause no hand edit is; located at its `resource`
+  # line, wherever it stands, the line that names the program in part, as decision 531
+  # tells its refusal at the first `program` line and decision 537 tells 535's at the
+  # header only where no line names any of it (provisional, the line, `PLAN.md`'s RV-28),
+  # and only once the count reads, as 535's (decision 538), a cut after the `resource` line
+  # taking the `program` lines with it. A `program` line that does not read is told as itself,
+  # and the store not told also that it names no program type (unread_by/2).
+  defp naming(
+         %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
+         [{@header, 1} | _rest],
+         []
+       )
+       when is_binary(resource) and map_size(programs) == 0 and not is_map_key(unread, :program),
+       do:
+         problem(
+           acc,
+           Map.fetch!(acc.seen, :resource),
+           unnamed(
+             "#{quoted("resource #{resource}")} names the resource of the store's writer, " <>
+               "and the store names no program type"
+           )
          )
 
   defp naming(acc, _lines, _ending), do: acc
+
+  # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
+  # then what a store that names its program gives.
+  defp unnamed(missing),
+    do:
+      missing <>
+        ": a store that names the program that wrote it gives `resource <digest>` straight " <>
+        "after its configuration's line, and then a `program <type> <digest>` a type"
 
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
@@ -903,10 +937,10 @@ defmodule Logex.Retain do
     problem(
       acc,
       n,
-      "#{quoted("program #{name} #{Map.fetch!(programs, name)}")} names a program type of " <>
-        "the store's writer, and the store names no resource: a store that names the " <>
-        "program that wrote it gives `resource <digest>` straight after its configuration's " <>
-        "line, and then a `program <type> <digest>` a type"
+      unnamed(
+        "#{quoted("program #{name} #{Map.fetch!(programs, name)}")} names a program type " <>
+          "of the store's writer, and the store names no resource"
+      )
     )
   end
 
