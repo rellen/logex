@@ -20422,6 +20422,220 @@ and RV-24 side by side; and RV-25 last, alone.
     background job that ran them reached the session's two-hour limit for one, so the walk
     has 28 loaded runs behind it, past RV-26's 10.
 
+  **RV-27's review** (2026-11-14, of `e304d57`, the review's clone `rv/review27`, its
+  parent worktree `rv/r27par` and its probes under `rv/r27p/`): no correctness defect in
+  decisions 532, 535 or 536, every probe giving what the decisions say; the five commits
+  green in CI; two mutants surviving the full suite, a point the record left open and no
+  one had put as a question, and some document nits; six findings, each closed below by
+  a fix a test holds, a document made true, or a question put to the maintainer. The
+  fixes are `d3f8f12` (F1 to F6) and `73fccf1` (F4's twins reading a member too), each
+  GATE-OK, 2,996 tests (11 doctests among them), CI green on each (runs 43582808331 and
+  43583693595); this record the commit after them. The working files are under
+  `scratchpad/rv/p27/fix/`, `fixmut/` and `fixcost/`.
+
+  - *The review's own runs* (`rv/r27mut/table.md`, `rv/r27p/`): fifteen mutants of
+    RV-27's code, each judged by the full suite: `x03`, a lowercased copy of every name
+    for the capital search, and `x10`, a version 3 store naming its resource alone
+    refused, survived (F1 and F2 below); `x14`, a tag's name in brackets lowercased,
+    survived as an equivalent, two tags that differ only in case being refused and a
+    declaration carrying the tag's case; the other twelve red, `x09`'s in
+    `array_configuration_test.exs` too, which decodes a version 1 store. Its probes
+    found 532's words read in any case at every place one can stand, a mnemonic in a
+    branch, a conversion, a section, a qualifier, a sized type word, a block's heading,
+    `LBL` and `JMP`, and a tag's, a label's and a member's case still warning; a bit's
+    number in brackets read the same in every spelling; a store RV-26's logex wrote
+    warning once and then not; 535's refusal under LF, CRLF and a lone CR, with a
+    byte-order mark, through the runner warm and cold; and 536's one message under every
+    header that takes no end line. Its load runs: the four store tests 0 of 50 red and
+    the life walk 0 of 22, making 50 with RV-27's 28. Its cost against `4ac679e`: a
+    round, a period's write and the runner's side of a fresh start unchanged; the
+    lowercase box counter's digest 2.2 per cent more and its fresh start and accept
+    about 1 per cent; the same in upper case 11.2, 3.1 and 3.8 per cent; 1,000 instances
+    of ten types unchanged in lowercase and 1.3 per cent in upper case. A trial merge
+    with RV-22's `land22` at `c076305` conflicted in README's "What has landed" and in
+    PLAN, where RV-22 conflicts with `4ac679e` on its own.
+  - *F1 (medium, test strength): the 15 per cent bound let the lowercase program's case
+    reading double.* The review's `x03`, a lowercased copy of every name compared with it
+    in place of the one search for a capital letter, survived the full suite: its digest
+    14.3 per cent over its texts printed and digested directly, under the cost test's
+    `direct * 1.15 + 10_000`, against 7.7 per cent at the tip. Fixed: the bound is a
+    tenth, `direct * 1.10 + 10_000`, which `x03` (here `y01`, 1,998,108 against
+    1,754,664, 13.9 per cent) fails and the tip passes by some three points; the
+    reductions it compares move by hundredths of a per cent from run to run.
+  - *F4 (low, cost, untested): a CamelCase name paid the table's look-up.* A name
+    holding a capital letter was looked up in `Logex.Declarations.reserved/1` whole, and
+    where none, read through `Logex.Name.element/1` and its word looked up again, so that
+    a program of CamelCase tags, common in Logix shops, paid some 46 reductions a name
+    over its lowercase twin, and an array's elements 66: the review's 1,000-element
+    `Count[i]` program digested 25.2 per cent over its texts printed directly, past the
+    quarter the record states for a program in upper case. Fixed, not only bounded: such a
+    name's word, the whole name or its part before the first `[` or `.`, is looked up
+    first among the tags its text declares, where no word logex reserves can be, and kept
+    where it is one; only a word that is no tag, a keyword, a label or a user block's
+    name, is looked up in the table, and a word before an array's sizes lowercased by its
+    length, with no second split. The digests are the very ones `e304d57` gives, the
+    review's probes `case1`, `case2`, `case3`, `kw` and `unlex` and a CamelCase program of
+    keywords in upper case, elements, members, bits in brackets, a label and a user block
+    each printing the same at both. The review's figures, its tip and here (its
+    `camel.exs`, a process of its own and no heap floor): the lowercase box counter 7.7 per
+    cent over its texts at the tip and 7.1 here; CamelCase tags 14.2 and 6.5; the
+    1,000-element array 25.3 and 11.0, the parent's 9.2 being RV-26's reading of
+    the subscripts. The cost test holds it in CONTRIBUTING.md's form, each twin against its
+    lowercase twin, the same texts' bytes, in the same run: the box counter with its tags
+    capitalised, `Eye`, `Total` and `C1` to `C1000`, each rung reading `C7.q` too, 4,005
+    names, its digest within 11,498 reductions of its twin's and half a reduction a name;
+    and an array's, `C[7]` and `C[7].q`, 3,006 names, within 6,505 and half a reduction a
+    name. The mutants show each bound red: the tags not looked up (`y02`, 175,083 over
+    the twin), `e304d57`'s reading (`y03`, 185,847), the name cut at `[` alone so that a
+    member's holder is not cut from it (`y04`, 56,757) and the tags looked up by the whole
+    name (`y05`, 51,058). `Logex.Declarations.reserved/1`, which downcases a word twice
+    when it is no type, the second time in `Logex.FbType.builtin/1`, is as it was: the
+    look-up among the tags spares a CamelCase program the table altogether.
+  - *F2 (low-medium, a gap in the record, and a survivor): a version 3 store with its
+    `resource` line and no `program` line.* Read as built, the warm start laying the
+    values over and warning "`tally` is not in the store; whether by a deploy of changed
+    files, or an edit tested or assembled online that never reached the files, ...",
+    whose cause is wrong for a hand edit; the review's `x10`, refusing it, survived, so no
+    test held the reading; and since decision 535 refuses a store with neither line and
+    531 one with `program` lines and no `resource`, the three partial forms disagree.
+    RV-26's review (its F8) kept this reading as following question 4's, which 535 has
+    reversed. Pinned as built, provisional: "a store of version 3 that names its resource
+    and no program type is read, and warns that each type is not in the store", its
+    `decoded!/2` naming the resource and no type, and a warm start through the runner
+    warning so, the values laid over and the next write naming the program whole (`y11`,
+    the review's `x10` on this code, now red). Put to the maintainer as question 3, below.
+    A configuration that declares no program is refused ("this configuration declares no
+    `program`: it would run nothing"), so the runner never writes such a store.
+  - *F3 (low, documents): the line 535 refuses at was provisional in three places and
+    settled in three.* README's store passage, `Logex.Runner`'s moduledoc and §4.13's
+    dated note now mark it "(provisional, the line)", as `Logex.Retain`'s comment at
+    `naming/3`, question 1 and decision 535's note did.
+  - *F5 (low): the life walk's comment claimed more than it asserted.*
+    `unnamed_drawn!/4` said the refused start opened no device and asserted only the raise
+    and its message. It now takes each sim's reads and writes before the refused start
+    and asserts them unchanged after it, and its comment says "no device read or
+    written", which is what it asserts; the store test of decision 535 asserts the same of
+    its panel. No mutant was made of it: a runner that read a device before its store
+    would be a reordering of `init/1`, which the store test and this assertion each hold.
+  - *F6 (observations).* (a) A store 535 refuses, relabelled `logex retain 2` by hand
+    with its count kept, is read as a version 2 store naming none is, and warns of
+    nothing: README's store passage now says so, and decision 535's note. (b) A store
+    whose naming lines are there and do not read, `resource xyz` and `program tally zz`,
+    was told at line 1 that it names none beside each line's problem, and one whose
+    `resource` line alone does not read, decision 531's "names no resource" beside it.
+    Fixed by the record's words, decision 535 refusing a store with neither line and 531
+    one with no `resource` line, where such a line is one: a `resource` or `program` line
+    that does not read, its digest none or its words not the line's, is told as itself,
+    and the store not told also that it names none or no resource (`Logex.Retain`'s
+    `unread_by/2`). Test: "a store whose naming line does not read is told that line, not
+    that it names none or no resource", both digests mistyped, the `resource` line given
+    a word too many, and the `resource` line taken away with the `program` line's digest,
+    each told its line alone; mutants `y06` to `y10`, each rule reverted, red. (c) Neither
+    531's message nor 535's says how to start anyway, where the cut-short message names
+    `start: :cold`; 531's is pinned by tests this item does not change, and 535's follows
+    its form, so both stay as built, and the way out is question 4. (d) `9bc9a16`'s
+    message calls the bound "a sixth", where it was 15 per cent; it is a tenth now (F1).
+  - *The leave of the fixes* (`git diff --numstat e304d57`): `retain_store_test.exs`,
+    153 added and 5 removed, the cost test's lowercase bound made tighter, 1.15 to 1.10
+    (one line, and four of its comment), and the rest new, the CamelCase twins and two
+    tests; `api_contract_test.exs`, 8 and 2, the life walk's comment made true and its
+    assertion added. No test, walk or oracle was deleted or weakened, and no test of
+    reading versions 1 and 2 changed.
+  - *The mutation table* (`scripts/mutate.sh`, each judged by the full suite at
+    `73fccf1`, the patches and logs under `scratchpad/rv/p27/fixmut/`, `store` being
+    `retain_store_test.exs`, each count the failed tests the failures manifest names):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `y01_downcase_compare` | the review's `x03`: a lowercased copy of every name compared with it, for the search for a capital | red, 1 (store's cost), and README's project test (Mix's banner over the dependency rebuilt) |
+    | `y02_no_tag_lookup` | a capital name's word not looked up among the tags, every such name to the table | red, 1 (store's cost) |
+    | `y03_f4_reverted` | the case reading as `e304d57` built it, the whole name to the table and an element's word split and looked up again | red, 1 (store's cost) |
+    | `y04_cut_at_bracket_only` | the word cut at the first `[` alone, a member's holder not cut from its name | red, 1 (store's cost) |
+    | `y05_tag_lookup_whole_name` | the tags looked up by the whole name, not its word | red, 1 (store's cost) |
+    | `y06_naming_ignores_unread` | a store whose naming line does not read told also that it names none | red, 1 (store) |
+    | `y07_resourced_ignores_unread` | one whose `resource` line does not read told also that it names no resource | red, 1 (store) |
+    | `y08_bad_digest_unmarked` | a naming line whose digest is none not marked as a naming line | red, 1 (store) |
+    | `y09_malformed_resource_unmarked` | a `resource` line of other words not marked | red, 1 (store) |
+    | `y10_malformed_program_unmarked` | a `program` line of other words not marked | red, 2 (store, and decision 520's flake below) |
+    | `y11_resource_alone_refused` | the review's `x10`: a version 3 store with its `resource` line and no `program` line refused | red, 1 (store) |
+
+    No mutant survived. `y10`'s second failure is `logex_test.exs`'s "the caller is
+    charged the reductions its compile spent", "1454684 charged, 1454690 here", the same
+    flake of decision 520's test RV-26's review recorded (its F6), its second sighting,
+    here with the load runs beside the table; the fixes touch neither
+    the compile nor that test. `y01`'s README failure is the dependency's rebuild banner
+    over `scan.exs`'s output, as earlier tables record of any change to `lib/`.
+
+  - *Load runs* (`scripts/load.sh`, four busy loops on four cores, in a clone of their
+    own, `p27/loadtree`, the mutation table and the cost runs beside them, the machine's
+    load average some 12 to 17): the store tests this fix changed or added that start a
+    runner, the cost test and the version 3 store naming its resource alone, 0 of 50
+    runs red; the store's life walk, at its line with the two tests ExUnit's line filter
+    takes beside it, 55 runs in three batches, two at once for most of them, eight busy
+    loops on four cores: 54 green and one red, the first batch's run 11, an ExUnit
+    timeout of the walk's `@tag timeout: 300_000` while its model scanned
+    (`Logex.Runtime.cycle_step/2` under the walk's `record/2`), the run 342 s for its
+    three tests against the others' 237 to 271 s, while the close's full-suite gate ran
+    beside both batches (load average 16 to 20); the other batch's run of the same
+    minutes took 339 s and passed. No assertion failed. The walk's three tests take some
+    four minutes on a machine so loaded, a minute under its timeout, as RV-27's own runs
+    (4.3 minutes) and the review's found: recorded for whoever next holds the walk, and
+    no bound widened. With the builder's 28 runs and the review's 22 of `e304d57`, the
+    walk has 105 loaded runs behind it.
+  - *Cost against the parent* (`e304d57`), reductions, the least of several runs, two
+    runs each, the scripts of RV-27's entry and the review's `camel.exs` and
+    `camelstart.exs` (`p27/fixcost/cost.txt`): unchanged, a round of three tasks, 2075.5
+    changing and 1771.5 to 1771.8 unchanged at the parent, 2075.5 to 2075.6 and 1771.5
+    to 1772.0 here; a period's write of 1,000 retained counters, 447,209 at both; that
+    store's fresh start, the runner's 155,700 at both, the caller's 6.54 to 6.56 million
+    and 6.53 to 6.54 here; at 1,000 instances of a small type, an edit's test 620
+    thousand, an untest 582 thousand, an accept's caller 6.60 million and a warm fresh
+    start's caller 11.06 to 11.11 million at both. Changed by the case's reading: the
+    box counter in lowercase, its digest 1,912,820 to 1,913,576 at the parent and
+    1,903,202 to 1,903,714 here, 0.5 per cent less, its fresh start's caller 6.55 to
+    6.57 million and 6.52 to 6.57, its accept's 5.37 to 5.38 and 5.37 million; in upper
+    case 2,080,131 to 2,080,419 and 2,084,747 to 2,087,743, 0.3 per cent more, each
+    keyword now looked up among the tags before the table, its fresh start's caller 6.65
+    to 6.69 million and 6.72 to 6.73, its accept's 5.54 and 5.53 to 5.55; RV-26's
+    review's 1,000 subscripted names and 1,000 bits 1,514,779 to 1,515,659 and 1,510,479
+    to 1,510,491; and the review's CamelCase programs, written_by/1 in a process of its
+    own, tags 2,402,451 to 2,403,107 and 2,240,769 to 2,241,325, 14.2 per cent over
+    their texts printed directly and 6.5 here, the 1,000-element array 1,419,199 to
+    1,419,591 and 1,264,360 to 1,266,716, 25.2 per cent over and 11.6, its fresh start's
+    caller 5.61 to 5.66 million and 5.50 to 5.54, its accept's 3.63 and 3.49 million.
+  - *CLAUDE.md*: unchanged; no file was added, and `Logex.Retain`'s line, the store's text
+    to its end line, versions 2 and 1 read too, stays true.
+  - *The labels*: the review's finding numbers are this entry's alone; the code and the
+    tests cite "RV-27's review", where `d3f8f12` cited its findings by number in five
+    comments, which the close commit took out, §7 defining fixes F1 to F16 of its own.
+  - *README's "What logex is not"*, checked claim by claim again: unchanged and true; the
+    fixes add no feature, the case reading gives the digests it gave, and the store
+    passage's "no checksum ... beyond its grammar and its count of lines" holds.
+  - *Questions for the maintainer, added by the review*, each marked provisional where it
+    stands (questions 1 and 2 above stand as they were):
+    3. *A version 3 store with its `resource` line and no `program` line* (F2). A hand
+       edit takes `program tally ...` out of `tally.retain`, keeps `resource ...` and the
+       count of boxes, and mends the end line. (a) As built: the warm start runs, the
+       count kept, and `status/1` and every subscriber are told "`tally` is not in the
+       store; whether by a deploy of changed files, or an edit tested or assembled online
+       that never reached the files, ...", a cause that is not this one; (b) refused at
+       its first line or at the `resource` line, as 531 and 535 refuse the other two
+       partial forms, the operator told what is missing and a cold start copying the
+       store first; (c) read as naming no program, no warning, as a version 2 store
+       naming none is. No configuration may hold no program type, so (b) refuses no
+       store the runner writes. IEC 61131-3 and Logix have no store a person edits.
+    4. *The way out of a refusal of the naming lines* (F6 (c)). A hand edit leaves
+       `conveyor.retain` naming no program, or a program and no resource; the warm start
+       is refused with what is missing and what a good store gives, and says nothing of
+       how to start anyway, where a store cut short is told to start with `start: :cold`,
+       which copies it first. (a) As built: the message names the fault and the shape
+       only, README and the runner's moduledoc saying a cold start copies any refused
+       store; (b) both messages, 531's and 535's, end as the cut-short one does, "start it
+       with start: :cold to start over it, which copies it first to the next
+       `.dropped.<n>` beside it and then writes a new store over it", 531's pinned message
+       changing with it; (c) both say "put the lines back, or start it with start:
+       :cold, ...". IEC 61131-3 and Logix have no store a person edits.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

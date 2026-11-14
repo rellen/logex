@@ -15263,8 +15263,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      in upper case, each such word looked up once, within a quarter; and since RV-27's
      review a name holding a capital letter has its word, before any `[` or `.`, looked up
      first among its text's tags and kept where it is one, so that a program of CamelCase
-     tags pays a map's look-up a name over its lowercase twin, near 4 reductions, where
-     the table's look-up and an element's subscripts read past cost 46 and 66. A store RV-26's logex wrote, whose digest kept every word's
+     tags pays a map's look-up a name over its lowercase twin, near 3 reductions, where
+     the table's look-up and an element's subscripts read past cost 44 to 66. A store RV-26's logex wrote, whose digest kept every word's
      case, is read as any version 3 store: where a type's words were written in another
      case than lowercase, or a bit in brackets, its first fresh start here is told once
      that the type's text differs, and its next write names the type as this logex reads

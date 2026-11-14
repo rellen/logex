@@ -15077,7 +15077,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # store with its `resource` and `program` lines taken away and its count mended, as a
   # hand edit leaves it, and is refused at its first line, which says that a store of
   # `logex retain 3` names the program that wrote it, no device read or written, each
-  # sim's reads and writes as they were (RV-27's review, F5, where this said no device
+  # sim's reads and writes as they were (RV-27's review, where this said no device
   # opened and asserted none of it); the store put back, the start is made from it.
   defp unnamed_refused!(%{life: false}, _text, _opts), do: :ok
   defp unnamed_refused!(%{start: :cold}, _text, _opts), do: :ok

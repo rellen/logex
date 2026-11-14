@@ -298,7 +298,7 @@ defmodule Logex.Retain do
   # name's word, the whole name or its part before the first `[` or `.`, is looked up
   # first among the tags its text declares, none of which a word logex reserves can be,
   # and kept where it is one, so that a tag in CamelCase, as Logix shops write them,
-  # `Eye`, `C7` or `C[7].q`, costs a map's look-up (RV-27's review, F4: each such name
+  # `Eye`, `C7` or `C[7].q`, costs a map's look-up (RV-27's review: each such name
   # looked up in the table, and an element's word read past its subscripts, cost a
   # program of CamelCase tags near a quarter over its texts printed); only a word that is
   # no tag, a keyword, a label or a user block's name, is looked up in the table.

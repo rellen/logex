@@ -3290,12 +3290,12 @@ defmodule Logex.RetainStoreTest do
       # capital letter, within a tenth of its texts printed and digested here, where a
       # look-up of every name in the table that reserves its words cost near a quarter,
       # and a lowercased copy of every name to compare it with near 14 per cent (RV-27's
-      # review, F1: the 15 per cent this bound was let both pass); and the same program
+      # review: the 15 per cent this bound was let both pass); and the same program
       # with each word logex reads in any case in upper case, each such word looked up and
       # lowercased, named alike, at its texts' cost too.
       assert digest <= direct * 1.10 + 10_000, "the digest #{digest}, its texts #{direct}"
 
-      # RV-27's review, F4: a name holding a capital letter has its word, the whole name or
+      # RV-27's review: a name holding a capital letter has its word, the whole name or
       # its part before the first `[` or `.`, looked up among the program's own tags and
       # kept where it is one, a tag in CamelCase as Logix shops write them, an element of
       # one or a member of one, and only a word that is no tag, a keyword or a label, in
@@ -3710,7 +3710,7 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # RV-27's review, F6: a `resource` or `program` line that does not read is a line that
+    # RV-27's review: a `resource` or `program` line that does not read is a line that
     # names the store's writer, told as itself, and the store is not told also that it
     # names none (decision 535) or no resource (decision 531), which it may name once that
     # line is mended: both lines' digests mistyped, each line told and not line 1; the
@@ -3759,7 +3759,7 @@ defmodule Logex.RetainStoreTest do
       )
     end
 
-    # RV-27's review, F2 (provisional, `PLAN.md`'s RV-27, question 3): a store of `logex
+    # RV-27's review (provisional, `PLAN.md`'s RV-27, question 3): a store of `logex
     # retain 3` with its `resource` line and no `program` line, a hand edit's, as no
     # configuration the runner runs gives one, every configuration declaring a program, is
     # read, its resource named and no type, and a warm start from it lays its values over
