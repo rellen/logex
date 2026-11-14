@@ -15076,8 +15076,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # reads a store, by the store's own text, so that no draw is taken, is first given the
   # store with its `resource` and `program` lines taken away and its count mended, as a
   # hand edit leaves it, and is refused at its first line, which says that a store of
-  # `logex retain 3` names the program that wrote it, no device opened; the store put
-  # back, the start is made from it.
+  # `logex retain 3` names the program that wrote it, no device read or written, each
+  # sim's reads and writes as they were (RV-27's review, F5, where this said no device
+  # opened and asserted none of it); the store put back, the start is made from it.
   defp unnamed_refused!(%{life: false}, _text, _opts), do: :ok
   defp unnamed_refused!(%{start: :cold}, _text, _opts), do: :ok
   defp unnamed_refused!(_w, nil, _opts), do: :ok
@@ -15096,12 +15097,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       Enum.join([header, configuration | lines], "\n") <> "\nend #{count} lines\n"
     )
 
+    devices = for {_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}
+
     assert_raise ArgumentError,
                  "#{w.store}: line 1: `logex retain 3` heads a store that names the program " <>
                    "that wrote it, and the store names none: a store that names the program " <>
                    "that wrote it gives `resource <digest>` straight after its configuration's " <>
                    "line, and then a `program <type> <digest>` a type",
                  fn -> Runner.start_link(opts) end
+
+    assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==
+             devices
 
     File.write!(w.store, text)
     reach(:life_unnamed_refused, true)

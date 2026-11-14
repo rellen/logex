@@ -3502,12 +3502,19 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   its program, as RV-21's logex wrote it, names each type by the MD5 of its file's bytes,
   so a fresh start from it compares the bytes of the files it is given, as that logex
   did, and warns where they differ (decision 534); a store of `logex retain 3` with
-  neither a `resource` nor a `program` line, a hand edit's, is refused at its first line,
+  neither a `resource` nor a `program` line, a hand edit's, is refused at its first line
+  (provisional, the line),
   ``tally.retain: line 1: `logex retain 3` heads a store that names the program that
   wrote it, and the store names none: ...``, as one with a `program` line and no
   `resource` line is refused at that line (decisions 531 and 535), and starts warm once
   the lines are put back, or `start: :cold`, which copies it first to the next
-  `.dropped.<n>`. A logex from before RV-26, put back over a store this one wrote
+  `.dropped.<n>`; its first line made `logex retain 2` by hand, its count kept, it is
+  read as any store of version 2 that names no program is, and warns of nothing. A
+  `resource` or `program` line that does not read, its digest mistyped, is told as
+  itself, not as one missing; and a store of `logex retain 3` with its `resource` line and
+  no `program` line, which no configuration gives, each declaring a program, is read, and
+  warns that each type the start runs is not in the store (provisional). A logex from
+  before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
   reads `logex retain 2` and `logex retain 1` ``, and its end line as one its header does

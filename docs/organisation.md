@@ -4754,9 +4754,16 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   mnemonic, a section, a qualifier, a type's word and a block's heading word, and a
   literal bit number in brackets as the plain bit, so that neither warns, a tag's case
   still doing so (532); a `logex retain 3` store that names no program is refused at its
-  first line, as one that names it in part is (535); and an end line under any header
-  that takes none, `logex retain 1` among them, is told as one a store of `logex retain
-  3` or `logex retain 2` ends with (536).)*
+  first line (the line provisional), as one that names it in part is (535); and an end
+  line under any header that takes none, `logex retain 1` among them, is told as one a
+  store of `logex retain 3` or `logex retain 2` ends with (536).)* *(RV-27's review,
+  2026-11-14: a naming line that does not read, its digest mistyped, is told as itself
+  and the store not told also that it names none or no resource; a `logex retain 3`
+  store with its `resource` line and no `program` line, which no configuration gives, is
+  read and warns that each type is not in the store (provisional, `PLAN.md`'s RV-27,
+  question 3); and a name holding a capital letter is looked up among its text's tags
+  before the table that reserves logex's words, so that a program of CamelCase tags pays
+  a map's look-up a name.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -15252,8 +15259,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      name are the text's, each read by its exact name (README's "tags are
      case-sensitive"), so `Start` for `start` still warns. A program written in lowercase
      pays one search a name for a capital letter, its digest within 15 per cent of its
-     texts printed and digested directly; one written in upper case, each such word looked
-     up once, within a quarter. A store RV-26's logex wrote, whose digest kept every word's
+     texts printed and digested directly, since RV-27's review within a tenth; one written
+     in upper case, each such word looked up once, within a quarter; and since RV-27's
+     review a name holding a capital letter has its word, before any `[` or `.`, looked up
+     first among its text's tags and kept where it is one, so that a program of CamelCase
+     tags pays a map's look-up a name over its lowercase twin, near 4 reductions, where
+     the table's look-up and an element's subscripts read past cost 46 and 66. A store RV-26's logex wrote, whose digest kept every word's
      case, is read as any version 3 store: where a type's words were written in another
      case than lowercase, or a bit in brackets, its first fresh start here is told once
      that the type's text differs, and its next write names the type as this logex reads
@@ -15328,9 +15339,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      its count not mended, is told that alone, a cut before the third line taking the
      naming lines with it, and its line 1 named once (provisional, `PLAN.md`'s RV-27, as
      is the line the refusal names). A store of `logex retain 2` or `logex retain 1`
-     naming none is read as before. The life walk takes a version 3 store's naming lines
-     away before one warm start in two and asserts the refusal whole
-     (`:life_unnamed_refused`).)*
+     naming none is read as before, one relabelled so by hand among them, which warns of
+     nothing. The life walk takes a version 3 store's naming lines away before one warm
+     start in two and asserts the refusal whole (`:life_unnamed_refused`).)* *(RV-27's
+     review, 2026-11-14: a store whose `resource` or `program` line is there and does not
+     read, its digest mistyped, is told that line, and not also that it names none, where
+     it was told both, nor that it names no resource, decision 531's message, which it was
+     told beside a `resource` line that did not read: decision 535 refuses a store with
+     neither line, and such a line is one. A store with its `resource` line and no
+     `program` line, which no configuration gives, every one declaring a program, is read
+     and warns that each type the start runs is not in the store, as built, provisional,
+     `PLAN.md`'s RV-27, question 3; the 535 refusal's way out, its message saying nothing
+     of `start: :cold` as 531's does not, question 4.)*
 
 536. **An end line under `logex retain 1` (RV-26),** RV-26's question 5, from its
      review: in a store whose first line is a header this logex does not read, an end

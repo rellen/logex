@@ -234,8 +234,8 @@ defmodule Logex.Retain do
         )
     ]
 
-  defp own_text(source, _program, {:canonical, kind}) when is_binary(source),
-    do: canonical(source, kind)
+  defp own_text(source, program, {:canonical, kind}) when is_binary(source),
+    do: canonical(source, {kind, program})
 
   defp own_text(source, _program, {:bytes, _kind}) when is_binary(source), do: source
 
@@ -252,25 +252,25 @@ defmodule Logex.Retain do
   # the program's; the declarations are rungs to the parser, and printed so too. A text
   # that does not lex or parse, which only a program built by hand holds, every compile's
   # text doing both, is digested as its bytes.
-  defp canonical(source, kind), do: lexed(Logex.Lexer.tokenize(source), source, kind)
+  defp canonical(source, read), do: lexed(Logex.Lexer.tokenize(source), source, read)
 
-  defp lexed({:ok, tokens, _end_line}, source, kind),
-    do: parsed(Logex.Parser.parse(tokens), source, kind)
+  defp lexed({:ok, tokens, _end_line}, source, read),
+    do: parsed(Logex.Parser.parse(tokens), source, read)
 
-  defp lexed(_error, source, _kind), do: source
+  defp lexed(_error, source, _read), do: source
 
-  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source, kind),
-    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value(&1, kind))}})
+  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source, read),
+    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value(&1, read))}})
 
-  defp parsed(_error, source, _kind), do: source
+  defp parsed(_error, source, _read), do: source
 
-  defp by_value({:rung, elements}, kind), do: {:rung, Enum.map(elements, &by_value(&1, kind))}
+  defp by_value({:rung, elements}, read), do: {:rung, Enum.map(elements, &by_value(&1, read))}
 
-  defp by_value({:branches, legs}, kind),
-    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e, kind) end))}
+  defp by_value({:branches, legs}, read),
+    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e, read) end))}
 
-  defp by_value({:int_lit, line, value, _spelling}, _kind), do: {:int_lit, line, value}
-  defp by_value({:real_lit, line, value, _spelling}, _kind), do: {:real_lit, line, value}
+  defp by_value({:int_lit, line, value, _spelling}, _read), do: {:int_lit, line, value}
+  defp by_value({:real_lit, line, value, _spelling}, _read), do: {:real_lit, line, value}
 
   # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
   # by its value too (`Logex.Name.each_by_value/1`), so that `arr[16#2]`, `w.03` and
@@ -278,10 +278,10 @@ defmodule Logex.Retain do
   # `int[16#4]`; since decision 532 (RV-27) a literal bit number in brackets the plain
   # bit, `w.[4]` and `w.[16#4]` both `w.4`, and the name's case read as logex reads it
   # (cased/2).
-  defp by_value({:name, line, name}, kind),
-    do: {:name, line, cased(Logex.Name.each_by_value(name), kind)}
+  defp by_value({:name, line, name}, read),
+    do: {:name, line, cased(Logex.Name.each_by_value(name), read)}
 
-  defp by_value(element, _kind), do: element
+  defp by_value(element, _read), do: element
 
   # Decision 532 (RV-27): each word logex reads in any case lowercased, wherever it stands
   # in the tree, so that `XIC start` for `xic start`, `VAR_INPUT`, `RETAIN`, `DINT`,
@@ -294,29 +294,39 @@ defmodule Logex.Retain do
   # other name is kept as written, its case its name's: a tag's, a member's, a label's and
   # a user block's, each of which logex reads by its exact name, so that `Start` for
   # `start` is another tag and warns. Only a name holding a capital letter is looked at
-  # past one search for one, a program written in lowercase paying that alone.
+  # past one search for one, a program written in lowercase paying that alone; and such a
+  # name's word, the whole name or its part before the first `[` or `.`, is looked up
+  # first among the tags its text declares, none of which a word logex reserves can be,
+  # and kept where it is one, so that a tag in CamelCase, as Logix shops write them,
+  # `Eye`, `C7` or `C[7].q`, costs a map's look-up (RV-27's review, F4: each such name
+  # looked up in the table, and an element's word read past its subscripts, cost a
+  # program of CamelCase tags near a quarter over its texts printed); only a word that is
+  # no tag, a keyword, a label or a user block's name, is looked up in the table.
   @capitals for c <- ?A..?Z, do: <<c>>
 
-  defp cased(name, kind), do: capital(:binary.match(name, @capitals), name, kind)
+  defp cased(name, read), do: capital(:binary.match(name, @capitals), name, read)
 
-  defp capital(:nomatch, name, _kind), do: name
-  defp capital(_found, name, kind), do: lowered(Declarations.reserved(name), name, kind)
+  defp capital(:nomatch, name, _read), do: name
+  defp capital(_found, name, read), do: worded(:binary.match(name, ["[", "."]), name, read)
 
-  defp lowered(nil, name, kind), do: worded(Logex.Name.element(name), name, kind)
-  defp lowered(_as, name, _kind), do: String.downcase(name)
+  defp worded(:nomatch, name, read), do: declared(name, name, read)
+  defp worded({at, _length}, name, read), do: declared(binary_part(name, 0, at), name, read)
 
-  defp worded({word, _sizes}, name, _kind),
-    do: lowered_base(Declarations.reserved(word), word, name)
+  defp declared(word, name, {_kind, %{tags: tags}}) when is_map_key(tags, word), do: name
 
-  defp worded(nil, name, :block), do: heading(String.downcase(name) in Declarations.kinds(), name)
-  defp worded(nil, name, :program), do: name
+  defp declared(name, name, {kind, _program}),
+    do: whole(Declarations.reserved(name), name, kind)
 
-  defp lowered_base(nil, _word, name), do: name
+  defp declared(word, name, _read), do: sized(Declarations.reserved(word), byte_size(word), name)
 
-  defp lowered_base(_as, word, name),
-    do:
-      String.downcase(word) <>
-        binary_part(name, byte_size(word), byte_size(name) - byte_size(word))
+  defp whole(nil, name, :block), do: heading(String.downcase(name) in Declarations.kinds(), name)
+  defp whole(nil, name, :program), do: name
+  defp whole(_as, name, _kind), do: String.downcase(name)
+
+  defp sized(nil, _at, name), do: name
+
+  defp sized(_as, at, name),
+    do: String.downcase(binary_part(name, 0, at)) <> binary_part(name, at, byte_size(name) - at)
 
   defp heading(true, name), do: String.downcase(name)
   defp heading(false, name), do: name
@@ -484,7 +494,8 @@ defmodule Logex.Retain do
       seen: %{},
       problems: Enum.reverse(marked ++ before_end(problems, last)),
       unprintable: Refusal.pattern(),
-      ended: last != nil
+      ended: last != nil,
+      unread_by: %{}
     }
 
     acc =
@@ -503,17 +514,23 @@ defmodule Logex.Retain do
   # (decision 417). A store whose end line does not read, cut short or miscounted, is told
   # that alone (decision 355), since a cut before the configuration's line's end takes the
   # lines that name its program with it (provisional, `PLAN.md`'s RV-27). A store of
-  # `logex retain 2` or `logex retain 1` that names none is read as it was.
-  defp naming(%{by: nil} = acc, [{@header, 1} | _rest], []),
-    do:
-      problem(
-        acc,
-        1,
-        "`#{@header}` heads a store that names the program that wrote it, and the store " <>
-          "names none: a store that names the program that wrote it gives `resource " <>
-          "<digest>` straight after its configuration's line, and then a `program <type> " <>
-          "<digest>` a type"
-      )
+  # `logex retain 2` or `logex retain 1` that names none is read as it was, one relabelled
+  # so by hand among them. One of `logex retain 3` that names its resource and no program
+  # type, which no configuration gives, each declaring a program, is read, and a warm start
+  # from it warns that each type it runs is not in the store (provisional, `PLAN.md`'s
+  # RV-27, question 3); and one whose `resource` or `program` line does not read is told
+  # that line, and not that it names none (unread_by/2).
+  defp naming(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest], [])
+       when map_size(unread) == 0,
+       do:
+         problem(
+           acc,
+           1,
+           "`#{@header}` heads a store that names the program that wrote it, and the store " <>
+             "names none: a store that names the program that wrote it gives `resource " <>
+             "<digest>` straight after its configuration's line, and then a `program <type> " <>
+             "<digest>` a type"
+         )
 
   defp naming(acc, _lines, _ending), do: acc
 
@@ -815,10 +832,20 @@ defmodule Logex.Retain do
       )
 
   defp line(["resource" | _words], {text, n}, acc),
-    do: problem(acc, n, "#{quoted(text)} is no resource's line: it is `resource <digest>`")
+    do:
+      problem(
+        unread_by(acc, :resource),
+        n,
+        "#{quoted(text)} is no resource's line: it is `resource <digest>`"
+      )
 
   defp line(["program" | _words], {text, n}, acc),
-    do: problem(acc, n, "#{quoted(text)} is no program's line: it is `program <type> <digest>`")
+    do:
+      problem(
+        unread_by(acc, :program),
+        n,
+        "#{quoted(text)} is no program's line: it is `program <type> <digest>`"
+      )
 
   # Decision 355: an end line anywhere but last, which no path is, having no `.`; and since
   # RV-5's review one in a store not judged by version 2's rule, its header not `logex
@@ -868,6 +895,8 @@ defmodule Logex.Retain do
   # RV-21's review: a store that names its writer's program types names its resource
   # too, a problem of the first `program` line where it does not, as the reader read it.
   # The line is the three words the reader took it as, each one space apart.
+  defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc), do: acc
+
   defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do
     {name, n} = Enum.min_by(for({{:program, name}, n} <- acc.seen, do: {name, n}), &elem(&1, 1))
 
@@ -1074,10 +1103,21 @@ defmodule Logex.Retain do
   defp no_digest(digest),
     do: {:error, "#{quoted(digest)} is no digest: a store's is 32 lowercase hexadecimal digits"}
 
-  defp by_entered({:error, message}, _key, {_text, n}, acc), do: problem(acc, n, message)
+  defp by_entered({:error, message}, key, {_text, n}, acc),
+    do: problem(unread_by(acc, by_kind(key)), n, message)
 
   defp by_entered({:ok, digest}, key, at, acc),
     do: once(acc, key, at, &%{&1 | by: put_by(key, digest, by_of(&1.by))})
+
+  # RV-27's review: a `resource` or `program` line that does not read, its digest none or
+  # its words not the line's, told as itself, and the store not told also that it names
+  # no resource (resourced/1) or none (naming/3), which it may name once that line is
+  # mended: decision 535 refuses a store with neither line, and decision 531 one that names
+  # a type and no resource, where such a line is one.
+  defp unread_by(acc, kind), do: %{acc | unread_by: Map.put(acc.unread_by, kind, true)}
+
+  defp by_kind({:program, _name}), do: :program
+  defp by_kind(:resource), do: :resource
 
   defp by_of(nil), do: %{resource: nil, programs: %{}}
   defp by_of(by), do: by

@@ -3287,11 +3287,59 @@ defmodule Logex.RetainStoreTest do
       assert digest <= direct * 1.25 + 10_000, "the digest #{digest}, its texts #{direct}"
 
       # Decision 532 (RV-27): a program written in lowercase pays one search a name for a
-      # capital letter, within 15 per cent of its texts printed and digested here, where
-      # a look-up of every name in the table that reserves its words cost near a quarter;
-      # and the same program with each word logex reads in any case in upper case, each
-      # such word looked up and lowercased, named alike, at its texts' cost too.
-      assert digest <= direct * 1.15 + 10_000, "the digest #{digest}, its texts #{direct}"
+      # capital letter, within a tenth of its texts printed and digested here, where a
+      # look-up of every name in the table that reserves its words cost near a quarter,
+      # and a lowercased copy of every name to compare it with near 14 per cent (RV-27's
+      # review, F1: the 15 per cent this bound was let both pass); and the same program
+      # with each word logex reads in any case in upper case, each such word looked up and
+      # lowercased, named alike, at its texts' cost too.
+      assert digest <= direct * 1.10 + 10_000, "the digest #{digest}, its texts #{direct}"
+
+      # RV-27's review, F4: a name holding a capital letter that the program declares, a
+      # tag in CamelCase as Logix shops write them, its element's word or a member's
+      # holder, is looked up among the program's own tags and kept, and only a word that
+      # is none of them, a keyword or a label, in the table that reserves logex's words;
+      # so the program with its tags capitalised, `Eye`, `Total` and `C1` to `C1000`,
+      # each of its 3,005 names one look-up, costs its lowercase twin's digest, the same
+      # texts' bytes, and near 4 reductions a name more (11,985 when this was written),
+      # half a reduction a name allowed, and so does an array's element, `C[7]`, of its
+      # 2,006 names (3,184); where every such name looked up in the table cost some 46
+      # reductions a name more, and an element's word read through its subscripts 66.
+      capitalised = fn text ->
+        Regex.replace(~r/\b(?:eye|total)\b|\bc(?=[\d\[ ])/, text, &String.capitalize/1)
+      end
+
+      cased_plant =
+        plant
+        |> String.replace("retain total", "retain Total")
+        |> String.replace("m1.eye", "m1.Eye")
+
+      cased_digest = fn text, plant ->
+        {:ok, program} = Logex.compile(text, name: "many")
+        config = configured(plant, %{"many" => program})
+        least.(fn -> Retain.written_by(config) end)
+      end
+
+      camel = capitalised.(text)
+      assert camel =~ "var_input Eye bool\nvar_external Total dint\nvar retain C1 ctu\n"
+      assert camel =~ "\nxic Eye ctu C1000 5\nxic Eye add Total 1 Total"
+      lower_digest = cased_digest.(text, plant)
+      camel_digest = cased_digest.(camel, cased_plant)
+
+      assert camel_digest <= lower_digest + 11_985 + div(3005, 2),
+             "CamelCase tags #{camel_digest}, their lowercase twin #{lower_digest}"
+
+      elements =
+        "var_input eye bool\nvar_external total dint\nvar retain c ctu[1000]\n\n" <>
+          Enum.map_join(0..999, "\n", &"xic eye ctu c[#{&1}] 5") <> "\nxic eye add total 1 total"
+
+      camel_elements = capitalised.(elements)
+      assert camel_elements =~ "var retain C ctu[1000]\n\nxic Eye ctu C[0] 5\n"
+      lower_digest = cased_digest.(elements, plant)
+      camel_digest = cased_digest.(camel_elements, cased_plant)
+
+      assert camel_digest <= lower_digest + 3184 + div(2006, 2),
+             "CamelCase elements #{camel_digest}, their lowercase twin #{lower_digest}"
 
       shouted =
         Regex.replace(
@@ -3656,6 +3704,102 @@ defmodule Logex.RetainStoreTest do
       assert %{warning: nil, dropped: []} = Runner.status(runner).retain
       assert values(runner) == kept
       assert Runner.stop(runner) == :ok
+    end
+
+    # RV-27's review, F6: a `resource` or `program` line that does not read is a line that
+    # names the store's writer, told as itself, and the store is not told also that it
+    # names none (decision 535) or no resource (decision 531), which it may name once that
+    # line is mended: both lines' digests mistyped, each line told and not line 1; the
+    # resource's alone, its line told and not the first `program` line.
+    test "a store whose naming line does not read is told that line, not that it names " <>
+           "none or no resource" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+
+      ["logex retain 3", _named, "resource " <> resource, "program tally " <> program | _] =
+        String.split(v3, "\n")
+
+      both =
+        v3
+        |> String.replace("resource " <> resource, "resource xyz")
+        |> String.replace("program tally " <> program, "program tally zz")
+
+      raises(
+        "s: line 3: `xyz` is no digest: a store's is 32 lowercase hexadecimal digits\n" <>
+          "s: line 4: `zz` is no digest: a store's is 32 lowercase hexadecimal digits",
+        fn -> Retain.decoded!(both, {"s", "plant"}) end
+      )
+
+      worded = String.replace(v3, "resource " <> resource, "resource " <> resource <> " x")
+
+      raises(
+        "s: line 3: `resource #{resource} x` is no resource's line: it is `resource <digest>`",
+        fn -> Retain.decoded!(worded, {"s", "plant"}) end
+      )
+
+      # Its `resource` line taken away and its `program` line's digest too, the count
+      # mended: the program's line told, which names a program, and neither 535's line 1
+      # nor 531's, which the next start tells once that line is mended.
+      [_, count] = Regex.run(~r/end (\d+) lines\n\z/, v3)
+
+      unresourced =
+        v3
+        |> String.replace("resource " <> resource <> "\n", "")
+        |> String.replace("program tally " <> program, "program tally")
+        |> String.replace("end #{count} lines", "end #{String.to_integer(count) - 1} lines")
+
+      raises(
+        "s: line 3: `program tally` is no program's line: it is `program <type> <digest>`",
+        fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
+      )
+    end
+
+    # RV-27's review, F2 (provisional, `PLAN.md`'s RV-27, question 3): a store of `logex
+    # retain 3` with its `resource` line and no `program` line, a hand edit's, as no
+    # configuration the runner runs gives one, every configuration declaring a program, is
+    # read, its resource named and no type, and a warm start from it lays its values over
+    # and warns that each type the start runs is not in the store, as a store naming the
+    # very resource and other types would; its next write names the program whole.
+    test "a store of version 3 that names its resource and no program type is read, and " <>
+           "warns that each type is not in the store",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      whole = File.read!(rig.store)
+
+      [header, named, resource, "program tally " <> _ = program | rest] =
+        String.split(whole, "\n")
+
+      count = length(String.split(whole, "\n", trim: true))
+
+      unprogrammed =
+        Enum.join([header, named, resource | Enum.drop(rest, -2)], "\n") <>
+          "\nend #{count - 1} lines\n"
+
+      refute unprogrammed =~ program
+      "resource " <> digest = resource
+      assert {_image, _at, by} = Retain.decoded!(unprogrammed, {"s", "plant"})
+      assert by == %{resource: digest, programs: %{}}
+
+      File.write!(rig.store, unprogrammed)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+
+      assert Runner.status(runner).retain.warning ==
+               rig.store <>
+                 ": the store was written by another program than the one this start was " <>
+                 "given: `tally` is not in the store; whether by a deploy of changed files, " <>
+                 "or an edit tested or assembled online that never reached the files, this " <>
+                 "start runs the program it was given, with the store's retained values laid " <>
+                 "over it by name and type"
+
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
     end
 
     # Decisions 530 (RV-26) and 534 (RV-27): a store RV-21's logex wrote, `logex retain 2` with
