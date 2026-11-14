@@ -36,7 +36,7 @@ defmodule Logex.Compiler.Worker do
   # slice at a time, each giving the scheduler a turn, so on a busy machine the charge
   # lengthens the caller's wait (RV-20's review, some 16% beside eight busy loops). The
   # settings taken, a compile killed taking its caller with it and the charge are
-  # readings the record leaves (provisional, `PLAN.md`'s RV-20, question 3).
+  # decision 524's, taken as built.
   #
   # The process runs this module's `serve/1`, spawned by module, function and arguments,
   # never a closure, and it calls `Logex.Compiler`'s three, which take a source text and

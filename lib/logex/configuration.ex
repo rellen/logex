@@ -611,7 +611,7 @@ defmodule Logex.Configuration do
   near the count of its mistakes, since the first hundred names it cannot find, in line
   order, a global, an instance, a task, a member or a program type, are each offered the
   nearest of every name it could be, a name differing only in case always the one, and
-  every name after them none, looked for among nothing (provisional,
+  every name after them none, looked for among nothing (decision 522,
   `Logex.Declarations`), as `Logex.compile/2`'s are, its loader's absent program types
   counted with them; and each list of names a message would end with is given once, as
   ever. So 1,000, 2,000 and 4,000 connections naming a renamed button among twice as many

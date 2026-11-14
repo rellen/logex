@@ -47,7 +47,7 @@ defmodule Logex do
   7,095 of them for a box counter's 280 KB program, refused in 50 s, where the allowance
   leaves 28 and 32 s, before the did-you-mean was bounded (`compile/2`). It takes the
   caller's priority and heap settings, `min_heap_size`, `max_heap_size` and
-  `fullsweep_after` (provisional), so a caller's limit of its heap holds its compile, and
+  `fullsweep_after` (decision 524), so a caller's limit of its heap holds its compile, and
   a caller given a large minimum heap holds two while its compile runs, its own and the
   compile's; and its group leader, as a spawn always does, and reads and writes no
   process dictionary, the caller's or its own. It is linked to the caller and unlinks
@@ -56,11 +56,11 @@ defmodule Logex do
   in the caller, its message unchanged and its stack the compile's, then the caller's
   from where it called, as when the caller compiled itself; a compile killed from outside
   takes its caller with it, with the same reason, trapping exits or not, as a compile
-  killed in the caller would have (provisional); and a caller that exits, killed by a
+  killed in the caller would have (decision 524); and a caller that exits, killed by a
   host's own time limit among them, takes the compile with it, its work never left
   running. The caller is charged the reductions the compile spent, so that its own count,
   `Process.info(self(), :reductions)`, holds the whole compile, as when it ran there
-  (provisional: `PLAN.md`'s RV-20, question 3); charged a time slice at a time, each
+  (decision 524); charged a time slice at a time, each
   giving the scheduler a turn, so on a busy machine the charge lengthens the caller's
   wait: 20,000 timers compiled in 3.2 s beside eight busy loops on four cores, 2.7 s
   without the charge, and 1.7 s either way on an idle machine (RV-20's review).
@@ -105,11 +105,11 @@ defmodule Logex do
   order, a tag, a label, a member or a type, are each offered the nearest of every name it
   could be, as before the decision, a name differing only in case always the one, and
   every name after them is told what a name with none near it is told, looked for among
-  nothing (provisional, `Logex.Declarations`). Each text counts its own hundred: the
+  nothing (decision 522, `Logex.Declarations`). Each text counts its own hundred: the
   program's, and with `compile_file/1` and `compile_files/1` each block file's and each
-  path's. A message that ends with a list, a type's members or the blocks given, gives it
-  in each of the hundred, and after them once a list, by the first message that would
-  give it. So a box counter of 4,000 tags in which a renamed tag leaves 1,000, 2,000,
+  path's (decision 525). A message that ends with a list, a type's members or the blocks
+  given, gives it in each of the hundred, and after them once a list, by the first
+  message that would give it (decision 526). So a box counter of 4,000 tags in which a renamed tag leaves 1,000, 2,000,
   4,000 and 16,000 rungs naming a tag that is gone is refused in some 1.3, 1.5, 1.5 and
   1.8 s, 126 to 140 million reductions and 11 to 13 full collections, where it took 13,
   50 and 253 s for the first three, 1,257 to 5,706 million reductions and up to 48,353

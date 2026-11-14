@@ -3115,7 +3115,7 @@ defmodule Logex.StalledDiskTest do
         :ok = :file.close(late)
 
         text = File.read!(rig.store)
-        assert text =~ ~r/\Alogex retain 2\nconfiguration plant written /
+        assert text =~ ~r/\Alogex retain 3\nconfiguration plant written /
         assert text =~ "t1.boxes.cv dint 2\n"
         refute text =~ "junk"
         refute File.exists?(rig.store <> ".tmp")
