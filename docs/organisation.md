@@ -15001,6 +15001,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      16,000 unknown members of a block of 1,000 made 174.5 MB of messages; each text
      counts its own hundred, a block file's and each path's (provisional, question 4); and
      a mistake raised again in the caller carries the compile's stack, then the caller's.)*
+     *(RV-27's landing, 2026-11-14: the test of the caller's charge held two figures, each
+     the least of three counted apart, `apart >= here`, which the compile's maps of more
+     than 32 keys, charged a few reductions more or less from one call to the next, broke
+     five times, once on a quiet machine; it now holds the caller's charge exactly to the
+     count the compile's process hands back, read by a trace of the caller's receives, and
+     the caller's count against the compile in the caller counted in pairs, nine, the most
+     of their differences no less than nothing (`PLAN.md`, "Decision 520's charge test").)*
 
 521. **When the review after Milestone 6 is done (the review after Milestone 6),** RV-8's
      question 7: RV-8 wrote the done sentence, the record holding none, "done when each of

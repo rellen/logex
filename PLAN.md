@@ -20636,6 +20636,33 @@ and RV-24 side by side; and RV-25 last, alone.
        changing with it; (c) both say "put the lines back, or start it with start:
        :cold, ...". IEC 61131-3 and Logix have no store a person edits.
 
+**Decision 520's charge test, at RV-27's landing (2026-11-14).** The full suite on RV-27's
+merge went red on one test, `logex_test.exs`'s "the caller is charged the reductions its
+compile spent", "1454674 charged, 1454685 here", on a quiet machine: its fifth sighting,
+after RV-22's first build (21 under) and its mutation table (4 under), RV-26's review (34
+under, its F6) and RV-27's mutation table (6 under), each recorded for whoever next held
+decision 520's tests. The root cause is the test's: it held two figures, each the least of
+three counted apart, with nothing allowed below, `apart >= here`, where a compile builds
+maps of more than 32 keys, which the VM charges a few reductions more or less from one
+call to the next (`CONTRIBUTING.md`, "A count moves with the VM's own state"). Measured
+here: `:maps.from_list/1` of one 1,625-key list was charged 7,567 to 7,681 in 25 fresh
+processes, `Map.put/3` over the same keys 6,508 every time; this compile read 1,454,628 to
+1,454,769 in 40 runs on an idle machine, and alike on one scheduler, with no collection and
+the same 329 schedulings each run, a spread wider than the 40 to 70 reductions the handing
+over adds, so the compile apart read up to 131 under the compile here. The test now reads
+the count the compile's process hands back, traced as its caller takes it, and holds the
+caller's charge to it exactly, the handing over 55 to 60 at every run, and holds the
+caller's count against the compile in the caller counted in pairs, nine, after a pair
+counted for nothing (a fresh VM's first compile is charged some 7,000 more), the most of
+the pairs' differences no less than nothing and the least no more than 1,000. Six mutants
+of `Logex.Compiler.Worker`'s charge, each red by the check it is for: no charge (103
+charged), one time slice charged (4,097), a slice short (2,205 under), charged twice, the
+count read before the compile (the pairs, 65 charged against 1.45 million), and the
+caller's heap settings not taken (the pairs, some 42,000 over). The test's logic run 200
+times in one VM, 3,600 compiles: every check held, the most of the differences 54 to 272,
+the least -131 to 66. 52 runs of the test alone on a quiet machine and 30 under the
+busy loops green. Only the test changed, no file of `lib/`.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
