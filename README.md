@@ -383,8 +383,12 @@ files under `examples/`; and an adapter of a host's own beside the simulator ("A
 device's adapter", below). The maintainer answered RV-20's and RV-21's questions on
 2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
 before the store compares it, the stale store's warning naming both causes and sent to
-the subscribers too, and the store written as `logex retain 3`. Waiting: CI naming a
-failed test, a release step, typespecs with Dialyzer, and the runner split by concern.
+the subscribers too, and the store written as `logex retain 3`. The maintainer answered
+RV-26's questions on 2026-11-14, decisions 532–536. Waiting: CI naming a failed test, a
+release step, typespecs with Dialyzer, the runner split by concern, and RV-27: a
+keyword's case and a bit's brackets in a program's text read as logex reads them before
+the store compares it, a version 3 store that names no program refused, and one message
+for an end line under every header that takes none.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions

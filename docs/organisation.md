@@ -15212,6 +15212,84 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      wherever they stand, `retain_store_test.exs`'s "a store that names its program is
      version 3, and versions 3, 2 and 1 read alike".)*
 
+532. **A word's case, and a bit's number in brackets, in a program's text (RV-26),**
+     RV-26's question 1: decision 527 prints a program type's text before its digest, and
+     the printer keeps each word's case, since a tag's case is its name (`aa` and `AA` are
+     two tags), so `XIC start` retyped for `xic start`, which logex reads the same, warns
+     "`conveyor`'s text differs" at a fresh start from the store; a bit written
+     `lamps.[4]` for `lamps.4`, the very bit (decision 213), warns too; and the
+     configuration's own print already reads `TASK` as `task`, so the two kinds of file
+     differ.
+
+     **Taken: the words logex reads in any case lowercased (b)** (the maintainer,
+     2026-11-14): before the digest, every word logex reads in any case, a mnemonic, a
+     section, a qualifier, an elementary type word, a built-in block's type and the word
+     that heads a block's file, is lowercased, and a literal bit number in brackets is
+     read as the plain bit, `lamps.[4]` as `lamps.4`, so neither warns; a tag renamed,
+     or a tag's case changed, still warns, its name being changed. IEC 61131-3 reads
+     keywords in any case; Logix reads a tag's name in any case, and how it treats
+     `tag.[4]` is unverified. RV-27 builds it.
+
+533. **Who hears the stale store's warning (RV-26),** RV-26's question 2: decision 528
+     sends the warning to the subscribers too, and none can exist before
+     `start_link/1` returns (decision 324); RV-26 sent it to each subscription as it
+     takes `:retain`, for the runner's life, provisional, where the readings were the
+     subscriptions made before the store's next write, once a process, or once a
+     subscription until it unsubscribes.
+
+     **Taken: as built, each time a subscription takes `:retain` (a)** (the maintainer,
+     2026-11-14): a subscription that takes `:retain`, by the default kinds or by name,
+     is sent `{:retain, {:warning, message}}` as it subscribes, before `subscribe/2`
+     answers, for as long as the warning stands, the runner's life, as `status/1` holds
+     it; subscribing again with `:retain` already taken sends nothing more, and one that
+     takes `:retain` away and back, or subscribes after `unsubscribe/1`, hears it again,
+     so the HMI connected a second after the start, the log an hour later and the HMI's
+     screen switched away and back each show it. IEC 61131-3 has no runner or
+     subscription; Studio 5000 tells an engineer the project differs from the
+     controller's each time it goes online. RV-27 makes the marks this decision's number.
+
+534. **A store RV-21's logex wrote (RV-26),** RV-26's question 3: RV-21's logex wrote
+     `logex retain 2` stores whose digests are of the program files' bytes, where
+     decision 527's are of their printed text; RV-26 compared such a store by the bytes
+     of the start's texts, provisional, where the readings were to read it as naming no
+     program, or to compare it with the printed digests.
+
+     **Taken: as built, compared by its bytes (a)** (the maintainer, 2026-11-14): a
+     `logex retain 2` store that names its program is compared by the bytes of the
+     start's texts, as RV-21 wrote it, and written again as `logex retain 3`, so an
+     upgrade whose files gained a comment warns once, as RV-21's logex would have, and an
+     online edit made under RV-21 that never reached the files is still told; a
+     version 3 store a person relabels `logex retain 2` by hand is read so too and warns
+     once though nothing differs, as README's rollback passage says. Neither IEC 61131-3
+     nor Logix keeps retained values in a file carried across an upgrade. RV-27 makes the
+     marks this decision's number.
+
+535. **A version 3 store that names no program (RV-26),** RV-26's question 4: every
+     `logex retain 3` store the runner writes names its configuration and programs in its
+     `resource` and `program` lines; RV-26 read one that has neither, a hand edit's, as
+     naming no program, as a version 2 store naming none is read, provisional.
+
+     **Taken: refused (b)** (the maintainer, 2026-11-14): a `logex retain 3` store with
+     neither a `resource` nor a `program` line is refused, located, version 3 being a
+     store that names its program, as decision 531 refuses one that names it in part; the
+     fan's line starts warm once the lines are put back, or cold, the store copied to
+     its next `.dropped.<n>` as any store refused is (decision 417). Neither IEC 61131-3
+     nor Logix has a store a person edits. RV-27 builds it.
+
+536. **An end line under `logex retain 1` (RV-26),** RV-26's question 5, from its
+     review: in a store whose first line is a header this logex does not read, an end
+     line is told as one a store of `logex retain 3` or `logex retain 2` ends with, while
+     under `logex retain 1`, a version that takes no end line, decision 355's message
+     names `logex retain 2` alone, so a person who follows it with a version 3 store has
+     it read as RV-21's, and told once that `tally`'s text differs though nothing does.
+
+     **Taken: both named (b)** (the maintainer, 2026-11-14): an end line in a store whose
+     first line takes none, `logex retain 1` included, is told as one a store of
+     `logex retain 3` or `logex retain 2` ends with, one message for every such header;
+     version 1's pinned message changes by this decision, and every other test of
+     reading version 1 stays as it is. Neither IEC 61131-3 nor Logix has a store a person
+     edits. RV-27 builds it.
+
 ---
 
 ## 8. Sources, and what is unverified

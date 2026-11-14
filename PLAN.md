@@ -32,7 +32,9 @@ review; and since their answers the same day, decisions 513–521, it says the r
 done, decision 521, and names what waits, RV-20 to RV-25.)* *(Since RV-20, 2026-11-12:
 it says RV-20 has landed, and names what still waits.)* *(Since RV-21 and the answers to RV-20's and
 RV-21's questions, 2026-11-13: it says RV-21 has landed, names decisions 522–531, and
-names what still waits, RV-22 to RV-26.)*
+names what still waits, RV-22 to RV-26.)* *(Since RV-26 and the answers to its questions,
+2026-11-14: it says RV-26 has landed, names decisions 532–536, and names what still
+waits, RV-22 to RV-25 and RV-27.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -19706,7 +19708,8 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   written in `CONTRIBUTING.md` and checked as the gate is; the first version's number, and
   whether its tag is pushed, put to the maintainer before any tag is. `mix.exs`'s Elixir
   bound is not touched. It runs after RV-20 and RV-21, beside RV-26 *(so since the answers
-  of 2026-11-13, where it was to run beside RV-23)*.
+  of 2026-11-13, where it was to run beside RV-23)*, and finishes beside RV-27 *(so since
+  the answers of 2026-11-14)*.
 - **RV-23 — the marks of Milestones 5 and 6 traced** (decision 519). Each "provisional" in
   `lib/`, the tests, README, `CONTRIBUTING.md`, `docs/naming.md` and
   `docs/organisation.md`'s design (§4) traced against decisions 144–346 and the rest of
@@ -19715,7 +19718,7 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   100,000 writes among them, put to the maintainer grouped by what an operator sees. It
   builds no rule. It runs after RV-22 and RV-26, and traces RV-20's, RV-21's and RV-26's marks
   too, beside RV-24 *(so since the answers of 2026-11-13, where it was to run beside
-  RV-22)*.
+  RV-22)*, and after RV-27 too, tracing its marks *(so since the answers of 2026-11-14)*.
 - **RV-24 — typespecs and Dialyzer** (decision 515, (c)). Typespecs on the host
   contract's functions, decision 514's modules, and Dialyzer, OTP's own `dialyzer` over
   the compiled modules with a table of the toolchain's applications, no dependency added,
@@ -19959,8 +19962,9 @@ and RV-26 side by side; then RV-23 and RV-24 side by side; and RV-25 last, alone
     some 4 minutes a run.
   - *CLAUDE.md*: `Logex.Retain`'s line names `logex retain 3`, 2 and 1 read too; no file
     was added.
-  - *Provisional readings, and questions for the maintainer*, each marked provisional
-    where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
+  - *Provisional readings, and questions for the maintainer* *(all five answered on
+    2026-11-14, decisions 532–536: 1 532, 2 533, 3 534, 4 535 and 5 536)*, each marked
+    provisional where it stands, the closest reading of the record, IEC 61131-3 and Logix that could
     be found; each question says what an operator or a host sees:
     1. *A word's case in a program's text* (decision 527). An engineer retypes `xic
        start` as `XIC start` in `conveyor.ld`, which logex reads the same, and restarts
@@ -20183,6 +20187,32 @@ and RV-26 side by side; then RV-23 and RV-24 side by side; and RV-25 last, alone
     lists its readers by kind and stays true.
   - *The labels*: the review's finding numbers are this entry's alone; the code and the
     tests cite "RV-26's review".
+
+**RV-26's questions answered, 2026-11-14** (decisions 532–536). The maintainer took two
+as built: each subscription told the stale store's warning as it takes `:retain`, for
+the runner's life (533), and a store RV-21's logex wrote compared by its bytes (534); and
+three to build: the words logex reads in any case lowercased in a program's text before
+its digest, and a bit's number in brackets read as the plain bit (532); a version 3 store
+that names no program refused (535); and an end line under any header that takes none,
+`logex retain 1` included, told as one a store of `logex retain 3` or `logex retain 2`
+ends with (536). The order from here: RV-22, finishing, and RV-27 side by side; then RV-23
+and RV-24 side by side; and RV-25 last, alone.
+
+- **RV-27 — the answers to RV-26's questions** (decisions 532–536). In a program type's
+  text as `Logex.Retain` digests it, every word logex reads in any case, a mnemonic, a
+  section, a qualifier, an elementary type word, a built-in block's type and the word
+  that heads a block's file, lowercased, and a literal bit number in brackets read as the
+  plain bit, `lamps.[4]` as `lamps.4`, so neither warns, while a tag's name, its case
+  included, still does, and what a store RV-26's logex wrote then gives at a fresh start
+  said (532); a `logex retain 3` store with neither a `resource` nor a `program` line
+  refused, located, as decision 531 refuses one that names its program in part, its cold
+  start's copy as any refused store's (535); an end line in a store whose first line
+  takes none, `logex retain 1` included, told as one a store of `logex retain 3` or
+  `logex retain 2` ends with, version 1's pinned message changed by this decision alone
+  (536); the store's life walk and README's store passage restating each; the marks
+  decisions 532–536 settle made their numbers, 533's and 534's as built; and, once RV-22
+  has landed, the changelog given RV-27's entries as RV-22's procedure says. It runs
+  beside RV-22 as RV-22 finishes, before RV-23 traces the marks.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
