@@ -4741,13 +4741,22 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   also an event, `{:retain, {:warning, message}}`, sent to each subscription as it takes
   `:retain`, while it stands, once while the subscription takes it, no subscriber existing
   when the start finds it (528, its delivery provisional; since RV-26's review, one that
-  takes `:retain` away and back hears it again, as it was built); every store the runner writes is `logex
-  retain 3`, versions 2 and 1 read as before, so that a logex before RV-26 says at line 1
-  that it does not read version 3, a `logex retain 2` store that names its program,
-  RV-21's, compared by its types' bytes and a `logex retain 3` store that names none read
-  as naming none (530, provisional); and a store that names a type and no resource
-  refused, each line read wherever it stands, as built (531). The header's version, the
-  mark above, is decision 530's.)*
+  takes `:retain` away and back hears it again, as it was built); every store the runner
+  writes is `logex retain 3`, versions 2 and 1 read as before, so that a logex before
+  RV-26 says at line 1 that it does not read version 3, a `logex retain 2` store that
+  names its program, RV-21's, compared by its types' bytes and a `logex retain 3` store
+  that names none read as naming none (530, provisional); and a store that names a type
+  and no resource refused, each line read wherever it stands, as built (531). The
+  header's version, the mark above, is decision 530's.)* *(Decisions 532 to 536, RV-27,
+  2026-11-14: the marks above are these decisions' numbers, the delivery decision 533's
+  and the comparison of RV-21's store by its bytes decision 534's, each as built; a
+  `program` line's digest reads each word logex reads in any case lowercased, a
+  mnemonic, a section, a qualifier, a type's word and a block's heading word, and a
+  literal bit number in brackets as the plain bit, so that neither warns, a tag's case
+  still doing so (532); a `logex retain 3` store that names no program is refused at its
+  first line, as one that names it in part is (535); and an end line under any header
+  that takes none, `logex retain 1` among them, is told as one a store of `logex retain
+  3` or `logex retain 2` ends with (536).)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

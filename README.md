@@ -3692,7 +3692,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   subscribing again with `:retain` among the kinds sends nothing more, and one that takes
   `:retain` away, subscribing to other kinds, and then back, or one made after an
   unsubscribe, hears it again; nothing else sends it again, a round, a trip, a restart,
-  an edit's step or the store's next write (provisional).
+  an edit's step or the store's next write (decision 533).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),

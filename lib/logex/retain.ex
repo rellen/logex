@@ -194,7 +194,7 @@ defmodule Logex.Retain do
         Map.new(programs, fn {name, program} -> {name, digest(texts(program, :canonical))} end)
     }
 
-  # Decision 530 (RV-26, provisional): the program a store of version 2 or 1 names, as
+  # Decisions 530 (RV-26) and 534 (RV-27): the program a store of version 2 or 1 names, as
   # RV-21's logex wrote it, `logex retain 2` with its `resource` and `program` lines, each
   # type's digest the MD5 of its text's bytes, is laid beside the start's program digested
   # so, its configuration's lines as ever, so that a fresh start from such a store warns as

@@ -2785,7 +2785,7 @@ defmodule Logex.RetainStoreTest do
     # the kinds sends nothing more, one that adds it hears it, and one made after an
     # unsubscribe is a new one. Nothing else sends it, a round, a period's write, a trip, a
     # warm and a cold restart, an edit's steps or a stop; and a start that warns of nothing
-    # sends nothing (provisional, `PLAN.md`'s RV-26).
+    # sends nothing (decision 533).
     test "the warning is sent to each subscription that takes :retain, once, as it " <>
            "subscribes",
          %{tmp_dir: dir} do
@@ -3658,7 +3658,7 @@ defmodule Logex.RetainStoreTest do
       assert Runner.stop(runner) == :ok
     end
 
-    # Decision 530 (RV-26, provisional): a store RV-21's logex wrote, `logex retain 2` with
+    # Decisions 530 (RV-26) and 534 (RV-27): a store RV-21's logex wrote, `logex retain 2` with
     # its `resource` and `program` lines, each type's digest of its text's bytes, is laid
     # beside the start's program digested so, so that a start from the very files warns of
     # nothing, where every type's printed digest differs from its bytes'; one from the same

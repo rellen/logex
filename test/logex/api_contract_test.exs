@@ -17438,7 +17438,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
           "\n#{name}\n#{block.body.source}"
         end)
 
-  # Decision 530 (RV-26, provisional), restated: one warm start in two of the life walk's,
+  # Decisions 530 (RV-26) and 534, restated: one warm start in two of the life walk's,
   # by the store's own text, so that no draw is taken, reads the store as RV-21's logex
   # wrote it, `logex retain 2` with each type's digest of its text's bytes, which the model
   # reads as the same last write (`on_disk/1`) and the start compares by the bytes.

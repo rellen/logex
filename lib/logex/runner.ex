@@ -518,7 +518,7 @@ defmodule Logex.Runner do
     took it away by subscribing to other kinds among them, and one made after an
     unsubscribe a new one;
     a round, a trip, a restart, an edit's step, the store's next write and a stop send it
-    to no one (provisional, `PLAN.md`'s RV-26); it
+    to no one (decision 533); it
     changes nothing else, the image laid over the configuration by name and type as
     decision 277 has it, and a store written before RV-21, which names no program, warns
     of nothing and is read as before. A cold start, which lays nothing over, warns of
@@ -1352,7 +1352,8 @@ defmodule Logex.Runner do
   as long as it stands, the runner's life, and once while the subscription takes
   `:retain`: subscribing again with `:retain` among the kinds sends it no more, one that
   takes `:retain` away by subscribing to other kinds and then takes it back hears it
-  again, and one made after `unsubscribe/1` is a new one (provisional), and since decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
+  again, and one made after `unsubscribe/1` is a new one (decision 533), and since
+  decision 493 `:forces`, `{:forces, {:error, reason}}`, the write
   of the runner's own set over a forces file it could not read (decision 472) that an
   orderly end made and that failed or was cut, a shutdown's among them, which answers no
   caller, so that an HMI or a log can warn that the next start may bring back an old
@@ -2059,8 +2060,8 @@ defmodule Logex.Runner do
   # once while a subscription takes `:retain`, so that subscribing again with `:retain`
   # among the kinds sends nothing more, where one that adds it hears it, one that took it
   # away by subscribing to other kinds among them, and one made after an unsubscribe is a
-  # new one (provisional, `PLAN.md`'s RV-26: no subscriber exists before start_link/1
-  # returns, decision 324, so the start's own publishing reaches no one).
+  # new one (decision 533: no subscriber exists before start_link/1 returns, decision 324,
+  # so the start's own publishing reaches no one).
   defp serve({:subscribe, pid, kinds}, %{subscribers: subscribers} = state) do
     held = Map.get(subscribers, pid)
     demonitor(held)
@@ -3209,7 +3210,7 @@ defmodule Logex.Runner do
   # `retain` too, the fresh start's, which a round, a trip, a restart, an edit's step, the
   # store's next write and a stop leave as it is, as `dropped` is, and since decision 528
   # (RV-26) each subscription is sent as it takes `:retain`, none of them sending it again
-  # (serve/2's `:subscribe`, provisional).
+  # (serve/2's `:subscribe`, decision 533).
   defp running(devices, start) do
     points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
     inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
