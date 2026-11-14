@@ -3501,9 +3501,13 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   and the next write makes either `logex retain 3`. A `logex retain 2` store that names
   its program, as RV-21's logex wrote it, names each type by the MD5 of its file's bytes,
   so a fresh start from it compares the bytes of the files it is given, as that logex
-  did, and warns where they differ (provisional, `PLAN.md`'s RV-26); a store of `logex
-  retain 3` with no `resource` or `program` line, a hand edit's, is read as naming no
-  program (provisional). A logex from before RV-26, put back over a store this one wrote
+  did, and warns where they differ (decision 534); a store of `logex retain 3` with
+  neither a `resource` nor a `program` line, a hand edit's, is refused at its first line,
+  ``tally.retain: line 1: `logex retain 3` heads a store that names the program that
+  wrote it, and the store names none: ...``, as one with a `program` line and no
+  `resource` line is refused at that line (decisions 531 and 535), and starts warm once
+  the lines are put back, or `start: :cold`, which copies it first to the next
+  `.dropped.<n>`. A logex from before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
   reads `logex retain 2` and `logex retain 1` ``, and its end line as one its header does
@@ -3517,12 +3521,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the digests being this logex's. A copy whose first line a hand edit made `logex retain
   2` and that this logex reads again, no older logex having written over it, is read as
   RV-21's and warns once that each type's text differs, for the same reason
-  (provisional, `PLAN.md`'s RV-26, question 3). The runner ends each line with LF
+  (decision 534). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
   saved with a byte-order mark before its header is told so, the rest of it read as if
-  the mark were not there; a comment, a tab and a byte
+  the mark were not there; an end line in a store whose first line takes none, `logex
+  retain 1` or a header mistyped, is told as one that a store of `logex retain 3` or
+  `logex retain 2` ends with (decision 536); a comment, a tab and a byte
   past ASCII are each refused, told as what they are; and a refusal names at most the
   first 50 problems and then counts the rest, each text of the store it quotes at most 60
   bytes and printable, and the store's path printable too, each line's 1,000 bytes

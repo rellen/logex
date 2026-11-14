@@ -287,6 +287,13 @@ defmodule Logex.RetainStoreTest do
         "assembled online that never reached the files, this start runs the program it was " <>
         "given, with the store's retained values laid over it by name and type"
 
+  # Decision 535 (RV-27): what a store of `logex retain 3` that names no program is told
+  # at its first line.
+  @names_none "`logex retain 3` heads a store that names the program that wrote it, and the " <>
+                "store names none: a store that names the program that wrote it gives " <>
+                "`resource <digest>` straight after its configuration's line, and then a " <>
+                "`program <type> <digest>` a type"
+
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
     # a trigger's last sample (decision 313), an instance with a built-in, an array of a
@@ -873,10 +880,13 @@ defmodule Logex.RetainStoreTest do
 
       # A store of version 1 has no end line: one a hand edit gave it is a line of no
       # store's shape there, told since RV-5's review as an end line its header does not
-      # take, where it was told, though last, as one before the store's last.
+      # take, where it was told, though last, as one before the store's last; since
+      # decision 536 (RV-27) as one a store of either header that takes one ends with,
+      # where it named `logex retain 2` alone.
       raises(
         "s: line 3: `end 3 lines` is an end line, which a store whose first line is " <>
-          "`logex retain 2` ends with, and this store's first line is not",
+          "`logex retain 3` or `logex retain 2` ends with, and this store's first line is " <>
+          "neither",
         fn ->
           Retain.decode!(
             "logex retain 1\nconfiguration plant written 2026-10-30T14:00:00Z\nend 3 lines\n",
@@ -939,8 +949,9 @@ defmodule Logex.RetainStoreTest do
     # 3 store's mistyped by a hand edit among them, an end line is told as one of either
     # header that takes one, `logex retain 3` or `logex retain 2`, so that the edit is not
     # pointed at version 2's alone, which reads a store's program as RV-21's digests of its
-    # bytes; in a store of `logex retain 1`, which takes none, as decision 355 told it
-    # (provisional, `PLAN.md`'s RV-26, question 5).
+    # bytes; and since decision 536 (RV-27) in a store of `logex retain 1`, which takes none,
+    # too, one message for every header that takes none, where it was told as decision 355
+    # told it, naming version 2 alone.
     test "an end line under a header this logex does not read names both headers that take " <>
            "one" do
       body =
@@ -971,7 +982,8 @@ defmodule Logex.RetainStoreTest do
 
       raises(
         "s: line 6: `end 6 lines` is an end line, which a store whose first line is " <>
-          "`logex retain 2` ends with, and this store's first line is not",
+          "`logex retain 3` or `logex retain 2` ends with, and this store's first line is " <>
+          "neither",
         fn -> Retain.decode!("logex retain 1\n" <> body, {"s", "plant"}) end
       )
 
@@ -3493,11 +3505,12 @@ defmodule Logex.RetainStoreTest do
     # Decision 530 (RV-26): a store that names its program is written as `logex retain 3`,
     # one that names none as `logex retain 2`, and versions 3, 2 and 1 are each read to the
     # same image: version 3's program as it names it, printed; version 2's or 1's, a store
-    # RV-21's logex wrote, marked as digested by its bytes; and a version 3 store that names
-    # none, a hand edit's, as one naming none (provisional). Decision 355's end line and
-    # decision 531's rules hold for version 3 as for 2: cut short, it is refused, naming its
-    # own header; its `resource` line taken away, refused at its first `program` line; its
-    # lines moved among the values, read; saved with CRLF (decision 410), read.
+    # RV-21's logex wrote, marked as digested by its bytes; and since decision 535 (RV-27) a
+    # version 3 store that names none, a hand edit's, refused at its header, where it was
+    # read as one naming none, a version 2 or 1 store naming none read. Decision 355's end
+    # line and decision 531's rules hold for version 3 as for 2: cut short, it is refused,
+    # naming its own header; its `resource` line taken away, refused at its first `program`
+    # line; its lines moved among the values, read; saved with CRLF (decision 410), read.
     test "a store that names its program is version 3, and versions 3, 2 and 1 read alike" do
       config = configured()
       image = Runtime.retained(Runtime.start(config))
@@ -3527,7 +3540,7 @@ defmodule Logex.RetainStoreTest do
       none =
         Enum.join([header, named | Enum.drop(rest, -2)], "\n") <> "\nend #{lines - 2} lines\n"
 
-      assert Retain.decoded!(none, {"s", "plant"}) == {image, at, nil}
+      raises("s: line 1: #{@names_none}", fn -> Retain.decoded!(none, {"s", "plant"}) end)
 
       moved = Enum.join([header, named | Enum.drop(rest, -2)] ++ [program, resource], "\n")
       assert Retain.decoded!(moved <> "\nend #{lines} lines\n", {"s", "plant"}) == {image, at, by}
@@ -3552,6 +3565,97 @@ defmodule Logex.RetainStoreTest do
           "then writes a new store over it",
         fn -> Retain.decoded!(String.replace(v3, ~r/end \d+ lines\n\z/, ""), {"s", "plant"}) end
       )
+    end
+
+    # Decision 535 (RV-27): a store of `logex retain 3` with neither a `resource` nor a
+    # `program` line, a hand edit's, is refused at its first line, the header that says it
+    # names the program that wrote it, as decision 531 refuses one that names it in part;
+    # the line starts warm once the lines are put back, or cold, the store copied first to
+    # its next `.dropped.<n>` as any store a warm start refuses is (decision 417), the count
+    # started at its initial value. One whose end line does not read, cut short or its count
+    # not mended, is told that alone (provisional, `PLAN.md`'s RV-27); and one of `logex
+    # retain 2` or `logex retain 1` naming none is read as ever.
+    test "a store of version 3 that names no program is refused at its header, and a cold " <>
+           "start copies it first",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      whole = File.read!(rig.store)
+      [header, named, resource, program | rest] = String.split(whole, "\n")
+      assert {header, resource, program} == {"logex retain 3", hd(named(rig.store)), program}
+      count = length(String.split(whole, "\n", trim: true))
+
+      none =
+        Enum.join([header, named | Enum.drop(rest, -2)], "\n") <>
+          "\nend #{count - 2} lines\n"
+
+      raises("s: line 1: #{@names_none}", fn -> Retain.decoded!(none, {"s", "plant"}) end)
+
+      # A byte-order mark before it, told too; the count not mended, or the store cut, told
+      # alone.
+      raises(
+        "s: line 1: the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor " <>
+          "that saves UTF-8 with one writes it: a store is ASCII and begins `logex retain 3`, " <>
+          "so save it without one\ns: line 1: #{@names_none}",
+        fn -> Retain.decoded!("\xEF\xBB\xBF" <> none, {"s", "plant"}) end
+      )
+
+      unmended = String.replace(none, "end #{count - 2} lines", "end #{count} lines")
+
+      raises(
+        "s: line #{count - 2}: the store's end line counts #{count} lines, and the store has " <>
+          "#{count - 2}: a line was lost or doubled, or a hand edit added or removed one " <>
+          "without changing the count, which counts every line, the end line among them, " <>
+          "and the store is not read",
+        fn -> Retain.decoded!(unmended, {"s", "plant"}) end
+      )
+
+      cut = header <> "\n" <> named <> "\n"
+
+      assert_raise ArgumentError,
+                   ~r/\As: line 2: `configuration plant written \S+` is the store's last line, and no end line: a store of `logex retain 3` ends with `end <count> lines`[^\n]*\z/,
+                   fn ->
+                     Retain.decoded!(cut, {"s", "plant"})
+                   end
+
+      # Its version 2 and 1 read as naming none, as ever.
+      v2 = String.replace(none, "logex retain 3", "logex retain 2")
+
+      v1 =
+        String.replace(v2, "logex retain 2", "logex retain 1")
+        |> String.replace(~r/end \d+ lines\n\z/, "")
+
+      assert {_image, _at, nil} = Retain.decoded!(v2, {"s", "plant"})
+      assert {_image, _at, nil} = Retain.decoded!(v1, {"s", "plant"})
+
+      # Through the runner: a warm start refused, naming the store, no device opened.
+      File.write!(rig.store, none)
+      opener_down(rig.panel)
+      reads = Sim.reads(rig.panel)
+      raises("#{rig.store}: line 1: #{@names_none}", fn -> Runner.start_link(rig.opts) end)
+      assert Sim.reads(rig.panel) == reads
+      assert File.read!(rig.store) == none
+
+      # A cold start copies it, byte for byte, then starts from the initial values.
+      {:ok, runner} = Runner.start_link(rig.opts ++ [start: :cold])
+      copy = rig.store <> ".dropped.1"
+      assert Runner.status(runner).retain.copy == copy
+      assert File.read!(copy) == none
+      assert [0, 0 | _lamp_and_shown] = values(runner)
+      assert [2, 2 | _] = kept
+      assert Runner.stop(runner) == :ok
+      assert "logex retain 3\n" <> _ = File.read!(rig.store)
+
+      # Its lines put back, the copy starts warm with the values it kept.
+      File.write!(rig.store, whole)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: []} = Runner.status(runner).retain
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
     end
 
     # Decision 530 (RV-26, provisional): a store RV-21's logex wrote, `logex retain 2` with

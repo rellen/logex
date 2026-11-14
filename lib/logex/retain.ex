@@ -37,8 +37,9 @@ defmodule Logex.Retain do
   # that a logex before RV-26 says plainly that it does not read the store's version, where
   # one before RV-21 told its `resource` line as one before any `instance` line. A store of
   # `logex retain 2` that names its program, RV-21's, names each type by its text's bytes,
-  # and is laid beside the start's program digested so (compared/3, provisional); one of
-  # `logex retain 3` that names none, a hand edit's, is read as naming none (provisional);
+  # and is laid beside the start's program digested so (compared/3, decision 534); one of
+  # `logex retain 3` that names none, a hand edit's, is refused at its first line, as one
+  # that names it in part is (decision 535, RV-27), where it was read as naming none;
   # encode/2, which names no program, writes `logex retain 2`; each retained global, `global
   # <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
@@ -88,10 +89,11 @@ defmodule Logex.Retain do
   # its header, inside its second line or at its end, is told once, at the line the cut
   # left last; an end line in a store whose header is not `logex retain 2`, which only
   # version 2's rule reads, and since RV-26 version 3's, is told as one that header does
-  # not take, never as one before the store's last, its message naming version 2 alone as
-  # it did in a store of `logex retain 1`, and since RV-26's review naming versions 3 and
-  # 2 in a store of a header this logex does not read, `logex retain 3 ` mistyped among
-  # them (provisional, `PLAN.md`'s RV-26, question 5); and the message for a store cut short said that `start: :cold`
+  # not take, never as one before the store's last, its message naming version 2 alone,
+  # since RV-26's review naming versions 3 and 2 in a store of a header this logex does
+  # not read, `logex retain 3 ` mistyped among them, and since decision 536 (RV-27) in a
+  # store of `logex retain 1` too, one message for every header that takes no end line;
+  # and the message for a store cut short said that `start: :cold`
   # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
   # to the next of its numbered copies (decision 418), and then writes over it, as a cold
   # start over any store a fresh start would refuse does (`Logex.Runner`).
@@ -482,20 +484,38 @@ defmodule Logex.Retain do
       seen: %{},
       problems: Enum.reverse(marked ++ before_end(problems, last)),
       unprintable: Refusal.pattern(),
-      ended: last != nil,
-      unread: unread?(lines)
+      ended: last != nil
     }
 
-    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced()
+    acc =
+      body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced() |> naming(lines, ending)
+
     refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending, path)
     {acc.image, written_at, versioned(acc.by, lines)}
   end
 
-  # RV-26's review: a store whose first line is no header this logex reads, a version
-  # past 3 or one mistyped, `logex retain 3 ` or `Logex retain 3`, its end line told so
-  # (line/2).
-  defp unread?([{first, 1} | _rest]) when first in @headers, do: false
-  defp unread?(_lines), do: true
+  # Decision 535 (RV-27): a store of `logex retain 3` is one that names the program that
+  # wrote it, as every store the runner writes since decision 530 does, so one that names
+  # none, its `resource` and `program` lines a hand edit took away, is refused, located at
+  # its header, the line that says it names one (provisional, `PLAN.md`'s RV-27), as
+  # decision 531 refuses one that names it in part at its first `program` line, where it
+  # was read as naming none; a cold start copies it first, as any refused store
+  # (decision 417). A store whose end line does not read, cut short or miscounted, is told
+  # that alone (decision 355), since a cut before the configuration's line's end takes the
+  # lines that name its program with it (provisional, `PLAN.md`'s RV-27). A store of
+  # `logex retain 2` or `logex retain 1` that names none is read as it was.
+  defp naming(%{by: nil} = acc, [{@header, 1} | _rest], []),
+    do:
+      problem(
+        acc,
+        1,
+        "`#{@header}` heads a store that names the program that wrote it, and the store " <>
+          "names none: a store that names the program that wrote it gives `resource " <>
+          "<digest>` straight after its configuration's line, and then a `program <type> " <>
+          "<digest>` a type"
+      )
+
+  defp naming(acc, _lines, _ending), do: acc
 
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
@@ -812,29 +832,20 @@ defmodule Logex.Retain do
           "line"
       )
 
-  # RV-26's review: in a store whose first line is no header this logex reads, an end line
-  # is told as one of either header that takes one, `logex retain 3`, which the runner
-  # writes since decision 530, or `logex retain 2`, which it wrote before, where it named
-  # version 2 alone, so that a hand edit that mistyped a version 3 store's header is not
-  # pointed at version 2's, which would read its digests as RV-21's; in one of `logex
-  # retain 1`, which has none, as decision 355 told it (provisional, `PLAN.md`'s RV-26,
-  # question 5).
-  defp line(["end", _count, "lines"], {text, n}, %{unread: true} = acc),
+  # RV-26's review and decision 536 (RV-27): in a store whose first line takes no end
+  # line, a header this logex does not read or `logex retain 1`, an end line is told as one
+  # of either header that takes one, `logex retain 3`, which the runner writes since
+  # decision 530, or `logex retain 2`, which it wrote before, one message for every such
+  # header, where it named version 2 alone, so that a hand edit of a version 3 store, its
+  # header mistyped or made `logex retain 1`, is not pointed at version 2's, which would
+  # read its digests as RV-21's and warn that its text differs though nothing does.
+  defp line(["end", _count, "lines"], {text, n}, acc),
     do:
       problem(
         acc,
         n,
         "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` or " <>
           "`#{@unnamed}` ends with, and this store's first line is neither"
-      )
-
-  defp line(["end", _count, "lines"], {text, n}, acc),
-    do:
-      problem(
-        acc,
-        n,
-        "#{quoted(text)} is an end line, which a store whose first line is `#{@unnamed}` " <>
-          "ends with, and this store's first line is not"
       )
 
   defp line([path, kind], at, acc), do: under(acc.instance, path, {:kind, kind}, at, acc)

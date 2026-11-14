@@ -328,8 +328,9 @@ defmodule Logex.Runner do
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
-    types' bytes as it was written and one of `logex retain 3` that names none read as
-    naming none (provisional, `PLAN.md`'s RV-26); and since decision 355 its end line,
+    types' bytes as it was written (decision 534), and one of `logex retain 3` that names
+    none, a hand edit's, refused at its first line, as one that names it in part is
+    (decision 535, RV-27); and since decision 355 its end line,
     `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
@@ -497,8 +498,9 @@ defmodule Logex.Runner do
     `plant.retain.dropped.2`; a file that does not exist none, written at once; and one
     that cannot be read, that is no store, a line of no store's shape, an image
     `Logex.Runtime.start/2` refuses, a store of another configuration, which a renamed
-    configuration's is, or since decision 355 one of `logex retain 2` cut short, its last
-    line no end line or its end line's count not its lines', the host's mistake, one
+    configuration's is, since decision 355 one of `logex retain 2` cut short, its last
+    line no end line or its end line's count not its lines', or since decision 535 one of
+    `logex retain 3` that names no program, the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
     device opened. Since decision 517 (c) (RV-21) a warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
