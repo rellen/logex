@@ -3506,7 +3506,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   so a fresh start from it compares the bytes of the files it is given, as that logex
   did, and warns where they differ (decision 534); a store of `logex retain 3` with
   neither a `resource` nor a `program` line, a hand edit's, is refused at its first line
-  (provisional, the line),
+  (decision 537),
   ``tally.retain: line 1: `logex retain 3` heads a store that names the program that
   wrote it, and the store names none: ...``, as one with a `program` line and no
   `resource` line is refused at that line (decisions 531 and 535), and starts warm once

@@ -329,8 +329,8 @@ defmodule Logex.Runner do
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
     types' bytes as it was written (decision 534), and one of `logex retain 3` that names
-    none, a hand edit's, refused at its first line (provisional, the line), as one that
-    names it in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
+    none, a hand edit's, refused at its first line (decision 537), as one that names it
+    in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
     names its resource and no program type, which no configuration gives, refused at its
     `resource` line (provisional, the line), where it was read and warned that each type
     was not in the store, and a naming line that does not read is told as itself; and

@@ -3639,8 +3639,8 @@ defmodule Logex.RetainStoreTest do
     # the line starts warm once the lines are put back, or cold, the store copied first to
     # its next `.dropped.<n>` as any store a warm start refuses is (decision 417), the count
     # started at its initial value. One whose end line does not read, cut short or its count
-    # not mended, is told that alone (provisional, `PLAN.md`'s RV-27); and one of `logex
-    # retain 2` or `logex retain 1` naming none is read as ever.
+    # not mended, is told that alone (decision 538); and one of `logex retain 2` or `logex
+    # retain 1` naming none is read as ever.
     test "a store of version 3 that names no program is refused at its header, and a cold " <>
            "start copies it first",
          %{tmp_dir: dir} do
@@ -3773,6 +3773,40 @@ defmodule Logex.RetainStoreTest do
       )
     end
 
+    # Decision 538 (RV-27's question 2, as built): a store whose end line does not read is
+    # told that, and the naming lines only once the count reads, for decision 535's
+    # refusal and decision 539's, a cut before the `program` lines taking them with it;
+    # decision 531's, a store that names a program type and no resource, which no cut
+    # makes, the `resource` line coming first, is told beside the count, as built since
+    # RV-21's review (provisional, `PLAN.md`'s RV-28).
+    test "a store whose count does not read is told its naming lines once it does, 531's " <>
+           "beside it" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      miscounted = fn lines -> Enum.join(lines, "\n") <> "\nend 99 lines\n" end
+
+      count = fn lines ->
+        "the store's end line counts 99 lines, and the store has #{length(lines) + 1}"
+      end
+
+      for lines <- [[header, named | values], [header, named, resource | values]] do
+        message = refused(fn -> Retain.decoded!(miscounted.(lines), {"s", "plant"}) end)
+        assert message =~ ~r/\As: line #{length(lines) + 1}: #{count.(lines)}: [^\n]*\z/
+      end
+
+      lines = [header, named, program | values]
+      message = refused(fn -> Retain.decoded!(miscounted.(lines), {"s", "plant"}) end)
+      assert [named_in_part, counted] = String.split(message, "\n")
+
+      assert named_in_part =~
+               ~r/\As: line 3: `#{program}` names a program type of the store's writer/
+
+      assert String.starts_with?(counted, "s: line #{length(lines) + 1}: #{count.(lines)}: ")
+    end
+
     # Decision 540 (RV-28): each refusal of the naming lines, decision 531's, 535's and
     # 539's, ends as the cut-short store's does, `: ` and the way to start anyway, `start:
     # :cold`, which copies the store first, one way out for every refused store, where
@@ -3856,7 +3890,7 @@ defmodule Logex.RetainStoreTest do
     # written; a cold start copying it first, byte for byte, to its next `.dropped.<n>`
     # (decision 417), and starting from the initial values; its `program` line put back, a
     # warm start reading it. Its count not mended, or the store cut after its `resource`
-    # line, it is told that alone, as 535's is (provisional, `PLAN.md`'s RV-27); a `program`
+    # line, it is told that alone, as 535's is (decision 538); a `program`
     # line that does not read is told as itself, not as one missing; and one of `logex
     # retain 2`, its first line so made by hand, or of `logex retain 1` is read as before, a
     # warm start from it laying its values over and warning that each type is not in the

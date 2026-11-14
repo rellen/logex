@@ -4763,7 +4763,18 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   read and warns that each type is not in the store (provisional, `PLAN.md`'s RV-27,
   question 3); and a name holding a capital letter is looked up among its text's tags
   before the table that reserves logex's words, so that a program of CamelCase tags pays
-  a map's look-up a name.)*
+  a map's look-up a name.)* *(Decisions 537 to 540, RV-28, 2026-11-14: the marks above
+  are these decisions' numbers, the line decision 535 refuses at, the header, decision
+  537's, and a store whose count does not read told that alone, the naming lines once it
+  does, decision 538's, each as built; a `logex retain 3` store with its `resource` line
+  and no `program` line, the reading RV-27's review marked, is refused at that line,
+  wherever it stands (the line provisional, `PLAN.md`'s RV-28), once the count reads, a
+  warm start refused with no device read and a cold start copying it first (539); and each
+  refusal of the naming lines, 531's, 535's and 539's, ends as the cut-short store's does,
+  "start it with start: :cold to start over it, which copies it first to the next
+  `.dropped.<n>` beside it and then writes a new store over it" (540). A store that names
+  a type and no resource is told beside a count that does not read, as built since
+  RV-21's review (provisional, `PLAN.md`'s RV-28).)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -15391,6 +15402,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the naming lines owed, as decision 531 tells its refusal at the line that names a
      program in part. Neither IEC 61131-3 nor Logix has a store a person edits. RV-28
      makes the marks this decision's number.
+     *(RV-28, 2026-11-14: the marks, `Logex.Retain`'s comment at naming/3,
+     `Logex.Runner`'s moduledoc, README's store passage and §4.13's note, are this
+     decision's number; decision 535's note keeps its mark as history.)*
 
 538. **A store that names no program and whose end line does not read (RV-27),** RV-27's
      question 2: the same hand edit leaves the count at `end 15 lines` where the store now
@@ -15403,6 +15417,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      store told cut is not also told what the cut took; a store cut straight after its
      header is so told once at its first line. Neither IEC 61131-3 nor Logix has a store a
      person edits. RV-28 makes the marks this decision's number.
+     *(RV-28, 2026-11-14: the marks, `Logex.Retain`'s comment at naming/3,
+     `retain_store_test.exs`'s decision 535 test and §4.13's note, are this decision's
+     number, and decision 539's refusal is told so too, only once the count reads, a cut
+     after the `resource` line taking the `program` lines with it; decision 535's note
+     keeps its mark as history. Decision 531's refusal, which no cut makes, is told beside
+     a count that does not read, as built since RV-21's review (provisional, `PLAN.md`'s
+     RV-28), and a new test pins both.)*
 
 539. **A version 3 store with its `resource` line and no `program` line (RV-27),** RV-27's
      question 3, from its review: decision 531 refuses a store whose `program` lines come

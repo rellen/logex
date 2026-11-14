@@ -520,12 +520,14 @@ defmodule Logex.Retain do
   # Decision 535 (RV-27): a store of `logex retain 3` is one that names the program that
   # wrote it, as every store the runner writes since decision 530 does, so one that names
   # none, its `resource` and `program` lines a hand edit took away, is refused, located at
-  # its header, the line that says it names one (provisional, `PLAN.md`'s RV-27), as
-  # decision 531 refuses one that names it in part at its first `program` line, where it
-  # was read as naming none; a cold start copies it first, as any refused store
-  # (decision 417). A store whose end line does not read, cut short or miscounted, is told
-  # that alone (decision 355), since a cut before the configuration's line's end takes the
-  # lines that name its program with it (provisional, `PLAN.md`'s RV-27). A store of
+  # its header, the line that says it names one, the one line that makes the naming lines
+  # owed (decision 537), as decision 531 refuses one that names it in part at its first
+  # `program` line, where it was read as naming none; a cold start copies it first, as any
+  # refused store (decision 417). A store whose end line does not read, cut short or
+  # miscounted, is told that alone (decision 355), and the naming lines only once the count
+  # reads, since a cut before the configuration's line's end takes the lines that name its
+  # program with it and a store told cut is not also told what the cut took (decision
+  # 538). A store of
   # `logex retain 2` or `logex retain 1` that names none is read as it was, one relabelled
   # so by hand among them; and one whose `resource` or `program` line does not read is told
   # that line, and not that it names none (unread_by/2).
@@ -939,7 +941,11 @@ defmodule Logex.Retain do
 
   # RV-21's review: a store that names its writer's program types names its resource
   # too, a problem of the first `program` line where it does not, as the reader read it.
-  # The line is the three words the reader took it as, each one space apart.
+  # The line is the three words the reader took it as, each one space apart. It is told
+  # beside an end line that does not read, as built since RV-21's review, where decision
+  # 538 tells 535's and 539's only once the count reads: a cut keeps the `resource` line,
+  # which comes before every `program` line the runner writes, so only a hand edit makes
+  # this store, and its count may be told with it (provisional, `PLAN.md`'s RV-28).
   defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc), do: acc
 
   defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do
