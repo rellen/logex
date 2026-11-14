@@ -65,7 +65,7 @@ and `Connection`, which `Logex.Configuration.new!/1` checks, `Logex.IO.Sim`, the
 simulated device, and the runner's clocks, `Logex.Runner.Clock.Manual` the one a test
 moves; and outside it, on logex's own data, unguarded, `Logex.Diagnostic.format/1` on the
 diagnostics logex gives, `Logex.FbType.ctu/0` beside a tag's type and a `%Logex.Scan{}`
-that `Logex.Runtime.call/4` checks (provisional readings, `PLAN.md`'s RV-20, question 2).
+that `Logex.Runtime.call/4` checks (decision 523).
 
 ## The dialect
 
@@ -381,10 +381,10 @@ another program than the files', an edit that never reached them; the simulator 
 and giving the configuration's addresses once a runner has opened it; the examples as
 files under `examples/`; and an adapter of a host's own beside the simulator ("A
 device's adapter", below). The maintainer answered RV-20's and RV-21's questions on
-2026-11-13, decisions 522–531. Waiting: CI naming a failed test, a release step,
-typespecs with Dialyzer, the runner split by concern, and RV-26: a program's text read
-canonically before the store compares it, the stale store's warning naming both causes
-and sent to the subscribers too, and the store written as `logex retain 3`.
+2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
+before the store compares it, the stale store's warning naming both causes and sent to
+the subscribers too, and the store written as `logex retain 3`. Waiting: CI naming a
+failed test, a release step, typespecs with Dialyzer, and the runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3430,10 +3430,10 @@ end
 $ mix run kept.exs
 four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
-logex retain 2
+logex retain 3
 configuration tally written 2026-10-30T14:00:08Z
 resource 013cc059392445fdcc1e84c9b0de6118
-program tally 79283a3df1f759ac3c077ad9de67c863
+program tally bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 4
 instance t1 tally
 t1.boxes ctu
@@ -3448,21 +3448,28 @@ end 15 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
-tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; an edit tested or assembled online that was never written to the files is not in this start, which runs the program it was given with the store's retained values laid over it by name and type
+tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; whether by a deploy of changed files, or an edit tested or assembled online that never reached the files, this start runs the program it was given, with the store's retained values laid over it by name and type
 tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
-  tripped the plant (decision 284, below): a header, `logex retain 2`; the
+  tripped the plant (decision 284, below): a header, `logex retain 3` (decision 530); the
   configuration's name and the time of the write on the host's wall clock, in UTC, which
   a clock gives through its `wall_ms/1` (the manual clock's own time, read from the
   epoch); the program the runner ran as it wrote the store (decision 517 (c), RV-21),
   `resource`, the MD5 of the configuration's own lines, its tasks, globals, instances and
   connections as `Logex.Configuration.Text.print/1` prints them with no line numbers, so
   that a comment or an empty line changes nothing, and `program` a program type, the MD5
-  of its text, what `md5sum tally.ld` prints, and of each user block's after it where it
-  holds one, a store with a `program` line and no `resource` line refused a line, as a
-  hand edit that took the one away and kept the other leaves it; each retained global;
+  of its text and of each user block's after it where it holds one, each as
+  `Logex.Printer` prints it, one rung a line, one space between its elements and each
+  literal by its value, a number in a name too, a subscript, a bit's number or an
+  array's size, so that a comment, an empty line, CRLF line ends, spacing or a literal
+  respelt, `16#3E8` for `1000` or `temps[03]` for `temps[3]`, in a `.ld` file changes
+  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; a
+  word's case and a bit written `w.[4]` for `w.4` are the text's (provisional); a store
+  with a `program` line
+  and no `resource` line refused a line, as a hand edit that took the one away and kept
+  the other leaves it (decision 531); each retained global;
   each retained `single`'s last sample, `trigger arm 0`; each instance whose program
   retains anything, then each instance on the way to a value with its kind and each value
   with its type, in path order, an array's elements on one line, a real in the shortest
@@ -3474,13 +3481,30 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   it, and is refused at a fresh start, naming the file and its last line, so that no
   store is read short, its lost values started at their initial values unreported or a
   number cut in its digits read as a smaller one; a hand edit that changes a line in
-  place keeps the count, and one that adds or takes away a line changes it too. A store
-  of `logex retain 1`, which an earlier logex wrote and which has no end line, is read as
-  before, and the next write makes it `logex retain 2`. A store that names its program is
-  `logex retain 2` too, so a logex from before RV-21, put back over a store this one
-  wrote, refuses it at a warm start, its `resource` line told as one that comes before
-  any `instance` line, and starts it only cold, copying it first (provisional, `PLAN.md`'s
-  RV-21 question 4). The runner ends each line with LF
+  place keeps the count, and one that adds or takes away a line changes it too. Every
+  store the runner writes names its program and is `logex retain 3` (decision 530); a
+  store of `logex retain 2`, which a logex from RV-5 until RV-26 wrote, and one of `logex
+  retain 1`, which an earlier logex wrote and which has no end line, are read as before,
+  and the next write makes either `logex retain 3`. A `logex retain 2` store that names
+  its program, as RV-21's logex wrote it, names each type by the MD5 of its file's bytes,
+  so a fresh start from it compares the bytes of the files it is given, as that logex
+  did, and warns where they differ (provisional, `PLAN.md`'s RV-26); a store of `logex
+  retain 3` with no `resource` or `program` line, a hand edit's, is read as naming no
+  program (provisional). A logex from before RV-26, put back over a store this one wrote
+  after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
+  ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
+  reads `logex retain 2` and `logex retain 1` ``, and its end line as one its header does
+  not take; one from before RV-21 tells its `resource` and `program` lines too, as lines
+  that come before any `instance` line. It starts the store only `start: :cold`, which
+  copies it first, to `tally.retain.dropped.1`, and starts the count at 0: the count is
+  lost unless the copy is put back, either once this logex is back, which reads it as
+  it is, or by hand for the older one, its first line made `logex retain 2` and, for a
+  logex from before RV-21, its `resource` and `program` lines taken away and its end
+  line's count made two fewer, RV-21's logex then warning that each type's text differs,
+  the digests being this logex's. A copy whose first line a hand edit made `logex retain
+  2` and that this logex reads again, no older logex having written over it, is read as
+  RV-21's and warns once that each type's text differs, for the same reason
+  (provisional, `PLAN.md`'s RV-26, question 3). The runner ends each line with LF
   and reads a line ended by LF, CRLF or a lone CR alike, as it reads a program and a
   configuration file, so a store an editor saved with CRLF line ends starts as written,
   its lines counted however they end, and its next write is LF's again (decision 410); one
@@ -3630,15 +3654,26 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   files the edit never reached, as `kept.exs` makes above, finds its store written by
   another program than the one it is given and warns of it, `status/1`'s `retain` giving
   `warning`, one message naming the store and what differs, the configuration's own lines
-  or a program type's text, or a type only the store or only the start has (decision 517
-  (c), RV-21). It changes nothing else: the store's values are laid over the program the
-  start was given by name and type, as at any start, so the operator who sees it either
-  writes the edit to the files and starts again, or lets the start stand, its next write
-  naming the files' program, after which nothing warns. A deploy of changed files warns
-  the same way, the store having been written by the program before it; a store an
-  earlier logex wrote names no program and warns of nothing, and a cold start, which lays
-  nothing over, warns of nothing. `warning` is always in the report, nil where nothing
-  warned, for the runner's life, as `dropped` is.
+  or a program type's text as it prints, or a type only the store or only the start has,
+  and both causes it may have, a deploy of changed files or an edit tested or assembled
+  online that never reached the files (decisions 517 (c) and 527). It changes nothing
+  else: the store's values are laid over the program the start was given by name and
+  type, as at any start, so the operator who sees it either writes the edit to the files
+  and starts again, or lets the start stand, its next write naming the files' program,
+  after which nothing warns. A deploy of changed files warns the same way, the store
+  having been written by the program before it, but a deploy that changes a file's
+  comments, empty lines, line ends, spacing or a literal's spelling alone does not; a
+  store an earlier logex wrote names no program and warns of nothing, and a cold start,
+  which lays nothing over, warns of nothing. `warning` is always in the report, nil where
+  nothing warned, for the runner's life, as `dropped` is. The warning is an event too,
+  `{:retain, {:warning, message}}` (decision 528): since no subscriber can exist before
+  `start_link/1` returns, an HMI or a log that subscribes to `:retain`, as `subscribe/1`'s
+  default kinds do, is sent it as it subscribes, before `subscribe/2` returns, whenever it
+  subscribes in the runner's life, once while the subscription takes `:retain`:
+  subscribing again with `:retain` among the kinds sends nothing more, and one that takes
+  `:retain` away, subscribing to other kinds, and then back, or one made after an
+  unsubscribe, hears it again; nothing else sends it again, a round, a trip, a restart,
+  an edit's step or the store's next write (provisional).
 - A fresh start that drops anything from its store, a value retyped, resized or no
   longer retained, or an instance the configuration no longer has, as a mistaken deploy
   drops them, first copies the store as it read it to a file of its own (decision 360),
@@ -4042,12 +4077,14 @@ closed: true
 - Once a runner has opened it, a sim is set and read at the configuration's addresses,
   as `packing.logex` writes them: `set(panel, "panel.i.8", 1)` sets the eye, and
   `outputs/1` and `writes/1` give `case_full` under `"panel.q.4"`. A sim no runner has
-  opened knows no device's name, and is set by the adapter's list, `[8]` (decision 517
-  (e), provisional).
+  opened knows no device's name, and is set by the adapter's list, `[8]` (decisions 517
+  (e) and 529).
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`, and by default a store's
-  write that failed, `{:retain, {:error, reason}}`, and a forces file's write an orderly
+  write that failed, `{:retain, {:error, reason}}`, a fresh start's warning that its store
+  was written by another program, `{:retain, {:warning, message}}`, sent as a
+  subscription takes `:retain` (decision 528, below), and a forces file's write an orderly
   end made that failed, `{:forces, {:error, reason}}` (decision 493, below; a kind of its
   own, by default, decision 507); and `stop/2`
   writes every output 0 once and closes every device before it returns.
@@ -5674,9 +5711,10 @@ in every cycle's outputs at the value it holds.
   start can switch an output on at once, as `a_warm_trip.exs`'s case-full lamp does
   above; the configuration warns only of a retained var_output wired straight to an
   output point (decision 272). A fresh start from a store another program wrote, an edit
-  made online that never reached the files, is warned of in `status/1` and refused
-  nothing: the store's values are laid over the program the start was given, by name and
-  type, and run at once (decision 517 (c)). And a host's own child spec that restarts a
+  made online that never reached the files or a deploy of changed files, is warned of in
+  `status/1` and to each subscription that takes `:retain`, and refused nothing: the
+  store's values are laid over the program the start was given, by name and type, and
+  run at once (decisions 517 (c), 527 and 528). And a host's own child spec that restarts a
   crashed runner restarts it warm wherever it names a store, since a fresh start reads
   its store warm unless `start: :cold`.
 

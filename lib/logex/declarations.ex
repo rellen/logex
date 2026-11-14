@@ -388,8 +388,8 @@ defmodule Logex.Declarations do
   # is told, and looked for among nothing. A site that would suggest gives its diagnostic
   # `offer/5` as its message, which holds the look-up and what the message is made of
   # around the suggestion, and the text's last pass over its diagnostics in line order,
-  # `offered/1`, makes each message (provisional: which names are offered one is the
-  # maintainer's to say, `PLAN.md`'s RV-20 question 1). A message that ends with a list of
+  # `offered/1`, makes each message (decision 522: the first hundred, each offered the
+  # nearest of every name). A message that ends with a list of
   # names, a type's members or the blocks given, gives it in each of the hundred, as ever,
   # and after them once a list, by the first message that would give it, none where one
   # before gave it, so that the refusal's text grows with its count and not as its count

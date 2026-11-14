@@ -6,9 +6,10 @@ defmodule Logex.Retain do
   # retained image, `Logex.Runtime.retained/1`'s, is what it holds.
   #
   # Its text is decision 276's, a person's to read after an incident and, where decision
-  # 284 has it, to edit by hand, and since decision 355 (RV-5) of version 2:
+  # 284 has it, to edit by hand, since decision 355 (RV-5) of version 2 and since decision
+  # 530 (RV-26), as every store the runner writes names its program, of version 3:
   #
-  #     logex retain 2
+  #     logex retain 3
   #     configuration plant written 2026-10-27T14:00:00Z
   #     resource 3c59dc048e8850243be8079a5c74d079
   #     program motor 7d793037a0760186574b0282f2f435e7
@@ -21,16 +22,22 @@ defmodule Logex.Retain do
   #     m1.weights int[8] 0 0 12 14 0 0 0 0
   #     end 12 lines
   #
-  # a header, `logex retain 2`; the configuration's name and the time of the write on the
+  # a header, `logex retain 3`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
   # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
-  # of each program type's text, in name order (written_by/1), which a warm fresh start
-  # lays beside the program it is given and warns where they differ (warning/3), a store
-  # written before RV-21 naming none and read as it was, and one that names a type and no
-  # resource refused (RV-21's review); the version still 2, so a logex before RV-21 refuses
-  # such a store at a warm start, its `resource` line told as one before any `instance`
-  # line (provisional, `PLAN.md`'s RV-21 question 4); each retained global, `global
+  # of each program type's text, in name order, since decision 527 (RV-26) as
+  # `Logex.Printer` prints it (written_by/1), which a warm fresh start lays beside the
+  # program it is given and warns where they differ (warning/3), a store written before
+  # RV-21 naming none and read as it was, and one that names a type and no resource
+  # refused, each line read wherever it stands (decision 531); since decision 530 (RV-26)
+  # the header `logex retain 3`, where RV-21 wrote these lines under `logex retain 2`, so
+  # that a logex before RV-26 says plainly that it does not read the store's version, where
+  # one before RV-21 told its `resource` line as one before any `instance` line. A store of
+  # `logex retain 2` that names its program, RV-21's, names each type by its text's bytes,
+  # and is laid beside the start's program digested so (compared/3, provisional); one of
+  # `logex retain 3` that names none, a hand edit's, is read as naming none (provisional);
+  # encode/2, which names no program, writes `logex retain 2`; each retained global, `global
   # <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
   # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
@@ -59,7 +66,9 @@ defmodule Logex.Retain do
   # of the last newline alone keeps every line whole, and that store is read. The count
   # catches, too, a line lost or doubled inside the file, and a line a hand edit added or
   # removed without changing it. A store of version 1, which has no end line, is read as
-  # it was, a cut one among it; every store written since is of version 2.
+  # it was, a cut one among it; every store written since RV-5 is of version 2, and since
+  # RV-26 of version 3, whose end line is version 2's, a cut one refused naming its own
+  # header.
   #
   # A store's lines end with LF, as the runner writes them, and since decision 410 (RV-13)
   # a line ended by CRLF or a lone CR is read alike, as B8 has the source's and a
@@ -76,15 +85,25 @@ defmodule Logex.Retain do
   # is told so in plain words and the rest read as if it were not there; a store cut after
   # its header, inside its second line or at its end, is told once, at the line the cut
   # left last; an end line in a store whose header is not `logex retain 2`, which only
-  # version 2's rule reads, is told as one that header does not take, never as one before
-  # the store's last; and the message for a store cut short said that `start: :cold`
+  # version 2's rule reads, and since RV-26 version 3's, is told as one that header does
+  # not take, never as one before the store's last, its message naming version 2 alone as
+  # it did in a store of `logex retain 1`, and since RV-26's review naming versions 3 and
+  # 2 in a store of a header this logex does not read, `logex retain 3 ` mistyped among
+  # them (provisional, `PLAN.md`'s RV-26, question 5); and the message for a store cut short said that `start: :cold`
   # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
   # to the next of its numbered copies (decision 418), and then writes over it, as a cold
   # start over any store a fresh start would refuse does (`Logex.Runner`).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
-  @header "logex retain 2"
+  # Decision 530 (RV-26): the header of a store that names its program, as the runner
+  # writes every store; and that of one that names none, as encode/2 writes it and every
+  # store was written from decision 355 to RV-26, read as it was.
+  @header "logex retain 3"
+  @unnamed "logex retain 2"
+
+  # The headers this logex reads, the newest first.
+  @headers [@header, @unnamed, "logex retain 1"]
 
   @reals Declarations.reals()
 
@@ -95,13 +114,15 @@ defmodule Logex.Retain do
 
   # A resource's retained image as the store's text, written at `at`, a UTC DateTime, its
   # last line its count of lines (decision 355), naming no program (a store's text as it
-  # was before decision 517).
+  # was before decision 517), its header `logex retain 2`.
   def encode(image, at), do: encode(image, at, nil)
 
   # Decision 517 (c), RV-21: and the program that wrote it, `by` (written_by/1), its
   # `resource` line and a `program` line a program type, in name order, after the
   # configuration's line, so that a fresh start can tell a store written by another program
-  # than the one it was given (warning/3).
+  # than the one it was given (warning/3); since decision 530 (RV-26) under the header
+  # `logex retain 3`, so that a logex before it says that it does not read the store's
+  # version, where one before RV-21 told a `resource` line as one before any instance's.
   def encode(%{configuration: name, globals: globals, instances: instances} = image, at, by) do
     by = by_lines(by)
     globals = for {name, entry} <- Enum.sort(globals), do: ["global #{name} ", entry(entry), "\n"]
@@ -113,7 +134,7 @@ defmodule Logex.Retain do
         Enum.sum(Enum.map(instances, &length/1))
 
     IO.iodata_to_binary([
-      @header,
+      header_of(by),
       "\n",
       "configuration #{name} written #{DateTime.to_iso8601(at)}\n",
       by,
@@ -124,6 +145,9 @@ defmodule Logex.Retain do
     ])
   end
 
+  defp header_of([]), do: @unnamed
+  defp header_of(_by), do: @header
+
   defp by_lines(nil), do: []
 
   defp by_lines(%{resource: resource, programs: programs}),
@@ -132,14 +156,21 @@ defmodule Logex.Retain do
       | for({name, digest} <- Enum.sort(programs), do: "program #{name} #{digest}\n")
     ]
 
-  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 question 1): the program a
-  # configuration runs, as a store names it, `%{resource: digest, programs: %{type =>
-  # digest}}`, each digest the MD5 of a text in 32 lowercase hexadecimal digits. A program
-  # type's is of its source text, the bytes of the file it was read from, so that `md5sum
-  # conveyor.ld` gives it, and where it holds user blocks, of each block's name and source
-  # text after it, in name order, so that a block edited is its holder's text changed too;
-  # one with no source text, built by hand, of its rungs and tags as data. The resource's
-  # is of the configuration's own lines, its tasks, globals, instances and connections, as
+  # Decision 517 (c), RV-21, and decision 527 (RV-26): the program a configuration runs, as
+  # a store names it, `%{resource: digest, programs: %{type => digest}}`, each digest the
+  # MD5 of a text in 32 lowercase hexadecimal digits. A program type's is of its text and,
+  # where it holds user blocks, of each block's name and text after it, in name order, so
+  # that a block edited is its holder's text changed too; and since decision 527 each text
+  # is the one `Logex.Printer` prints of its parse tree, each literal by its value
+  # (canonical/1), as the configuration's own lines are printed before theirs, so that a
+  # comment, an empty line, CRLF, spacing or a literal respelt, `16#ff` for `255`, in a
+  # name too since RV-26's review, `arr[16#2]` for `arr[2]`, `w.03` for `w.3` and
+  # `int[004]` for `int[4]`, in a program's `.ld` or a block's warns of nothing, where
+  # the bytes of each file were
+  # digested and `md5sum conveyor.ld` gave a type with no blocks; a name's case is the
+  # text's, as the printer keeps it (provisional, `PLAN.md`'s RV-26). One with no source
+  # text, built by hand, of its rungs and tags as data. The resource's is of the
+  # configuration's own lines, its tasks, globals, instances and connections, as
   # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
   # comment or an empty line added to the file changes nothing and a task, a global, an
   # instance's type or task, a connection or their order does. The configuration's name is
@@ -152,8 +183,25 @@ defmodule Logex.Retain do
   def written_by(%Logex.Configuration{programs: programs} = configuration),
     do: %{
       resource: digest(Logex.Configuration.Text.print(unlined(configuration))),
-      programs: Map.new(programs, fn {name, program} -> {name, digest(texts(program))} end)
+      programs:
+        Map.new(programs, fn {name, program} -> {name, digest(texts(program, :canonical))} end)
     }
+
+  # Decision 530 (RV-26, provisional): the program a store of version 2 or 1 names, as
+  # RV-21's logex wrote it, `logex retain 2` with its `resource` and `program` lines, each
+  # type's digest the MD5 of its text's bytes, is laid beside the start's program digested
+  # so, its configuration's lines as ever, so that a fresh start from such a store warns as
+  # RV-21's logex would have, where every type's printed digest would differ from its
+  # bytes' and warn of every program once; a store of version 3 names its program printed
+  # (written_by/1), which `by` is.
+  def compared(%{bytes: true}, by, %Logex.Configuration{programs: programs}),
+    do: %{
+      by
+      | programs:
+          Map.new(programs, fn {name, program} -> {name, digest(texts(program, :bytes))} end)
+    }
+
+  def compared(_stored, by, _configuration), do: by
 
   defp unlined(configuration),
     do:
@@ -168,19 +216,54 @@ defmodule Logex.Retain do
         do: %{entry | line: nil}
       )
 
-  defp texts(%Logex.Program{source: source, blocks: blocks} = program),
+  defp texts(%Logex.Program{source: source, blocks: blocks} = program, form),
     do: [
-      own_text(source, program)
+      own_text(source, program, form)
       | for(
           {name, %Logex.FbType{body: %Logex.Program{} = body}} <- Enum.sort(blocks),
-          do: ["\n", name, "\n", own_text(body.source, body)]
+          do: ["\n", name, "\n", own_text(body.source, body, form)]
         )
     ]
 
-  defp own_text(source, _program) when is_binary(source), do: source
+  defp own_text(source, _program, :canonical) when is_binary(source), do: canonical(source)
+  defp own_text(source, _program, :bytes) when is_binary(source), do: source
 
-  defp own_text(nil, program),
+  defp own_text(nil, program, _form),
     do: :erlang.term_to_binary({program.rungs, program.tags}, [:deterministic])
+
+  # Decision 527 (RV-26): a program's or a block's text as `Logex.Printer` prints its parse
+  # tree, one rung a line and one space between its elements, each literal by its value,
+  # `255` for `16#ff` and `1.0` for `1.0e0`, and since RV-26's review each number in a
+  # name, a subscript, a bit's number or an array's size (by_value/1), so that what the
+  # lexer skips, a
+  # comment, an empty line, a line's end and its spacing, and a literal's spelling are not
+  # the program's; the declarations are rungs to the parser, and printed so too. A text
+  # that does not lex or parse, which only a program built by hand holds, every compile's
+  # text doing both, is digested as its bytes.
+  defp canonical(source), do: lexed(Logex.Lexer.tokenize(source), source)
+
+  defp lexed({:ok, tokens, _end_line}, source), do: parsed(Logex.Parser.parse(tokens), source)
+  defp lexed(_error, source), do: source
+
+  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source),
+    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value/1)}})
+
+  defp parsed(_error, source), do: source
+
+  defp by_value({:rung, elements}), do: {:rung, Enum.map(elements, &by_value/1)}
+
+  defp by_value({:branches, legs}),
+    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e) end))}
+
+  defp by_value({:int_lit, line, value, _spelling}), do: {:int_lit, line, value}
+  defp by_value({:real_lit, line, value, _spelling}), do: {:real_lit, line, value}
+
+  # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
+  # by its value too (`Logex.Name.each_by_value/1`), so that `arr[16#2]`, `w.03` and
+  # `int[004]` are `arr[2]`, `w.3` and `int[4]`, as the configuration's own lines read
+  # `int[16#4]`.
+  defp by_value({:name, line, name}), do: {:name, line, Logex.Name.each_by_value(name)}
+  defp by_value(element), do: element
 
   defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)
 
@@ -345,23 +428,38 @@ defmodule Logex.Retain do
       seen: %{},
       problems: Enum.reverse(marked ++ before_end(problems, last)),
       unprintable: Refusal.pattern(),
-      ended: last != nil
+      ended: last != nil,
+      unread: unread?(lines)
     }
 
     acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced()
     refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending, path)
-    {acc.image, written_at, acc.by}
+    {acc.image, written_at, versioned(acc.by, lines)}
   end
 
-  # Decision 517 (c), RV-21 (provisional, `PLAN.md`'s RV-21 questions 1 and 2): what a warm
-  # fresh start warns of, nil where the store names no program, written before RV-21, or
-  # the very program the start was given; otherwise one message, naming the start's store
-  # as the host spelled it, the configuration's own lines where their digest differs and
-  # each program type whose digest differs, is only the store's or only the start's, in
-  # name order, the first ten and then a count, so that the operator learns that an edit
-  # tested or assembled online, which lives in the runner and the store, never reached
-  # the files the start was given. It changes nothing else: the image is laid over the
-  # start's configuration by name and type as decision 277 has it.
+  # RV-26's review: a store whose first line is no header this logex reads, a version
+  # past 3 or one mistyped, `logex retain 3 ` or `Logex retain 3`, its end line told so
+  # (line/2).
+  defp unread?([{first, 1} | _rest]) when first in @headers, do: false
+  defp unread?(_lines), do: true
+
+  # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
+  # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
+  # digested by its bytes (compared/3).
+  defp versioned(nil, _lines), do: nil
+  defp versioned(by, [{@header, 1} | _rest]), do: by
+  defp versioned(by, _lines), do: Map.put(by, :bytes, true)
+
+  # Decision 517 (c), RV-21, and decision 527 (RV-26): what a warm fresh start warns of,
+  # nil where the store names no program, written before RV-21, or the very program the
+  # start was given; otherwise one message, naming the start's store as the host spelled
+  # it, the configuration's own lines where their digest differs and each program type
+  # whose digest differs, is only the store's or only the start's, in name order, the
+  # first ten and then a count, and since decision 527 both causes, a deploy of changed
+  # files, or an edit tested or assembled online, which lives in the runner and the store,
+  # that never reached the files the start was given, where it named the edit alone. It
+  # changes nothing else: the image is laid over the start's configuration by name and type
+  # as decision 277 has it.
   def warning(nil, _by, _path), do: nil
 
   def warning(stored, by, path),
@@ -392,9 +490,9 @@ defmodule Logex.Retain do
       "#{Refusal.path(path)}: the store was written by another program than the one this " <>
         "start was given: " <>
         Enum.join(Array.capped(differences, &"and #{&1} more"), ", ") <>
-        "; an edit tested or assembled online that was never written to the files is not in " <>
-        "this start, which runs the program it was given with the store's retained values " <>
-        "laid over it by name and type"
+        "; whether by a deploy of changed files, or an edit tested or assembled online that " <>
+        "never reached the files, this start runs the program it was given, with the " <>
+        "store's retained values laid over it by name and type"
 
   # RV-5's review: a store that begins with a byte-order mark, as an editor that saves
   # UTF-8 with one writes it, told so in plain words at its first line, and the rest of
@@ -406,11 +504,16 @@ defmodule Logex.Retain do
       {[
          {1,
           "the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor that saves " <>
-            "UTF-8 with one writes it: a store is ASCII and begins `#{@header}`, so save it " <>
+            "UTF-8 with one writes it: a store is ASCII and begins `#{begun(first)}`, so save it " <>
             "without one"}
        ], [{first, 1} | rest]}
 
   defp marked(lines), do: {[], lines}
+
+  # Decision 530 (RV-26): the header a store begins with where it is one this logex reads,
+  # and otherwise the one it writes.
+  defp begun(first) when first in @headers, do: first
+  defp begun(_first), do: @header
 
   # RV-5's review: the header's problems at the line judged as the store's end line, or
   # after it, which only a store cut inside its first two lines has, not told, that line
@@ -427,35 +530,40 @@ defmodule Logex.Retain do
   # store is judged as its end line alone, so that a line a cut left half is told once,
   # its number given back, nil for a store judged by version 1's rule. A store of version
   # 1 has no end line and is read as it was.
-  defp ended([{"logex retain 2", 1} | _rest] = lines),
-    do: trailing(Enum.reverse(lines), [])
+  defp ended([{header, 1} | _rest] = lines) when header in [@header, @unnamed],
+    do: trailing(Enum.reverse(lines), [], header)
 
   defp ended(lines), do: {lines, [], nil}
 
   # RV-5 (b3-store-image-10): an empty line after the last a store holds, which a hand
   # edit's editor may leave, told as what it is, the line before it judged as the end
   # line, where it was told as a store cut short.
-  defp trailing([{"", n} | rest], empty) when rest != [], do: trailing(rest, [n | empty])
-  defp trailing(reversed, empty), do: end_line(Enum.reverse(reversed), empty)
+  defp trailing([{"", n} | rest], empty, header) when rest != [],
+    do: trailing(rest, [n | empty], header)
 
-  defp end_line(lines, empty) do
+  defp trailing(reversed, empty, header), do: end_line(Enum.reverse(reversed), empty, header)
+
+  defp end_line(lines, empty, header) do
     {text, n} = List.last(lines)
-    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n) ++ after_end(empty), n}
+
+    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n, header) ++ after_end(empty),
+     n}
   end
 
   defp after_end(empty),
     do: for(n <- empty, do: {n, "an empty line, which a store never holds: its end line is last"})
 
-  defp ending(["end", count, "lines"], text, n), do: counted(number(count), text, n)
+  defp ending(["end", count, "lines"], text, n, _header), do: counted(number(count), text, n)
 
   # Decision 417 (RV-13): the remedy says that a cold start copies the store first, under
   # the next of its numbered copies (decision 418), and then writes over it, where it
-  # warned the operator to copy it aside first.
-  defp ending(_other, text, n),
+  # warned the operator to copy it aside first; since decision 530 (RV-26) naming the
+  # store's own header, `logex retain 3` or `logex retain 2`.
+  defp ending(_other, text, n, header),
     do: [
       {n,
        "#{quoted(text)} is the store's last line, and no end line: a store of " <>
-         "`#{@header}` ends with `end <count> lines`, its count of lines, so this one was " <>
+         "`#{header}` ends with `end <count> lines`, its count of lines, so this one was " <>
          "cut short, and a store cut short is not read: start it with start: :cold to " <>
          "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
          "then writes a new store over it"}
@@ -507,14 +615,15 @@ defmodule Logex.Retain do
   defp headed([{first, 1} | rest], name),
     do: {written_at(rest), header(String.split(first, " "), first) ++ named(rest, name)}
 
-  defp header(["logex", "retain", version], _text) when version in ["1", "2"], do: []
+  defp header(["logex", "retain", version], _text) when version in ["1", "2", "3"], do: []
 
+  # Decision 530 (RV-26): a version past 3 told plainly, as a logex before RV-26 tells a
+  # store of version 3.
   defp header(["logex", "retain", version], _text),
     do: [
       {1,
        "the store is of version #{Refusal.shown(version)}, which this logex does not " <>
-         "read: it " <>
-         "reads `#{@header}` and `logex retain 1`"}
+         "read: it reads `#{@header}`, `#{@unnamed}` and `logex retain 1`"}
     ]
 
   defp header(_other, text),
@@ -649,12 +758,28 @@ defmodule Logex.Retain do
           "line"
       )
 
+  # RV-26's review: in a store whose first line is no header this logex reads, an end line
+  # is told as one of either header that takes one, `logex retain 3`, which the runner
+  # writes since decision 530, or `logex retain 2`, which it wrote before, where it named
+  # version 2 alone, so that a hand edit that mistyped a version 3 store's header is not
+  # pointed at version 2's, which would read its digests as RV-21's; in one of `logex
+  # retain 1`, which has none, as decision 355 told it (provisional, `PLAN.md`'s RV-26,
+  # question 5).
+  defp line(["end", _count, "lines"], {text, n}, %{unread: true} = acc),
+    do:
+      problem(
+        acc,
+        n,
+        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` or " <>
+          "`#{@unnamed}` ends with, and this store's first line is neither"
+      )
+
   defp line(["end", _count, "lines"], {text, n}, acc),
     do:
       problem(
         acc,
         n,
-        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` " <>
+        "#{quoted(text)} is an end line, which a store whose first line is `#{@unnamed}` " <>
           "ends with, and this store's first line is not"
       )
 

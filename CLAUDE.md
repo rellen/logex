@@ -121,8 +121,9 @@ own documentation holds:
   through, plain data.
 - `lib/logex/image.ex` — `Logex.Image`, internal: the retained image, taken out of an
   instance or a resource, checked, and laid over a new one by name and type.
-- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 2` to
-  its end line, encoded and decoded, and the atomic write it shares with the forces file.
+- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 3` to
+  its end line, 2 and 1 read too, encoded and decoded, and the atomic write it shares with
+  the forces file.
 - `lib/logex/refusal.ex` — `Logex.Refusal`, internal: a refusal of the store or the forces
   file, its problems capped and counted, each line and each text it quotes bounded and
   printable.

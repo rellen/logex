@@ -113,6 +113,50 @@ defmodule Logex.Name do
   defp literal_name(false, _element, name), do: name
 
   @doc false
+  # Decision 527 (RV-26's review): a lexed name with each number in it by its value, as a
+  # store's digest reads a program's text: each subscript or size that is one integer
+  # literal and nothing else, `arr[2]` of `arr[16#2]`, `arr[02]` or `arr[0_2]`, `g[1,i]` of
+  # `g[01,i]` and `int[4]` of `int[004]`, a bit's number, `w.3` of `w.03`, and a literal
+  # one in brackets, `w.[4]` of `w.[16#4]`, each by its plain decimal, as a literal outside
+  # a name is; a tag's name in brackets, `w.[n]` or `arr[i]`, and every word as written, its
+  # case and a bit's brackets among them (provisional, `PLAN.md`'s RV-26). Total on a text:
+  # a part of no shape it reads is kept as written. A name with no `.` and no `[`, most of
+  # a program's, is looked at once and given back.
+  def each_by_value(name) when is_binary(name),
+    do: parted_by_value(:binary.match(name, [".", "["]), name)
+
+  defp parted_by_value(:nomatch, name), do: name
+
+  defp parted_by_value(_found, name),
+    do: Enum.map_join(:binary.split(name, ".", [:global]), ".", &part_by_value/1)
+
+  defp part_by_value(<<?[, _::binary>> = part)
+       when byte_size(part) > 2 and binary_part(part, byte_size(part) - 1, 1) == "]",
+       do: "[" <> subscript_by_value(binary_part(part, 1, byte_size(part) - 2)) <> "]"
+
+  defp part_by_value(<<d, _::binary>> = part) when d in ?0..?9,
+    do: bit_by_value(Integer.parse(part), part)
+
+  defp part_by_value(part)
+       when byte_size(part) > 0 and binary_part(part, byte_size(part) - 1, 1) == "]",
+       do: subscripted_by_value(element(part), part)
+
+  defp part_by_value(part), do: part
+
+  defp bit_by_value({n, ""}, _part), do: Integer.to_string(n)
+  defp bit_by_value(_other, part), do: part
+
+  defp subscripted_by_value({word, subscripts}, _part),
+    do: word <> "[" <> Enum.map_join(subscripts, ",", &subscript_by_value/1) <> "]"
+
+  defp subscripted_by_value(nil, part), do: part
+
+  defp subscript_by_value(text), do: subscript_text(exact(text), text)
+
+  defp subscript_text({:literal, n}, _text), do: Integer.to_string(n)
+  defp subscript_text(_tag, text), do: text
+
+  @doc false
   # RV-6 (decision 352): an element's name as logex spells it, `Logex.Array.name/2`'s,
   # `lane_t[2]` or `grid[1,7]`, its word and each subscript's value, `{"grid", [1, 7]}`,
   # read with no lexer, each subscript plain decimal digits, at most 18 of them, which the
