@@ -3469,8 +3469,17 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   literal by its value, a number in a name too, a subscript, a bit's number or an
   array's size, so that a comment, an empty line, CRLF line ends, spacing or a literal
   respelt, `16#3E8` for `1000` or `temps[03]` for `temps[3]`, in a `.ld` file changes
-  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; a
-  word's case and a bit written `w.[4]` for `w.4` are the text's (provisional); a store
+  nothing either (decision 527), where `md5sum tally.ld` gave the digest before it; and
+  each word logex reads in any case, a mnemonic, a section, a qualifier, a type's word or
+  the word that heads a block's file, is read lowercased, and a bit written in brackets
+  for its plain number as that number, so that `XIC` for `xic`, `DINT` for `dint` or
+  `w.[4]` for `w.4` changes nothing either, where a tag's name is the text's, its case
+  among it, `Start` another tag than `start`, and so are a member's, a label's and a user
+  block's name, each read by its exact name (decision 532); a store RV-26's logex wrote,
+  whose digest kept every word's case, is told once that a type's text differs where its
+  words were written in another case than lowercase, and its next write names the type
+  as this logex reads it, a program written in lowercase, as every one here is, named
+  alike by both; a store
   with a `program` line
   and no `resource` line refused a line, as a hand edit that took the one away and kept
   the other leaves it (decision 531); each retained global;

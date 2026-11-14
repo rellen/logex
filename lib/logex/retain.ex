@@ -27,7 +27,9 @@ defmodule Logex.Retain do
   # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
   # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
   # of each program type's text, in name order, since decision 527 (RV-26) as
-  # `Logex.Printer` prints it (written_by/1), which a warm fresh start lays beside the
+  # `Logex.Printer` prints it and since decision 532 (RV-27) with each word logex reads in
+  # any case lowercased and a literal bit number in brackets the plain bit, `XIC` and
+  # `w.[4]` read as `xic` and `w.4` (written_by/1), which a warm fresh start lays beside the
   # program it is given and warns where they differ (warning/3), a store written before
   # RV-21 naming none and read as it was, and one that names a type and no resource
   # refused, each line read wherever it stands (decision 531); since decision 530 (RV-26)
@@ -162,13 +164,16 @@ defmodule Logex.Retain do
   # where it holds user blocks, of each block's name and text after it, in name order, so
   # that a block edited is its holder's text changed too; and since decision 527 each text
   # is the one `Logex.Printer` prints of its parse tree, each literal by its value
-  # (canonical/1), as the configuration's own lines are printed before theirs, so that a
+  # (canonical/2), as the configuration's own lines are printed before theirs, so that a
   # comment, an empty line, CRLF, spacing or a literal respelt, `16#ff` for `255`, in a
   # name too since RV-26's review, `arr[16#2]` for `arr[2]`, `w.03` for `w.3` and
   # `int[004]` for `int[4]`, in a program's `.ld` or a block's warns of nothing, where
-  # the bytes of each file were
-  # digested and `md5sum conveyor.ld` gave a type with no blocks; a name's case is the
-  # text's, as the printer keeps it (provisional, `PLAN.md`'s RV-26). One with no source
+  # the bytes of each file were digested and `md5sum conveyor.ld` gave a type with no
+  # blocks; and since decision 532 (RV-27) each word logex reads in any case lowercased,
+  # `XIC` for `xic`, `DINT` for `dint` or `FUNCTION_BLOCK` heading a block's file, and a
+  # literal bit number in brackets the plain bit, `w.[4]` for `w.4`, so that neither warns,
+  # where a tag's name, its case among it, a member's, a label's and a user block's are the
+  # text's (cased/2). One with no source
   # text, built by hand, of its rungs and tags as data. The resource's is of the
   # configuration's own lines, its tasks, globals, instances and connections, as
   # `Logex.Configuration.Text.print/1` prints them with no line of their own, so that a
@@ -216,17 +221,21 @@ defmodule Logex.Retain do
         do: %{entry | line: nil}
       )
 
+  # Decision 532 (RV-27): a program type's own text, `:program`, and each block's, `:block`,
+  # whose first word, `function_block`, is reserved in a block's file alone.
   defp texts(%Logex.Program{source: source, blocks: blocks} = program, form),
     do: [
-      own_text(source, program, form)
+      own_text(source, program, {form, :program})
       | for(
           {name, %Logex.FbType{body: %Logex.Program{} = body}} <- Enum.sort(blocks),
-          do: ["\n", name, "\n", own_text(body.source, body, form)]
+          do: ["\n", name, "\n", own_text(body.source, body, {form, :block})]
         )
     ]
 
-  defp own_text(source, _program, :canonical) when is_binary(source), do: canonical(source)
-  defp own_text(source, _program, :bytes) when is_binary(source), do: source
+  defp own_text(source, _program, {:canonical, kind}) when is_binary(source),
+    do: canonical(source, kind)
+
+  defp own_text(source, _program, {:bytes, _kind}) when is_binary(source), do: source
 
   defp own_text(nil, program, _form),
     do: :erlang.term_to_binary({program.rungs, program.tags}, [:deterministic])
@@ -234,36 +243,81 @@ defmodule Logex.Retain do
   # Decision 527 (RV-26): a program's or a block's text as `Logex.Printer` prints its parse
   # tree, one rung a line and one space between its elements, each literal by its value,
   # `255` for `16#ff` and `1.0` for `1.0e0`, and since RV-26's review each number in a
-  # name, a subscript, a bit's number or an array's size (by_value/1), so that what the
-  # lexer skips, a
-  # comment, an empty line, a line's end and its spacing, and a literal's spelling are not
+  # name, a subscript, a bit's number or an array's size (by_value/2), and since decision
+  # 532 (RV-27) each word logex reads in any case lowercased and a literal bit number in
+  # brackets as the plain bit, so that what the lexer skips, a comment, an empty line, a
+  # line's end and its spacing, a literal's spelling and what logex reads alike are not
   # the program's; the declarations are rungs to the parser, and printed so too. A text
   # that does not lex or parse, which only a program built by hand holds, every compile's
   # text doing both, is digested as its bytes.
-  defp canonical(source), do: lexed(Logex.Lexer.tokenize(source), source)
+  defp canonical(source, kind), do: lexed(Logex.Lexer.tokenize(source), source, kind)
 
-  defp lexed({:ok, tokens, _end_line}, source), do: parsed(Logex.Parser.parse(tokens), source)
-  defp lexed(_error, source), do: source
+  defp lexed({:ok, tokens, _end_line}, source, kind),
+    do: parsed(Logex.Parser.parse(tokens), source, kind)
 
-  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source),
-    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value/1)}})
+  defp lexed(_error, source, _kind), do: source
 
-  defp parsed(_error, source), do: source
+  defp parsed({:ok, {:routine, {:rungs, rungs}}}, _source, kind),
+    do: Logex.Printer.print({:routine, {:rungs, Enum.map(rungs, &by_value(&1, kind))}})
 
-  defp by_value({:rung, elements}), do: {:rung, Enum.map(elements, &by_value/1)}
+  defp parsed(_error, source, _kind), do: source
 
-  defp by_value({:branches, legs}),
-    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e) end))}
+  defp by_value({:rung, elements}, kind), do: {:rung, Enum.map(elements, &by_value(&1, kind))}
 
-  defp by_value({:int_lit, line, value, _spelling}), do: {:int_lit, line, value}
-  defp by_value({:real_lit, line, value, _spelling}), do: {:real_lit, line, value}
+  defp by_value({:branches, legs}, kind),
+    do: {:branches, Enum.map(legs, &Enum.map(&1, fn e -> by_value(e, kind) end))}
+
+  defp by_value({:int_lit, line, value, _spelling}, _kind), do: {:int_lit, line, value}
+  defp by_value({:real_lit, line, value, _spelling}, _kind), do: {:real_lit, line, value}
 
   # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
   # by its value too (`Logex.Name.each_by_value/1`), so that `arr[16#2]`, `w.03` and
   # `int[004]` are `arr[2]`, `w.3` and `int[4]`, as the configuration's own lines read
-  # `int[16#4]`.
-  defp by_value({:name, line, name}), do: {:name, line, Logex.Name.each_by_value(name)}
-  defp by_value(element), do: element
+  # `int[16#4]`; since decision 532 (RV-27) a literal bit number in brackets the plain
+  # bit, `w.[4]` and `w.[16#4]` both `w.4`, and the name's case read as logex reads it
+  # (cased/2).
+  defp by_value({:name, line, name}, kind),
+    do: {:name, line, cased(Logex.Name.each_by_value(name), kind)}
+
+  defp by_value(element, _kind), do: element
+
+  # Decision 532 (RV-27): each word logex reads in any case lowercased, wherever it stands
+  # in the tree, so that `XIC start` for `xic start`, `VAR_INPUT`, `RETAIN`, `DINT`,
+  # `TON[4]` for `ton[4]` and, in a block's file, `FUNCTION_BLOCK` change nothing, as the
+  # configuration's print lowercases its keywords: a word that `Logex.Declarations.
+  # reserved/1` names, a mnemonic, a section, a qualifier, an elementary type's word or a
+  # built-in block's type, from the one table that reserves each, whole or as the word
+  # before an array's sizes; and in a block's text the word that heads its file
+  # (`Logex.Declarations.kinds/0`), which a program's text may hold as a tag's name. Every
+  # other name is kept as written, its case its name's: a tag's, a member's, a label's and
+  # a user block's, each of which logex reads by its exact name, so that `Start` for
+  # `start` is another tag and warns. Only a name holding a capital letter is looked at
+  # past one search for one, a program written in lowercase paying that alone.
+  @capitals for c <- ?A..?Z, do: <<c>>
+
+  defp cased(name, kind), do: capital(:binary.match(name, @capitals), name, kind)
+
+  defp capital(:nomatch, name, _kind), do: name
+  defp capital(_found, name, kind), do: lowered(Declarations.reserved(name), name, kind)
+
+  defp lowered(nil, name, kind), do: worded(Logex.Name.element(name), name, kind)
+  defp lowered(_as, name, _kind), do: String.downcase(name)
+
+  defp worded({word, _sizes}, name, _kind),
+    do: lowered_base(Declarations.reserved(word), word, name)
+
+  defp worded(nil, name, :block), do: heading(String.downcase(name) in Declarations.kinds(), name)
+  defp worded(nil, name, :program), do: name
+
+  defp lowered_base(nil, _word, name), do: name
+
+  defp lowered_base(_as, word, name),
+    do:
+      String.downcase(word) <>
+        binary_part(name, byte_size(word), byte_size(name) - byte_size(word))
+
+  defp heading(true, name), do: String.downcase(name)
+  defp heading(false, name), do: name
 
   defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)
 

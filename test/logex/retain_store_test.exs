@@ -201,22 +201,44 @@ defmodule Logex.RetainStoreTest do
   # Decision 527 (RV-26): a program's text as a store's digest reads it, restated from the
   # text: each rung a line, a line's end however it ends, a comment and an empty line
   # dropped, each element one space from the next, a group's `(`, `|` and `)` elements of
-  # their own; the texts here write each literal as its value's plain text.
-  defp printed(text),
+  # their own; the texts here write each literal as its value's plain text. Decision 532
+  # (RV-27): and each word logex reads in any case lowercased, of the words the texts here
+  # hold, whole or before an array's sizes, and in a block's text the word heading it; and
+  # a literal bit number in brackets the plain bit, `w.[4]` as `w.4`, a tag's, `w.[i]`, as
+  # written. `:case_kept` is the text as RV-26's logex printed it, every word as written.
+  @any_case ~w(var var_input var_output var_external retain non_retain bool int dint real) ++
+              ~w(word ton ctu xic xio ote otl otu ons add move cal jmp lbl)
+
+  defp printed(text, kind \\ :program),
     do:
       text
       |> String.split(["\r\n", "\r", "\n"])
-      |> Enum.map(&printed_line/1)
+      |> Enum.map(&printed_line(&1, kind))
       |> Enum.reject(&(&1 == ""))
       |> Enum.join("\n")
 
-  defp printed_line(line),
+  defp printed_line(line, kind),
     do:
       line
       |> String.replace(~r{//.*}, "")
       |> String.replace(~r/([()|])/, " \\1 ")
       |> String.split()
-      |> Enum.join(" ")
+      |> Enum.map_join(" ", &printed_word(&1, kind))
+
+  defp printed_word(word, :case_kept), do: word
+
+  defp printed_word(word, kind),
+    do:
+      Regex.replace(~r/\.\[(\d+)\]/, word, ".\\1")
+      |> String.split("[", parts: 2)
+      |> printed_parts(kind)
+
+  defp printed_parts([word | sizes], kind),
+    do: Enum.join([lowered_word(String.downcase(word), word, kind) | sizes], "[")
+
+  defp lowered_word(lower, _word, _kind) when lower in @any_case, do: lower
+  defp lowered_word("function_block", _word, :block), do: "function_block"
+  defp lowered_word(_lower, word, _kind), do: word
 
   # Decision 528 (RV-26): the warnings a process of its own is sent as it subscribes by
   # each list of kinds in turn, `:default` the default kinds and `:unsubscribe` an
@@ -2944,8 +2966,9 @@ defmodule Logex.RetainStoreTest do
     # Decision 527 (RV-26): a program type's text and each block's read as they print, one
     # rung a line, one space between its elements and each literal by its value, as the
     # configuration's own lines are read, so that a comment, an empty line, CRLF, spacing
-    # or a literal respelt changes nothing and a rung changed, moved or of another case
-    # does, a block's file as its holder's.
+    # or a literal respelt changes nothing and a rung changed or moved does, a block's file
+    # as its holder's; and since decision 532 (RV-27) a mnemonic written in another case,
+    # `XIC` for `xic`, changes nothing either, where it did.
     test "a program type's text read as it prints: its layout and a literal's spelling no " <>
            "change" do
       text =
@@ -2971,7 +2994,8 @@ defmodule Logex.RetainStoreTest do
             String.replace(text, "dint 255", "dint 16#FF"),
             String.replace(text, "add n 1 n", "add n 001 n"),
             String.replace(text, "dint 255", "dint 2_5_5"),
-            String.replace(text, "real 1.5", "real 1.50e0")
+            String.replace(text, "real 1.5", "real 1.50e0"),
+            String.replace(text, "xic q add", "XIC q add")
           ],
           do: assert(digest.(same, []) == own, inspect(same))
 
@@ -2982,15 +3006,14 @@ defmodule Logex.RetainStoreTest do
               text,
               "( xic a | xic b ) ote q\nxic q add n 1 n",
               "xic q add n 1 n\n( xic a | xic b ) ote q"
-            ),
-            String.replace(text, "xic q add", "XIC q add")
+            )
           ],
           do: refute(digest.(other, []) == own, inspect(other))
 
       # RV-26's review: a number in a name, a subscript, a bit's number or an array's size,
       # is read by its value too, and a literal in a group as one outside it; another
-      # number, in a name or a group, is another text, and so, provisional, is a bit
-      # written in brackets for its plain number (`PLAN.md`'s RV-26, question 1).
+      # number, in a name or a group, is another text; and since decision 532 (RV-27) a bit
+      # written in brackets for its plain number, `w.[4]` for `w.4`, is not, where it was.
       named =
         "var_input a bool\nvar_input b bool\nvar arr int[4]\nvar g int[2,3]\nvar i int\n" <>
           "var w word\nvar t ton[2]\nxic a move 255 arr[2]\nxic a move 1 g[1,i]\n" <>
@@ -3015,7 +3038,8 @@ defmodule Logex.RetainStoreTest do
             {"ton[2]", "ton[16#2]"},
             {"t[1].dn", "t[01].dn"},
             {"add i 1 i", "add i 16#1 i"},
-            {"move 2 g", "move 2#10 g"}
+            {"move 2 g", "move 2#10 g"},
+            {"xic w.[4]", "xic w.4"}
           ],
           do:
             assert(
@@ -3028,8 +3052,7 @@ defmodule Logex.RetainStoreTest do
             {"g[1,i]", "g[0,i]"},
             {"w.3", "w.5"},
             {"int[4]", "int[5]"},
-            {"add i 1 i", "add i 2 i"},
-            {"xic w.[4]", "xic w.4"}
+            {"add i 1 i", "add i 2 i"}
           ],
           do:
             refute(
@@ -3049,7 +3072,7 @@ defmodule Logex.RetainStoreTest do
       end
 
       both = held.(block)
-      assert both == md5(printed(holder) <> "\ngate\n" <> printed(block))
+      assert both == md5(printed(holder) <> "\ngate\n" <> printed(block, :block))
       assert held.("// the gate\r\n\r\n" <> String.replace(block, "\n", "\r\n")) == both
       refute held.(String.replace(block, "add k 1 k", "add k 2 k")) == both
 
@@ -3062,6 +3085,117 @@ defmodule Logex.RetainStoreTest do
         config = %{config | programs: %{"p" => %{program | source: bytes}}}
         assert Retain.written_by(config).programs["p"] == md5(bytes)
       end
+    end
+
+    # Decision 532 (RV-27): each word logex reads in any case is lowercased before the
+    # digest, wherever it stands, from the one table that reserves it, a mnemonic, a
+    # conversion's among them, a section, a qualifier, an elementary type's word and a
+    # built-in block's type, whole or before an array's sizes, and in a block's text the
+    # word that heads its file; and a literal bit number in brackets is read as the plain
+    # bit, a member's and an element's too, a tag's in brackets kept as written. A tag's
+    # case, a label's, a member's and a user block's name are the text's, logex reading
+    # each by its exact name, and `function_block` is a tag's name in a program's text.
+    test "a word logex reads in any case, and a bit's number in brackets, read as logex " <>
+           "reads them; a name's case the text's" do
+      text =
+        "var_input a bool\nvar_output q bool\nvar retain n dint 255\nvar non_retain m int\n" <>
+          "var w word\nvar i int\nvar t ton[2]\nvar c ctu\nvar s bool\nvar lamps int[4]\n" <>
+          "xic a xio q ons s add n 1 n\nxic a jmp done\nxic a ton t[0] 100\n" <>
+          "xic t[0].dn ctu c 5\nxic w.[4] xic t[1].acc.[2] xic lamps[2].[3] otl q\n" <>
+          "xic w.[i] otu q\nxic a int_to_dint m n\nlbl done move 1 m\n"
+
+      digest = fn text, types ->
+        {:ok, program} = Logex.compile(text, name: "p", types: types)
+        config = configured("program p1 p\n  p1.a 0\n", %{"p" => program})
+        Retain.written_by(config).programs["p"]
+      end
+
+      own = digest.(text, [])
+      assert own == md5(printed(text))
+      refute own == md5(printed(text, :case_kept))
+
+      upper =
+        Regex.replace(
+          ~r/\b(var_input|var_output|var|retain|non_retain|bool|dint|int|word|ton|ctu|xic|xio|ons|add|jmp|otl|otu|int_to_dint|lbl|move)\b/,
+          text,
+          &String.upcase/1
+        )
+
+      assert upper =~ "VAR RETAIN n DINT 255\nVAR NON_RETAIN m INT\n"
+      assert upper =~ "VAR t TON[2]\nVAR c CTU\n"
+      assert upper =~ "VAR lamps INT[4]\nXIC a XIO q ONS s ADD n 1 n\n"
+      assert upper =~ "XIC a INT_TO_DINT m n\nLBL done MOVE 1 m\n"
+
+      for same <- [
+            upper,
+            String.replace(text, "xic a xio", "Xic a xIO"),
+            String.replace(text, "var_input a", "Var_Input a"),
+            String.replace(text, "var retain n", "var Retain n"),
+            String.replace(text, "var non_retain m int", "var NON_Retain m Int"),
+            String.replace(text, "dint 255", "DInt 255"),
+            String.replace(text, "ton[2]", "Ton[16#2]"),
+            String.replace(text, "int[4]", "INT[004]"),
+            String.replace(text, "var c ctu", "var c CTU"),
+            String.replace(text, "int_to_dint", "Int_To_DInt"),
+            String.replace(text, "jmp done", "JMP done"),
+            String.replace(text, "xic w.[4]", "xic w.4"),
+            String.replace(text, "xic w.[4]", "xic w.[16#4]"),
+            String.replace(text, "t[1].acc.[2]", "t[1].acc.2"),
+            String.replace(text, "lamps[2].[3]", "lamps[2].3"),
+            String.replace(text, "lamps[2].[3]", "lamps[02].[0_3]")
+          ],
+          do: assert(digest.(same, []) == own, same)
+
+      # A tag's case, a label's and a bit whose number a tag holds, each another text.
+      for other <- [
+            Regex.replace(~r/\bn\b/, text, "N"),
+            String.replace(text, "done", "Done"),
+            String.replace(text, "xic w.[i]", "xic w.[m]")
+          ],
+          do: refute(digest.(other, []) == own, other)
+
+      # A block's file: its words and the one heading it read alike, its name, a member's
+      # and a holder's tag `function_block` its own.
+      block = "function_block gate\nvar_input go bool\nvar retain k dint\nxic go add k 1 k\n"
+      holder = "var_input a bool\nvar g gate\ncal g a\n"
+
+      held = fn block, holder, name ->
+        {:ok, gate} = Logex.compile(block, name: name)
+        digest.(holder, [gate])
+      end
+
+      both = held.(block, holder, "gate")
+      assert both == md5(printed(holder) <> "\ngate\n" <> printed(block, :block))
+
+      shouted =
+        Regex.replace(
+          ~r/\b(function_block|var_input|var|retain|bool|dint|xic|add)\b/,
+          block,
+          &String.upcase/1
+        )
+
+      assert shouted ==
+               "FUNCTION_BLOCK gate\nVAR_INPUT go BOOL\nVAR RETAIN k DINT\nXIC go ADD k 1 k\n"
+
+      assert held.(shouted, holder, "gate") == both
+
+      assert held.(String.replace(block, "function_block", "FUNCTION_BLOCK"), holder, "gate") ==
+               both
+
+      refute held.(
+               String.replace(block, "gate", "Gate"),
+               String.replace(holder, "gate", "Gate"),
+               "Gate"
+             ) ==
+               both
+
+      refute held.(String.replace(block, "go", "Go"), holder, "gate") == both
+
+      tagged = "var_input a bool\nvar function_block bool\nxic a ote function_block\n"
+      assert digest.(tagged, []) == md5(printed(tagged))
+
+      refute digest.(String.replace(tagged, "function_block", "FUNCTION_BLOCK"), []) ==
+               digest.(tagged, [])
     end
 
     # Decision 527 (RV-26), through the runner: a fresh start from files laid out anew, a
@@ -3139,6 +3273,30 @@ defmodule Logex.RetainStoreTest do
       digest = least.(fn -> Retain.written_by(config) end)
       direct = least.(fn -> printed_digest.(text, config) end)
       assert digest <= direct * 1.25 + 10_000, "the digest #{digest}, its texts #{direct}"
+
+      # Decision 532 (RV-27): a program written in lowercase pays one search a name for a
+      # capital letter, within a sixth of its texts printed and digested here, where a
+      # look-up of every name in the table that reserves its words cost near a quarter;
+      # and the same program with each word logex reads in any case in upper case, each
+      # such word looked up and lowercased, named alike, at its texts' cost too.
+      assert digest <= direct * 1.15 + 10_000, "the digest #{digest}, its texts #{direct}"
+
+      shouted =
+        Regex.replace(
+          ~r/\b(var_input|var_external|var|retain|bool|dint|ctu|xic|add)\b/,
+          text,
+          &String.upcase/1
+        )
+
+      assert shouted =~ "VAR RETAIN c1000 CTU\n\nXIC eye CTU c1 5\n"
+      {:ok, loud} = Logex.compile(shouted, name: "many")
+      loud = configured(plant, %{"many" => loud})
+      assert Retain.written_by(loud) == Retain.written_by(config)
+      loud_digest = least.(fn -> Retain.written_by(loud) end)
+      loud_direct = least.(fn -> printed_digest.(shouted, loud) end)
+
+      assert loud_digest <= loud_direct * 1.25 + 10_000,
+             "the digest #{loud_digest}, its texts #{loud_direct}"
 
       started = fn retain ->
         {:ok, clock} = Manual.start_link(now: @wall)
@@ -3443,6 +3601,57 @@ defmodule Logex.RetainStoreTest do
       {:ok, runner} = Runner.start_link(rig.opts)
       assert Runner.status(runner).retain.warning == nil
       assert Runner.stop(runner) == :ok
+    end
+
+    # Decision 532 (RV-27): a store RV-26's logex wrote names its program by the MD5 of its
+    # text as that logex printed it, every word's case kept, so that a program whose words
+    # logex reads in any case are written in upper case, `XIC eye CTU boxes 1000`, is named
+    # there by another digest than this logex gives it: a fresh start from the very files
+    # warns once that its text differs, as a deploy of changed files would, its values laid
+    # over as ever, and its next write names the program as this logex reads it, so that
+    # the start after it warns of nothing. A program written in lowercase, as README's are,
+    # is named alike by both.
+    test "a store RV-26's logex wrote of a program in upper case warns once, and is written " <>
+           "again as this logex reads it",
+         %{tmp_dir: dir} do
+      shouted =
+        Regex.replace(
+          ~r/\b(var_input|var_external|var_output|var|retain|bool|dint|ctu|xic|ons|add|move|otl|otu)\b/,
+          @tally,
+          &String.upcase/1
+        )
+
+      assert shouted =~ "VAR_OUTPUT RETAIN lamp BOOL\n"
+      assert shouted =~ "XIC eye CTU boxes 1000\n"
+      rig = rig(dir, configuration: configured(@plant, programs(shouted)))
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+
+      rv26 =
+        String.replace(
+          File.read!(rig.store),
+          md5(printed(@tally)),
+          md5(printed(shouted, :case_kept))
+        )
+
+      refute md5(printed(shouted, :case_kept)) == md5(printed(@tally))
+      File.write!(rig.store, rv26)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: warning, dropped: []} = Runner.status(runner).retain
+      assert warning == warned(rig.store)
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.status(runner).retain.warning == nil
+      assert Runner.stop(runner) == :ok
+      assert printed(@tally) == printed(@tally, :case_kept)
     end
 
     # The two lines a hand edit may break, each refused as a line of the store, and a

@@ -318,9 +318,12 @@ defmodule Logex.Runner do
     each user block's after it where it holds one, each since decision 527 (RV-26) as
     `Logex.Printer` prints it, one rung a line, one space between its elements and each
     literal by its value, a number in a name too, a subscript, a bit's number or an
-    array's size (RV-26's review), so that a comment, an empty line, CRLF, spacing or a
-    literal respelt, `16#3E8` for `1000` or `arr[02]` for `arr[2]`, in a `.ld` file
-    changes nothing, where `md5sum` of the file gave it before; a
+    array's size (RV-26's review), and since decision 532 (RV-27) each word logex reads
+    in any case lowercased and a literal bit number in brackets as the plain bit, so that
+    a comment, an empty line, CRLF, spacing, a literal respelt, `16#3E8` for `1000` or
+    `arr[02]` for `arr[2]`, or a keyword's case, `XIC` for `xic`, or `w.[4]` for `w.4`, in a
+    `.ld` file changes nothing, where `md5sum` of the file gave it before, and a tag's
+    case, a member's, a label's or a user block's name changed does; a
     `program` line with no `resource` line refused, and each read wherever it stands, as a
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's

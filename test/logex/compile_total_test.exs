@@ -1217,7 +1217,8 @@ defmodule Logex.CompileTotalTest do
 
     # RV-26's review (decision 527): a name as a store's digest reads it, each number in
     # it by its value, a tag's name and a word as written; total on a text, as the other
-    # readers are.
+    # readers are. Decision 532 (RV-27): a literal bit number in brackets the plain bit,
+    # `w.4`, where it was `w.[4]`, a tag's in brackets as written.
     test "each_by_value/1 reads each number in a name by its value, and is total" do
       for {text, valued} <- [
             {"arr[16#2]", "arr[2]"},
@@ -1226,7 +1227,10 @@ defmodule Logex.CompileTotalTest do
             {"g[01,i]", "g[1,i]"},
             {"int[004]", "int[4]"},
             {"w.03", "w.3"},
-            {"w.[16#4]", "w.[4]"},
+            {"w.[16#4]", "w.4"},
+            {"w.[4]", "w.4"},
+            {"t.acc.[04]", "t.acc.4"},
+            {"lamps[02].[3]", "lamps[2].3"},
             {"w.[n]", "w.[n]"},
             {"lines[01].gates[0_0].q", "lines[1].gates[0].q"},
             {"Tl[1].DN", "Tl[1].DN"},
