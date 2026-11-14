@@ -98,7 +98,9 @@ defmodule Logex.Retain do
   # and the message for a store cut short said that `start: :cold`
   # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
   # to the next of its numbered copies (decision 418), and then writes over it, as a cold
-  # start over any store a fresh start would refuse does (`Logex.Runner`).
+  # start over any store a fresh start would refuse does (`Logex.Runner`), the way out
+  # every refusal of the naming lines ends with too since decision 540 (RV-28), told from
+  # one place (`@way_out`).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -110,6 +112,14 @@ defmodule Logex.Retain do
 
   # The headers this logex reads, the newest first.
   @headers [@header, @unnamed, "logex retain 1"]
+
+  # Decision 417 (RV-13), and since decision 540 (RV-28) from this one place for every
+  # refusal that tells it, the cut-short store's (ending/4) and each of the naming lines'
+  # (unnamed/1): the way to start over a store a fresh start refuses, a cold start, which
+  # copies it first to the next of its numbered copies (decision 418) and then writes a new
+  # store over it.
+  @way_out "start it with start: :cold to start over it, which copies it first to the next " <>
+             "`.dropped.<n>` beside it and then writes a new store over it"
 
   @reals Declarations.reals()
 
@@ -561,12 +571,15 @@ defmodule Logex.Retain do
   defp naming(acc, _lines, _ending), do: acc
 
   # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
-  # then what a store that names its program gives.
+  # then what a store that names its program gives, and since decision 540 (RV-28) the way
+  # to start anyway, `@way_out`, as the cut-short store's ends (ending/4), one way out told
+  # for every refused store, where 531's and 535's named the fault and the shape alone.
   defp unnamed(missing),
     do:
       missing <>
         ": a store that names the program that wrote it gives `resource <digest>` straight " <>
-        "after its configuration's line, and then a `program <type> <digest>` a type"
+        "after its configuration's line, and then a `program <type> <digest>` a type: " <>
+        @way_out
 
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
@@ -689,9 +702,7 @@ defmodule Logex.Retain do
       {n,
        "#{quoted(text)} is the store's last line, and no end line: a store of " <>
          "`#{header}` ends with `end <count> lines`, its count of lines, so this one was " <>
-         "cut short, and a store cut short is not read: start it with start: :cold to " <>
-         "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
-         "then writes a new store over it"}
+         "cut short, and a store cut short is not read: " <> @way_out}
     ]
 
   defp counted({:ok, n}, _text, n), do: []

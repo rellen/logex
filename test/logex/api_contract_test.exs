@@ -15103,7 +15103,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
                  "#{w.store}: line 1: `logex retain 3` heads a store that names the program " <>
                    "that wrote it, and the store names none: a store that names the program " <>
                    "that wrote it gives `resource <digest>` straight after its configuration's " <>
-                   "line, and then a `program <type> <digest>` a type",
+                   "line, and then a `program <type> <digest>` a type: start it with start: " <>
+                   ":cold to start over it, which copies it first to the next `.dropped.<n>` " <>
+                   "beside it and then writes a new store over it",
                  fn -> Runner.start_link(opts) end
 
     assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==

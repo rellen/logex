@@ -288,20 +288,25 @@ defmodule Logex.RetainStoreTest do
         "given, with the store's retained values laid over it by name and type"
 
   # Decision 535 (RV-27): what a store of `logex retain 3` that names no program is told
-  # at its first line.
+  # at its first line, and since decision 540 (RV-28) ending with the way out the cut-short
+  # store's ends with (`@way_out`).
+  @way_out "start it with start: :cold to start over it, which copies it first to the next " <>
+             "`.dropped.<n>` beside it and then writes a new store over it"
+
   @names_none "`logex retain 3` heads a store that names the program that wrote it, and the " <>
                 "store names none: a store that names the program that wrote it gives " <>
                 "`resource <digest>` straight after its configuration's line, and then a " <>
-                "`program <type> <digest>` a type"
+                "`program <type> <digest>` a type: " <> @way_out
 
   # Decision 539 (RV-28): what a store of `logex retain 3` that names its resource and no
-  # program type is told at its `resource` line, the line given.
+  # program type is told at its `resource` line, the line given, ending with decision
+  # 540's way out.
   defp names_no_program(resource),
     do:
       "`#{resource}` names the resource of the store's writer, and the store names no " <>
         "program type: a store that names the program that wrote it gives `resource " <>
         "<digest>` straight after its configuration's line, and then a `program <type> " <>
-        "<digest>` a type"
+        "<digest>` a type: " <> @way_out
 
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
@@ -3558,7 +3563,7 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `#{program_end}` names a program type of the store's writer, and the " <>
           "store names no resource: a store that names the program that wrote it gives " <>
           "`resource <digest>` straight after its configuration's line, and then a `program " <>
-          "<type> <digest>` a type",
+          "<type> <digest>` a type: " <> @way_out,
         fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
       )
     end
@@ -3612,7 +3617,7 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `#{program}` names a program type of the store's writer, and the store " <>
           "names no resource: a store that names the program that wrote it gives `resource " <>
           "<digest>` straight after its configuration's line, and then a `program <type> " <>
-          "<digest>` a type",
+          "<digest>` a type: " <> @way_out,
         fn -> Retain.decoded!(unresourced <> "\nend #{lines - 1} lines\n", {"s", "plant"}) end
       )
 
@@ -3766,6 +3771,79 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `program tally` is no program's line: it is `program <type> <digest>`",
         fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
       )
+    end
+
+    # Decision 540 (RV-28): each refusal of the naming lines, decision 531's, 535's and
+    # 539's, ends as the cut-short store's does, `: ` and the way to start anyway, `start:
+    # :cold`, which copies the store first, one way out for every refused store, where
+    # 531's and 535's named the fault and the shape alone; and a store told several
+    # problems is told within `Logex.Refusal`'s bounds as ever, its first 50 problems and a
+    # count of the rest, each text it quotes at most 60 bytes and each line at most 1,000
+    # bytes after the store's path, a path past 4,096 bytes shown by its last 4,096, the
+    # way out whole in each line that tells it.
+    test "each refusal of the naming lines ends with the cut-short store's way out, within " <>
+           "the refusal's bounds" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+
+      for {text, line} <- [
+            {counted.([header, named | values]), 1},
+            {counted.([header, named, program | values]), 3},
+            {counted.([header, named, resource | values]), 3},
+            {Enum.join([header, named, resource, program | values], "\n") <> "\n",
+             length(values) + 4}
+          ] do
+        message = refused(fn -> Retain.decoded!(text, {"s", "plant"}) end)
+        assert String.starts_with?(message, "s: line #{line}: "), message
+        assert String.ends_with?(message, ": " <> @way_out), message
+        refute message =~ "\n"
+      end
+
+      # 539's refusal among 61 problems: told first, whole, of the 50, the rest counted.
+      doubled = List.duplicate("global total_boxes dint 3", 61)
+
+      message =
+        refused(fn ->
+          Retain.decoded!(counted.([header, named, resource | doubled]), {"s", "plant"})
+        end)
+
+      lines = String.split(message, "\n")
+      assert length(lines) == 51
+      assert hd(lines) == "s: line 3: #{names_no_program(resource)}"
+
+      assert Enum.at(lines, 1) ==
+               "s: line 5: `global total_boxes dint 3` names what line 4 names already"
+
+      assert List.last(lines) == "s: and 11 more problems, not listed"
+
+      # 531's, its type's name past 60 bytes, quoted cut there, the way out whole.
+      long = String.duplicate("t", 200)
+      "program tally " <> digest = program
+
+      raises(
+        "s: line 3: `program #{String.duplicate("t", 52)}…` names a program type of the " <>
+          "store's writer, and the store names no resource: a store that names the program " <>
+          "that wrote it gives `resource <digest>` straight after its configuration's line, " <>
+          "and then a `program <type> <digest>` a type: " <> @way_out,
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, "program #{long} #{digest}" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # 535's, under a path past 4,096 bytes, shown by its last 4,096, the line whole.
+      wide = "/" <> String.duplicate("e", 5000) <> "/plant.retain"
+      shown = "…" <> binary_part(wide, byte_size(wide) - 4096, 4096)
+
+      raises("#{shown}: line 1: #{@names_none}", fn ->
+        Retain.decoded!(counted.([header, named | values]), {wide, "plant"})
+      end)
     end
 
     # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no
