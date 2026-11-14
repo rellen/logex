@@ -3295,16 +3295,18 @@ defmodule Logex.RetainStoreTest do
       # lowercased, named alike, at its texts' cost too.
       assert digest <= direct * 1.10 + 10_000, "the digest #{digest}, its texts #{direct}"
 
-      # RV-27's review, F4: a name holding a capital letter that the program declares, a
-      # tag in CamelCase as Logix shops write them, its element's word or a member's
-      # holder, is looked up among the program's own tags and kept, and only a word that
-      # is none of them, a keyword or a label, in the table that reserves logex's words;
-      # so the program with its tags capitalised, `Eye`, `Total` and `C1` to `C1000`,
-      # each of its 3,005 names one look-up, costs its lowercase twin's digest, the same
-      # texts' bytes, and near 4 reductions a name more (11,985 when this was written),
-      # half a reduction a name allowed, and so does an array's element, `C[7]`, of its
-      # 2,006 names (3,184); where every such name looked up in the table cost some 46
-      # reductions a name more, and an element's word read through its subscripts 66.
+      # RV-27's review, F4: a name holding a capital letter has its word, the whole name or
+      # its part before the first `[` or `.`, looked up among the program's own tags and
+      # kept where it is one, a tag in CamelCase as Logix shops write them, an element of
+      # one or a member of one, and only a word that is no tag, a keyword or a label, in
+      # the table that reserves logex's words. So the program with its tags capitalised,
+      # `Eye`, `Total` and `C1` to `C1000`, each rung reading a member too, `C7.q`, costs
+      # its lowercase twin's digest, the same texts' bytes, and near 3 reductions a name
+      # more over its 4,005 names (11,498 when this was written), half a reduction a name
+      # allowed; and so does an array's, `C[7]` and `C[7].q`, over its 3,006 (6,505);
+      # where every such name looked up in the table, as RV-27 first built it, cost 44 to
+      # 66 reductions a name more, and a member's name looked up whole, its holder not cut
+      # from it, some 45 more a member.
       capitalised = fn text ->
         Regex.replace(~r/\b(?:eye|total)\b|\bc(?=[\d\[ ])/, text, &String.capitalize/1)
       end
@@ -3320,25 +3322,27 @@ defmodule Logex.RetainStoreTest do
         least.(fn -> Retain.written_by(config) end)
       end
 
-      camel = capitalised.(text)
+      membered = Regex.replace(~r/xic eye ctu (c\d+) 5/, text, "xic eye xio \\1.q ctu \\1 5")
+      camel = capitalised.(membered)
       assert camel =~ "var_input Eye bool\nvar_external Total dint\nvar retain C1 ctu\n"
-      assert camel =~ "\nxic Eye ctu C1000 5\nxic Eye add Total 1 Total"
-      lower_digest = cased_digest.(text, plant)
+      assert camel =~ "\nxic Eye xio C1000.q ctu C1000 5\nxic Eye add Total 1 Total"
+      lower_digest = cased_digest.(membered, plant)
       camel_digest = cased_digest.(camel, cased_plant)
 
-      assert camel_digest <= lower_digest + 11_985 + div(3005, 2),
+      assert camel_digest <= lower_digest + 11_498 + div(4005, 2),
              "CamelCase tags #{camel_digest}, their lowercase twin #{lower_digest}"
 
       elements =
         "var_input eye bool\nvar_external total dint\nvar retain c ctu[1000]\n\n" <>
-          Enum.map_join(0..999, "\n", &"xic eye ctu c[#{&1}] 5") <> "\nxic eye add total 1 total"
+          Enum.map_join(0..999, "\n", &"xic eye xio c[#{&1}].q ctu c[#{&1}] 5") <>
+          "\nxic eye add total 1 total"
 
       camel_elements = capitalised.(elements)
-      assert camel_elements =~ "var retain C ctu[1000]\n\nxic Eye ctu C[0] 5\n"
+      assert camel_elements =~ "var retain C ctu[1000]\n\nxic Eye xio C[0].q ctu C[0] 5\n"
       lower_digest = cased_digest.(elements, plant)
       camel_digest = cased_digest.(camel_elements, cased_plant)
 
-      assert camel_digest <= lower_digest + 3184 + div(2006, 2),
+      assert camel_digest <= lower_digest + 6505 + div(3006, 2),
              "CamelCase elements #{camel_digest}, their lowercase twin #{lower_digest}"
 
       shouted =
