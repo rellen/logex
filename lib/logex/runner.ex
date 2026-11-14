@@ -5740,7 +5740,7 @@ defmodule Logex.Runner do
   # changes nothing else: the image laid over the configuration as decision 277 has it.
   # Since decision 530 (RV-26) a store of version 2 or 1 that names its program, RV-21's,
   # is laid beside the start's program digested by its texts' bytes, as it was written
-  # (`Logex.Retain.compared/3`, provisional), every write naming the program printed.
+  # (`Logex.Retain.compared/3`, decision 534), every write naming the program printed.
   defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
     {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)

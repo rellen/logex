@@ -497,7 +497,7 @@ defmodule Logex.Retain do
   def decoded!(text, {path, name}) do
     {marked, lines} = text |> lines() |> unended() |> Enum.with_index(1) |> marked()
     {written_at, problems} = headed(lines, name)
-    {body, ending, last} = ended(lines)
+    {body, ending, trailed, last} = ended(lines)
 
     acc = %{
       image: empty(name),
@@ -513,7 +513,7 @@ defmodule Logex.Retain do
     acc =
       body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced() |> naming(lines, ending)
 
-    refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending, path)
+    refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending ++ trailed, path)
     {acc.image, written_at, versioned(acc.by, lines)}
   end
 
@@ -527,9 +527,11 @@ defmodule Logex.Retain do
   # miscounted, is told that alone (decision 355), and the naming lines only once the count
   # reads, since a cut before the configuration's line's end takes the lines that name its
   # program with it and a store told cut is not also told what the cut took (decision
-  # 538). A store of `logex retain 2` or `logex retain 1` that names none is read as it
-  # was, one relabelled so by hand among them; and one whose `resource` or `program` line
-  # does not read is told that line, and not that it names none (unread_by/2).
+  # 538); an empty line after an end line whose count reads, told as itself, holds them
+  # back no longer (RV-28's review), the count read, where it held them to the next try.
+  # A store of `logex retain 2` or `logex retain 1` that names none is read as it was, one
+  # relabelled so by hand among them; and one whose `resource` or `program` line does not
+  # read is told that line, and not that it names none (unread_by/2).
   defp naming(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest], [])
        when map_size(unread) == 0,
        do:
@@ -552,7 +554,11 @@ defmodule Logex.Retain do
   # header only where no line names any of it (provisional, the line, `PLAN.md`'s RV-28),
   # and only once the count reads, as 535's (decision 538), a cut after the `resource`
   # line taking the `program` lines with it. A `program` line that does not read is told
-  # as itself, and the store not told also that it names no program type (unread_by/2).
+  # as itself, and the store not told also that it names no program type (unread_by/2);
+  # a second `resource` line that does not read, beside one that does, is told as itself
+  # and the store told this too, since mending it names no program type (RV-28's review),
+  # as decision 531's refusal is told beside a second `program` line that does not read
+  # (resourced/1), each refusal held back only by a line of the kind it says is missing.
   defp naming(
          %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
          [{@header, 1} | _rest],
@@ -573,8 +579,11 @@ defmodule Logex.Retain do
 
   # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
   # then what a store that names its program gives, and since decision 540 (RV-28) the way
-  # to start anyway, `@way_out`, as the cut-short store's ends (ending/4), one way out told
-  # for every refused store, where 531's and 535's named the fault and the shape alone.
+  # to start anyway, `@way_out`, as the cut-short store's ends (ending/4), the one way out
+  # every refused store is told, where 531's and 535's named the fault and the shape alone.
+  # Each refusal that tells it ends with it, so a store told 531's beside its cut, which
+  # only a hand edit and a cut together make, is told it twice, a line each (provisional,
+  # `PLAN.md`'s RV-28, question 2), 535's and 539's waiting for the count (naming/3).
   defp unnamed(missing),
     do:
       missing <>
@@ -668,11 +677,14 @@ defmodule Logex.Retain do
   # anywhere is never read short (see the head of this module). The last line of such a
   # store is judged as its end line alone, so that a line a cut left half is told once,
   # its number given back, nil for a store judged by version 1's rule. A store of version
-  # 1 has no end line and is read as it was.
+  # 1 has no end line and is read as it was. The end line's own problem and those of the
+  # empty lines after it come apart, so that the naming lines wait for the count alone
+  # (naming/3, decision 538), an empty line after an end line whose count reads told
+  # beside them (RV-28's review).
   defp ended([{header, 1} | _rest] = lines) when header in [@header, @unnamed],
     do: trailing(Enum.reverse(lines), [], header)
 
-  defp ended(lines), do: {lines, [], nil}
+  defp ended(lines), do: {lines, [], [], nil}
 
   # RV-5 (b3-store-image-10): an empty line after the last a store holds, which a hand
   # edit's editor may leave, told as what it is, the line before it judged as the end
@@ -685,8 +697,7 @@ defmodule Logex.Retain do
   defp end_line(lines, empty, header) do
     {text, n} = List.last(lines)
 
-    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n, header) ++ after_end(empty),
-     n}
+    {Enum.drop(lines, -1), ending(String.split(text, " "), text, n, header), after_end(empty), n}
   end
 
   defp after_end(empty),
@@ -944,7 +955,10 @@ defmodule Logex.Retain do
   # beside an end line that does not read, as built since RV-21's review, where decision
   # 538 tells 535's and 539's only once the count reads: a cut keeps the `resource` line,
   # which comes before every `program` line the runner writes, so only a hand edit makes
-  # this store, and its count may be told with it (provisional, `PLAN.md`'s RV-28).
+  # this store, and its count may be told with it, beside a cut its way out told twice
+  # (provisional, `PLAN.md`'s RV-28, question 2). A `resource` line that does not read
+  # holds it back, the line it says is missing perhaps that one mistyped; a second
+  # `program` line that does not read, beside one that does, does not (RV-28's review).
   defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc), do: acc
 
   defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do

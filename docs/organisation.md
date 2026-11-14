@@ -4774,7 +4774,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   "start it with start: :cold to start over it, which copies it first to the next
   `.dropped.<n>` beside it and then writes a new store over it" (540). A store that names
   a type and no resource is told beside a count that does not read, as built since
-  RV-21's review (provisional, `PLAN.md`'s RV-28).)*
+  RV-21's review (provisional, `PLAN.md`'s RV-28).)* *(RV-28's review, 2026-11-14: the
+  naming lines wait for the count alone, an empty line after an end line whose count
+  reads told beside them, where it held 535's and 539's to the next try; a store that
+  names a type and no resource and is cut short too is told the way out twice, a line
+  each (provisional, `PLAN.md`'s RV-28, question 2); and a naming line that does not
+  read holds back only the refusal of its own kind, so a second `resource` line that
+  does not read, beside one that does, is told beside 539's refusal, and a second
+  `program` line so beside 531's.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -15333,7 +15340,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and its comment at `compared/3`, `Logex.Runner`'s moduledoc, README's store passage
      twice, `retain_store_test.exs`'s test of RV-21's store and the life walk's
      `life_rv21/2`, are this decision's number; decision 530's note keeps its mark as
-     history.)*
+     history.)* *(RV-28's review, 2026-11-14: `Logex.Runner`'s comment at `store_text!/5`,
+     which RV-27 missed, is this decision's number too.)*
 
 535. **A version 3 store that names no program (RV-26),** RV-26's question 4: every
      `logex retain 3` store the runner writes names its configuration and programs in its

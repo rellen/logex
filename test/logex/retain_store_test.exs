@@ -308,6 +308,23 @@ defmodule Logex.RetainStoreTest do
         "<digest>` straight after its configuration's line, and then a `program <type> " <>
         "<digest>` a type: " <> @way_out
 
+  # Decision 531: what a store of `logex retain 3` that names a program type and no
+  # resource is told at its first `program` line, the line given, ending with decision
+  # 540's way out.
+  defp names_no_resource(program),
+    do:
+      "`#{program}` names a program type of the store's writer, and the store names no " <>
+        "resource: a store that names the program that wrote it gives `resource <digest>` " <>
+        "straight after its configuration's line, and then a `program <type> <digest>` a " <>
+        "type: " <> @way_out
+
+  # What a store of `logex retain 3` is told where its last line, `text`, is no end line.
+  defp cut_short(text),
+    do:
+      "`#{text}` is the store's last line, and no end line: a store of `logex retain 3` " <>
+        "ends with `end <count> lines`, its count of lines, so this one was cut short, and " <>
+        "a store cut short is not read: " <> @way_out
+
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
     # a trigger's last sample (decision 313), an instance with a built-in, an array of a
@@ -3805,6 +3822,150 @@ defmodule Logex.RetainStoreTest do
                ~r/\As: line 3: `#{program}` names a program type of the store's writer/
 
       assert String.starts_with?(counted, "s: line #{length(lines) + 1}: #{count.(lines)}: ")
+    end
+
+    # RV-28's review: decision 531's refusal told beside an end line that does not read,
+    # each line whole, as built since RV-21's review (provisional, `PLAN.md`'s RV-28,
+    # question 2): beside a count not mended, the count's message, which tells no way out,
+    # and the refusal's way out once; beside a cut, the cut-short store's message, so the
+    # way out told twice, a line each, which only a hand edit and a cut together make.
+    test "decision 531's refusal beside a count that does not read and beside a cut, whole, " <>
+           "each line that tells the way out ending with it" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, _resource, program | rest] = String.split(v3, "\n")
+      lines = [header, named, program | Enum.drop(rest, -2)]
+      n = length(lines) + 1
+
+      miscounted = Enum.join(lines, "\n") <> "\nend 99 lines\n"
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\n" <>
+          "s: line #{n}: the store's end line counts 99 lines, and the store has #{n}: a " <>
+          "line was lost or doubled, or a hand edit added or removed one without changing " <>
+          "the count, which counts every line, the end line among them, and the store is " <>
+          "not read",
+        fn -> Retain.decoded!(miscounted, {"s", "plant"}) end
+      )
+
+      cut = Enum.join(lines, "\n") <> "\n"
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\n" <>
+          "s: line #{n - 1}: #{cut_short(List.last(lines))}",
+        fn -> Retain.decoded!(cut, {"s", "plant"}) end
+      )
+
+      told = refused(fn -> Retain.decoded!(cut, {"s", "plant"}) end)
+      assert length(String.split(told, @way_out)) == 3
+      told = refused(fn -> Retain.decoded!(miscounted, {"s", "plant"}) end)
+      assert length(String.split(told, @way_out)) == 2
+    end
+
+    # RV-28's review: the naming lines wait for the count alone (decision 538), so an empty
+    # line after an end line whose count reads, told as itself (RV-5's review), is told
+    # beside each refusal of the naming lines, 535's, 539's and 531's, where 535's and
+    # 539's waited for the next try; beside a count that does not read, the count and the
+    # empty line are told and 535's and 539's wait, 531's told beside them as ever.
+    test "an empty line after an end line whose count reads is told beside the naming " <>
+           "lines, and beside a count that does not read 535's and 539's wait" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      empty = "an empty line, which a store never holds: its end line is last"
+
+      for {lines, told} <- [
+            {[header, named | values], "s: line 1: #{@names_none}"},
+            {[header, named, resource | values], "s: line 3: #{names_no_program(resource)}"},
+            {[header, named, program | values], "s: line 3: #{names_no_resource(program)}"}
+          ] do
+        n = length(lines) + 1
+        counted = Enum.join(lines, "\n") <> "\nend #{n} lines\n\n"
+
+        raises("#{told}\ns: line #{n + 1}: #{empty}", fn ->
+          Retain.decoded!(counted, {"s", "plant"})
+        end)
+
+        twice = counted <> "\n"
+
+        raises("#{told}\ns: line #{n + 1}: #{empty}\ns: line #{n + 2}: #{empty}", fn ->
+          Retain.decoded!(twice, {"s", "plant"})
+        end)
+      end
+
+      for {lines, told} <- [
+            {[header, named | values], ""},
+            {[header, named, resource | values], ""},
+            {[header, named, program | values], "s: line 3: #{names_no_resource(program)}\n"}
+          ] do
+        n = length(lines) + 1
+        miscounted = Enum.join(lines, "\n") <> "\nend 99 lines\n\n"
+
+        raises(
+          told <>
+            "s: line #{n}: the store's end line counts 99 lines, and the store has #{n}: a " <>
+            "line was lost or doubled, or a hand edit added or removed one without " <>
+            "changing the count, which counts every line, the end line among them, and the " <>
+            "store is not read\ns: line #{n + 1}: #{empty}",
+          fn -> Retain.decoded!(miscounted, {"s", "plant"}) end
+        )
+      end
+    end
+
+    # RV-28's review: a naming line that does not read holds back only the refusal of its
+    # own kind, the line that refusal says is missing perhaps that one mistyped (RV-27's
+    # review, unread_by/2): a second `resource` line that does not read, beside one that
+    # does, is told as itself and decision 539's refusal beside it, since mending it names
+    # no program type; a second `program` line that does not read, beside one that does,
+    # is told as itself and decision 531's beside it. A `program` line that does not read
+    # holds 539's back, and a `resource` line that does not read 531's (the tests above).
+    test "a second naming line that does not read is told beside the refusal of the other " <>
+           "kind" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+      no_digest = "`xyz` is no digest: a store's is 32 lowercase hexadecimal digits"
+
+      raises(
+        "s: line 3: #{names_no_program(resource)}\ns: line 4: #{no_digest}",
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, resource, "resource xyz" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\ns: line 4: #{no_digest}",
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, program, "program tally xyz" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # Of the kind missing, the line that does not read told alone.
+      raises("s: line 4: #{no_digest}", fn ->
+        Retain.decoded!(
+          counted.([header, named, resource, "program tally xyz" | values]),
+          {"s", "plant"}
+        )
+      end)
+
+      raises("s: line 3: #{no_digest}", fn ->
+        Retain.decoded!(
+          counted.([header, named, "resource xyz", program | values]),
+          {"s", "plant"}
+        )
+      end)
     end
 
     # Decision 540 (RV-28): each refusal of the naming lines, decision 531's, 535's and

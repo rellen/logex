@@ -3525,9 +3525,12 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
   it" (decision 540). Where the count of a store that names no program, or its resource
   alone, does not read either, the count is told alone, and the missing lines once it is
-  mended (decision 538); one with a `program` line and no `resource` line is told both at
-  once (provisional). A `resource` or `program` line that does not read, its digest
-  mistyped, is told as itself, not as one missing. A logex from
+  mended (decision 538), an empty line an editor left after an end line whose count reads
+  told beside them; one with a `program` line and no `resource` line is told both at
+  once, and cut short too, the way out twice, a line each (provisional). A `resource` or
+  `program` line that does not read, its digest mistyped, is told as itself, not as one
+  missing; beside a good line of its own kind, it is told beside the refusal of the kind
+  that is missing. A logex from
   before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it

@@ -15237,20 +15237,46 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # made; one over a store that reads whole makes none. One cold start in two, by the
   # store's own text so that no draw is taken, meets the store cut at a byte that text
   # chooses, short of its last newline, which decision 355 refuses, the copy then the cut
-  # bytes; the store is written over at once, as every cold start writes it.
+  # bytes; the store is written over at once, as every cold start writes it. Decisions 535
+  # and 539, restated (RV-28's review): in the life walk, one cold start in four, of those
+  # whose store is not cut, by the same draw, meets a version 3 store a hand edit left
+  # naming its program not at all or its resource alone, half each by the store's text,
+  # the copy then those bytes (unnamed_store/2).
   defp cold_cut!(%{start: :cold, store: store, stored: stored} = w)
        when store != nil and stored != nil,
-       do: cold_cut(rem(:erlang.phash2({on_disk(w), :cold}), 2), w, on_disk(w))
+       do: cold_cut(rem(:erlang.phash2({on_disk(w), :cold}), 4), w, on_disk(w))
 
   defp cold_cut!(_w), do: nil
 
-  defp cold_cut(0, w, text) do
+  defp cold_cut(draw, w, text) when draw in [0, 2] do
     cut = binary_part(text, 0, rem(:erlang.phash2(text), byte_size(text) - 1))
     File.write!(w.store, cut)
     cut
   end
 
+  defp cold_cut(3, %{life: true} = w, "logex retain 3\n" <> _ = text) do
+    {kind, unnamed} = unnamed_store(rem(:erlang.phash2({text, :unnamed}), 2), text)
+    File.write!(w.store, unnamed)
+    reach(kind, true)
+    unnamed
+  end
+
   defp cold_cut(_whole, _w, _text), do: nil
+
+  # A version 3 store's text as a hand edit leaves it, its count mended: its `resource`
+  # and `program` lines taken away, which decision 535 refuses, or its `program` lines
+  # alone, its `resource` line kept, which decision 539 refuses.
+  defp unnamed_store(0, text),
+    do: {:life_cold_unnamed_copied, naming_taken(text, ~r/\A(resource|program) /)}
+
+  defp unnamed_store(1, text),
+    do: {:life_cold_unprogrammed_copied, naming_taken(text, ~r/\Aprogram /)}
+
+  defp naming_taken(text, taken) do
+    [header, configuration | rest] = String.split(text, "\n")
+    {lines, ["end " <> _, ""]} = Enum.split(Enum.reject(rest, &String.match?(&1, taken)), -2)
+    Enum.join([header, configuration | lines], "\n") <> "\nend #{3 + length(lines)} lines\n"
+  end
 
   defp copied_bytes(nil, text), do: text
   defp copied_bytes(cut, _text), do: cut
@@ -16665,7 +16691,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_unnamed_refused,
     # Decision 539 (RV-28): a store of version 3 whose `program` lines a hand edit took
     # away, its `resource` line kept, refused at that line.
-    :life_unprogrammed_refused
+    :life_unprogrammed_refused,
+    # RV-28's review: a cold start over each, copying it first (decision 417).
+    :life_cold_unnamed_copied,
+    :life_cold_unprogrammed_copied
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
