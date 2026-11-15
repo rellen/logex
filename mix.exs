@@ -18,7 +18,7 @@ defmodule Logex.MixProject do
       # The golden record's generator lives beside its fixture; it is run by hand, not
       # loaded by `mix test`, which would otherwise warn that it looks like a misnamed test.
       test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
-      deps: deps()
+      deps: deps(Mix.env())
     ]
   end
 
@@ -28,6 +28,11 @@ defmodule Logex.MixProject do
     []
   end
 
+  # `mix docs` runs in the `docs` environment, the only one with a dependency.
+  def cli do
+    [preferred_envs: [docs: :docs]]
+  end
+
   defp package do
     [
       licenses: ["Apache-2.0"],
@@ -35,11 +40,12 @@ defmodule Logex.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
-  defp deps do
-    [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
-    ]
-  end
+  # ExDoc builds the documentation and nothing else needs it, so it is a dependency of the
+  # `docs` environment alone, the one `mix docs` runs in (`cli/0`). In every other
+  # environment logex has no dependency, at run time, at compile time or under test: Mix
+  # reads no entry, asks for no Hex and fetches nothing, and `mix.lock` names ExDoc's
+  # packages alone. An entry marked `only: :docs` would not do: Mix needs Hex to read any
+  # Hex entry, whatever its environment (test/logex/docs_test.exs).
+  defp deps(:docs), do: [{:ex_doc, "~> 0.40", runtime: false}]
+  defp deps(_env), do: []
 end

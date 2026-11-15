@@ -4,7 +4,7 @@ Logex is a Ladder Logic compiler and interpreter in Elixir: ladder text compiled
 data, a `%Logex.Program{}`, which `Logex.Runtime` interprets one scan at a time; programs
 run as instances, configurations as resources on tasks, `Logex.Runner` on a clock through
 device adapters, with online edit, forcing and retained values. No dependencies, no
-generated code.
+generated code: ExDoc alone, in the `docs` environment, builds the documentation.
 
 This file is an index of what is there now. It holds no history and no rule a module's
 own documentation holds:
@@ -287,6 +287,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
   repository with a stand-in `gh`, every check passed and each taken back.
+- `test/logex/docs_test.exs` — the documentation's build: `mix.exs` giving no dependency
+  outside the `docs` environment, read by a `mix` with no Hex, and `mix.lock` ExDoc's alone.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
