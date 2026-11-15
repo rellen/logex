@@ -169,7 +169,8 @@ defmodule Logex.TypespecTest do
   holds the value, a result through `GenServer.call/3` or the compile's own process among
   them, and each test names the functions it reaches and reaches exactly those, and
   together every spec of those modules. A host's mistake, its pinned `ArgumentError`, is
-  outside every spec and not called here.
+  outside every spec and not called here. A spec wider than every value its function gives
+  passes here, a value never showing it (provisional: `PLAN.md`'s RV-24, question 6).
   """
   use ExUnit.Case, async: true
 

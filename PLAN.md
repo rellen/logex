@@ -20248,7 +20248,9 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     `improper!/1` and `refuse!/2` raising themselves, each a refusal that raises a host's
     mistake by design, or a writer's fun that exits by design: none a defect. No
     defect in `Logex.Retain`'s refusals or the runner's store code was found.
-  - *The flags* (`scripts/dialyzer.sh`, provisional, question 2). Dialyzer's defaults,
+  - *The flags* (`scripts/dialyzer.sh`, provisional, question 2; *since RV-24's review,
+    the same day, `-Wmissing_return` and `-Wopaque_union` on too, their sites written to
+    say what they do, below*). Dialyzer's defaults,
     every class it gives unasked, unknown functions and types among them, and three that
     hold a spec to its code: `-Wextra_return`, a spec naming a return its function never
     gives; `-Wunderspecs`, a spec more allowing than what its function takes and gives;
@@ -20319,7 +20321,8 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     PLT kept). A spec or a clause only Dialyzer reads passes the suite, its code unchanged,
     and is judged by Dialyzer's exit code; a script's or the workflow's change by the
     suite, `scripts_test.exs` holding them; every mutant is killed by one or the other but
-    one.
+    one *(of these 24: a spec no mutant here touched, of a call to a process above all, was
+    held by nothing, RV-24's review, F1, below)*.
 
     | mutant | full suite | Dialyzer |
     |---|---|---|
@@ -20416,6 +20419,207 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     DOC-1 after what waits; PLAN.md, §7 and the changelog, `Decisions: 1–548.`, merged
     clean, and `scripts/changelog.exs` passed. GATE-OK at the merge, 3,043 tests (11
     doctests), and `scripts/dialyzer.sh` clean, `lib/` as at this record's commit.
+
+  **RV-24's review** (2026-11-15, of `3563787`, the review's clone `rv/review24`, its
+  mutants in `rv/review24m` and `rv/review24s`, its runs under `rv/r24probe/`): no defect
+  in the code and no pinned message changed, `scripts/dialyzer.sh` clean and CI green at
+  the tip (run 43690606976, its analysis 7.64 s on a cached PLT); six findings on how
+  far the specs are held and what the record claims of it, each closed below by a fix a
+  test or Dialyzer holds or a document made true. The fixes are `abbb0b4`, GATE-OK, 3,050
+  tests (11 doctests), CI green on it (run 43695214607, its Dialyzer step 45 s, the PLT
+  built cold under its new key in 37.2 s and the analysis 6.1 s); this record the commit
+  after it. The working files are under `scratchpad/rv/p24r/`.
+
+  - *The review's own runs* (`rv/r24probe/`): twelve spec mutants judged by
+    `scripts/dialyzer.sh`, of which eight passed it and, applied together, passed the whole
+    gate too, 3,043 tests, and `scripts/dialyzer.sh`; `-Wspecdiffs` showing Dialyzer's
+    success typing `any()` for 33 of the 101 specs, every call through `GenServer.call/3`
+    or the compile's own process; a trace of every call to the runner, the sim, the manual
+    clock, `Logex.IO` and `Logex.Configuration.Edit` across some fifteen test files, each
+    value checked against its spec, none outside it but the stale types of F3 (the
+    tracer's mailbox overflowing and dropping some); the four `-Wmissing_return` warnings
+    cleared by nine lines, after which that flag's run was clean and M3 red; the script's
+    and the workflow's mutants W2, W9, W11 and W18 each red by `scripts_test.exs`, W16, a
+    `restore-keys:` on the PLT's cache, passing it; every pinned message the warnings'
+    rewrites touched found in the tests, and the two clauses removed unreachable. Live
+    probes of the specs' edges: a float `elapsed`, `true` as an input, a charlist source,
+    map options to `compile/2` and a junk image to `start/2` each its pinned
+    `ArgumentError`, outside the specs; `Logex.Configuration.Global.new!/3` keeping
+    `initial: true` for `check/1` to refuse, the documented deferral, its struct then
+    outside `Global.t()` (question 7 below).
+  - *F1 (high): a third of the specs held by nothing.* Dialyzer types nothing a call to a
+    process gives back nor a field of a struct, so a false spec of the runner, the sim, the
+    manual clock or a compile passed the gate and CI, and `runtime_test.exs` held only that
+    a spec is there; the record read as though Dialyzer held each spec to its code, and its
+    "every mutant is killed by one or the other but one" was true of its own 24 mutants
+    alone. Fixed: `test/logex/typespec_test.exs`, a file of its own, its checker
+    `Logex.TypespecTest.Held` written in clauses, reads each spec and type from the
+    compiled module (`Code.Typespec`) and holds a value to it, a type's parameters put in
+    and another module's types read where they are named, a form it does not know raised.
+    Each of its seven tests calls the contract on what its docs take, a compile, a lone
+    instance and its edit, a configuration, a resource and its edit, and the runner with
+    its sim and manual clock on a store and a forces file, the errors among them (a device
+    that will not open, a store that cannot be written, a forces file in a directory gone,
+    a refused candidate, a restart a device refuses, a hold let go); each call's arguments
+    are held to the spec's and its value to the return of a clause that takes them, each
+    test reaches exactly the functions it names, and the last holds those to every spec of
+    the seventeen modules `runtime_test.exs` puts in the contract, 101. Every one of the
+    review's twelve mutants is red by the suite now, and M3 by Dialyzer too (F2).
+    `CONTRIBUTING.md`, `scripts/dialyzer.sh`'s head, CI's comment, CHANGELOG.md, README's
+    "What has landed" and decision 515's note say what each holds. What it does not hold:
+    a spec wider than every value its function gives, s7 below, which a value never shows
+    (question 6).
+  - *F3 (medium): the types the specs lean on stale.* `Logex.FbType.Member`'s type had no
+    array and its initial value only an integer or a map, where a block's array member is
+    `{:array, type, sizes}` with its list or nil, a real's a float and a timer's its preset
+    map; and `%{String.t() => …}` is a required key in Elixir, false of an empty map. Made
+    true: a member's type is `Logex.Tag.type() | :clock` and its initial value
+    `Logex.Tag.initial()`; `Logex.Program`'s `tags` and `blocks`, `Logex.Scan`'s,
+    `Logex.Instance`'s env and `Logex.IO`'s values have optional keys, a program of no
+    line compiling to none; `units`, `reals` and `arrays`, nil where they would be empty,
+    and a configuration's `programs`, which holds one at least, keep theirs. Held by
+    `typespec_test.exs`: a compile of the leaf, mid and top chain of arrays of blocks, of
+    an empty program and of its instance (mutants t1 to t5).
+  - *F2 (medium): `-Wmissing_return` off on a reason that did not hold.* On: the runner's
+    `started/1` takes `{:ok, pid}` and `{:error, reason}` alone, the sim's and the manual
+    clock's `start_link/1` say `{:ok, pid}` through a `started/1` of one clause, their
+    inits failing and ignoring never, and `Logex.Runtime`'s `due_in/2` takes whole
+    milliseconds, as every due time and `now` are. Each a clause no call reaches put
+    right, none a defect; Dialyzer red with any of the four put back (r1 to r4) and with a
+    spec that leaves out a return, M3.
+  - *F4 (low-medium): the flag record against its own rule.* `-Wopaque_union` on:
+    `Logex.IO` called `Logex.Runtime.start/1` for its refusal alone, the idiom the item
+    rewrote elsewhere; it raises the same words itself, which `io_test.exs` holds equal to
+    `start/1`'s (o1). `-Wunmatched_returns`, 24 sites, and `-Werror_handling`, 18, stay
+    off, each class read site by site, none a defect (above), their reasons made plain in
+    question 2: the first needs `_ =` at 24 sites, the second a `no_return()` spec on 18
+    refusals, which this work's rule forbids as a silencer.
+  - *F5 (low): the PLT's name and cache key blind to its applications.* The PLT is
+    `logex-otp-<otp>-elixir-<elixir>-erts-kernel-stdlib-elixir.plt`, from the script's
+    list, and CI's key adds `hashFiles('scripts/dialyzer.sh')`, restoring no other key.
+    `scripts_test.exs` holds the cache step whole to the next step, so a `restore-keys:`
+    is red (c5, W16), and a PLT of this toolchain's of other applications, the name the
+    script gave before, left unread while another is built (c3).
+  - *F6 (low): the documents.* `CONTRIBUTING.md`'s 112-character line wrapped (its two
+    longer lines were there at the base); its times as measured, a cold run one to two and
+    a half minutes, a kept PLT 10 to 35 s; "red on any warning" now "red on any warning
+    its flags give", beside what the suite holds, in CHANGELOG.md, README and decision
+    515's note.
+  - *No defect* in `Logex.Retain`'s refusals or the runner's store code was found by
+    Dialyzer or by the value test: the store's write, read and refusals are reached through
+    the runner's start, stop and restart, each answer inside its spec.
+  - *The mutation table* (`scripts/mutate.sh` in a clone at `abbb0b4`, each patch's named
+    file and the full suite, 3,050 tests; and `scripts/dialyzer.sh` over the same tree in
+    another clone, its PLT kept; patches under `p24r/mut/`). M01 to M12 are the review's
+    own; t1 to t5 put F3's types back, r1 to r4 F2's sites, o1 F4's; c1 to c5 the script
+    and the workflow.
+
+    | mutant | full suite | Dialyzer |
+    |---|---|---|
+    | M01 `Logex.Runner.status/1`'s spec `:ok` | 1 failed, `typespec_test.exs` | rc 0 |
+    | M02 `Logex.IO.Sim.outputs/1`'s spec a list | 2 failed, `typespec_test.exs` and `trip_test.exs:1600`, a real-clock test red under the machine's load, 5 of 5 alone | rc 0 |
+    | M03 `Logex.Runtime.get/2`'s spec leaving out `{:error, _}` | 1 failed, `typespec_test.exs` | rc 2, `-Wmissing_return` |
+    | M04 `Logex.Configuration.Edit.accept/2,3`'s specs leaving out `{:error, _}` | 1 failed, `typespec_test.exs` | rc 2, `-Wmissing_return` and the runner's clause for it |
+    | M05 `Logex.compile/2`'s spec `:ok` | 1 failed, `typespec_test.exs` | rc 0 |
+    | M06 `Logex.Configuration.check/1`'s spec `:ok` | 1 failed, `typespec_test.exs` | rc 2, the spec invalid |
+    | M07 `Logex.Runner.stop/1,2`'s specs `{:error, :never}` | 1 failed, `typespec_test.exs` | rc 0 |
+    | M08 `Logex.Runtime.next_due_in/1`'s spec `pos_integer` | 1 failed, `typespec_test.exs` | rc 2, `-Wmissing_return` |
+    | M09 `Logex.IO.points/1`'s map of points, not lists | 1 failed, `typespec_test.exs` | rc 0 |
+    | M10 `Clock.Manual.advance/2`'s spec `{:ok, integer}` | 1 failed, `typespec_test.exs` | rc 0 |
+    | M11 `Logex.Configuration.Edit.stage/1`'s spec `:never` | 1 failed, `typespec_test.exs` | rc 0 |
+    | M12 `Logex.Runtime.start/1`'s spec `{t, dropped}` | 1 failed, `typespec_test.exs` | rc 2, the spec invalid |
+    | s7 `Logex.Edit.stage/1`'s spec widened to `atom` | 1 failed, `trip_test.exs:2062`, a real-clock test red under the machine's load, 5 of 5 alone with s7: **survives** | rc 0: **survives** |
+    | t1 `FbType.Member`'s type without arrays | 3 failed, `typespec_test.exs` (2) and `trip_test.exs:4956`, load, 5 of 5 alone | rc 0 |
+    | t2 `FbType.Member`'s initial value an integer or a map | 2 failed, `typespec_test.exs` | rc 0 |
+    | t3 `Logex.Program`'s `tags` a required key | 2 failed, `typespec_test.exs` | rc 0 |
+    | t4 `Logex.Program`'s `blocks` a required key | 6 failed, `typespec_test.exs` | rc 0 |
+    | t5 `Logex.Instance`'s env a required key | 1 failed, `typespec_test.exs` | rc 0 |
+    | r1 the runner's `started/1` taking any result | passes | rc 2, `-Wmissing_return` |
+    | r2 the sim's `start_link/1` without `started/1` | 1 failed, `readme_test.exs`, the examples' build warning `started/1` unused, the mutant's own leftover | rc 2, `-Wmissing_return` |
+    | r2b r2 with `started/1` gone too | passes | rc 2, `-Wmissing_return` |
+    | r3 the manual clock's `start_link/1` without `started/1` | 1 failed, `readme_test.exs`, as r2 | rc 2, `-Wmissing_return` |
+    | r3b r3 with `started/1` gone too | passes | rc 2, `-Wmissing_return` |
+    | r4 `due_in/2` without its guard | passes | rc 2, `-Wmissing_return` (the red run) |
+    | o1 `Logex.IO` refusing through `Logex.Runtime.start/1` again | passes, its message the same | rc 2, `-Wopaque_union` |
+    | c1 `-Wmissing_return` dropped from the script | 2 failed, `scripts_test.exs` | rc 0 |
+    | c2 `-Wopaque_union` dropped from the script | 2 failed, `scripts_test.exs` | rc 0 |
+    | c3 the PLT named without its applications | 2 failed, `scripts_test.exs` | |
+    | c4 CI's PLT key without the script's hash | 1 failed, `scripts_test.exs` | |
+    | c5 CI's PLT cache given `restore-keys: plt-` (the review's W16) | 1 failed, `scripts_test.exs` | |
+
+    s7 survives both, recorded (question 6). r2 and r3 are red in the suite only by the
+    examples' build warning their `started/1` unused, the mutant's leftover; r2b and r3b,
+    the whole change taken back, pass it, and only Dialyzer reads them, as r1, r4 and o1. A
+    red beside the named file's, from another session's suites on the machine, was run again
+    alone (below).
+  - *The red run* (`backup/rv24-red`, `f2d9275` over `abbb0b4`, on no other branch; the
+    item's first, `5ee6986`, CI run 43676373038, recorded above): r4, `due_in/2`'s guard
+    taken away. CI run 43696324821: the four gates green, 3,050 tests, and the Dialyzer step
+    red, its log ending
+    ```
+    dialyzer: building the PLT /home/runner/work/logex/logex/_build/dialyzer/logex-otp-28.5.0.8-elixir-1.20.4-erts-kernel-stdlib-elixir.plt
+      Creating PLT ...-erts-kernel-stdlib-elixir.plt.tmp ... done in 0m45.03s
+    done (passed successfully)
+      Proceeding with analysis...
+    lib/logex/runtime.ex:1379: The success typing for 'Elixir.Logex.Runtime':next_due_in/1 implies that the function might also return
+              float() but the specification return is
+              'infinity' | non_neg_integer()
+     done in 0m7.04s
+    done (warnings were emitted)
+    DIALYZER-FAIL rc=2
+    ##[error]Process completed with exit code 2.
+    ```
+  - *The cost against the parent* (`3563787`, `p24/cost.exs`, two runs at each): the
+    compile 8,712 at both; 100 scans 44,706; 100 cycles 83,386; a configuration's accept
+    40,675, test 3,897, untest 3,711 and assemble 2,329; a lone accept 7,310 and test 252;
+    the round 1,714.99 and 1,713.16 at the parent and 1,714.72 and 1,714.68 at the tip,
+    the scheduler's interleaving. Every ceiling holds.
+  - *The load runs.* `scripts/load.sh -n 50`, four busy loops, at `abbb0b4`:
+    `typespec_test.exs`, whose runner test starts the runner, the sim and the manual clock
+    through the `started/1`s, 0 of 50 failed; `runner_paths_test.exs`, the runner's starts
+    and their refusals, 0 of 50. Three real-clock tests red once each in a mutant's full
+    suite under the machine's load, `trip_test.exs:1600` (M02), `trip_test.exs:2062` (s7)
+    and `trip_test.exs:4956` (t1), none reached by those mutants, each 5 of 5 alone at the
+    tip, 2062 under s7 too.
+  - *The gate*: GATE-OK at `abbb0b4`, 3,050 tests (11 doctests), 329 s under a load of
+    10.5; `scripts/dialyzer.sh` clean, a cold run 112 s here (the PLT 88 s, the analysis
+    15 s); and at this record's commit GATE-OK, 3,050 tests (11 doctests), its `lib/` and
+    tests as at `abbb0b4`. No test, walk or oracle was removed or
+    weakened: `scripts_test.exs`'s pinned cache step grew by the key's hash and is now
+    taken whole, its flags by two, its PLT's name by the applications, and one of its
+    tests reads a third PLT; seven tests are new, all in `typespec_test.exs`.
+  - *CLAUDE.md*: `scripts/dialyzer.sh`'s line names the PLT's applications and says red
+    on any warning its flags give; a line for `test/logex/typespec_test.exs`.
+  - *RV-29*, beside this work, had not landed on `main` by this record's commit. A trial
+    merge of `backup/rv29` (`678dfe0`) into `abbb0b4` conflicted in README's "What has
+    landed" paragraph alone; with it resolved, `scripts/dialyzer.sh` was clean and
+    `typespec_test.exs` passed, so no spec here is made false by RV-29's store refusals.
+  - *Questions for the maintainer*, the closest readings of the record taken and marked
+    provisional where they stand; questions 1, 3, 4 and 5 above stand as they were.
+    2. *Which warnings*, restated. An engineer changes the runner's start so that it can
+       also answer `:ignore`, and forgets the spec. (a) As built since the review:
+       Dialyzer's defaults and five that hold a spec to its code and the resource's
+       opacity, `-Wextra_return`, `-Wmissing_return`, `-Wunderspecs`,
+       `-Woverlapping_contract` and `-Wopaque_union`, red at once; `-Wunmatched_returns`
+       and `-Werror_handling` off; (b) also `-Wunmatched_returns`, the 24 sites written
+       `_ = check(...)`, so a dropped `{:error, _}` from a file write, the store's among
+       them, is red; (c) also `-Werror_handling`, with a `no_return()` spec on each of its
+       18 refusals, which this work's rule today forbids; (d) the three flags the item
+       first chose, the engineer's mistake passing.
+    6. *How far a spec is held where Dialyzer cannot type the value.* The runner's
+       `status/1` gives a map with `:running` or `:tripped`; an engineer widens its spec to
+       `atom()` for a box counter's HMI that reads it, or a new spec names an answer the
+       runner never gives, `{:error, :never}` beside the real ones. (a) As built: each
+       value held to the spec in `typespec_test.exs` and every spec reached, a spec wider
+       than the values passing, as s7 does; (b) also each alternative of a spec's return
+       reached by a test, so `{:error, :never}` is red and every error answer must be
+       driven, a longer file; (c) the spec test removed and the limit recorded alone.
+    7. *A global built from Elixir with a value of no global's type.* An engineer writes
+       `Global.new!("fan_on", :bool, initial: true)` for a fan's run lamp. (a) As built:
+       `new!/3` keeps it and `Logex.Configuration.new!/1` or `check/1` refuses it, a line
+       of the configuration's refusal, its struct meanwhile outside `Global.t()`, the spec
+       taking no such value; (b) `new!/3` refuses a value no type of a global holds at
+       once, as `Logex.Tag.new!/5` does, a new pinned message.
 - **RV-25 — the runner and the contract test file split by concern** (decision 515,
   (d)). `Logex.Runner`'s 5,700 lines into internal modules by concern, the public module
   and every message unchanged, each new module a line in CLAUDE.md; and
