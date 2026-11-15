@@ -15153,6 +15153,114 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp unnamed_drawn!(_draw, _w, _text, _opts), do: :ok
 
+  # The way out a refusal of the store tells (decisions 417, 540 and 545), restated.
+  @life_way_out "start it with start: :cold to start over it, which copies it first to the " <>
+                  "next `.dropped.<n>` beside it and then writes a new store over it"
+
+  # Decision 544, restated (RV-29): of the warm fresh starts that read a version 3 store,
+  # one in two, by the store's own text, so that no draw is taken, is first given the store
+  # with its `resource` line taken away and its count left as it was, as a hand edit that
+  # forgot the count leaves it, and is told that count alone, at the end line, decision
+  # 531's refusal waiting for it as 535's and 539's do; and then, the count mended, 531's
+  # refusal at the first `program` line, with the way out; each with no device read or
+  # written, the store then put back. Decision 545, restated (RV-29): the other half is
+  # first given the store renamed, its configuration's line naming another configuration,
+  # and is told that a renamed configuration starts only cold, with the full way out; and
+  # then the renamed store with its `resource` line taken away and its count mended, told
+  # both, the way out once, at line 2 (provisional, `PLAN.md`'s RV-29).
+  defp named_refused!(%{life: false}, _text, _opts), do: :ok
+  defp named_refused!(%{start: :cold}, _text, _opts), do: :ok
+  defp named_refused!(_w, nil, _opts), do: :ok
+
+  defp named_refused!(w, text, opts),
+    do: named_drawn!(rem(:erlang.phash2({text, :named}), 2), w, text, opts)
+
+  defp named_drawn!(0, w, "logex retain 3\n" <> _ = text, opts) do
+    {lines, count} = unresourced(text)
+    n = length(lines) + 1
+
+    refused_so!(
+      w,
+      opts,
+      Enum.join(lines, "\n") <> "\nend #{count} lines\n",
+      "#{w.store}: line #{n}: the store's end line counts #{count} lines, and the store has " <>
+        "#{n}: a line was lost or doubled, or a hand edit added or removed one without " <>
+        "changing the count, which counts every line, the end line among them, and the " <>
+        "store is not read"
+    )
+
+    refused_so!(
+      w,
+      opts,
+      Enum.join(lines, "\n") <> "\nend #{n} lines\n",
+      "#{w.store}: #{no_resource(lines)}: " <> @life_way_out
+    )
+
+    File.write!(w.store, text)
+    reach(:life_unresourced_counted, true)
+  end
+
+  defp named_drawn!(1, w, "logex retain 3\n" <> _ = text, opts) do
+    name = Keyword.fetch!(opts, :configuration).name
+
+    renamed =
+      &String.replace(&1, "\nconfiguration #{name} written ", "\nconfiguration other written ")
+
+    told =
+      "#{w.store}: line 2: the store is of configuration `other`, and this configuration is " <>
+        "`#{name}`: a store starts only the configuration it was written for, so a renamed " <>
+        "configuration starts only cold"
+
+    refused_so!(w, opts, renamed.(text), told <> ": " <> @life_way_out)
+    {lines, _count} = unresourced(text)
+    unresourced = Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n"
+
+    refused_so!(
+      w,
+      opts,
+      renamed.(unresourced),
+      told <> ": " <> @life_way_out <> "\n#{w.store}: #{no_resource(lines)}"
+    )
+
+    File.write!(w.store, text)
+    reach(:life_renamed_refused, true)
+  end
+
+  defp named_drawn!(_draw, _w, _text, _opts), do: :ok
+
+  # The store given `edited`, a warm start refused with `message`, whole, no device read or
+  # written.
+  defp refused_so!(w, opts, edited, message) do
+    File.write!(w.store, edited)
+    devices = for {_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}
+    assert_raise ArgumentError, message, fn -> Runner.start_link(opts) end
+
+    assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==
+             devices
+  end
+
+  # A version 3 store's lines with its `resource` line taken away, its end line apart, and
+  # the count that end line gave.
+  defp unresourced(text) do
+    {lines, ["end " <> ended, ""]} =
+      text
+      |> String.split("\n")
+      |> Enum.reject(&String.starts_with?(&1, "resource "))
+      |> Enum.split(-2)
+
+    {lines, String.to_integer(hd(String.split(ended, " ")))}
+  end
+
+  # Decision 531's refusal of those lines, at their first `program` line.
+  defp no_resource(lines) do
+    at = Enum.find_index(lines, &String.starts_with?(&1, "program "))
+
+    "line #{at + 1}: `#{Enum.at(lines, at)}` names a program type of the store's writer, " <>
+      "and the store names no resource: a store that names the program that wrote it " <>
+      "gives `resource <digest>` straight after its configuration's line, and then a " <>
+      "`program <type> <digest>` a type"
+  end
+
   # Decision 410, restated (RV-13): a store and a forces file saved with CRLF line ends,
   # or a lone CR's, are read as the runner wrote them, with LF. Before each warm fresh
   # start that reads a store, the store, and the forces file where it holds a force, are
@@ -15575,6 +15683,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:write_limit_given, w.write_limit != nil)
     cut_refused!(w, text, opts)
     unnamed_refused!(w, text, opts)
+    named_refused!(w, text, opts)
     saved = line_ended!(w, text)
     w = %{w | saved: saved_as(saved, text)}
     cold = cold_cut!(w)
@@ -16694,7 +16803,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :life_unprogrammed_refused,
     # RV-28's review: a cold start over each, copying it first (decision 417).
     :life_cold_unnamed_copied,
-    :life_cold_unprogrammed_copied
+    :life_cold_unprogrammed_copied,
+    # Decision 544 (RV-29): a store of version 3 whose `resource` line a hand edit took
+    # away, its count not mended, told the count alone and then, mended, 531's refusal;
+    # and decision 545: a renamed configuration's store told the full way out, alone and
+    # beside 531's refusal, once.
+    :life_unresourced_counted,
+    :life_renamed_refused
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
