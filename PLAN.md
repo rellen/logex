@@ -39,7 +39,9 @@ waits, RV-22 to RV-25 and RV-27.)* *(Since RV-27 and the answers to its question
 waits, RV-22 to RV-25 and RV-28.)* *(Since RV-22, 2026-11-15: it says RV-22 has landed,
 and names what still waits, RV-23 to RV-25 and RV-28.)* *(Since RV-28 and the answers
 to RV-22's and RV-28's questions, 2026-11-15: it says RV-28 has landed, names decisions
-541–545, and names what still waits, RV-23 to RV-25 and RV-29.)*
+541–545, and names what still waits, RV-23 to RV-25 and RV-29.)* *(Since the maintainer asked for the
+documentation's new shape, 2026-11-15: it names decisions 546–548 and what they add to
+what waits, DOC-1 and DOC-2.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -21548,6 +21550,43 @@ still runs; and RV-25 last, alone.
   decision 468's restart wait told "the runner is running", and `trip_test.exs:2078`,
   decision 486's cap trip awaited 100 ms on the manual clock. It runs beside RV-24,
   before RV-23 traces the marks.
+
+**The documentation's new shape, asked for and answered, 2026-11-15** (decisions 546–548).
+The maintainer asked for README's details to move into user pages, built with ExDoc and
+ordered by Diátaxis, and into contributor pages, all in Simplified Technical English, with
+tables, drawn rungs and diagrams. Four questions were put the same day. The answers:
+README first, the module text later (546); a curated set of about twenty decision records,
+§7 kept as the full log (547); the built site published on GitHub Pages (548); and a
+commit's `Co-Authored-By` line names the model that made the commit, which is a working
+rule and no decision of §7. The order from here: RV-29 and RV-24 finish side by side;
+DOC-1 starts when the first of them lands, beside the other; then RV-23, which traces the
+marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
+
+- **DOC-1 — README made short, its details moved into guides** (decisions 546–548). Three
+  steps, each built, reviewed and landed in turn.
+  1. *The foundation.* ExDoc as a dependency of a `docs` environment alone, so that
+     `mix compile` and `mix test` still fetch nothing and ask for no Hex; the site's
+     configuration; the workflow that builds the site and publishes it to GitHub Pages;
+     the examples' test made to read every page, not README alone, with nothing it holds
+     let go (546 (e)); a checker for the writing rules that a script can measure, run by
+     the suite; a style guide with the list of logex's technical words; and scripts that
+     draw a rung from its `.ld` text and a timing diagram from a run, each picture held to
+     its script's output.
+  2. *The pages.* Each page written from an inventory of README made at `0793a86`
+     (about 640 units of content, each with its lines and its page), each claim checked against
+     the code, each page reviewed by two readers, one for what is true and one for the
+     reader, and a ledger that says what became of every unit. The decision records. README
+     rewritten as a short first page. `CLAUDE.md`, `CONTRIBUTING.md` and this file brought
+     up to date.
+  3. *The review of the whole.* The gate, the site built with no warning, every link
+     followed, a mutation table for the new tests, the test diff judged, and each tutorial
+     followed step by step in an empty directory by a reader who knows only the page.
+
+  Its questions for the maintainer are recorded here when it lands.
+
+- **DOC-2 — the module text rewritten** (decision 546 (a)). Each module's and function's
+  text rewritten by DOC-1's style guide, each sentence the suite pins changed with its
+  pin, after RV-24 and RV-25.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
