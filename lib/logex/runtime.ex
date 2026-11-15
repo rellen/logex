@@ -1584,7 +1584,7 @@ defmodule Logex.Runtime do
   # Decision 515 (c), RV-24: the one reader of the resource for a configuration edit's
   # step, its fields as plain data, so that they are read in this module alone, as
   # edited/2 alone writes them, and Dialyzer holds every other module to the opacity of
-  # `t()` (provisional: RV-24's question 5). The wiring is left out: an edit derives its
+  # `t()` (decision 553). The wiring is left out: an edit derives its
   # own from the configurations.
   @spec fields(t) :: fields
   def fields(%__MODULE__{} = runtime), do: Map.delete(Map.from_struct(runtime), :wiring)

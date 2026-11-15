@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # scripts/dialyzer.sh: OTP's own dialyzer over logex's compiled modules (decision 515 (c);
-# CONTRIBUTING.md, "Before you commit"), as CI's step after the four gates runs it, with
-# no dependency: it reads the specs of the host contract and logex's code against the
-# success typings of the toolchain's applications it calls.
+# CONTRIBUTING.md, "Before you commit"), the fifth gate, as scripts/gate.sh and CI's step
+# after the suite run it (decision 549), with no dependency: it reads the specs of the
+# host contract and logex's code against the success typings of the toolchain's
+# applications it calls.
 #
 # It compiles logex (`mix compile`, the dev build), reads the toolchain from the `elixir`
 # on the path, its OTP's full version, its Elixir's and Elixir's own `ebin`, which
@@ -26,17 +27,23 @@
 # there alone).
 #
 # The warnings are Dialyzer's own defaults, every class it gives unasked, unknown
-# functions and types among them, and five that hold each spec to its code and the
-# resource's opacity to every module:
+# functions and types among them, five that hold each spec to its code and the
+# resource's opacity to every module, and one that holds every call to its answer
+# (decision 550):
 #
 #   -Wextra_return          a spec naming a return its function never gives
 #   -Wmissing_return        a spec leaving out a return its function gives
 #   -Wunderspecs            a spec more allowing than what its function takes and gives
 #   -Woverlapping_contract  two specs of one function whose arguments overlap
 #   -Wopaque_union          an opaque value beside another in one function's returns
+#   -Wunmatched_returns     a call whose answer is thrown away, a file write's
+#                           `{:error, _}` among them: one dropped on purpose is written
+#                           `_ = ...`, beside its reason where that is not plain
 #
-# The others are left off, each with its reason in PLAN.md's RV-24 entry (provisional:
-# its question 2). Dialyzer types nothing a call to a process gives back nor a field of a
+# The others are left off, each with its reason in PLAN.md's RV-24 entry (decision 550):
+# `-Werror_handling` above all, whose warnings are logex's refusals, which raise a host's
+# mistake by design and which only a `no_return()` spec would pass, a silencer decision
+# 551 does not allow. Dialyzer types nothing a call to a process gives back nor a field of a
 # struct, so a spec of those it cannot hold; test/logex/typespec_test.exs holds every
 # spec of the host contract to the values its function gives. Dialyzer's configuration
 # file is not read (DIALYZER_CONFIG=/dev/null), so that a contributor's own warnings or
@@ -48,7 +55,8 @@ set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root" || exit 1
 export DIALYZER_CONFIG=/dev/null
-flags=(-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union)
+flags=(-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union
+  -Wunmatched_returns)
 apps=(erts kernel stdlib)
 
 failed() {

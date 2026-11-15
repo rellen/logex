@@ -5746,10 +5746,11 @@ mix format
 
 CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors`, the same under
-`MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
+`MIX_ENV=test`, `mix test --warnings-as-errors`, and OTP's own Dialyzer over the build,
+`scripts/dialyzer.sh` — on every push and pull request, on
 Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`), a red run's log ending with
 each test that failed, its file, line and name, or why none is named, and a suite cut
-short by a test that halts the VM red; `scripts/gate.sh` runs the same four here, and
+short by a test that halts the VM red; `scripts/gate.sh` runs the same five here, and
 judges the suite the same way. The suite runs every example in this file, each script a
 `$ mix run` block follows, from its file under `examples/`, and compares what it prints with what is
 printed here, each block shown here held to its file; the one `elixir` block shown with

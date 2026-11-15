@@ -2371,7 +2371,7 @@ add e i y",
     # implements, which the behaviour's own spec covers (`GenServer`'s, `Logex.IO`'s,
     # `Logex.Runner.Clock`'s), and every type it exports has a typedoc, `@typedoc false`
     # for one internal to logex. The internal functions among them have specs too
-    # (provisional: RV-24's question 4).
+    # (decision 552).
     test "every public function of the host contract has a spec, every type a typedoc" do
       unspecced =
         for module <- @contract ++ @decided,

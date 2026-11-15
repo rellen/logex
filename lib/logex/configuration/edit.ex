@@ -385,7 +385,7 @@ defmodule Logex.Configuration.Edit do
     %{config: original} = runtime = Runtime.fields(runtime!(runtime))
     edited!(original)
     at = at!(runtime, elapsed_ms)
-    candidate!(candidate)
+    _ = candidate!(candidate)
     named!(original, candidate)
     stopped = %{test: drives(original, :stopped), untest: drives(candidate, :stopped)}
 
@@ -538,7 +538,7 @@ defmodule Logex.Configuration.Edit do
   # The runtime's own checks, and so its messages: overlaps/1 checks the resource and
   # changes nothing.
   defp runtime!(runtime) do
-    Runtime.overlaps(runtime)
+    _ = Runtime.overlaps(runtime)
     runtime
   end
 

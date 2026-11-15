@@ -41,7 +41,7 @@ defmodule Logex.Runner.Clock.Monotonic do
 
   @impl Clock
   def cancel(_clock, timer) do
-    Process.cancel_timer(Clock.timer!(timer))
+    _ = Process.cancel_timer(Clock.timer!(timer))
     :ok
   end
 end

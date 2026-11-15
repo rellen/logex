@@ -7,7 +7,8 @@ defmodule Logex.ScriptsTest do
   `.github/workflows/ci.yml` and run as GitHub runs it, its shell's flags and all, over a
   stand-in `mix` that prints, writes a manifest and exits as a run would; the workflow's
   keys, so that every push and pull request runs every gate and no step is skipped or its
-  failure let pass; and `scripts/gate.sh` over the same stand-in. And CI's Dialyzer step
+  failure let pass; and `scripts/gate.sh` over the same stand-in, its fifth step,
+  `scripts/dialyzer.sh` (decision 549), over a stand-in `dialyzer`. And CI's Dialyzer step
   (decision 515 (c)), its PLT's cache and `scripts/dialyzer.sh`, run as the step writes it
   over a stand-in `mix` and `dialyzer`, a real run too slow for the suite: its flags, its
   PLT's name, check and build, and its exit code.
@@ -567,15 +568,31 @@ defmodule Logex.ScriptsTest do
   # first on the path: it notes each gate's task and `MIX_ENV`, exits `format_rc` for the
   # format check, 0 for each compile, and for the suite prints a run's last line, puts
   # `manifest` in place, where given, and exits `test_rc`; a manifest an earlier run left
-  # is there before the gate runs.
-  defp run_gate(dir, format_rc, test_rc, manifest) do
+  # is there before the gate runs. Since decision 549 the gate's fifth step is
+  # `scripts/dialyzer.sh`, copied there as it is, over a `dialyzer` of the test's own: it
+  # notes its first argument, writes the PLT a build names, and for the analysis prints
+  # `printed` and exits `dialyzer_rc`.
+  defp run_gate(dir, format_rc, test_rc, manifest, {dialyzer_rc, printed} \\ {0, ""}) do
     bin = Path.join(dir, "bin")
     File.mkdir_p!(bin)
     File.mkdir_p!(Path.join(dir, "scripts"))
 
-    for script <- ["gate.sh", "failed.exs"] do
+    for script <- ["gate.sh", "failed.exs", "dialyzer.sh"] do
       File.cp!(Path.join(@root, "scripts/#{script}"), Path.join(dir, "scripts/#{script}"))
     end
+
+    File.write!(Path.join(bin, "dialyzer"), """
+    #!/usr/bin/env bash
+    echo "dialyzer $1" >> called
+    case "$1" in
+      --check_plt) exit 0 ;;
+      --build_plt) echo plt > "$3"; exit 0 ;;
+    esac
+    printf '%s' '#{printed}'
+    exit #{dialyzer_rc}
+    """)
+
+    File.chmod!(Path.join(bin, "dialyzer"), 0o755)
 
     path = "_build/test/lib/logex/.mix/.mix_test_failures"
     File.write!(Path.join(dir, "next"), (manifest && :erlang.term_to_binary(manifest)) || "")
@@ -606,13 +623,50 @@ defmodule Logex.ScriptsTest do
     {out, code, File.read!(Path.join(dir, "called"))}
   end
 
+  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
+  @apps "-erts-kernel-stdlib-elixir"
+
+  # The PLT scripts/dialyzer.sh builds in `dir`, named as it names it.
+  defp plt(dir) do
+    {otp, elixir, _ebin} = toolchain()
+    Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
+  end
+
   describe "scripts/gate.sh" do
     @gates "format dev\ncompile dev\ncompile test\ntest dev\n"
+    # Decision 549: the fifth, scripts/dialyzer.sh, its build of the dev tree, its PLT and
+    # its analysis.
+    @fifth "compile dev\ndialyzer --build_plt\ndialyzer --no_check_plt\n"
 
     test "a green suite is GATE-OK, every gate run in order", %{tmp_dir: dir} do
-      assert run_gate(dir, 0, 0, {1, %{}}) == {"Result: 1/3 passed\nGATE-OK\n", 0, @gates}
+      assert run_gate(dir, 0, 0, {1, %{}}) ==
+               {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                  "DIALYZER-OK\nGATE-OK\n", 0, @gates <> @fifth}
     end
 
+    # Decision 549: Dialyzer's code is the gate's, 2 for a warning and 1 for a run that
+    # could not be made, the step named after the verdict and every warning in the log.
+    test "a red fifth step alone is GATE-FAIL with Dialyzer's code, the step named and " <>
+           "its warnings kept in the log",
+         %{tmp_dir: tmp} do
+      warning = "lib/logex/runner.ex:4463:13: Expression produces a value of type"
+
+      for rc <- [2, 1] do
+        dir = Path.join(tmp, "rc#{rc}")
+        log = Path.join(dir, "gate.log")
+
+        assert run_gate(dir, 0, 0, {1, %{}}, {rc, warning <> "\n"}) ==
+                 {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                    "#{warning}\nDIALYZER-FAIL rc=#{rc}\nGATE-FAIL rc=#{rc}\n" <>
+                    "scripts/dialyzer.sh exited #{rc}, the gate's fifth step: its warnings " <>
+                    "are in #{log}\n", rc, @gates <> @fifth}
+
+        assert String.ends_with?(File.read!(log), warning <> "\nDIALYZER-FAIL rc=#{rc}\n")
+      end
+    end
+
+    # The fifth step runs once the four before it are green: after a red suite, a halted
+    # one or a red gate before the suite, the three tests below, no `dialyzer` is called.
     test "a red suite is followed by the tests that failed, each with its line",
          %{tmp_dir: dir} do
       File.mkdir_p!(Path.join(dir, "test"))
@@ -692,9 +746,6 @@ defmodule Logex.ScriptsTest do
     {out, code, File.read!(Path.join(dir, "called")) |> String.split("\n", trim: true)}
   end
 
-  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
-  @apps "-erts-kernel-stdlib-elixir"
-
   describe "CI's Dialyzer step and scripts/dialyzer.sh (decision 515 (c))" do
     # RV-24's review (F5): the key names the script, whose list of applications names the
     # PLT, and the step restores no other key, its lines taken whole to the next step's.
@@ -738,7 +789,7 @@ defmodule Logex.ScriptsTest do
                     "--apps erts kernel stdlib #{ebin} config=/dev/null",
                   "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath " <>
                     "-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract " <>
-                    "-Wopaque_union " <>
+                    "-Wopaque_union -Wunmatched_returns " <>
                     "_build/dev/lib/logex/ebin config=/dev/null"
                 ], "plt\n"}
 
@@ -764,7 +815,7 @@ defmodule Logex.ScriptsTest do
       analysis =
         "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath -Wextra_return " <>
           "-Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union " <>
-          "_build/dev/lib/logex/ebin config=/dev/null"
+          "-Wunmatched_returns _build/dev/lib/logex/ebin config=/dev/null"
 
       assert {_out, 0, ["mix compile dev", ^check, ^analysis]} = run_dialyzer(dir, %{})
       assert File.read!(plt) == "kept"

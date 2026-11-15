@@ -1,7 +1,8 @@
-# The four gates CONTRIBUTING.md asks of every commit (PLAN.md §4·B3), each a step of its
-# own, so each is judged by its own exit code, the suite's step naming the tests a red run
-# failed, and after them Dialyzer (decision 515 (c)). Every push and pull request runs them
-# all, no step skipped and no failure let pass (test/logex/scripts_test.exs). The
+# The five gates CONTRIBUTING.md asks of every commit (PLAN.md §4·B3; decision 549), as
+# scripts/gate.sh runs them, each a step of its own, so each is judged by its own exit
+# code, the suite's step naming the tests a red run failed, and the fifth OTP's own
+# Dialyzer (decision 515 (c)), behind its PLT's cache. Every push and pull request runs
+# them all, no step skipped and no failure let pass (test/logex/scripts_test.exs). The
 # toolchain is the pair mix.exs and shell.nix pin: Erlang/OTP 28 and Elixir 1.20.4.
 name: CI
 
@@ -67,8 +68,9 @@ jobs:
           mix test --warnings-as-errors || rc=$?
           elixir scripts/failed.exs --exit "$rc"
 
-      # Decision 515 (c): OTP's own dialyzer over logex's compiled modules, as a contributor
-      # runs it, scripts/dialyzer.sh, which names its flags, builds or checks its PLT of
+      # Decision 515 (c): OTP's own dialyzer over logex's compiled modules, the fifth gate,
+      # as scripts/gate.sh runs it after the suite (decision 549), scripts/dialyzer.sh,
+      # which names its flags, builds or checks its PLT of
       # the toolchain's applications and exits with Dialyzer's code, red on any warning
       # its flags give. The PLT, the toolchain's alone, is cached by the versions
       # setup-beam resolved and by the script, which names its applications (RV-24's

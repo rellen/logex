@@ -1945,7 +1945,7 @@ defmodule Logex.Runner do
   defp forces_told({:ok, _state} = kept), do: kept
 
   defp forces_told({{:error, {:forces, reason}}, state} = failed) do
-    published(state, [{:forces, {:error, reason}}])
+    _ = published(state, [{:forces, {:error, reason}}])
     failed
   end
 
@@ -2215,7 +2215,7 @@ defmodule Logex.Runner do
     do: {{state.edits, state.runtime, step_time(state), state.retain != nil}, state}
 
   defp serve({:accept, edits, edit, forecast, by}, %{edits: edits} = state) do
-    published(state, [{:edit, :accept, forecast}])
+    _ = published(state, [{:edit, :accept, forecast}])
     {{:ok, forecast}, edit_named(%{state | edit: edit}, by)}
   end
 
@@ -2341,7 +2341,7 @@ defmodule Logex.Runner do
       |> longest()
       |> written_by(step)
 
-    published(state, [{:edit, step, report}])
+    _ = published(state, [{:edit, step, report}])
     replanned(state)
   end
 
@@ -2704,7 +2704,7 @@ defmodule Logex.Runner do
     do: forces_joined(restarts_made(forces_taken(result, state)))
 
   defp forces_taken(result, %{writing: writing} = state) do
-    Process.cancel_timer(writing.timer)
+    _ = Process.cancel_timer(writing.timer)
     {reply, state} = taken(result, writing.forces, writing.names, %{state | writing: nil})
     state = kicked(state)
     for from <- writing.froms, do: GenServer.reply(from, reply)
@@ -3118,7 +3118,8 @@ defmodule Logex.Runner do
   defp taken?({_ref, kinds}), do: :retain in kinds
   defp taken?(nil), do: false
 
-  # Each event of a kind its subscriber named, sent, never awaited.
+  # Each event of a kind its subscriber named, sent, never awaited: what it gives, the
+  # messages sent, is no answer, and each call drops it (decision 550).
   defp published(%{subscribers: subscribers}, events),
     do:
       for(
@@ -3689,7 +3690,7 @@ defmodule Logex.Runner do
     heard_from(silent(%{state | in_round: []}), &a_round(%{&1 | in_round: []}))
   catch
     {__MODULE__, :clock, cause, at} ->
-      published(at, cut_round(at.in_round, at))
+      _ = published(at, cut_round(at.in_round, at))
       tripped(%{at | in_round: nil}, {:clock, cause})
   end
 
@@ -3822,7 +3823,7 @@ defmodule Logex.Runner do
   # end of its last program's scan, the timed tasks' runs in it included, its trip naming
   # each step with its time (decisions 111 and 126), and its outputs computed and written.
   defp computed({:trip, reason, state, events}, _start) do
-    published(state, Enum.reverse(events))
+    _ = published(state, Enum.reverse(events))
     tripped(state, reason)
   end
 
@@ -3888,7 +3889,7 @@ defmodule Logex.Runner do
   # writes reached (cut_round/2) and then its trip (decision 497: the record names a cut
   # "wherever any device was written", which a failing write's round is read to be).
   defp delivered({:trip, reason, %{in_round: [{:reached, _, _} | _]} = state}, _, _, _, _) do
-    published(state, cut_round(state.in_round, state))
+    _ = published(state, cut_round(state.in_round, state))
     tripped(state, reason)
   end
 
@@ -3908,7 +3909,7 @@ defmodule Logex.Runner do
         looked: finish
     }
 
-    published(state, Enum.reverse(events, [{:round, state.logical, outputs}]))
+    _ = published(state, Enum.reverse(events, [{:round, state.logical, outputs}]))
 
     %{state | in_round: []}
     |> planned(start, finish, state.untimed or again)
@@ -4171,7 +4172,7 @@ defmodule Logex.Runner do
 
     state = refused_waiting(state)
     state = zeroed(state)
-    published(state, [{:trip, reason}])
+    _ = published(state, [{:trip, reason}])
     {_written, state} = kept_store(state, state.runtime)
     drained(:queue.out(state.queue), state)
   end
@@ -4277,7 +4278,7 @@ defmodule Logex.Runner do
   # one killed before its copy took a number, which can land nowhere, a write that failed,
   # `:timeout`, the copy still owed (decision 452).
   defp noted({:uncopied, {:unknown, n}}, _at, %{retain: retain} = state) do
-    published(state, [{:retain, {:error, :timeout}}])
+    _ = published(state, [{:retain, {:error, :timeout}}])
 
     {{:error, {:retain, :timeout}},
      %{state | retain: unknown(retain, Paths.copy(retain.path, n))}}
@@ -4293,14 +4294,14 @@ defmodule Logex.Runner do
   # the write's caller told `{:error, {:retain, :timeout}}`, a cold restart left tripped
   # and a fresh start not started as for any write that does not land (decision 291).
   defp noted({:error, :timeout}, _at, %{retain: retain} = state) do
-    published(state, [{:retain, {:error, :timeout}}])
+    _ = published(state, [{:retain, {:error, :timeout}}])
     {{:error, {:retain, :timeout}}, %{state | retain: unknown(retain, retain.path)}}
   end
 
   defp noted({:error, reason}, _at, state), do: failed(reason, state)
 
   defp failed(reason, %{retain: retain} = state) do
-    published(state, [{:retain, {:error, reason}}])
+    _ = published(state, [{:retain, {:error, reason}}])
 
     {{:error, {:retain, reason}}, %{state | retain: %{retain | failed: reason, unknown: nil}}}
   end
@@ -4460,7 +4461,7 @@ defmodule Logex.Runner do
   defp timer_off(%{late: nil} = periodic), do: periodic
 
   defp timer_off(%{late: {timer, _token}} = periodic) do
-    Process.cancel_timer(timer)
+    _ = Process.cancel_timer(timer)
     %{periodic | late: nil}
   end
 
@@ -4713,7 +4714,7 @@ defmodule Logex.Runner do
         logic: Map.new(state.logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)
     }
 
-    published(state, [{:restart, mode}])
+    _ = published(state, [{:restart, mode}])
     rounded(state)
   end
 
@@ -5693,7 +5694,7 @@ defmodule Logex.Runner do
 
   # Since RV-4 the wall clock's answer is checked too, as a store's header holds it.
   defp walled!(true, clock, path) do
-    wall!(clock)
+    _ = wall!(clock)
     path
   end
 

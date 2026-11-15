@@ -448,7 +448,7 @@ defmodule Logex.Runner.Device do
   # request of the runner's reaches while its outputs do not change; the cost, a message
   # a device a poll period, and one a report.
   defp back(result, state) do
-    told_back(state)
+    _ = told_back(state)
     result
   end
 
@@ -756,7 +756,7 @@ defmodule Logex.Runner.Device do
   def terminate(_reason, %{closed: true}), do: :ok
 
   def terminate(_reason, state) do
-    closed(last_zero(state))
+    _ = closed(last_zero(state))
     :ok
   end
 

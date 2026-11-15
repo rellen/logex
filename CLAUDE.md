@@ -40,14 +40,15 @@ own documentation holds:
   by its exit code, never by grepping its output: Elixir 1.20 prints `Result: 39/40
   passed`, which a grep for `[0-9]+ passed` reads as a pass.
 - `mix format` — format before a commit; CI runs `mix format --check-formatted`.
-- `scripts/gate.sh [log]` — the four gates of `CONTRIBUTING.md`'s "Before you commit" in
-  order, by exit code, printing `GATE-OK` or `GATE-FAIL rc=<n>` and the tests that failed;
+- `scripts/gate.sh [log]` — the five gates of `CONTRIBUTING.md`'s "Before you commit" in
+  order, by exit code, the fifth `scripts/dialyzer.sh`, printing `GATE-OK` or `GATE-FAIL
+  rc=<n>` and the tests that failed, or the step, Dialyzer's warnings kept in the log;
   `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, `file:line:
   Module: test name`, and with `--exit N` judges a run, as CI's test step does; the
   manifest keeps a test's failure until a run passes it, so after runs by hand it may name
   an earlier run's; the scripts delete the manifest before each run.
-- `scripts/dialyzer.sh` — OTP's own dialyzer over the dev build, CI's step after the four
-  gates: its PLT of the toolchain's applications under `_build/dialyzer/`, named by the
+- `scripts/dialyzer.sh` — OTP's own dialyzer over the dev build, the gate's fifth step and
+  CI's: its PLT of the toolchain's applications under `_build/dialyzer/`, named by the
   versions and the applications, built or checked, its flags named in it, `DIALYZER-OK`
   or `DIALYZER-FAIL rc=<n>`, red on any warning its flags give.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,

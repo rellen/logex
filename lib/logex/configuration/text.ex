@@ -1163,7 +1163,7 @@ defmodule Logex.Configuration.Text do
   end
 
   def print(entries) when is_list(entries) do
-    entries!(entries)
+    _ = entries!(entries)
     text(entries)
   end
 

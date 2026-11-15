@@ -644,7 +644,7 @@ defmodule Logex.Configuration do
           {:ok, t} | {:error, [Diagnostic.t(), ...]}
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
-    checked(configuration_name(name) ++ mistakes, [])
+    _ = checked(configuration_name(name) ++ mistakes, [])
     {read, rounded, spelled, literals} = Text.read_rounded(source)
 
     read
