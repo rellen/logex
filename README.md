@@ -381,17 +381,20 @@ another program than the files', an edit that never reached them; the simulator 
 and giving the configuration's addresses once a runner has opened it; the examples as
 files under `examples/`; and an adapter of a host's own beside the simulator ("A
 device's adapter", below). The maintainer answered RV-20's and RV-21's questions on
-2026-11-13, decisions 522–531, and RV-26 has landed: a program's text read canonically
-before the store compares it, the stale store's warning naming both causes and sent to
-the subscribers too, and the store written as `logex retain 3`. The maintainer answered
-RV-26's questions on 2026-11-14, decisions 532–536, and RV-27 has landed: a keyword's
-case and a bit's brackets in a program's text read as logex reads them before the store
-compares it, a version 3 store that names no program refused, and one message for an end
-line under every header that takes none. The maintainer answered RV-27's questions the
-same day, decisions 537–540. Waiting: CI naming a failed test, a release step, typespecs
-with Dialyzer, the runner split by concern, and RV-28: a version 3 store that names its
-resource and no program refused, and every refusal of the lines that name a store's
-program ending with the way to start cold.
+2026-11-13, decisions 522–531. RV-22 has landed (decision 515 (e) and (b)): CI ends a red
+run's log with each failed test's file, line and name, and a release step tags a version
+once [`CHANGELOG.md`](CHANGELOG.md), drawn from §7's decisions, names it, the first
+version's number and its tag the maintainer's to give. RV-26 has landed: a program's text
+read canonically before the store compares it, the stale store's warning naming both
+causes and sent to the subscribers too, and the store written as `logex retain 3`. The
+maintainer answered RV-26's questions on 2026-11-14, decisions 532–536, and RV-27 has
+landed: a keyword's case and a bit's brackets in a program's text read as logex reads
+them before the store compares it, a version 3 store that names no program refused, and
+one message for an end line under every header that takes none. The maintainer answered
+RV-27's questions the same day, decisions 537–540. Waiting: typespecs with Dialyzer, the
+runner split by concern, and RV-28: a version 3 store that names its resource and no
+program refused, and every refusal of the lines that name a store's program ending with
+the way to start cold.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -5776,9 +5779,11 @@ mix format
 CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors`, the same under
 `MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
-Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`); `scripts/gate.sh` runs the
-same four here. The suite runs every example in this file, each script a `$ mix run`
-block follows, from its file under `examples/`, and compares what it prints with what is
+Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`), a red run's log ending with
+each test that failed, its file, line and name, or why none is named, and a suite cut
+short by a test that halts the VM red; `scripts/gate.sh` runs the same four here, and
+judges the suite the same way. The suite runs every example in this file, each script a
+`$ mix run` block follows, from its file under `examples/`, and compares what it prints with what is
 printed here, each block shown here held to its file; the one `elixir` block shown with
 no output, the call made from another process in "Running a plant on the clock", is a
 fragment, which it runs in the state its prose describes (`test/logex/readme_test.exs`).
@@ -5788,7 +5793,8 @@ fragment, which it runs in the state its prose describes (`test/logex/readme_tes
 - `PLAN.md` — the codebase review and the ordered plan of work
 - [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word, word that heads a file or configuration file's word
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
-- `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
+- `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix", and how a release is made
+- `CHANGELOG.md` — what each release carries, by the decisions of [`docs/organisation.md`](docs/organisation.md) §7 it names, and what changes for a running program
 - `CLAUDE.md` — commands, conventions and a line for each module and test file, for anyone (or anything) editing the code
 - `docs/review-2026-11-01.md` — the adversarial review of the whole codebase after Milestone 6, every finding with its repro, and its close, what became of each
 - [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4, and its data types, §4.12, the integer widths, bit strings, reals and arrays, with Milestone 5, and retained values and a true warm restart, §4.13, with Milestone 6)
