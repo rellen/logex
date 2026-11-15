@@ -302,7 +302,7 @@ holds every script there to the clauses rule, as it holds the harness.
 
 The documentation is a site ExDoc builds (decisions 546 to 548): README first, the pages
 under `guides/`, and the modules' own documentation. `docs/style-guide.md` is the rule
-for a page, who reads it, which of the four kinds it is, the words it may use, and how to
+for a page, who reads it, which of the six kinds it is, the words it may use, and how to
 add one, check it and build the site; read it before writing one, and start from the
 kind's template under `docs/templates/`. What it rests on, each held by a test:
 

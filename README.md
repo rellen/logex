@@ -5768,7 +5768,7 @@ GitHub Actions.
 
 - [`guides/tutorials/first-program.md`](guides/tutorials/first-program.md) — the tutorial "Your first program": a motor starter written, compiled and run for five scans, in a project of your own
 - [`guides/reference/glossary.md`](guides/reference/glossary.md) — the glossary: each term the pages use, what it means in logex, and the word IEC 61131-3 has for it
-- [`docs/style-guide.md`](docs/style-guide.md) — how a page of the documentation is written, checked and added: the readers, the four kinds of page, the writing rules, the examples' marks and the pictures a script draws; the list of pages is `docs/pages.exs`
+- [`docs/style-guide.md`](docs/style-guide.md) — how a page of the documentation is written, checked and added: the readers, the six kinds of page, the writing rules, the examples' marks and the pictures a script draws; the list of pages is `docs/pages.exs`
 - `PLAN.md` — the codebase review and the ordered plan of work
 - [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word, word that heads a file or configuration file's word
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements

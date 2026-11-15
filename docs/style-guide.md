@@ -31,7 +31,8 @@ Rules that help the reader:
 
 ## The kinds of page
 
-A user page is 1 of 4 kinds. Do not mix the kinds on a page. Link between them.
+A page is 1 of 6 kinds. The first 4 kinds are user pages. Do not mix the kinds on a page.
+Link between them.
 
 | Kind | Directory | Job | Template |
 |---|---|---|---|

@@ -2,7 +2,7 @@
 # Every push and pull request builds the site with scripts/docs.sh, on the toolchain
 # ci.yml pins, Erlang/OTP 28 and Elixir 1.20.4: the build is red on a warning or a dead
 # link docs/site-warnings.txt does not list, no step skipped and no failure let pass
-# (test/logex/scripts_test.exs). A push to main then publishes the built site to GitHub
+# (test/logex/docs_test.exs). A push to main then publishes the built site to GitHub
 # Pages, with GitHub's own actions and the least permissions they need.
 #
 # The publish never turns a run red where Pages cannot take it. The build job asks GitHub
