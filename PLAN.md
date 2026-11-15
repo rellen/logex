@@ -22055,8 +22055,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   there, and one page written on it whole, the tutorial "Your first program", so that each
   part was used once before a second page is written. No test was deleted or weakened:
   decision 546 (e)'s leave was used for the examples' test alone, whose every hold is kept
-  and is now made of every page. No decision was recorded; each reading the record does not give
-  is marked provisional here and is a question below.
+  and is now made of every page. No decision was recorded; each reading the record does
+  not give is marked provisional here and is a question below.
 
   - *ExDoc, in the `docs` environment alone* (`c69e100`). `mix.exs`'s `deps/1` is `[]` in
     every environment but `docs`, where it is ExDoc `~> 0.40`, `runtime: false`; `mix docs`
@@ -22109,9 +22109,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     a paragraph over 6 sentences; 17 words with a plainer one; `should` and its kin; Latin
     abbreviations; contractions; a semicolon or a dash between clauses; the perfect and
     the progressive tenses; "need to"; 13 forms of this repository's own manner ("of its
-    own", "as written", "a line a failure"); "simply" and its kin; words of history
-    ("now", "no longer"); "above" and "below" for a place on the page; a number under 10
-    in letters; a label of the plan on a user's page; a heading deeper than 3; a code
+    own", "as written", ", each a report"); "simply" and its kin; words of history
+    ("now", "no longer"); "above" and "below" for a place on the page; a number written
+    in letters, "two" to "twelve" and the tens; a label of the plan on a user's page; a heading deeper than 3; a code
     block with no language; a picture with no alternative text; a callout of an unknown
     class; and a user's page that does not end with "See also". It reads no code, no code
     span and no link target. It does not fail what it cannot judge, and counts it: a
@@ -22125,26 +22125,25 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     every file under `guides/assets/` to what the script draws today and to a page that
     marks it.
   - *The style guide, the glossary and the templates* (`3cf187f`). `docs/style-guide.md`,
-    a page of the site, itself under the rules; `guides/reference/glossary.md`, 94 terms;
+    a page of the site, itself under the rules; `guides/reference/glossary.md`, 95 terms
+    since `6e0294a`;
     `docs/templates/`, a template for each of the six kinds, each passing its kind's rules.
   - *One page whole* (`5385098`). `guides/tutorials/first-program.md`: README's `motor.ld`
     and `scan.exs` in a project the reader makes, drawn, run and read, followed by hand in
     an empty directory with an empty `MIX_HOME`. README's "An example" lost those two
     blocks and their prose, 66 lines, for one sentence that links to the page, the link
     giving `motor.ld` to README's later examples.
-
-  - *The documents and the close* (`6e0294a`, `0c99750`, `f29a5e4`). `CONTRIBUTING.md`'s
+  - *The documents and the close* (`6e0294a` and the commits after it). `CONTRIBUTING.md`'s
     "Writing a page of the documentation" and its scripts, README's "Running it" and
     "Documents", `CLAUDE.md`'s lines, and this entry. The pages keep
     `CONTRIBUTING.md`'s "Do not restore vendor names": the glossary gives a term's word in
     "the conventional set" (question 6). Each rule of this step has a mutant, 92 in all:
     25 of the site, its list and its workflow, 25 of the examples' test and the first
-    pages, 32 of the checker and 10 of the pictures. Each fails a test of the file that holds its rule.
-    Three passed at first, a repository script's run with no argument read as an
+    pages, 32 of the checker and 10 of the pictures. Each fails a test of the file that
+    holds its rule. Three passed at first, a repository script's run with no argument read as an
     example's, a picture's mark read inside a code block, and the glossary counting its
     own terms as unlinked, and each has its test since. The suite is 3,176 tests, 126
-    more than at `6889ad5`; `scripts/docs.sh` gives
-    `DOCS-OK`, 40 pages built and 13 warnings and dead links, each listed; and
+    more than at `6889ad5`; `scripts/docs.sh` gives `DOCS-OK`, 40 pages built and 13 warnings and dead links, each listed; and
     `scripts/dialyzer.sh` gives `DIALYZER-OK`, the `dev` build it reads holding logex
     alone. Parts 1 to 3 were gated before the next was begun, and the later parts after
     they were committed. Two of those, the checker's and the pictures', failed one test as
@@ -22162,9 +22161,10 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
      web pages ExDoc builds; a page of it is listed in its sidebar. `CONTRIBUTING.md`,
      `CHANGELOG.md`, this file, `CLAUDE.md` and the five files under `docs/` are read on
      GitHub, and a link to one from the site goes there. As pages they gave about 50
-     warnings, each a name of a hidden module or function that ExDoc cannot link. For example, the tutorial's
-     reader who follows "how to work on logex" lands on GitHub's view of
-     `CONTRIBUTING.md`, not on a page with the site's sidebar. Options: (a), recommended,
+     warnings, each a name of a hidden module or function that ExDoc cannot link. For
+     example, a reader of README's page in the site who follows its link to
+     `CONTRIBUTING.md` lands on GitHub's view of it, not on a page with the site's
+     sidebar. Options: (a), recommended,
      as built, until step 2 writes the contributor pages that replace their content; (b)
      in the site at once under "Project", their warnings added to the list.
   2. *A file may be shown on more than one page, and a link gives a file to a page that
@@ -22178,8 +22178,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
      compared with a file, unless a line above it says `<!-- unchecked: why -->`. For
      example, a message ExDoc or `mix` prints, which no file of `examples/` holds. The
      checker counts these blocks for a page's reviewer; one is in the pages today, the
-     style guide's quotation of the older README.
-     Options: (a), recommended, as built; (b) no such mark, so every block is a file or a
+     style guide's quotation of the older README. Options: (a), recommended, as built;
+     (b) no such mark, so every block is a file or a
      run, and a page that must show a message runs something that prints it.
   4. *A passive verb is counted, not refused.* The passive voice is "the tag is written
      by the rung" where the active is "the rung writes the tag". A script cannot tell it
@@ -22230,8 +22230,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   otherwise: no code block stands in a callout, since ExDoc shows its mark as text and
   the suite reads no block there; a heading of a page under the writing rules gives one
   anchor on GitHub and in the site, so it is written with letters, digits and single
-  spaces, "Scan / cycle" refused and a colon let through; the site's link from a function to its source goes to `main`, where the
-  site is published from, not to the commit built; a page's length is counted and not
+  spaces, "Scan / cycle" refused and a colon let through; the site's link from a
+  function to its source goes to `main`, where the site is published from, not to the
+  commit built; a page's length is counted and not
   refused; and no script follows the links of a document read on GitHub alone, which
   step 2's contributor pages replace.
 
