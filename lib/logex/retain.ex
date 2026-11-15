@@ -469,7 +469,7 @@ defmodule Logex.Retain do
   # purpose, the failure it follows being the one the write gives and the runner reports;
   # a close after a good sync is the write's answer, above.
   defp closed(error, io) do
-    _ = :file.close(io)
+    :file.close(io)
     error
   end
 
