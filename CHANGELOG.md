@@ -184,3 +184,11 @@ the host's API is README's, so this first entry lists neither apart.
   store refused for what a hand can mend told none, and the configuration's own name
   quoted in that refusal as any text a refusal quotes, at most 60 bytes, so that a long
   name no longer cuts the way out off (RV-29's review).
+- **The documentation as a site**, DOC-1's first step (decisions 546 and 548): added, and
+  nothing a program or a host's call did is changed. `mix docs` builds a site of README,
+  the pages under `guides/` and each module's text, with ExDoc, a dependency of the `docs`
+  environment alone, so a host that depends on logex still fetches nothing with it; the
+  first page beside README is the tutorial "Your first program". A page's examples are run
+  by the suite as README's are, its writing checked by `scripts/prose.exs` and its
+  pictures drawn by `scripts/draw.exs`; a workflow builds the site on every push and
+  publishes it from `main`.

@@ -262,12 +262,16 @@ happen. A plan that disagrees with the code is worse than no plan, because it is
 
 Any language change stales the README: a new instruction adds a row, a syntax change
 touches the syntax list, the instruction table *and* the worked examples. The examples'
-output is real, and `test/logex/readme_test.exs` keeps it so (decision 359): each `elixir`
+output is real, and `test/logex/readme_test.exs` keeps it so (decision 359), in README
+and, since decision 546 (e), in every page `docs/pages.exs` lists that is not a document
+from before that decision ("Writing a page of the documentation", below, for what a page
+adds to this): each `elixir`
 block followed at once by a block beginning `$ mix run x.exs` is an example, run in a
-fresh VM in a directory of its own, `tmp/readme/x.exs/`, its output compared exactly with
-the rest of that block. A block a script reads from the disk is marked by the line
-straight above its fence, `<!-- file: conveyor.ld -->`, which GitHub does not show, and
-from there on it is that file of every later example; a file README only describes in
+fresh VM in a directory of its own, `tmp/readme/<page>/x.exs/`, its output compared
+exactly with the rest of that block. A block a script reads from the disk is marked by
+the line straight above its fence, `<!-- file: conveyor.ld -->`, which GitHub does not
+show, and from there on it is that file of every later example of its page; a file README
+only describes in
 prose, `faster/packing.logex` "being `packing.logex` with `interval 5`", is made in the
 test's `@derived` table from the file it names, and a script README shows as the rest of
 another, `a_trip.exs`, in its `@continues`, each beside README's words, which the test
@@ -290,9 +294,72 @@ whole, beside `examples/mix.exs`, a project naming logex in the directory above,
 its files there, copied to its directory under `tmp/readme/`, holds every block README
 shows to its file and `examples/` to nothing else, and runs `scan.exs` through the
 project with `mix run`, its build kept under `tmp/`; so a block changed in README is
-changed in its file in the same commit, and a path is marked once in README, a later
+changed in its file in the same commit, and a path is marked once on a page, a later
 file of the same name named apart, `broken_retain.logex`. `test/logex/clauses_test.exs`
 holds every script there to the clauses rule, as it holds the harness.
+
+### Writing a page of the documentation
+
+The documentation is a site ExDoc builds (decisions 546 to 548): README first, the pages
+under `guides/`, and the modules' own documentation. `docs/style-guide.md` is the rule
+for a page, who reads it and the words it may use, with three pages beside it:
+`docs/house-manner.md`, the forms of these older documents a page does not have,
+`docs/examples-and-pictures.md`, the marks of a block and of a picture, and
+`docs/check-a-page.md`, which of the seven kinds a page is and how to add one, check it
+and build the site. Read them before writing one, and start from the kind's template
+under `docs/templates/`. What it rests on, each held by a test:
+
+- **One list of pages.** `docs/pages.exs` has a line for every Markdown file of the
+  repository, its kind and its place in the site, one line a page, which the formatter
+  is kept off; `mix.exs` builds the site from it, and a file with no line fails
+  `test/logex/docs_test.exs`. The ten documents from before decision 546, this one among
+  them, are listed `:legacy`: the writing rules are not applied to them, and all but
+  README are read on GitHub, not in the site, where no script follows their links;
+  README's examples are run and its links followed, as a page's are. The ten are named
+  in the test, and no page joins them: a new page has its kind, and README, written
+  again, is a `:readme`.
+- **One reading of a page.** `scripts/page.exs` cuts a page into prose and code blocks
+  for the checker, the site, the pictures and the examples' test alike, as GitHub cuts
+  it. A fence it cannot take as the page means it, one not closed or with more than a
+  language after it, is a failure with the page's name and the line, and stops no other
+  page's tests; on a page under the rules a block fenced with tildes or shown by
+  indentation, an HTML tag and a comment left open are failures too, since each would
+  be shown to a reader and read by no check (`test/logex/page_test.exs`).
+- **Every example is run.** The examples' test above reads every page that is not
+  `:legacy`, each judged on what it shows. A file another page shows is given to a page's
+  examples by a link the reader sees, ``[`motor.ld`](first-program.md)``, and a script
+  that names a file its page does not give it is a failure of the reading, with the
+  file's name. A block that is no example carries a mark, `part of`, `fragment` or
+  `unchecked`, or is of a language the suite compares with nothing, a diagram, data,
+  Markdown shown as Markdown, or a command line that shows commands alone; any other
+  block the test refuses. What it compares with nothing the checker counts for a
+  reviewer, each marked block and each such block. `mix test test/logex/readme_test.exs
+  --only page:<path>` runs one page's examples, `--only reading:<path>` its reading
+  alone, in two seconds however many the pages.
+- **The writing rules a script can measure are measured.** `elixir scripts/prose.exs`
+  checks every page that is not `:legacy` against the rules of the style guide, a
+  sentence's length, a word with a plainer one, a tense the rules leave out, and counts
+  what it cannot judge, a passive verb among them; `test/logex/prose_test.exs` holds each
+  rule and every page. It refuses the literal forms of its lists and reads no meaning:
+  the manner in other words passes it, and a reviewer reads for that.
+- **No picture is drawn by hand.** `mix run scripts/draw.exs` draws a ladder from its
+  `.ld` text and a timing diagram from a run, into `guides/assets/`, each named by a mark
+  above its picture; `test/logex/pictures_test.exs` holds every picture to what the script
+  draws today, so a picture cannot disagree with the program it shows, and two marks
+  that name one file and differ in its source are refused, on one page or on two.
+- **The site builds with no warning but the ones listed.** `scripts/docs.sh` builds it and
+  compares what ExDoc warns of, and every link of the pages it wrote that leads to a
+  file or a heading of the site, with `docs/site-warnings.txt`, which lists what the
+  modules' own text gives today; a new warning or such a dead link is `DOCS-FAIL`. A
+  link to a heading of a Markdown file read on GitHub is held to that file's headings
+  when the page is staged; a link to another site is followed by no script.
+  `.github/workflows/docs.yml` runs it on every push and publishes the site from `main`.
+
+The rule below holds in the pages too: the glossary gives a term's word in "the
+conventional set" beside IEC 61131-3's, and names no vendor for it; a page names Logix
+only where it compares what a controller does, as README does. Whether a user's page may
+name the product a reader comes from is a question `PLAN.md` puts to the maintainer under
+DOC-1's step 1.
 
 ### Do not restore vendor names
 
@@ -752,3 +819,28 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
 - **`scripts/release.sh [--dry-run] [--push]`** and **`elixir scripts/changelog.exs
   [--release]`** are the release step and its checks of the documents ("Releasing",
   above).
+- **`scripts/docs.sh [log]`** builds the site ("Writing a page of the documentation",
+  above): it fetches ExDoc for the `docs` environment, the one step here that needs Hex
+  and the network, runs `mix docs`, and then `elixir scripts/site.exs check <log>`, which
+  holds the build's warnings and every link of `doc/` to `docs/site-warnings.txt`; it
+  prints the log's last lines and `DOCS-OK` or `DOCS-FAIL rc=<n>`. `mix docs` first runs
+  `elixir scripts/site.exs stage`, which copies the site's pages to `_build/docs/pages/`,
+  each under its name in the site, a page under `guides/` its file's name and any other
+  its whole path, with each link to a page made that name, the anchor it names made
+  the one ExDoc gives the heading, and each link to a file the site does not hold made a
+  link to GitHub; it refuses a link to no file, an anchor no heading gives, a picture
+  outside `guides/assets/`, and two pages with one name.
+- **`elixir scripts/prose.exs [--review] [page...]`** checks pages against the writing
+  rules, every page of `docs/pages.exs` that is not `:legacy` where none is named, a line
+  a failure, `page:line: [rule] what it found. Write: what to write`, exiting 1 on any;
+  `--review` lists what it only counts, a passive verb, a glossary term with no link, a
+  block marked `unchecked` and a block the suite compares with nothing; `--kind <kind>
+  <file>` checks a file `docs/pages.exs` does not list.
+- **`mix run scripts/draw.exs [--check] [page...]`** draws each picture a page marks,
+  `<!-- rung: file.ld -->` or `<!-- timing: file.timing.exs -->`, into the file the page
+  shows; `--check` writes nothing and exits 1 where a picture is not what it would draw.
+  `scripts/pictures.exs` is the drawing, which the suite reads too.
+- **`scripts/page.exs`** has no command: it is the one reading of a page's Markdown the
+  four above and the examples' test share, and the page's name in the site. The scripts
+  written in Elixir hold a `case` where a value is told apart, function clauses for the
+  rest, and no `cond`, `if` or `unless` (`test/logex/clauses_test.exs`).
