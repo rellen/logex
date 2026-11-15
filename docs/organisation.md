@@ -15670,7 +15670,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      this decision, each hold kept and made of each page. What the record did not say is
      provisional, `PLAN.md`'s DOC-1: the documents from before this decision read on
      GitHub and not in the site, a file shown on more than one page, the marks of a block
-     that is no example, and what of ASD-STE100 a page may claim.)*
+     that is no example, and what of ASD-STE100 a page may claim. Since its review,
+     `edc27ae`: a page is read once for the four that read it, by `scripts/page.exs`; a
+     page's name in the site is its file's under `guides/` and its whole path elsewhere;
+     the first page is a kind of its own, `:readme`; and no new page is a document from
+     before this decision, the ten named in `docs_test.exs`.)*
 
 547. **A curated set of architecture decision records (DOC-1).** An architecture decision
      record is one short page for one decision: the problem, the choice and what follows

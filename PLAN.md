@@ -22071,7 +22071,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     `_build/docs/pages/`, each link to a file the site does not hold made a link to GitHub
     at `main`, and refuses a link to no file, an anchor no heading gives, a picture
     outside `guides/assets/`, and, on a page under the writing rules, a heading whose
-    anchor GitHub and ExDoc give differently; then ExDoc builds `doc/`, README its first
+    anchor GitHub and ExDoc give differently *(since the review, F10 below: no heading
+    is refused, the stage making each link's anchor ExDoc's, and a page is staged under
+    its name in the site)*; then ExDoc builds `doc/`, README its first
     page, the modules in two groups, the host contract of decisions 514 and 523 and the
     rest, Mermaid diagrams drawn in the reader's theme, and a source link on every
     function. `scripts/docs.sh` runs it and then `elixir scripts/site.exs check`, which
@@ -22103,7 +22105,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     with no mark and no run is refused; a code block in a callout is refused, since
     ExDoc shows its mark as text. `--only reading:<page>` is one page's reading, 5 tests
     in about two seconds; `--only page:<page>` adds its examples.
-  - *The writing rules a script can measure* (`fb4c118`). `scripts/prose.exs`, 22 rules,
+  - *The writing rules a script can measure* (`fb4c118`). `scripts/prose.exs`, 22 rules
+    *(23 since the review, and which forms each refuses changed, F8 and F9 below)*,
     each with a test in `prose_test.exs` and each broken once by
     `test/fixtures/prose/every_rule.md`: a sentence over 25 words, 20 in a numbered step;
     a paragraph over 6 sentences; 17 words with a plainer one; `should` and its kin; Latin
@@ -22127,7 +22130,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   - *The style guide, the glossary and the templates* (`3cf187f`). `docs/style-guide.md`,
     a page of the site, itself under the rules; `guides/reference/glossary.md`, 95 terms
     since `6e0294a`;
-    `docs/templates/`, a template for each of the six kinds, each passing its kind's rules.
+    `docs/templates/`, a template for each of the six kinds, each passing its kind's rules
+    *(since the review: the style guide four pages, 100 terms, seven kinds, F2 and F14
+    below)*.
   - *One page whole* (`5385098`). `guides/tutorials/first-program.md`: README's `motor.ld`
     and `scan.exs` in a project the reader makes, drawn, run and read, followed by hand in
     an empty directory with an empty `MIX_HOME`. README's "An example" lost those two
@@ -22230,11 +22235,225 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   otherwise: no code block stands in a callout, since ExDoc shows its mark as text and
   the suite reads no block there; a heading of a page under the writing rules gives one
   anchor on GitHub and in the site, so it is written with letters, digits and single
-  spaces, "Scan / cycle" refused and a colon let through; the site's link from a
+  spaces, "Scan / cycle" refused and a colon let through *(not since the review: a
+  heading is written as its page needs, F10 below)*; the site's link from a
   function to its source goes to `main`, where the site is published from, not to the
   commit built; a page's length is counted and not
   refused; and no script follows the links of a document read on GitHub alone, which
   step 2's contributor pages replace.
+
+  **DOC-1's step 1 reviewed** (2026-11-15, of `86aabe7`, the review's clones
+  `docs/review1`, `rx`, `rp` and `rn`, its edits, logs, drawings and screenshots under
+  `docs/rev/`): the gate, Dialyzer and the site's build green at the tip, every hold of
+  `6889ad5`'s examples' test still red on its break, the pictures and the site sound in
+  Chromium; and fifteen findings, the first four of which each let a page through
+  unchecked or let one page break every other page's suite. Each is closed here by a fix
+  a test holds or by a page written again; none is left to step 2. The fixes are
+  `edc27ae`, `a2da2cb`, `bc07351` and `563debe`: GATE-OK on `edc27ae` and on `bc07351`,
+  3,243 tests (11 doctests) at `563debe`, 67 more than the review read; this record the
+  commit after them. Each was reproduced first, on a
+  copy of the tree (`docs/rev/live`). No decision is recorded; what the fixes had to
+  choose is provisional and is questions 12 to 17 below.
+
+  - *F1 (high): any new page could be listed `:legacy` and escape every check.* The
+    kind's directory was any. Fixed: `docs_test.exs` names the ten documents of before
+    decision 546, and a legacy page that is none of them is refused, "a new page is no
+    :legacy document"; the list can only shrink.
+  - *F2 (high): README could not be put under the rules.* Only `:legacy` lived at the
+    root. Fixed: a seventh kind, `:readme`, for `README.md` alone, a user's page, which
+    cites no label of the plan, not held to end with "See also", with its template
+    `docs/templates/readme.md` in the shape decision 546 gives the first page. README
+    stays `:legacy` until step 2 writes it (provisional, question 13).
+  - *F3 (high): one malformed fence stopped the whole suite, or turned the page inside
+    out, and named nobody.* The four readers of a page, the examples' test, the checker,
+    the pictures and the site, each cut it by a rule of their own, and they differed.
+    Fixed: `scripts/page.exs`, one reading for the four, as GitHub cuts a page; a block
+    not closed, a fence that says more than a language and a block closed by a longer
+    fence are a problem `<page>:<line>: ...` of the reading test and of the checker, the
+    page's other blocks still read, and nothing is raised (`page_test.exs`, new). Run on
+    the tutorial with `elixir title="mix.exs"` and an open block: one failed test, the
+    page and both lines named, README's tests untouched.
+  - *F4 (high): "no block is shown unheld by accident" was not true.* Fixed: on a page
+    under the rules a block fenced with tildes, an indented code block, an HTML tag and a
+    comment left open are failures; a command line shows commands alone, each after
+    `$ `, and what a command prints is an example's run or is marked `unchecked`; an
+    `elixir` block is never `unchecked`. What the suite compares with nothing, a diagram,
+    data, Markdown shown as Markdown, a command line, the checker counts for the reviewer
+    and `--review` lists, beside the blocks marked `unchecked`.
+  - *F5 (medium): a reworded passage no longer named the page or the words.* Fixed: each
+    row of `@derived` names its page, as `@fragments`' did; the file is made for that
+    page, and its reading test says "README.md no longer says <words> of <file>", the
+    message of `6889ad5`; a file's block that is not its file fails with the page, the
+    block's line and the file (`Logex.ReadmeTest.same/4`), and a page that links to a
+    file no longer fails for the page that shows it.
+  - *F6 (medium): the fast check missed a file a script was not given, and the example
+    then failed with nothing printed.* Fixed: the reading test names each file
+    `examples/` ships that a script names and its example is not given, and each program
+    a configuration file it names loads, "`plant.exs` reads `motor.ld`, which the page
+    neither shows before it ... nor links to"; a script that stops shows what it said on
+    standard error, kept apart from the output the page is held to.
+  - *F7 (medium): the reading tests grew with the square of the pages.* Fixed: the pages
+    are read once, at the file's top level, and each page's module is given what is its
+    own; a run of one page's tests, `--only reading:<page>` or `--only page:<page>`,
+    defines that page's modules alone. With 90 more pages, copies of the tutorial: one
+    page's fast check 2.0 s where it was 12.0 s (1.7 s with the seven pages there are),
+    every reading test 21.7 s where it was 255.7 s, the checker over every page 3.8 s
+    where it was 31.6 s, its patterns compiled once.
+  - *F8 (medium): the checker refused correct English of the domain, 36 failures on 40
+    good sentences.* Fixed, 14 left, each a form decision 546's rules do refuse: a
+    participle before a noun is an adjective ("has retained tags"), "is used to" is no
+    history, "since" is refused where it gives a reason, first in its clause, "the one"
+    is refused before a noun of the manner alone, a word of the word list after an
+    article is a noun ("the display", "a power supply"), an -ing form that is a state
+    is no verb ("rising", "remaining"), a character entity is no semicolon, "escapes",
+    "pinned" and "pins" are refused in the manner's own forms, and "enable" is a term of
+    the glossary, a term passing in each of its forms. Still refused, and the style
+    guide's page on checking says how to write each: "is scheduling", "below 10", "a
+    leading zero", `now` as a name, "whether".
+  - *F9 (medium): the manner in other words passed, three of its rows were missing, and
+    a quotation exempted anything.* Of the review's 30 reworded sentences the checker
+    took 3 and takes 20; what a literal form cannot catch, an abstract subject, a chain
+    of clauses, an idiom, a group of five nouns, it does not, and `docs/house-manner.md`
+    says the table is examples and no limit, with the three rows it had left out. On a
+    user's page words between quotation marks are read as any other: a message is
+    written as code.
+  - *F10 (medium): the plan's file names met the site's one-name rule, and a reference
+    page's headings were refused.* Fixed: a page's name in the site is its file's under
+    `guides/` and its whole path anywhere else, `docs-architecture-runner`, so the names
+    the plan gives twice are each two pages (provisional, question 12); the stage writes
+    each link to a page as the page ExDoc builds, since ExDoc's own reading of such a
+    link is by the file's name alone, and makes the anchor it names, GitHub's, the one
+    ExDoc gives the heading, so a heading may be `` `Logex.compile/2` ``. The list of
+    pages is one line a page and the formatter is kept off it.
+  - *F11 (low): links the stage and the build did not see.* An anchor of a Markdown file
+    read on GitHub is held to that file's headings when a page is staged; an HTML tag is
+    refused (F4). A link to another site is followed by no script, as before, and the
+    documents say so.
+  - *F12 (low): two writers could fight over one picture, and `scripts/draw.exs` had no
+    test.* Two marks that name one file and differ in its source are refused, each with
+    the other's place, and nothing is drawn; the command is run by five tests in a tree
+    of their own; a source that does not compile is told with logex's diagnostic. A
+    comment is cut to the rungs' width, the coils that end the rungs stand in one
+    column, and a pulse coil names its storage bit under it; a long tag name still
+    widens a drawing.
+  - *F13 (low): rules with no test.* Each of the review's ten survivors has its test or
+    its rule is no longer written twice: the site's own fence reader is gone, and
+    `draw.exs --check`, "until recently", "string", "sixty", "met", "being", `+` and a
+    link to a `.cheatmd` page are each tested.
+  - *F14 (low): the words of the three pages.* The tutorial compiles a program type, as
+    the glossary has it, links each term at its first use, checks the program in a step
+    of its own (`examples/check.exs`, run by the suite), so that each step shows its
+    result, and tells no history; the glossary has compile, rail, enable, latch and
+    unlatch, and no note to writers; the style guide is four pages, the longest 1,357
+    words, its diagram with a caption, the cheatsheet and the pictures no script can make
+    named.
+  - *F15 (low): smaller things.* `CONTRIBUTING.md` and this file claim what is held; the
+    scripts hold a `case` and no `cond`, `if` or `unless`, which `clauses_test.exs` holds
+    (the reading of a page, which the harness reads through, no `case` either); no page
+    of the site asks for a file that is not there, `scripts/docs.sh` leaving
+    `docs_config.js` empty; the sidebar shows no version (provisional, question 16); the
+    tutorial's last table has three columns; an example's test waits three minutes for
+    its VM, not one.
+  - *The mutation table.* 102 mutants of the fixes (`docs/mut2/`, the patches, `make.py`
+    that wrote them, and each run's log), each one rule taken away: 17 of the reading
+    (`g`), 15 of the harness (`h`), 36 of the checker (`j`), 10 of the site (`k`), 5 of
+    the list (`l`), 11 of the pictures (`n`), 2 of the scripts' manner (`o`), 5 of the
+    pages (`t`) and 1 of the tests' own scratch files (`z`). Each was judged by the test
+    file that holds its rule, run whole, one run a worktree, and is red there on a test
+    of the rule it takes away, the test named in the run's row or its log; a red file is
+    a red suite. Twelve, of every group, were judged by the full suite at `bc07351` besides:
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `g01_tilde_no_fence` | a line of tildes opens no block | red: `page_test.exs` 1, `pictures_test.exs` 1, `prose_test.exs` 1, `readme_test.exs` 1 |
+    | `g06_indented_passes` | an indented code block is no problem | red: `page_test.exs` 2, and every test that reads a script's standard error, the mutant leaving a function unused |
+    | `h01_derived_for_any_page` | a file made of prose is made for every page | red: `readme_test.exs` 1 |
+    | `h08_every_module_always` | every page's modules defined in a run of one page | red: `readme_test.exs` 1 |
+    | `h13_files_of_each_page_again` | the files of every page read again for each page | red: `readme_test.exs` 1, the growth test |
+    | `j01_perfect_before_a_noun` | "has retained tags" refused as a perfect tense | red: `prose_test.exs`, in its first form, which left a warning; 1 by the file in its second |
+    | `j08_user_page_quotation_exempt` | a quotation on a user's page not read | red: `prose_test.exs` 1 |
+    | `k01_anchor_left_githubs` | a link's anchor left as GitHub's | red: `docs_test.exs` 1 |
+    | `l01_new_page_legacy` | a new page may be `:legacy` | red: `docs_test.exs` 2 |
+    | `n01_clash_passes` | two sources for one picture pass | red: `pictures_test.exs` 2 |
+    | `o01_an_if_in_a_script` | an `if` in a script | red: `clauses_test.exs` 1 |
+    | `t02_check_exs_file_changed` | the tutorial's `check.exs` is not its file | red: `readme_test.exs` 2 |
+
+    Beside these the full suites were red on tests of the store, the trip, the release
+    step and a cost, one or two a run, under the load of another item's
+    `scripts/load.sh` on the same four cores (load average 20 to 35); each of those
+    passes in the gate's runs. The first two rows' runs shared their worktree for a
+    while with the pass thrown away below, and three or four failures of the checker's
+    test in each are that pass's. Two
+    mutants passed their file. `h13` passed the growth test, which summed four parts of
+    the reading; it judges each part by itself now (`bc07351`: the files, the examples,
+    the problems and what each page holds, 2.12, 2.03, 1.37 and 2.01 times the work at
+    twice the pages, each held under 2.6; the mutant's examples 3.78), and `h13` is red.
+    `h15` takes away a test's own assertion, "@derived names <page> ..., and it is no
+    page the suite reads"; with the row's page changed to none the next assertion fails,
+    "no page describes faster/packing.logex any longer", so it is the plainer message
+    and no hold of its own. Three mutants, `j01`, `k02` and `k10`, first left a
+    compiler's warning in their script, which fails every test that reads a script's
+    standard error; each was written again to leave none and is red on its rule's test.
+    The checker's mutants were first judged while a second run changed the same
+    worktree; that pass is thrown away, and each was run again alone. Those runs, two
+    worktrees at once, found what `563debe` fixes: the checker's test kept each run's
+    output in the machine's temporary directory under the VM's count alone, so two
+    suites on one machine read and removed each other's file. The tests of before this
+    item that name a directory there the same way are left as they are, and are a
+    question for the item that gates two clones at once.
+  - *The test diff.* Of `6889ad5`'s tests `readme_test.exs` changes, under decision 546
+    (e)'s leave, and one line of `clauses_test.exs`, the text it finds the examples'
+    modules by, a module being named by its page now; `clauses_test.exs` gains two
+    tests. Every hold of the examples' test is kept, each failure names its page, and a
+    hold that read every page is a page's own where the page is what failed; no other
+    test of before this item is changed.
+
+  **What the review's fixes chose, provisional, and the questions.**
+
+  12. *A page's name in the site.* The site has one directory, and a page's address there
+      is `<name>.html`. A user's page is named by its file, `runner.html`; any other page
+      by its whole path, `docs-architecture-runner.html`. For example, the plan has a
+      reference page `guides/reference/runner.md` and a contributor page
+      `docs/architecture/runner.md`. Options: (a), recommended, as built: a reader of a
+      user's page sees a short address, and a writer of a contributor page may use any
+      file name; (b) every page by its file's name alone, and no two pages of the
+      repository with one file name, so the plan's second `runner.md` and
+      `docs/README.md` are renamed.
+  13. *The first page's rules.* README written again is a user's page: no label of the
+      plan, the writing rules, every block held. It is not held to end with "See also",
+      since decision 546 gives it its own last sections, its status and its licence.
+      Options: (a), recommended, as built; (b) README ends with "See also" as every
+      user's page.
+  14. *What the checker refuses where a word has two senses.* Decision 546's rules give
+      one word for a meaning. The checker cannot read meaning, so it now passes "since"
+      of time, a word of the list as a noun after its article ("the display") and
+      "enable", a glossary term, and still refuses "whether", "below 10" and "is
+      testing", with the way to write each on the page that explains the checker. For
+      example, "The timer adds the time since the last scan" passes and "Since the tag
+      is retained, ..." is refused. Options: (a), recommended, as built: a writer is
+      rarely stopped by a correct sentence; (b) the rules as first built, every form
+      refused, and a writer rewords.
+  15. *A quotation on a user's page.* Words between double quotation marks were not read
+      by the word rules, so a mannered sentence in quotation marks passed. On a user's
+      page they are read now; a contributor page and a decision record, which quote the
+      older documents, keep the leave, and the checker counts their quotations. Options:
+      (a), recommended, as built: a user's page writes a message as code; (b) the leave
+      on every page.
+  16. *The sidebar shows no version.* `mix.exs` says 0.1.0 and no release is planned
+      (decision 541); the site's sidebar would show "v0.1.0" under the name. It is
+      hidden; a page's title in the browser's tab still ends "logex v0.1.0", which ExDoc
+      gives no way to change. Options: (a), recommended, as built; (b) shown.
+  17. *What a command line may show.* A `console` block is compared with nothing, so on
+      a page under the rules it shows commands alone; a block that shows what a command
+      printed is an example's run, which the suite compares, or carries `unchecked` and
+      its reason. For example, the tutorial says in a sentence what `mix compile` prints
+      last. Options: (a), recommended, as built; (b) any `console` block passes, counted
+      for the reviewer.
+
+  Where decision 546's writing rules could not be kept as written, the style guide says
+  what is kept: "since" for a time and "enable" as a term (question 14); "execute" given
+  "do", or "run" for a program or a task; a heading that holds a name as code; and the
+  first page not ending with "See also" (question 13).
 
 - **DOC-2 — the module text rewritten** (decision 546 (a)). Each module's and function's
   text rewritten by DOC-1's style guide, each sentence the suite pins changed with its
