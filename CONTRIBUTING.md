@@ -617,11 +617,12 @@ push a commit that changes `lib/` (provisional: `PLAN.md`'s RV-24, question 1); 
 run builds the PLT, a minute or two, and later runs check the one it kept and take some
 15 s. A warning is fixed in the code, with a test that fails when the fix is reverted where
 it is a defect, or, where it is not, the code made to say what it does and the reason
-recorded in `PLAN.md`; never silenced by a broader spec, a `no_return()`, a `@dialyzer`
-attribute or a flag dropped without its reason. A spec states the contract the code and its
-tests already hold, what a host hands in and gets back, a host's mistake being its pinned
-`ArgumentError`, never a narrower or a wider one; a public function added to the contract
-gets one, and a type it hands out a `@typedoc`, or `runtime_test.exs` fails.
+recorded in `PLAN.md` (provisional: its RV-24, question 3); never silenced by a broader
+spec, a `no_return()`, a `@dialyzer` attribute or a flag dropped without its reason. A
+spec states the contract the code and its tests already hold, what a host hands in and gets
+back, a host's mistake being its pinned `ArgumentError`, never a narrower or a wider one;
+a public function added to the contract gets one, and a type it hands out a `@typedoc`, or
+`runtime_test.exs` fails.
 
 ---
 

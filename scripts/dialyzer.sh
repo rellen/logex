@@ -30,12 +30,12 @@
 #   -Wunderspecs            a spec more allowing than what its function takes and gives
 #   -Woverlapping_contract  two specs of one function whose arguments overlap
 #
-# The others are left off, each with its reason in PLAN.md's RV-24 entry. Dialyzer's
-# configuration file is not read (DIALYZER_CONFIG=/dev/null), so that a contributor's own
-# warnings or paths change nothing here. It prints what Dialyzer prints, then DIALYZER-OK
-# or DIALYZER-FAIL rc=<n>, and exits with Dialyzer's code: 2 for a warning, 1 for a run
-# that could not be made; a compile that fails exits with mix's. Run from anywhere in the
-# checkout.
+# The others are left off, each with its reason in PLAN.md's RV-24 entry (provisional:
+# its question 2). Dialyzer's configuration file is not read (DIALYZER_CONFIG=/dev/null),
+# so that a contributor's own warnings or paths change nothing here. It prints what
+# Dialyzer prints, then DIALYZER-OK or DIALYZER-FAIL rc=<n>, and exits with Dialyzer's
+# code: 2 for a warning, 1 for a run that could not be made; a compile that fails exits
+# with mix's. Run from anywhere in the checkout.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root" || exit 1
