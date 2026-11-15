@@ -132,7 +132,11 @@ defmodule Logex.DocsTest do
     test "it lists every Markdown file of the repository, each once, and no file that is " <>
            "not there" do
       {listed, 0} = System.cmd("git", ["ls-files", "*.md", "*.cheatmd", "*.livemd"], cd: @root)
-      tracked = String.split(listed, "\n", trim: true)
+      # A fixture of a test is no page.
+      tracked =
+        for path <- String.split(listed, "\n", trim: true),
+            not String.starts_with?(path, "test/"),
+            do: path
 
       on_disk =
         for under <- ["*", "docs/**/*", "guides/**/*"],

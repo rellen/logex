@@ -61,6 +61,9 @@ own documentation holds:
   scripts/site.exs check <log>`, which holds the build's warnings and the built site's dead
   links to the lines of `docs/site-warnings.txt`. `.github/workflows/docs.yml` runs it and
   publishes the site from `main`.
+- `elixir scripts/prose.exs [--review] [page...]` — the writing rules a script can
+  measure, on the pages of `docs/pages.exs` under the rules or on those named, each
+  failure `<file>:<line>: [rule] ... Write: <fix>`; `--kind <kind> <file>` reads a draft.
 - `mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/` —
   regenerate the golden record, only in a commit that changes the language on purpose,
   and read the diff.
@@ -307,6 +310,10 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   first; each refusal of `scripts/site.exs`; `scripts/docs.sh` over a stand-in `mix`; and
   `.github/workflows/docs.yml`, its keys, toolchain and permissions, its question to
   GitHub run as written.
+- `test/logex/prose_test.exs` — `scripts/prose.exs`: `test/fixtures/prose/every_rule.md`
+  refused once by each rule, each word and form the style guide replaces, what is not
+  prose, the limits, a page's kind, the glossary's terms, what it counts for a reviewer,
+  and every page under the rules passing.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
