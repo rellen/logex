@@ -187,6 +187,21 @@ defmodule Logex.StalledDiskTest do
     renaming(server, runner)
   end
 
+  # RV-29: a monitor of `pid` in place before anything is sent that could take it down. A
+  # monitor is a signal of its own, and Erlang orders the signals of one sender to one
+  # receiver alone, so that the exit a kill of the writer's runner sends it through their
+  # link can reach the writer before this process's monitor does, the writer then down
+  # and the monitor told `:noproc` (1 of 206 runs under load at RV-29's parent, and a
+  # bare monitor and kill 11 and 21 of 200,000): the writer's own `monitored_by`, a
+  # request of this process's to the writer sent after the monitor and answered only once
+  # the writer has taken the monitor, holds this process before the kill.
+  defp monitored(pid) do
+    ref = Process.monitor(pid)
+    assert {:monitored_by, by} = Process.info(pid, :monitored_by)
+    assert self() in by
+    ref
+  end
+
   # A call of `kind` waiting in the held file server, `{:called, pid}`, or `:answered`
   # where the task it was awaited from ended first, its write killed at its limit before
   # it made the call.
@@ -1862,7 +1877,7 @@ defmodule Logex.StalledDiskTest do
       server = held()
       force = Task.async(fn -> stop_answer_of(fn -> Runner.force(runner, "level", 7) end) end)
       writer = renaming(server, runner)
-      ref = Process.monitor(writer)
+      ref = monitored(writer)
       Process.exit(runner, :kill)
       assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, @answers
       assert Task.await(force, @answers) == gone_told(runner)
