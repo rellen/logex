@@ -2365,6 +2365,51 @@ add e i y",
       assert Enum.all?(inside, &(&1 in Enum.map(documented, fn {module, _doc} -> module end)))
     end
 
+    # Decision 515 (c) (RV-24): typespecs on the host contract, which Dialyzer reads
+    # (`scripts/dialyzer.sh`, CI's step after the four gates). Every public function of a
+    # module inside the contract has a spec, but a callback of a behaviour the module
+    # implements, which the behaviour's own spec covers (`GenServer`'s, `Logex.IO`'s,
+    # `Logex.Runner.Clock`'s), and every type it exports has a typedoc, `@typedoc false`
+    # for one internal to logex.
+    test "every public function of the host contract has a spec, every type a typedoc" do
+      unspecced =
+        for module <- @contract ++ @decided,
+            {:ok, specs} = Code.Typespec.fetch_specs(module),
+            callbacks =
+              for(
+                {:behaviour, behaviours} <- module.module_info(:attributes),
+                behaviour <- behaviours,
+                callback <- behaviour.behaviour_info(:callbacks),
+                do: callback
+              ),
+            function <- module.__info__(:functions),
+            function not in [__struct__: 0, __struct__: 1],
+            function not in callbacks,
+            function not in Enum.map(specs, &elem(&1, 0)),
+            do: {module, function}
+
+      undocumented =
+        for module <- @contract ++ @decided,
+            {:docs_v1, _, _, _, _, _, docs} = Code.fetch_docs(module),
+            {{:type, name, arity}, _, _, :none, _} <- docs,
+            do: {module, name, arity}
+
+      assert {unspecced, undocumented} == {[], []}
+    end
+
+    # Decision 515 (c) (RV-24): opaque where the record says a value is: the resource and
+    # the two edits, each a host's to hold and hand back, read through its module alone,
+    # which Dialyzer holds every other module of logex to (`Logex.Runtime.fields/1`).
+    test "the resource and the two edits are opaque types" do
+      opaque =
+        for module <- [Runtime, Logex.Edit, Logex.Configuration.Edit],
+            {:ok, types} = Code.Typespec.fetch_types(module),
+            {:opaque, {:t, _, []}} <- types,
+            do: module
+
+      assert opaque == [Runtime, Logex.Edit, Logex.Configuration.Edit]
+    end
+
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       # M2-2: compile_files/1, the loader's one memo over several files, which a
       # configuration's loader goes through. Since decision 432 each of the three is
@@ -2381,7 +2426,10 @@ add e i y",
       # M6-4 (decision 282): the retained image, retained/1 and /2 taking it out, start/2
       # and instance/2 laying it over a new resource or instance. Decision 488 (RV-18):
       # retained_values/1 and retained_image/1, internal, the retained values the runner's
-      # period hands its writer and the image the writer makes of them.
+      # period hands its writer and the image the writer makes of them. Decision 515 (c)
+      # (RV-24): fields/1, internal, the one reader of the resource's fields for a
+      # configuration edit's step, as edited/2 is its one writer, so that Dialyzer holds
+      # every other module to the resource's opacity.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
@@ -2392,6 +2440,7 @@ add e i y",
                  cycle_step: 2,
                  cycle_steps: 3,
                  edited: 2,
+                 fields: 1,
                  fresh: 1,
                  get: 2,
                  get!: 2,
@@ -2573,9 +2622,9 @@ add e i y",
 
       assert Enum.sort(
                for {{:function, name, arity}, _, _, :hidden, _} <- docs,
-                   name in [:cycle_steps, :cycle_step, :cycle_outputs, :fresh],
+                   name in [:cycle_steps, :cycle_step, :cycle_outputs, :fields, :fresh],
                    do: {name, arity}
-             ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3, fresh: 1]
+             ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3, fields: 1, fresh: 1]
 
       # OE-2: the staged edit of a running configuration, whose struct is opaque; since
       # M4-5, accept, test and untest take the step's time too (decision 139).

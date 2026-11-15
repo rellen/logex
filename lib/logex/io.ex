@@ -118,6 +118,7 @@ defmodule Logex.IO do
   The configuration is checked as `Logex.Runtime.start/1` checks it, and one it refuses
   raises `ArgumentError` in the same words.
   """
+  @spec points(Configuration.t()) :: %{optional(String.t()) => [Point.t(), ...]}
   def points(configuration) do
     configured!(configuration)
 
@@ -178,6 +179,8 @@ defmodule Logex.IO do
   quadratic in the two, as `Logex.Configuration`'s refusals do. Only a host's mistake pays
   it, and its message is linear in its problems.
   """
+  @spec bind!(Configuration.t(), %{optional(String.t()) => module | {module, keyword}}) ::
+          [{device :: String.t(), module, keyword, [Point.t(), ...]}]
   def bind!(configuration, io) do
     devices = points(configuration)
     io = io!(io)

@@ -38,16 +38,41 @@ defmodule Logex.Tag do
   @enforce_keys [:name, :type, :section]
   defstruct [:name, :type, :section, initial: nil, line: nil, retain: nil]
 
+  @typedoc """
+  A tag's type: an elementary type, a function block's type, or an array of either, of
+  one to three dimensions; a compiled program's tag names a block by `{:block, name}`,
+  which its `blocks` holds (decision 53).
+  """
+  @type type ::
+          Logex.Declarations.elementary()
+          | Logex.FbType.t()
+          | {:block, String.t()}
+          | {:array, Logex.Declarations.elementary() | Logex.FbType.t() | {:block, String.t()},
+             [pos_integer]}
+
+  @typedoc "The section a tag is declared in."
+  @type section :: :var | :var_input | :var_output | :var_external
+
+  @typedoc """
+  A tag's initial value: a number, an array's list of them, or nil for its type's zero;
+  a compiled program's timer or counter holds the preset its instruction gives as a map
+  of its preset member, `%{"pre" => 5000}`, an array of them by element (the compiler's,
+  never a host's: `new!/5` refuses an initial value on an instance).
+  """
+  @type initial ::
+          integer
+          | float
+          | [integer | float]
+          | %{optional(String.t()) => integer}
+          | %{optional(term) => %{optional(String.t()) => integer}}
+          | nil
+
+  @typedoc "A declared tag, as the moduledoc gives it."
   @type t :: %__MODULE__{
           name: String.t(),
-          type:
-            Logex.Declarations.elementary()
-            | Logex.FbType.t()
-            | {:block, String.t()}
-            | {:array, Logex.Declarations.elementary() | Logex.FbType.t() | {:block, String.t()},
-               [pos_integer]},
-          section: :var | :var_input | :var_output | :var_external,
-          initial: integer | float | [integer | float] | %{String.t() => integer} | nil,
+          type: type,
+          section: section,
+          initial: initial,
           line: pos_integer | nil,
           retain: :retain | :non_retain | nil
         }
@@ -89,6 +114,10 @@ defmodule Logex.Tag do
   or nil, and a `%Logex.Tag{}` built by hand with any other is refused where it is
   checked (`Logex.Declarations.check/1`).
   """
+  @spec new!(String.t(), type) :: t
+  @spec new!(String.t(), type, section) :: t
+  @spec new!(String.t(), type, section, initial) :: t
+  @spec new!(String.t(), type, section, initial, retain: boolean, non_retain: boolean) :: t
   def new!(name, type, section \\ :var, initial \\ nil, options \\ []),
     do:
       Logex.Declarations.validate!(%__MODULE__{

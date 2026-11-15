@@ -60,7 +60,7 @@ defmodule Logex.Instance do
 
   @type t :: %__MODULE__{
           type: String.t() | nil,
-          env: %{String.t() => integer | map},
+          env: %{String.t() => integer | float | tuple | map},
           now: non_neg_integer,
           first: boolean,
           ons_blocked: [String.t()],

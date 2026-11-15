@@ -1021,6 +1021,67 @@ defmodule Logex.Runner do
   @kinds [:overlap, :fault, :trip, :restart, :edit, :retain, :forces, :ran, :round]
   @default_kinds [:overlap, :fault, :trip, :restart, :edit, :retain, :forces]
 
+  # Decision 515 (c), RV-24: the host contract's types.
+
+  @typedoc "A runner: its pid, or the name `start_link/1` registered it under (`name:`)."
+  @type runner :: GenServer.server()
+
+  @typedoc "A kind of event `subscribe/2` names."
+  @type kind :: :overlap | :fault | :trip | :restart | :edit | :retain | :forces | :ran | :round
+
+  @typedoc """
+  What a subscriber is sent, as `{Logex.Runner, runner, event}` (`subscribe/2`): the
+  resource's events, a trip, a restart, an edit's step, a store's or the forces file's
+  failed write, a store's warning, and a round's outputs.
+  """
+  @type event ::
+          Runtime.event()
+          | {:trip, reason :: term}
+          | {:restart, Runtime.mode()}
+          | {:edit, :accept | :test | :untest | :assemble | :cancel, Edit.report()}
+          | {:retain, {:error, reason :: term} | {:warning, message :: String.t()}}
+          | {:forces, {:error, reason :: term}}
+          | {:round, now :: non_neg_integer, outputs :: Runtime.values()}
+
+  @typedoc "The runner's store, as `status/1` gives it, nil for a runner given no `retain:`."
+  @type store :: %{
+          path: String.t(),
+          written_at: DateTime.t() | nil,
+          failed: term,
+          dropped: Runtime.dropped(),
+          copy: String.t() | nil,
+          unknown: String.t() | nil,
+          warning: String.t() | nil
+        }
+
+  @typedoc """
+  Why a stop's writes failed (`stop/2`): the store's, the forces file's, or both, in the
+  order they were written.
+  """
+  @type stop_error ::
+          {:retain, reason :: term}
+          | {:forces, reason :: term}
+          | [forces: term, retain: term]
+
+  @typedoc "The runner's status (`status/1`)."
+  @type status :: %{
+          status: :running | :tripped,
+          now: non_neg_integer,
+          rounds: non_neg_integer,
+          trip: term,
+          overlaps: %{optional(String.t()) => non_neg_integer},
+          forces: %{optional(String.t()) => Runtime.value()},
+          forces_unread: {String.t(), reason :: term} | nil,
+          forces_unknown: %{optional(String.t()) => Runtime.value()} | nil,
+          forcing: %{optional(String.t()) => Runtime.value()} | nil,
+          edit: Edit.stage() | nil,
+          runs: %{optional(String.t() | :none) => {non_neg_integer, pos_integer}},
+          latest_wake: non_neg_integer,
+          refresh_gap: non_neg_integer,
+          unzeroed: [String.t()],
+          retain: store | nil
+        }
+
   # A poll period and the idle watchdog are an interval's range, as a watchdog is
   # (decision 109); the share is the conventional table's span (decision 121).
   @interval 1..2_147_483_647
@@ -1059,6 +1120,12 @@ defmodule Logex.Runner do
   and a raise of the host's mistake, in the caller, for a store or forces path another
   runner of this VM holds (decision 356).
   """
+  @spec start_link(keyword) ::
+          {:ok, pid}
+          | {:error,
+             {:io_init, device :: String.t(), reason :: term}
+             | {:retain, reason :: term}
+             | {:already_started, pid}}
   def start_link(opts) do
     {start, name} = options!(opts)
     started(GenServer.start_link(__MODULE__, start, name))
@@ -1099,6 +1166,7 @@ defmodule Logex.Runner do
   stands, so that a supervisor waits for the store's write after both (decision 494: the
   record names no deadline), `devices * (idle + poll) + 4 * write_limit` ms.
   """
+  @spec child_spec(keyword) :: Supervisor.child_spec()
   def child_spec(opts),
     do: Map.put(super(opts), :shutdown, shutdown_ms(opts))
 
@@ -1198,9 +1266,11 @@ defmodule Logex.Runner do
     do: Map.merge(retain, %{copy: nil, failed: reason, owed: text})
 
   @doc "The value at an access path, as `Logex.Runtime.get/2` gives it: `{:ok, value}` or `{:error, reason}`."
+  @spec get(runner, String.t()) :: {:ok, Runtime.value()} | {:error, String.t()}
   def get(runner, path), do: call(runner, {:get, path})
 
   @doc "The value at an access path, as `Logex.Runtime.get!/2` gives it, raising `ArgumentError` with its reason."
+  @spec get!(runner, String.t()) :: Runtime.value()
   def get!(runner, path), do: call(runner, {:get!, path})
 
   @doc """
@@ -1252,6 +1322,8 @@ defmodule Logex.Runner do
   them, is held for the stopped runner until that write has ended (the moduledoc's "Its
   files"), so that a start on it meanwhile is refused, naming it.
   """
+  @spec stop(runner) :: :ok | {:error, stop_error}
+  @spec stop(runner, term) :: :ok | {:error, stop_error}
   def stop(runner, reason \\ :normal) do
     pid = runner!(runner)
     ref = make_ref()
@@ -1348,6 +1420,7 @@ defmodule Logex.Runner do
   and since decision 528 sent to each subscription that takes `:retain` as it subscribes,
   `{:retain, {:warning, message}}` (`subscribe/2`).
   """
+  @spec status(runner) :: status
   def status(runner), do: call(runner, :status)
 
   @doc """
@@ -1374,10 +1447,13 @@ defmodule Logex.Runner do
   display's events come at thousands a second. A subscriber is monitored, and dropped when
   it goes down; subscribing again replaces the kinds. Events are sent, never awaited.
   """
+  @spec subscribe(runner) :: :ok
+  @spec subscribe(runner, [kind]) :: :ok
   def subscribe(runner, kinds \\ @default_kinds),
     do: call(runner, {:subscribe, self(), kinds!(kinds)})
 
   @doc "Stops sending the caller the runner's events."
+  @spec unsubscribe(runner) :: :ok
   def unsubscribe(runner), do: call(runner, {:unsubscribe, self()})
 
   @doc """
@@ -1399,6 +1475,7 @@ defmodule Logex.Runner do
   `"zone_t"`, is forced to a list of its shape in the elements' order, each element then
   forced as its own point, nothing forced where its shape or any element does not fit.
   """
+  @spec force(runner, String.t(), Runtime.value()) :: :ok | {:error, {:forces, reason :: term}}
   def force(runner, point, value), do: call(runner, {:force, point, value})
 
   @doc """
@@ -1408,6 +1485,7 @@ defmodule Logex.Runner do
   trigger that reads another value makes its round at once, as a force does. A located
   array of input points named whole unforces every element (decision 241).
   """
+  @spec unforce(runner, String.t()) :: :ok | {:error, {:forces, reason :: term}}
   def unforce(runner, point), do: call(runner, {:unforce, point})
 
   @doc """
@@ -1417,6 +1495,7 @@ defmodule Logex.Runner do
   device-name and then address order, each round reading those before it at their new
   values and those after it as they were (decision 120).
   """
+  @spec unforce_all(runner) :: :ok | {:error, {:forces, reason :: term}}
   def unforce_all(runner), do: call(runner, :unforce_all)
 
   @doc """
@@ -1438,6 +1517,8 @@ defmodule Logex.Runner do
   on one machine). The plant runs on meanwhile, the runner's rounds waiting on no accept;
   the HMI that asked waits.
   """
+  @spec accept(runner, Configuration.t()) ::
+          {:ok, Edit.report()} | {:error, [Logex.Diagnostic.t(), ...]}
   def accept(runner, candidate) do
     {edits, runtime, elapsed, stored} = call(runner, :resource)
     accepting(Edit.accept(runtime, candidate, elapsed), {edits, stored}, runner, candidate)
@@ -1470,12 +1551,14 @@ defmodule Logex.Runner do
   switched. A runner that holds no edit, and a step its
   stage refuses, are the host's mistakes.
   """
+  @spec test(runner) :: {:ok, Edit.report()}
   def test(runner), do: call(runner, {:edit, :test})
 
   @doc """
   Runs the original again, from test, as `Logex.Configuration.Edit.untest/3` does at the
   time since the last round, as `test/1` does: `{:ok, report}`.
   """
+  @spec untest(runner) :: {:ok, Edit.report()}
   def untest(runner), do: call(runner, {:edit, :untest})
 
   @doc """
@@ -1483,12 +1566,14 @@ defmodule Logex.Runner do
   `Logex.Configuration.Edit.assemble/2` does: `{:ok, report}`, the runner running the
   candidate from now on.
   """
+  @spec assemble(runner) :: {:ok, Edit.report()}
   def assemble(runner), do: call(runner, {:edit, :assemble})
 
   @doc """
   Keeps the original and ends the edit, from accept or after an untest, as
   `Logex.Configuration.Edit.cancel/2` does: `{:ok, report}`.
   """
+  @spec cancel(runner) :: {:ok, Edit.report()}
   def cancel(runner), do: call(runner, {:edit, :cancel})
 
   @doc """
@@ -1545,6 +1630,12 @@ defmodule Logex.Runner do
   in memory, a write-back that fails reported as any failed write and the restart
   answered with the device's reason all the same. A warm restart writes none.
   """
+  @spec restart(runner, Runtime.mode()) ::
+          :ok
+          | {:error,
+             {:io_init, device :: String.t(), reason :: term}
+             | {:retain, reason :: term}
+             | {:clock, cause :: term}}
   def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
 
   defp mode!(mode) when mode in [:cold, :warm], do: mode
@@ -5162,19 +5253,19 @@ defmodule Logex.Runner do
         module
       )
 
-  defp steps!(other), do: stands_in!(false, other)
+  defp steps!(other), do: raise(ArgumentError, no_steps(other))
 
   defp exported?(module, {function, arity}), do: function_exported?(module, function, arity)
 
   defp stands_in!(true, module), do: module
+  defp stands_in!(false, other), do: raise(ArgumentError, no_steps(other))
 
-  defp stands_in!(false, other),
+  # Decision 515 (c), RV-24: the refusal raised where it is meant, so that no call reaches
+  # a clause only to raise (Dialyzer's "will never return").
+  defp no_steps(other),
     do:
-      raise(
-        ArgumentError,
-        "the runner's steps: is a module with cycle_steps/3, cycle_step/2 and " <>
-          "cycle_outputs/1, standing in for Logex.Runtime's, got: #{inspect(other)}"
-      )
+      "the runner's steps: is a module with cycle_steps/3, cycle_step/2 and " <>
+        "cycle_outputs/1, standing in for Logex.Runtime's, got: #{inspect(other)}"
 
   defp ms!(ms, _key) when ms in @interval, do: ms
 

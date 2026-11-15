@@ -66,6 +66,10 @@ defmodule Logex.Runner.Clock.Manual do
   Starts a manual clock linked to the caller, at time 0 or `now:`, waiting `wait:` ms,
   5000 unless set, 1 to 4294967295, for each receiver `advance/2` delivers to.
   """
+  @spec child_spec(keyword) :: Supervisor.child_spec()
+
+  @spec start_link() :: {:ok, pid}
+  @spec start_link(keyword) :: {:ok, pid}
   def start_link(opts \\ []) do
     %{now: now, wait: wait} = options!(opts)
     GenServer.start_link(__MODULE__, {now, wait})
@@ -76,6 +80,7 @@ defmodule Logex.Runner.Clock.Manual do
   order, ties in the order they were set, and returns once each receiver has handled its
   message.
   """
+  @spec advance(pid, non_neg_integer) :: :ok
   def advance(clock, ms) do
     clock = clock!(clock)
     {target, wait} = called(clock, {:span, span!(ms, "advance/2")})
@@ -83,9 +88,11 @@ defmodule Logex.Runner.Clock.Manual do
   end
 
   @doc "Moves the clock on by `ms`, 0 or more, delivering nothing: time passing inside a step."
+  @spec pass(pid, non_neg_integer) :: :ok
   def pass(clock, ms), do: GenServer.call(clock!(clock), {:pass, span!(ms, "pass/2")})
 
   @doc "The timers not yet delivered, `{at_ms, pid, message}`, in the order `advance/2` would deliver them."
+  @spec pending(pid) :: [{at_ms :: integer, pid, message :: term}]
   def pending(clock), do: GenServer.call(clock!(clock), :pending)
 
   @impl Clock
