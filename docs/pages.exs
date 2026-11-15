@@ -28,6 +28,7 @@
 #                    page of the site goes there
 [
   {"README.md", :legacy, :first},
+  {"guides/reference/words.md", :reference, "Reference"},
   {"CONTRIBUTING.md", :legacy, :github},
   {"CHANGELOG.md", :legacy, :github},
   {"PLAN.md", :legacy, :github},
