@@ -15605,6 +15605,60 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      example of it among its pins, changes by this decision. Neither IEC 61131-3 nor
      Logix has a store a person edits. RV-29 builds it.
 
+546. **The README made short, and its details moved into guides (DOC-1).** The maintainer,
+     2026-11-15: "The readme is a massive wall of text. We need to move all the details
+     from the readme into a) diataxis exdocs for users and high level explanations and
+     detailed definition of behaviour of the engine or b) contributor focused
+     documentation including deeper architecture, ADRs, explanations of implementation
+     approaches etc. This needs to be mannered-prose-free ASD-STE100 with empathy for the
+     reader, with lots of nice formatting, diagrams, and other visual aids." README.md was
+     5,824 lines and 52,653 words at `0793a86`.
+
+     **Taken** (the maintainer, 2026-11-15), in five parts:
+
+     - (a) **README first.** DOC-1 moves and rewrites everything README says. The API
+       reference shows each module's text as it is. A later item, DOC-2, rewrites the
+       module text, after RV-24 and RV-25, which both change those files.
+     - (b) **User pages by Diátaxis, built with ExDoc.** The pages are of four kinds:
+       tutorials, how-to guides, reference and explanation. The reference pages define
+       the engine's behaviour exactly. README stays as a short first page.
+     - (c) **Contributor pages** hold the architecture, the decision records of decision
+       547 and the notes on how each part is built.
+     - (d) **The words.** The new pages follow the writing rules of ASD-STE100, Simplified
+       Technical English: short sentences, one instruction a sentence, the active voice,
+       one word for one thing. A page says who it is for and what the reader must know
+       first. A page uses tables, callouts, drawn rungs and diagrams where they help.
+     - (e) **Nothing the suite holds is let go.** Each example a page shows is still run and
+       its output compared, each block shown is still held to its file under `examples/`,
+       and each `elixir` block is still an example or a named fragment. The test follows
+       the examples to their pages.
+
+     IEC 61131-3 says nothing of a manual's shape. Rockwell splits its Logix manuals the
+     same way: a quick start, a programming manual and an instruction reference.
+
+547. **A curated set of architecture decision records (DOC-1).** An architecture decision
+     record is one short page for one decision: the problem, the choice and what follows
+     from it. §7 holds 545 numbered decisions, and the tests, the code and the changelog
+     cite them by number.
+
+     **Taken: a curated set (a)** (the maintainer, 2026-11-15): about twenty records for
+     the large choices only, among them that a program is data that is interpreted, that
+     the host gives the time, that logex has its own dialect, that a trip writes every
+     output off once, and how a store is refused. Each record links to the numbered
+     decisions it sums up. §7 stays the full log, so every number cited today still
+     works. Not taken: §7 split into record files, which points every citation again; and
+     no record files, which leaves a new contributor §7's ten thousand lines to enter by.
+
+548. **The built documentation published on GitHub Pages (DOC-1).** ExDoc builds a site
+     from the pages and the module text. HexDocs hosts one only after a release, and
+     none is planned (decision 541). The repository is public.
+
+     **Taken: GitHub Pages (a)** (the maintainer, 2026-11-15): CI builds the site on each
+     push to `main` and publishes it to GitHub Pages, in a workflow of its own, so the
+     four gates stay as they are. The maintainer turns Pages on once, in the repository's
+     settings, with GitHub Actions as its source. The Markdown pages also read on GitHub
+     itself. Not taken: a build that publishes nothing.
+
 ---
 
 ## 8. Sources, and what is unverified
