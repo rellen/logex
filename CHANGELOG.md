@@ -28,7 +28,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–545.
+Decisions: 1–548.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (provisional: its number, and whether its tag is pushed, are the maintainer's, `PLAN.md`'s

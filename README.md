@@ -400,7 +400,10 @@ resource and no program told at its resource line. RV-24 has landed (decision 51
 typespecs on the host contract, which OTP's own Dialyzer reads in CI after the four
 gates, red on any warning. Waiting: RV-29, a store with no resource line whose count does
 not read told its count first, and a renamed configuration's refusal ending with the full
-way out; and the runner split by concern.
+way out; and the runner split by concern. And DOC-1, decisions 546–548: this file made
+short, its details moved into guides built with ExDoc, tutorials, how-to guides, reference
+and explanation, and into contributor pages with a curated set of decision records, the
+site published on GitHub Pages.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
