@@ -522,6 +522,16 @@ defmodule Logex.ProseTest do
       assert {[], [^report, named], 0} = run(dir, ["--review", "--kind", "howto", "page.md"])
       assert named == "  page.md: no link to the glossary for: display, tag"
     end
+
+    test "the glossary uses its own terms with no link to itself, and none is counted",
+         %{tmp_dir: dir} do
+      files = %{"guides/reference/glossary.md" => @glossary <> "\n### rung\n\nIt reads a tag.\n"}
+
+      assert {_, [report], _} =
+               prose(dir, files, ["--kind", "reference", "guides/reference/glossary.md"])
+
+      assert report =~ "to review: 0 passive, 0 glossary terms with no link"
+    end
   end
 
   test "a passive verb is counted for the reviewer and never fails; --review names each " <>

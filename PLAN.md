@@ -22140,9 +22140,10 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     "the conventional set" (question 6). Each rule of this step has a mutant, 92 in all:
     25 of the site, its list and its workflow, 25 of the examples' test and the first
     pages, 32 of the checker and 10 of the pictures. Each fails a test of the file that holds its rule.
-    Two passed at first, a repository script's run with no argument read as an example's,
-    and a picture's mark read inside a code block, and each has its test since `0c99750`.
-    The suite is 3,175 tests, 125 more than at `6889ad5`; `scripts/docs.sh` gives
+    Three passed at first, a repository script's run with no argument read as an
+    example's, a picture's mark read inside a code block, and the glossary counting its
+    own terms as unlinked, and each has its test since. The suite is 3,176 tests, 126
+    more than at `6889ad5`; `scripts/docs.sh` gives
     `DOCS-OK`, 40 pages built and 13 warnings and dead links, each listed; and
     `scripts/dialyzer.sh` gives `DIALYZER-OK`, the `dev` build it reads holding logex
     alone. Parts 1 to 3 were gated before the next was begun, and the later parts after
