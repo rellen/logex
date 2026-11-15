@@ -15431,7 +15431,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      after the `resource` line taking the `program` lines with it; decision 535's note
      keeps its mark as history. Decision 531's refusal, which no cut makes, is told beside
      a count that does not read, as built since RV-21's review (provisional, `PLAN.md`'s
-     RV-28), and a new test pins both.)*
+     RV-28), and a new test pins both.)* *(RV-28's review, 2026-11-14, `1620d94`: the
+     naming lines wait for the count alone, as this decision says, where they waited too
+     for an empty line after an end line whose count reads, which is now told beside
+     them; and a store that names a type and no resource and is cut short too is told
+     531's refusal and the cut, the way out twice, a line each, pinned whole, provisional,
+     `PLAN.md`'s RV-28, question 2.)*
 
 539. **A version 3 store with its `resource` line and no `program` line (RV-27),** RV-27's
      question 3, from its review: decision 531 refuses a store whose `program` lines come
@@ -15466,7 +15471,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the old reading is made the refusal. The life walk takes a version 3 store's `program`
      lines away, its `resource` line kept, before the other warm start in two that RV-27's
      restatement of decision 535 leaves, and asserts the refusal whole
-     (`:life_unprogrammed_refused`, `86e1cfe`).)*
+     (`:life_unprogrammed_refused`, `86e1cfe`).)* *(RV-28's review, 2026-11-14,
+     `1620d94`: a second `resource` line that does not read, beside one that does, is told
+     beside this refusal, since mending it names no program type, as a second `program`
+     line is beside decision 531's, each refusal held back only by a line of the kind it
+     says is missing; and the life walk gives some cold starts such a store, and one that
+     names no program, asserting the copy each makes first.)*
 
 540. **The way out of a refusal of the naming lines (RV-27),** RV-27's question 4, from its
      review: decision 531's and decision 535's refusals name what is missing and what a
@@ -15487,7 +15497,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      535's, the store test's and the life walk's, changed so and only so. A store told
      several problems is told within `Logex.Refusal`'s bounds as ever, the first 50 and
      a count, each quoted text at most 60 bytes and each line at most 1,000 after the
-     path.)*
+     path.)* *(RV-28's review, 2026-11-14, `1620d94`: "one way out told for every refused
+     store" read as the one remedy every refused store is given, each refusal that tells
+     it ending with it, so a store told decision 531's refusal beside its cut is told it
+     twice, a line each, pinned, provisional, `PLAN.md`'s RV-28, question 2; whether every
+     refusal of a store ends with the way out, the renamed configuration's among them, is
+     RV-28's question 3.)*
 
 ---
 

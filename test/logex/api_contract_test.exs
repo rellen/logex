@@ -15238,10 +15238,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # store's own text so that no draw is taken, meets the store cut at a byte that text
   # chooses, short of its last newline, which decision 355 refuses, the copy then the cut
   # bytes; the store is written over at once, as every cold start writes it. Decisions 535
-  # and 539, restated (RV-28's review): in the life walk, one cold start in four, of those
-  # whose store is not cut, by the same draw, meets a version 3 store a hand edit left
-  # naming its program not at all or its resource alone, half each by the store's text,
-  # the copy then those bytes (unnamed_store/2).
+  # and 539, restated (RV-28's review): in the life walk, one cold start in four by the
+  # same draw, half of those whose store is not cut, meets a version 3 store a hand edit
+  # left naming its program not at all or its resource alone, half each by the store's
+  # text, the copy then those bytes (unnamed_store/2).
   defp cold_cut!(%{start: :cold, store: store, stored: stored} = w)
        when store != nil and stored != nil,
        do: cold_cut(rem(:erlang.phash2({on_disk(w), :cold}), 4), w, on_disk(w))
