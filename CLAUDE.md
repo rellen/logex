@@ -38,6 +38,10 @@ own documentation holds:
   Module: test name`, and with `--exit N` judges a run, as CI's test step does; the
   manifest keeps a test's failure until a run passes it, so after runs by hand it may name
   an earlier run's; the scripts delete the manifest before each run.
+- `scripts/dialyzer.sh` — OTP's own dialyzer over the dev build, CI's step after the four
+  gates: its PLT of the toolchain's applications under `_build/dialyzer/`, named by the
+  versions, built or checked, its flags named in it, `DIALYZER-OK` or `DIALYZER-FAIL
+  rc=<n>`, red on any warning.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -203,8 +207,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   each item's Done-when and Milestones 5 and 6's done sentences, from text and files on
   disk, against oracles that know nothing of logex; its assertions name no IR tag.
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
-  surface, every moduledoc held to the host contract, and the checks made where a program
-  is first handed in.
+  surface, every moduledoc held to the host contract, a spec on every function and a
+  typedoc on every type of it, the opaque resource and edits, and the checks made where a
+  program is first handed in.
 - `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.
@@ -274,7 +279,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   prose (`CONTRIBUTING.md`, "Landing work stales the plan").
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
   each test's line read from its file, CI's workflow held to every gate and its test step
-  run as written, and `scripts/gate.sh` over a stand-in `mix`.
+  run as written, `scripts/gate.sh` over a stand-in `mix`, and CI's Dialyzer step and
+  `scripts/dialyzer.sh` over a stand-in `dialyzer`.
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
   repository with a stand-in `gh`, every check passed and each taken back.

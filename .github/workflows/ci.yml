@@ -1,8 +1,8 @@
 # The four gates CONTRIBUTING.md asks of every commit (PLAN.md §4·B3), each a step of its
 # own, so each is judged by its own exit code, the suite's step naming the tests a red run
-# failed. Every push and pull request runs them all, no step skipped and no failure let
-# pass (test/logex/scripts_test.exs). The toolchain is the pair mix.exs and shell.nix pin:
-# Erlang/OTP 28 and Elixir 1.20.4.
+# failed, and after them Dialyzer (decision 515 (c)). Every push and pull request runs them
+# all, no step skipped and no failure let pass (test/logex/scripts_test.exs). The
+# toolchain is the pair mix.exs and shell.nix pin: Erlang/OTP 28 and Elixir 1.20.4.
 name: CI
 
 on:
@@ -26,13 +26,14 @@ jobs:
           elixir-version: ${{ env.ELIXIR_VERSION }}
 
       # There is no mix.lock (logex has no dependencies), so the cache is keyed on the
-      # versions setup-beam resolved and on mix.exs.
+      # versions setup-beam resolved and on mix.exs. Dialyzer's PLT is cached apart, below.
       - name: Cache deps and _build
         uses: actions/cache@v5
         with:
           path: |
             deps
             _build
+            !_build/dialyzer
           key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.exs') }}
           restore-keys: |
             mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
@@ -64,3 +65,17 @@ jobs:
           rc=0
           mix test --warnings-as-errors || rc=$?
           elixir scripts/failed.exs --exit "$rc"
+
+      # Decision 515 (c): OTP's own dialyzer over logex's compiled modules, as a contributor
+      # runs it, scripts/dialyzer.sh, which names its flags, builds or checks its PLT of
+      # the toolchain's applications and exits with Dialyzer's code, red on any warning.
+      # The PLT, the toolchain's alone, is cached by the versions setup-beam resolved, so
+      # that a toolchain changed builds its own, a saved one only once a run passes.
+      - name: Cache the Dialyzer PLT
+        uses: actions/cache@v5
+        with:
+          path: _build/dialyzer
+          key: plt-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}
+
+      - name: scripts/dialyzer.sh
+        run: scripts/dialyzer.sh

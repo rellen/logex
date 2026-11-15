@@ -163,7 +163,8 @@ the host's API is README's, so this first entry lists neither apart.
   measured within the run; the host contract named; a long refusal bounded and a compile
   run in a process of its own; a store written by another program warned of; the
   simulator taking the configuration's addresses; README's examples as files under
-  `examples/`; CI naming a red run's failed tests, and this release step; RV-26's,
+  `examples/`; CI naming a red run's failed tests, and this release step; typespecs on the
+  host contract, which OTP's Dialyzer reads in CI, red on any warning (RV-24); RV-26's,
   decisions 527, 528 and 530, a program's text read canonically before the store compares
   it, the stale store's warning sent to the subscribers too and the store written as
   `logex retain 3`; RV-27's, decisions 532, 535 and 536, the words logex reads in any case
