@@ -541,7 +541,10 @@ defmodule Logex.TagSubscriptTest do
 
     test "a fault in a block's body is named by the instance's path, in the body's file" do
       dir =
-        Path.join(System.tmp_dir!(), "logex_tag_subscript_#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "logex_tag_subscript_#{System.pid()}_#{System.unique_integer([:positive])}"
+        )
 
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)

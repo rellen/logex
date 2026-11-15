@@ -126,7 +126,12 @@ defmodule Logex.CompileTotalTest do
     end
 
     test "and through the loader, from a file beside the program that holds it" do
-      dir = Path.join(System.tmp_dir!(), "logex-rv2-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv2-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -327,7 +332,12 @@ defmodule Logex.CompileTotalTest do
     # from no word that is not one word and its sizes, so a broken `gate.ld` beside the
     # program is not loaded for `gate[2].x`, which the compiler reports alone.
     test "and the loader loads no block for it" do
-      dir = Path.join(System.tmp_dir!(), "logex-rv2-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv2-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
       File.write!(Path.join(dir, "gate.ld"), "function_block gate\nxic\n")

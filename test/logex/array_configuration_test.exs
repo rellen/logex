@@ -948,7 +948,12 @@ defmodule Logex.ArrayConfigurationTest do
                &(&1.message =~ "as in `var_global point bool[8] at card.q.0`")
              )
 
-      dir = Path.join(System.tmp_dir!(), "logex-m12-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-m12-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       File.write!(Path.join(dir, "oven.ld"), @oven)
       File.write!(Path.join(dir, "plant.logex"), "program o1 oven\no1.zone_t card.i.0\n")

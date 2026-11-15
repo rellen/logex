@@ -556,7 +556,13 @@ defmodule Logex.RunnerTest do
     # opened and the other a FunctionClauseError.
     test "a clock whose now_ms/1 or wall_ms/1 gives no time a runner can take" do
       {opts, _rig} = rig()
-      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv4-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       on_exit(fn -> File.rm_rf!(dir) end)
 
       for answer <- [1.5, nil, "10"] do
@@ -596,7 +602,13 @@ defmodule Logex.RunnerTest do
     # wall time a store's header holds, spelled to the second.
     test "a wall clock's time from year 0 to year 9999 is taken, one before 1970 among it" do
       {opts, _rig} = rig()
-      dir = Path.join(System.tmp_dir!(), "logex-rv4-#{System.unique_integer([:positive])}")
+
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv4-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -2602,7 +2614,12 @@ defmodule Logex.RunnerTest do
     # (RV-16's review). Each round's write takes 3 ms; at 50% every round brings its slot.
     test "an open slot of the continuous task's serves the poller's call that comes " <>
            "behind the round at once, with a store and with none (decision 442)" do
-      dir = Path.join(System.tmp_dir!(), "logex-rv16-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv16-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -2741,7 +2758,12 @@ defmodule Logex.RunnerTest do
     # loaded machine's to miss; the test reads the requests a round, never the heartbeat.
     test "on the real clock, with no untimed program, a tight loop of forces leaves a " <>
            "10 ms task its periods (decision 396)" do
-      dir = Path.join(System.tmp_dir!(), "logex-rv11-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-rv11-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 

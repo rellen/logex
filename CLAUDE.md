@@ -335,6 +335,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   `examples/` drawn, a drawing's elements its program's, a timing diagram's values a
   run's, each picture a page shows held to what its script gives today, one file one
   picture, and `scripts/draw.exs` run as a writer runs it.
+- `test/logex/scratch_test.exs` — every name a test file makes in the machine's temporary
+  directory holds the VM's OS pid, read from each test file's syntax tree, so that two
+  suites on one machine share no scratch directory.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
