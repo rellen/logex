@@ -1,0 +1,109 @@
+# The documentation's site (decision 548), apart from CI's gates, which stay as they are.
+# Every push and pull request builds the site with scripts/docs.sh, on the toolchain
+# ci.yml pins, Erlang/OTP 28 and Elixir 1.20.4: the build is red on a warning or a dead
+# link docs/site-warnings.txt does not list, no step skipped and no failure let pass
+# (test/logex/docs_test.exs). A push to main then publishes the built site to GitHub
+# Pages, with GitHub's own actions and the least permissions they need.
+#
+# The publish never turns a run red where Pages cannot take it. The build job asks GitHub
+# whether Pages is on for the repository with GitHub Actions as its source; where it is
+# not, in a fork for one, the run says so in a notice, publishes nothing and ends green.
+# To turn it on: the repository's Settings, Pages, Build and deployment, Source: GitHub
+# Actions.
+name: Docs
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    env:
+      OTP_VERSION: "28"
+      ELIXIR_VERSION: "1.20.4"
+    outputs:
+      publish: ${{ steps.pages.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Erlang/OTP and Elixir
+        id: beam
+        uses: erlef/setup-beam@v1.24.1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      # ExDoc and its packages, at the versions mix.lock names, and the docs build: keyed
+      # on the versions setup-beam resolved, on mix.exs and on mix.lock, no other key
+      # restored.
+      - name: Cache deps and _build
+        uses: actions/cache@v5
+        with:
+          path: |
+            deps
+            _build
+          key: docs-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.exs', 'mix.lock') }}
+
+      # The build, as a contributor runs it: DOCS-OK, or DOCS-FAIL and the script's exit
+      # code. No key but these two, so that nothing skips the step or lets its failure pass.
+      - name: scripts/docs.sh
+        run: scripts/docs.sh
+
+      # Asked on every push, so that a branch's run shows the answer, and acted on for a
+      # push to main alone, the one event that publishes. GitHub answers with the site's
+      # `build_type`, `workflow` where the source is GitHub Actions and `legacy` where it
+      # is a branch, and with no site where Pages is off. On main, anything but `workflow`
+      # publishes nothing and says so in a notice; the step itself never fails.
+      - name: Ask GitHub whether Pages publishes from GitHub Actions
+        id: pages
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type 2> /dev/null) || source=off
+          echo "GitHub Pages for $GITHUB_REPOSITORY: $source; this push is to $GITHUB_REF"
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "$source" = workflow ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=The site was built and not published::GitHub Pages is off for $GITHUB_REPOSITORY, or its source is not GitHub Actions. To publish: Settings, Pages, Build and deployment, Source: GitHub Actions."
+          fi
+
+      - name: Configure GitHub Pages
+        if: steps.pages.outputs.publish == 'true'
+        uses: actions/configure-pages@v6
+
+      - name: Upload the site
+        if: steps.pages.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: doc
+
+  # The publish, of a push to main alone and only where the build job found Pages ready.
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

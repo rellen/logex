@@ -25,8 +25,9 @@ jobs:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
 
-      # There is no mix.lock (logex has no dependencies), so the cache is keyed on the
-      # versions setup-beam resolved and on mix.exs. Dialyzer's PLT is cached apart, below.
+      # No gate reads mix.lock: logex has no dependency but ExDoc, in the docs environment
+      # alone, which docs.yml builds in. So the cache is keyed on the versions setup-beam
+      # resolved and on mix.exs. Dialyzer's PLT is cached apart, below.
       - name: Cache deps and _build
         uses: actions/cache@v5
         with:

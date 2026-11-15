@@ -1,0 +1,22 @@
+# The warnings ExDoc gives for logex's module text today, each `<where>: <message>`, one
+# line a warning (decision 546 (a): the module text is DOC-2's to rewrite, so DOC-1's
+# build lets exactly these pass). scripts/site.exs holds the build to this list: a
+# warning that is not here fails the build, a page's or a module's, and so does a line
+# here that the build no longer gives. Six today, each a reference to a module or a
+# function that is hidden (`@moduledoc false`), which ExDoc shows as code with no link.
+Logex.IO.Sim (module): documentation references module "Logex.Runner.Device" but it is hidden
+Logex.IO.Sim (module): documentation references module "Logex.Runner.Device" but it is hidden
+Logex.Edit (module): documentation references module "Logex.Edit.Plan" but it is hidden
+Logex.Declarations (module): documentation references function "Logex.Real.value?/2" but it is hidden
+Logex.Declarations (module): documentation references function "Logex.Array.deep_size/1" but it is hidden
+Logex.FbType.started/2: documentation references module "Logex.Array" but it is hidden
+# And seven dead links in the site's list of modules: ExDoc copies a module's first
+# paragraph there, and a link in it to a function of the module, `new!/4`, then names an
+# anchor the list does not have.
+api-reference.html: the link `#new!/4` names an anchor that api-reference.html does not have
+api-reference.html: the link `#new!/4` names an anchor that api-reference.html does not have
+api-reference.html: the link `#bit_name/1` names an anchor that api-reference.html does not have
+api-reference.html: the link `#storage_bits/1` names an anchor that api-reference.html does not have
+api-reference.html: the link `#bit_writes/1` names an anchor that api-reference.html does not have
+api-reference.html: the link `#bit_name/1` names an anchor that api-reference.html does not have
+api-reference.html: the link `#element_writes/1` names an anchor that api-reference.html does not have

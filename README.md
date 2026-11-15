@@ -488,78 +488,17 @@ whose only words in the language are a task's `watchdog` and the `continuous` ta
 ## An example
 
 Every example in this file is in the repository, under `examples/`: each script a `$ mix
-run` block follows, and every file one reads, `motor.ld` and `scan.exs` below among them,
-and the files the prose describes rather than shows, `faster/packing.logex` among them.
+run` block follows, and every file one reads, the tutorial's `motor.ld` and `scan.exs`
+among them, and the files the prose describes rather than shows, `faster/packing.logex` among them.
 From that directory, `mix run scan.exs` runs one as it is run here, `examples/mix.exs`
 naming logex, the directory above, as its one dependency; a script shown here as the
 continuation of another, `a_trip.exs`, is there whole. The suite runs every one of them
 there and holds each block shown here to its file (decision 517 (b)).
 
-`motor.ld` — a seal-in motor starter with a latched fault. Every tag is declared before the
-first rung: what it holds (`bool`, `dint` or another type), and whether it is supplied from outside
-(`var_input`), produced for outside (`var_output`) or the program's own (`var`):
-
-<!-- file: motor.ld -->
-```
-var_input start bool
-var_input stop bool
-var_input overtemp bool
-var_input reset bool
-var_output motor bool
-var_output run_lamp bool
-var_output speed_sp dint 1200
-var fault bool
-
-( xic start | xic motor ) xio stop ote motor
-xic motor ote run_lamp
-xic overtemp otl fault
-xic reset otu fault
-xic fault move 0 speed_sp
-```
-
-Rung 1 is the seal-in: `start` OR `motor` itself, AND not `stop`. Because `ote` is
-non-retentive, `motor` drops out the moment `stop` closes. Rung 3 latches `fault`, which
-only rung 4 can clear — that is what makes `otl`/`otu` different from `ote`. A misspelt
-tag is a compile error, not a rung that silently never fires: with `xic motor ote
-run_lmap`, `Logex.compile_file/1` gives
-`` motor.ld: line 11: `run_lmap` is not declared — did you mean `run_lamp`? ``.
-
-`scan.exs` — the program is compiled once, named `motor` after its file, and run as one
-instance. Each step sets the inputs that changed, then scans:
-
-```elixir
-{:ok, motor} = Logex.compile_file("motor.ld")
-
-scan = fn state, label, inputs ->
-  state = Logex.Runtime.put_inputs(motor, state, inputs)
-  {outputs, state} = Logex.Runtime.scan(motor, state)
-  IO.puts("#{label}  #{inspect(outputs)}  fault=#{state.env["fault"]}")
-  state
-end
-
-Logex.Runtime.instance(motor)
-|> scan.("start pressed ", %{"start" => 1})
-|> scan.("start released", %{"start" => 0})
-|> scan.("overtemp      ", %{"overtemp" => 1})
-|> scan.("stop pressed  ", %{"stop" => 1})
-|> scan.("cooled, idle  ", %{"stop" => 0, "overtemp" => 0})
-```
-
-An instance starts with every declared tag at its initial value: 0, except `speed_sp` at
-1200. A scan gives back the `var_output`s; `fault` is internal, read from the instance's
-state. Five scans, because a seal-in and a latch only show across scans:
-
-```
-$ mix run scan.exs
-start pressed   %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
-start released  %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
-overtemp        %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 0}  fault=1
-stop pressed    %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}  fault=1
-cooled, idle    %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}  fault=1
-```
-
-The motor holds itself in after the start button is released, and the fault stays latched
-after the overtemperature input clears.
+`motor.ld`, a seal-in motor starter with a latched fault, and `scan.exs`, which compiles it
+and runs five scans, are shown, drawn and run in the tutorial
+[Your first program](guides/tutorials/first-program.md), whose
+[`motor.ld`](guides/tutorials/first-program.md) the examples below read.
 
 A mistake by the host raises `ArgumentError`, with every problem in one message.
 `Logex.Runtime.put_inputs(motor, state, %{"motor" => 1, "strat" => 1})` gives:
@@ -5785,7 +5724,10 @@ is inside both projects' security windows. `.tool-versions` pins the exact patch
 `shell.nix`; `mix.exs` is the bound the compiler itself enforces. The floor was `~> 1.15` until September 2026; Elixir 1.15 and OTP 26
 left their windows in June and May 2026, and the oldest pair still receiving security fixes
 is Elixir 1.16 on OTP 27. There are no dependencies to fetch and nothing is generated at
-build time, so a bare Erlang/OTP plus Elixir is enough — no `erlang-parsetools`.
+build time, so a bare Erlang/OTP plus Elixir is enough — no `erlang-parsetools`. The one
+exception is the documentation's site, which ExDoc builds: ExDoc is a dependency of the
+`docs` environment alone, fetched from Hex by `scripts/docs.sh` (or by `MIX_ENV=docs mix
+deps.get`, before `mix docs`), so compiling, testing and running logex fetch nothing.
 
 On an older toolchain `mix compile` aborts with *"you're trying to run :logex on Elixir
 v1.14.0 but it has declared in its mix.exs file it supports only Elixir ~> 1.20"*.
@@ -5813,9 +5755,20 @@ judges the suite the same way. The suite runs every example in this file, each s
 printed here, each block shown here held to its file; the one `elixir` block shown with
 no output, the call made from another process in "Running a plant on the clock", is a
 fragment, which it runs in the state its prose describes (`test/logex/readme_test.exs`).
+It reads the pages of the documentation the same way, each page's examples run and
+compared with what that page prints.
+
+`scripts/docs.sh` builds the documentation's site into `doc/`, this file its first page,
+and fails on a warning or a dead link that `docs/site-warnings.txt` does not list; a
+second workflow (`.github/workflows/docs.yml`) runs it on every push and pull request,
+and publishes the site from `main` where the repository's Pages are set to publish from
+GitHub Actions.
 
 ## Documents
 
+- [`guides/tutorials/first-program.md`](guides/tutorials/first-program.md) — the tutorial "Your first program": a motor starter written, compiled and run for five scans, in a project of your own
+- [`guides/reference/glossary.md`](guides/reference/glossary.md) — the glossary: each term the pages use, what it means in logex, and the word IEC 61131-3 has for it
+- [`docs/style-guide.md`](docs/style-guide.md) — how a page of the documentation is written: the readers and the writing rules; beside it [`docs/house-manner.md`](docs/house-manner.md), the forms of these older documents a page does not have, [`docs/examples-and-pictures.md`](docs/examples-and-pictures.md), the examples' marks and the pictures a script draws, and [`docs/check-a-page.md`](docs/check-a-page.md), the seven kinds of page and how one is added and checked; the list of pages is `docs/pages.exs`
 - `PLAN.md` — the codebase review and the ordered plan of work
 - [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word, word that heads a file or configuration file's word
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements

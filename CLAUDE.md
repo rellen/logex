@@ -4,7 +4,7 @@ Logex is a Ladder Logic compiler and interpreter in Elixir: ladder text compiled
 data, a `%Logex.Program{}`, which `Logex.Runtime` interprets one scan at a time; programs
 run as instances, configurations as resources on tasks, `Logex.Runner` on a clock through
 device adapters, with online edit, forcing and retained values. No dependencies, no
-generated code.
+generated code: ExDoc alone, in the `docs` environment, builds the documentation.
 
 This file is an index of what is there now. It holds no history and no rule a module's
 own documentation holds:
@@ -21,6 +21,14 @@ own documentation holds:
 - **The names** are `docs/naming.md`, one stanza a word. Read `docs/instruction-sets.md`,
   the reference it cites, before writing a stanza: it carries the IEC feature numbers a
   stanza should cite.
+- **The pages** of the documentation are the lines of `docs/pages.exs`, each with its
+  kind and its group in the site: a new page is a file and a line there, never a
+  `:legacy` one. Read `docs/style-guide.md` before writing one, the readers and the
+  writing rules, and beside it `docs/house-manner.md`, the forms a page does not have,
+  `docs/examples-and-pictures.md`, the marks of a block and a picture, and
+  `docs/check-a-page.md`, the kinds and how to add and check a page; its technical words
+  are the headings of `guides/reference/glossary.md`, and each kind starts from its
+  template under `docs/templates/`.
 - **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
   is and how to use it is `README.md`, whose examples the suite runs from their files
   under `examples/`, a project of their own (`examples/mix.exs`, logex its dependency).
@@ -52,6 +60,20 @@ own documentation holds:
   every decision of `docs/organisation.md` §7, each once (`elixir scripts/changelog.exs
   --release`), the tag is absent and the gate green; `--dry-run` tags nothing, `--push`
   pushes the tag.
+- `scripts/docs.sh [log]` — builds the documentation's site in `doc/`, by exit code,
+  printing `DOCS-OK` or `DOCS-FAIL rc=<n>`: `mix docs`, which first makes the pages of
+  `docs/pages.exs` ready (`elixir scripts/site.exs stage`, refusing a page's link that leads
+  to no file or heading) and then runs ExDoc in the `docs` environment, and `elixir
+  scripts/site.exs check <log>`, which holds the build's warnings and the built site's dead
+  links to the lines of `docs/site-warnings.txt`. `.github/workflows/docs.yml` runs it and
+  publishes the site from `main`.
+- `elixir scripts/prose.exs [--review] [page...]` — the writing rules a script can
+  measure, on the pages of `docs/pages.exs` under the rules or on those named, each
+  failure `<file>:<line>: [rule] ... Write: <fix>`; `--kind <kind> <file>` reads a draft.
+- `mix run scripts/draw.exs [--check] [page...]` — draws the pictures the pages' marks
+  name, with `scripts/pictures.exs`: a ladder drawing from a `.ld` file's text and a timing
+  diagram from a run, each an SVG under `guides/assets/`. These three and the examples'
+  test read a page through `scripts/page.exs`, the one reading of a page's Markdown.
 - `mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/` —
   regenerate the golden record, only in a commit that changes the language on purpose,
   and read the diff.
@@ -273,13 +295,22 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   configuration edit's holds, each against oracles restated from the programs' text, each
   asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
-  trees of `lib/`, the walks, the end-to-end tests, the README harness and the examples.
-- `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
-  `$ mix run` follows, run from its files under `examples/` in a fresh VM and its output
-  compared with README's, each block held to its file there, `examples/scan.exs` run by
-  `mix run` through `examples/mix.exs`, and every other `elixir` block a fragment it
-  names and parses, and runs in a setup it makes where it gives one, held to README's
-  prose (`CONTRIBUTING.md`, "Landing work stales the plan").
+  trees of `lib/`, the walks, the end-to-end tests, the README harness, the examples
+  and the scripts.
+- `test/logex/readme_test.exs` — every example of every page, README's and each page's of
+  `docs/pages.exs` that is not a legacy document, each page read on its own: each `elixir`
+  block a `$ mix run` follows run from its files under `examples/` in a fresh VM and its
+  output compared with its page's, each block held to its file there, a file another page
+  shows given by a link the reader sees, `examples/scan.exs` run by `mix run` through
+  `examples/mix.exs`, every other `elixir` block a fragment its page or the test names and
+  parses, and runs in a setup the test makes where it gives one, held to the page's prose,
+  and on a page under the writing rules every block held, marked as not, or of a
+  language the suite compares with nothing (`CONTRIBUTING.md`, "Landing work stales the
+  plan"); `--only reading:<page>` reads one page's blocks and marks with no script run,
+  `--only page:<page>` runs its examples too.
+- `test/logex/page_test.exs` — `scripts/page.exs`: a page cut into prose and blocks as
+  GitHub cuts it, what it cannot take given as a problem with its line and never raised,
+  a page's name in the site, a mark and an example's run.
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
   each test's line read from its file, CI's workflow held to every gate and its test step
   run as written, `scripts/gate.sh` over a stand-in `mix`, and CI's Dialyzer step and
@@ -287,6 +318,21 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
   repository with a stand-in `gh`, every check passed and each taken back.
+- `test/logex/docs_test.exs` — the documentation's build: `mix.exs` giving no dependency
+  outside the `docs` environment, read by a `mix` with no Hex, and `mix.lock` ExDoc's alone;
+  `docs/pages.exs`, the one list of pages, a line a page, held to every Markdown file,
+  each page's kind to its directory and group, the legacy documents to the ten it names; `mix.exs`'s site read from it, the host contract's modules first; each
+  refusal of `scripts/site.exs`, a page's name in the site and each link's anchor made
+  ExDoc's; `scripts/docs.sh` over a stand-in `mix`; and `.github/workflows/docs.yml`, its
+  keys, toolchain and permissions, its question to GitHub run as written.
+- `test/logex/prose_test.exs` — `scripts/prose.exs`: `test/fixtures/prose/every_rule.md`
+  refused once by each rule, each word and form the style guide replaces, what is not
+  prose, the limits, a page's kind, the glossary's terms, what it counts for a reviewer,
+  and every page under the rules passing.
+- `test/logex/pictures_test.exs` — `scripts/pictures.exs`: every `.ld` file under
+  `examples/` drawn, a drawing's elements its program's, a timing diagram's values a
+  run's, each picture a page shows held to what its script gives today, one file one
+  picture, and `scripts/draw.exs` run as a writer runs it.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
@@ -301,9 +347,11 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   green.
 - **Clauses, not conditionals.** Use pattern matching with multiple function clauses, not
   `case`, `cond`, `if` or `unless`, in `lib/` and in every walk's and end-to-end test's
-  oracle and harness, README's included; only a draw a walk's module names in `@draws`
-  may hold one, never a `setup`, a macro or an attribute's function, nor one written
-  `Kernel.if` (`clauses_test.exs`, decision 264).
+  oracle and harness, README's included, and `scripts/page.exs`, which that harness reads
+  through; only a draw a walk's module names in `@draws` may hold one, never a `setup`,
+  a macro or an attribute's function, nor one written `Kernel.if`. Any other script
+  under `scripts/` may hold a `case`, and no `cond`, `if` or `unless`
+  (`clauses_test.exs`, decision 264).
 - **Nothing compiles a user's program to BEAM.** Every front end ends in
   `%Logex.Program{}` data that `Logex.Runtime` interprets, and none puts the Elixir
   compiler on the path that changes a running program (`PLAN.md` §6, `docs/organisation.md`
@@ -370,11 +418,12 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - **A new syntax form** goes into `printer_test.exs`'s generator and `@required_shapes`
   before it lands, and the golden record stays green; nothing checks the grammar for
   ambiguity but those.
-- **The README is checked.** A language change stales its syntax list, instruction table
-  and examples; each example's output is compared by `readme_test.exs`, a file an example
-  reads is marked `<!-- file: path -->` above its block, each block is its file under
-  `examples/`, changed with it, and an `elixir` block shown with
-  no output is a fragment the test names (`CONTRIBUTING.md`). Its prose has no test: its
+- **The pages are checked.** A language change stales README's syntax list and instruction
+  table and the pages' examples; each example's output is compared by `readme_test.exs`,
+  on whichever page shows it, a file an example reads is marked `<!-- file: path -->`
+  above its block or linked to the page that shows it, each block is its file under
+  `examples/`, changed with it, and an `elixir` block shown with no output is a fragment
+  its page marks or the test names (`CONTRIBUTING.md`). README's prose has no test: its
   "What logex is not" says plainly what logex does not do, a safety function first, each
   claim checked against the code, so a change that adds what it says logex lacks, an
   adapter, output forcing, a backward jump or a type among them, stales it.
