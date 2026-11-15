@@ -64,6 +64,9 @@ own documentation holds:
 - `elixir scripts/prose.exs [--review] [page...]` — the writing rules a script can
   measure, on the pages of `docs/pages.exs` under the rules or on those named, each
   failure `<file>:<line>: [rule] ... Write: <fix>`; `--kind <kind> <file>` reads a draft.
+- `mix run scripts/draw.exs [--check] [page...]` — draws the pictures the pages' marks
+  name, with `scripts/pictures.exs`: a ladder drawing from a `.ld` file's text and a timing
+  diagram from a run, each an SVG under `guides/assets/`.
 - `mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/` —
   regenerate the golden record, only in a commit that changes the language on purpose,
   and read the diff.
@@ -314,6 +317,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   refused once by each rule, each word and form the style guide replaces, what is not
   prose, the limits, a page's kind, the glossary's terms, what it counts for a reviewer,
   and every page under the rules passing.
+- `test/logex/pictures_test.exs` — `scripts/pictures.exs`: every `.ld` file under
+  `examples/` drawn, a drawing's elements its program's, a timing diagram's values a
+  run's, and each picture a page shows held to what its script gives today.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
