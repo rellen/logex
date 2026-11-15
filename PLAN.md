@@ -22065,7 +22065,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     `dev`, `test` and `prod`, and reads no dependency; the gate ran `GATE-OK` with an empty
     `MIX_HOME` too. `scripts/dialyzer.sh` analyses the `dev` build, which holds no ExDoc.
   - *The site* (`253cad3`). `docs/pages.exs` is the one list of pages, `{path, kind,
-    group}` a line, and every Markdown file of the repository has a line (`docs_test.exs`).
+    group}` a line, and every Markdown file of the repository has a line, a test's
+    fixture apart (`docs_test.exs`).
     `mix docs` is an alias: `elixir scripts/site.exs stage` copies the site's pages to
     `_build/docs/pages/`, each link to a file the site does not hold made a link to GitHub
     at `main`, and refuses a link to no file, an anchor no heading gives, a picture
@@ -22223,6 +22224,15 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
       page, so that each of the record's citations of it stays true. Options: (a),
       recommended, kept; (b) renamed `examples_test.exs` in step 2, the citations of the
       present rule changed and the history's left.
+
+  Smaller readings, provisional too, each kept as built unless the maintainer says
+  otherwise: no code block stands in a callout, since ExDoc shows its mark as text and
+  the suite reads no block there; a heading of a page under the writing rules gives one
+  anchor on GitHub and in the site, so it is written with letters, digits and single
+  spaces, "Scan / cycle" refused and a colon let through; the site's link from a function to its source goes to `main`, where the
+  site is published from, not to the commit built; a page's length is counted and not
+  refused; and no script follows the links of a document read on GitHub alone, which
+  step 2's contributor pages replace.
 
 - **DOC-2 — the module text rewritten** (decision 546 (a)). Each module's and function's
   text rewritten by DOC-1's style guide, each sentence the suite pins changed with its

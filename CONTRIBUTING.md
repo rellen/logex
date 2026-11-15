@@ -309,8 +309,9 @@ kind's template under `docs/templates/`. What it rests on, each held by a test:
 - **One list of pages.** `docs/pages.exs` has a line for every Markdown file of the
   repository, its kind and its place in the site; `mix.exs` builds the site from it, and
   a file with no line fails `test/logex/docs_test.exs`. The documents from before decision
-  546, this one among them, are listed `:legacy`: their links and examples are checked,
-  the writing rules are not, and they are read on GitHub, not in the site.
+  546, this one among them, are listed `:legacy`: the writing rules are not applied to
+  them, and all but README are read on GitHub, not in the site, where no script follows
+  their links; README's examples are run and its links followed, as a page's are.
 - **Every example is run.** The examples' test above reads every page that is not
   `:legacy`, each judged on what it shows. A file another page shows is given to a page's
   examples by a link the reader sees, ``[`motor.ld`](first-program.md)``; a block that is

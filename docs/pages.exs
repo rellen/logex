@@ -15,8 +15,9 @@
 #     :explanation   the model and the reasons, under guides/explanation/
 #     :contributor   how logex is built and how to work on it, under docs/
 #     :adr           a decision record, under docs/adr/
-#     :legacy        a document from before decision 546, in its own manner: its examples
-#                    are run and its links are checked, the writing rules are not applied
+#     :legacy        a document from before decision 546, in its own manner: the writing
+#                    rules are not applied to it. README's examples are run; no other
+#                    legacy document's blocks are read
 #
 # group: where the page stands in the site:
 #
@@ -25,7 +26,8 @@
 #     "Architecture and implementation", "Decision records", "Project"
 #                    the heading it is listed under, the headings in that order
 #     :github        not in the site: the page is read on GitHub, and a link to it from a
-#                    page of the site goes there
+#                    page of the site goes there. scripts/site.exs follows the links of
+#                    the site's pages alone, so no script follows a :github page's own
 #
 # A template, under docs/templates/, has the kind it is the template of, so that it is
 # checked by that kind's rules, and the group :github.
