@@ -1439,18 +1439,33 @@ defmodule Logex.ReadmeTest.Extraction do
       for at <- 1..count, do: page({"guides/a#{at}.md", :howto}, one)
     end
 
-    work = fn pages ->
+    # Each part by itself: a part that reads every page again for each page is lost in the
+    # sum, where the parts that grow as they should are the most of it.
+    parts = [
+      files: fn pages -> Examples.files_of(pages) end,
+      examples: fn pages -> Examples.all(pages) end,
+      problems: fn pages -> Examples.problems(pages) end,
+      held: fn pages ->
+        shown = Examples.files_of(pages)
+        for page <- pages, do: {Examples.held(page, shown), Examples.own_held(page, shown)}
+      end
+    ]
+
+    work = fn part, pages ->
       {:reductions, before} = Process.info(self(), :reductions)
-      shown = Examples.files_of(pages)
-      Examples.all(pages)
-      Examples.problems(pages)
-      for page <- pages, do: {Examples.held(page, shown), Examples.own_held(page, shown)}
+      part.(pages)
       {:reductions, after_work} = Process.info(self(), :reductions)
       after_work - before
     end
 
     {few, many} = {pages.(40), pages.(80)}
-    work.(few)
-    assert work.(many) / work.(few) < 2.6
+
+    grown =
+      for {name, part} <- parts do
+        work.(part, few)
+        {name, work.(part, many) / work.(part, few) < 2.6}
+      end
+
+    assert grown == [files: true, examples: true, problems: true, held: true]
   end
 end
