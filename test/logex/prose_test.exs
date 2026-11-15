@@ -60,9 +60,11 @@ defmodule Logex.ProseTest do
   end
 
   test "the page that breaks each rule once is refused once by each rule, with its line " <>
-         "and its fix" do
-    file = "test/fixtures/prose/every_rule.md"
-    assert {failures, [report], 1} = run(@root, ["--kind", "tutorial", file])
+         "and its fix",
+       %{tmp_dir: dir} do
+    file = "every_rule.md"
+    page = File.read!(Path.join(@root, "test/fixtures/prose/every_rule.md"))
+    assert {failures, [report], 1} = prose(dir, %{file => page}, ["--kind", "tutorial", file])
 
     assert failures ==
              Enum.map(

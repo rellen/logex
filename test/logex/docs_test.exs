@@ -117,9 +117,12 @@ defmodule Logex.DocsTest do
         {under, groups} = Map.get(@kinds, kind, {"", []}),
         problem <- [
           not Map.has_key?(@kinds, kind) && "#{path}: #{inspect(kind)} is no kind",
-          not String.starts_with?(path, under) && "#{path}: a #{kind} page lives under #{under}",
+          not String.starts_with?(path, [under, "docs/templates/"]) &&
+            "#{path}: a #{kind} page lives under #{under}",
           (kind == :adr or not String.starts_with?(path, "docs/adr/")) ||
             "#{path}: a page under docs/adr/ is an :adr",
+          (String.starts_with?(path, "docs/templates/") and group != :github) &&
+            "#{path}: a template is read on GitHub, :github",
           group not in ([:github, :first] ++ groups) &&
             "#{path}: a #{kind} page stands under #{Enum.join(groups, " or ")}, or :github",
           (group == :first and path != "README.md") && "#{path}: README.md alone is :first"
@@ -150,7 +153,8 @@ defmodule Logex.DocsTest do
     end
 
     test "each page's kind is one of the seven, its directory its kind's and its group one " <>
-           "its kind stands in; README alone is the first page" do
+           "its kind stands in; README alone is the first page; a template is of the kind " <>
+           "it is the template of, and read on GitHub" do
       assert wrong(pages()) == []
       assert [{"README.md", _, :first}] = for({_, _, :first} = page <- pages(), do: page)
     end
@@ -165,6 +169,8 @@ defmodule Logex.DocsTest do
                {"docs/adr/0001-e.md", :contributor, "Project"},
                {"docs/f.md", :contributor, :first},
                {"docs/g.md", :contributor, :github},
+               {"docs/templates/howto.md", :howto, :github},
+               {"docs/templates/tutorial.md", :tutorial, "Tutorials"},
                {"PLAN.md", :legacy, :github}
              ]) == [
                "guides/howto/b.md: :lesson is no kind",
@@ -172,7 +178,8 @@ defmodule Logex.DocsTest do
                "guides/howto/c.md: a tutorial page lives under guides/tutorials/",
                "guides/reference/d.md: a reference page stands under Reference, or :github",
                "docs/adr/0001-e.md: a page under docs/adr/ is an :adr",
-               "docs/f.md: README.md alone is :first"
+               "docs/f.md: README.md alone is :first",
+               "docs/templates/tutorial.md: a template is read on GitHub, :github"
              ]
     end
   end

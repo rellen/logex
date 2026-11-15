@@ -4,7 +4,8 @@
 # page's pictures with it, and test/logex/pictures_test.exs holds each picture a page shows
 # to what it gives.
 #
-# A page names a picture's source on the line straight above the picture:
+# A page names a picture's source on the line straight above the picture, outside every
+# code block:
 #
 #     <!-- rung: motor.ld -->
 #     ![The motor program as a ladder diagram.](../assets/motor.svg)
@@ -53,46 +54,62 @@ defmodule Pictures do
   # The pictures a page's marks name, `{line, svg path, kind, source, rungs}`, and what is
   # wrong with its marks, each `<page>:<line>: ...`.
   def of(page, text) do
-    lines = text |> String.split("\n") |> Enum.with_index(1)
+    {found, problems, _, _} =
+      text
+      |> String.split("\n")
+      |> Enum.with_index(1)
+      |> Enum.reduce({[], [], nil, nil}, fn {line, n}, {found, problems, mark, fence} ->
+        case {fence, Regex.run(~r/^\s*(`{3,}|~{3,})/, line)} do
+          {nil, [_, marker]} ->
+            {found, problems, mark, marker}
 
-    {found, problems, _} =
-      Enum.reduce(lines, {[], [], nil}, fn {line, n}, {found, problems, mark} ->
-        case {mark, Regex.run(@mark, line), Regex.run(@image, line)} do
-          {_, [_, kind, source, rungs], _} ->
-            {found, problems, {kind, source, numbers(rungs)}}
+          {nil, nil} ->
+            {found, problems, mark} = line(line, n, page, {found, problems, mark})
+            {found, problems, mark, nil}
 
-          {{kind, source, rungs}, nil, [_, target]} ->
-            svg = resolve(page, target)
-
-            if String.starts_with?(svg, @assets <> "/") and Path.extname(svg) == ".svg" do
-              {[{n, svg, kind, source, rungs} | found], problems, nil}
-            else
-              {found,
-               ["#{page}:#{n}: a picture a script makes is an .svg under #{@assets}/" | problems],
-               nil}
-            end
-
-          {{kind, _source, _rungs}, nil, nil} ->
-            {found,
-             ["#{page}:#{n}: no picture follows the `#{kind}` mark above this line" | problems],
-             nil}
-
-          {nil, nil, [_, target]} ->
-            if String.match?(target, ~r/^[a-z]+:/) do
-              {found, problems, nil}
-            else
-              why =
-                "a picture with no `rung` or `timing` mark on the line above it: a script makes every picture"
-
-              {found, ["#{page}:#{n}: #{why}" | problems], nil}
-            end
-
-          {nil, nil, nil} ->
-            {found, problems, nil}
+          {marker, _} ->
+            closed = if String.trim(line) == marker, do: nil, else: marker
+            {found, problems, mark, closed}
         end
       end)
 
     {Enum.reverse(found), Enum.reverse(problems)}
+  end
+
+  # A line outside a code block: a mark, the picture a mark names, or neither.
+  defp line(line, n, page, {found, problems, mark}) do
+    case {mark, Regex.run(@mark, line), Regex.run(@image, line)} do
+      {_, [_, kind, source, rungs], _} ->
+        {found, problems, {kind, source, numbers(rungs)}}
+
+      {{kind, source, rungs}, nil, [_, target]} ->
+        svg = resolve(page, target)
+
+        if String.starts_with?(svg, @assets <> "/") and Path.extname(svg) == ".svg" do
+          {[{n, svg, kind, source, rungs} | found], problems, nil}
+        else
+          {found,
+           ["#{page}:#{n}: a picture a script makes is an .svg under #{@assets}/" | problems],
+           nil}
+        end
+
+      {{kind, _source, _rungs}, nil, nil} ->
+        {found,
+         ["#{page}:#{n}: no picture follows the `#{kind}` mark above this line" | problems], nil}
+
+      {nil, nil, [_, target]} ->
+        if String.match?(target, ~r/^[a-z]+:/) do
+          {found, problems, nil}
+        else
+          why =
+            "a picture with no `rung` or `timing` mark on the line above it: a script makes every picture"
+
+          {found, ["#{page}:#{n}: #{why}" | problems], nil}
+        end
+
+      {nil, nil, nil} ->
+        {found, problems, nil}
+    end
   end
 
   defp numbers(rungs),

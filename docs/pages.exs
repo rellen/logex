@@ -26,8 +26,19 @@
 #                    the heading it is listed under, the headings in that order
 #     :github        not in the site: the page is read on GitHub, and a link to it from a
 #                    page of the site goes there
+#
+# A template, under docs/templates/, has the kind it is the template of, so that it is
+# checked by that kind's rules, and the group :github.
 [
   {"README.md", :legacy, :first},
+  {"guides/reference/glossary.md", :reference, "Reference"},
+  {"docs/style-guide.md", :contributor, "Project"},
+  {"docs/templates/tutorial.md", :tutorial, :github},
+  {"docs/templates/howto.md", :howto, :github},
+  {"docs/templates/reference.md", :reference, :github},
+  {"docs/templates/explanation.md", :explanation, :github},
+  {"docs/templates/contributor.md", :contributor, :github},
+  {"docs/templates/adr.md", :adr, :github},
   {"CONTRIBUTING.md", :legacy, :github},
   {"CHANGELOG.md", :legacy, :github},
   {"PLAN.md", :legacy, :github},

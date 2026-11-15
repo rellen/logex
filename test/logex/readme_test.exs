@@ -26,7 +26,9 @@ defmodule Logex.ReadmeTest.Examples do
   @examples Path.expand("../../examples", __DIR__)
   @mark ~r/^\s*<!-- (file|part of|fragment|unchecked): (\S.*?) -->\s*$/
   @fence ~r/^(\s*)(`{3,})(\w*)\s*$/
-  @run ~r/\A\$ mix run (\S+)\n/
+  # A script's run, `$ mix run scan.exs`; a command that runs one of the repository's own
+  # scripts, `$ mix run scripts/draw.exs`, is no example.
+  @run ~r/\A\$ mix run (?!scripts\/)(\S+)\n/
   @needs ~r/\[`([^`\]]+)`\]\(([^)#\s]+\.(?:md|cheatmd))(?:#[^)\s]*)?\)/
   # The languages of a block the suite does not hold: a command line, a diagram, Markdown
   # shown as Markdown, and data of another tool.
@@ -200,7 +202,7 @@ defmodule Logex.ReadmeTest.Examples do
   def unrun(page) do
     blocks = fenced(page.blocks)
 
-    for {{n, "elixir", body, mark}, next} <- Enum.zip(blocks, tl(blocks) ++ [nil]),
+    for {{n, "elixir", body, mark}, next} <- Enum.zip(blocks, Enum.drop(blocks, 1) ++ [nil]),
         mark == nil or match?({"fragment", _}, mark),
         not runs?(next),
         do: {n, hd(String.split(body, "\n")), body}
@@ -664,7 +666,7 @@ for page <- Logex.ReadmeTest.Examples.pages() do
 
     test "every `$ mix run` #{@path} shows is an example, and every file a mark names is one" do
       own = Examples.own(page())
-      shown = for [_, name] <- Regex.scan(~r/^\s*\$ mix run (\S+)$/m, own), do: name
+      shown = for [_, name] <- Regex.scan(~r/^\s*\$ mix run (?!scripts\/)(\S+)$/m, own), do: name
       assert Enum.map(examples(), & &1.name) == shown
 
       marked = for [_, path] <- Regex.scan(~r/^\s*<!-- file: (\S+) -->$/m, own), do: path
@@ -840,8 +842,17 @@ defmodule Logex.ReadmeTest.Extraction do
     assert Examples.files(page) == %{}
   end
 
-  test "a `$ mix run` that does not follow its script is a problem, and no example" do
-    page = page(@first, shows("motor.ld") ++ ["```console", "$ mix run scan.exs", "1", "```"])
+  test "a `$ mix run` that does not follow its script is a problem, and no example; a " <>
+         "command that runs one of the repository's own scripts is neither" do
+    own = [
+      "```console",
+      "$ mix run scripts/draw.exs guides/a.md",
+      "drawn guides/assets/a.svg",
+      "```"
+    ]
+
+    page =
+      page(@first, shows("motor.ld") ++ ["```console", "$ mix run scan.exs", "1", "```"] ++ own)
 
     assert Examples.problems([page]) ==
              [
@@ -900,6 +911,10 @@ defmodule Logex.ReadmeTest.Extraction do
       ])
 
     assert Examples.marked(page) == ["Logex.compile(source)"]
+
+    # A page with no block has no fragment, no example and no problem.
+    bare = page(@second, ["# A page", "", "No block."])
+    assert {Examples.unrun(bare), Examples.all([bare]), Examples.problems([bare])} == {[], [], []}
 
     assert Examples.unrun(page) == [
              {2, "Logex.compile(source)", "Logex.compile(source)\n"},

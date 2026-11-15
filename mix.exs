@@ -111,9 +111,23 @@ defmodule Logex.MixProject do
         "Other modules, which do not check their arguments": @unguarded
       ],
       assets: %{"guides/assets" => "assets"},
+      before_closing_head_tag: &before_closing_head_tag/1,
       before_closing_body_tag: &before_closing_body_tag/1
     ]
   end
+
+  # A picture a script makes is shown at its own size, and its paragraph scrolls where the
+  # page is narrower, a phone's: shrunk to the page its text would be too small to read.
+  defp before_closing_head_tag(:html) do
+    """
+    <style>
+      .content-inner p:has(> img[src^="assets/"]) { overflow-x: auto; }
+      .content-inner img[src^="assets/"] { max-width: none; }
+    </style>
+    """
+  end
+
+  defp before_closing_head_tag(_format), do: ""
 
   # A `mermaid` block of a page, drawn in the reader's browser by Mermaid, in the theme the
   # page is shown in and again when the reader changes it (ExDoc's own recipe, and its

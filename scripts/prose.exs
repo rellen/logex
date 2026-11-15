@@ -46,8 +46,8 @@
 #
 # What it cannot see, it counts for a reviewer and never fails (`--review` gives each
 # place): a passive verb, which a script cannot tell from a state ("the rung is true");
-# and a term of the glossary a page uses with no link to the glossary, which the page
-# perhaps defines itself. It reads no dictionary: it does not certify a page as
+# and a term of the glossary a page other than the glossary uses with no link to the
+# glossary, which the page perhaps defines itself. It reads no dictionary: it does not certify a page as
 # Simplified Technical English, and a wrong sense of a word, a noun cluster or a
 # missing article passes it. There is no way to switch it off inside a page. A script,
 # not a test: it uses `case` freely.
@@ -233,7 +233,7 @@ defmodule Prose do
       quotations: read |> Enum.map(& &1.quotations) |> Enum.sum(),
       unchecked: marks,
       passive: for(unit <- read, hit <- hits(unit, @passive), do: hit),
-      unlinked: Enum.sort(used -- linked)
+      unlinked: if(file == @glossary, do: [], else: Enum.sort(used -- linked))
     }
   end
 
