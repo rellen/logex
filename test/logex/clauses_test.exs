@@ -20,7 +20,7 @@ defmodule Logex.ClausesTest do
   @kinds [:case, :cond, :if, :unless]
   @defs [:def, :defp, :defmacro, :defmacrop]
   @kernel [[:Kernel], [:Kernel, :SpecialForms]]
-  @each_example "Module.concat(Logex.ReadmeTest, Macro.camelize(Path.rootname(example.name)))"
+  @each_example "Module.concat(Logex.ReadmeTest, Logex.ReadmeTest.Examples.named(example))"
   @top "the file's top level"
 
   test "a walk's conditional lies only in a draw its module names, and each draw named is one of its functions" do

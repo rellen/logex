@@ -283,12 +283,16 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   asserting its reach.
 - `test/logex/clauses_test.exs` — the clauses rule (Conventions) read from the syntax
   trees of `lib/`, the walks, the end-to-end tests, the README harness and the examples.
-- `test/logex/readme_test.exs` — every example in `README.md`, each `elixir` block a
-  `$ mix run` follows, run from its files under `examples/` in a fresh VM and its output
-  compared with README's, each block held to its file there, `examples/scan.exs` run by
-  `mix run` through `examples/mix.exs`, and every other `elixir` block a fragment it
-  names and parses, and runs in a setup it makes where it gives one, held to README's
-  prose (`CONTRIBUTING.md`, "Landing work stales the plan").
+- `test/logex/readme_test.exs` — every example of every page, README's and each page's of
+  `docs/pages.exs` that is not a legacy document, each page read on its own: each `elixir`
+  block a `$ mix run` follows run from its files under `examples/` in a fresh VM and its
+  output compared with its page's, each block held to its file there, a file another page
+  shows given by a link the reader sees, `examples/scan.exs` run by `mix run` through
+  `examples/mix.exs`, every other `elixir` block a fragment its page or the test names and
+  parses, and runs in a setup the test makes where it gives one, held to the page's prose,
+  and on a page under the writing rules every block held or marked as not
+  (`CONTRIBUTING.md`, "Landing work stales the plan"); `--only reading:<page>` reads one
+  page's blocks and marks with no script run, `--only page:<page>` runs its examples too.
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
   each test's line read from its file, CI's workflow held to every gate and its test step
   run as written, `scripts/gate.sh` over a stand-in `mix`, and CI's Dialyzer step and
@@ -386,11 +390,12 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - **A new syntax form** goes into `printer_test.exs`'s generator and `@required_shapes`
   before it lands, and the golden record stays green; nothing checks the grammar for
   ambiguity but those.
-- **The README is checked.** A language change stales its syntax list, instruction table
-  and examples; each example's output is compared by `readme_test.exs`, a file an example
-  reads is marked `<!-- file: path -->` above its block, each block is its file under
-  `examples/`, changed with it, and an `elixir` block shown with
-  no output is a fragment the test names (`CONTRIBUTING.md`). Its prose has no test: its
+- **The pages are checked.** A language change stales README's syntax list and instruction
+  table and the pages' examples; each example's output is compared by `readme_test.exs`,
+  on whichever page shows it, a file an example reads is marked `<!-- file: path -->`
+  above its block or linked to the page that shows it, each block is its file under
+  `examples/`, changed with it, and an `elixir` block shown with no output is a fragment
+  its page marks or the test names (`CONTRIBUTING.md`). README's prose has no test: its
   "What logex is not" says plainly what logex does not do, a safety function first, each
   claim checked against the code, so a change that adds what it says logex lacks, an
   adapter, output forcing, a backward jump or a type among them, stales it.
