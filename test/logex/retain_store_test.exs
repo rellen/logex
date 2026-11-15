@@ -483,7 +483,8 @@ defmodule Logex.RetainStoreTest do
             "s: line 2: the store is of configuration `other`, and this configuration is " <>
               "`plant`: a store starts only the configuration it was written for, so a " <>
               "renamed configuration starts only cold: start it with start: :cold to start " <>
-              "over it",
+              "over it, which copies it first to the next `.dropped.<n>` beside it and then " <>
+              "writes a new store over it",
             "s: line 2: `junk` is no time a store is written at, in UTC, as 2026-10-27T14:00:00Z",
             "s: line 3: `foo` is no type of a retained value: an elementary type's word, or " <>
               "an array of one, as `int[8]`",
@@ -2440,7 +2441,9 @@ defmodule Logex.RetainStoreTest do
       raises(
         "#{rig.store}: line 2: the store is of configuration `line2`, and this configuration " <>
           "is `plant`: a store starts only the configuration it was written for, so a " <>
-          "renamed configuration starts only cold: start it with start: :cold to start over it",
+          "renamed configuration starts only cold: start it with start: :cold to start over " <>
+          "it, which copies it first to the next `.dropped.<n>` beside it and then writes a " <>
+          "new store over it",
         fn -> Runner.start_link(rig.opts) end
       )
 
@@ -4180,6 +4183,97 @@ defmodule Logex.RetainStoreTest do
       raises("#{shown}: line 1: #{@names_none}", fn ->
         Retain.decoded!(counted.([header, named | values]), {wide, "plant"})
       end)
+    end
+
+    # Decision 545 (RV-29): a store of another configuration, as a renamed configuration's
+    # is, is told the full way out, "start it with start: :cold to start over it, which
+    # copies it first to the next `.dropped.<n>` beside it and then writes a new store over
+    # it", where it ended "start it with start: :cold to start over it" and said nothing of
+    # the copy, so that every refusal that tells a way out tells the same words; and a store
+    # refused for what a hand can mend, a junk line, a digest mistyped or a miscount, tells
+    # none, so that an operator mends it and keeps the count. The way out is told once a
+    # refusal, at the first line that tells it (provisional, `PLAN.md`'s RV-29): a store
+    # told the renamed configuration beside a naming refusal, decision 531's, 535's or
+    # 539's, or beside a cut, is told it at line 2, or at line 1 where 535's comes first,
+    # the other line ending at what is missing. Through the runner, a warm start is refused
+    # so, no device read or written, and a cold start copies the store first, as the way
+    # out says, and starts from the initial values.
+    test "the renamed configuration's refusal ends with the full way out, told once, and a " <>
+           "refusal for what a hand can mend tells none",
+         %{tmp_dir: dir} do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+      other = String.replace(named, "configuration plant", "configuration line_2")
+      untold = &String.replace_suffix(&1, ": " <> @way_out, "")
+
+      renamed =
+        "the store is of configuration `line_2`, and this configuration is `plant`: a store " <>
+          "starts only the configuration it was written for, so a renamed configuration " <>
+          "starts only cold"
+
+      raises("s: line 2: #{renamed}: #{@way_out}", fn ->
+        Retain.decoded!(counted.([header, other, resource, program | values]), {"s", "plant"})
+      end)
+
+      # Beside a naming refusal, or a cut, the way out told once, at the first line that
+      # tells it.
+      cut = Enum.join([header, other, resource, program | values], "\n") <> "\n"
+
+      for {text, told} <- [
+            {counted.([header, other, resource | values]),
+             "s: line 2: #{renamed}: #{@way_out}\n" <>
+               "s: line 3: #{untold.(names_no_program(resource))}"},
+            {counted.([header, other, program | values]),
+             "s: line 2: #{renamed}: #{@way_out}\n" <>
+               "s: line 3: #{untold.(names_no_resource(program))}"},
+            {counted.([header, other | values]),
+             "s: line 1: #{@names_none}\ns: line 2: #{renamed}"},
+            {cut,
+             "s: line 2: #{renamed}: #{@way_out}\n" <>
+               "s: line #{length(values) + 4}: #{untold.(cut_short(List.last(values)))}"}
+          ] do
+        raises(told, fn -> Retain.decoded!(text, {"s", "plant"}) end)
+        message = refused(fn -> Retain.decoded!(text, {"s", "plant"}) end)
+        assert length(String.split(message, @way_out)) == 2
+      end
+
+      # What a hand can mend tells no way out: a junk line, a digest mistyped, a miscount.
+      for text <- [
+            counted.([header, named, resource, program, "junk" | values]),
+            counted.([header, named, resource, "program tally zz" | values]),
+            Enum.join([header, named, resource, program | values], "\n") <> "\nend 99 lines\n"
+          ] do
+        message = refused(fn -> Retain.decoded!(text, {"s", "plant"}) end)
+        refute message =~ "start: :cold", message
+      end
+
+      # Through the runner.
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      assert [2, 2 | _] = values(runner)
+      assert Runner.stop(runner) == :ok
+      store = String.replace(File.read!(rig.store), "configuration plant", "configuration line_2")
+      File.write!(rig.store, store)
+      opener_down(rig.panel)
+      devices = {Sim.reads(rig.panel), Sim.writes(rig.panel)}
+
+      raises("#{rig.store}: line 2: #{renamed}: #{@way_out}", fn ->
+        Runner.start_link(rig.opts)
+      end)
+
+      assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == devices
+      assert File.read!(rig.store) == store
+      {:ok, runner} = Runner.start_link(rig.opts ++ [start: :cold])
+      assert Runner.status(runner).retain.copy == rig.store <> ".dropped.1"
+      assert File.read!(rig.store <> ".dropped.1") == store
+      assert [0, 0 | _lamp_and_shown] = values(runner)
+      assert Runner.stop(runner) == :ok
+      assert "logex retain 3\nconfiguration plant written " <> _ = File.read!(rig.store)
     end
 
     # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no

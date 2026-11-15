@@ -4784,7 +4784,10 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   `program` line so beside 531's.)* *(Decisions 541 to 545, RV-29, 2026-11-15: a store
   that names a type and no resource waits for its count as the other two partial forms
   do, a store miscounted or cut short told its end line alone and 531's refusal at the
-  next try, the way out once, where it was told beside the count (544).)*
+  next try, the way out once, where it was told beside the count (544); and the renamed
+  configuration's refusal ends with the full way out, which copies the store first, the
+  way out told once a refusal, at the first line that tells it (provisional, `PLAN.md`'s
+  RV-29), a refusal for what a hand can mend telling none (545).)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

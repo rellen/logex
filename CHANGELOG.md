@@ -171,8 +171,10 @@ the host's API is README's, so this first entry lists neither apart.
   program's text, a version 3 store that names no program refused, and an end line under
   any header that takes none told as one; RV-28's, decisions 539 and 540, a version 3
   store that names its resource and no program refused, and each refusal of the lines
-  that name a store's program ending with the way to start cold; and RV-29's, decision
-  544, a store that names a program type and no resource, its count not mended or the
-  store cut short too, told its count or its cut alone and the missing resource once the
-  count is mended, as a store that names no program or its resource alone is, so the way
-  to start cold is told once.
+  that name a store's program ending with the way to start cold; and RV-29's, decisions
+  544 and 545, a store that names a program type and no resource, its count not mended or
+  the store cut short too, told its count or its cut alone and the missing resource once
+  the count is mended, as a store that names no program or its resource alone is, and a
+  store of a renamed configuration told the full way to start cold, which copies the
+  store first, where it said nothing of the copy, that way out told once a refusal and a
+  store refused for what a hand can mend told none.

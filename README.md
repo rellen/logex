@@ -3464,7 +3464,7 @@ fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
 tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; whether by a deploy of changed files, or an edit tested or assembled online that never reached the files, this start runs the program it was given, with the store's retained values laid over it by name and type
-tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
+tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
@@ -3531,14 +3531,18 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the store. Each of the three refusals, 531's, 535's and 539's, ends as a cut store's
   does, with the way to start anyway, "start it with start: :cold to start over it, which
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
-  it" (decision 540). Where the count of a store that names its program in part or not
-  at all does not read either, its count not mended or the store cut short too, the count
-  or the cut is told alone, and the missing lines once it is mended, one rule for the
-  three, so the way out is told once (decisions 538 and 544), an empty line an editor left
-  after an end line whose count reads told beside them. A `resource` or
-  `program` line that does not read, its digest mistyped, is told as itself, not as one
-  missing; beside a good line of its own kind, it is told beside the refusal of the kind
-  that is missing. A logex from
+  it" (decision 540), and so does a store of another configuration's, a renamed
+  configuration's, as `kept.exs` shows above (decision 545), the way out told once a
+  refusal, at the first line that tells it (provisional); a store refused for what a hand
+  can mend, a junk line, a digest mistyped or a miscount, is told none, so that it is
+  mended and keeps its count, where a cold start sets the count back to its initial value.
+  Where the count of a store that names its program in part or not at all does not read
+  either, its count not mended or the store cut short too, the count or the cut is told
+  alone, and the missing lines once it is mended, one rule for the three, so the way out
+  is told once (decisions 538 and 544), an empty line an editor left after an end line
+  whose count reads told beside them. A `resource` or `program` line that does not read,
+  its digest mistyped, is told as itself, not as one missing; beside a good line of its
+  own kind, it is told beside the refusal of the kind that is missing. A logex from
   before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it
