@@ -396,13 +396,13 @@ store that names its resource and no program refused, and every refusal of the l
 that name a store's program ending with the way to start cold. The maintainer answered
 RV-22's and RV-28's questions on 2026-11-15, decisions 541–545: no release for now, the
 changelog naming every decision at every commit, and the refusal of a store that names its
-resource and no program told at its resource line. Waiting: RV-29, a store with no
+resource and no program told at its resource line, and RV-29 has landed: a store with no
 resource line whose count does not read told its count first, and a renamed
-configuration's refusal ending with the full way out; typespecs with Dialyzer; and the
-runner split by concern. And DOC-1, decisions 546–548: this file made short, its details
-moved into guides built with ExDoc, tutorials, how-to guides, reference and explanation,
-and into contributor pages with a curated set of decision records, the site published on
-GitHub Pages.
+configuration's refusal ending with the full way out. Waiting: typespecs with Dialyzer;
+and the runner split by concern. And DOC-1, decisions 546–548: this file made short, its
+details moved into guides built with ExDoc, tutorials, how-to guides, reference and
+explanation, and into contributor pages with a curated set of decision records, the site
+published on GitHub Pages.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
