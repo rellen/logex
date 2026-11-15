@@ -59,7 +59,8 @@ own documentation holds:
   `docs/pages.exs` ready (`elixir scripts/site.exs stage`, refusing a page's link that leads
   to no file or heading) and then runs ExDoc in the `docs` environment, and `elixir
   scripts/site.exs check <log>`, which holds the build's warnings and the built site's dead
-  links to the lines of `docs/site-warnings.txt`.
+  links to the lines of `docs/site-warnings.txt`. `.github/workflows/docs.yml` runs it and
+  publishes the site from `main`.
 - `mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/` —
   regenerate the golden record, only in a commit that changes the language on purpose,
   and read the diff.
@@ -299,7 +300,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   outside the `docs` environment, read by a `mix` with no Hex, and `mix.lock` ExDoc's alone;
   `docs/pages.exs`, the one list of pages, held to every Markdown file, each page's kind to
   its directory and group; `mix.exs`'s site read from it, the host contract's modules
-  first; each refusal of `scripts/site.exs`; and `scripts/docs.sh` over a stand-in `mix`.
+  first; each refusal of `scripts/site.exs`; `scripts/docs.sh` over a stand-in `mix`; and
+  `.github/workflows/docs.yml`, its keys, toolchain and permissions, its question to
+  GitHub run as written.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 

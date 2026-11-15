@@ -11,8 +11,9 @@ defmodule Logex.DocsTest do
   it, README first, the host contract's modules first and apart; `scripts/site.exs`, run
   as `mix docs` and `scripts/docs.sh` run it, over small trees of the test's own, each
   refusal of its `stage` and its `check`, and over the repository's pages; `scripts/docs.sh`
-  over a stand-in `mix`. The site itself is built by `scripts/docs.sh`, a build too slow
-  for the suite.
+  over a stand-in `mix`; and `.github/workflows/docs.yml`, its keys, its toolchain, its
+  permissions, and its question to GitHub run as written over a stand-in `gh`. The site
+  itself is built by the workflow, a build too slow for the suite.
   """
   use ExUnit.Case, async: true
 
@@ -646,6 +647,221 @@ defmodule Logex.DocsTest do
     test "ExDoc not fetched stops the rest", %{tmp_dir: dir} do
       assert {"DOCS-FAIL rc=3\n", 3, "local.hex unset stale\ndeps.get docs stale\n"} =
                run_docs(dir, %{"deps.get" => 3}, "")
+    end
+  end
+
+  # ---- .github/workflows/docs.yml ----
+
+  # A workflow's lines that hold anything, comments and blank lines dropped.
+  defp workflow(name) do
+    @root
+    |> Path.join(".github/workflows/#{name}")
+    |> File.read!()
+    |> String.split("\n")
+    |> Enum.reject(&(String.trim(&1) == "" or String.starts_with?(String.trim(&1), "#")))
+  end
+
+  # The keys among `lines` written at `indent`, a list item's first with its `- `.
+  defp keys_at(lines, indent) do
+    for line <- lines,
+        [_, key] <- [Regex.run(~r/^ {#{indent}}((?:- )?[A-Za-z_-]+):/, line)],
+        do: key
+  end
+
+  # The lines from the one `heading` to the next at its indentation or less.
+  defp under(lines, heading) do
+    [line | rest] = Enum.drop_while(lines, &(&1 != heading))
+    indent = byte_size(line) - byte_size(String.trim_leading(line))
+    Enum.take_while(rest, &(byte_size(&1) - byte_size(String.trim_leading(&1)) > indent))
+  end
+
+  # A job's steps, each its lines.
+  defp steps(job) do
+    job
+    |> under("    steps:")
+    |> Enum.chunk_while(
+      [],
+      fn
+        "      - " <> _ = line, [] -> {:cont, [line]}
+        "      - " <> _ = line, acc -> {:cont, Enum.reverse(acc), [line]}
+        line, acc -> {:cont, [line | acc]}
+      end,
+      &{:cont, Enum.reverse(&1), []}
+    )
+  end
+
+  defp step_keys(step) do
+    ["- " <> first | keys] = keys_at(step, 6) ++ keys_at(step, 8)
+    [first | keys]
+  end
+
+  # The text of a step's `run: |` block.
+  defp script(step) do
+    [line | block] = Enum.drop_while(step, &(not String.match?(&1, ~r/^\s*run: \|$/)))
+    at = byte_size(line) - byte_size(String.trim_leading(line))
+    Enum.map_join(block, "\n", &String.slice(&1, (at + 2)..-1//1)) <> "\n"
+  end
+
+  # Runs the workflow's question to GitHub as GitHub runs a `shell: bash` step, over a `gh`
+  # of the test's own that answers `answer` and exits `rc`: what the step printed, its
+  # exit code, what it wrote to GITHUB_OUTPUT and what it asked.
+  defp ask(dir, ref, answer, rc) do
+    [step] =
+      Enum.filter(steps(under(workflow("docs.yml"), "  build:")), fn [name | _] ->
+        name == "      - name: Ask GitHub whether Pages publishes from GitHub Actions"
+      end)
+
+    bin = Path.join(dir, "bin")
+    File.mkdir_p!(bin)
+
+    File.write!(Path.join(bin, "gh"), """
+    #!/usr/bin/env bash
+    echo "$*" > asked
+    echo '#{answer}'
+    exit #{rc}
+    """)
+
+    File.chmod!(Path.join(bin, "gh"), 0o755)
+    File.write!(Path.join(dir, "step.sh"), script(step))
+    File.write!(Path.join(dir, "output"), "")
+
+    {out, code} =
+      System.cmd("bash", ["--noprofile", "--norc", "-eo", "pipefail", "step.sh"],
+        cd: dir,
+        stderr_to_stdout: true,
+        env: [
+          {"PATH", Enum.join([bin, System.get_env("PATH")], ":")},
+          {"GITHUB_REPOSITORY", "someone/logex"},
+          {"GITHUB_REF", ref},
+          {"GITHUB_OUTPUT", Path.join(dir, "output")}
+        ]
+      )
+
+    {out, code, File.read!(Path.join(dir, "output")), File.read!(Path.join(dir, "asked"))}
+  end
+
+  describe ".github/workflows/docs.yml (decision 548)" do
+    test "every push and pull request builds the site by scripts/docs.sh, the step no key " <>
+           "but its name and run, no job or step that skips it or lets its failure pass" do
+      lines = workflow("docs.yml")
+      build = under(lines, "  build:")
+
+      assert {keys_at(lines, 0), under(lines, "on:"), keys_at(lines, 2), keys_at(build, 4),
+              Enum.map(steps(build), &step_keys/1)} ==
+               {["name", "on", "permissions", "jobs"], ["  push:", "  pull_request:"],
+                ["push", "pull_request", "contents", "build", "publish"],
+                ["runs-on", "permissions", "env", "outputs", "steps"],
+                [
+                  ["uses"],
+                  ["name", "id", "uses", "with"],
+                  ["name", "uses", "with"],
+                  ["name", "run"],
+                  ["name", "id", "if", "shell", "env", "run"],
+                  ["name", "if", "uses"],
+                  ["name", "if", "uses", "with"]
+                ]}
+
+      assert Enum.at(steps(build), 3) == [
+               "      - name: scripts/docs.sh",
+               "        run: scripts/docs.sh"
+             ]
+
+      refute Enum.any?(lines, &(&1 =~ "continue-on-error"))
+    end
+
+    test "its toolchain is the pair CI pins, set up as CI sets it up" do
+      [ci, docs] =
+        for name <- ["ci.yml", "docs.yml"] do
+          lines = workflow(name)
+          setup = Enum.drop_while(lines, &(&1 != "      - name: Set up Erlang/OTP and Elixir"))
+          {under(lines, "    env:"), Enum.take(setup, 6)}
+        end
+
+      assert docs == ci
+
+      assert elem(docs, 0) == [
+               ~S|      OTP_VERSION: "28"|,
+               ~S|      ELIXIR_VERSION: "1.20.4"|
+             ]
+    end
+
+    test "its permissions are the least: the contents read, Pages read by the build, and " <>
+           "Pages written and an identity token by the publish alone" do
+      lines = workflow("docs.yml")
+
+      assert {under(lines, "permissions:"), under(under(lines, "  build:"), "    permissions:"),
+              under(under(lines, "  publish:"), "    permissions:")} ==
+               {["  contents: read"], ["      contents: read", "      pages: read"],
+                ["      pages: write", "      id-token: write"]}
+    end
+
+    test "the publish is GitHub's three actions, each only where the build found Pages " <>
+           "ready, the publish job after the build" do
+      lines = workflow("docs.yml")
+      build = steps(under(lines, "  build:"))
+      publish = under(lines, "  publish:")
+      ready = "        if: steps.pages.outputs.publish == 'true'"
+
+      assert Enum.take(Enum.at(build, 5), 3) ==
+               [
+                 "      - name: Configure GitHub Pages",
+                 ready,
+                 "        uses: actions/configure-pages@v6"
+               ]
+
+      assert Enum.at(build, 6) == [
+               "      - name: Upload the site",
+               ready,
+               "        uses: actions/upload-pages-artifact@v5",
+               "        with:",
+               "          path: doc"
+             ]
+
+      assert Enum.take(publish, 2) ==
+               ["    needs: build", "    if: needs.build.outputs.publish == 'true'"]
+
+      assert [["      - name: Publish to GitHub Pages", "        id: deployment", uses]] =
+               steps(publish)
+
+      assert uses == "        uses: actions/deploy-pages@v5"
+
+      assert under(under(lines, "  build:"), "    outputs:") ==
+               ["      publish: ${{ steps.pages.outputs.publish }}"]
+    end
+
+    test "a push to main where Pages publishes from GitHub Actions is published",
+         %{tmp_dir: dir} do
+      assert ask(dir, "refs/heads/main", "workflow", 0) ==
+               {"GitHub Pages for someone/logex: workflow; this push is to refs/heads/main\n", 0,
+                "publish=true\n", "api repos/someone/logex/pages --jq .build_type\n"}
+    end
+
+    test "a push to main where Pages is off, or its source is a branch, publishes nothing, " <>
+           "says so in a notice and passes",
+         %{tmp_dir: dir} do
+      notice =
+        "::notice title=The site was built and not published::GitHub Pages is off for " <>
+          "someone/logex, or its source is not GitHub Actions. To publish: Settings, Pages, " <>
+          "Build and deployment, Source: GitHub Actions.\n"
+
+      assert {out, 0, "publish=false\n", _} = ask(dir, "refs/heads/main", "legacy", 0)
+
+      assert out ==
+               "GitHub Pages for someone/logex: legacy; this push is to refs/heads/main\n" <>
+                 notice
+
+      assert {out, 0, "publish=false\n", _} =
+               ask(dir, "refs/heads/main", ~S|{"message":"Not Found"}|, 1)
+
+      assert out ==
+               "GitHub Pages for someone/logex: off; this push is to refs/heads/main\n" <> notice
+    end
+
+    test "a push to any other branch publishes nothing and gives no notice", %{tmp_dir: dir} do
+      assert ask(dir, "refs/heads/backup/doc1", "workflow", 0) ==
+               {"GitHub Pages for someone/logex: workflow; this push is to " <>
+                  "refs/heads/backup/doc1\n", 0, "publish=false\n",
+                "api repos/someone/logex/pages --jq .build_type\n"}
     end
   end
 
