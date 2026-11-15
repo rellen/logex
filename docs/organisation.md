@@ -15657,6 +15657,21 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      IEC 61131-3 says nothing of a manual's shape. Rockwell splits its Logix manuals the
      same way: a quick start, a programming manual and an instruction reference.
 
+     *(Built by DOC-1's step 1, 2026-11-15, `c69e100` to `d6d07c1`, the foundation and one
+     page; the rest of README moves with step 2. (b): ExDoc a dependency of the `docs`
+     environment alone, the site's pages the lines of `docs/pages.exs`, built by `mix
+     docs` and held by `scripts/docs.sh` to the warnings `docs/site-warnings.txt` lists;
+     the first page of a kind, the tutorial `guides/tutorials/first-program.md`. (d): the
+     rules a script can measure checked by `scripts/prose.exs`, the technical words the
+     headings of `guides/reference/glossary.md`, the rest a reviewer's, in
+     `docs/style-guide.md`; a drawn rung and a timing diagram made by
+     `scripts/draw.exs` from a program's text and a run, held to it. (e):
+     `readme_test.exs` reads README and every page that is not a document from before
+     this decision, each hold kept and made of each page. What the record did not say is
+     provisional, `PLAN.md`'s DOC-1: the documents from before this decision read on
+     GitHub and not in the site, a file shown on more than one page, the marks of a block
+     that is no example, and what of ASD-STE100 a page may claim.)*
+
 547. **A curated set of architecture decision records (DOC-1).** An architecture decision
      record is one short page for one decision: the problem, the choice and what follows
      from it. §7 holds 545 numbered decisions, and the tests, the code and the changelog
@@ -15679,6 +15694,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      four gates stay as they are. The maintainer turns Pages on once, in the repository's
      settings, with GitHub Actions as its source. The Markdown pages also read on GitHub
      itself. Not taken: a build that publishes nothing.
+
+     *(Built by DOC-1's step 1, 2026-11-15, `5873485`: `.github/workflows/docs.yml` builds
+     the site with `scripts/docs.sh` on every push and pull request, so a page that
+     breaks the build is red before it reaches `main`, and on a push to `main` publishes
+     it, in a job of its own that alone may write to Pages. It first asks GitHub for the
+     source of the repository's Pages, and where that is not GitHub Actions it publishes
+     nothing and says so in a notice, the run green. `docs_test.exs` holds the workflow.
+     The publishing job runs on `main` alone, so its first run there is the first test of
+     it.)*
 
 549. **When a contributor runs Dialyzer (RV-24),** RV-24's question 1: RV-24 built
      `scripts/dialyzer.sh`, run by hand before a push that changes `lib/` and by CI after

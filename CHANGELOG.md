@@ -174,3 +174,11 @@ the host's API is README's, so this first entry lists neither apart.
   any header that takes none told as one; and RV-28's, decisions 539 and 540, a version 3
   store that names its resource and no program refused, and each refusal of the lines
   that name a store's program ending with the way to start cold.
+- **The documentation as a site**, DOC-1's first step (decisions 546 and 548): added, and
+  nothing a program or a host's call did is changed. `mix docs` builds a site of README,
+  the pages under `guides/` and each module's text, with ExDoc, a dependency of the `docs`
+  environment alone, so a host that depends on logex still fetches nothing with it; the
+  first page beside README is the tutorial "Your first program". A page's examples are run
+  by the suite as README's are, its writing checked by `scripts/prose.exs` and its
+  pictures drawn by `scripts/draw.exs`; a workflow builds the site on every push and
+  publishes it from `main`.

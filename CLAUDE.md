@@ -22,7 +22,11 @@ own documentation holds:
   the reference it cites, before writing a stanza: it carries the IEC feature numbers a
   stanza should cite.
 - **The pages** of the documentation are the lines of `docs/pages.exs`, each with its
-  kind and its group in the site: a new page is a file and a line there.
+  kind and its group in the site: a new page is a file and a line there. Read
+  `docs/style-guide.md` before writing one: the readers, the kinds, the writing rules, the
+  marks of an example and a picture, and how to check a page; its technical words are the
+  headings of `guides/reference/glossary.md`, and each kind starts from its template under
+  `docs/templates/`.
 - **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
   is and how to use it is `README.md`, whose examples the suite runs from their files
   under `examples/`, a project of their own (`examples/mix.exs`, logex its dependency).

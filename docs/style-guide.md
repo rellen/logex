@@ -192,6 +192,10 @@ The pages define the behaviour of the engine. A wrong sentence is a defect.
 - Run the claim if you can. A small script settles a claim faster than a long read.
 - Quote a message exactly, in a code block.
 - Do not invent a feature, an option, a default or a limit.
+- Write "the [conventional set](../guides/reference/glossary.md#conventional-set)" for
+  the vocabulary that logex takes its mnemonics from. Do not name the vendor of this
+  vocabulary. You can name Logix when you compare the behaviour of logex with the
+  behaviour of a Logix controller.
 - Do not make a limit weaker. "logex is not a safety controller" stays as strong as it
   is.
 

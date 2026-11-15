@@ -3,10 +3,11 @@
 This page is for each reader of the logex documentation. It gives 1 definition for each
 technical word that a page of the documentation can use.
 
-For some words, the page also gives the word that IEC 61131-3 uses and the word that
-Logix uses. The sources of these words are [`docs/naming.md`](../../docs/naming.md) and
+For some words, the page also gives the word that IEC 61131-3 uses and the word of the
+[conventional set](#conventional-set). The sources of these words are
+[`docs/naming.md`](../../docs/naming.md) and
 [`docs/organisation.md`](../../docs/organisation.md). If an entry gives no IEC word or
-no Logix word, these 2 documents have none.
+no conventional word, these 2 documents have none.
 
 > #### How the writers use this page {: .info}
 >
@@ -25,7 +26,7 @@ the export format of a vendor.
 
 A file of declarations and rungs. logex compiles a program into data.
 
-IEC 61131-3: a program type. Logix: a program.
+IEC 61131-3: a program type. Conventional set: a program.
 
 ### program type
 
@@ -46,7 +47,7 @@ The rungs of 1 program, or the rungs of 1 function block. A label belongs to 1 r
 
 One line of a program. A rung has 1 or more instructions in series, from left to right.
 
-IEC 61131-3: a network. Logix: a rung.
+IEC 61131-3: a network. Conventional set: a rung.
 
 ### instruction
 
@@ -69,7 +70,7 @@ A number in the source text, for example `3000`, `16#ff` or `37.5`.
 The state, true or false, that each instruction gives to the next instruction on a rung.
 The left end of each rung is true.
 
-IEC 61131-3: power flow. Logix: the rung condition.
+IEC 61131-3: power flow. Conventional set: the rung condition.
 
 ### true rung
 
@@ -108,7 +109,7 @@ One of the parallel paths of a branch.
 A name that the `lbl` instruction gives to a rung. The `jmp` instruction jumps to a
 label.
 
-IEC 61131-3: a network label. Logix: a label.
+IEC 61131-3: a network label. Conventional set: a label.
 
 ### jump
 
@@ -137,7 +138,7 @@ The bool tag that an `osr` or an `osf` sets to 1 for 1 scan.
 
 A named value of a program, with a type. Each tag has a declaration.
 
-IEC 61131-3: a variable. Logix: a tag.
+IEC 61131-3: a variable. Conventional set: a tag.
 
 ### declaration
 
@@ -207,7 +208,7 @@ A word that cannot be the name of a tag, for example a mnemonic or a type word.
 A routine with a state, written in a separate file. A program declares instances of it
 and runs each instance with `cal`.
 
-IEC 61131-3: a function block. Logix: a user-defined instruction.
+IEC 61131-3: a function block. Conventional set: a user-defined instruction.
 
 ### function block type
 
@@ -219,14 +220,14 @@ and the counters.
 An instance of a built-in function block type that measures time: `ton`, `tof`, `tp` or
 `rto`.
 
-IEC 61131-3: a timer function block. Logix: a TIMER tag.
+IEC 61131-3: a timer function block. Conventional set: a TIMER tag.
 
 ### counter
 
 An instance of a built-in function block type that counts rising edges: `ctu`, `ctd` or
 `ctud`.
 
-IEC 61131-3: a counter function block. Logix: a COUNTER tag.
+IEC 61131-3: a counter function block. Conventional set: a COUNTER tag.
 
 ### preset
 
@@ -248,7 +249,7 @@ program.
 
 One run of the rungs of 1 instance, from the first rung to the last rung.
 
-IEC 61131-3: an evaluation of the networks. Logix: a scan.
+IEC 61131-3: an evaluation of the networks. Conventional set: a scan.
 
 ### first scan
 
@@ -323,7 +324,7 @@ The modules that a host calls. Each of these modules refuses a wrong argument wi
 
 A set of program instances, tasks, globals and connections that run together as 1 plant.
 
-IEC 61131-3: a configuration. Logix: a controller.
+IEC 61131-3: a configuration. Conventional set: a controller.
 
 ### configuration file
 
@@ -345,25 +346,25 @@ this word for the configuration and its programs together.
 
 A schedule for program instances in a configuration.
 
-IEC 61131-3: a task. Logix: a task.
+IEC 61131-3: a task. Conventional set: a task.
 
 ### periodic task
 
 A task that is due at a fixed interval.
 
-IEC 61131-3: a task with INTERVAL. Logix: a periodic task.
+IEC 61131-3: a task with INTERVAL. Conventional set: a periodic task.
 
 ### event task
 
 A task that is due when its trigger rises.
 
-IEC 61131-3: a task with SINGLE. Logix: an event task.
+IEC 61131-3: a task with SINGLE. Conventional set: an event task.
 
 ### continuous task
 
 The task that runs each program instance that has no timed task.
 
-IEC 61131-3: a program with no task. Logix: the continuous task.
+IEC 61131-3: a program with no task. Conventional set: the continuous task.
 
 ### trigger
 
@@ -382,7 +383,7 @@ One pass of a resource: it runs each task that is due at the time that the host 
 A value of a configuration that programs share by name. A program reads or writes it
 through a `var_external` declaration.
 
-IEC 61131-3: a global variable. Logix: a controller-scope tag.
+IEC 61131-3: a global variable. Conventional set: a controller-scope tag.
 
 ### connection
 
@@ -397,7 +398,7 @@ One input or one output of a device, at an address. A located global is at a poi
 
 A global with the word `at` and the address of a point.
 
-IEC 61131-3: a located variable. Logix: an alias tag on an I/O member.
+IEC 61131-3: a located variable. Conventional set: an alias tag on an I/O member.
 
 ### device
 
@@ -431,7 +432,7 @@ The source of the time for the runner. The manual clock moves only when a test m
 A limit of time for a task or for the runner. The runner trips if the work takes longer
 than the limit.
 
-Logix: a watchdog.
+Conventional set: a watchdog.
 
 ### trip
 
@@ -492,17 +493,23 @@ The step of an online edit that removes the new program and keeps the old progra
 The international standard for the programming languages of programmable controllers.
 Ladder diagram is 1 of its languages.
 
+### conventional set
+
+The ladder vocabulary that most controls engineers know, with mnemonics such as `XIC` and
+`OTE`. logex takes its mnemonics from it. The documentation does not name the vendor of
+this vocabulary, as [`docs/naming.md`](../../docs/naming.md) does not.
+
 ### Logix
 
-A family of industrial controllers. The documentation compares logex with it, because
-many controls engineers know its ladder instructions.
+A family of industrial controllers. A page can compare the behaviour of logex with the
+behaviour of a Logix controller.
 
 ## Instruction mnemonics
 
 logex has 40 instructions and 182 typed conversions. For the rules of each instruction,
 read the reference pages of the instructions.
 
-| logex | What it is | IEC 61131-3 | Logix |
+| logex | What it is | IEC 61131-3 | Conventional set |
 |---|---|---|---|
 | `xic` | A contact that is true when its tag is 1 | Normally open contact | XIC, Examine If Closed |
 | `xio` | A contact that is true when its tag is 0 | Normally closed contact | XIO, Examine If Open |
@@ -547,14 +554,14 @@ read the reference pages of the instructions.
 
 The typed conversions have names of 2 forms:
 
-| logex | What it is | IEC 61131-3 | Logix |
+| logex | What it is | IEC 61131-3 | Conventional set |
 |---|---|---|---|
 | `int_to_dint`, `word_to_int`, `real_to_int` and 163 more | Convert a value of 1 type into a tag of a different type | `<FROM>_TO_<TO>` | None: MOV converts to the type of its destination |
 | `real_trunc_int` and 15 more | Convert a real to an integer and remove the fraction | `REAL_TRUNC_INT` and the others | TRUNC (before: TRN) |
 
 ## Type words
 
-| logex | What it is | IEC 61131-3 | Logix |
+| logex | What it is | IEC 61131-3 | Conventional set |
 |---|---|---|---|
 | `bool` | 0 or 1 | BOOL | BOOL |
 | `sint` | A signed integer of 8 bits | SINT | SINT |
@@ -578,7 +585,7 @@ timer has a word such as `ton_ltime` and counts in nanoseconds.
 
 ## Declaration words
 
-| logex | What it is | IEC 61131-3 | Logix |
+| logex | What it is | IEC 61131-3 | Conventional set |
 |---|---|---|---|
 | `var` | A tag that only the program uses | VAR | A local tag |
 | `var_input` | A tag with a value from outside the program | VAR_INPUT | An Input parameter |
@@ -590,7 +597,7 @@ timer has a word such as `ton_ltime` and counts in nanoseconds.
 
 ## Configuration words
 
-| logex | What it is | IEC 61131-3 | Logix |
+| logex | What it is | IEC 61131-3 | Conventional set |
 |---|---|---|---|
 | `program` | Make an instance of a program type | PROGRAM, WITH | A program |
 | `with` | Put an instance under a task | WITH | None: the task lists its programs |
