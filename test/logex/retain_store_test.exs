@@ -4285,7 +4285,7 @@ defmodule Logex.RetainStoreTest do
     # have, put unbounded, cut the line inside the way out, and since the way out is told
     # once a refusal, at that line, a naming refusal beside it, 531's at line 3, the
     # refusal told it nowhere. Alone, beside 531's refusal and beside a cut, the way out
-    # whole, once.
+    # whole, once (provisional, the name cut at 60 bytes, `PLAN.md`'s RV-29, question 2).
     test "a long configuration name is quoted bounded, the way out kept whole" do
       config = configured()
       at = ~U[2026-10-30 14:00:00Z]

@@ -517,8 +517,8 @@ defmodule Logex.Runner do
     over it"; the way out told once a refusal, at the end of the first line that tells it,
     the lines after it ending at what they say is missing (provisional), so that a naming
     refusal beside a renamed configuration's ends without it; and a refusal for what a
-    hand can mend, a junk line, a digest mistyped or a miscount, telling none. Since decision 517 (c) (RV-21) a
-    warm fresh start lays the program the
+    hand can mend, a junk line, a digest mistyped or a miscount, telling none. Since
+    decision 517 (c) (RV-21) a warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
     configuration's own lines or a program type's text as it prints, a type only the store
     has or only the start, warns of it in `status/1`'s `retain`, `warning`, one message

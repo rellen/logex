@@ -15677,7 +15677,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the line longer than the 1,000 bytes `Logex.Refusal` shows of one, a name of some 650
      bytes or more cutting it inside the way out, so that a refusal that told the way out
      only there told it nowhere; now quoted as the store's is, at most 60 bytes and then
-     `…`. The life walk restates the way out once beside a cut too.)*
+     `…` (provisional, `PLAN.md`'s RV-29, question 2). The life walk restates the way out
+     once beside a cut too.)*
 
 546. **The README made short, and its details moved into guides (DOC-1).** The maintainer,
      2026-11-15: "The readme is a massive wall of text. We need to move all the details

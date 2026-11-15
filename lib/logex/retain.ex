@@ -838,7 +838,8 @@ defmodule Logex.Retain do
   # refusal quotes any text, at most 60 bytes (`Logex.Refusal`), this configuration's own
   # among them since RV-29's review, so that the line keeps the way out within the 1,000
   # bytes `Logex.Refusal` shows of a line, where a name of some 650 bytes or more, which a
-  # configuration may have, pushed it past them and the refusal told it nowhere.
+  # configuration may have, pushed it past them and the refusal told it nowhere
+  # (provisional, the name cut at 60 bytes, `PLAN.md`'s RV-29, question 2).
   defp configuration(["configuration", stored, "written", time], _text, name),
     do:
       [
