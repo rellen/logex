@@ -198,7 +198,9 @@ defmodule Logex.ReadmeTest.Examples do
   # Each `elixir` block of a page no `$ mix run` follows and no `file` or `part of` mark
   # holds, `{line, first line, body}`.
   def unrun(page) do
-    for {{n, "elixir", body, mark}, next} <- Enum.zip(page.blocks, tl(page.blocks) ++ [nil]),
+    blocks = fenced(page.blocks)
+
+    for {{n, "elixir", body, mark}, next} <- Enum.zip(blocks, tl(blocks) ++ [nil]),
         mark == nil or match?({"fragment", _}, mark),
         not runs?(next),
         do: {n, hd(String.split(body, "\n")), body}
@@ -212,6 +214,10 @@ defmodule Logex.ReadmeTest.Examples do
 
   defp runs?({_n, lang, body, nil}) when lang in ["", "console"], do: Regex.match?(@run, body)
   defp runs?(_block), do: false
+
+  # A page's fenced blocks alone, its links to other pages' files left out.
+  defp fenced(blocks),
+    do: for({_n, lang, _body, _mark} = block <- blocks, is_binary(lang), do: block)
 
   # Every example of every page, in the pages' order and each page's own.
   def all(pages \\ pages()) do
@@ -409,7 +415,7 @@ defmodule Logex.ReadmeTest.Examples do
 
   # A `$ mix run` that does not follow its script.
   defp unscripted(page, blocks) do
-    for {previous, {n, lang, body, nil}} <- Enum.zip([nil | blocks], blocks),
+    for {previous, {n, lang, body, nil}} <- Enum.zip([nil | fenced(blocks)], fenced(blocks)),
         lang in ["", "console"],
         [_, name] <- [Regex.run(@run, body)],
         script(previous) == nil,
@@ -754,6 +760,8 @@ defmodule Logex.ReadmeTest.Extraction do
          "links to on the page that shows them, and no other page's" do
     first = page(@first, shows("motor.ld") ++ runs("scan.exs") ++ shows("delay.ld"))
     second = page(@second, runs("early.exs") ++ ["Get [`motor.ld`](a.md#x)."] ++ runs("scan.exs"))
+    between = ["```elixir", "IO.puts(1)", "```", "Get [`motor.ld`](a.md).", "```console"]
+    third = page({"guides/c.md", :howto}, between ++ ["$ mix run scan.exs", "1", "```"])
 
     assert [
              %{page: "guides/a.md", name: "scan.exs", line: 22, files: one},
@@ -765,6 +773,12 @@ defmodule Logex.ReadmeTest.Extraction do
              {%{"motor.ld" => file("motor.ld")}, %{}, %{"motor.ld" => file("motor.ld")}}
 
     assert Examples.problems([first, second]) == []
+
+    # A link between a script and its `$ mix run` leaves the script the run's.
+    assert [_, %{page: "guides/c.md", name: "scan.exs", files: ^linked}] =
+             Examples.all([first, third])
+
+    assert {Examples.problems([first, third]), Examples.unrun(third)} == {[], []}
   end
 
   test "a link to a file on a page that does not show it, or on no page the suite reads, " <>
