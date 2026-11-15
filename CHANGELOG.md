@@ -39,7 +39,8 @@ program's outputs" lists each rule §7 records as replacing one that had landed 
 and that changed what a running program, or the runner under it, writes, found by a pass
 through §7, oldest first (provisional: `PLAN.md`'s RV-22, question 4, its reading (b)); a
 word newly reserved or a form newly refused is told by the compile's own diagnostic, and
-the host's API is README's, so this first entry lists neither apart.
+the host's API is README's, so this first entry lists neither apart, but for a call that
+changed after its last item was written, under "The host's API".
 
 ### What changes a running program's outputs
 
@@ -113,6 +114,23 @@ the host's API is README's, so this first entry lists neither apart.
   and a poll period trips the line whatever the runner's lateness. Look for: plants on a
   loaded or virtual machine.
 
+### The host's API
+
+- **`Logex.Configuration.Global.new!/3` refuses an initial value no global of its type
+  holds, at once** (decision 555), an `ArgumentError`, where it kept any value and
+  `Logex.Configuration.new!/1` or `check/1` refused it later, a line of the
+  configuration's refusal. A host that builds a fan's run lamp with `Global.new!("fan_on",
+  :bool, initial: true)` is told there, ``the initial value of global `fan_on` must be an
+  integer, found true``, and `initial: 300` for an `:sint` is `` `trim` is an sint: `300`
+  is outside -128 to 127 ``: each the line `check/1` gives of the same value, a value
+  that is no number, a number outside the type, -0.0 in a real, and an array's list of
+  another length or with an element its type does not hold among them. `new!/2`, and a
+  value the type holds, are as they were; a struct built by hand, or changed after, is
+  refused where it was, by `check/1` and `new!/1`; a located global's initial value is
+  still refused there too, for its location. Look for: a `rescue` around
+  `Logex.Configuration.new!/1` or a read of `check/1`'s diagnostics that expected a
+  global's wrong initial value there, where the global came from `Global.new!/3`.
+
 ### What it carries, by the work that built it
 
 - **Program organisation and the first online edit** (decisions 1–29). The direction
@@ -182,3 +200,12 @@ the host's API is README's, so this first entry lists neither apart.
   by the suite as README's are, its writing checked by `scripts/prose.exs` and its
   pictures drawn by `scripts/draw.exs`; a workflow builds the site on every push and
   publishes it from `main`.
+- **The answers to RV-24's questions**, RV-30 (decisions 549–555): `scripts/gate.sh` runs
+  OTP's Dialyzer as its fifth step, after the suite, so a spec the code breaks is seen
+  before the commit (549); a call whose answer is thrown away is red,
+  `-Wunmatched_returns`, each of the 24 sites that drop one on purpose written `_ = ...`,
+  none a defect and no behaviour changed (550); `Global.new!/3` refuses a wrong initial
+  value at once, above (555); and as built, a warning that is no defect cleared by code
+  that says what it does (551), a spec on every public function of the host contract
+  (552), the resource read inside logex through one internal reader (553), and each
+  value held to its spec by the suite (554).

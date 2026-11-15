@@ -1197,6 +1197,283 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # Decision 555 (RV-30; the maintainer, 2026-11-15, RV-24's question 7): `Global.new!/3`
+  # refuses at once an initial value no global of its type holds, as `Logex.Tag.new!/5`
+  # refuses a tag's, where it kept `initial: true` for check/1 to refuse later, its struct
+  # meanwhile outside `Global.t()`. It raises the lines check/1 gives of the same value in
+  # a struct built by hand, from the one judge both read, so each test below lays what
+  # `new!/3` raises beside what check/1 says; check/1 and new!/1 keep their refusal for a
+  # struct built by hand or changed after.
+  describe "Global.new!/3 refuses an initial value its type does not hold (decision 555)" do
+    # What check/1 says of the one global, built by hand and added to a configuration that
+    # runs: the host's lines it raises, or its diagnostics' messages.
+    defp of_hand(seal, %Global{} = global) do
+      fields = base(seal)
+      config = %{Configuration.new!(fields) | globals: fields[:globals] ++ [global]}
+      {:diagnostics, Enum.map(Configuration.check(config), & &1.message)}
+    rescue
+      error in ArgumentError -> {:raised, String.split(error.message, "\n")}
+    end
+
+    # What new!/3 does with the value: the struct it gives, or the lines it raises.
+    defp of_new(name, type, options) do
+      {:kept, Global.new!(name, type, options)}
+    rescue
+      error in ArgumentError -> {:raised, String.split(error.message, "\n")}
+    end
+
+    test "each kind of value, its message pinned whole, the line check/1 gives of it",
+         %{seal: seal} do
+      for {type, initial, kind, message} <- [
+            # No number: the host's line, which check/1 raises.
+            {:bool, true, :raised,
+             "the initial value of global `g` must be an integer, found true"},
+            {:dint, "5", :raised,
+             "the initial value of global `g` must be an integer, found \"5\""},
+            {:word, :on, :raised,
+             "the initial value of global `g` must be an integer, found :on"},
+            {:dint, [5], :raised,
+             "the initial value of global `g` must be an integer, found [5]"},
+            {:real, "1.5", :raised,
+             "the initial value of global `g` must be a number, found \"1.5\""},
+            {:lreal, true, :raised,
+             "the initial value of global `g` must be a number, found true"},
+            # A number outside the type: check/1's diagnostic, in a tag's words.
+            {:bool, 2, :diagnostics,
+             "`g` is a bool: its initial value must be 0 or 1, found `2`"},
+            {:bool, -1, :diagnostics,
+             "`g` is a bool: its initial value must be 0 or 1, found `-1`"},
+            {:sint, 300, :diagnostics, "`g` is an sint: `300` is outside -128 to 127"},
+            {:uint, -1, :diagnostics, "`g` is a uint: `-1` is outside 0 to 65535"},
+            {:byte, 256, :diagnostics, "`g` is a byte: `256` is outside 0 to 255"},
+            # A float in a type that holds integers, by the literal rules (decision 237).
+            {:dint, 1.5, :diagnostics,
+             "`g` is a dint: `1.5` is a real, and a dint holds only integers"},
+            {:bool, 1.0, :diagnostics,
+             "`g` is a bool: `1.0` is a real, and a bool holds only 0 or 1"},
+            # A real's: beyond its range, an integer it does not hold exactly, and -0.0.
+            {:real, 1.0e39, :diagnostics,
+             "`g` is a real: `1.0e39` is beyond a real's range, -3.4028234663852886e38 to " <>
+               "3.4028234663852886e38"},
+            {:real, 16_777_217, :diagnostics,
+             "`g` is a real: `16777217` is no value of a real, which holds integers exactly " <>
+               "only to 2^24: the nearest it holds is 16777216.0"},
+            {:lreal, 9_007_199_254_740_993, :diagnostics,
+             "`g` is an lreal: `9007199254740993` is no value of an lreal, which holds " <>
+               "integers exactly only to 2^53: the nearest it holds is 9007199254740992.0"},
+            {:real, -0.0, :raised,
+             "the initial value of global `g` is -0.0, which no real holds and no line " <>
+               "gives, a line's `-0.0` being 0.0: give 0.0"},
+            {:lreal, -0.0, :raised,
+             "the initial value of global `g` is -0.0, which no real holds and no line " <>
+               "gives, a line's `-0.0` being 0.0: give 0.0"},
+            # An array's: no list, a list of anything but numbers, a nested or an improper
+            # one among them, the host's lines.
+            {{:array, :int, [3]}, 5, :raised,
+             "the initial value of global `g`, an array, must be a list of its elements' " <>
+               "values, found 5"},
+            {{:array, :int, [3]}, %{}, :raised,
+             "the initial value of global `g`, an array, must be a list of its elements' " <>
+               "values, found %{}"},
+            {{:array, :int, [2, 2]}, [[1, 2], [3, 4]], :raised,
+             "the initial value of global `g`, an array of ints, must be a list of its " <>
+               "elements' values, each a number, found [[1, 2], [3, 4]]"},
+            {{:array, :bool, [3]}, [1, true, 0], :raised,
+             "the initial value of global `g`, an array of bools, must be a list of its " <>
+               "elements' values, each a number, found [1, true, 0]"},
+            {{:array, :int, [3]}, [1, 2 | 3], :raised,
+             "the initial value of global `g`, an array of ints, must be a list of its " <>
+               "elements' values, each a number, found [1, 2 | 3]"},
+            # A list of another length, and each element its type does not hold, a line
+            # each, named by its element: check/1's diagnostics.
+            {{:array, :int, [3]}, [1, 2], :diagnostics,
+             "`g` is an array of 3 ints: its initial list holds 2 values, and an array's " <>
+               "holds one for every element, 3, in the elements' order"},
+            {{:array, :int, [2, 2]}, [1, 2, 3, 4, 5], :diagnostics,
+             "`g` is an array of 2 by 2 ints: its initial list holds 5 values, and an " <>
+               "array's holds one for every element, 4, in the elements' order"},
+            {{:array, :int, [3]}, [1, 40_000, -40_000], :diagnostics,
+             "`g[1]` is an int: `40000` is outside -32768 to 32767\n" <>
+               "`g[2]` is an int: `-40000` is outside -32768 to 32767"},
+            {{:array, :bool, [2]}, [0, 2], :diagnostics,
+             "`g[1]` is a bool: its initial value must be 0 or 1, found `2`"},
+            {{:array, :int, [3]}, [1, 1.5, 3], :diagnostics,
+             "the initial value of `g[1]` must be an integer, found 1.5"},
+            {{:array, :real, [2]}, [1.5, -0.0], :diagnostics,
+             "`g[1]` is a real: its initial value is -0.0, which no real holds and no line " <>
+               "gives, a line's `-0.0` being 0.0: give 0.0"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Global.new!("g", type, initial: initial) end
+
+        assert of_hand(seal, %Global{name: "g", type: type, initial: initial}) ==
+                 {kind, String.split(message, "\n")},
+               "check/1 of #{inspect(type)} with #{inspect(initial, charlists: :as_lists)}"
+      end
+    end
+
+    # Each type's range written here, from IEC's table, not read from logex's: its ends
+    # kept, the struct a hand-built one, and the numbers one past them refused.
+    test "every integer type and bit string by its range, its ends kept and one past each " <>
+           "refused",
+         %{seal: seal} do
+      for {type, low, high} <- [
+            {:bool, 0, 1},
+            {:sint, -128, 127},
+            {:int, -32_768, 32_767},
+            {:dint, -2_147_483_648, 2_147_483_647},
+            {:lint, -9_223_372_036_854_775_808, 9_223_372_036_854_775_807},
+            {:usint, 0, 255},
+            {:uint, 0, 65_535},
+            {:udint, 0, 4_294_967_295},
+            {:ulint, 0, 18_446_744_073_709_551_615},
+            {:byte, 0, 255},
+            {:word, 0, 65_535},
+            {:dword, 0, 4_294_967_295},
+            {:lword, 0, 18_446_744_073_709_551_615}
+          ] do
+        for kept <- [low, high] do
+          assert of_new("g", type, initial: kept) ==
+                   {:kept, %Global{name: "g", type: type, initial: kept}}
+
+          assert of_hand(seal, %Global{name: "g", type: type, initial: kept}) ==
+                   {:diagnostics, []}
+        end
+
+        for past <- [low - 1, high + 1] do
+          assert {:diagnostics, [line]} =
+                   of_hand(seal, %Global{name: "g", type: type, initial: past})
+
+          assert line =~ "#{past}"
+          assert of_new("g", type, initial: past) == {:raised, [line]}, "#{type} #{past}"
+        end
+      end
+
+      # A real takes an integer it holds exactly and a float, an lreal the same.
+      for {type, kept} <- [
+            {:real, 16_777_216},
+            {:real, 1.5},
+            {:real, 3.4028234663852886e38},
+            {:lreal, 9_007_199_254_740_992},
+            {:lreal, 1.0e300},
+            {:lreal, 0.0}
+          ] do
+        assert of_new("g", type, initial: kept) ==
+                 {:kept, %Global{name: "g", type: type, initial: kept}}
+      end
+    end
+
+    # The rule itself, over every elementary type and an array of each: new!/3 raises
+    # exactly where check/1 refuses the value in a struct built by hand, in its lines, and
+    # keeps what check/1 takes, the struct a hand-built one. The walk's reach: every type
+    # with a value kept, a value check/1 raises for and one it diagnoses.
+    test "over every type and an array of each, new!/3 refuses exactly what check/1 " <>
+           "refuses of the value, in its lines",
+         %{seal: seal} do
+      scalars =
+        [nil, 0, 1, 2, -1, 127, 128, 255, 256, 65_536, 4_294_967_296] ++
+          [18_446_744_073_709_551_616, -9_223_372_036_854_775_809] ++
+          [0.0, 1.0, 1.5, -0.0, 1.0e39, 1.0e308, 16_777_217, 9_007_199_254_740_993] ++
+          [true, false, :one, "1", ~c"1", [], [1], {1}, %{}]
+
+      lists =
+        [nil, [], [0, 1], [1, 2], [0, 1, 0], [0, 2], [1.5, 2], [1, -0.0], [300, 0]] ++
+          [[1, :x], [[0, 1]], [0 | 1], 5, true, "01", %{}, {0, 1}]
+
+      types =
+        for type <- Logex.Declarations.elementary(),
+            {of, values} <- [{type, scalars}, {{:array, type, [2]}, lists}],
+            do: {of, values}
+
+      assert length(types) == 30
+
+      for {type, values} <- types do
+        reach =
+          for initial <- values do
+            hand = %Global{name: "g", type: type, initial: initial}
+            agreed(of_new("g", type, initial: initial), of_hand(seal, hand), hand)
+          end
+
+        assert Enum.sort(Enum.uniq(reach)) == [:diagnosed, :kept, :raised], inspect(type)
+      end
+    end
+
+    # What check/1 takes, new!/3 keeps, the struct as built by hand; what check/1 refuses,
+    # raised or diagnosed, new!/3 raises, in the same lines.
+    defp agreed({:kept, global}, {:diagnostics, []}, global), do: :kept
+    defp agreed({:raised, [_ | _] = lines}, {:raised, lines}, _hand), do: :raised
+    defp agreed({:raised, [_ | _] = lines}, {:diagnostics, lines}, _hand), do: :diagnosed
+
+    defp agreed(new, hand, global),
+      do: flunk("#{inspect(global)}: new!/3 #{inspect(new)}, check/1 #{inspect(hand)}")
+
+    test "the options' mistakes come first; the type, the name and the location stay " <>
+           "check/1's; new!/2 is as it was",
+         %{seal: seal} do
+      # A mistake in the options is told alone, the value not yet read.
+      assert_raise ArgumentError, "`retain:` for `g` takes true or false, found 1", fn ->
+        Global.new!("g", :bool, initial: true, retain: 1)
+      end
+
+      # The value is judged against the type alone: a located global's that its type
+      # holds is kept, and check/1 refuses it for its location, as it did.
+      located = Global.new!("f", :bool, initial: 1, at: "panel.i.5")
+      assert located == %Global{name: "f", type: :bool, initial: 1, at: "panel.i.5"}
+
+      assert of_hand(seal, located) ==
+               {:diagnostics,
+                [
+                  "`f` is an input point: its value comes from the input image, so it " <>
+                    "takes no initial value"
+                ]}
+
+      # One its type does not hold is refused for that, located or not.
+      assert_raise ArgumentError,
+                   "`f` is a bool: its initial value must be 0 or 1, found `2`",
+                   fn -> Global.new!("f", :bool, initial: 2, at: "panel.i.5") end
+
+      # A type that is none holds no value to judge a number by: kept, check/1's to
+      # refuse, as an array's sizes are; a value that is no number is no global's.
+      assert Global.new!("g", :float, initial: 5) ==
+               %Global{name: "g", type: :float, initial: 5}
+
+      assert Global.new!("g", {:array, :int, [0]}, initial: [1]) ==
+               %Global{name: "g", type: {:array, :int, [0]}, initial: [1]}
+
+      assert_raise ArgumentError,
+                   "the initial value of global `g` must be an integer, found true",
+                   fn -> Global.new!("g", :float, initial: true) end
+
+      # A name that is no string is labelled as given, as in the options' lines.
+      assert_raise ArgumentError,
+                   "the initial value of global :g must be an integer, found true",
+                   fn -> Global.new!(:g, :bool, initial: true) end
+
+      # No initial value, or nil for none: nothing to judge.
+      assert Global.new!("g", :bool) == %Global{name: "g", type: :bool}
+      assert Global.new!("g", :bool, initial: nil) == %Global{name: "g", type: :bool}
+      assert Global.new!("g", :nothing) == %Global{name: "g", type: :nothing}
+    end
+
+    test "check/1 and new!/1 keep their refusal for a struct built by hand or changed " <>
+           "after new!/3 gave it",
+         %{seal: seal} do
+      changed = %{Global.new!("fan_on", :bool, initial: 1) | initial: true}
+      by_hand = %Global{name: "trim", type: :sint, initial: 300}
+      fields = base(seal)
+
+      assert of_hand(seal, changed) ==
+               {:raised, ["the initial value of global `fan_on` must be an integer, found true"]}
+
+      assert of_hand(seal, by_hand) ==
+               {:diagnostics, ["`trim` is an sint: `300` is outside -128 to 127"]}
+
+      assert refused(Keyword.put(fields, :globals, fields[:globals] ++ [changed, by_hand])) == [
+               "the initial value of global `fan_on` must be an integer, found true",
+               "`trim` is an sint: `300` is outside -128 to 127"
+             ]
+    end
+  end
+
   describe "globals" do
     test "a bool or a dint, its initial value fitting it, a dint's negative too, and none " <>
            "on a located global",

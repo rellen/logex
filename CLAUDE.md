@@ -163,7 +163,8 @@ own documentation holds:
   printable.
 - `lib/logex/configuration.ex` — `Logex.Configuration` with `Task`, `Global`, `Instance`
   and `Connection`: a configuration as data, `check/1`, the one validator, `new!/1`,
-  `compile/3` and `compile_file/1` from text, and its warnings.
+  `compile/3` and `compile_file/1` from text, and its warnings; and `Initial`, internal,
+  the one judge of a global's initial value, `check/1`'s and `Global.new!/3`'s.
 - `lib/logex/configuration/text.ex` — `Logex.Configuration.Text`, a configuration file's
   text: its words, `read/1` to entries, `print/1` back, an exact round trip.
 - `lib/logex/edit.ex` — `Logex.Edit`, a staged online edit of a lone instance: `accept/3`,

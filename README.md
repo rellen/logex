@@ -3248,7 +3248,12 @@ broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
   `Logex.Tag.new!/5` takes it, `non_retain: true` for `non_retain`, and each mistake in
   its options refused in the same words (decision 304); the struct it gives,
   `%Logex.Configuration.Global{retain: :retain}`, `Logex.Configuration.Text.print/1`
-  prints as the line above.
+  prints as the line above. An initial value no global of its type holds is refused
+  there, at once: `new!("fan_on", :bool, initial: true)` raises ``the initial value of
+  global `fan_on` must be an integer, found true``, and `new!("trim", :sint, initial:
+  300)`, `` `trim` is an sint: `300` is outside -128 to 127 ``, each the line
+  `Logex.Configuration.check/1` gives of the same value in a struct built by hand, which
+  it still refuses (decision 555).
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision

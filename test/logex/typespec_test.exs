@@ -169,8 +169,10 @@ defmodule Logex.TypespecTest do
   holds the value, a result through `GenServer.call/3` or the compile's own process among
   them, and each test names the functions it reaches and reaches exactly those, and
   together every spec of those modules. A host's mistake, its pinned `ArgumentError`, is
-  outside every spec and not called here. A spec wider than every value its function gives
-  passes here, a value never showing it (provisional: `PLAN.md`'s RV-24, question 6).
+  outside every spec and not called here, but `Global.new!/3`'s of an initial value no
+  global's type holds, refused so that every struct it gives is a `Global.t()` (decision
+  555). A spec wider than every value its function gives
+  passes here, a value never showing it (decision 554).
   """
   use ExUnit.Case, async: true
 
@@ -544,6 +546,62 @@ defmodule Logex.TypespecTest do
 
     assert [{"panel", Sim, [sim: ^sim], [_]}] =
              held(Logex.IO, :bind!, [built, %{"panel" => {Sim, sim: sim}}])
+
+    reaches!(@reach)
+  end
+
+  # Decision 555 (RV-30; RV-24's question 7): `Global.t()` is true of every struct
+  # `Global.new!/2,3` gives. Every elementary type at the ends of its range, a real's
+  # integer and float, an array's list and a located global, each held to the spec; and
+  # the values no global's type holds, which `new!/3` kept until then, its struct outside
+  # `t()`: each such struct, built by hand, is outside it, and `new!/3` gives none.
+  @reach [{Global, :new!, 2}, {Global, :new!, 3}]
+  @reaches @reach
+  test "every struct Global.new!/2,3 gives is a Global.t(), every type at its ends" do
+    for {type, values} <- [
+          {:bool, [0, 1]},
+          {:sint, [-128, 127]},
+          {:int, [-32_768, 32_767]},
+          {:dint, [-2_147_483_648, 2_147_483_647]},
+          {:lint, [-9_223_372_036_854_775_808, 9_223_372_036_854_775_807]},
+          {:usint, [0, 255]},
+          {:uint, [0, 65_535]},
+          {:udint, [0, 4_294_967_295]},
+          {:ulint, [0, 18_446_744_073_709_551_615]},
+          {:byte, [0, 255]},
+          {:word, [0, 65_535]},
+          {:dword, [0, 4_294_967_295]},
+          {:lword, [0, 18_446_744_073_709_551_615]},
+          {:real, [0, 16_777_216, 1.5, -3.4028234663852886e38]},
+          {:lreal, [0, 9_007_199_254_740_992, 1.0e300]},
+          {{:array, :int, [3]}, [[1, 2, 3], [-32_768, 0, 32_767]]},
+          {{:array, :lreal, [2, 2]}, [[1, 2.5, 3, 4.5]]},
+          {{:array, :bool, [1]}, [[1]]}
+        ] do
+      assert %Global{type: ^type, initial: nil} = held(Global, :new!, ["g", type])
+      assert %Global{initial: nil} = held(Global, :new!, ["g", type, [initial: nil]])
+
+      for initial <- values do
+        assert %Global{type: ^type, initial: ^initial} =
+                 held(Global, :new!, ["g", type, [initial: initial, retain: true]])
+      end
+    end
+
+    assert %Global{at: "panel.q.0"} = held(Global, :new!, ["y", :bool, [at: "panel.q.0"]])
+
+    [{_arguments, t}] = Held.clauses(Global, :new!, 2)
+    assert Held.held?(%Global{name: "g", type: :bool, initial: 1}, t, Global)
+
+    for {type, initial} <- [
+          {:bool, true},
+          {:dint, "5"},
+          {:real, :half},
+          {{:array, :int, [2]}, [[1], [2]]},
+          {{:array, :int, [2]}, [1, :x]}
+        ] do
+      refute Held.held?(%Global{name: "g", type: type, initial: initial}, t, Global)
+      assert_raise ArgumentError, fn -> Global.new!("g", type, initial: initial) end
+    end
 
     reaches!(@reach)
   end
