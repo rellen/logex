@@ -9,12 +9,6 @@ For some words, the page also gives the word that IEC 61131-3 uses and the word 
 [`docs/organisation.md`](../../docs/organisation.md). If an entry gives no IEC word or
 no conventional word, these 2 documents have none.
 
-> #### How the writers use this page {: .info}
->
-> Each heading of level 3 on this page is 1 technical word that a page can use. The
-> checker of the writing rules reads these headings. Put a new technical word on this page
-> before you use it on a different page.
-
 ## Programs and rungs
 
 ### dialect
@@ -31,6 +25,11 @@ IEC 61131-3: a program type. Conventional set: a program.
 ### program type
 
 A compiled program. A program type holds no values. You make 1 or more instances from it.
+
+### compile
+
+To make a program type from the text of a program. If the text has an error, logex
+returns diagnostics and no program type.
 
 ### instance
 
@@ -72,6 +71,11 @@ The left end of each rung is true.
 
 IEC 61131-3: power flow. Conventional set: the rung condition.
 
+### rail
+
+One of the 2 vertical lines of a ladder drawing. Power flows from the left rail through
+each rung to the right rail. The text of a program does not show the rails.
+
 ### true rung
 
 The condition of a rung at an instruction when the power flow to that instruction is
@@ -81,6 +85,13 @@ true.
 
 The condition of a rung at an instruction when the power flow to that instruction is
 false.
+
+### enable
+
+To give power to an instruction. A true rung enables the instruction. The member `en` of
+a timer is 1 while the rung enables the timer.
+
+Conventional set: the enable bit, `.EN`.
 
 ### contact
 
@@ -94,6 +105,20 @@ An instruction that writes 1 bool from the power flow: `ote`, `otl`, `otu`, `osr
 `osf`.
 
 IEC 61131-3: a coil.
+
+### latch
+
+To write 1 to a bool with the coil `otl`. On a false rung, `otl` does not change the
+bool. Thus the bool stays 1 until a different instruction writes 0 to it.
+
+IEC 61131-3: a SET coil. Conventional set: OTL, Output Latch.
+
+### unlatch
+
+To write 0 to a bool with the coil `otu`. On a false rung, `otu` does not change the
+bool.
+
+IEC 61131-3: a RESET coil. Conventional set: OTU, Output Unlatch.
 
 ### branch
 

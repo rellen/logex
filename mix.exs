@@ -43,8 +43,9 @@ defmodule Logex.MixProject do
 
   # The site (decisions 546 and 548). Its pages are the lines of docs/pages.exs, the one
   # list of them, each page read from the copy `scripts/site.exs stage` makes of it under
-  # `_build/docs/pages/` and linked to its own file on GitHub; README is the first page.
-  # The modules stand in two groups, the host contract first (decisions 514 and 523).
+  # `_build/docs/pages/`, by its name in the site (`staged/1`), and linked to its own file
+  # on GitHub; README is the first page. The modules stand in two groups, the host
+  # contract first (decisions 514 and 523).
   @pages "_build/docs/pages"
   @groups [
     "Tutorials",
@@ -100,11 +101,11 @@ defmodule Logex.MixProject do
       main: "readme",
       formatters: ["html"],
       source_ref: "main",
-      extras: for({path, _group} <- site, do: {Path.join(@pages, path), [source: path]}),
+      extras: for({path, _group} <- site, do: {staged(path), [source: path]}),
       groups_for_extras:
         for(
           heading <- @groups,
-          do: {heading, for({path, ^heading} <- site, do: Path.join(@pages, path))}
+          do: {heading, for({path, ^heading} <- site, do: staged(path))}
         ),
       groups_for_modules: [
         "Host contract": @contract,
@@ -116,13 +117,24 @@ defmodule Logex.MixProject do
     ]
   end
 
+  # A page's file as `scripts/site.exs stage` writes it, by the page's name in the site,
+  # which is `Page.name/1`'s rule (scripts/page.exs; test/logex/docs_test.exs holds the two
+  # together): README is `readme`, a user's page, under guides/, is named by its file
+  # alone, and any other page by its whole path, `docs-style-guide`, so that two pages with
+  # one file name in two directories are two pages of the site.
+  defp staged("README.md"), do: Path.join(@pages, "readme.md")
+  defp staged("guides/" <> _ = path), do: Path.join(@pages, Path.basename(path))
+  defp staged(path), do: Path.join(@pages, String.replace(path, "/", "-"))
+
   # A picture a script makes is shown at its own size, and its paragraph scrolls where the
   # page is narrower, a phone's: shrunk to the page its text would be too small to read.
+  # The sidebar does not show the version: mix.exs's is no release's (decision 541).
   defp before_closing_head_tag(:html) do
     """
     <style>
       .content-inner p:has(> img[src^="assets/"]) { overflow-x: auto; }
       .content-inner img[src^="assets/"] { max-width: none; }
+      .sidebar .sidebar-projectVersion { display: none; }
     </style>
     """
   end

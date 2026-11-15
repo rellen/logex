@@ -13,6 +13,9 @@
 # and every link of the built site that leads nowhere, must be a line of
 # docs/site-warnings.txt, the list of what the module text gives today, and every line
 # of the list must still be given. A new warning, a page's or a module's, is red.
+# Every page ExDoc builds asks for `docs_config.js`, the list of a project's other
+# versions, which a host of several versions puts there: logex has one, so the script
+# leaves the file empty, and no page asks for a file that is not there.
 #
 # It runs from the project's root wherever it is called from, writes what the build
 # prints to the log (`_build/docs.log` unless given), prints the log's last lines and
@@ -29,7 +32,8 @@ cd "$root" || exit 1
   mix local.hex --force --if-missing &&
     MIX_ENV=docs mix deps.get &&
     rm -rf doc &&
-    mix docs
+    mix docs &&
+    : >> doc/docs_config.js
 } > "$log" 2>&1
 rc=$?
 checked=""

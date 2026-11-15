@@ -19,9 +19,12 @@
 # through `Logex.Lexer` and `Logex.Parser`, and draws its rungs as a controls engineer
 # expects them: the two rails, a contact `-| |-` for `xic` and `-|/|-` for `xio`, a coil
 # `-( )-` for `ote`, `-(L)-` for `otl`, `-(U)-` for `otu`, `-(P)-` and `-(N)-` for the pulse
-# coils `osr` and `osf`, a box for every other instruction with its operands, parallel
-# branches at any depth as legs between two verticals, each element with its tag, each rung
-# with its number and the comment above it in the file.
+# coils `osr` and `osf`, each with its pulse bit above it and its storage bit named under
+# it, a box for every other instruction with its operands, parallel branches at any depth
+# as legs between two verticals, each element with its tag, the coils that end the rungs
+# in one column at the right rail, each rung with its number and the comment above it in
+# the file, cut into lines no wider than the rungs. A long tag name widens the drawing:
+# a name is never cut.
 #
 # `timing:` names a description under guides/assets/, an Elixir map:
 #
@@ -40,9 +43,17 @@
 # preset marked, read from the run as every value is. The description gives the inputs
 # and the time; it gives no value of a signal.
 #
+# One file is one picture: two marks, on one page or on two, that name one .svg and
+# differ in its source are a problem of each, with the other's place, since each page's
+# check would tell its writer to draw the file again over the other's.
+#
 # Both pictures are an SVG with its own light panel, so that it reads on a light and on a
 # dark page, a title and a description for a screen reader, text as text, no script and no
-# font or file from elsewhere. A script, not a test: it uses `case` freely.
+# font or file from elsewhere. A page's lines are scripts/page.exs's to read: a mark or a
+# picture inside a code block is the page's text, and not read. A script, not a test: it
+# uses `case`, and function clauses for the rest.
+Code.require_file("page.exs", __DIR__)
+
 defmodule Pictures do
   @moduledoc false
 
@@ -54,63 +65,78 @@ defmodule Pictures do
   # The pictures a page's marks name, `{line, svg path, kind, source, rungs}`, and what is
   # wrong with its marks, each `<page>:<line>: ...`.
   def of(page, text) do
-    {found, problems, _, _} =
+    {found, problems, _mark} =
       text
-      |> String.split("\n")
-      |> Enum.with_index(1)
-      |> Enum.reduce({[], [], nil, nil}, fn {line, n}, {found, problems, mark, fence} ->
-        case {fence, Regex.run(~r/^\s*(`{3,}|~{3,})/, line)} do
-          {nil, [_, marker]} ->
-            {found, problems, mark, marker}
-
-          {nil, nil} ->
-            {found, problems, mark} = line(line, n, page, {found, problems, mark})
-            {found, problems, mark, nil}
-
-          {marker, _} ->
-            closed = if String.trim(line) == marker, do: nil, else: marker
-            {found, problems, mark, closed}
-        end
-      end)
+      |> Page.read()
+      |> Page.lines()
+      |> Enum.reduce({[], [], nil}, &line(&1, page, &2))
 
     {Enum.reverse(found), Enum.reverse(problems)}
   end
 
   # A line outside a code block: a mark, the picture a mark names, or neither.
-  defp line(line, n, page, {found, problems, mark}) do
-    case {mark, Regex.run(@mark, line), Regex.run(@image, line)} do
-      {_, [_, kind, source, rungs], _} ->
-        {found, problems, {kind, source, numbers(rungs)}}
+  defp line({_n, _line, :code}, _page, state), do: state
 
-      {{kind, source, rungs}, nil, [_, target]} ->
-        svg = resolve(page, target)
+  defp line({n, line, _kind}, page, {found, problems, mark}),
+    do: seen(mark, Regex.run(@mark, line), Regex.run(@image, line), {n, page}, {found, problems})
 
-        if String.starts_with?(svg, @assets <> "/") and Path.extname(svg) == ".svg" do
-          {[{n, svg, kind, source, rungs} | found], problems, nil}
-        else
-          {found,
-           ["#{page}:#{n}: a picture a script makes is an .svg under #{@assets}/" | problems],
-           nil}
-        end
+  defp seen(_mark, [_, kind, source, rungs], _image, _at, {found, problems}),
+    do: {found, problems, {kind, source, numbers(rungs)}}
 
-      {{kind, _source, _rungs}, nil, nil} ->
-        {found,
-         ["#{page}:#{n}: no picture follows the `#{kind}` mark above this line" | problems], nil}
+  defp seen({kind, source, rungs}, nil, [_, target], {n, page}, {found, problems}) do
+    svg = resolve(page, target)
 
-      {nil, nil, [_, target]} ->
-        if String.match?(target, ~r/^[a-z]+:/) do
-          {found, problems, nil}
-        else
-          why =
-            "a picture with no `rung` or `timing` mark on the line above it: a script makes every picture"
-
-          {found, ["#{page}:#{n}: #{why}" | problems], nil}
-        end
-
-      {nil, nil, nil} ->
-        {found, problems, nil}
-    end
+    named(
+      String.starts_with?(svg, @assets <> "/") and Path.extname(svg) == ".svg",
+      {n, svg, kind, source, rungs},
+      page,
+      {found, problems}
+    )
   end
+
+  defp seen({kind, _source, _rungs}, nil, nil, {n, page}, {found, problems}) do
+    {found, ["#{page}:#{n}: no picture follows the `#{kind}` mark above this line" | problems],
+     nil}
+  end
+
+  defp seen(nil, nil, [_, target], {n, page}, {found, problems}),
+    do: {found, unmarked(String.match?(target, ~r/^[a-z]+:/), n, page) ++ problems, nil}
+
+  defp seen(nil, nil, nil, _at, {found, problems}), do: {found, problems, nil}
+
+  defp named(true, picture, _page, {found, problems}), do: {[picture | found], problems, nil}
+
+  defp named(false, {n, _svg, _kind, _source, _rungs}, page, {found, problems}) do
+    {found, ["#{page}:#{n}: a picture a script makes is an .svg under #{@assets}/" | problems],
+     nil}
+  end
+
+  # A picture from another site, a badge, carries no mark; any other is a script's.
+  defp unmarked(true, _n, _page), do: []
+
+  defp unmarked(false, n, page) do
+    [
+      "#{page}:#{n}: a picture with no `rung` or `timing` mark on the line above it: a " <>
+        "script makes every picture"
+    ]
+  end
+
+  # One file is one picture: among the pictures of pages, `{page, picture}` each, those
+  # that name one .svg and differ in what it is drawn from, each a problem with the place
+  # of the first that named the file.
+  def clashes(pictures) do
+    for {_svg, [{first, {line, _, kind, source, rungs}} | rest]} <-
+          Enum.group_by(pictures, fn {_page, {_line, svg, _, _, _}} -> svg end),
+        {page, {n, svg, other_kind, other_source, other_rungs}} <- rest,
+        {other_kind, other_source, other_rungs} != {kind, source, rungs} do
+      "#{page}:#{n}: #{svg} is drawn here from `#{mark(other_kind, other_source, other_rungs)}` " <>
+        "and at #{first}:#{line} from `#{mark(kind, source, rungs)}`: one file is one " <>
+        "picture, so give this picture another file name"
+    end
+    |> Enum.sort()
+  end
+
+  defp mark(kind, source, rungs), do: Enum.join(["#{kind}: #{source}" | rungs], " ")
 
   defp numbers(rungs),
     do: rungs |> String.split(" ", trim: true) |> Enum.map(&String.to_integer/1)
@@ -138,12 +164,10 @@ defmodule Pictures do
   # A number as an SVG attribute writes it: an integer where it is one, else one decimal.
   def n(x) when is_integer(x), do: Integer.to_string(x)
 
-  def n(x) when is_float(x),
-    do:
-      if(Float.round(x, 1) == trunc(x),
-        do: Integer.to_string(trunc(x)),
-        else: :erlang.float_to_binary(x, decimals: 1)
-      )
+  def n(x) when is_float(x), do: decimal(Float.round(x, 1) == trunc(x), x)
+
+  defp decimal(true, x), do: Integer.to_string(trunc(x))
+  defp decimal(false, x), do: :erlang.float_to_binary(x, decimals: 1)
 
   # The width of a text in the picture's monospace font, by its characters.
   def width(text, size \\ 12), do: String.length(text) * size * 0.62
@@ -188,39 +212,28 @@ defmodule Pictures.Rung do
   import Pictures, only: [escape: 1, n: 1, width: 1, width: 2]
 
   @contacts %{"xic" => :open, "xio" => :closed}
-  @coils %{"ote" => "", "otl" => "L", "otu" => "U", "osr" => "P", "osf" => "N"}
+  @coils %{"ote" => "", "otl" => "L", "otu" => "U"}
+  @pulses %{"osr" => "P", "osf" => "N"}
   @gap 16
   @leg 12
 
   # The picture of a `.ld` file's rungs, those numbered in `only` or all, or `{:error, why}`.
   def svg(path, only \\ []) do
-    case rungs(path) do
-      {:ok, rungs} ->
-        chosen =
-          for {rung, n} <- Enum.with_index(rungs, 1), only == [] or n in only, do: {n, rung}
-
-        missing = only -- Enum.map(chosen, &elem(&1, 0))
-
-        cond do
-          missing != [] ->
-            {:error,
-             "#{path} has #{length(rungs)} rungs, and no rung #{Enum.join(missing, ", ")}"}
-
-          chosen == [] ->
-            {:error, "#{path} has no rung"}
-
-          true ->
-            {:ok, picture(Path.basename(path), chosen)}
-        end
-
-      {:error, why} ->
-        {:error, why}
+    with {:ok, rungs} <- rungs(path) do
+      chosen = for {rung, n} <- Enum.with_index(rungs, 1), only == [] or n in only, do: {n, rung}
+      drawn(only -- Enum.map(chosen, &elem(&1, 0)), chosen, path, length(rungs))
     end
   end
 
+  defp drawn([_ | _] = missing, _chosen, path, count),
+    do: {:error, "#{path} has #{count} rungs, and no rung #{Enum.join(missing, ", ")}"}
+
+  defp drawn([], [], path, _count), do: {:error, "#{path} has no rung"}
+  defp drawn([], chosen, path, _count), do: {:ok, picture(Path.basename(path), chosen)}
+
   # A file's rungs as the picture draws them: each `%{text, note, elements}`, an element
-  # `{:contact, kind, tag}`, `{:coil, letter, tags}`, `{:box, mnemonic, rows}` or
-  # `{:branches, legs}`.
+  # `{:contact, kind, tag}`, `{:coil, letter, tag}`, `{:pulse, letter, storage, tag}`,
+  # `{:shot, mnemonic, tag}`, `{:box, mnemonic, rows}` or `{:branches, legs}`.
   def rungs(path) do
     with {:ok, source} <- File.read(path),
          {:ok, compiled} <- Logex.compile_file(path),
@@ -244,10 +257,19 @@ defmodule Pictures.Rung do
       {:error, why} when is_atom(why) ->
         {:error, "#{path}: #{:file.format_error(why)}"}
 
+      {:error, diagnostics} when is_list(diagnostics) ->
+        {:error,
+         Enum.map_join(diagnostics, "; ", &said/1) <>
+           ": a picture is drawn of a program that compiles"}
+
       {:error, _} ->
         {:error, "#{path} does not compile: a picture is drawn of a program that does"}
     end
   end
+
+  # A diagnostic as logex words it, with its line.
+  defp said(%Logex.Diagnostic{} = diagnostic), do: Logex.Diagnostic.format(diagnostic)
+  defp said(other), do: inspect(other)
 
   defp program(%Logex.Program{} = program), do: program
   defp program(%Logex.FbType{body: body}), do: body
@@ -279,9 +301,7 @@ defmodule Pictures.Rung do
        ) do
     {given, elements} = Enum.split(elements, length(operands))
     mnemonic = String.downcase(word)
-
-    if mnemonic != Atom.to_string(symbol) or length(given) != length(operands),
-      do: raise("the text and the program differ at `#{word}`")
+    same!(mnemonic == Atom.to_string(symbol) and length(given) == length(operands), word)
 
     [
       element(mnemonic, Enum.map(given, &spelled/1), captions(instruction, program))
@@ -289,14 +309,20 @@ defmodule Pictures.Rung do
     ]
   end
 
+  defp same!(true, _word), do: :ok
+  defp same!(false, word), do: raise("the text and the program differ at `#{word}`")
+
   defp spelled({:name, _, word}), do: word
   defp spelled(literal), do: Logex.Parser.spelling(literal)
 
   defp element(mnemonic, [tag], _captions) when is_map_key(@contacts, mnemonic),
     do: {:contact, @contacts[mnemonic], tag}
 
-  defp element(mnemonic, tags, _captions) when is_map_key(@coils, mnemonic),
-    do: {:coil, @coils[mnemonic], tags}
+  defp element(mnemonic, [tag], _captions) when is_map_key(@coils, mnemonic),
+    do: {:coil, @coils[mnemonic], tag}
+
+  defp element(mnemonic, [storage, tag], _captions) when is_map_key(@pulses, mnemonic),
+    do: {:pulse, @pulses[mnemonic], storage, tag}
 
   defp element("ons", [tag], _captions), do: {:shot, "ons", tag}
 
@@ -345,14 +371,15 @@ defmodule Pictures.Rung do
   # ---- the layout: each element its width, its rise above the wire and its fall below ----
 
   defp size({:contact, _kind, tag}), do: {even(max(width(tag) + 10, 46)), 30, 14}
-  defp size({:coil, _letter, tags}), do: {even(max(width(Enum.join(tags, " ")) + 10, 46)), 30, 14}
+  defp size({:coil, _letter, tag}), do: {even(max(width(tag) + 10, 46)), 30, 14}
+
+  defp size({:pulse, _letter, storage, tag}),
+    do: {even(Enum.max([width(tag) + 10, width("storage " <> storage, 11) + 10, 46])), 30, 30}
+
   defp size({:shot, _mnemonic, tag}), do: {even(max(width(tag) + 10, 52)), 30, 14}
 
   defp size({:box, mnemonic, rows}) do
-    inner =
-      for {caption, operand} <- rows,
-          do: width(operand) + if(caption == "", do: 0, else: width(caption, 11) + 8)
-
+    inner = for {caption, operand} <- rows, do: width(operand) + captioned(caption)
     {even(max(Enum.max([width(mnemonic) | inner]) + 20, 60)), 13, 13 + length(rows) * 18 + 6}
   end
 
@@ -363,6 +390,9 @@ defmodule Pictures.Rung do
     below = for {_, rise, fall} <- tl(sizes), do: rise + fall + 12
     {wide + 2 * @leg, rise, fall + Enum.sum(below)}
   end
+
+  defp captioned(""), do: 0
+  defp captioned(caption), do: width(caption, 11) + 8
 
   defp size_of_series([]), do: {40, 8, 8}
 
@@ -383,25 +413,23 @@ defmodule Pictures.Rung do
     left = 46
     pad = 22
     sizes = for {_n, rung} <- rungs, do: size_of_series(rung.elements)
-    notes = for {_n, rung} <- rungs, do: width(rung.note, 11)
-    inner = max(Enum.max(Enum.map(sizes, &elem(&1, 0))) + 2 * pad + 40, 300)
-    right = left + even(max(inner, Enum.max(notes) + 12))
+    right = left + even(max(Enum.max(Enum.map(sizes, &elem(&1, 0))) + 2 * pad + 40, 300))
     total = right + 18
+    # A comment is cut into lines no wider than the rungs: it never widens the drawing.
+    fits = floor((right - left - 16) / width("x", 11))
 
     {body, bottom} =
-      Enum.reduce(Enum.zip(rungs, sizes), {[], 22}, fn {{n, rung}, {wide, rise, fall}},
+      Enum.reduce(Enum.zip(rungs, sizes), {[], 22}, fn {{n, rung}, {_wide, rise, fall}},
                                                        {body, y} ->
-        noted = if rung.note == "", do: 0, else: 18
-        wire = y + noted + rise
+        notes = wrapped(rung.note, fits)
+        wire = y + 14 * length(notes) + noted(notes) + rise
 
         note =
-          if rung.note == "",
-            do: [],
-            else: [
-              ~s(<text class="note dim" x="#{n(left + 8)}" y="#{n(y + 12)}">#{escape(rung.note)}</text>)
-            ]
+          for {text, at} <- Enum.with_index(notes) do
+            ~s(<text class="note dim" x="#{n(left + 8)}" y="#{n(y + 12 + 14 * at)}">#{escape(text)}</text>)
+          end
 
-        drawn = rung(rung.elements, left, right, wire, wide, pad)
+        drawn = rung(rung.elements, left, right, wire, pad)
 
         number =
           ~s(<text class="dim" x="#{n(left - 10)}" y="#{n(wire + 4)}" text-anchor="end">#{n}</text>)
@@ -415,7 +443,7 @@ defmodule Pictures.Rung do
     ]
 
     described =
-      "#{length(rungs)} #{if length(rungs) == 1, do: "rung", else: "rungs"} between two power rails. " <>
+      "#{counted(length(rungs))} between two power rails. " <>
         Enum.map_join(rungs, " ", fn {n, rung} -> "Rung #{n}: #{rung.text}." end)
 
     Pictures.svg(
@@ -427,38 +455,63 @@ defmodule Pictures.Rung do
     )
   end
 
+  defp counted(1), do: "1 rung"
+  defp counted(count), do: "#{count} rungs"
+
+  defp noted([]), do: 0
+  defp noted(_notes), do: 4
+
+  # A comment's words in lines of `fits` characters at most; a word longer than a line
+  # stands alone on its own.
+  def wrapped("", _fits), do: []
+
+  def wrapped(note, fits) do
+    note
+    |> String.split(" ", trim: true)
+    |> Enum.reduce([], &placed(&1, &2, fits))
+    |> Enum.reverse()
+  end
+
+  defp placed(word, [], _fits), do: [word]
+
+  defp placed(word, [line | lines], fits),
+    do: joined(String.length(line) + 1 + String.length(word) <= fits, word, line, lines)
+
+  defp joined(true, word, line, lines), do: [line <> " " <> word | lines]
+  defp joined(false, word, line, lines), do: [word, line | lines]
+
   # A rung: its elements from the left rail, its last coil or box at the right rail, and
   # the wire between.
-  defp rung(elements, left, right, wire, _wide, pad) do
-    {flow, last} =
-      case List.last(elements) do
-        {kind, _, _} = last when kind in [:coil, :box] ->
-          {Enum.drop(elements, -1), last}
-
-        _ ->
-          {elements, nil}
-      end
-
+  defp rung(elements, left, right, wire, pad) do
+    {flow, last} = ended(List.last(elements), elements)
     {drawn, x} = laid(flow, left + pad, wire)
+    closed(last, drawn, x, {left, right, wire, pad})
+  end
 
-    case last do
-      nil ->
-        [wire(left, left + pad, wire), wire(x, right, wire) | drawn]
+  defp ended({kind, _, _} = last, elements) when kind in [:coil, :box],
+    do: {Enum.drop(elements, -1), last}
 
-      last ->
-        {wide, _, _} = size(last)
-        at = right - pad - wide
-        {coil, _} = draw(last, at, wire)
+  defp ended({:pulse, _, _, _} = last, elements), do: {Enum.drop(elements, -1), last}
+  defp ended(_last, elements), do: {elements, nil}
 
-        [
-          wire(left, left + pad, wire),
-          wire(x, at, wire),
-          wire(at + wide, right, wire) | drawn ++ coil
-        ]
-    end
+  defp closed(nil, drawn, x, {left, right, wire, pad}),
+    do: [wire(left, left + pad, wire), wire(x, right, wire) | drawn]
+
+  defp closed(last, drawn, x, {left, right, wire, pad}) do
+    {wide, _, _} = size(last)
+    at = right - pad - wide
+    {coil, _} = draw(last, at, wire)
+
+    [
+      wire(left, left + pad, wire),
+      wire(x, at, wire),
+      wire(at + wide, right, wire) | drawn ++ coil
+    ]
   end
 
   # A series drawn from `x` on the wire at `y`: its parts and where it ends.
+  defp laid([], x, _y), do: {[], x}
+
   defp laid(elements, x, y) do
     {drawn, x} =
       Enum.reduce(elements, {[], x}, fn element, {drawn, x} ->
@@ -466,29 +519,19 @@ defmodule Pictures.Rung do
         {drawn ++ part ++ [wire(x + wide, x + wide + @gap, y)], x + wide + @gap}
       end)
 
-    case elements do
-      [] -> {drawn, x}
-      _ -> {Enum.drop(drawn, -1), x - @gap}
-    end
+    {Enum.drop(drawn, -1), x - @gap}
   end
 
   defp wire(from, to, y),
     do: ~s(<line class="ink" x1="#{n(from)}" y1="#{n(y)}" x2="#{n(to)}" y2="#{n(y)}"/>)
 
-  defp label(text, x, y, class \\ "tag"),
+  defp label(text, x, y, class \\ "tag", anchor \\ "middle"),
     do:
-      ~s(<text class="#{class}" x="#{n(x)}" y="#{n(y)}" text-anchor="middle">#{escape(text)}</text>)
+      ~s(<text class="#{class}" x="#{n(x)}" y="#{n(y)}" text-anchor="#{anchor}">#{escape(text)}</text>)
 
   defp draw({:contact, kind, tag} = element, x, y) do
     {wide, _, _} = size(element)
     middle = x + wide / 2
-
-    slash =
-      if kind == :closed,
-        do: [
-          ~s(<line class="ink" x1="#{n(middle - 5)}" y1="#{n(y + 9)}" x2="#{n(middle + 5)}" y2="#{n(y - 9)}"/>)
-        ],
-        else: []
 
     {[
        label(tag, middle, y - 17),
@@ -496,22 +539,22 @@ defmodule Pictures.Rung do
        ~s(<line class="ink" x1="#{n(middle - 7)}" y1="#{n(y - 11)}" x2="#{n(middle - 7)}" y2="#{n(y + 11)}"/>),
        ~s(<line class="ink" x1="#{n(middle + 7)}" y1="#{n(y - 11)}" x2="#{n(middle + 7)}" y2="#{n(y + 11)}"/>),
        wire(middle + 7, x + wide, y)
-     ] ++ slash, wide}
+     ] ++ slash(kind, middle, y), wide}
   end
 
-  defp draw({:coil, letter, tags} = element, x, y) do
+  defp draw({:coil, letter, tag} = element, x, y) do
     {wide, _, _} = size(element)
-    middle = x + wide / 2
+    {coil(tag, letter, x, y, wide), wide}
+  end
 
-    inside = if letter == "", do: [], else: [label(letter, middle, y + 4, "op")]
+  defp draw({:pulse, letter, storage, tag} = element, x, y) do
+    {wide, _, _} = size(element)
 
-    {[
-       label(Enum.join(tags, " "), middle, y - 17),
-       wire(x, middle - 11, y),
-       ~s(<path class="ink" d="M #{n(middle - 6)} #{n(y - 11)} Q #{n(middle - 16)} #{n(y)} #{n(middle - 6)} #{n(y + 11)}"/>),
-       ~s(<path class="ink" d="M #{n(middle + 6)} #{n(y - 11)} Q #{n(middle + 16)} #{n(y)} #{n(middle + 6)} #{n(y + 11)}"/>),
-       wire(middle + 11, x + wide, y)
-     ] ++ inside, wide}
+    under =
+      ~s(<text class="dim" x="#{n(x + wide - 2)}" y="#{n(y + 26)}" text-anchor="end">storage ) <>
+        ~s(<tspan class="tag">#{escape(storage)}</tspan></text>)
+
+    {coil(tag, letter, x, y, wide) ++ [under], wide}
   end
 
   defp draw({:shot, mnemonic, tag} = element, x, y) do
@@ -534,14 +577,7 @@ defmodule Pictures.Rung do
       for {{caption, operand}, at} <- Enum.with_index(rows) do
         base = y + 13 + at * 18 + 14
 
-        captioned =
-          if caption == "",
-            do: [],
-            else: [
-              ~s(<text class="dim" x="#{n(x + 10)}" y="#{n(base)}">#{escape(caption)}</text>)
-            ]
-
-        captioned ++
+        caption(caption, x + 10, base) ++
           [
             ~s(<text class="tag" x="#{n(x + wide - 10)}" y="#{n(base)}" text-anchor="end">#{escape(operand)}</text>)
           ]
@@ -558,9 +594,9 @@ defmodule Pictures.Rung do
     {wide, _, _} = size(element)
 
     {drawn, last} =
-      Enum.reduce(Enum.with_index(legs), {[], y}, fn {leg, at}, {drawn, below} ->
+      Enum.reduce(legs, {[], nil}, fn leg, {drawn, below} ->
         {_, rise, fall} = size_of_series(leg)
-        wire = if at == 0, do: y, else: below + 12 + rise
+        wire = level(below, y, rise)
         {parts, to} = laid(leg, x + @leg, wire)
         joined = [wire(x, x + @leg, wire), wire(to, x + wide, wire)]
         {drawn ++ parts ++ joined, wire + fall}
@@ -574,6 +610,45 @@ defmodule Pictures.Rung do
        | drawn
      ], wide}
   end
+
+  # A branch's first leg lies on the rung's wire; each other leg under the leg before it.
+  defp level(nil, y, _rise), do: y
+  defp level(below, _y, rise), do: below + 12 + rise
+
+  defp slash(:open, _middle, _y), do: []
+
+  defp slash(:closed, middle, y) do
+    [
+      ~s(<line class="ink" x1="#{n(middle - 5)}" y1="#{n(y + 9)}" x2="#{n(middle + 5)}" y2="#{n(y - 9)}"/>)
+    ]
+  end
+
+  # A coil: its symbol at the right of its place, so that the coils that end the rungs
+  # stand in one column, and its tag over it, a tag wider than the symbol ending with it.
+  defp coil(tag, letter, x, y, wide) do
+    middle = x + wide - 23
+
+    [
+      named(wide, tag, x, y),
+      wire(x, middle - 11, y),
+      ~s(<path class="ink" d="M #{n(middle - 6)} #{n(y - 11)} Q #{n(middle - 16)} #{n(y)} #{n(middle - 6)} #{n(y + 11)}"/>),
+      ~s(<path class="ink" d="M #{n(middle + 6)} #{n(y - 11)} Q #{n(middle + 16)} #{n(y)} #{n(middle + 6)} #{n(y + 11)}"/>),
+      wire(middle + 11, x + wide, y)
+    ] ++ lettered(letter, middle, y)
+  end
+
+  defp named(wide, tag, x, y), do: over(width(tag) + 10 <= 46, tag, x + wide, y - 17)
+
+  defp over(true, tag, edge, y), do: label(tag, edge - 23, y)
+  defp over(false, tag, edge, y), do: label(tag, edge - 2, y, "tag", "end")
+
+  defp lettered("", _middle, _y), do: []
+  defp lettered(letter, middle, y), do: [label(letter, middle, y + 4, "op")]
+
+  defp caption("", _x, _y), do: []
+
+  defp caption(text, x, y),
+    do: [~s(<text class="dim" x="#{n(x)}" y="#{n(y)}">#{escape(text)}</text>)]
 end
 
 defmodule Pictures.Timing do
@@ -596,23 +671,25 @@ defmodule Pictures.Timing do
         {:error, "#{path} is not there"}
 
       {%{} = map, _} ->
-        cond do
-          Enum.sort(Map.keys(map)) != Enum.sort(@keys) ->
-            {:error,
-             "#{path}: a description has the keys #{Enum.map_join(@keys, ", ", &inspect/1)}, and no other"}
-
-          not (is_integer(map.step) and map.step > 0 and is_integer(map.scans) and
-                   map.scans in 1..200) ->
-            {:error,
-             "#{path}: step is a number of milliseconds, 1 or more, and scans a number from 1 to 200"}
-
-          true ->
-            {:ok, map}
-        end
+        keyed(Enum.sort(Map.keys(map)) == Enum.sort(@keys), map, path)
 
       _ ->
         {:error, "#{path}: a description is a map"}
     end
+  end
+
+  defp keyed(false, _map, path) do
+    {:error,
+     "#{path}: a description has the keys #{Enum.map_join(@keys, ", ", &inspect/1)}, and no other"}
+  end
+
+  defp keyed(true, %{step: step, scans: scans} = map, _path)
+       when is_integer(step) and step > 0 and is_integer(scans) and scans in 1..200,
+       do: {:ok, map}
+
+  defp keyed(true, _map, path) do
+    {:error,
+     "#{path}: step is a number of milliseconds, 1 or more, and scans a number from 1 to 200"}
   end
 
   # The run: for each signal shown, its value after each scan, and for an `acc` its
@@ -656,7 +733,13 @@ defmodule Pictures.Timing do
            "#{name} has no tag or member `#{Enum.join(unread, "`, `")}` whose value is a number"}
       end
     else
-      _ -> {:error, "#{path} does not compile as a program: a diagram is drawn of a run"}
+      {:error, diagnostics} when is_list(diagnostics) ->
+        {:error,
+         Enum.map_join(diagnostics, "; ", &Logex.Diagnostic.format/1) <>
+           ": a diagram is drawn of a run of a program that compiles"}
+
+      _ ->
+        {:error, "#{path} does not compile as a program: a diagram is drawn of a run"}
     end
   end
 
@@ -664,11 +747,14 @@ defmodule Pictures.Timing do
 
   defp kind(program, signal) do
     case String.split(signal, ".") do
-      [tag] -> if match?(%{type: :bool}, program.tags[tag]), do: :bool, else: :number
-      [_instance, member] -> if member in ~w(acc pre cv pv), do: :number, else: :bool
+      [tag] -> bool(match?(%{type: :bool}, program.tags[tag]))
+      [_instance, member] -> bool(member not in ~w(acc pre cv pv))
       _ -> :number
     end
   end
+
+  defp bool(true), do: :bool
+  defp bool(false), do: :number
 
   defp preset(env, signal) do
     case String.split(signal, ".") do
@@ -689,9 +775,9 @@ defmodule Pictures.Timing do
     {lanes, bottom} =
       Enum.reduce(run.values, {[], top}, fn {signal, values}, {lanes, y} ->
         kind = run.kinds[signal]
-        height = if kind == :bool, do: 26, else: 54
+        height = height(kind)
         preset = run.presets[signal]
-        high = Enum.max([1 | values] ++ if(preset, do: [preset], else: []))
+        high = Enum.max([1 | values] ++ List.wrap(preset))
         low = min(0, Enum.min(values))
         level = fn value -> y + height - (value - low) / (high - low) * height end
 
@@ -709,25 +795,8 @@ defmodule Pictures.Timing do
             "#{n(Float.round(x * 1.0, 1))},#{n(Float.round(y * 1.0, 1))}"
           end)
 
-        scale =
-          if kind == :bool do
-            []
-          else
-            [
-              ~s(<text class="dim" x="#{n(gutter - 8)}" y="#{n(y + 4)}" text-anchor="end">#{high}</text>),
-              ~s(<text class="dim" x="#{n(gutter - 8)}" y="#{n(y + height + 4)}" text-anchor="end">#{low}</text>)
-            ]
-          end
-
-        marked =
-          if preset do
-            [
-              ~s(<line class="mark" x1="#{n(gutter)}" y1="#{n(Float.round(level.(preset) * 1.0, 1))}" x2="#{n(gutter + plot)}" y2="#{n(Float.round(level.(preset) * 1.0, 1))}"/>),
-              ~s(<text class="marked" x="#{n(gutter + 6)}" y="#{n(Float.round(level.(preset) * 1.0, 1) + 13)}">preset #{preset}</text>)
-            ]
-          else
-            []
-          end
+        scale = scale(kind, gutter - 8, {y + 4, high}, {y + height + 4, low})
+        marked = marked(preset, level, gutter, plot)
 
         lane =
           [
@@ -768,7 +837,7 @@ defmodule Pictures.Timing do
         Enum.map_join(run.values, " ", fn {signal, values} ->
           preset = run.presets[signal]
 
-          "#{signal}: #{Enum.join(values, ", ")}#{if preset, do: " (preset #{preset})", else: ""}."
+          "#{signal}: #{Enum.join(values, ", ")}#{preset_said(preset)}."
         end)
 
     Pictures.svg(
@@ -779,6 +848,36 @@ defmodule Pictures.Timing do
       Enum.join(labels ++ grid ++ lanes ++ List.flatten(axis), "\n")
     )
   end
+
+  defp height(:bool), do: 26
+  defp height(:number), do: 54
+
+  # A number's lane names its top and its bottom; a bool's is 0 and 1.
+  defp scale(:bool, _x, _high, _low), do: []
+
+  defp scale(:number, x, {top, high}, {bottom, low}) do
+    [
+      ~s(<text class="dim" x="#{n(x)}" y="#{n(top)}" text-anchor="end">#{high}</text>),
+      ~s(<text class="dim" x="#{n(x)}" y="#{n(bottom)}" text-anchor="end">#{low}</text>)
+    ]
+  end
+
+  # A timer's or a counter's preset, a dashed line across its lane.
+  defp marked(nil, _level, _gutter, _plot), do: []
+  defp marked(false, _level, _gutter, _plot), do: []
+
+  defp marked(preset, level, gutter, plot) do
+    at = Float.round(level.(preset) * 1.0, 1)
+
+    [
+      ~s(<line class="mark" x1="#{n(gutter)}" y1="#{n(at)}" x2="#{n(gutter + plot)}" y2="#{n(at)}"/>),
+      ~s(<text class="marked" x="#{n(gutter + 6)}" y="#{n(at + 13)}">preset #{preset}</text>)
+    ]
+  end
+
+  defp preset_said(nil), do: ""
+  defp preset_said(false), do: ""
+  defp preset_said(preset), do: " (preset #{preset})"
 
   defp time(ms) when rem(ms, 1000) == 0, do: "#{div(ms, 1000)} s"
   defp time(ms) when ms >= 1000, do: "#{:erlang.float_to_binary(ms / 1000, decimals: 1)} s"

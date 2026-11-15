@@ -11,9 +11,12 @@
 # For each picture it prints `drawn <svg>`, or `same <svg>` where the file already holds
 # what the script gives. A mark that is wrong, or a source that cannot be drawn, is a line
 # on stderr, `<page>:<line>: ...`, and the exit code is 1; with `--check` a picture that
-# differs from its file is one too. test/logex/pictures_test.exs holds every picture to
-# this script's output, so a picture cannot go stale. A script, not a test: it uses `case`
-# freely.
+# differs from its file is one too, and nothing is written. Two marks that name one file
+# and differ in its source, on the pages named or on any other page of the list, are a
+# problem too, and then no picture is drawn: each would be drawn over the other.
+# test/logex/pictures_test.exs holds every picture to this script's output, so a picture
+# cannot go stale. A script, not a test: it uses `case`, and function clauses for the
+# rest.
 Code.require_file("pictures.exs", __DIR__)
 
 defmodule Draw do
@@ -38,30 +41,42 @@ defmodule Draw do
   end
 
   defp pages(pages, write?) do
-    pages =
-      case pages do
-        [] ->
-          {listed, _} = Code.eval_file("docs/pages.exs")
-          for {path, kind, _group} <- listed, kind != :legacy or path == "README.md", do: path
+    listed =
+      for {path, kind, _group} <- Page.listed(), kind != :legacy or path == "README.md", do: path
 
-        pages ->
-          pages
-      end
+    chosen = chosen(pages, listed)
 
+    read =
+      for page <- Enum.uniq(chosen ++ listed), do: {page, Pictures.of(page, File.read!(page))}
+
+    clashes =
+      Pictures.clashes(
+        for {page, {pictures, _}} <- read, picture <- pictures, do: {page, picture}
+      )
+
+    told(clashes, read, chosen, write?)
+  end
+
+  defp chosen([], listed), do: listed
+  defp chosen(pages, _listed), do: pages
+
+  # One file two marks draw differently: nothing is drawn.
+  defp told([_ | _] = clashes, _read, _chosen, _write?), do: fail(clashes)
+
+  defp told([], read, chosen, write?) do
     problems =
-      for page <- pages do
-        {pictures, problems} = Pictures.of(page, File.read!(page))
-        problems ++ Enum.flat_map(pictures, &picture(&1, page, write?))
-      end
+      for {page, {pictures, problems}} <- read,
+          page in chosen,
+          do: problems ++ Enum.flat_map(pictures, &picture(&1, page, write?))
 
-    case List.flatten(problems) do
-      [] ->
-        :ok
+    fail(List.flatten(problems))
+  end
 
-      problems ->
-        Enum.each(problems, &IO.puts(:stderr, "draw: " <> &1))
-        System.halt(1)
-    end
+  defp fail([]), do: :ok
+
+  defp fail(problems) do
+    Enum.each(problems, &IO.puts(:stderr, "draw: " <> &1))
+    System.halt(1)
   end
 
   defp picture({line, svg, _kind, _source, _rungs} = picture, page, write?) do

@@ -8,9 +8,11 @@ defmodule Logex.ClausesTest do
   oracle and the harness that compares it with logex, and every other form of a module's
   body, a `setup`, a module attribute's anonymous function or the body's own code, is
   clauses. `end_to_end_test.exs` holds none, nor does `readme_test.exs`, the harness that
-  runs README's examples, nor any example, a script under `examples/` (decision 517 (b)),
+  runs README's examples, nor `scripts/page.exs`, the reading of a page the harness reads
+  through, nor any example, a script under `examples/` (decision 517 (b)),
   and in each file the code outside every module, its top level, is
-  read as a module's body is. The files are read as syntax trees, so that a
+  read as a module's body is. A script under `scripts/` is in the manner of
+  `scripts/failed.exs`: it may hold a `case`, and no `cond`, `if` or `unless`. The files are read as syntax trees, so that a
   conditional in a string, a comment or a heredoc is none and one written inline,
   `if(x, do: 1, else: 0)`, or through its module, `Kernel.if(x, do: 1)`, is one.
   """
@@ -61,6 +63,36 @@ defmodule Logex.ClausesTest do
 
     for {module, %{conditionals: conditionals}} <- modules,
         do: assert(conditionals == [], inspect(module))
+  end
+
+  # The harness reads each page through `scripts/page.exs` (decision 546 (d)), the one
+  # reading of a page every script shares: it is the harness's own, and holds no
+  # conditional, a `case` no more than an `if`.
+  test "the reading of a page the examples' harness reads through holds no conditional" do
+    modules = modules(Path.join(@root, "scripts/page.exs"))
+    assert Map.has_key?(modules, Page)
+
+    for {module, %{conditionals: conditionals}} <- modules,
+        do: assert(conditionals == [], inspect(module))
+  end
+
+  # The scripts' manner, `scripts/failed.exs`'s and `scripts/changelog.exs`'s: a `case`
+  # where a value is told apart, function clauses for the rest, and no `cond`, `if` or
+  # `unless`.
+  test "a script under scripts/ holds no cond, if or unless" do
+    scripts = Path.wildcard(Path.join(@root, "scripts/*.exs"))
+
+    assert Enum.sort(Enum.map(scripts, &Path.basename/1)) ==
+             ~w(changelog.exs draw.exs failed.exs page.exs pictures.exs prose.exs site.exs)
+
+    found =
+      for path <- scripts,
+          {module, %{conditionals: conditionals}} <- modules(path),
+          {owner, line, kind} <- conditionals,
+          kind != :case,
+          do: {Path.basename(path), module, owner, line, kind}
+
+    assert found == []
   end
 
   # Decision 517 (b): README's examples, shipped as scripts under `examples/`, are held to

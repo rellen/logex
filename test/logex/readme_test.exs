@@ -1,3 +1,5 @@
+Code.require_file("../../scripts/page.exs", __DIR__)
+
 defmodule Logex.ReadmeTest.Examples do
   @moduledoc false
 
@@ -18,43 +20,45 @@ defmodule Logex.ReadmeTest.Examples do
   # <why> -->`: an `elixir` block no `$ mix run` follows, which must parse. `<!--
   # unchecked: <why> -->`: a block no test holds, a message or a form of the syntax. On a
   # page under the writing rules every block is an example's, carries a mark, or is of a
-  # language of `@shown`, which the suite does not hold: so no block is shown unheld by
-  # accident.
+  # language `Page.shown/0` lists, which the suite compares with nothing: a diagram, data,
+  # Markdown shown as Markdown, and a command line, whose lines are commands alone, each
+  # after `$ `, since what a command prints is an example's to show or is marked
+  # `unchecked`. `scripts/prose.exs` counts both for a reviewer.
+  #
+  # A page's fences are read by `scripts/page.exs`, the one reading of a page every script
+  # shares: a fence it cannot take, one not closed or whose info string is not one word,
+  # is a problem with the page's name and the line, never a raise, so that one page's
+  # fence does not stop the suite of every other page.
 
   @root Path.expand("../..", __DIR__)
   # Decision 517 (b): where the pages' examples are shipped, each a file a host can copy.
   @examples Path.expand("../../examples", __DIR__)
-  @mark ~r/^\s*<!-- (file|part of|fragment|unchecked): (\S.*?) -->\s*$/
-  @fence ~r/^(\s*)(`{3,})(\w*)\s*$/
-  # A script's run, `$ mix run scan.exs`; a command that runs one of the repository's own
-  # scripts, `$ mix run scripts/draw.exs`, is no example.
-  @run ~r/\A\$ mix run (?!scripts\/)(\S+)\n/
   @needs ~r/\[`([^`\]]+)`\]\(([^)#\s]+\.(?:md|cheatmd))(?:#[^)\s]*)?\)/
-  # The languages of a block the suite does not hold: a command line, a diagram, Markdown
-  # shown as Markdown, and data of another tool.
-  @shown ["console", "mermaid", "markdown", "yaml", "json", "diff"]
-
-  # The files a page describes in its prose rather than shows, each made from a file it
-  # shows, by replacing text, beside the words of the page that describe it, which the test
-  # finds there: a page that shows the file and says the words is given the file made.
+  # The files a page describes in its prose rather than shows, each by its page, made from
+  # a file the page shows or links to, by replacing text, beside the words of the page
+  # that describe it, which the test finds there: the page a row names is given the file
+  # made, and is held to the words. A passage that moves to another page takes its rows
+  # with it: the row's page is changed in the same commit.
   # Since decision 363 `wired.logex` is no longer one: README shows it, its warning citing
   # a line README shows.
   @derived [
-    {"faster/packing.logex", "packing.logex", :as_is, [{"interval 10", "interval 5"}],
+    {"README.md", "faster/packing.logex", "packing.logex", :as_is,
+     [{"interval 10", "interval 5"}],
      "`faster/packing.logex`\nbeing `packing.logex` with `interval 5`"},
-    {"faster/conveyor.ld", "conveyor.ld", :as_is, [], "`faster/packing.logex`"},
-    {"faster/boxes.ld", "boxes.ld", :as_is, [], "`faster/packing.logex`"},
-    {"warm/packing.logex", "packing.logex", :as_is, [],
+    {"README.md", "faster/conveyor.ld", "conveyor.ld", :as_is, [], "`faster/packing.logex`"},
+    {"README.md", "faster/boxes.ld", "boxes.ld", :as_is, [], "`faster/packing.logex`"},
+    {"README.md", "warm/packing.logex", "packing.logex", :as_is, [],
      "runs the same plant from `warm/packing.logex`"},
-    {"warm/conveyor.ld", "conveyor.ld", :as_is, [], "`warm/packing.logex`"},
-    {"warm/boxes.ld", "boxes.ld", :as_is, [{"var boxes ctu", "var retain boxes ctu"}],
+    {"README.md", "warm/conveyor.ld", "conveyor.ld", :as_is, [], "`warm/packing.logex`"},
+    {"README.md", "warm/boxes.ld", "boxes.ld", :as_is,
+     [{"var boxes ctu", "var retain boxes ctu"}],
      "beside `warm/boxes.ld`,\nwhich is `boxes.ld` with its counter declared `var retain boxes ctu`"},
-    {"boxes_v2.ld", "boxes.ld", :as_is, [{"ctu boxes 3", "ctu boxes 5"}],
+    {"README.md", "boxes_v2.ld", "boxes.ld", :as_is, [{"ctu boxes 3", "ctu boxes 5"}],
      "boxes_v2.ld is boxes.ld with `ctu boxes 5`"},
-    {"moved/trip.logex", "v2/trip.logex", :as_is,
+    {"README.md", "moved/trip.logex", "v2/trip.logex", :as_is,
      [{"program c1 conveyor with fast", "program c1 conveyor with trip"}],
      "`moved/trip.logex`, that is `v2/trip.logex` with `c1` moved to `trip`"},
-    {"moved/conveyor.ld", "v2/conveyor.ld", :as_is, [], "`moved/trip.logex`"}
+    {"README.md", "moved/conveyor.ld", "v2/conveyor.ld", :as_is, [], "`moved/trip.logex`"}
   ]
 
   # A script a page shows as the continuation of another of the same page, its setup up
@@ -138,29 +142,48 @@ defmodule Logex.ReadmeTest.Examples do
   def derived, do: @derived
   def continues, do: @continues
   def fragments(path), do: for({^path, first, _run} <- @fragments, do: first)
-  def shown, do: @shown
+  def shown, do: Page.shown()
 
   # The pages the test reads: README.md, and every page docs/pages.exs lists that is not
   # a legacy document.
   def pages do
-    {listed, _} = Code.eval_file(Path.join(@root, "docs/pages.exs"))
-
-    for {path, kind, _group} <- listed,
+    for {path, kind, _group} <- Page.listed(@root),
         read?(path, kind),
         do: page(path, kind, File.read!(Path.join(@root, path)))
   end
 
-  # A page as the test reads it: its path, its kind, its text and its blocks.
-  def page(path, kind, text),
-    do: %{
+  # A page as the test reads it: its path, its kind, its text, its blocks, and what is
+  # wrong with its fences, which `scripts/page.exs` reads.
+  def page(path, kind, text) do
+    read = Page.read(text)
+
+    %{
       path: path,
       kind: kind,
       text: text,
-      blocks: read(String.split(text, "\n"), 1, nil, [], path)
+      blocks: Enum.flat_map(read.items, &item(&1, path)),
+      faults: Page.problems(read, Page.ruled?(kind))
     }
+  end
 
   defp read?("README.md", _kind), do: true
   defp read?(_path, kind), do: kind != :legacy
+
+  # The pages whose modules a run needs: every page's, or, where the run is of one
+  # page's tests alone, `--only reading:<page>` or `--only page:<page>`, that page's.
+  # Every other page's tests would be excluded, and to define their modules is most of
+  # the time such a run takes once the pages are many.
+  def wanted(configuration) do
+    include = configuration[:include]
+    named = for {key, page} <- include, key in [:reading, :page], do: page
+    only(:test in configuration[:exclude] and length(named) == length(include), named)
+  end
+
+  defp only(true, [_ | _] = pages), do: pages
+  defp only(_only, _pages), do: :all
+
+  def wanted?(:all, _page), do: true
+  def wanted?(pages, page), do: page in pages
 
   # A page's name as a module's, `GuidesTutorialsFirstProgram`, and as a directory's.
   def module(path),
@@ -214,7 +237,7 @@ defmodule Logex.ReadmeTest.Examples do
         do: hd(String.split(body, "\n"))
   end
 
-  defp runs?({_n, lang, body, nil}) when lang in ["", "console"], do: Regex.match?(@run, body)
+  defp runs?({_n, lang, body, nil}) when lang in ["", "console"], do: Page.run(body) != nil
   defp runs?(_block), do: false
 
   # A page's fenced blocks alone, its links to other pages' files left out.
@@ -223,9 +246,12 @@ defmodule Logex.ReadmeTest.Examples do
 
   # Every example of every page, in the pages' order and each page's own.
   def all(pages \\ pages()) do
-    shown = Map.new(pages, &{&1.path, files(&1)})
+    shown = files_of(pages)
     Enum.flat_map(pages, &of(&1, shown))
   end
+
+  # The files each page shows, by the page's path: what a link to a page can give.
+  def files_of(pages), do: Map.new(pages, &{&1.path, files(&1)})
 
   # A page's examples.
   def of(page, shown) do
@@ -241,52 +267,56 @@ defmodule Logex.ReadmeTest.Examples do
   def files(page),
     do: for({_n, _lang, body, {"file", path}} <- page.blocks, into: %{}, do: {path, body})
 
-  # The files a page has by its end: those it shows, those it links to on the pages that
-  # show them, and those its prose describes, made.
-  def held(page, pages) do
-    shown = Map.new(pages, &{&1.path, files(&1)})
-
+  # The files a page has by its end, among the files `shown/1` gives: those it shows,
+  # those it links to on the pages that show them, and those its prose describes, made.
+  def held(page, shown) do
     {files, _previous, _examples} =
       Enum.reduce(page.blocks, {%{}, nil, []}, &step(&1, &2, page, shown))
 
-    with_derived(files, page.text)
+    with_derived(files, page.path)
+  end
+
+  # The files a page's own test holds to examples/: those it shows and those made of its
+  # prose. A file it links to is held by the page that shows it, once.
+  def own_held(page, shown) do
+    linked = for {_n, :needs, file, _from} <- page.blocks, do: file
+    Map.drop(held(page, shown), linked -- Map.keys(files(page)))
+  end
+
+  # Where a page shows each of its files, by the file's path: the line of its block, a
+  # file made of the page's prose at the block of the file it is made of.
+  def lines(page) do
+    linked = for {n, :needs, file, _from} <- page.blocks, into: %{}, do: {file, n}
+    marked = for {n, _lang, _body, {"file", path}} <- page.blocks, into: %{}, do: {path, n}
+    shown = Map.merge(linked, marked)
+
+    made =
+      for {page_path, path, from, _how, _edits, _words} <- @derived,
+          page_path == page.path,
+          Map.has_key?(shown, from),
+          into: %{},
+          do: {path, shown[from]}
+
+    Map.merge(made, shown)
   end
 
   # Each fenced block of a page in order, `{line, lang, body, mark}`, `mark` what the line
-  # above it says of it, `{"file", path}` for one, or nil; and among them each link to a
-  # file another page shows, `{line, :needs, file, page}`. A fence of four backticks or
-  # more closes at its like, so that a block of Markdown that shows a fence is one block.
-  defp read([], _n, _mark, acc, _path), do: Enum.reverse(acc)
+  # above it says of it, `{"file", path}` for one, or nil; among them each link to a file
+  # another page shows, `{line, :needs, file, page}`; and each block or mark in a
+  # quotation, a callout's, `{line, :quoted}`, where the suite reads no block. The fences
+  # are `scripts/page.exs`'s to read: a fence of four backticks or more closes at its
+  # like, so that a block of Markdown that shows a fence is one block.
+  # A mark in a quotation, a callout's: the suite reads no block there.
+  @quoted ~r/^\s*>\s*<!-- (?:file|part of|fragment|unchecked):/
 
-  defp read([line | rest], n, mark, acc, path),
-    do:
-      block(kind(Regex.run(@mark, line), Regex.run(@fence, line)), line, rest, n, mark, acc, path)
+  defp item({:block, %{quoted: true, line: n}}, _path), do: [{n, :quoted}]
 
-  defp kind([_, what, value], _), do: {:mark, {what, value}}
-  defp kind(nil, [_, indent, ticks, lang]), do: {:fence, indent, ticks, lang}
-  defp kind(nil, nil), do: :text
+  defp item({:block, %{line: n, lang: lang, body: body, above: above}}, _path),
+    do: [{n, lang, body, Page.mark(above)}]
 
-  # A fence or a mark in a quotation, a callout's: the suite reads no block there.
-  @quoted ~r/^\s*>\s*(?:`{3,}|<!-- (?:file|part of|fragment|unchecked):)/
-
-  defp block({:mark, mark}, _line, rest, n, _mark, acc, path),
-    do: read(rest, n + 1, mark, acc, path)
-
-  defp block(:text, line, rest, n, _mark, acc, path),
-    do:
-      read(
-        rest,
-        n + 1,
-        nil,
-        quoted(Regex.match?(@quoted, line), n) ++ needs(line, n, path) ++ acc,
-        path
-      )
-
-  defp block({:fence, indent, ticks, lang}, _line, rest, n, mark, acc, path) do
-    {body, [_closing | after_block]} = Enum.split_while(rest, &(String.trim(&1) != ticks))
-    text = Enum.map_join(body, "\n", &String.replace_prefix(&1, indent, "")) <> "\n"
-    read(after_block, n + length(body) + 2, nil, [{n, lang, text, mark} | acc], path)
-  end
+  defp item({:line, n, line, :prose}, path), do: needs(line, n, path)
+  defp item({:line, n, line, :comment}, _path), do: quoted(Regex.match?(@quoted, line), n)
+  defp item({:line, _n, _line, :blank}, _path), do: []
 
   defp quoted(true, n), do: [{n, :quoted}]
   defp quoted(false, _n), do: []
@@ -294,7 +324,7 @@ defmodule Logex.ReadmeTest.Examples do
   # The links of a line whose text is a shipped file's name, in a code span, and whose
   # target is a page: the file, and the page as the repository names it.
   defp needs(line, n, path) do
-    for [_, file, target] <- Enum.reverse(Regex.scan(@needs, line)),
+    for [_, file, target] <- Regex.scan(@needs, line),
         File.regular?(Path.join(@examples, file)),
         do: {n, :needs, file, resolved(path, target)}
   end
@@ -315,7 +345,7 @@ defmodule Logex.ReadmeTest.Examples do
 
   defp step({n, lang, body, nil} = block, {files, previous, examples}, page, _shown)
        when lang in ["", "console"],
-       do: run(Regex.run(@run, body), block, {files, previous, examples}, n, page)
+       do: run(Page.run(body), block, {files, previous, examples}, n, page)
 
   defp step(block, {files, _previous, examples}, _page, _shown), do: {files, block, examples}
 
@@ -342,17 +372,18 @@ defmodule Logex.ReadmeTest.Examples do
         line: n,
         run: :shipped,
         script: script,
-        files: with_derived(files, page.text),
+        files: with_derived(files, page.path),
         expected: String.replace_prefix(body, shown, "")
       }
     ]
   end
 
-  defp with_derived(files, text) do
+  # The files made of a page's prose, for the page their rows name, where it has the file
+  # each is made of.
+  defp with_derived(files, page) do
     made =
-      for {path, from, how, edits, words} <- @derived,
+      for {^page, path, from, how, edits, _words} <- @derived,
           Map.has_key?(files, from),
-          text =~ words,
           into: %{},
           do: {path, Enum.reduce(edits, kept(how, files[from]), &edited/2)}
 
@@ -373,15 +404,29 @@ defmodule Logex.ReadmeTest.Examples do
   # What is wrong with the pages' marks and blocks, each `<page>:<line>: ...`: what a set
   # of pages can get wrong that one file could not, and what a writer can forget.
   def problems(pages \\ pages()) do
-    shown = Map.new(pages, &{&1.path, files(&1)})
-    Enum.flat_map(pages, &problems(&1, shown))
+    shown = files_of(pages)
+    shipped = shipped()
+    Enum.flat_map(pages, &problems(&1, shown, shipped))
   end
 
-  defp problems(page, shown) do
+  defp problems(page, shown, shipped) do
     blocks = page.blocks
 
-    Enum.flat_map(blocks, &problem(&1, page, shown)) ++
-      twice(page, blocks) ++ unscripted(page, blocks) ++ unheld(page.kind, page, blocks)
+    for({n, message} <- page.faults, do: "#{page.path}:#{n}: #{message}") ++
+      Enum.flat_map(blocks, &problem(&1, page, shown)) ++
+      twice(page, blocks) ++
+      unscripted(page, blocks) ++
+      unheld(page.kind, page, blocks) ++ ungiven(page, shown, shipped)
+  end
+
+  # Each file examples/ ships, by its path there, but the project's own two.
+  def shipped do
+    for path <- Path.wildcard(Path.join(@examples, "**"), match_dot: true),
+        File.regular?(path),
+        relative <- [Path.relative_to(path, @examples)],
+        not String.starts_with?(relative, ["_build/", "deps/"]),
+        relative not in [".gitignore", "mix.exs"],
+        do: relative
   end
 
   defp problem({n, :needs, file, from}, page, shown),
@@ -394,6 +439,13 @@ defmodule Logex.ReadmeTest.Examples do
     do: [
       "#{page.path}:#{n}: a `fragment` mark is for an `elixir` block, and this one is `#{lang}`"
     ]
+
+  defp problem({n, "elixir", _body, {"unchecked", _why}}, page, _shown) do
+    [
+      "#{page.path}:#{n}: an `elixir` block marked `unchecked`: an `elixir` block is an " <>
+        "example's script, or a `fragment`, which the suite parses"
+    ]
+  end
 
   defp problem({n, :quoted}, page, _shown) do
     [
@@ -439,7 +491,7 @@ defmodule Logex.ReadmeTest.Examples do
   defp unscripted(page, blocks) do
     for {previous, {n, lang, body, nil}} <- Enum.zip([nil | fenced(blocks)], fenced(blocks)),
         lang in ["", "console"],
-        [_, name] <- [Regex.run(@run, body)],
+        [_, name] <- [Page.run(body)],
         script(previous) == nil,
         do: "#{page.path}:#{n}: `$ mix run #{name}` does not follow its script, an `elixir` block"
   end
@@ -450,13 +502,67 @@ defmodule Logex.ReadmeTest.Examples do
   defp unheld(_kind, page, blocks) do
     for {n, lang, body, nil} <- blocks,
         is_binary(lang),
-        lang not in ["elixir" | @shown],
-        not Regex.match?(@run, body),
-        do:
-          "#{page.path}:#{n}: a `#{lang}` block with no mark: mark it `<!-- file: <path> -->`, " <>
-            "`<!-- part of: <path> -->` or `<!-- unchecked: <why> -->` on the line above " <>
-            "it, or write its language as one of #{Enum.join(@shown, ", ")}"
+        lang != "elixir",
+        Page.run(body) == nil,
+        told <- untold(lang in Page.shown(), lang, commands?(body)),
+        do: "#{page.path}:#{n}: #{told}"
   end
+
+  # A block with no mark: of a language the suite compares with nothing it passes, but a
+  # command line that shows what a command printed; of any other language it does not.
+  defp untold(true, "console", false) do
+    [
+      "a `console` block that shows what a command prints, which no test compares: show " <>
+        "the commands alone, each after `$ `, or show a script's run, `$ mix run " <>
+        "<script>` straight after its `elixir` block, or mark it `<!-- unchecked: <why> -->`"
+    ]
+  end
+
+  defp untold(true, _lang, _commands), do: []
+
+  defp untold(false, lang, _commands) do
+    [
+      "a `#{lang}` block with no mark: mark it `<!-- file: <path> -->`, " <>
+        "`<!-- part of: <path> -->` or `<!-- unchecked: <why> -->` on the line above " <>
+        "it, or write its language as one of #{Enum.join(Page.shown(), ", ")}"
+    ]
+  end
+
+  defp commands?(body),
+    do: body |> String.split("\n", trim: true) |> Enum.all?(&String.starts_with?(&1, "$ "))
+
+  # A file examples/ ships that an example's script names, in a string, or that a
+  # configuration file it names loads as a program, and the example is not given: its
+  # page neither shows it before the example nor links to the page that shows it, and
+  # the script would stop where it reads the file.
+  defp ungiven(page, shown, shipped) do
+    for %{run: :shipped} = example <- of(page, shown),
+        {path, through} <- reads(example, shipped),
+        not Map.has_key?(example.files, path),
+        do:
+          "#{page.path}:#{example.line}: `#{example.name}` reads `#{path}`#{through}, which " <>
+            "the page neither shows before it, under `<!-- file: #{path} -->`, nor links " <>
+            "to on the page that shows it, as [`#{path}`](<that page>)"
+  end
+
+  defp reads(example, shipped) do
+    named = for path <- shipped, String.contains?(example.script, ~s("#{path}")), do: path
+
+    loaded =
+      for path <- named,
+          Path.extname(path) == ".logex",
+          [_, type] <-
+            Regex.scan(~r/^\s*program\s+\S+\s+(\w+)/m, Map.get(example.files, path, "")),
+          program = beside(path, type <> ".ld"),
+          program in shipped,
+          uniq: true,
+          do: {program, ", a program of `#{path}`"}
+
+    Enum.map(named, &{&1, ""}) ++ loaded
+  end
+
+  defp beside(path, name),
+    do: Path.relative_to(Path.expand(Path.join(Path.dirname(path), name), "/"), "/")
 
   # A page's text with each block of Markdown shown as Markdown taken out: what a `$ mix
   # run` or a mark there says is the page's subject, not the page's own.
@@ -491,7 +597,9 @@ defmodule Logex.ReadmeTest do
   side by side, its script beside them, and the script run in a fresh VM by the `elixir`
   the suite runs on, with this build's code on its path, as `mix run` runs it; what it
   prints on standard output must be the page's text exactly, but for the lines the page
-  says are this run's alone, compared by their beginning, and it must exit 0. Each example
+  says are this run's alone, compared by their beginning, and it must exit 0; where it
+  does not, the failure shows what it printed on standard error too, the exception that
+  stopped it. Each example
   is a test module of its own, `Logex.ReadmeTest.Readme.OnTheClock` for README's
   `on_the_clock.exs`, so that the examples run side by side, a script two pages run is run
   for each, and a failure is named by its page and its example, and shows what the script
@@ -535,11 +643,29 @@ defmodule Logex.ReadmeTest do
 
     File.write!(Path.join(dir, example.name), script(example))
 
+    # Standard error is kept apart, in a file beside the directory: the page's text is
+    # held to standard output alone, and a script that stops says why on standard error.
+    errors = dir <> ".stderr"
+
     {output, status} =
-      System.cmd(@elixir, ["-pa", Mix.Project.compile_path(), example.name], cd: dir)
+      System.cmd(
+        "sh",
+        [
+          "-c",
+          ~S(exec "$0" "$@" 2>"$ERRORS"),
+          to_string(@elixir),
+          "-pa",
+          Mix.Project.compile_path(),
+          example.name
+        ],
+        cd: dir,
+        env: [{"ERRORS", errors}]
+      )
 
     at = "#{example.page} line #{example.line}: #{example.name}"
-    assert status == 0, "#{at} exited #{status}, printing:\n#{output}"
+
+    assert status == 0,
+           "#{at} exited #{status}, printing:\n#{output}" <> said(File.read!(errors))
 
     # Held as a pair with its place, so that a failure shows what the script printed beside
     # what the page shows, and where they differ, which a message of the test's own hid
@@ -547,6 +673,9 @@ defmodule Logex.ReadmeTest do
     assert {at, Examples.comparable(output, example.name)} ==
              {at, Examples.comparable(example.expected, example.name)}
   end
+
+  defp said(""), do: ""
+  defp said(errors), do: "and on standard error:\n" <> errors
 
   # Decision 517 (b): an example runs its script as shipped under `examples/`, which the
   # hold below keeps its page's; a fragment the script the test makes of it.
@@ -556,11 +685,22 @@ defmodule Logex.ReadmeTest do
   def elixir, do: @elixir
 end
 
-for example <- Logex.ReadmeTest.Examples.all() do
+# The pages are read once, here, for every module below: a page's own tests read what
+# is the page's, so that a page more is a page's work more and not every page's.
+pages = Logex.ReadmeTest.Examples.pages()
+shown = Logex.ReadmeTest.Examples.files_of(pages)
+examples = Logex.ReadmeTest.Examples.all(pages)
+fragments = Logex.ReadmeTest.Examples.run_fragments(pages)
+problems = Logex.ReadmeTest.Examples.problems(pages)
+wanted = Logex.ReadmeTest.Examples.wanted(ExUnit.configuration())
+
+for example <- examples, Logex.ReadmeTest.Examples.wanted?(wanted, example.page) do
   defmodule Module.concat(Logex.ReadmeTest, Logex.ReadmeTest.Examples.named(example)) do
     @moduledoc false
     use ExUnit.Case, async: Logex.ReadmeTest.Examples.async?(example.name)
     @moduletag page: example.page
+    # A fresh VM's start alone can take a minute where every core is busy.
+    @moduletag timeout: 180_000
     @example example
 
     test "#{@example.page}'s #{@example.name} prints what the page shows" do
@@ -571,11 +711,12 @@ end
 
 # Decision 365: each fragment the suite runs, in the setup its test makes, a module of its
 # own, `Logex.ReadmeTest.Readme.OnTheClockFragment3790`.
-for fragment <- Logex.ReadmeTest.Examples.run_fragments() do
+for fragment <- fragments, Logex.ReadmeTest.Examples.wanted?(wanted, fragment.page) do
   defmodule Module.concat(Logex.ReadmeTest, Logex.ReadmeTest.Examples.named(fragment)) do
     @moduledoc false
     use ExUnit.Case, async: true
     @moduletag page: fragment.page
+    @moduletag timeout: 180_000
     @fragment fragment
 
     test "#{@fragment.page}'s fragment at line #{@fragment.line} does what the page's prose says" do
@@ -617,7 +758,7 @@ end
 
 # Each page's blocks and marks, read with no script run, a module a page:
 # `mix test test/logex/readme_test.exs --only reading:<page>` checks one page in seconds.
-for page <- Logex.ReadmeTest.Examples.pages() do
+for page <- pages, Logex.ReadmeTest.Examples.wanted?(wanted, page.path) do
   defmodule Module.concat(Logex.ReadmeTest.Reading, Logex.ReadmeTest.Examples.module(page.path)) do
     @moduledoc false
     alias Logex.ReadmeTest.Examples
@@ -625,26 +766,39 @@ for page <- Logex.ReadmeTest.Examples.pages() do
     @moduletag page: page.path
     @moduletag reading: page.path
     @path page.path
+    @page page
+    @examples Enum.filter(examples, &(&1.page == page.path))
+    @fragments Enum.filter(fragments, &(&1.page == page.path))
+    @held Examples.own_held(page, shown)
+    @given Examples.held(page, shown)
+    @problems Enum.filter(problems, &String.starts_with?(&1, page.path <> ":"))
 
-    defp page, do: Enum.find(Examples.pages(), &(&1.path == @path))
-    defp examples, do: Enum.filter(Examples.all(), &(&1.page == @path))
+    defp page, do: @page
+    defp examples, do: @examples
+    defp fragments, do: @fragments
+    defp held, do: @held
+    defp given, do: @given
+    defp problems, do: @problems
 
-    # What the examples are made of is the page's own: each file the page's examples are
-    # given that its prose describes is still described there, and each script that
-    # continues another still says so.
+    # What the examples are made of is the page's own: each file its row names this page
+    # for is made of a file the page still has, and is still described there, and each
+    # script that continues another still says so.
     test "#{@path} still describes each file and script the examples make of its prose" do
       text = page().text
-      held = Examples.held(page(), Examples.pages())
 
-      for {path, _from, _how, _edits, words} <- Examples.derived(),
-          Map.has_key?(held, path),
-          do: assert(text =~ words, "#{@path} no longer says #{inspect(words)} of #{path}")
+      for {@path, path, from, _how, _edits, words} <- Examples.derived() do
+        assert Map.has_key?(given(), from),
+               "#{@path} no longer shows #{from}, nor links to the page that shows it, " <>
+                 "which #{path} is made of"
+
+        assert text =~ words, "#{@path} no longer says #{inspect(words)} of #{path}"
+      end
 
       for %{name: name} <- examples(),
           {_from, _cut, words} <- [Map.get(Examples.continues(), name)],
           do: assert(text =~ words, "#{@path} no longer says #{inspect(words)} of #{name}")
 
-      for %{page: @path, name: name, words: words} <- Examples.run_fragments(),
+      for %{name: name, words: words} <- fragments(),
           do: assert(text =~ words, "#{@path} no longer says #{inspect(words)} of #{name}")
     end
 
@@ -668,21 +822,25 @@ for page <- Logex.ReadmeTest.Examples.pages() do
              "a fragment @fragments names is no longer in #{@path}"
 
       for {n, _first, body} <- unrun,
-          do: assert(match?({:ok, _}, Code.string_to_quoted(body)), "#{@path} line #{n}")
+          do:
+            assert(
+              match?({:ok, _}, Code.string_to_quoted(body)),
+              "#{@path} line #{n}: an `elixir` block that does not parse"
+            )
     end
 
     # Decision 517 (b): the pages' examples are shipped as files under `examples/`, each
     # block a page shows its file there, each file a page describes made as the test makes
-    # it, and each script a page shows as the rest of another there whole.
+    # it, and each script a page shows as the rest of another there whole. A failure
+    # names the page, the line of the block and the file.
     test "each file and script #{@path} shows is its file under examples/" do
-      shown =
-        Map.merge(
-          Examples.held(page(), Examples.pages()),
-          Map.new(examples(), &{&1.name, &1.script})
-        )
+      lines =
+        Map.merge(Examples.lines(page()), Map.new(examples(), &{&1.name, &1.line}))
+
+      shown = Map.merge(held(), Map.new(examples(), &{&1.name, &1.script}))
 
       for {path, text} <- shown,
-          at = "#{@path}: #{path}",
+          at = "#{@path} line #{lines[path]}: #{path}",
           do: assert({at, File.read(Path.join(Examples.dir(), path))} == {at, {:ok, text}})
     end
 
@@ -696,11 +854,13 @@ for page <- Logex.ReadmeTest.Examples.pages() do
     end
 
     # What a set of pages can get wrong that one file could not, and what a writer can
-    # forget: a link to a file on a page that does not show it, a path marked twice, a
-    # part that is not its file's, a `$ mix run` with no script, and on a page under the
-    # writing rules a block no test holds that does not say so.
+    # forget: a fence that is not closed or says more than its language, a link to a file
+    # on a page that does not show it, a path marked twice, a part that is not its
+    # file's, a `$ mix run` with no script, a script that reads a file its page does not
+    # give it, and on a page under the writing rules a block no test holds that does not
+    # say so.
     test "#{@path}'s marks and blocks are sound, each block held or said not to be" do
-      assert Enum.filter(Examples.problems(), &String.starts_with?(&1, @path <> ":")) == []
+      assert Enum.join(problems(), "\n") == ""
     end
   end
 end
@@ -726,10 +886,16 @@ defmodule Logex.ReadmeTest.Extraction do
   test "each file, script and fragment the test makes of prose is still some page's" do
     pages = Examples.pages()
     examples = Examples.all()
-    held = Enum.flat_map(pages, &Map.keys(Examples.held(&1, pages)))
+    shown = Examples.files_of(pages)
+    held = Enum.flat_map(pages, &Map.keys(Examples.held(&1, shown)))
+    read = Enum.map(pages, & &1.path)
 
-    for {path, _from, _how, _edits, _words} <- Examples.derived(),
-        do: assert(path in held, "no page describes #{path} any longer")
+    for {page, path, _from, _how, _edits, _words} <- Examples.derived() do
+      assert page in read,
+             "@derived names #{page} for #{path}, and it is no page the suite reads"
+
+      assert path in held, "no page describes #{path} any longer"
+    end
 
     for {name, {from, _cut, _words}} <- Examples.continues(),
         do:
@@ -751,9 +917,10 @@ defmodule Logex.ReadmeTest.Extraction do
   # and nothing else but the project they run in: a file no page shows is refused.
   test "examples/ holds the files and scripts the pages show, and no other" do
     pages = Examples.pages()
+    files = Examples.files_of(pages)
 
     shown =
-      Enum.flat_map(pages, &Map.keys(Examples.held(&1, pages))) ++
+      Enum.flat_map(pages, &Map.keys(Examples.held(&1, files))) ++
         Enum.map(Examples.all(), & &1.name)
 
     on_disk =
@@ -797,6 +964,12 @@ defmodule Logex.ReadmeTest.Extraction do
              {%{"motor.ld" => file("motor.ld")}, %{}, %{"motor.ld" => file("motor.ld")}}
 
     assert Examples.problems([first, second]) == []
+
+    # A page of any kind of file gives a file: a cheatsheet as a page of Markdown.
+    sheet = page({"guides/sheet.cheatmd", :reference}, shows("motor.ld"))
+    reads = page(@second, ["Get [`motor.ld`](sheet.cheatmd#motor)."] ++ runs("scan.exs"))
+    assert [%{files: ^linked}] = Examples.all([sheet, reads])
+    assert Examples.problems([sheet, reads]) == []
 
     # A link between a script and its `$ mix run` leaves the script the run's.
     assert [_, %{page: "guides/c.md", name: "scan.exs", files: ^linked}] =
@@ -869,8 +1042,8 @@ defmodule Logex.ReadmeTest.Extraction do
     own = [
       "```console",
       "$ mix run scripts/draw.exs guides/a.md",
-      "drawn guides/assets/a.svg",
       "```",
+      "<!-- unchecked: what the repository's script prints -->",
       "```console",
       "$ mix run scripts/draw.exs",
       "same guides/assets/a.svg",
@@ -893,7 +1066,7 @@ defmodule Logex.ReadmeTest.Extraction do
     lines =
       ["```text", "xic a ote b", "```", "```", "xic a ote b", "```"] ++
         ["<!-- unchecked: a form of the syntax -->", "```text", "xic a ote b", "```"] ++
-        Enum.flat_map(Examples.shown(), &["```#{&1}", "x", "```"]) ++
+        Enum.flat_map(Examples.shown(), &["```#{&1}", "$ x", "```"]) ++
         ["````markdown", "```text", "xic a ote b", "```", "$ mix run scan.exs", "````"] ++
         ["<!-- fragment: its form -->", "```text", "x", "```", "```erlang", "x.", "```"]
 
@@ -928,14 +1101,161 @@ defmodule Logex.ReadmeTest.Extraction do
         "> <!-- unchecked: a message -->",
         "> ```text",
         "> not declared",
-        "> ```"
+        "> ```",
+        "",
+        "> <!-- file: motor.ld -->",
+        "> The file.",
+        "",
+        "After the callout."
       ])
 
     told =
       "a code block or a mark in a callout, which the suite does not read: put the block after the callout"
 
     assert Examples.problems([page]) ==
-             ["guides/a.md:4: #{told}", "guides/a.md:5: #{told}", "guides/a.md:7: #{told}"]
+             ["guides/a.md:4: #{told}", "guides/a.md:5: #{told}", "guides/a.md:9: #{told}"]
+
+    assert Examples.files(page) == %{}
+  end
+
+  # One page's fence stops no other page's suite: what `scripts/page.exs` cannot take is
+  # a problem of that page, with its line, and the page's other blocks are still read.
+  test "a fence that says more than its language, a fence that is not closed and a block " <>
+         "closed by a longer fence are problems of their page, with the line, and no raise" do
+    said = ["```elixir title=\"scan.exs\"", "IO.puts(1)", "```", "", "```console"]
+    page = page(@first, said ++ ["$ mix run scan.exs", "1", "```", "", "```text", "xic a"])
+
+    assert Examples.problems([page]) == [
+             "guides/a.md:1: a code block whose fence says `elixir title=\"scan.exs\"`: write " <>
+               "its language alone after the fence, one word, as in ```elixir",
+             "guides/a.md:10: a code block that is not closed: close it with ``` on a line " <>
+               "of its own",
+             "guides/a.md:10: a `text` block with no mark: mark it `<!-- file: <path> -->`, " <>
+               "`<!-- part of: <path> -->` or `<!-- unchecked: <why> -->` on the line above " <>
+               "it, or write its language as one of console, mermaid, markdown, yaml, json, diff"
+           ]
+
+    # The block is read by its language, and the example after it is still one.
+    assert [%{name: "scan.exs", line: 5, script: "IO.puts(1)\n"}] = Examples.all([page])
+
+    longer = page(@second, ["```console", "$ ls", "````", "", "The end."])
+
+    assert Examples.problems([longer]) == [
+             "guides/b.md:3: a code block closed by a longer fence than opened it: close it " <>
+               "with ```, as it is opened"
+           ]
+
+    # A language the examples do not know is a block with no mark, at its own fence.
+    session = page(@second, ["```shell-session", "$ ls", "```", ""] ++ runs("scan.exs"))
+
+    assert ["guides/b.md:1: a `shell-session` block with no mark" <> _] =
+             Examples.problems([session])
+
+    assert [%{name: "scan.exs"}] = Examples.all([session])
+  end
+
+  test "on a page under the writing rules a block fenced with tildes, an indented code " <>
+         "block, an HTML tag and a comment left open are problems; a legacy page's are left" do
+    lines = [
+      "~~~text",
+      "xic a ote b",
+      "~~~",
+      "",
+      "    xic a ote b",
+      "",
+      "1. A step.",
+      "",
+      "   Its result, in the step.",
+      "",
+      "       xic a ote b",
+      "",
+      "A list of <kind> pages and `<kind>` as code, <https://example.com>.",
+      "<pre>xic a ote b</pre>",
+      "<!-- a comment",
+      "left open -->"
+    ]
+
+    assert Examples.problems([page(@first, lines)]) == [
+             "guides/a.md:1: a code block fenced with tildes: fence it with three backticks, " <>
+               "as every other block",
+             "guides/a.md:5: a line indented by 4 spaces or more after an empty line, which " <>
+               "Markdown shows as a code block no check reads: fence the block with three " <>
+               "backticks and give it a language, or indent the line less",
+             "guides/a.md:11: a line indented by 4 spaces or more after an empty line, which " <>
+               "Markdown shows as a code block no check reads: fence the block with three " <>
+               "backticks and give it a language, or indent the line less",
+             "guides/a.md:13: the HTML tag `<kind>`: the site shows a tag as text and no " <>
+               "check reads into it. Write Markdown, or write the words as code",
+             "guides/a.md:14: the HTML tag `<pre>`: the site shows a tag as text and no " <>
+               "check reads into it. Write Markdown, or write the words as code",
+             "guides/a.md:15: an HTML comment that does not end on its line: a mark is one " <>
+               "line, as `<!-- file: motor.ld -->`",
+             "guides/a.md:1: a `text` block with no mark: mark it `<!-- file: <path> -->`, " <>
+               "`<!-- part of: <path> -->` or `<!-- unchecked: <why> -->` on the line above " <>
+               "it, or write its language as one of console, mermaid, markdown, yaml, json, diff"
+           ]
+
+    assert Examples.problems([page({"guides/a.md", :legacy}, lines)]) == []
+  end
+
+  test "a command line shows commands alone, each after `$ `: what a command prints is an " <>
+         "example's run or is marked unchecked; an `elixir` block is never unchecked" do
+    page =
+      page(@first, [
+        "```console",
+        "$ mix deps.get",
+        "$ mix compile",
+        "```",
+        "```console",
+        "$ elixir scan.exs",
+        "start pressed",
+        "```",
+        "<!-- unchecked: what the command prints differs by machine -->",
+        "```console",
+        "$ elixir --version",
+        "Elixir 1.20.4",
+        "```",
+        "<!-- unchecked: a script -->",
+        "```elixir",
+        "IO.puts(1)",
+        "```"
+      ])
+
+    assert Examples.problems([page]) == [
+             "guides/a.md:15: an `elixir` block marked `unchecked`: an `elixir` block is an " <>
+               "example's script, or a `fragment`, which the suite parses",
+             "guides/a.md:5: a `console` block that shows what a command prints, which no " <>
+               "test compares: show the commands alone, each after `$ `, or show a script's " <>
+               "run, `$ mix run <script>` straight after its `elixir` block, or mark it " <>
+               "`<!-- unchecked: <why> -->`"
+           ]
+  end
+
+  test "a script that names a file examples/ ships, which its page neither shows before " <>
+         "it nor links to, is a problem at the script's run; one given the file is none" do
+    script = ["```elixir", ~S|{:ok, motor} = Logex.compile_file("motor.ld")|, "```", ""]
+    run = ["```console", "$ mix run scan.exs", "1", "```"]
+    late = page(@first, script ++ run ++ shows("motor.ld") ++ shows("delay.ld"))
+    given = page(@second, ["Get [`motor.ld`](a.md)."] ++ script ++ run)
+
+    assert Examples.problems([late, given]) == [
+             "guides/a.md:5: `scan.exs` reads `motor.ld`, which the page neither shows " <>
+               "before it, under `<!-- file: motor.ld -->`, nor links to on the page that " <>
+               "shows it, as [`motor.ld`](<that page>)"
+           ]
+
+    # A configuration file the script names loads each of its programs from beside it.
+    loads = ["```elixir", ~S|Logex.Configuration.compile_file("plant.logex")|, "```", ""]
+    through = page(@first, shows("plant.logex") ++ loads ++ run)
+    assert file("plant.logex") =~ ~r/^program \S+ motor/m
+
+    assert ["guides/a.md:" <> told] = Examples.problems([through])
+
+    assert told =~
+             ~r/^\d+: `scan.exs` reads `motor.ld`, a program of `plant.logex`, which the page neither shows/
+
+    whole = page(@first, shows("plant.logex") ++ shows("motor.ld") ++ loads ++ run)
+    assert Examples.problems([whole]) == []
   end
 
   test "an `elixir` block with a `fragment` mark is named by its page; one with a `file` " <>
@@ -1000,14 +1320,121 @@ defmodule Logex.ReadmeTest.Extraction do
     exited = Map.merge(example, %{script: ~S|IO.puts("b"); System.halt(3)|, expected: "b\n"})
     error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(exited) end
     assert error.message == "guides/a.md line 5: wrong.exs exited 3, printing:\nb\n"
+
+    # A script that stops says why on standard error, which the failure shows.
+    stopped = Map.merge(example, %{script: ~S|IO.puts("b"); File.read!("gone.ld")|})
+    error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(stopped) end
+
+    assert error.message =~
+             ~r/\Aguides\/a\.md line 5: wrong\.exs exited 1, printing:\nb\nand on standard error:\n.*could not read file "gone\.ld": no such file or directory/s
   end
 
-  test "a file a page describes in its prose is made for it only where the page says the words" do
-    {path, from, _how, _edits, words} = hd(Examples.derived())
-    says = page(@first, shows(from) ++ [words])
-    silent = page(@second, shows(from))
+  test "a file a page describes in its prose is made for the page its row names, where " <>
+         "the page has the file it is made of, and for no other page" do
+    {named, path, from, _how, _edits, _words} = hd(Examples.derived())
+    names = page({named, :legacy}, shows(from))
+    other = page(@second, shows(from))
+    without = page({named, :legacy}, ["# A page"])
+    shown = Examples.files_of([names, other])
 
-    assert Map.has_key?(Examples.held(says, [says, silent]), path)
-    refute Map.has_key?(Examples.held(silent, [says, silent]), path)
+    assert Map.has_key?(Examples.held(names, shown), path)
+    assert Examples.lines(names)[path] == 2
+    refute Map.has_key?(Examples.held(other, shown), path)
+    refute Map.has_key?(Examples.held(without, Examples.files_of([without])), path)
+  end
+
+  test "a page's own test holds the files it shows and the files made of its prose; a " <>
+         "file it links to is held by the page that shows it" do
+    first = page(@first, shows("motor.ld"))
+    second = page(@second, ["Get [`motor.ld`](a.md)."] ++ shows("delay.ld"))
+    shown = Examples.files_of([first, second])
+
+    assert Map.keys(Examples.held(second, shown)) == ["delay.ld", "motor.ld"]
+    assert Map.keys(Examples.own_held(second, shown)) == ["delay.ld"]
+    assert Examples.lines(second) == %{"delay.ld" => 3, "motor.ld" => 1}
+  end
+
+  # The pages are read once for all their tests (the file's top level): a page's module
+  # reads what is the page's, and calls nothing that reads every page again, which made
+  # the reading tests grow with the square of the pages.
+  test "a page's reading tests call nothing that reads every page" do
+    {:ok, ast} = Code.string_to_quoted(File.read!(__ENV__.file))
+
+    {_ast, modules} =
+      Macro.prewalk(ast, [], fn
+        {:for, _,
+         [{:<-, _, [{:page, _, _}, {:pages, _, _}]}, _wanted, [do: {:defmodule, _, _} = body]]} =
+            node,
+        found ->
+          {node, [body | found]}
+
+        node, found ->
+          {node, found}
+      end)
+
+    assert [body] = modules
+
+    {_body, called} =
+      Macro.prewalk(body, [], fn
+        {{:., _, [{:__aliases__, _, [:Examples]}, name]}, _, arguments} = node, found ->
+          {node, [{name, length(arguments)} | found]}
+
+        node, found ->
+          {node, found}
+      end)
+
+    assert Enum.sort(Enum.uniq(called)) == [
+             continues: 0,
+             derived: 0,
+             dir: 0,
+             files: 1,
+             fragments: 1,
+             held: 2,
+             lines: 1,
+             marked: 1,
+             own: 1,
+             own_held: 2,
+             unrun: 1
+           ]
+  end
+
+  test "a run of one page's tests alone defines that page's modules alone; any other " <>
+         "run defines every page's" do
+    one = "guides/tutorials/first-program.md"
+    only = fn include -> Examples.wanted(include: include, exclude: [:test]) end
+
+    assert only.(reading: one) == [one]
+    assert only.(page: one, reading: "README.md") == [one, "README.md"]
+    assert {Examples.wanted?([one], one), Examples.wanted?([one], "README.md")} == {true, false}
+
+    # A filter of another kind beside it, or no `--only`, and every module is needed.
+    assert only.(reading: one, slow: true) == :all
+    assert only.([]) == :all
+    assert Examples.wanted(include: [reading: one], exclude: []) == :all
+    assert Examples.wanted(include: [], exclude: []) == :all
+    assert Examples.wanted?(:all, "README.md")
+  end
+
+  # A growth test compares reductions at two sizes, never time.
+  test "reading twice the pages is about twice the work" do
+    one = shows("motor.ld") ++ runs("scan.exs") ++ ["Get [`delay.ld`](a0.md)."]
+
+    pages = fn count ->
+      for at <- 1..count, do: page({"guides/a#{at}.md", :howto}, one)
+    end
+
+    work = fn pages ->
+      {:reductions, before} = Process.info(self(), :reductions)
+      shown = Examples.files_of(pages)
+      Examples.all(pages)
+      Examples.problems(pages)
+      for page <- pages, do: {Examples.held(page, shown), Examples.own_held(page, shown)}
+      {:reductions, after_work} = Process.info(self(), :reductions)
+      after_work - before
+    end
+
+    {few, many} = {pages.(40), pages.(80)}
+    work.(few)
+    assert work.(many) / work.(few) < 2.6
   end
 end

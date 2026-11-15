@@ -9,11 +9,22 @@ defmodule Logex.PicturesTest do
   title and a description, text as text, no script and nothing fetched. And the hold:
   each picture a page shows carries a mark that names its source, and its file under
   `guides/assets/` is what its script gives today, so that a picture cannot go stale; a
-  file there no page's mark names is refused.
+  file there no page's mark names is refused, and so are two marks that name one file and
+  differ in its source. `scripts/draw.exs`, the command a writer runs, is run as a writer
+  runs it, in a small tree of the test's own.
   """
   use ExUnit.Case, async: true
 
+  @moduletag :tmp_dir
   @root Path.expand("../..", __DIR__)
+  # The `elixir` beside the Elixir the suite runs on, or else the one on the path.
+  @elixir Enum.find(
+            [
+              Path.expand(Path.join([:code.lib_dir(:elixir), "..", "..", "bin", "elixir"])),
+              System.find_executable("elixir")
+            ],
+            &File.exists?(to_string(&1))
+          )
 
   defp in_root(fun), do: File.cd!(@root, fun)
 
@@ -36,11 +47,11 @@ defmodule Logex.PicturesTest do
                [
                  {:branches, [[{:contact, :open, "start"}], [{:contact, :open, "motor"}]]},
                  {:contact, :closed, "stop"},
-                 {:coil, "", ["motor"]}
+                 {:coil, "", "motor"}
                ],
-               [{:contact, :open, "motor"}, {:coil, "", ["run_lamp"]}],
-               [{:contact, :open, "overtemp"}, {:coil, "L", ["fault"]}],
-               [{:contact, :open, "reset"}, {:coil, "U", ["fault"]}],
+               [{:contact, :open, "motor"}, {:coil, "", "run_lamp"}],
+               [{:contact, :open, "overtemp"}, {:coil, "L", "fault"}],
+               [{:contact, :open, "reset"}, {:coil, "U", "fault"}],
                [{:contact, :open, "fault"}, {:box, "move", [{"", "0"}, {"to", "speed_sp"}]}]
              ]
 
@@ -61,7 +72,13 @@ defmodule Logex.PicturesTest do
       assert [[_, {:box, "ton", [{"", "t1"}, {"preset", "3000"}]}], _, shot, _] =
                Enum.map(rungs.("delay.ld"), & &1.elements)
 
-      assert shot == [{:contact, :open, "go"}, {:shot, "ons", "s1"}, {:coil, "", ["pulse"]}]
+      assert shot == [{:contact, :open, "go"}, {:shot, "ons", "s1"}, {:coil, "", "pulse"}]
+
+      # A pulse coil has its storage bit and its pulse bit, each named for what it is.
+      assert [[_, {:pulse, "P", "s1", "step"}, {:coil, "", "held_lamp"}], _, falling] =
+               Enum.map(rungs.("step.ld"), & &1.elements)
+
+      assert falling == [{:contact, :open, "eye"}, {:pulse, "N", "s2", "box_left"}]
 
       assert [
                {:box, "cal",
@@ -118,6 +135,67 @@ defmodule Logex.PicturesTest do
       assert {count.(">preset</text>"), count.(">3000</text>"), count.(">s1</text>")} == {1, 1, 1}
     end
 
+    test "a pulse coil is drawn with its pulse bit over it and its storage bit named under it" do
+      assert {:ok, svg} = in_root(fn -> Pictures.Rung.svg("examples/step.ld") end)
+      count = fn text -> length(String.split(svg, text)) - 1 end
+
+      assert {count.(">P</text>"), count.(">N</text>"), count.(">box_left</text>")} == {1, 1, 1}
+      assert count.(~s(>storage <tspan class="tag">s1</tspan></text>)) == 1
+      assert count.(~s(>storage <tspan class="tag">s2</tspan></text>)) == 1
+      refute svg =~ ">s1 step<"
+    end
+
+    # A coil's two arcs start 6 pixels each side of its middle: the coils that end
+    # motor.ld's first four rungs, a short tag over one and a long tag over another, have
+    # one middle.
+    test "the coils that end the rungs stand in one column at the right rail, a tag wider " <>
+           "than the coil ending with it" do
+      assert {:ok, svg} = in_root(fn -> Pictures.Rung.svg("examples/motor.ld") end)
+      arcs = for [_, x] <- Regex.scan(~r/<path class="ink" d="M (\d+) /, svg), do: x
+      assert [left, right] = Enum.uniq(arcs)
+      assert {length(arcs), String.to_integer(right) - String.to_integer(left)} == {8, 12}
+      assert svg =~ ~r/text-anchor="end">run_lamp<\/text>/
+      assert svg =~ ~r/text-anchor="middle">motor<\/text>/
+    end
+
+    test "a rung's comment is cut into lines no wider than the rungs, and widens no drawing",
+         %{tmp_dir: dir} do
+      assert Pictures.Rung.wrapped("in auto, jump over the manual section", 20) ==
+               ["in auto, jump over", "the manual section"]
+
+      assert Pictures.Rung.wrapped("a-word-longer-than-a-line and one", 10) ==
+               ["a-word-longer-than-a-line", "and one"]
+
+      assert Pictures.Rung.wrapped("", 10) == []
+
+      program = "var_input a bool\nvar_output b bool\n\nxic a ote b\n"
+      comment = "// " <> String.duplicate("a long comment on a short rung ", 6)
+      commented = String.replace(program, "xic a", comment <> "\nxic a")
+      File.write!(Path.join(dir, "bare.ld"), program)
+      File.write!(Path.join(dir, "noted.ld"), commented)
+
+      assert {:ok, bare} = Pictures.Rung.svg(Path.join(dir, "bare.ld"))
+      assert {:ok, noted} = Pictures.Rung.svg(Path.join(dir, "noted.ld"))
+
+      width = fn svg ->
+        hd(Regex.run(~r/<svg [^>]*width="(\d+)"/, svg, capture: :all_but_first))
+      end
+
+      assert width.(noted) == width.(bare)
+      assert length(String.split(noted, ~s(class="note dim"))) - 1 == 5
+    end
+
+    test "a file that does not compile is refused with what logex says of it, its line",
+         %{tmp_dir: dir} do
+      path = Path.join(dir, "wrong.ld")
+      File.write!(path, "var_input a bool\nvar_output b bool\n\nxic a ote lamp\n")
+
+      assert Pictures.Rung.svg(path) ==
+               {:error,
+                "#{path}: line 4: `lamp` is not declared: a picture is drawn of a program " <>
+                  "that compiles"}
+    end
+
     test "rungs can be drawn alone, by their numbers; a number the file has no rung for, " <>
            "and a file that does not compile, are refused" do
       assert {:ok, one} = in_root(fn -> Pictures.Rung.svg("examples/motor.ld", [3]) end)
@@ -131,7 +209,10 @@ defmodule Logex.PicturesTest do
                {:error, "examples/gone.ld: no such file or directory"}
 
       assert in_root(fn -> Pictures.Rung.svg("mix.exs") end) ==
-               {:error, "mix.exs does not compile: a picture is drawn of a program that does"}
+               {:error,
+                "mix.exs: `mix.exs` is not a `.ld` file: Logex.compile_file/1 compiles a " <>
+                  "program or a function block from its `.ld` file: a picture is drawn of a " <>
+                  "program that compiles"}
     end
   end
 
@@ -319,9 +400,35 @@ defmodule Logex.PicturesTest do
       for {path, kind, _group} <- listed, kind != :legacy or path == "README.md", do: path
     end
 
+    test "two marks that name one file and differ in its source are a problem of the " <>
+           "second, with the first's place; the same picture on two pages is none" do
+      first = {"guides/tutorials/a.md", {4, "guides/assets/motor.svg", "rung", "motor.ld", []}}
+      same = {"guides/howto/b.md", {9, "guides/assets/motor.svg", "rung", "motor.ld", []}}
+      some = {"guides/howto/c.md", {7, "guides/assets/motor.svg", "rung", "motor.ld", [1]}}
+      other = {"guides/howto/c.md", {12, "guides/assets/motor.svg", "timing", "m.timing.exs", []}}
+      apart = {"guides/howto/c.md", {15, "guides/assets/seal.svg", "rung", "seal.ld", []}}
+
+      assert Pictures.clashes([first, same, apart]) == []
+
+      assert Pictures.clashes([first, same, some, other, apart]) == [
+               "guides/howto/c.md:12: guides/assets/motor.svg is drawn here from `timing: " <>
+                 "m.timing.exs` and at guides/tutorials/a.md:4 from `rung: motor.ld`: one file " <>
+                 "is one picture, so give this picture another file name",
+               "guides/howto/c.md:7: guides/assets/motor.svg is drawn here from `rung: motor.ld " <>
+                 "1` and at guides/tutorials/a.md:4 from `rung: motor.ld`: one file is one " <>
+                 "picture, so give this picture another file name"
+             ]
+    end
+
     test "each picture a page shows is what its script gives today, and its marks are sound" do
-      for page <- pages() do
-        {pictures, problems} = Pictures.of(page, File.read!(Path.join(@root, page)))
+      read =
+        for page <- pages(), do: {page, Pictures.of(page, File.read!(Path.join(@root, page)))}
+
+      assert Pictures.clashes(
+               for({page, {pictures, _}} <- read, picture <- pictures, do: {page, picture})
+             ) == []
+
+      for {page, {pictures, problems}} <- read do
         assert problems == []
 
         for {line, svg, _kind, _source, _rungs} = picture <- pictures do
@@ -348,6 +455,159 @@ defmodule Logex.PicturesTest do
             do: Path.relative_to(path, @root)
 
       assert Enum.sort(on_disk) == Enum.sort(named)
+    end
+  end
+
+  describe "scripts/draw.exs" do
+    @lesson "# A\n\n<!-- rung: motor.ld -->\n![The motor.](../assets/motor.svg)\n\n" <>
+              "<!-- timing: delay.timing.exs -->\n![The lamp.](../assets/delay.svg)\n"
+    @recipe "# B\n\n<!-- rung: motor.ld -->\n![The motor.](../assets/motor.svg)\n"
+
+    # A small tree of the test's own: a list of three pages, two of them with pictures, one
+    # picture shown on both, and the sources the repository ships.
+    defp tree(dir, pages \\ %{}) do
+      files =
+        Map.merge(
+          %{
+            "docs/pages.exs" =>
+              ~S|[{"README.md", :legacy, :first}, {"guides/tutorials/a.md", :tutorial, "Tutorials"}, | <>
+                ~S|{"guides/howto/b.md", :howto, "How-to guides"}]|,
+            "README.md" => "# A project\n",
+            "guides/tutorials/a.md" => @lesson,
+            "guides/howto/b.md" => @recipe
+          },
+          pages
+        )
+
+      for {path, text} <- files do
+        File.mkdir_p!(Path.dirname(Path.join(dir, path)))
+        File.write!(Path.join(dir, path), text)
+      end
+
+      for path <- ["examples/motor.ld", "examples/delay.ld", "guides/assets/delay.timing.exs"] do
+        File.mkdir_p!(Path.dirname(Path.join(dir, path)))
+        File.cp!(Path.join(@root, path), Path.join(dir, path))
+      end
+    end
+
+    # The script run in `dir` as `mix run` runs it, this build's code on its path: the
+    # lines it printed, and its exit code.
+    defp draw(dir, args) do
+      {out, code} =
+        System.cmd(
+          to_string(@elixir),
+          ["-pa", Mix.Project.compile_path(), Path.join(@root, "scripts/draw.exs") | args],
+          cd: dir,
+          stderr_to_stdout: true
+        )
+
+      {String.split(out, "\n", trim: true), code}
+    end
+
+    test "it draws each picture the pages' marks name, says which it drew and which were " <>
+           "already what it gives, and draws what scripts/pictures.exs gives",
+         %{tmp_dir: dir} do
+      tree(dir)
+
+      assert draw(dir, []) ==
+               {[
+                  "drawn guides/assets/motor.svg",
+                  "drawn guides/assets/delay.svg",
+                  "same guides/assets/motor.svg"
+                ], 0}
+
+      assert {:ok, motor} = in_root(fn -> Pictures.Rung.svg("examples/motor.ld") end)
+      assert File.read!(Path.join(dir, "guides/assets/motor.svg")) == motor
+
+      assert File.read!(Path.join(dir, "guides/assets/delay.svg")) ==
+               File.read!(Path.join(@root, "guides/assets/delay.svg"))
+
+      assert draw(dir, ["guides/howto/b.md"]) == {["same guides/assets/motor.svg"], 0}
+    end
+
+    test "--check draws nothing: a picture that is not what the script gives, or is not " <>
+           "there, is a problem of each page that shows it, and the exit code is 1",
+         %{tmp_dir: dir} do
+      tree(dir)
+      assert {_, 0} = draw(dir, [])
+
+      assert draw(dir, ["--check"]) ==
+               {List.duplicate("same guides/assets/motor.svg", 2)
+                |> List.insert_at(1, "same guides/assets/delay.svg"), 0}
+
+      motor = Path.join(dir, "guides/assets/motor.svg")
+      File.write!(motor, "<svg/>")
+
+      stale = fn page ->
+        "draw: #{page}:4: guides/assets/motor.svg is not what its script gives: run `mix run scripts/draw.exs #{page}`"
+      end
+
+      assert draw(dir, ["--check"]) ==
+               {[
+                  "same guides/assets/delay.svg",
+                  stale.("guides/tutorials/a.md"),
+                  stale.("guides/howto/b.md")
+                ], 1}
+
+      assert File.read!(motor) == "<svg/>"
+
+      File.rm!(motor)
+      assert draw(dir, ["--check", "guides/howto/b.md"]) == {[stale.("guides/howto/b.md")], 1}
+      refute File.exists?(motor)
+    end
+
+    test "two marks that name one file and differ in its source stop the drawing, on " <>
+           "whichever page the writer names, and nothing is drawn",
+         %{tmp_dir: dir} do
+      tree(dir, %{"guides/howto/b.md" => String.replace(@recipe, "motor.ld", "motor.ld 1")})
+
+      clash =
+        "draw: guides/howto/b.md:4: guides/assets/motor.svg is drawn here from `rung: " <>
+          "motor.ld 1` and at guides/tutorials/a.md:4 from `rung: motor.ld`: one file is one " <>
+          "picture, so give this picture another file name"
+
+      assert draw(dir, ["guides/tutorials/a.md"]) == {[clash], 1}
+      assert draw(dir, ["--check"]) == {[clash], 1}
+      refute File.exists?(Path.join(dir, "guides/assets/motor.svg"))
+    end
+
+    test "a mark that is wrong and a source that does not compile are a problem with the " <>
+           "page and the line, and what logex says of the source",
+         %{tmp_dir: dir} do
+      page =
+        "# A\n\n![By hand.](../assets/hand.svg)\n\n<!-- rung: wrong.ld -->\n![Wrong.](../assets/wrong.svg)\n"
+
+      tree(dir, %{"guides/tutorials/a.md" => page})
+      wrong = "var_input a bool\nvar_output b bool\n\nxic a ote lamp\n"
+      File.write!(Path.join(dir, "examples/wrong.ld"), wrong)
+
+      assert draw(dir, ["guides/tutorials/a.md"]) ==
+               {[
+                  "draw: guides/tutorials/a.md:3: a picture with no `rung` or `timing` mark on " <>
+                    "the line above it: a script makes every picture",
+                  "draw: guides/tutorials/a.md:6: examples/wrong.ld: line 4: `lamp` is not " <>
+                    "declared: a picture is drawn of a program that compiles"
+                ], 1}
+
+      refute File.exists?(Path.join(dir, "guides/assets/wrong.svg"))
+    end
+
+    test "--rung and --timing draw one picture to a file, for a look", %{tmp_dir: dir} do
+      tree(dir)
+      assert draw(dir, ["--rung", "examples/motor.ld", "one.svg", "3"]) == {["drawn one.svg"], 0}
+      assert {:ok, one} = in_root(fn -> Pictures.Rung.svg("examples/motor.ld", [3]) end)
+      assert File.read!(Path.join(dir, "one.svg")) == one
+
+      assert draw(dir, ["--timing", "guides/assets/delay.timing.exs", "two.svg"]) ==
+               {["drawn two.svg"], 0}
+
+      assert File.read!(Path.join(dir, "two.svg")) ==
+               File.read!(Path.join(@root, "guides/assets/delay.svg"))
+
+      assert draw(dir, ["--rung", "examples/motor.ld", "three.svg", "9"]) ==
+               {["draw: examples/motor.ld has 5 rungs, and no rung 9"], 1}
+
+      refute File.exists?(Path.join(dir, "three.svg"))
     end
   end
 end

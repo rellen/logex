@@ -1,4 +1,4 @@
-# A page that breaks each rule once
+# A page that breaks each rule 1 time
 
 This page is for the test of the prose checker. Each paragraph breaks one rule one time.
 
@@ -49,3 +49,5 @@ xic start ote motor
 > #### Caution {: .caution}
 >
 > The plant stops.
+
+The lamp is on.<br>
