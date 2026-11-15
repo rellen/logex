@@ -15657,7 +15657,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      IEC 61131-3 says nothing of a manual's shape. Rockwell splits its Logix manuals the
      same way: a quick start, a programming manual and an instruction reference.
 
-     *(Built by DOC-1's step 1, 2026-11-15, `c69e100` to `d6d07c1`, the foundation and one
+     *(Built by DOC-1's step 1, 2026-11-15, `c69e100` to `5385098`, the foundation and one
      page; the rest of README moves with step 2. (b): ExDoc a dependency of the `docs`
      environment alone, the site's pages the lines of `docs/pages.exs`, built by `mix
      docs` and held by `scripts/docs.sh` to the warnings `docs/site-warnings.txt` lists;

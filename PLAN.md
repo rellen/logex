@@ -22102,7 +22102,7 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     with no mark and no run is refused; a code block in a callout is refused, since
     ExDoc shows its mark as text. `--only reading:<page>` is one page's reading, 5 tests
     in about two seconds; `--only page:<page>` adds its examples.
-  - *The writing rules a script can measure* (`93e4cef`). `scripts/prose.exs`, 22 rules,
+  - *The writing rules a script can measure* (`fb4c118`). `scripts/prose.exs`, 22 rules,
     each with a test in `prose_test.exs` and each broken once by
     `test/fixtures/prose/every_rule.md`: a sentence over 25 words, 20 in a numbered step;
     a paragraph over 6 sentences; 17 words with a plainer one; `should` and its kin; Latin
@@ -22117,20 +22117,41 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     passive verb, a glossary term with no link to the glossary, a quotation, an
     `unchecked` block. The permitted technical words are the glossary's headings, read
     from `guides/reference/glossary.md`, the one list.
-  - *Pictures a script makes* (`5a0096a`). `scripts/pictures.exs` draws a ladder from a
+  - *Pictures a script makes* (`da43ad5`). `scripts/pictures.exs` draws a ladder from a
     `.ld` file's parse tree and a timing diagram from a run of the program through
     `Logex.Runtime`, as SVG with its own light panel, a title and a description; `mix run
     scripts/draw.exs` writes each picture a page marks, and `pictures_test.exs` holds
     every file under `guides/assets/` to what the script draws today and to a page that
     marks it.
-  - *The style guide, the glossary and the templates* (`bb12b91`). `docs/style-guide.md`,
+  - *The style guide, the glossary and the templates* (`3cf187f`). `docs/style-guide.md`,
     a page of the site, itself under the rules; `guides/reference/glossary.md`, 94 terms;
     `docs/templates/`, a template for each of the six kinds, each passing its kind's rules.
-  - *One page whole* (`d6d07c1`). `guides/tutorials/first-program.md`: README's `motor.ld`
+  - *One page whole* (`5385098`). `guides/tutorials/first-program.md`: README's `motor.ld`
     and `scan.exs` in a project the reader makes, drawn, run and read, followed by hand in
     an empty directory with an empty `MIX_HOME`. README's "An example" lost those two
     blocks and their prose, 66 lines, for one sentence that links to the page, the link
     giving `motor.ld` to README's later examples.
+
+  - *The documents and the close* (`6e0294a`, `0c99750`, `f29a5e4`). `CONTRIBUTING.md`'s
+    "Writing a page of the documentation" and its scripts, README's "Running it" and
+    "Documents", `CLAUDE.md`'s lines, and this entry. The pages keep
+    `CONTRIBUTING.md`'s "Do not restore vendor names": the glossary gives a term's word in
+    "the conventional set" (question 6). Each rule of this step has a mutant, 92 in all:
+    25 of the site, its list and its workflow, 25 of the examples' test and the first
+    pages, 32 of the checker and 10 of the pictures. Each fails a test of the file that holds its rule.
+    Two passed at first, a repository script's run with no argument read as an example's,
+    and a picture's mark read inside a code block, and each has its test since `0c99750`.
+    The suite is 3,175 tests, 125 more than at `6889ad5`; `scripts/docs.sh` gives
+    `DOCS-OK`, 40 pages built and 13 warnings and dead links, each listed; and
+    `scripts/dialyzer.sh` gives `DIALYZER-OK`, the `dev` build it reads holding logex
+    alone. Parts 1 to 3 were gated before the next was begun, and the later parts after
+    they were committed. Two of those, the checker's and the pictures', failed one test as
+    first committed, `docs_test.exs` asking the checker's fixture for a line in
+    `docs/pages.exs`, which CI's runs 43716807515 and 43717558117 showed; the branch was
+    rebuilt so that the checker's commit carries the fixture's leave, its last tree
+    unchanged, and every commit of it passes. On the backup branch the workflow's
+    question to GitHub was answered `workflow`, so the first run on `main` is expected to
+    publish the site.
 
   **The readings that are provisional, and the questions they put to the maintainer.**
   Each is kept as built until answered.
