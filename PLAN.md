@@ -22154,7 +22154,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   3. *The `unchecked` mark.* A block of code on a page is held by the suite, run or
      compared with a file, unless a line above it says `<!-- unchecked: why -->`. For
      example, a message ExDoc or `mix` prints, which no file of `examples/` holds. The
-     checker counts these blocks for a page's reviewer; none is in the pages today.
+     checker counts these blocks for a page's reviewer; one is in the pages today, the
+     style guide's quotation of the older README.
      Options: (a), recommended, as built; (b) no such mark, so every block is a file or a
      run, and a page that must show a message runs something that prints it.
   4. *A passive verb is counted, not refused.* The passive voice is "the tag is written

@@ -16,13 +16,8 @@ left rail to the right rail through each rung.
 <!-- rung: motor.ld -->
 ![The 5 rungs of motor.ld as a ladder drawing. Rung 1: start or motor, and not stop, sets motor. Rung 2: motor sets run_lamp. Rung 3: overtemp latches fault. Rung 4: reset unlatches fault. Rung 5: fault moves 0 to speed_sp.](../assets/motor.svg)
 
-At the end, your script prints the outputs of the program after each scan:
-
-<!-- unchecked: the same lines as the output of step 4, which the suite compares -->
-```text
-start pressed   %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
-start released  %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
-```
+At the end, your script prints the outputs of the program after each scan.
+[Step 4](#step-4-run-the-scans) shows these lines.
 
 ## Before you start
 
