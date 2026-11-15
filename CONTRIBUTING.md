@@ -583,8 +583,18 @@ below).
 CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
 exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 through
 `erlef/setup-beam`: a red run there is a red commit, whatever ran green here, and a work
-item's report says so. A push runs CI on the commit it ends at alone, so push each commit
-you want checked, and read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
+item's report says so. Its test step ends a red run's log with each test that failed,
+`file:line: Module: test name` a line, as `scripts/gate.sh` does here: it deletes ExUnit's
+failures manifest, runs `mix test --warnings-as-errors` with its output in the log, and
+then `elixir scripts/failed.exs --exit` with the suite's code, which names the tests a red
+run failed, or says why it names none, and exits with that code, and makes a run that
+exited 0 and wrote no manifest, a suite a test halted, red (decision 515 (e)).
+`test/logex/scripts_test.exs` runs the step as the workflow writes it, and holds the
+workflow to every gate on every push and pull request, no step carrying a key, an `if:`
+or `continue-on-error:` for one, that could skip it or let its failure pass: on GitHub a
+failing suite under `continue-on-error: true` is a green job (RV-22's review, run 7). A
+push runs CI on the commit it ends at alone, so push each commit you want checked, and
+read its run before you call it landed. `--force` recompiles every module in `lib/`, so a
 warning in a file you did not touch still fails the build. `mix compile` never compiles the
 tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
 checker printed two warnings on every run of `runtime_test.exs`, across six commits that
@@ -600,6 +610,51 @@ change is wrong, not the record.
 
 ---
 
+## Releasing
+
+A release is a version, a changelog entry drawn from `docs/organisation.md` §7's decisions
+and a tag, made before anything is published (decision 515 (b)). `CHANGELOG.md`'s head says
+how an entry reads; `scripts/release.sh` checks a release and makes its tag; and
+`test/logex/release_test.exs` holds both, as `scripts_test.exs` holds the gate: it runs
+`scripts/changelog.exs` on the tree, and on changelogs of every shape it refuses, and
+`scripts/release.sh` in a scratch repository of its own, with a gate that stands in for
+the suite, a `gh` that stands in for GitHub's and an origin of its own, every check
+passed and each taken back in turn.
+
+- **Between releases.** A commit that records a decision in §7 names it in the newest
+  entry, `## Unreleased`, opening one above the newest release where there is none: the
+  entry's first line, `Decisions: 541–543.`, names every decision it carries, each once in
+  the file. The suite is red until every decision §7 records is named
+  (`release_test.exs`, provisional: `PLAN.md`'s RV-22, question 3). A change that alters
+  what a running program writes to its outputs gets an item under "What changes a running
+  program's outputs": the rule before and after, a plant that shows it, and how to find a
+  program it reaches, as the changelog's head shows for decision 146; a word newly
+  reserved or a form newly refused, one under "What no longer compiles, loads or starts".
+- **To release**, from `main`, its CI run green, which the release step checks:
+  1. The version is the maintainer's to give (the first's, and what a number says of the
+     release after it, are `PLAN.md`'s RV-22, question 1). In one commit, `mix.exs`'s
+     `version:` is set to it and `## Unreleased` becomes `## X.Y.Z — YYYY-MM-DD`, the
+     release's day; push it to `main` and read CI's run on it.
+  2. `scripts/release.sh --dry-run` runs every check, tags nothing, pushes nothing, and
+     says what it would tag. Read it.
+  3. Either `scripts/release.sh`, which makes the annotated tag `vX.Y.Z` on the commit
+     checked out and prints the command that pushes it, `git push origin
+     refs/tags/vX.Y.Z`, run by hand; or `scripts/release.sh --push`, in place of the plain
+     run, which makes the tag and pushes it (whether a tag is pushed is the maintainer's,
+     `PLAN.md`'s RV-22, question 2). Not one after the other: a run after a plain one is
+     refused, the tag being here already. A push that fails leaves the tag here and
+     prints the command. Each check refuses, a line `refused: ...`, and tags nothing:
+     the tree not clean; the commit not on origin's `main`, fetched as it runs, so that a
+     tag never names a commit only one checkout holds; CI not run on the commit, or a run
+     of `.github/workflows/ci.yml` on it not concluded `success`, read through GitHub's
+     CLI, `gh api`, signed in (`GH_REPO` names the repository where the checkout's remotes
+     do not); the changelog's newest entry not that version, or a decision of §7 no entry
+     names, each once (`elixir scripts/changelog.exs --release`); the tag here or on
+     origin already; the gate red (`scripts/gate.sh`, its log `_build/release-gate.log`).
+  4. A publish, to Hex or anywhere, comes only after the tag, a step of its own.
+
+---
+
 ## Scripts
 
 `scripts/` holds the checks this file asks for, each run from anywhere in the checkout,
@@ -609,17 +664,35 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
 - **`scripts/gate.sh [log] [mix test args]`** runs the four gates of "Before you commit"
   in order, the first that fails stopping the rest, writes what they print to the log
   (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
-  rc=<n>`, and exits with the gates' code. A failed suite is followed by the tests that
-  failed, `file: Module: test name` a line, read from ExUnit's failures manifest by
-  `scripts/failed.exs`, since `Result: 2406/2407 passed` names none, and a long log hides
-  them.
+  rc=<n>`, and exits with the gates' code. The suite is judged by `elixir
+  scripts/failed.exs --exit`, as CI's test step judges it ("Before you commit"): a failed
+  suite is followed by the tests that failed, `file:line: Module: test name` a line, read
+  from ExUnit's failures manifest, since `Result: 2406/2407 passed` names none, and a long
+  log hides them, or by why none is named; and a suite that exits 0 with no manifest
+  written, one a test halted with `System.halt(0)`, is `GATE-FAIL rc=1`, where `mix test`
+  alone reports it green.
 - **`elixir scripts/failed.exs`** prints the tests ExUnit's failures manifest holds. The
   manifest is ExUnit's own and kept across runs: a test's failure stays in it until a run
   passes that test, so after a failing run of one file and a passing run of another it
   still names the first; after the scripts here, which delete it first, it names that
   run's alone. A suite whose test files fail to compile or load runs no test, and ExUnit
   marks it failed whole: the script says so in one line beginning `suite:`
-  (`test/logex/scripts_test.exs`).
+  (`test/logex/scripts_test.exs`). The manifest holds no line, so each test's is read from
+  its file's syntax tree, the `test` or `doctest` call whose name, its `describe`'s before
+  it, is the test's, a part the compile makes matching any text; it is the line ExUnit's
+  own report gives, which `mix test file:line` runs again, the same for each of the
+  suite's 3,013 tests when RV-22's review compared them. Where more than one call could
+  name a test, the surest gives the line, a call in the test's own module before one in a
+  module the compile names, and a name all literal before one the compile makes; where
+  the surest are more than one, as a literal-named loop's `test name` and another loop's
+  test both match, the file alone is given, never a line that may be another test's. A
+  test no such call names, one a helper of a test file's own defines, is given its file
+  alone. With `--exit N`, after a run made with the manifest deleted before it, `N` the
+  run's exit code, it judges the run: a red one's tests under the heading `mix test exited
+  N; the tests that failed:`, or why none is named, no manifest (the suite did not finish)
+  or a manifest of no failure (a warning under `--warnings-as-errors`, for one), exiting
+  `N`; and a run that exited 0, silent and 0 where the manifest is there and names no
+  failure, red, 1, where there is none.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
   mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
   then restore the tree; the script applies each patch in turn (`git apply`), runs the
@@ -636,3 +709,6 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   and then how many failed, its logs in `_build/load/`. A new real-clock or runner test
   runs under it before it lands, `scripts/load.sh -n 50 test/logex/runner_test.exs`
   ("Wait for a process's `DOWN`…", above).
+- **`scripts/release.sh [--dry-run] [--push]`** and **`elixir scripts/changelog.exs
+  [--release]`** are the release step and its checks of the documents ("Releasing",
+  above).
