@@ -4932,8 +4932,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   count.)*
 - *A store from another configuration* (decision 285): the header names the
   configuration, and a store of another name is the host's mistake at a fresh start, a
-  line naming both, `start: :cold` starting over it and writing a new store at once, so a
-  renamed configuration starts only cold, which the message says.
+  line naming both, `start: :cold` starting over it, copying it first to the next
+  `.dropped.<n>` beside it (decisions 417 and 418) and then writing a new store over it,
+  so a renamed configuration starts only cold, which the message says, with that way out
+  whole (decision 545), each name quoted as a refusal quotes a text, at most 60 bytes.
+  *(RV-29's review, 2026-11-15: this bullet said `start: :cold` wrote a new store at
+  once, of no copy, since decision 417 made one; and this configuration's own name,
+  quoted unbounded, could push the way out past the 1,000 bytes a refusal shows of a
+  line, so that the refusal told it nowhere.)*
 
 **What "What logex is not" will owe** (M6-9) *(owed no more: README says each since
 M6-9, 2026-10-31, in its "Not everything a controller has", "Not battery-backed memory,
@@ -15666,7 +15672,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      or at line 1 where decision 535's refusal comes first (provisional, `PLAN.md`'s
      RV-29); a junk line, a digest mistyped and a miscount tell none. Its two pinned
      messages in `retain_store_test.exs` and README's `kept.exs` output changed by the
-     full way out alone. The life walk restates it (`:life_renamed_refused`).)*
+     full way out alone. The life walk restates it (`:life_renamed_refused`).)* *(RV-29's
+     review, 2026-11-15: this configuration's own name, interpolated whole, could make
+     the line longer than the 1,000 bytes `Logex.Refusal` shows of one, a name of some 650
+     bytes or more cutting it inside the way out, so that a refusal that told the way out
+     only there told it nowhere; now quoted as the store's is, at most 60 bytes and then
+     `…`. The life walk restates the way out once beside a cut too.)*
 
 546. **The README made short, and its details moved into guides (DOC-1).** The maintainer,
      2026-11-15: "The readme is a massive wall of text. We need to move all the details

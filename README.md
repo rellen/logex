@@ -3536,12 +3536,14 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   store names no program type: ...`` (decision 539), and starts warm once its `program`
   lines are put back, or `start: :cold`, which copies it first; its first line made
   `logex retain 2` by hand, it is read, and warns that each type the start runs is not in
-  the store. Each of the three refusals, 531's, 535's and 539's, ends as a cut store's
-  does, with the way to start anyway, "start it with start: :cold to start over it, which
+  the store. Each of the three refusals, 531's, 535's and 539's, tells, as a cut store's
+  does, the way to start anyway, "start it with start: :cold to start over it, which
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
   it" (decision 540), and so does a store of another configuration's, a renamed
-  configuration's, as `kept.exs` shows above (decision 545), the way out told once a
-  refusal, at the first line that tells it (provisional); a store refused for what a hand
+  configuration's, as `kept.exs` shows above (decision 545); the way out is told once a
+  refusal, at the end of the first line that tells it, and the lines after it end at what
+  they say is missing (provisional), so that a naming refusal told beside a renamed
+  configuration's ends without it; a store refused for what a hand
   can mend, a junk line, a digest mistyped or a miscount, is told none, so that it is
   mended and keeps its count, where a cold start sets the count back to its initial value.
   Where the count of a store that names its program in part or not at all does not read

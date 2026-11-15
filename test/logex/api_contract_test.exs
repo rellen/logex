@@ -15167,7 +15167,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # first given the store renamed, its configuration's line naming another configuration,
   # and is told that a renamed configuration starts only cold, with the full way out; and
   # then the renamed store with its `resource` line taken away and its count mended, told
-  # both, the way out once, at line 2 (provisional, `PLAN.md`'s RV-29).
+  # both, the way out once, at line 2 (provisional, `PLAN.md`'s RV-29). RV-29's review:
+  # decision 544's cut half and 545's way out once beside a cut restated too, the store
+  # with its `resource` line taken away cut short after its last line of values, its end
+  # line lost, told the cut alone, with the way out, where the first half is drawn, and,
+  # renamed too, told the renamed configuration with the way out and the cut with none,
+  # where the other is: in neither is 531's refusal told beside the cut.
   defp named_refused!(%{life: false}, _text, _opts), do: :ok
   defp named_refused!(%{start: :cold}, _text, _opts), do: :ok
   defp named_refused!(_w, nil, _opts), do: :ok
@@ -15196,6 +15201,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       "#{w.store}: #{no_resource(lines)}: " <> @life_way_out
     )
 
+    refused_so!(
+      w,
+      opts,
+      Enum.join(lines, "\n") <> "\n",
+      "#{w.store}: #{life_cut(lines)}: " <> @life_way_out
+    )
+
     File.write!(w.store, text)
     reach(:life_unresourced_counted, true)
   end
@@ -15220,6 +15232,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       opts,
       renamed.(unresourced),
       told <> ": " <> @life_way_out <> "\n#{w.store}: #{no_resource(lines)}"
+    )
+
+    refused_so!(
+      w,
+      opts,
+      renamed.(Enum.join(lines, "\n") <> "\n"),
+      told <> ": " <> @life_way_out <> "\n#{w.store}: #{life_cut(lines)}"
     )
 
     File.write!(w.store, text)
@@ -15250,6 +15269,18 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     {lines, String.to_integer(hd(String.split(ended, " ")))}
   end
+
+  # Decision 355's refusal of those lines cut short after the last of them, its end line
+  # lost, at that line, which it quotes as a refusal quotes a text, at most 60 bytes and
+  # then `…` (RV-5), without the way out.
+  defp life_cut(lines),
+    do:
+      "line #{length(lines)}: #{life_quoted(List.last(lines))} is the store's last line, and " <>
+        "no end line: a store of `logex retain 3` ends with `end <count> lines`, its count " <>
+        "of lines, so this one was cut short, and a store cut short is not read"
+
+  defp life_quoted(<<shown::binary-size(60), _, _::binary>>), do: "`#{shown}…`"
+  defp life_quoted(text), do: "`#{text}`"
 
   # Decision 531's refusal of those lines, at their first `program` line.
   defp no_resource(lines) do

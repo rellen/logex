@@ -22134,7 +22134,7 @@ still runs; and RV-25 last, alone.
       the line running, and the first find it so and be refused. A race of the helper,
       not of the runner, which takes restarts in the order they reach it (decision 500);
       a status of `:waiting` in `do_call/4`, its one receive after the send, would close
-      it.
+      it. *(RV-29's review: unproven, and the helper's sync applied, below.)*
     - `trip_test.exs:2078`, decision 486's cap trip awaited 100 ms, red in none of the 206:
       changed nothing. The cause argued from the code: the cap's trip kills the panel's
       device (decision 489) inside its report's call to the runner, and
@@ -22143,7 +22143,7 @@ still runs; and RV-25 last, alone.
       mailbox at `set/2`'s return in 13 of 300, the rest after it, and the 206 runs had it
       within the 100 ms each time. A
       `status/1` before the assertion, answered only once the runner has handled the
-      report, would close it.
+      report, would close it. *(RV-29's review: applied, below.)*
   - *The close* (the commit that records this entry, after `e52eb08`, which merged
     `origin/main`'s decisions 546–548 and took each side whole): §7's dated notes on
     decisions 541 to 545; README's "What has landed", which says RV-29 has landed, its

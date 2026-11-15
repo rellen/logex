@@ -622,8 +622,10 @@ defmodule Logex.Retain do
   # configuration and a naming refusal, or a cut, is told it once, at line 2 or, where
   # decision 535's refusal comes first, at line 1, the lines after it ending at what they
   # say is missing or wrong, and the way out shown wherever any line that tells it is,
-  # among `Logex.Refusal`'s first 50; since decision 544 no other store has two lines
-  # that tell it.
+  # among `Logex.Refusal`'s first 50: each such line quotes only texts `Logex.Refusal`
+  # bounds, at most 60 bytes each, so that with the way out it stays within the 1,000
+  # bytes a refusal shows of a line (RV-29's review); since decision 544 no other store
+  # has two lines that tell it.
   defp told_once(problems), do: elem(Enum.map_reduce(problems, :untold, &out_told/2), 0)
 
   defp out_told({n, {:way_out, text}}, :untold), do: {{n, text <> ": " <> @way_out}, :told}
@@ -832,14 +834,18 @@ defmodule Logex.Retain do
 
   # Decision 545 (RV-29): a store of another configuration, as a renamed one's is, starts
   # only cold, its refusal ending with the full way out (way_out/1), the copy among it,
-  # where it ended "start it with start: :cold to start over it".
+  # where it ended "start it with start: :cold to start over it". Both names quoted as a
+  # refusal quotes any text, at most 60 bytes (`Logex.Refusal`), this configuration's own
+  # among them since RV-29's review, so that the line keeps the way out within the 1,000
+  # bytes `Logex.Refusal` shows of a line, where a name of some 650 bytes or more, which a
+  # configuration may have, pushed it past them and the refusal told it nowhere.
   defp configuration(["configuration", stored, "written", time], _text, name),
     do:
       [
         {2,
          way_out(
            "the store is of configuration #{quoted(stored)}, and this configuration is " <>
-             "`#{name}`: a store starts only the configuration it was written for, so a " <>
+             "#{quoted(name)}: a store starts only the configuration it was written for, so a " <>
              "renamed configuration starts only cold"
          )}
       ] ++ time_lines(time)

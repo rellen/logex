@@ -110,10 +110,12 @@ defmodule Logex.RetainStoreTest do
     %{clock: clock, panel: panel, store: store, opts: opts}
   end
 
-  # A task once its call has been sent and waits for its answer.
-  defp waiting(task), do: in_call(Process.info(task.pid, :current_function), task)
+  # A task once its call has been sent and waits for its answer: in `gen:do_call/4` and
+  # blocked in its receive, `:waiting`, which it reaches only after its send (RV-29's
+  # review, as `stalled_disk_test.exs`'s calling/1).
+  defp waiting(task), do: in_call(Process.info(task.pid, [:current_function, :status]), task)
 
-  defp in_call({:current_function, {:gen, :do_call, 4}}, task), do: task
+  defp in_call([current_function: {:gen, :do_call, 4}, status: :waiting], task), do: task
 
   defp in_call(_elsewhere, task) do
     Process.sleep(1)
@@ -4274,6 +4276,46 @@ defmodule Logex.RetainStoreTest do
       assert [0, 0 | _lamp_and_shown] = values(runner)
       assert Runner.stop(runner) == :ok
       assert "logex retain 3\nconfiguration plant written " <> _ = File.read!(rig.store)
+    end
+
+    # RV-29's review (F2): this configuration's own name is quoted in the renamed
+    # configuration's refusal as any text a refusal quotes, at most 60 bytes and then `…`,
+    # as the store's is, so that the line keeps the way out within the 1,000 bytes
+    # `Logex.Refusal` shows of a line: a name of 700 bytes, which a configuration may
+    # have, put unbounded, cut the line inside the way out, and since the way out is told
+    # once a refusal, at that line, a naming refusal beside it, 531's at line 3, the
+    # refusal told it nowhere. Alone, beside 531's refusal and beside a cut, the way out
+    # whole, once.
+    test "a long configuration name is quoted bounded, the way out kept whole" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+      long = String.duplicate("p", 700)
+      untold = &String.replace_suffix(&1, ": " <> @way_out, "")
+
+      renamed =
+        "the store is of configuration `plant`, and this configuration is " <>
+          "`#{String.duplicate("p", 60)}…`: a store starts only the configuration it was " <>
+          "written for, so a renamed configuration starts only cold: " <> @way_out
+
+      cut = Enum.join([header, named, program | values], "\n") <> "\n"
+
+      for {text, told} <- [
+            {counted.([header, named, resource, program | values]), "s: line 2: #{renamed}"},
+            {counted.([header, named, program | values]),
+             "s: line 2: #{renamed}\ns: line 3: #{untold.(names_no_resource(program))}"},
+            {cut,
+             "s: line 2: #{renamed}\n" <>
+               "s: line #{length(values) + 3}: #{untold.(cut_short(List.last(values)))}"}
+          ] do
+        raises(told, fn -> Retain.decoded!(text, {"s", long}) end)
+        message = refused(fn -> Retain.decoded!(text, {"s", long}) end)
+        assert length(String.split(message, @way_out)) == 2
+        assert Enum.all?(String.split(message, "\n"), &(byte_size(&1) <= 1000 + 3))
+      end
     end
 
     # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no

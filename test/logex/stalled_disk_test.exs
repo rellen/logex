@@ -2342,7 +2342,11 @@ defmodule Logex.StalledDiskTest do
     # a write, and the restart reads the file the write it waited for left, the force
     # written after it; and a second restart asked meanwhile is taken once the first is
     # made, as it was when the wait was the runner's own, and finds the runner running,
-    # refused as decision 133 refuses any.
+    # refused as decision 133 refuses any. The line is seen tripped before the first
+    # restart is asked, and each task taken as calling once it waits in its call, so that
+    # each request comes behind the one before it; red once under load with the first
+    # restart told "the runner is running", its cause not found (RV-29's review, `PLAN.md`),
+    # a trip not yet made now told as itself.
     test "a force asked during the wait is written after the restart, and a second restart " <>
            "finds the line running",
          %{tmp_dir: dir} do
@@ -2353,6 +2357,7 @@ defmodule Logex.StalledDiskTest do
       _writing = waiting_call(server, :rename)
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
       restart = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
       behind = calling(Task.async(fn -> Runner.force(runner, "eye_1", 1) end))
 
@@ -3028,10 +3033,14 @@ defmodule Logex.StalledDiskTest do
   end
 
   # A task once its call has been sent, waiting for the answer, so that a request the test
-  # makes after it comes behind it in the runner's mailbox.
-  defp calling(task), do: in_call(Process.info(task.pid, :current_function), task)
+  # makes after it comes behind it in the runner's mailbox: in `gen:do_call/4` and blocked
+  # in its receive, `:waiting`, which it reaches only after its send, where `do_call/4`
+  # alone was also the moment between its monitor of the runner and its send (RV-29's
+  # review).
+  defp calling(task),
+    do: in_call(Process.info(task.pid, [:current_function, :status]), task)
 
-  defp in_call({:current_function, {:gen, :do_call, 4}}, task), do: task
+  defp in_call([current_function: {:gen, :do_call, 4}, status: :waiting], task), do: task
 
   defp in_call(_elsewhere, task) do
     Process.sleep(1)

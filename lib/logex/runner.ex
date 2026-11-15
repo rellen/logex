@@ -510,13 +510,14 @@ defmodule Logex.Runner do
     resource and no program type, the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
     device opened, a cut store's line and since decision 540 (RV-28) each refusal of the
-    naming lines, decisions 531's, 535's and 539's, ending with the way out, "start it
-    with start: :cold to start over it, which copies it first to the next `.dropped.<n>`
+    naming lines, decisions 531's, 535's and 539's, telling the way out, "start it with
+    start: :cold to start over it, which copies it first to the next `.dropped.<n>`
     beside it and then writes a new store over it", and since decision 545 (RV-29) a
     store of another configuration's, where it ended "start it with start: :cold to start
-    over it", the way out told once a refusal, at the first line that tells it
-    (provisional), and a refusal for what a hand can mend, a junk line, a digest mistyped
-    or a miscount, telling none. Since decision 517 (c) (RV-21) a
+    over it"; the way out told once a refusal, at the end of the first line that tells it,
+    the lines after it ending at what they say is missing (provisional), so that a naming
+    refusal beside a renamed configuration's ends without it; and a refusal for what a
+    hand can mend, a junk line, a digest mistyped or a miscount, telling none. Since decision 517 (c) (RV-21) a
     warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
     configuration's own lines or a program type's text as it prints, a type only the store

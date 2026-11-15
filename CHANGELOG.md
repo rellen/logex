@@ -181,4 +181,6 @@ the host's API is README's, so this first entry lists neither apart.
   the count is mended, as a store that names no program or its resource alone is, and a
   store of a renamed configuration told the full way to start cold, which copies the
   store first, where it said nothing of the copy, that way out told once a refusal and a
-  store refused for what a hand can mend told none.
+  store refused for what a hand can mend told none, and the configuration's own name
+  quoted in that refusal as any text a refusal quotes, at most 60 bytes, so that a long
+  name no longer cuts the way out off (RV-29's review).
