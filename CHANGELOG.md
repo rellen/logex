@@ -28,10 +28,10 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–531.
+Decisions: 1–540.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to
-2026-11-13 (provisional: its number, and whether its tag is pushed, are the maintainer's,
+2026-11-14 (provisional: its number, and whether its tag is pushed, are the maintainer's,
 `PLAN.md`'s RV-22, questions 1 and 2). No release came before it, but `mix.exs` has said
 0.1.0 at every commit of `main`, so a host who ran one upgrades from a logex that said the
 same number. For that host, "What changes a running program's outputs" lists each rule §7
@@ -156,14 +156,20 @@ README's, so this first entry lists neither apart.
 - **Retained values and a true warm restart**, Milestone 6 (decisions 266–285 and
   291–346): `retain` and `non_retain`, a warm restart keeping what is marked, the retained
   image as plain data, and the store a runner keeps on the host's disk.
-- **The review of the whole codebase after Milestone 6** (decisions 347–531): every source
+- **The review of the whole codebase after Milestone 6** (decisions 347–540): every source
   text compiling or told why, a rung that writes nothing refused; held outputs that hold;
   each device's write and every file write limited in time; a store cut short refused and a
   fresh start that drops anything keeping a numbered copy; the suite's cost pins bounds
   measured within the run; the host contract named; a long refusal bounded and a compile
   run in a process of its own; a store written by another program warned of; the
   simulator taking the configuration's addresses; README's examples as files under
-  `examples/`; CI naming a red run's failed tests, and this release step; and RV-26's,
+  `examples/`; CI naming a red run's failed tests, and this release step; RV-26's,
   decisions 527, 528 and 530, a program's text read canonically before the store compares
   it, the stale store's warning sent to the subscribers too and the store written as
-  `logex retain 3`, the release made only once RV-26 is on `main` (provisional).
+  `logex retain 3`; RV-27's, decisions 532, 535 and 536, the words logex reads in any case
+  and a bit's number in brackets read as logex reads them before the store compares a
+  program's text, a version 3 store that names no program refused, and an end line under
+  any header that takes none told as one; and RV-28's, decisions 539 and 540, a version 3
+  store that names its resource and no program refused, and each refusal of the lines
+  that name a store's program ending with the way to start cold, the release made only
+  once RV-28 is on `main` (provisional).

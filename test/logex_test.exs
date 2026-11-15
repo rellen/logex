@@ -1322,6 +1322,46 @@ defmodule LogexTest do
       {p, worker}
     end
 
+    # `call` counted in a process of its own, P, whose heap no collection visits, its
+    # receives traced to this one: P's reductions over the call, and each count a
+    # compile's own process handed P with its result, none where the compile ran in P.
+    defp counted(call) do
+      parent = self()
+
+      {p, ref} =
+        :erlang.spawn_opt(
+          fn ->
+            receive(do: (:go -> :ok))
+            {:reductions, before} = Process.info(self(), :reductions)
+            {:ok, _program} = call.()
+            {:reductions, later} = Process.info(self(), :reductions)
+            send(parent, {:reductions, self(), later - before})
+          end,
+          [:monitor, min_heap_size: 8_000_000]
+        )
+
+      :erlang.trace(p, true, [:receive, {:tracer, self()}])
+      send(p, :go)
+      assert_receive {:reductions, ^p, n}, 30_000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
+      delivered = :erlang.trace_delivered(p)
+      assert_receive {:trace_delivered, ^p, ^delivered}, 30_000
+
+      {n,
+       for(
+         {ref, _outcome, spent} when is_reference(ref) and is_integer(spent) <- traced(p, []),
+         do: spent
+       )}
+    end
+
+    defp traced(p, seen) do
+      receive do
+        {:trace, ^p, :receive, message} -> traced(p, [message | seen])
+      after
+        0 -> Enum.reverse(seen)
+      end
+    end
+
     test "each of the three runs its compile in a process of its own, gone once it answers",
          %{tmp_dir: dir} do
       path = Path.join(dir, "seal.ld")
@@ -1557,40 +1597,44 @@ defmodule LogexTest do
       send(p, :done)
     end
 
-    # The caller's count of reductions holds the compile's, wherever it ran: what a
-    # compile through `Logex.compile/2` charges its caller against `Logex.Compiler`'s own
-    # run in the caller, each in a process of its own whose heap no collection visits, the
-    # least of three. They differ by what the handing over costs, a spawn and two messages.
+    # The caller's count of reductions holds the compile's, wherever it ran. A compile
+    # through `Logex.compile/2` is counted from its caller, P, whose receives this one
+    # traces, so that the count the compile's process hands back with its result is read
+    # as P takes it: P is charged that count and its own handing over, a spawn, two
+    # messages and the charge, at every run, exactly. And P's count is held against
+    # `Logex.Compiler`'s own run in a process of its own, so that the count handed back is
+    # the whole compile's: each in a process whose heap no collection visits, counted in
+    # pairs, nine, since a compile builds maps of more than 32 keys, which the VM charges
+    # a few reductions more or less from one call to the next (`CONTRIBUTING.md`), here
+    # 1.45 million read over some 150 from run to run on a quiet machine, more than the 40
+    # to 70 the handing over adds: the most of the pairs' differences no less than
+    # nothing, the least no more than a thousand, after a pair counted for nothing, whose
+    # first compile a fresh VM charges some 7,000 more. (RV-27's landing, 2026-11-14: the
+    # two counts each the least of three, `apart >= here`, read the compile apart 11
+    # reductions under the compile here on a quiet machine, and 34 and 6 under load before
+    # it.)
     test "the caller is charged the reductions its compile spent" do
       source = counter(800, 0)
+      {_first, []} = counted(fn -> Logex.Compiler.compile(source, name: "p") end)
+      {_first, [_spent]} = counted(fn -> Logex.compile(source, name: "p") end)
 
-      count = fn call ->
-        Enum.min(
-          for _ <- 1..3 do
-            parent = self()
+      pairs =
+        for _ <- 1..9 do
+          {here, []} = counted(fn -> Logex.Compiler.compile(source, name: "p") end)
+          {apart, [spent]} = counted(fn -> Logex.compile(source, name: "p") end)
+          {here, apart, spent}
+        end
 
-            {_pid, ref} =
-              :erlang.spawn_opt(
-                fn ->
-                  {:reductions, before} = Process.info(self(), :reductions)
-                  {:ok, _program} = call.()
-                  {:reductions, later} = Process.info(self(), :reductions)
-                  send(parent, {:reductions, later - before})
-                end,
-                [:monitor, min_heap_size: 8_000_000]
-              )
-
-            assert_receive {:reductions, n}, 30_000
-            assert_receive {:DOWN, ^ref, :process, _, :normal}, 30_000
-            n
-          end
-        )
+      for {here, apart, spent} <- pairs do
+        assert here > 1_000_000
+        assert apart >= spent and apart <= spent + 1_000, "#{apart} charged, #{spent} spent"
       end
 
-      here = count.(fn -> Logex.Compiler.compile(source, name: "p") end)
-      apart = count.(fn -> Logex.compile(source, name: "p") end)
-      assert here > 1_000_000
-      assert apart >= here and apart <= here + 1_000, "#{apart} charged, #{here} here"
+      differences = for {here, apart, _spent} <- pairs, do: apart - here
+      assert Enum.max(differences) >= 0, "charged less than here in every pair: #{inspect(pairs)}"
+
+      assert Enum.min(differences) <= 1_000,
+             "charged more than here in every pair: #{inspect(pairs)}"
     end
 
     # Decision 520 (RV-8's review): a program keeps its text (decision 54), so a compile

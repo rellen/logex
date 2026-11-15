@@ -623,7 +623,7 @@ passed and each taken back in turn.
 
 - **Between releases.** A commit that records a decision in §7 names it in the newest
   entry, `## Unreleased`, opening one above the newest release where there is none: the
-  entry's first line, `Decisions: 532–534.`, names every decision it carries, each once in
+  entry's first line, `Decisions: 541–543.`, names every decision it carries, each once in
   the file. The suite is red until every decision §7 records is named
   (`release_test.exs`, provisional: `PLAN.md`'s RV-22, question 3). A change that alters
   what a running program writes to its outputs gets an item under "What changes a running

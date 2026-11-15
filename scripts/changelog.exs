@@ -16,9 +16,9 @@
 # `Unreleased`, and one whose version is not the one mix.exs gives, as Mix reads it.
 #
 # Each refusal is a line on stderr, `changelog: ...`, and the exit code is 1. With none, it
-# prints `changelog: every decision of §7, 1–531, named once`, or with `--release` the
-# version alone, which scripts/release.sh tags. A script, not a test: it uses `case`
-# freely.
+# prints `changelog: every decision of §7, 1–N, named once`, N the last §7 records, or
+# with `--release` the version alone, which scripts/release.sh tags. A script, not a
+# test: it uses `case` freely.
 defmodule Changelog do
   @moduledoc false
 
