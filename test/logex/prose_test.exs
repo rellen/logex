@@ -35,7 +35,7 @@ defmodule Logex.ProseTest do
   end
 
   defp run(dir, args) do
-    out = Path.join(System.tmp_dir!(), "prose-#{System.unique_integer([:positive])}.out")
+    out = out()
     script = Path.join(@root, "scripts/prose.exs")
     quoted = Enum.map_join([script | args], " ", &"'#{&1}'")
 
@@ -46,6 +46,17 @@ defmodule Logex.ProseTest do
     File.rm!(out)
     {String.split(failures, "\n", trim: true), String.split(reports, "\n", trim: true), code}
   end
+
+  # Where a run's standard output is kept: a file of this VM's own, named by the machine's
+  # number for the VM and the VM's count. Two suites run at once on one machine, two
+  # clones gated side by side, each count from 1, and by the count alone each read and
+  # removed the other's file.
+  defp out,
+    do:
+      Path.join(
+        System.tmp_dir!(),
+        "prose-#{System.pid()}-#{System.unique_integer([:positive])}.out"
+      )
 
   # A page of one paragraph a line, as a tutorial, with the section a user page ends by.
   defp page(paragraphs), do: Enum.join(paragraphs, "\n\n") <> "\n\n## See also\n"
@@ -58,6 +69,11 @@ defmodule Logex.ProseTest do
     for failure <- failures,
         [_, line, rule, text] <- [Regex.run(~r/^page\.md:(\d+): \[([\w-]+)\] (.*)$/, failure)],
         do: {String.to_integer(line), rule, text}
+  end
+
+  test "a run's output is kept in a file no other suite on the machine names" do
+    assert [out(), out()] |> Enum.map(&Path.basename/1) |> Enum.uniq() |> length() == 2
+    assert String.starts_with?(Path.basename(out()), "prose-#{System.pid()}-")
   end
 
   test "the page that breaks each rule once is refused once by each rule, with its line " <>

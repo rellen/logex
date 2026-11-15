@@ -266,8 +266,8 @@ defmodule Logex.PicturesTest do
 
     test "the picture says the run in its description, marks the preset and names each " <>
            "signal",
-         %{} do
-      path = Path.join(System.tmp_dir!(), "timing-#{System.unique_integer([:positive])}.exs")
+         %{tmp_dir: dir} do
+      path = Path.join(dir, "a.timing.exs")
       File.write!(path, inspect(@description))
       assert {:ok, svg} = in_root(fn -> Pictures.Timing.svg(path) end)
       File.rm!(path)
@@ -286,9 +286,10 @@ defmodule Logex.PicturesTest do
     end
 
     test "a description with a key too many, a time that is none, a signal the program " <>
-           "does not have and a file that is not there are refused" do
+           "does not have and a file that is not there are refused",
+         %{tmp_dir: dir} do
       refused = fn description ->
-        path = Path.join(System.tmp_dir!(), "timing-#{System.unique_integer([:positive])}.exs")
+        path = Path.join(dir, "a.timing.exs")
         File.write!(path, inspect(description))
         result = in_root(fn -> Pictures.Timing.svg(path) end)
         File.rm!(path)
