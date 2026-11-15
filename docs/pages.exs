@@ -31,6 +31,7 @@
 # checked by that kind's rules, and the group :github.
 [
   {"README.md", :legacy, :first},
+  {"guides/tutorials/first-program.md", :tutorial, "Tutorials"},
   {"guides/reference/glossary.md", :reference, "Reference"},
   {"docs/style-guide.md", :contributor, "Project"},
   {"docs/templates/tutorial.md", :tutorial, :github},

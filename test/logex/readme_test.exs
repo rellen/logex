@@ -266,17 +266,30 @@ defmodule Logex.ReadmeTest.Examples do
   defp kind(nil, [_, indent, ticks, lang]), do: {:fence, indent, ticks, lang}
   defp kind(nil, nil), do: :text
 
+  # A fence or a mark in a quotation, a callout's: the suite reads no block there.
+  @quoted ~r/^\s*>\s*(?:`{3,}|<!-- (?:file|part of|fragment|unchecked):)/
+
   defp block({:mark, mark}, _line, rest, n, _mark, acc, path),
     do: read(rest, n + 1, mark, acc, path)
 
   defp block(:text, line, rest, n, _mark, acc, path),
-    do: read(rest, n + 1, nil, needs(line, n, path) ++ acc, path)
+    do:
+      read(
+        rest,
+        n + 1,
+        nil,
+        quoted(Regex.match?(@quoted, line), n) ++ needs(line, n, path) ++ acc,
+        path
+      )
 
   defp block({:fence, indent, ticks, lang}, _line, rest, n, mark, acc, path) do
     {body, [_closing | after_block]} = Enum.split_while(rest, &(String.trim(&1) != ticks))
     text = Enum.map_join(body, "\n", &String.replace_prefix(&1, indent, "")) <> "\n"
     read(after_block, n + length(body) + 2, nil, [{n, lang, text, mark} | acc], path)
   end
+
+  defp quoted(true, n), do: [{n, :quoted}]
+  defp quoted(false, _n), do: []
 
   # The links of a line whose text is a shipped file's name, in a code span, and whose
   # target is a page: the file, and the page as the repository names it.
@@ -381,6 +394,13 @@ defmodule Logex.ReadmeTest.Examples do
     do: [
       "#{page.path}:#{n}: a `fragment` mark is for an `elixir` block, and this one is `#{lang}`"
     ]
+
+  defp problem({n, :quoted}, page, _shown) do
+    [
+      "#{page.path}:#{n}: a code block or a mark in a callout, which the suite does not " <>
+        "read: put the block after the callout"
+    ]
+  end
 
   defp problem(_block, _page, _shown), do: []
 
@@ -505,6 +525,8 @@ defmodule Logex.ReadmeTest do
   def check(example) do
     dir = Path.join([@root, "tmp", "readme", Examples.slug(example.page), example.name])
     File.rm_rf!(dir)
+    # An example that reads no file still has its directory.
+    File.mkdir_p!(dir)
 
     for path <- Map.keys(example.files) do
       File.mkdir_p!(Path.dirname(Path.join(dir, path)))
@@ -893,6 +915,25 @@ defmodule Logex.ReadmeTest.Extraction do
     refute Examples.own(page(@first, lines)) =~ "$ mix run scan.exs"
   end
 
+  test "a code block or a mark in a callout is a problem: the suite reads no block there" do
+    page =
+      page(@first, [
+        "> #### Note {: .info}",
+        ">",
+        "> The message:",
+        "> <!-- unchecked: a message -->",
+        "> ```text",
+        "> not declared",
+        "> ```"
+      ])
+
+    told =
+      "a code block or a mark in a callout, which the suite does not read: put the block after the callout"
+
+    assert Examples.problems([page]) ==
+             ["guides/a.md:4: #{told}", "guides/a.md:5: #{told}", "guides/a.md:7: #{told}"]
+  end
+
   test "an `elixir` block with a `fragment` mark is named by its page; one with a `file` " <>
          "or `part of` mark is held to its file and is no fragment" do
     page =
@@ -941,6 +982,20 @@ defmodule Logex.ReadmeTest.Extraction do
 
     assert Examples.slug("guides/tutorials/first-program.md") ==
              "guides_tutorials_first_program.md"
+  end
+
+  test "a failure names the page, its line and the example, for a script that prints " <>
+         "another thing and for one that exits with a failure" do
+    example = %{page: "guides/a.md", name: "wrong.exs", line: 5, run: :made, files: %{}}
+    printed = Map.merge(example, %{script: ~S|IO.puts("b")|, expected: "a\n"})
+    error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(printed) end
+
+    assert {error.left, error.right} ==
+             {{"guides/a.md line 5: wrong.exs", "b\n"}, {"guides/a.md line 5: wrong.exs", "a\n"}}
+
+    exited = Map.merge(example, %{script: ~S|IO.puts("b"); System.halt(3)|, expected: "b\n"})
+    error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(exited) end
+    assert error.message == "guides/a.md line 5: wrong.exs exited 3, printing:\nb\n"
   end
 
   test "a file a page describes in its prose is made for it only where the page says the words" do

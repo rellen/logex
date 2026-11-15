@@ -223,7 +223,7 @@ defmodule Prose do
         Enum.flat_map(read, &words(&1, rules, terms)) ++ see_also(kind, text)
 
     used = for unit <- read, term <- terms, mentions?(unit.plain, term), uniq: true, do: term
-    linked = linked(text)
+    linked = linked(text, terms)
 
     %{
       file: file,
@@ -540,11 +540,13 @@ defmodule Prose do
   defp mentions?(plain, term),
     do: Regex.match?(~r/(?<![\p{L}\p{N}_-])#{Regex.escape(term)}s?(?![\p{L}\p{N}_-])/iu, plain)
 
-  # The glossary's terms a page links to, `glossary.md#term`, as the terms are written.
-  defp linked(text) do
-    for [_, anchor] <- Regex.scan(~r/glossary\.md#([\w-]+)/, text),
-        uniq: true,
-        do: String.replace(anchor, "-", " ")
+  # The glossary's terms a page links to, `glossary.md#warm-restart`, as the terms are
+  # written, `warm restart`.
+  defp linked(text, terms) do
+    anchors =
+      for [_, anchor] <- Regex.scan(~r/glossary\.md#([\w-]+)/, text), uniq: true, do: anchor
+
+    for term <- terms, String.replace(term, " ", "-") in anchors, do: term
   end
 end
 

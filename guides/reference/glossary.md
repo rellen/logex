@@ -605,4 +605,6 @@ timer has a word such as `ton_ltime` and counts in nanoseconds.
 
 ## See also
 
+- [Your first program](../tutorials/first-program.md): a tutorial that uses the first
+  words of this page.
 - [The style guide](../../docs/style-guide.md): the writing rules for these pages.

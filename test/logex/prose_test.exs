@@ -486,6 +486,10 @@ defmodule Logex.ProseTest do
     ### warm restart
 
     A restart that keeps the retained values.
+
+    ### seal-in
+
+    A rung that keeps its output on.
     """
 
     test "a term of the glossary, a heading of level 3 there, is never refused by a word " <>
@@ -508,7 +512,7 @@ defmodule Logex.ProseTest do
         "page.md" =>
           page([
             "Each tag has a type. A [warm restart](guides/reference/glossary.md#warm-restart) " <>
-              "keeps 2 tags. Read the display."
+              "keeps 2 tags. Read the display. A [seal-in](guides/reference/glossary.md#seal-in)."
           ])
       }
 
