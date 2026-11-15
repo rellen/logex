@@ -169,6 +169,10 @@ the host's API is README's, so this first entry lists neither apart.
   `logex retain 3`; RV-27's, decisions 532, 535 and 536, the words logex reads in any case
   and a bit's number in brackets read as logex reads them before the store compares a
   program's text, a version 3 store that names no program refused, and an end line under
-  any header that takes none told as one; and RV-28's, decisions 539 and 540, a version 3
+  any header that takes none told as one; RV-28's, decisions 539 and 540, a version 3
   store that names its resource and no program refused, and each refusal of the lines
-  that name a store's program ending with the way to start cold.
+  that name a store's program ending with the way to start cold; and RV-29's, decision
+  544, a store that names a program type and no resource, its count not mended or the
+  store cut short too, told its count or its cut alone and the missing resource once the
+  count is mended, as a store that names no program or its resource alone is, so the way
+  to start cold is told once.

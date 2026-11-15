@@ -3531,11 +3531,11 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   the store. Each of the three refusals, 531's, 535's and 539's, ends as a cut store's
   does, with the way to start anyway, "start it with start: :cold to start over it, which
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
-  it" (decision 540). Where the count of a store that names no program, or its resource
-  alone, does not read either, the count is told alone, and the missing lines once it is
-  mended (decision 538), an empty line an editor left after an end line whose count reads
-  told beside them; one with a `program` line and no `resource` line is told both at
-  once, and cut short too, the way out twice, a line each (provisional). A `resource` or
+  it" (decision 540). Where the count of a store that names its program in part or not
+  at all does not read either, its count not mended or the store cut short too, the count
+  or the cut is told alone, and the missing lines once it is mended, one rule for the
+  three, so the way out is told once (decisions 538 and 544), an empty line an editor left
+  after an end line whose count reads told beside them. A `resource` or
   `program` line that does not read, its digest mistyped, is told as itself, not as one
   missing; beside a good line of its own kind, it is told beside the refusal of the kind
   that is missing. A logex from

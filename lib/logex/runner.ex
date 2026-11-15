@@ -333,7 +333,9 @@ defmodule Logex.Runner do
     in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
     names its resource and no program type, which no configuration gives, refused at its
     `resource` line (provisional, the line), where it was read and warned that each type
-    was not in the store, and a naming line that does not read is told as itself; and
+    was not in the store, each of the three told only once the store's count reads, since
+    decision 544 (RV-29) decision 531's too, a store miscounted or cut short told its end
+    line alone, and a naming line that does not read is told as itself; and
     since decision 355 its end line,
     `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
