@@ -470,7 +470,105 @@ defmodule Logex.Runtime do
   ]
   defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside, :restarts]
 
+  # Decision 515 (c), RV-24: the host contract's types, each the value a host hands in or
+  # gets back as the docs give it. A spec names what the host hands in; anything else is
+  # the host's mistake, raised as its pinned `ArgumentError`.
+
+  @typedoc """
+  The resource (M2-1), a configuration running: opaque, plain data a host holds and hands
+  back, which this module alone reads and writes (decision 514).
+  """
   @opaque t :: %__MODULE__{}
+
+  @typedoc """
+  A value as a host sets and reads one: a bool `0` or `1` and every integer type an
+  integer, a real a float, and an array a list, a list of lists for more dimensions
+  (M5-11).
+  """
+  @type value :: integer | float | [value]
+
+  @typedoc """
+  Values by name: a lone instance's var_inputs or var_outputs, a resource's input or
+  output points, an element by its name, `"steps[3]"`.
+  """
+  @type values :: %{optional(String.t()) => value}
+
+  @typedoc "A restart's kind (M6-2)."
+  @type mode :: :cold | :warm
+
+  @typedoc """
+  What a cycle reports, in the order it happened (the moduledoc): a task's run of an
+  instance, a task's missed periods, and a fault a scan met. An open set: a host tolerates
+  a kind it does not know.
+  """
+  @type event ::
+          {:ran, task :: String.t() | :none, instance :: String.t(), now :: non_neg_integer}
+          | {:overlap, task :: String.t(), missed :: pos_integer}
+          | {:fault, task :: String.t() | :none, instance :: String.t(), Logex.Fault.t()}
+
+  @typedoc "A stored value's type: an elementary type's atom, or an array of one."
+  @type stored_type ::
+          Logex.Declarations.elementary()
+          | {:array, Logex.Declarations.elementary(), [pos_integer]}
+
+  @typedoc """
+  A lone instance's retained image (M6-4, `retained/2`), which `instance/2` takes: each
+  retained leaf by its path to its type and value, and each instance on the way to one to
+  its kind.
+  """
+  @type lone_image :: %{
+          program: String.t() | nil,
+          kinds: %{optional(String.t()) => String.t() | {:array, String.t(), [pos_integer]}},
+          values: %{optional(String.t()) => {stored_type, value}}
+        }
+
+  @typedoc """
+  A resource's retained image (M6-4, `retained/1`), which `start/2` takes: each retained
+  global, each instance's lone image, and each retained trigger's last sample.
+  """
+  @type image :: %{
+          configuration: String.t(),
+          globals: %{optional(String.t()) => {stored_type, value}},
+          instances: %{optional(String.t()) => lone_image},
+          triggers: %{optional(String.t()) => 0 | 1}
+        }
+
+  @typedoc """
+  Each value of an image a start did not keep, once, by its path, with its reason
+  (`start/2`).
+  """
+  @type dropped :: [{String.t(), reason}]
+
+  @typedoc """
+  Why a start dropped a stored value (`start/2`): an instance, global, tag or member the
+  configuration or program does not declare; a qualifier gone; a value that does not fit
+  its type; a type or kind changed; an array's sizes changed; or a timer's or counter's
+  stored preset the program's replaced (decisions 308 and 378).
+  """
+  @type reason ::
+          :undeclared
+          | :unretained
+          | :misfit
+          | {:retyped, stored :: term, now :: term}
+          | {:resized, from :: [pos_integer], to :: [pos_integer]}
+          | {:preset, stored :: integer, now :: integer}
+
+  @typedoc false
+  @type fields :: %{
+          config: Configuration.t(),
+          now: non_neg_integer,
+          globals: %{optional(String.t()) => term},
+          instances: %{optional(String.t()) => Instance.t()},
+          tasks: %{optional(String.t()) => map},
+          generation: non_neg_integer,
+          aside: %{optional(String.t()) => Instance.t()},
+          restarts: non_neg_integer
+        }
+
+  @typedoc false
+  @type step ::
+          {:timed, task :: String.t(), tuple}
+          | {:untimed, task :: String.t() | :none, instances :: [String.t()]}
 
   # M2-5: the key under which a scan records which instances' bodies ran.
   @ran :ran
@@ -554,6 +652,7 @@ defmodule Logex.Runtime do
   @memories %{ctu: "cu", ctd: "cd"}
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
+  @spec instance(Program.t()) :: Instance.t()
   def instance(program) do
     checked!(program)
     fresh(program)
@@ -587,6 +686,7 @@ defmodule Logex.Runtime do
   an entry under an instance whose kind it does not hold, a timer's `last`, or an image
   of another program, is the host's mistake: one `ArgumentError`, a line each.
   """
+  @spec instance(Program.t(), lone_image) :: {Instance.t(), dropped}
   def instance(program, image) do
     checked!(program)
     Image.lone!(image, program)
@@ -624,6 +724,7 @@ defmodule Logex.Runtime do
   lacks, which a plain swap gives, is not in it, so `instance/2` starts it at its initial
   value, as a warm restart does.
   """
+  @spec retained(Program.t(), Instance.t()) :: lone_image
   def retained(program, state) do
     program!(program)
     %Instance{env: env} = state!(state, program)
@@ -634,6 +735,7 @@ defmodule Logex.Runtime do
   # configuration's by `Logex.Configuration.check/1`, so that `start/1` and a
   # configuration edit's switch check each program once, not once an instance. Internal.
   @doc false
+  @spec fresh(Program.t()) :: Instance.t()
   def fresh(program),
     do: %Instance{type: program.name, env: Program.initial_env(program), now: 0, first: true}
 
@@ -642,6 +744,7 @@ defmodule Logex.Runtime do
   a `jmp` whose rung is true skipping those after it up to the one its label heads (M3-5),
   and `{outputs, state}` comes back, the outputs being every `var_output`.
   """
+  @spec call(Program.t(), Instance.t(), values, Scan.t()) :: {values, Instance.t()}
   def call(program, state, inputs, scan) do
     program!(program)
     state = state!(state, program)
@@ -653,6 +756,7 @@ defmodule Logex.Runtime do
   Sets inputs in an instance's input image, checked as `call/4` checks them, for the next
   `scan/2` or `scan/3`.
   """
+  @spec put_inputs(Program.t(), Instance.t(), values) :: Instance.t()
   def put_inputs(program, state, inputs) do
     program!(program)
     state!(state, program) |> merge!(program, inputs)
@@ -662,6 +766,8 @@ defmodule Logex.Runtime do
   One scan of the implicit configuration: `elapsed_ms` after the last one (none for
   `scan/2`), with the inputs `put_inputs/3` set.
   """
+  @spec scan(Program.t(), Instance.t()) :: {values, Instance.t()}
+  @spec scan(Program.t(), Instance.t(), non_neg_integer) :: {values, Instance.t()}
   def scan(program, state, elapsed_ms \\ 0) do
     program!(program)
     %Instance{now: now, first: first} = state = state!(state, program)
@@ -707,6 +813,7 @@ defmodule Logex.Runtime do
   at its initial value, as a cold restart starts it and as `instance/2` starts a path its
   image lacks, and the state is then one every entry point takes.
   """
+  @spec restart(Program.t(), Instance.t(), mode) :: Instance.t()
   def restart(program, state, mode) do
     program!(program)
     %Instance{env: env, now: now} = state = state!(state, program)
@@ -904,6 +1011,7 @@ defmodule Logex.Runtime do
   (`Logex.Configuration.check/1`), and one with a problem raises `ArgumentError` listing
   every one.
   """
+  @spec start(Configuration.t()) :: t
   def start(%Configuration{} = config) do
     configured!(Configuration.check(config))
     wiring = wiring(config)
@@ -993,6 +1101,7 @@ defmodule Logex.Runtime do
   by the name of a global `config` declares was refused.
   The matching forgives a changed program, never a broken image.
   """
+  @spec start(Configuration.t(), image) :: {t, dropped}
   def start(config, image) do
     %__MODULE__{} = runtime = start(config)
     Image.resource!(image, config)
@@ -1076,6 +1185,7 @@ defmodule Logex.Runtime do
   278). A timer's `last` is never in it (decision 273). Its cost is the retained values' and the paths', with one step for
   each global and instance declared, whatever else the resource holds.
   """
+  @spec retained(t) :: image
   def retained(runtime), do: retained_image(retained_values(runtime))
 
   # Decision 488 (RV-18): what the runner's period hands its writer, the resource's retained
@@ -1090,6 +1200,13 @@ defmodule Logex.Runtime do
   # for ten instances of it (RV-6's review). retained_image/1 makes the image retained/1
   # gives from it, in the writer, within the write limit (decision 455).
   @doc false
+  @spec retained_values(t) :: %{
+          configuration: String.t(),
+          globals: map,
+          programs: map,
+          instances: map,
+          triggers: %{optional(String.t()) => 0 | 1}
+        }
   def retained_values(runtime) do
     %__MODULE__{config: config, globals: globals, instances: instances} = runtime!(runtime)
 
@@ -1114,6 +1231,7 @@ defmodule Logex.Runtime do
   end
 
   @doc false
+  @spec retained_image(map) :: image
   def retained_image(%{configuration: name, programs: programs} = values) do
     %{
       configuration: name,
@@ -1162,6 +1280,7 @@ defmodule Logex.Runtime do
   One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,
   the outputs being every output point. See the moduledoc for its order.
   """
+  @spec cycle(t, non_neg_integer, values) :: {t, values, [event]}
   def cycle(runtime, elapsed_ms, inputs) do
     {runtime, steps} = cycle_steps(runtime, elapsed_ms, inputs)
 
@@ -1184,6 +1303,7 @@ defmodule Logex.Runtime do
   # name or `:none` (decision 111). Each step is a pure function of the resource, read by
   # no clock: cycle_step/2 runs one, giving its events in order, and cycle_outputs/1 is the
   # output points after the last.
+  @spec cycle_steps(t, non_neg_integer, values) :: {t, [step]}
   def cycle_steps(runtime, elapsed_ms, inputs) do
     %__MODULE__{now: now} = runtime = runtime!(runtime)
     elapsed = elapsed!(elapsed_ms)
@@ -1206,13 +1326,14 @@ defmodule Logex.Runtime do
   @doc false
   # One step cycle_steps/3 gave, run: `{runtime, events}`, its events in the order they
   # happened.
+  @spec cycle_step(t, step) :: {t, [event]}
   def cycle_step(%__MODULE__{} = runtime, {:timed, _name, task}) do
     {runtime, events} =
       try do
         run_task(task, {runtime, []})
       rescue
         refused in ArgumentError ->
-          externals!(refused, runtime, task_instances(task), __STACKTRACE__)
+          externals_told(misfit_externals(runtime, task_instances(task)), refused, __STACKTRACE__)
       end
 
     {runtime, Enum.reverse(events)}
@@ -1223,7 +1344,8 @@ defmodule Logex.Runtime do
       try do
         Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
       rescue
-        refused in ArgumentError -> externals!(refused, runtime, instances, __STACKTRACE__)
+        refused in ArgumentError ->
+          externals_told(misfit_externals(runtime, instances), refused, __STACKTRACE__)
       end
 
     {runtime, Enum.reverse(events)}
@@ -1234,6 +1356,7 @@ defmodule Logex.Runtime do
 
   @doc false
   # The output points, every one, after a cycle's last step.
+  @spec cycle_outputs(t) :: values
   def cycle_outputs(%__MODULE__{wiring: %{element_outputs: nil} = wiring, globals: globals}),
     do: Map.new(wiring.outputs, &{&1, Map.fetch!(globals, &1)})
 
@@ -1253,6 +1376,7 @@ defmodule Logex.Runtime do
   50). It is 0 after `start/1` where a task has an interval, and more than 0 after every
   cycle, which moves each due time it runs or skips past `now`.
   """
+  @spec next_due_in(t) :: non_neg_integer | :infinity
   def next_due_in(runtime) do
     %__MODULE__{now: now, tasks: tasks} = runtime!(runtime)
 
@@ -1262,7 +1386,9 @@ defmodule Logex.Runtime do
   end
 
   defp due_in(nil, _now), do: :infinity
-  defp due_in(next, now), do: next - now
+  # RV-24's review (F2): a due time and `now` are whole milliseconds, which Dialyzer, reading
+  # a task's due time untyped, takes for any number (`-Wmissing_return`).
+  defp due_in(next, now) when is_integer(next) and is_integer(now), do: next - now
 
   @doc """
   Starts the resource again, `:cold` or, since M6-2, `:warm`, which keeps each path an
@@ -1298,6 +1424,7 @@ defmodule Logex.Runtime do
   var_output, back at its initial value, over it, which `Logex.Configuration.check/1`
   warns of (decision 306).
   """
+  @spec restart(t, mode) :: t
   def restart(runtime, mode) do
     %__MODULE__{now: now, config: config} = runtime = runtime!(runtime)
     mode!(mode)
@@ -1447,12 +1574,23 @@ defmodule Logex.Runtime do
   # and `tasks`, each whole: a switch gives all five, a prune the instances, globals and
   # what is set aside, and cancel from accept none. The wiring is derived again from the
   # configuration, and every step moves the generation on by one (decisions 60 and 64).
+  @spec edited(t, map | keyword) :: t
   def edited(%__MODULE__{} = runtime, changes) do
     %__MODULE__{config: config, generation: generation} = runtime = struct!(runtime, changes)
     %{runtime | wiring: wiring(config), generation: generation + 1}
   end
 
+  @doc false
+  # Decision 515 (c), RV-24: the one reader of the resource for a configuration edit's
+  # step, its fields as plain data, so that they are read in this module alone, as
+  # edited/2 alone writes them, and Dialyzer holds every other module to the opacity of
+  # `t()` (provisional: RV-24's question 5). The wiring is left out: an edit derives its
+  # own from the configurations.
+  @spec fields(t) :: fields
+  def fields(%__MODULE__{} = runtime), do: Map.delete(Map.from_struct(runtime), :wiring)
+
   @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
+  @spec overlaps(t) :: %{optional(String.t()) => non_neg_integer}
   def overlaps(runtime) do
     %__MODULE__{tasks: tasks} = runtime!(runtime)
     Map.new(tasks, fn {name, %{overlaps: overlaps}} -> {name, overlaps} end)
@@ -1471,6 +1609,7 @@ defmodule Logex.Runtime do
   `reason` the message `get!/2` raises (decision 41). Something other than a resource,
   or a path that is not a string, is the host's mistake and raises `ArgumentError`.
   """
+  @spec get(t, String.t()) :: {:ok, value} | {:error, String.t()}
   def get(runtime, path) do
     looked_up(runtime!(runtime), string!(path))
   end
@@ -1485,6 +1624,7 @@ defmodule Logex.Runtime do
   The value at an access path, as `get/2` finds it, or `ArgumentError` with the reason
   `get/2` gives.
   """
+  @spec get!(t, String.t()) :: value
   def get!(runtime, path), do: value!(runtime!(runtime), string!(path))
 
   defp value!(runtime, path) do
@@ -3490,10 +3630,9 @@ defmodule Logex.Runtime do
   # type, by that global, `runtime.globals holds`, with every line of a copy-in's refusal
   # (read!/3), and otherwise as it was refused. Read only where a step is refused, so that
   # a step pays nothing for it; only a host gives a global a misfit, never a scan, so the
-  # runtime the step was given holds it.
-  defp externals!(refused, %__MODULE__{} = runtime, instances, stacktrace),
-    do: externals_told(misfit_externals(runtime, instances), refused, stacktrace)
-
+  # runtime the step was given holds it. Decision 515 (c), RV-24: each clause of
+  # externals_told/3 raises itself, called from the step's rescue, where a function between
+  # them that only called it read to Dialyzer as one with no local return.
   defp misfit_externals(%__MODULE__{wiring: wiring, globals: globals}, instances),
     do:
       Enum.reduce(instances, [], fn name, acc ->
@@ -3504,8 +3643,12 @@ defmodule Logex.Runtime do
 
   defp externals_told(lines, refused, _stacktrace),
     do:
-      read_fitted(
-        lines ++ Enum.flat_map(String.split(Exception.message(refused), "\n"), &refused_global/1)
+      raise(
+        ArgumentError,
+        fitted(
+          lines ++
+            Enum.flat_map(String.split(Exception.message(refused), "\n"), &refused_global/1)
+        )
       )
 
   defp refused_global("runtime.globals holds " <> _rest = line), do: [line]
@@ -3575,9 +3718,9 @@ defmodule Logex.Runtime do
     ]
 
   defp read_fitted([]), do: :ok
+  defp read_fitted(lines), do: raise(ArgumentError, fitted(lines))
 
-  defp read_fitted(lines),
-    do: raise(ArgumentError, lines |> Enum.sort() |> Enum.dedup() |> Enum.join("\n"))
+  defp fitted(lines), do: lines |> Enum.sort() |> Enum.dedup() |> Enum.join("\n")
 
   defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
 
@@ -3601,8 +3744,9 @@ defmodule Logex.Runtime do
     do: Logex.Array.from_flat(Enum.map(Logex.Array.to_flat(value, dims), &as_real(to, &1)), dims)
 
   # An access path: one name token to the lexer, as `m1.t1.acc` is.
-  defp path!(path) when is_binary(path), do: path_lexed(Logex.Lexer.tokenize(path), path)
-  defp path!(path), do: raise(ArgumentError, not_a_path(path))
+  # A path string!/1 has passed (decision 515 (c), RV-24: Dialyzer found the clause that
+  # refused a path no string unreachable, every caller checking it first).
+  defp path!(path), do: path_lexed(Logex.Lexer.tokenize(path), path)
 
   defp string!(path) when is_binary(path), do: path
   defp string!(path), do: raise(ArgumentError, not_a_path(path))
@@ -3749,8 +3893,11 @@ defmodule Logex.Runtime do
         "`#{path}` goes too deep: `#{head}.#{tag}` is an element, which has no members"
       )
 
+  # Decision 515 (c), RV-24: the refusals of a name no tag is and of an instance named
+  # whole raised here, in the words in_program/4 and in_block/5 give them, where this
+  # called each only to raise (Dialyzer's "will never return").
   defp element_tag(:error, {array, _subscripts}, {head, _tag}, {program, _runtime}),
-    do: in_program(:error, {head, array, [], nil}, program, %{})
+    do: raise(ArgumentError, undeclared(head, array, program))
 
   # M5-14: an element of an array of instances is named by a member, as an instance is.
   defp element_tag(
@@ -3766,7 +3913,7 @@ defmodule Logex.Runtime do
       element_source(found, head, runtime)
     )
 
-    in_block(type, "#{head}.#{tag}", [], {[], nil}, nil)
+    raise(ArgumentError, named_whole("#{head}.#{tag}", type))
   end
 
   defp element_tag({:ok, %Tag{} = found}, {array, subscripts}, {head, tag}, {_program, runtime}),
@@ -3804,12 +3951,7 @@ defmodule Logex.Runtime do
     do: in_program(found, at, program, Map.fetch!(runtime.instances, head).env)
 
   defp in_program(:error, {head, tag, _members, _path}, program, _env),
-    do:
-      raise(
-        ArgumentError,
-        "`#{head}` is a program instance of `#{program.name}`, which declares no `#{tag}`" <>
-          Declarations.suggest(tag, Enum.sort(Map.keys(program.tags)))
-      )
+    do: raise(ArgumentError, undeclared(head, tag, program))
 
   defp in_program({:ok, %Tag{type: %FbType{} = type}}, {head, tag, members, path}, _program, env),
     do: in_block(type, "#{head}.#{tag}", members, {[tag], path}, env)
@@ -3847,16 +3989,20 @@ defmodule Logex.Runtime do
   # one, and never the instance whole. The walk follows a member whose type is a block as
   # deep as the types go; which members are public, and so how deep a path reaches, is
   # FbType.public/1's.
-  defp in_block(type, at, [], _walked, _env),
-    do:
-      raise(
-        ArgumentError,
-        "`#{at}` is #{Declarations.instance_of(type)}: an access path names one of its " <>
-          "members" <> example(at, FbType.public(type))
-      )
+  defp in_block(type, at, [], _walked, _env), do: raise(ArgumentError, named_whole(at, type))
 
   defp in_block(type, at, [member | deeper], {walked, path}, env),
     do: member_at(FbType.member(type, member), type, at, {member, deeper}, {walked, path}, env)
+
+  defp undeclared(head, tag, program),
+    do:
+      "`#{head}` is a program instance of `#{program.name}`, which declares no `#{tag}`" <>
+        Declarations.suggest(tag, Enum.sort(Map.keys(program.tags)))
+
+  defp named_whole(at, type),
+    do:
+      "`#{at}` is #{Declarations.instance_of(type)}: an access path names one of its " <>
+        "members" <> example(at, FbType.public(type))
 
   defp member_at(:error, type, at, {member, _deeper}, _walked, _env) do
     names = Enum.map(FbType.public(type), & &1.name)

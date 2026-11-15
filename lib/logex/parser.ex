@@ -423,14 +423,16 @@ defmodule Logex.Parser do
   defp line!(_line, node, {:before, last}),
     do: refuse!("each rung starts on a line of its own, after line #{last}", node)
 
-  defp improper!(tail), do: refuse!("every list in it ends in []", tail, "got a list ending in")
+  defp improper!(tail),
+    do: raise(ArgumentError, refusal("every list in it ends in []", tail, "got a list ending in"))
 
-  defp refuse!(rule, node, got \\ "got"),
-    do:
-      raise(
-        ArgumentError,
-        "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{inspect(node)}"
-      )
+  defp refuse!(rule, node), do: raise(ArgumentError, refusal(rule, node, "got"))
+
+  # Decision 515 (c), RV-24: the refusal's text apart from its raise, so that each refusal
+  # raises itself, where Dialyzer read improper!/1, and refuse!/2's default argument,
+  # which only called refuse!/3 to raise, as functions with no local return.
+  defp refusal(rule, node, got),
+    do: "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{inspect(node)}"
 
   defp unexpected(token, expected) when is_tuple(token) and tuple_size(token) >= 2,
     do: {:error, {elem(token, 1), __MODULE__, {:unexpected, describe(token), expected}}}

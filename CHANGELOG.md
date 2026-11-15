@@ -28,7 +28,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–548.
+Decisions: 1–555.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (waiting under decision 541, no release planned: its number, and whether its tag is
@@ -165,7 +165,9 @@ the host's API is README's, so this first entry lists neither apart.
   measured within the run; the host contract named; a long refusal bounded and a compile
   run in a process of its own; a store written by another program warned of; the
   simulator taking the configuration's addresses; README's examples as files under
-  `examples/`; CI naming a red run's failed tests, and this release step; RV-26's,
+  `examples/`; CI naming a red run's failed tests, and this release step; typespecs on the
+  host contract, which OTP's Dialyzer reads in CI, red on any warning its flags give, and
+  the suite holds to every value a function gives (RV-24); RV-26's,
   decisions 527, 528 and 530, a program's text read canonically before the store compares
   it, the stale store's warning sent to the subscribers too and the store written as
   `logex retain 3`; RV-27's, decisions 532, 535 and 536, the words logex reads in any case

@@ -132,6 +132,33 @@ defmodule Logex.IO.Sim do
   # The writes a sim keeps unless `writes:` says otherwise (c6-pmi-7).
   @kept 100_000
 
+  # Decision 515 (c), RV-24: the host contract's types (decision 523).
+
+  @typedoc "A simulated device, by its pid."
+  @type sim :: pid
+
+  @typedoc """
+  A point's address as a test sets or reads one: a list, `[0]`, until a runner has opened
+  the sim, and from then on as the configuration writes it, `"panel.i.0"` (decision 517
+  (e)).
+  """
+  @type address :: Logex.IO.address() | String.t()
+
+  @typedoc "A callback `fail/3` acts a failure out in."
+  @type callback :: :init | :read | :write | :report | :close
+
+  @typedoc "A failure `fail/3` acts out (the moduledoc)."
+  @type failure ::
+          {:error, reason :: term}
+          | :raise
+          | :throw
+          | :exit
+          | :hang
+          | {:delay, non_neg_integer}
+          | {:value, Logex.IO.address(), value :: term}
+
+  @spec child_spec(keyword) :: Supervisor.child_spec()
+
   @doc """
   Starts a simulated device linked to the caller: `reports:` true or false, false unless
   set; `clock:` a manual clock for its delays, or nil; `wait:` ms, 5000 unless set, 1 to
@@ -139,13 +166,21 @@ defmodule Logex.IO.Sim do
   more, or nil, unless set, for as many as it is given; `writes:` how many writes it keeps,
   its newest, 1 or more, 100,000 unless set.
   """
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
+  @spec start_link() :: {:ok, sim}
+  @spec start_link(keyword) :: {:ok, sim}
+  def start_link(opts \\ []), do: started(GenServer.start_link(__MODULE__, options!(opts)))
+
+  # RV-24's review (F2): init/1 never fails nor ignores, so a start is `{:ok, sim}` alone,
+  # which GenServer.start_link/3's spec, naming `:ignore` and `{:error, reason}`, does not
+  # say (Dialyzer's `-Wmissing_return`).
+  defp started({:ok, _sim} = started), do: started
 
   @doc """
   Sets the input at `address` to `value`, reporting it where the sim reports and it
   changed: the address a list, `[0]`, until a runner has opened the sim, and from then on
   as the configuration writes it, `"panel.i.0"` (decision 517 (e)).
   """
+  @spec set(sim, address, number) :: :ok
   def set(sim, address, value) do
     sim = sim!(sim)
     setting(sim, &%{addressed!(&1, address, sim) => value!(value)})
@@ -155,6 +190,7 @@ defmodule Logex.IO.Sim do
   Sets several inputs, a map of addresses to values, reported as one where the sim
   reports, each address as `set/3` takes one.
   """
+  @spec set(sim, %{optional(address) => number}) :: :ok
   def set(sim, values) do
     sim = sim!(sim)
     setting(sim, &inputs!(values, &1, sim))
@@ -165,30 +201,36 @@ defmodule Logex.IO.Sim do
   opened the sim, and from then on as the configuration writes it, `"drive.q.0"` (decision
   517 (e)).
   """
+  @spec outputs(sim) :: %{optional(address) => number}
   def outputs(sim), do: GenServer.call(sim!(sim), :outputs)
 
   @doc """
   Every write, in order, each the values `write/2` was given, by address as `outputs/1`
   gives them.
   """
+  @spec writes(sim) :: [%{optional(address) => number}]
   def writes(sim) do
     {writes, named} = GenServer.call(sim!(sim), :writes)
     each_spelled(writes, named)
   end
 
   @doc "The number of reads made, failed ones among them."
+  @spec reads(sim) :: non_neg_integer
   def reads(sim), do: GenServer.call(sim!(sim), :reads)
 
   @doc "Whether the device was closed since it was last opened."
+  @spec closed?(sim) :: boolean
   def closed?(sim), do: GenServer.call(sim!(sim), :closed)
 
   @doc "Acts out `how` on the next call of `callback`, after any failure told to it before."
+  @spec fail(sim, callback, failure) :: :ok
   def fail(sim, callback, how) do
     sim = sim!(sim)
     GenServer.call(sim, {:fail, callback!(callback), failure!(callback, how)})
   end
 
   @doc "Holds the device's next reread, a restart's read, until `let_go/1` (decision 462)."
+  @spec hold(sim) :: :ok
   def hold(sim) do
     sim = sim!(sim)
     held!(GenServer.call(sim, :hold), sim)
@@ -198,12 +240,14 @@ defmodule Logex.IO.Sim do
   Lets the held reread go on. A hold no reread has come to, and no hold, is the test's
   mistake (decision 477).
   """
+  @spec let_go(sim) :: :ok
   def let_go(sim) do
     sim = sim!(sim)
     let!(GenServer.call(sim, :let_go), sim)
   end
 
   @doc "Whether a reread waits in the hold."
+  @spec holding?(sim) :: boolean
   def holding?(sim), do: GenServer.call(sim!(sim), :holding)
 
   defp held!(:ok, _sim), do: :ok
@@ -914,21 +958,21 @@ defmodule Logex.IO.Sim do
       )
 
   defp address!([_ | _] = address), do: whole!(fields?(address), address)
-  defp address!(other), do: whole!(false, other)
+  defp address!(other), do: raise(ArgumentError, unaddressed(other))
 
   defp fields?([]), do: true
   defp fields?([field | fields]) when is_integer(field) and field >= 0, do: fields?(fields)
   defp fields?(_other), do: false
 
   defp whole!(true, address), do: address
+  defp whole!(false, other), do: raise(ArgumentError, unaddressed(other))
 
-  defp whole!(false, other),
+  # Decision 515 (c), RV-24: the refusal raised where it is meant, so that no call reaches
+  # a clause only to raise (Dialyzer's "will never return").
+  defp unaddressed(other),
     do:
-      raise(
-        ArgumentError,
-        "an address is a list of whole numbers, 0 or more, as `panel.i.1.3`'s is [1, 3], " <>
-          "got: #{inspect(other)}"
-      )
+      "an address is a list of whole numbers, 0 or more, as `panel.i.1.3`'s is [1, 3], " <>
+        "got: #{inspect(other)}"
 
   # M5-10: a real point's value is a float or an integer, which the runner stores as its
   # nearest real (decision 166); every other point's an integer, which the runner checks.

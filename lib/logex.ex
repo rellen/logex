@@ -69,6 +69,21 @@ defmodule Logex do
   63 more than when the caller compiled itself, the handing over.
   """
 
+  # Decision 515 (c), RV-24: what a compile hands back, the host contract's types.
+
+  @typedoc """
+  What a compile gives: a program, or a function block's type for a block's source, or
+  every mistake in line order, each a diagnostic.
+  """
+  @type result ::
+          {:ok, Logex.Program.t() | Logex.FbType.t()} | {:error, [Logex.Diagnostic.t(), ...]}
+
+  @typedoc """
+  `compile/2`'s options, in either order: the program's `name:`, which it needs, and the
+  `types:` its source may declare instances of, none by default.
+  """
+  @type option :: {:name, String.t()} | {:types, [Logex.FbType.t()]}
+
   # Decision 432 (RV-15): the three are Logex.Compiler's, so that the loader and its own
   # compile of a file over the blocks it compiled itself are private code of the module
   # that compiles, which nothing a host hands in reaches. Since decision 520 (RV-20) each
@@ -118,6 +133,7 @@ defmodule Logex do
   suggestions, each matched against every tag, some 120 million reductions among 4,000;
   the engineer waits for it, and nothing runs meanwhile.
   """
+  @spec compile(String.t(), [option]) :: result
   defdelegate compile(source, options), to: Logex.Compiler.Worker
 
   @doc """
@@ -177,6 +193,7 @@ defmodule Logex do
   a deleted directory's among them, is a `:file` diagnostic, "cannot be located: the
   working directory cannot be read", and nothing is read (decision 478).
   """
+  @spec compile_file(String.t()) :: result
   defdelegate compile_file(path), to: Logex.Compiler.Worker
 
   @doc """
@@ -193,5 +210,6 @@ defmodule Logex do
   `paths` that is not a proper list of binaries is the host's mistake, raised as
   `ArgumentError` before any file is read.
   """
+  @spec compile_files([String.t()]) :: [result]
   defdelegate compile_files(paths), to: Logex.Compiler.Worker
 end

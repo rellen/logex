@@ -7,7 +7,10 @@ defmodule Logex.ScriptsTest do
   `.github/workflows/ci.yml` and run as GitHub runs it, its shell's flags and all, over a
   stand-in `mix` that prints, writes a manifest and exits as a run would; the workflow's
   keys, so that every push and pull request runs every gate and no step is skipped or its
-  failure let pass; and `scripts/gate.sh` over the same stand-in.
+  failure let pass; and `scripts/gate.sh` over the same stand-in. And CI's Dialyzer step
+  (decision 515 (c)), its PLT's cache and `scripts/dialyzer.sh`, run as the step writes it
+  over a stand-in `mix` and `dialyzer`, a real run too slow for the suite: its flags, its
+  PLT's name, check and build, and its exit code.
   """
   use ExUnit.Case, async: true
 
@@ -538,7 +541,9 @@ defmodule Logex.ScriptsTest do
                   ["name", "run"],
                   ["name", "run"],
                   ["name", "run", "env"],
-                  ["name", "shell", "run"]
+                  ["name", "shell", "run"],
+                  ["name", "uses", "with"],
+                  ["name", "run"]
                 ]}
     end
 
@@ -633,6 +638,157 @@ defmodule Logex.ScriptsTest do
     test "a gate before the suite that fails stops the rest, and names no test",
          %{tmp_dir: dir} do
       assert run_gate(dir, 1, 0, {1, %{}}) == {"GATE-FAIL rc=1\n", 1, "format dev\n"}
+    end
+  end
+
+  # The toolchain as scripts/dialyzer.sh reads it from the `elixir` beside the suite's: its
+  # OTP's full version, its Elixir's and Elixir's own `ebin`.
+  defp toolchain do
+    release = List.to_string(:erlang.system_info(:otp_release))
+    otp = File.read!(Path.join([:code.root_dir(), "releases", release, "OTP_VERSION"]))
+    {String.trim(otp), System.version(), Path.expand(Path.join(:code.lib_dir(:elixir), "ebin"))}
+  end
+
+  # Runs CI's Dialyzer step as GitHub runs a step with no `shell:`, `bash -e`, in `dir`,
+  # its script copied there and a `mix` and a `dialyzer` of the test's own first on the
+  # path. The `mix` notes its task and `MIX_ENV` and exits `mix_rc`; the `dialyzer` notes
+  # its arguments and `DIALYZER_CONFIG`, writes the PLT a build names, exits `check_rc` for
+  # a check, and for the analysis prints `printed` and exits `rc`.
+  defp run_dialyzer(dir, %{} = knobs) do
+    {nil, script} = ci_step("scripts/dialyzer.sh")
+    bin = Path.join(dir, "bin")
+    File.mkdir_p!(bin)
+    File.mkdir_p!(Path.join(dir, "scripts"))
+    File.cp!(Path.join(@root, "scripts/dialyzer.sh"), Path.join(dir, "scripts/dialyzer.sh"))
+    File.chmod!(Path.join(dir, "scripts/dialyzer.sh"), 0o755)
+
+    File.write!(Path.join(bin, "mix"), """
+    #!/usr/bin/env bash
+    echo "mix $* ${MIX_ENV:-}" >> called
+    exit #{Map.get(knobs, :mix_rc, 0)}
+    """)
+
+    File.write!(Path.join(bin, "dialyzer"), """
+    #!/usr/bin/env bash
+    echo "dialyzer $* config=${DIALYZER_CONFIG:-}" >> called
+    case "$1" in
+      --check_plt) exit #{Map.get(knobs, :check_rc, 0)} ;;
+      --build_plt) echo plt > "$3"; exit 0 ;;
+    esac
+    printf '%s' '#{Map.get(knobs, :printed, "")}'
+    exit #{Map.get(knobs, :rc, 0)}
+    """)
+
+    for stand_in <- ["mix", "dialyzer"], do: File.chmod!(Path.join(bin, stand_in), 0o755)
+    File.write!(Path.join(dir, "step.sh"), script)
+
+    {out, code} =
+      System.cmd("bash", ["-e", "step.sh"],
+        cd: dir,
+        env: [{"PATH", Enum.join([bin, Path.dirname(@elixir), System.get_env("PATH")], ":")}],
+        stderr_to_stdout: true
+      )
+
+    {out, code, File.read!(Path.join(dir, "called")) |> String.split("\n", trim: true)}
+  end
+
+  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
+  @apps "-erts-kernel-stdlib-elixir"
+
+  describe "CI's Dialyzer step and scripts/dialyzer.sh (decision 515 (c))" do
+    # RV-24's review (F5): the key names the script, whose list of applications names the
+    # PLT, and the step restores no other key, its lines taken whole to the next step's.
+    test "the step runs scripts/dialyzer.sh after the suite, its PLT cached by the " <>
+           "toolchain's versions and the script alone, apart from _build's cache" do
+      lines = ci_lines()
+      cached = Enum.drop_while(lines, &(&1 != "      - name: Cache the Dialyzer PLT"))
+
+      assert {ci_step("scripts/dialyzer.sh"),
+              [
+                hd(cached)
+                | Enum.take_while(tl(cached), &(not String.starts_with?(&1, "      - ")))
+              ],
+              lines
+              |> Enum.drop_while(&(&1 != "      - name: Cache deps and _build"))
+              |> Enum.at(6)} ==
+               {{nil, "scripts/dialyzer.sh"},
+                [
+                  "      - name: Cache the Dialyzer PLT",
+                  "        uses: actions/cache@v5",
+                  "        with:",
+                  "          path: _build/dialyzer",
+                  "          key: plt-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}" <>
+                    "-elixir-${{ steps.beam.outputs.elixir-version }}" <>
+                    "-${{ hashFiles('scripts/dialyzer.sh') }}"
+                ], "            !_build/dialyzer"}
+    end
+
+    test "with no PLT it builds one named by the toolchain's versions and the applications " <>
+           "logex calls, of those, and analyses the dev build with its flags, every one named",
+         %{tmp_dir: dir} do
+      {otp, elixir, ebin} = toolchain()
+      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
+      {out, code, called} = run_dialyzer(dir, %{})
+
+      assert {code, String.ends_with?(out, "DIALYZER-OK\n"), called, File.read!(plt)} ==
+               {0, true,
+                [
+                  "mix compile dev",
+                  "dialyzer --build_plt --output_plt #{plt}.tmp -pa #{ebin} -Wno_unknown " <>
+                    "--apps erts kernel stdlib #{ebin} config=/dev/null",
+                  "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath " <>
+                    "-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract " <>
+                    "-Wopaque_union " <>
+                    "_build/dev/lib/logex/ebin config=/dev/null"
+                ], "plt\n"}
+
+      refute File.exists?(plt <> ".tmp")
+    end
+
+    test "a PLT kept is checked against the toolchain's files and used, and one the check " <>
+           "cannot read is built again; another toolchain's or other applications' is " <>
+           "never read",
+         %{tmp_dir: dir} do
+      {otp, elixir, ebin} = toolchain()
+      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
+      other = Path.join(dir, "_build/dialyzer/logex-otp-27.0-elixir-1.19.0#{@apps}.plt")
+      # RV-24's review (F5): a PLT of this toolchain's of other applications, as the script
+      # named it before, unread too.
+      fewer = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}.plt")
+      File.mkdir_p!(Path.dirname(plt))
+      File.write!(other, "another toolchain's")
+      File.write!(fewer, "other applications'")
+      File.write!(plt, "kept")
+      check = "dialyzer --check_plt --plt #{plt} -pa #{ebin} -Wno_unknown config=/dev/null"
+
+      analysis =
+        "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath -Wextra_return " <>
+          "-Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union " <>
+          "_build/dev/lib/logex/ebin config=/dev/null"
+
+      assert {_out, 0, ["mix compile dev", ^check, ^analysis]} = run_dialyzer(dir, %{})
+      assert File.read!(plt) == "kept"
+      File.rm!(Path.join(dir, "called"))
+
+      assert {_out, 0, ["mix compile dev", ^check, "dialyzer --build_plt" <> _, ^analysis]} =
+               run_dialyzer(dir, %{check_rc: 1})
+
+      assert {File.read!(plt), File.read!(other), File.read!(fewer)} ==
+               {"plt\n", "another toolchain's", "other applications'"}
+    end
+
+    test "a warning is red: the step exits with Dialyzer's code, after what it printed",
+         %{tmp_dir: dir} do
+      warning = "lib/logex/runtime.ex:1378: The success typing for next_due_in/1"
+      {out, code, _called} = run_dialyzer(dir, %{rc: 2, printed: warning <> "\n"})
+      assert {code, String.ends_with?(out, warning <> "\nDIALYZER-FAIL rc=2\n")} == {2, true}
+      assert {_out, 1, _called} = run_dialyzer(dir, %{rc: 1})
+    end
+
+    test "a build that does not compile is red with mix's code, and nothing is analysed",
+         %{tmp_dir: dir} do
+      assert {out, 1, ["mix compile dev"]} = run_dialyzer(dir, %{mix_rc: 1})
+      assert String.ends_with?(out, "DIALYZER-FAIL rc=1\n")
     end
   end
 end

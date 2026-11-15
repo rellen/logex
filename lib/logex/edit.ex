@@ -400,7 +400,21 @@ defmodule Logex.Edit do
   @enforce_keys [:original, :candidate, :stage, :plans, :record]
   defstruct [:original, :candidate, :stage, :plans, :record]
 
+  @typedoc """
+  A staged edit of a lone instance (OE-1): opaque, the host's to hold between its steps
+  and hand back to the next.
+  """
   @opaque t :: %__MODULE__{}
+
+  @typedoc "Where an edit stands: accepted, under test, or untested."
+  @type stage :: :accepted | :testing | :untested
+
+  @typedoc """
+  What a step did, sorted: each entry a kind of the moduledoc's table, the path it names
+  and its detail, `{:preset, "t1", {5000, 6000}}`. An open set: a host tolerates a kind
+  it does not know.
+  """
+  @type report :: [{kind :: atom, path :: String.t(), detail :: term}]
 
   @doc """
   Accepts `candidate` beside `running`, the program `state` is an instance of:
@@ -415,6 +429,8 @@ defmodule Logex.Edit do
   machine). The accept is the caller's work, so the HMI that asked for it waits, and
   nothing else does.
   """
+  @spec accept(Program.t(), Program.t(), Logex.Instance.t()) ::
+          {:ok, t, report} | {:error, [Logex.Diagnostic.t(), ...]}
   def accept(running, candidate, state) do
     checked!(running)
     checked!(candidate)
@@ -440,6 +456,7 @@ defmodule Logex.Edit do
   defp accepted(diagnostics, _running, _candidate, _state), do: {:error, diagnostics}
 
   @doc "Runs the candidate over the state, from accept or after an untest."
+  @spec test(t, Logex.Instance.t()) :: {t, Logex.Instance.t(), report}
   def test(edit, state) do
     edit = edit!(edit)
     tested(edit, state!(edit, state))
@@ -458,6 +475,7 @@ defmodule Logex.Edit do
   defp first_test?(:untested), do: false
 
   @doc "Runs the original again over the same state, from test."
+  @spec untest(t, Logex.Instance.t()) :: {t, Logex.Instance.t(), report}
   def untest(edit, state) do
     edit = edit!(edit)
     untested(edit, state!(edit, state))
@@ -474,6 +492,7 @@ defmodule Logex.Edit do
   Keeps the candidate, from test, and ends the edit: what only the original declares is
   pruned. Returns the candidate, the program the host scans from now on.
   """
+  @spec assemble(t, Logex.Instance.t()) :: {Program.t(), Logex.Instance.t(), report}
   def assemble(edit, state) do
     edit = edit!(edit)
     assembled(edit, state!(edit, state))
@@ -490,6 +509,7 @@ defmodule Logex.Edit do
   Keeps the original and ends the edit: from accept, with nothing changed, or after an
   untest, when what only the candidate declares is pruned. Returns the original.
   """
+  @spec cancel(t, Logex.Instance.t()) :: {Program.t(), Logex.Instance.t(), report}
   def cancel(edit, state) do
     edit = edit!(edit)
     cancelled(edit, state!(edit, state))
@@ -505,12 +525,14 @@ defmodule Logex.Edit do
   defp cancelled(edit, _state), do: stage!(edit, "cancel", "accepted or untested")
 
   @doc "The program the host scans now: the candidate under test, the original otherwise."
+  @spec running(t) :: Program.t()
   def running(edit), do: run(edit!(edit))
 
   defp run(%__MODULE__{stage: :testing, candidate: candidate}), do: candidate
   defp run(%__MODULE__{original: original}), do: original
 
   @doc "Where the edit stands: `:accepted`, `:testing` or `:untested`."
+  @spec stage(t) :: stage
   def stage(edit), do: edit!(edit).stage
 
   # ---- host mistakes ----------------------------------------------------------------------

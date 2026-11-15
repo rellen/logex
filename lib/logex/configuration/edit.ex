@@ -346,7 +346,22 @@ defmodule Logex.Configuration.Edit do
     holds: %{}
   ]
 
+  @typedoc """
+  A staged edit of a running configuration (OE-2): opaque, the host's to hold between its
+  steps and hand back to the next, with the resource each step returns.
+  """
   @opaque t :: %__MODULE__{}
+
+  @typedoc "Where an edit stands: accepted, under test, or untested."
+  @type stage :: :accepted | :testing | :untested
+
+  @typedoc """
+  What a step did, sorted: each entry a kind of the moduledoc's table, `Logex.Edit`'s by
+  path among them, what it names, an instance, a global, a task, a path, or `:none` or
+  `:tasks` for an `:order`, and its detail. An open set: a host tolerates a kind it does
+  not know.
+  """
+  @type report :: [{kind :: atom, name :: String.t() | :none | :tasks, detail :: term}]
 
   @doc """
   Accepts `candidate` against `runtime`, the resource that runs the original:
@@ -362,8 +377,12 @@ defmodule Logex.Configuration.Edit do
   some 0.5 s to accept, and one of `ton[65536]` with 10 some 4.1 s (RV-20's figures, the
   least of three on one machine). The accept is the caller's work, the HMI's that asked.
   """
+  @spec accept(Runtime.t(), Configuration.t()) ::
+          {:ok, t, report} | {:error, [Logex.Diagnostic.t(), ...]}
+  @spec accept(Runtime.t(), Configuration.t(), non_neg_integer) ::
+          {:ok, t, report} | {:error, [Logex.Diagnostic.t(), ...]}
   def accept(runtime, candidate, elapsed_ms \\ 0) do
-    %Runtime{config: original} = runtime = runtime!(runtime)
+    %{config: original} = runtime = Runtime.fields(runtime!(runtime))
     edited!(original)
     at = at!(runtime, elapsed_ms)
     candidate!(candidate)
@@ -388,7 +407,7 @@ defmodule Logex.Configuration.Edit do
 
   defp accepted(
          [],
-         {%Runtime{config: original, generation: generation} = runtime, at},
+         {%{config: original, generation: generation} = runtime, at},
          {candidate, held, wires}
        ) do
     edit = %__MODULE__{
@@ -412,10 +431,12 @@ defmodule Logex.Configuration.Edit do
   Runs the candidate in the resource, from accept or after an untest, `elapsed_ms` after
   the resource's last cycle, the step's time for decision 139.
   """
+  @spec test(t, Runtime.t()) :: {t, Runtime.t(), report}
+  @spec test(t, Runtime.t(), non_neg_integer) :: {t, Runtime.t(), report}
   def test(edit, runtime, elapsed_ms \\ 0) do
     edit = edit!(edit)
     runtime = runtime!(runtime)
-    at = at!(runtime, elapsed_ms)
+    at = at!(Runtime.fields(runtime), elapsed_ms)
     tested(edit, {current!(edit, runtime), at})
   end
 
@@ -428,10 +449,12 @@ defmodule Logex.Configuration.Edit do
   Runs the original in the resource again, from test, `elapsed_ms` after the resource's
   last cycle, as `test/3` takes it.
   """
+  @spec untest(t, Runtime.t()) :: {t, Runtime.t(), report}
+  @spec untest(t, Runtime.t(), non_neg_integer) :: {t, Runtime.t(), report}
   def untest(edit, runtime, elapsed_ms \\ 0) do
     edit = edit!(edit)
     runtime = runtime!(runtime)
-    at = at!(runtime, elapsed_ms)
+    at = at!(Runtime.fields(runtime), elapsed_ms)
     untested(edit, {current!(edit, runtime), at})
   end
 
@@ -441,10 +464,15 @@ defmodule Logex.Configuration.Edit do
   defp untested(edit, _timed), do: stage!(edit, "untest", "under test")
 
   # A switch, written into the resource by Logex.Runtime.edited/2, which moves its
-  # generation on; the edit expects the new one.
-  defp stepped(edit, {runtime, _at} = timed, direction, stage) do
-    {changes, {records, aside_at, holds}, report} = switch(edit, timed, direction)
-    %Runtime{generation: generation} = runtime = Runtime.edited(runtime, changes)
+  # generation on; the edit expects the new one. The switch reads the resource's fields
+  # (Logex.Runtime.fields/1), as every step's own reads do, so that the resource stays
+  # opaque here (decision 515 (c), RV-24).
+  defp stepped(edit, {runtime, at}, direction, stage) do
+    {changes, {records, aside_at, holds}, report} =
+      switch(edit, {Runtime.fields(runtime), at}, direction)
+
+    runtime = Runtime.edited(runtime, changes)
+    %{generation: generation} = Runtime.fields(runtime)
 
     {%{
        edit
@@ -460,6 +488,7 @@ defmodule Logex.Configuration.Edit do
   Keeps the candidate, from test, and ends the edit: what only the original has is pruned.
   Returns the candidate, the configuration the resource runs from now on.
   """
+  @spec assemble(t, Runtime.t()) :: {Configuration.t(), Runtime.t(), report}
   def assemble(edit, runtime) do
     edit = edit!(edit)
     assembled(edit, current!(edit, runtime!(runtime)))
@@ -477,6 +506,7 @@ defmodule Logex.Configuration.Edit do
   generation, and the report `[]`; after an untest, what only the candidate has pruned.
   Returns the original.
   """
+  @spec cancel(t, Runtime.t()) :: {Configuration.t(), Runtime.t(), report}
   def cancel(edit, runtime) do
     edit = edit!(edit)
     cancelled(edit, current!(edit, runtime!(runtime)))
@@ -493,12 +523,14 @@ defmodule Logex.Configuration.Edit do
   defp cancelled(edit, _runtime), do: stage!(edit, "cancel", "accepted or untested")
 
   @doc "The configuration the resource runs now: the candidate under test, the original otherwise."
+  @spec running(t) :: Configuration.t()
   def running(edit), do: run(edit!(edit))
 
   defp run(%__MODULE__{stage: :testing, candidate: candidate}), do: candidate
   defp run(%__MODULE__{original: original}), do: original
 
   @doc "Where the edit stands: `:accepted`, `:testing` or `:untested`."
+  @spec stage(t) :: stage
   def stage(edit), do: edit!(edit).stage
 
   # ---- host mistakes ----------------------------------------------------------------------
@@ -525,7 +557,7 @@ defmodule Logex.Configuration.Edit do
 
   # Decision 139: the step's time, `elapsed_ms` after the resource's last cycle, counted as
   # Logex.Runtime.cycle/3 counts it, in its words; 0, the resource's own time, by default.
-  defp at!(%Runtime{now: now}, elapsed_ms) when is_integer(elapsed_ms) and elapsed_ms >= 0,
+  defp at!(%{now: now}, elapsed_ms) when is_integer(elapsed_ms) and elapsed_ms >= 0,
     do: now + elapsed_ms
 
   defp at!(_runtime, other),
@@ -561,13 +593,16 @@ defmodule Logex.Configuration.Edit do
       )
 
   # Decision 60: the generation the edit expects, then the configuration the resource runs.
-  defp current!(
-         %__MODULE__{generation: generation} = edit,
-         %Runtime{generation: generation} = runtime
-       ),
-       do: configured!(run(edit) == runtime.config, runtime)
+  defp current!(edit, runtime), do: generation!(edit, Runtime.fields(runtime), runtime)
 
-  defp current!(%__MODULE__{generation: expected}, %Runtime{generation: generation}),
+  defp generation!(
+         %__MODULE__{generation: generation} = edit,
+         %{generation: generation, config: config},
+         runtime
+       ),
+       do: configured!(run(edit) == config, runtime)
+
+  defp generation!(%__MODULE__{generation: expected}, %{generation: generation}, _runtime),
     do:
       raise(
         ArgumentError,
@@ -1751,7 +1786,7 @@ defmodule Logex.Configuration.Edit do
   # Logex.Runtime.edited/2 writes, each kept instance's record, and the report. Globals
   # first, so that a kept instance's merge sees every global the configuration started
   # declares.
-  defp switch(edit, {%Runtime{} = runtime, at}, direction) do
+  defp switch(edit, {%{} = runtime, at}, direction) do
     {from, to} = sides(edit, direction)
     first? = direction == :test and edit.stage == :accepted
     {left, aside, dropped} = superseded(first?, from, runtime)
@@ -1810,10 +1845,10 @@ defmodule Logex.Configuration.Edit do
   # candidate: it is dropped before the switch, as assemble prunes it, `:instance_pruned` and
   # `:pruned`, so that nothing comes back, or starts over a value, that this edit's
   # programs never ran.
-  defp superseded(false, _from, %Runtime{globals: globals, aside: aside}),
+  defp superseded(false, _from, %{globals: globals, aside: aside}),
     do: {globals, aside, []}
 
-  defp superseded(true, %Configuration{globals: declared}, %Runtime{} = runtime) do
+  defp superseded(true, %Configuration{globals: declared}, %{} = runtime) do
     keep = by_name(declared)
 
     {globals, gone} =
@@ -1956,7 +1991,7 @@ defmodule Logex.Configuration.Edit do
          context,
          {instances, records, reports, holds}
        ) do
-    %Runtime{now: now} = context.runtime
+    %{now: now} = context.runtime
     aside_at = Map.get(context.edit.aside_at, name)
     {env, resumed} = resume(Program.typed_tags(program), state.env, {name, now, aside_at})
 
@@ -2187,7 +2222,7 @@ defmodule Logex.Configuration.Edit do
   # (decision 139). No task is added or removed, and an event task keeps its interval or
   # its lack of one, both refused at accept, so each task is in both, and one with a
   # changed interval has one in both.
-  defp tasks(from, to, %Runtime{tasks: states}, now) do
+  defp tasks(from, to, %{tasks: states}, now) do
     was = by_name(from.tasks)
 
     {states, reports} =
@@ -2279,20 +2314,21 @@ defmodule Logex.Configuration.Edit do
   # reports of its var_output, `{:held, "m1.aux", 0}`, is of the value the hold leaves, as
   # a switch reports it, where until the review of RV-10 assemble and cancel reported the
   # value a restart had left beside the `:holds` that moved it.
-  defp prune(edit, %Runtime{} = runtime, direction) do
+  defp prune(edit, runtime, direction) do
     {from, to} = sides(edit, direction)
     froms = Map.new(from.instances, &{&1.name, &1.type})
     keep = by_name(to.globals)
+    resource = Runtime.fields(runtime)
 
     {globals, gone} =
-      Map.split_with(runtime.globals, fn {name, _value} -> is_map_key(keep, name) end)
+      Map.split_with(resource.globals, fn {name, _value} -> is_map_key(keep, name) end)
 
     {instances, reports} =
       held_again(
         Map.fetch!(edit.holders, direction),
         to,
-        {globals, runtime},
-        {runtime.instances, []}
+        {globals, resource},
+        {resource.instances, []}
       )
 
     {instances, reports} =
@@ -2310,7 +2346,7 @@ defmodule Logex.Configuration.Edit do
     report =
       reports ++
         for({name, value} <- gone, do: {:pruned, name, host(value)}) ++
-        for({name, state} <- runtime.aside, do: {:instance_pruned, name, state.type}) ++
+        for({name, state} <- resource.aside, do: {:instance_pruned, name, state.type}) ++
         holding(Map.fetch!(edit.held, direction), globals)
 
     {Runtime.edited(runtime, %{instances: instances, globals: globals, aside: %{}}),

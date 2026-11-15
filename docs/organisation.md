@@ -14931,6 +14931,27 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      passed, read through `gh api` (provisional, `PLAN.md`'s RV-22, question 5); and the
      changelog's first entry lists thirteen changes to a running program's outputs, its
      question 4's reading (b), provisional.)*
+     *(Landed, (c), with RV-24, 2026-11-15: a `@spec` on every public function of the
+     modules decision 514 and decision 523 put inside the host contract, a behaviour's
+     callbacks covered by its behaviour, and a `@typedoc` on every type they export, the
+     resource and the two edits opaque, `runtime_test.exs` holding each; the specs made the
+     resource's opacity effective, so `Logex.Configuration.Edit` reads it through
+     `Logex.Runtime.fields/1`, internal, as `edited/2` writes it. `scripts/dialyzer.sh`
+     runs OTP's own dialyzer, no dependency added, over the dev build against a PLT of
+     erts, kernel, stdlib and elixir named by the toolchain's versions, Dialyzer's defaults
+     and `-Wextra_return`, `-Wunderspecs` and `-Woverlapping_contract`, red on any
+     warning; CI runs it after the four gates, the PLT cached by the versions, and
+     `scripts_test.exs` holds the step and the script. The twelve warnings it gave at the
+     base, none a defect, were cleared in the code, each recorded; a spec made false is red
+     in CI, `backup/rv24-red`. The flags, when a contributor runs it, how a warning that is
+     no defect is cleared, the contract's reach and the opacity's reader are `PLAN.md`'s
+     RV-24, questions 1 to 5, provisional. Since RV-24's review, the same day: Dialyzer
+     types nothing a call to a process gives back nor a struct's field, so a third of the
+     specs it held to nothing; `test/logex/typespec_test.exs` reaches every spec of the
+     contract and holds each value and argument to it, and made the types of a block's
+     member and the maps a program and an instance hold true; `-Wmissing_return` and
+     `-Wopaque_union` are on, their sites written to say what they do, and the PLT is named
+     and cached by the applications it holds too.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the
@@ -15700,6 +15721,94 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      four gates stay as they are. The maintainer turns Pages on once, in the repository's
      settings, with GitHub Actions as its source. The Markdown pages also read on GitHub
      itself. Not taken: a build that publishes nothing.
+
+549. **When a contributor runs Dialyzer (RV-24),** RV-24's question 1: RV-24 built
+     `scripts/dialyzer.sh`, run by hand before a push that changes `lib/` and by CI after
+     the four gates, `scripts/gate.sh` unchanged. A contributor who changes what the
+     runner's status call returns and forgets its spec then learns of it from CI, minutes
+     after the push.
+
+     **Taken: the gate's fifth step (b)** (the maintainer, 2026-11-15): `scripts/gate.sh`
+     runs `scripts/dialyzer.sh` after its four gates, so the contributor sees the spec the
+     code breaks before the commit. A gate takes some 20 to 35 s longer with the PLT kept,
+     about two minutes the first time on a machine; CI runs the step as it does. Not
+     taken: by hand and in CI alone, as built; a test of the suite, every `mix test` that
+     much longer. IEC 61131-3's tools check a typed interface at every compile, and
+     Logix's Verify runs before every download. RV-30 builds it.
+
+550. **Which of Dialyzer's warnings are held (RV-24),** RV-24's question 2 as its review
+     restated it: as built, Dialyzer's defaults and five more, `-Wextra_return`,
+     `-Wmissing_return`, `-Wunderspecs`, `-Woverlapping_contract` and `-Wopaque_union`;
+     `-Wunmatched_returns` and `-Werror_handling` off.
+
+     **Taken: also `-Wunmatched_returns` (b)** (the maintainer, 2026-11-15): a call whose
+     answer is thrown away is red, so a `{:error, _}` from a file write that a later
+     change drops, the store's among them, does not pass. The 24 sites that drop an
+     answer on purpose today, none a defect, are written `_ = ...`, each read again as it
+     is written. `-Werror_handling` stays off: its 18 refusals raise by design, and only
+     a `no_return()` spec would pass them, which decision 551 does not allow. Not taken:
+     the flags as built; both classes; the three flags the item first chose. IEC's tools
+     refuse every interface mismatch; Logix's Verify blocks a download on an error and
+     lists a warning. RV-30 builds it.
+
+551. **A Dialyzer warning that is no defect (RV-24),** RV-24's question 3: twelve of the
+     first warnings were no defect, ten of them a refusal raised through a call that
+     reached another clause only to raise, as the runner's refusal of a bad `steps:`
+     option was.
+
+     **Taken: as built, the code rewritten (a)** (the maintainer, 2026-11-15): the code is
+     made to say what it does, the refusal raised where it is meant and its message built
+     apart, the same words, and the reason recorded. No `@dialyzer` attribute silences a
+     warning where it stands, and no class of warning is turned off without a reason that
+     holds. IEC's and Logix's tools have no mark that hides one warning; the code is
+     changed until the check is clean. RV-30 makes the marks this decision's number.
+
+552. **How far the typespecs reach (RV-24),** RV-24's question 4.
+
+     **Taken: as built, every public function (a)** (the maintainer, 2026-11-15): every
+     public function of the modules decisions 514 and 523 put inside the host contract
+     carries a `@spec`, the internal ones among them, a callback covered by its
+     behaviour, and every type they export a `@typedoc`; `runtime_test.exs` is red on a
+     public function without one. Not taken: decision 514's modules alone; the documented
+     functions alone. IEC types the interface of every program organisation unit. RV-30
+     makes the marks this decision's number.
+
+553. **How the resource stays opaque inside logex (RV-24),** RV-24's question 5: with
+     `Logex.Runtime.t()` opaque, `Logex.Configuration.Edit`, which needs the resource's
+     fields at each step, broke the opacity in 28 places.
+
+     **Taken: as built, one internal reader (a)** (the maintainer, 2026-11-15): the edit
+     reads the resource through `Logex.Runtime.fields/1`, internal, so Dialyzer holds
+     every other module to the opacity; a step pays 6 to 25 reductions more. Not taken:
+     `-Wno_opaque`, the rule left to the documents; a plain type. An IEC function block's
+     internal variables are read from outside it through its outputs alone. RV-30 makes
+     the marks this decision's number.
+
+554. **How far a spec is held where Dialyzer cannot type the value (RV-24),** question 6,
+     from RV-24's review: Dialyzer types nothing a call to a process gives back, so a
+     third of the specs it held to nothing, and `test/logex/typespec_test.exs` now holds
+     each value a function gives, and each argument it is given, to its spec, and reaches
+     every spec.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-15): a value outside its spec is
+     red and a spec no test reaches is red; a spec wider than the values, one that names
+     an answer its function never gives among them, passes, and the limit is recorded
+     (RV-24's mutant s7). Not taken: each alternative of a spec's return reached by a
+     test; the test removed. Logix documents a fixed list of error codes an instruction
+     gives, each of which can occur. RV-30 makes the marks this decision's number.
+
+555. **A global built from Elixir with a value of no global's type (RV-24),** question 7,
+     from RV-24's review: `Logex.Configuration.Global.new!("fan_on", :bool, initial:
+     true)` keeps the value, its struct outside `Global.t()`, and
+     `Logex.Configuration.new!/1` or `check/1` refuses it later, a line of the
+     configuration's refusal.
+
+     **Taken: refused at once (b)** (the maintainer, 2026-11-15): `Global.new!/3` raises
+     an `ArgumentError` for an initial value no global of that type holds, as
+     `Logex.Tag.new!/5` does for a tag's, a new message pinned whole; `check/1` keeps its
+     refusal for a struct built by hand. IEC refuses an initial value of the wrong type
+     at its declaration, and Logix's tag editor refuses it as it is typed. RV-30 builds
+     it.
 
 ---
 

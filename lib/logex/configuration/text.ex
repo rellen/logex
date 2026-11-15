@@ -1328,11 +1328,14 @@ defmodule Logex.Configuration.Text do
 
   defp kind!(entry),
     do:
-      unsaid!(
-        "an entry is a %Logex.Configuration.Task{}, %Logex.Configuration.Global{}, " <>
-          "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with its " <>
-          "struct's keys",
-        entry
+      raise(
+        ArgumentError,
+        unsaid(
+          "an entry is a %Logex.Configuration.Task{}, %Logex.Configuration.Global{}, " <>
+            "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with its " <>
+            "struct's keys",
+          entry
+        )
       )
 
   defp fields!(
@@ -1513,10 +1516,11 @@ defmodule Logex.Configuration.Text do
   defp after_line(nil), do: ", and no line is nil beside one that is not"
   defp after_line(last), do: ", and this one comes after line #{last}"
 
-  defp unsaid!(rule, entry),
-    do:
-      raise(
-        ArgumentError,
-        "not an entry a configuration file can say: #{rule}, got: #{inspect(entry)}"
-      )
+  defp unsaid!(rule, entry), do: raise(ArgumentError, unsaid(rule, entry))
+
+  # Decision 515 (c), RV-24: the refusal's text apart from its raise, so that a function
+  # whose one clause refuses raises itself (kind!/1), where Dialyzer read one that only
+  # called another to raise as a function with no local return.
+  defp unsaid(rule, entry),
+    do: "not an entry a configuration file can say: #{rule}, got: #{inspect(entry)}"
 end

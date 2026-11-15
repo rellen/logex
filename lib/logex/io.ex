@@ -69,7 +69,7 @@ defmodule Logex.IO do
   @type address :: [non_neg_integer, ...]
 
   @typedoc "Values by address."
-  @type values :: %{address => number}
+  @type values :: %{optional(address) => number}
 
   @typedoc "An adapter's own state, which the device's process holds between callbacks."
   @type state :: term
@@ -118,6 +118,7 @@ defmodule Logex.IO do
   The configuration is checked as `Logex.Runtime.start/1` checks it, and one it refuses
   raises `ArgumentError` in the same words.
   """
+  @spec points(Configuration.t()) :: %{optional(String.t()) => [Point.t(), ...]}
   def points(configuration) do
     configured!(configuration)
 
@@ -147,8 +148,16 @@ defmodule Logex.IO do
   defp configured!(%Configuration{} = configuration),
     do: refused!(Configuration.check(configuration))
 
-  # Anything else Logex.Runtime.start/1 refuses itself, so in its own words.
-  defp configured!(other), do: Logex.Runtime.start(other)
+  # Anything else is refused in Logex.Runtime.start/1's own words, which io_test.exs holds
+  # the two to. RV-24's review (F4): raised here, where it was Logex.Runtime.start/1 called
+  # for its refusal alone, whose resource beside `:ok` broke the resource's opacity
+  # (Dialyzer's `-Wopaque_union`).
+  defp configured!(other),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: #{inspect(other)}"
+      )
 
   defp refused!([]), do: :ok
 
@@ -178,6 +187,8 @@ defmodule Logex.IO do
   quadratic in the two, as `Logex.Configuration`'s refusals do. Only a host's mistake pays
   it, and its message is linear in its problems.
   """
+  @spec bind!(Configuration.t(), %{optional(String.t()) => module | {module, keyword}}) ::
+          [{device :: String.t(), module, keyword, [Point.t(), ...]}]
   def bind!(configuration, io) do
     devices = points(configuration)
     io = io!(io)
