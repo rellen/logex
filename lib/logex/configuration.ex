@@ -187,6 +187,10 @@ defmodule Logex.Configuration do
             connections: [],
             warnings: []
 
+  @typedoc """
+  A configuration (the moduledoc): its name, the file it was read from, its program types
+  by name, its tasks, globals, instances and connections, and its warnings.
+  """
   @type t :: %__MODULE__{
           name: String.t(),
           file: String.t() | nil,
@@ -220,6 +224,7 @@ defmodule Logex.Configuration do
     @enforce_keys [:name]
     defstruct [:name, :single, :interval, :priority, watchdog: nil, continuous: false, line: nil]
 
+    @typedoc "A task, as the moduledoc gives it."
     @type t :: %__MODULE__{
             name: String.t(),
             single: String.t() | nil,
@@ -267,6 +272,13 @@ defmodule Logex.Configuration do
     `Logex.Configuration.new!/1` runs, as for a struct built by hand. The struct's `retain`
     keeps the atom, `:retain`, `:non_retain` or nil.
     """
+    @spec new!(String.t(), type) :: t
+    @spec new!(String.t(), type,
+            initial: number | [number] | nil,
+            at: String.t() | nil,
+            retain: boolean,
+            non_retain: boolean
+          ) :: t
     def new!(name, type, options \\ []),
       do: built!(options, %__MODULE__{name: name, type: type})
 
@@ -353,11 +365,15 @@ defmodule Logex.Configuration do
     defp label(name) when is_binary(name), do: "`#{name}`"
     defp label(name), do: inspect(name)
 
+    @typedoc "A global's type: an elementary type, or an array of one."
+    @type type ::
+            Logex.Declarations.elementary()
+            | {:array, Logex.Declarations.elementary(), [pos_integer, ...]}
+
+    @typedoc "A global, as the moduledoc gives it."
     @type t :: %__MODULE__{
             name: String.t(),
-            type:
-              Logex.Declarations.elementary()
-              | {:array, Logex.Declarations.elementary(), [pos_integer, ...]},
+            type: type,
             initial: number | [number] | nil,
             at: String.t() | nil,
             line: pos_integer | nil,
@@ -374,6 +390,7 @@ defmodule Logex.Configuration do
     @enforce_keys [:name, :type]
     defstruct [:name, :type, task: nil, line: nil]
 
+    @typedoc "A program instance, as the moduledoc gives it."
     @type t :: %__MODULE__{
             name: String.t(),
             type: String.t(),
@@ -393,6 +410,7 @@ defmodule Logex.Configuration do
     @enforce_keys [:instance, :member, :to]
     defstruct [:instance, :member, :to, line: nil]
 
+    @typedoc "A connection, as the moduledoc gives it."
     @type t :: %__MODULE__{
             instance: String.t(),
             member: String.t(),
@@ -437,6 +455,7 @@ defmodule Logex.Configuration do
   mistake: a var_input whose one connection the host gave a bad instance or member is also
   not connected.
   """
+  @spec new!(keyword) :: t
   def new!(fields) when is_list(fields), do: built(keyword?(fields), fields)
 
   def new!(other), do: raise(ArgumentError, takes(other))
@@ -621,6 +640,8 @@ defmodule Logex.Configuration do
   the least of three on one machine). `compile_file/1` compiles its program types through
   `Logex.compile_files/1`, in a process of its own.
   """
+  @spec compile(String.t(), String.t(), %{optional(String.t()) => Program.t()}) ::
+          {:ok, t} | {:error, [Diagnostic.t(), ...]}
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
     checked(configuration_name(name) ++ mistakes, [])
@@ -813,6 +834,7 @@ defmodule Logex.Configuration do
   the VM's dirty I/O schedulers with its other raw file calls, as `Logex.compile_file/1`
   says.
   """
+  @spec compile_file(String.t()) :: {:ok, t} | {:error, [Diagnostic.t(), ...]}
   def compile_file(path) when is_binary(path),
     do: configuration_file(Path.extname(path), Path.basename(path), path)
 
@@ -1014,6 +1036,7 @@ defmodule Logex.Configuration do
   `ArgumentError` instead, each such mistake a line of its message (decision 36; the
   moduledoc lists them).
   """
+  @spec check(t) :: [Diagnostic.t()]
   def check(config), do: checking(is_struct(config, __MODULE__) and whole?(config), config)
 
   defp checking(true, config) do
@@ -2204,6 +2227,7 @@ defmodule Logex.Configuration do
       iex> Logex.Configuration.initial(%Logex.Configuration.Global{name: "x", type: :bool, at: "panel.i.0"})
       0
   """
+  @spec initial(Global.t()) :: integer | float | tuple
   def initial(%Global{type: type, initial: nil}) when is_elementary(type),
     do: Declarations.zero(type)
 
@@ -2330,6 +2354,7 @@ defmodule Logex.Configuration do
       iex> Logex.Configuration.watchdog(%Logex.Configuration.Task{name: "main", continuous: true, watchdog: 200})
       200
   """
+  @spec watchdog(Logex.Configuration.Task.t()) :: 1..2_147_483_647
   def watchdog(%Logex.Configuration.Task{watchdog: nil}), do: 500
 
   def watchdog(%Logex.Configuration.Task{watchdog: watchdog}) when watchdog in @interval,
@@ -2357,6 +2382,7 @@ defmodule Logex.Configuration do
       iex> Logex.Configuration.location("panel.i.00")
       :error
   """
+  @spec location(term) :: {:ok, {String.t(), String.t(), Logex.IO.address()}} | :error
   def location(at), do: located_word(word?(at), at)
 
   defp located_word(true, at), do: one_spelling(spelled(at))

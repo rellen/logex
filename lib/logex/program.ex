@@ -84,10 +84,13 @@ defmodule Logex.Program do
     retained: nil
   ]
 
+  # RV-24's review (F3): `tags` and `blocks` may be empty, a program of no line holding
+  # none, so each key is optional; `units`, `reals` and `arrays` are nil where they would
+  # be empty, so a map of them holds one key or more.
   @type t :: %__MODULE__{
           rungs: [{:rung, list}],
-          tags: %{String.t() => Logex.Tag.t()},
-          blocks: %{String.t() => Logex.FbType.t()},
+          tags: %{optional(String.t()) => Logex.Tag.t()},
+          blocks: %{optional(String.t()) => Logex.FbType.t()},
           units: nil | %{String.t() => pos_integer},
           reals: nil | %{String.t() => :real | :lreal},
           arrays: nil | %{String.t() => {:array, atom, [pos_integer]}},

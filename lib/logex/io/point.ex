@@ -13,6 +13,7 @@ defmodule Logex.IO.Point do
   @enforce_keys [:name, :direction, :address, :type]
   defstruct [:name, :direction, :address, :type]
 
+  @typedoc "A device's point, as the moduledoc gives it."
   @type t :: %__MODULE__{
           name: String.t(),
           direction: :input | :output,

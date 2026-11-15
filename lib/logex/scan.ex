@@ -54,8 +54,8 @@ defmodule Logex.Scan do
           now: non_neg_integer,
           first: boolean,
           ons_blocked: [] | blocked,
-          tags: nil | %{String.t() => Logex.Tag.t()},
-          blocks: nil | %{String.t() => Logex.FbType.t()},
+          tags: nil | %{optional(String.t()) => Logex.Tag.t()},
+          blocks: nil | %{optional(String.t()) => Logex.FbType.t()},
           units: nil | %{String.t() => pos_integer},
           reals: nil | %{String.t() => :real | :lreal}
         }

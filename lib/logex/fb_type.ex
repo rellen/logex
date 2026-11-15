@@ -86,13 +86,14 @@ defmodule Logex.FbType do
     @enforce_keys [:name, :type, :role]
     defstruct [:name, :type, :role, write: false, initial: 0, retain: nil]
 
+    # RV-24's review (F3): a member's type and initial value are a tag's, an array's among
+    # them, its initial list or nil, a real's a float, and a built-in's own `:clock`.
     @type t :: %__MODULE__{
             name: String.t(),
-            type:
-              Logex.Declarations.elementary() | :clock | Logex.FbType.t() | {:block, String.t()},
+            type: Logex.Tag.type() | :clock,
             role: :input | :output | :local | :internal,
             write: boolean,
-            initial: integer | %{String.t() => integer},
+            initial: Logex.Tag.initial(),
             retain: :retain | :non_retain | nil
           }
   end
@@ -788,7 +789,8 @@ defmodule Logex.FbType do
   defp reach([name | names], path, blocks, ok),
     do: reach(names, path, blocks, visit(name, path, blocks, ok))
 
-  defp visit(_name, _path, _blocks, :error), do: :error
+  # reach/4 stops at the first :error, so a visit is never handed one (decision 515 (c),
+  # RV-24: Dialyzer found the clause that took it unreachable).
   defp visit(name, path, _blocks, _ok) when is_map_key(path, name), do: :error
 
   defp visit(name, _path, _blocks, {:ok, reached, _order} = ok) when is_map_key(reached, name),

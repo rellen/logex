@@ -50,12 +50,14 @@ defmodule Logex.Runner.Clock do
 
   @doc false
   # The checks both clocks make of what a host hands them, one message a rule.
+  @spec receiver!(pid) :: pid
   def receiver!(pid) when is_pid(pid), do: pid
 
   def receiver!(other),
     do: raise(ArgumentError, "a timer wakes a process, given by its pid, got: #{inspect(other)}")
 
   @doc false
+  @spec time!(integer) :: integer
   def time!(at) when is_integer(at), do: at
 
   def time!(other),
@@ -66,6 +68,7 @@ defmodule Logex.Runner.Clock do
       )
 
   @doc false
+  @spec timer!(reference) :: reference
   def timer!(timer) when is_reference(timer), do: timer
 
   def timer!(other),

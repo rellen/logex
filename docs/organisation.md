@@ -14923,6 +14923,27 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      passed, read through `gh api` (provisional, `PLAN.md`'s RV-22, question 5); and the
      changelog's first entry lists thirteen changes to a running program's outputs, its
      question 4's reading (b), provisional.)*
+     *(Landed, (c), with RV-24, 2026-11-15: a `@spec` on every public function of the
+     modules decision 514 and decision 523 put inside the host contract, a behaviour's
+     callbacks covered by its behaviour, and a `@typedoc` on every type they export, the
+     resource and the two edits opaque, `runtime_test.exs` holding each; the specs made the
+     resource's opacity effective, so `Logex.Configuration.Edit` reads it through
+     `Logex.Runtime.fields/1`, internal, as `edited/2` writes it. `scripts/dialyzer.sh`
+     runs OTP's own dialyzer, no dependency added, over the dev build against a PLT of
+     erts, kernel, stdlib and elixir named by the toolchain's versions, Dialyzer's defaults
+     and `-Wextra_return`, `-Wunderspecs` and `-Woverlapping_contract`, red on any
+     warning; CI runs it after the four gates, the PLT cached by the versions, and
+     `scripts_test.exs` holds the step and the script. The twelve warnings it gave at the
+     base, none a defect, were cleared in the code, each recorded; a spec made false is red
+     in CI, `backup/rv24-red`. The flags, when a contributor runs it, how a warning that is
+     no defect is cleared, the contract's reach and the opacity's reader are `PLAN.md`'s
+     RV-24, questions 1 to 5, provisional. Since RV-24's review, the same day: Dialyzer
+     types nothing a call to a process gives back nor a struct's field, so a third of the
+     specs it held to nothing; `test/logex/typespec_test.exs` reaches every spec of the
+     contract and holds each value and argument to it, and made the types of a block's
+     member and the maps a program and an instance hold true; `-Wmissing_return` and
+     `-Wopaque_union` are on, their sites written to say what they do, and the PLT is named
+     and cached by the applications it holds too.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the

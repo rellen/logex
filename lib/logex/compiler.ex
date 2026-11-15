@@ -882,7 +882,7 @@ defmodule Logex.Compiler do
   # the check compiled again, so that the tags declared from Elixir compile again no type
   # it did (Logex.Declarations.split/4).
   defp library!(types) when is_list(types), do: listed!(proper?(types, &any?/1), types)
-  defp library!(types), do: listed!(false, types)
+  defp library!(types), do: raise(ArgumentError, unlisted(types))
 
   defp listed!(true, types) do
     {library, checked} =
@@ -898,13 +898,14 @@ defmodule Logex.Compiler do
     {library, held, checked}
   end
 
-  defp listed!(false, types),
+  defp listed!(false, types), do: raise(ArgumentError, unlisted(types))
+
+  # Decision 515 (c), RV-24: the refusal raised where it is meant, each clause its own
+  # raise, so that no call reaches a clause only to raise (Dialyzer's "will never
+  # return").
+  defp unlisted(types),
     do:
-      raise(
-        ArgumentError,
-        "types must be a list of function block types from Logex.compile/2, got: " <>
-          inspect(types)
-      )
+      "types must be a list of function block types from Logex.compile/2, got: " <> inspect(types)
 
   defp given!({:ok, checked}, %FbType{name: name} = type, library)
        when not is_map_key(library, name),
