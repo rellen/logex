@@ -37,7 +37,9 @@ names what still waits, RV-22 to RV-26.)* *(Since RV-26 and the answers to its q
 waits, RV-22 to RV-25 and RV-27.)* *(Since RV-27 and the answers to its questions,
 2026-11-14: it says RV-27 has landed, names decisions 537–540, and names what still
 waits, RV-22 to RV-25 and RV-28.)* *(Since RV-22, 2026-11-15: it says RV-22 has landed,
-and names what still waits, RV-23 to RV-25 and RV-28.)*
+and names what still waits, RV-23 to RV-25 and RV-28.)* *(Since RV-28 and the answers
+to RV-22's and RV-28's questions, 2026-11-15: it says RV-28 has landed, names decisions
+541–545, and names what still waits, RV-23 to RV-25 and RV-29.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -19893,7 +19895,10 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
     operator or a host sees. The readings no question asks: the test step's form, above;
     `failed.exs`'s line, which the decision does not name and a red run is read by; the
     file `CHANGELOG.md`, the name the common convention gives it; the tag `vX.Y.Z`, as
-    Elixir's own releases are tagged; and the entry's sections, the head's four.
+    Elixir's own releases are tagged; and the entry's sections, the head's four. *(All
+    answered on 2026-11-15: 1, 2 and 4 decision 541, no release for now, each reading
+    left provisional until one is planned; 3 decision 542, as built; and 5, which
+    concerns a release alone and was not put, waiting under 541 with 1, 2 and 4.)*
     1. *The first version's number.* A host adds `{:logex, "~> X"}` to a plant's
        `mix.exs`, or pins a tag, and reads the number for what the next release may do to
        its program. (a) 0.1.0, what `mix.exs` has said since the first commit: every
@@ -20139,13 +20144,15 @@ by side; then RV-22 and RV-23; then RV-24; and RV-25 last, alone.
   builds no rule. It runs after RV-22 and RV-26, and traces RV-20's, RV-21's and RV-26's marks
   too, beside RV-24 *(so since the answers of 2026-11-13, where it was to run beside
   RV-22)*, and after RV-27 too, tracing its marks *(so since the answers of 2026-11-14)*,
-  and RV-28's *(so since RV-27's answers, the same day)*.
+  and RV-28's *(so since RV-27's answers, the same day)*, and after RV-29, tracing its
+  marks too *(so since the answers of 2026-11-15)*.
 - **RV-24 — typespecs and Dialyzer** (decision 515, (c)). Typespecs on the host
   contract's functions, decision 514's modules, and Dialyzer, OTP's own `dialyzer` over
   the compiled modules with a table of the toolchain's applications, no dependency added,
   run in CI, each warning it gives fixed with a test where it is a defect or recorded
   with its reason. It runs beside RV-23 *(so since the answers of 2026-11-13, where it was
-  to run after it)*, leaving every mark to RV-23.
+  to run after it)*, and beside RV-29 *(so since the answers of 2026-11-15)*, leaving
+  every mark to RV-23.
 - **RV-25 — the runner and the contract test file split by concern** (decision 515,
   (d)). `Logex.Runner`'s 5,700 lines into internal modules by concern, the public module
   and every message unchanged, each new module a line in CLAUDE.md; and
@@ -21271,7 +21278,8 @@ and RV-24 side by side; and RV-25 last, alone.
     procedure gives it one once both have.
   - *Provisional readings, and questions for the maintainer*, each marked provisional
     where it stands, the closest reading of the record that could be found; IEC 61131-3
-    and Logix have no store a person edits:
+    and Logix have no store a person edits *(both answered on 2026-11-15: 1 decision 543,
+    as built, 2 decision 544, one at a time)*:
     1. *Which line a version 3 store with its `resource` line and no `program` line is
        refused at* (decision 539). A hand edit takes `program tally ...` out of
        `tally.retain` and mends its count; the warm start is refused, "tally.retain: line
@@ -21485,7 +21493,8 @@ and RV-24 side by side; and RV-25 last, alone.
     its grammar and its count of lines" holds, an empty line after the end line being the
     grammar's, as RV-5's review has it.
   - *Questions for the maintainer, added by the review*, marked provisional where they
-    stand (question 1 above as it was, question 2 extended by F1):
+    stand (question 1 above as it was, question 2 extended by F1) *(answered on
+    2026-11-15: decision 545, the renamed configuration's way out made the full one)*:
     3. *Whether every refusal of a store ends with one way out* (F4). README's box
        counter, `tally`, is given the store configuration `line_2` wrote, as README's
        renamed configuration is, and that store's `program` lines were taken away by hand:
@@ -21506,6 +21515,39 @@ and RV-24 side by side; and RV-25 last, alone.
        its problems, and no single refusal ending with it, which also tells the way out
        once where F1's store tells it twice. IEC 61131-3 and Logix have no store a person
        edits.
+
+**RV-22's and RV-28's questions answered, 2026-11-15** (decisions 541–545). The maintainer
+answered RV-22's first version's number, its tag and what the first release lists with
+"We are not making a release any time soon": no version is set, no tag made or pushed, the
+release step kept as built and its readings left provisional until a release is planned,
+RV-22's question 5, which concerns a release alone and was not put, among them (541); and
+took the changelog held at every commit as built (542). Of RV-28's, the maintainer took
+the refusal of a store that names its resource and no program told at its `resource`
+line, as built (543); decision 531's refusal beside a count or a cut that does not read
+made to wait for the count, as 535's and 539's do, one rule for the three partial forms,
+the way out told once (544); and the renamed configuration's way out made the full one,
+"... which copies it first to the next `.dropped.<n>` beside it and then writes a new
+store over it", a store refused for what a hand can mend told none (545). The order from
+here: RV-29 and RV-24 side by side; then RV-23, once RV-29 has landed, beside RV-24 if it
+still runs; and RV-25 last, alone.
+
+- **RV-29 — the answers to RV-22's and RV-28's questions** (decisions 541–545). Decision
+  531's refusal, a store whose `program` lines come with no `resource` line, made to wait
+  for the count as 535's and 539's do: a store miscounted or cut short told its end line
+  alone, and the naming lines once the count reads, the way out told once, the refusal
+  pinned whole by RV-28's review beside a miscount and a cut changed by this decision
+  alone (544); the renamed configuration's refusal ending with the full way out, its
+  pinned message and README's example of it changed so and only so (545); the store's
+  life walk and README's store passage restating each; the marks decisions 541–545 settle
+  made their numbers, 541's, 542's and 543's as built, the release step's readings
+  marked as waiting under 541, not settled; the changelog given RV-29's entries as
+  "Between releases" asks; and the three tests seen red under load since RV-22, each
+  root-caused and fixed in the test or the code as its cause says, none given more time:
+  `stalled_disk_test.exs:1857`, the writer gone, `:noproc`, when the test monitors it (2
+  of 20 runs under load at RV-28's parent, 0 of 20 quiet), `stalled_disk_test.exs:2331`,
+  decision 468's restart wait told "the runner is running", and `trip_test.exs:2078`,
+  decision 486's cap trip awaited 100 ms on the manual clock. It runs beside RV-24,
+  before RV-23 traces the marks.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

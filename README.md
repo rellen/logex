@@ -393,8 +393,13 @@ them before the store compares it, a version 3 store that names no program refus
 one message for an end line under every header that takes none. The maintainer answered
 RV-27's questions the same day, decisions 537–540, and RV-28 has landed: a version 3
 store that names its resource and no program refused, and every refusal of the lines
-that name a store's program ending with the way to start cold. Waiting: typespecs with
-Dialyzer and the runner split by concern.
+that name a store's program ending with the way to start cold. The maintainer answered
+RV-22's and RV-28's questions on 2026-11-15, decisions 541–545: no release for now, the
+changelog naming every decision at every commit, and the refusal of a store that names its
+resource and no program told at its resource line. Waiting: RV-29, a store with no
+resource line whose count does not read told its count first, and a renamed
+configuration's refusal ending with the full way out; typespecs with Dialyzer; and the
+runner split by concern.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions

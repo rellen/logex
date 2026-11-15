@@ -15529,6 +15529,82 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      refusal of a store ends with the way out, the renamed configuration's among them, is
      RV-28's question 3.)*
 
+541. **The first release: its number, its tag and what it lists (RV-22),** RV-22's
+     questions 1, 2 and 4, and question 5 from its review: RV-22 built the release step,
+     `CHANGELOG.md`, `scripts/changelog.exs` and `scripts/release.sh`, and read,
+     provisional, the first version as 0.2.0, its tag pushed at the release, its entry
+     listing the thirteen decisions that changed what a running program writes, and the
+     step refusing a commit origin's `main` does not hold or whose CI runs did not all
+     pass.
+
+     **Taken: no release for now** (the maintainer, 2026-11-15): "We are not making a
+     release any time soon." No version is set: `mix.exs` says 0.1.0 as it has,
+     `## Unreleased` stays the newest entry, and no tag is made or pushed. The release
+     step stays as built, run by its tests, and its readings stay provisional, each put to
+     the maintainer again when a release is planned: the first number, whether its tag is
+     pushed, what the first entry lists under "What changes a running program's outputs",
+     and whether the step reads CI's runs itself, question 5, which concerns a release
+     alone and was not put. IEC 61131-3 says nothing of how a release is numbered; Logix
+     numbers each firmware revision and ships notes with it. RV-29 makes the marks this
+     decision's number.
+
+542. **The changelog held at every commit (RV-22),** RV-22's question 3: as built, the
+     suite is red while §7 records a decision no entry of `CHANGELOG.md` names, so a
+     commit that records a decision names it in `## Unreleased` too, where the other
+     reading named each at the release, from §7, all at once.
+
+     **Taken: as built, every commit (a)** (the maintainer, 2026-11-15): the suite holds
+     every decision §7 records to an entry at every commit, as `claude_md_test.exs` holds
+     CLAUDE.md to every file, so no release can leave one out; the commit that records
+     this decision names 541–545. IEC 61131-3 has no rule for it; Logix writes its notes
+     per firmware revision. RV-29 makes the marks this decision's number.
+
+543. **The line a version 3 store with its `resource` line and no `program` line is
+     refused at (RV-28),** RV-28's question 1: decision 539 refuses it, and RV-28 located
+     the refusal at the `resource` line, wherever it stands, provisional, where the
+     readings were line 1, the header, as decision 537 has it for a store that names
+     neither, and line 3, where the runner writes the `resource` line.
+
+     **Taken: as built, the `resource` line (a)** (the maintainer, 2026-11-15):
+     "tally.retain: line 3: `resource 013cc...` names the resource of the store's writer,
+     and the store names no program type: ...", the line that names the program in part,
+     as decision 531 tells its refusal at the first `program` line, decision 537's header
+     kept for a store with no naming line at all. Neither IEC 61131-3 nor Logix has a
+     store a person edits. RV-29 makes the marks this decision's number.
+
+544. **Decision 531's refusal beside a count or a cut that does not read (RV-28),**
+     RV-28's question 2, extended by its review: a store whose `program` lines come with
+     no `resource` line and whose end line miscounts, or was cut away, is told 531's
+     refusal and the end line's problem at once, as built since RV-21's review, where
+     decision 538 tells a store that names none (535) or its resource alone (539) the
+     count alone and the naming lines at the next try; beside a cut, the way out of
+     decision 540 was told twice, a line each.
+
+     **Taken: one at a time (b)** (the maintainer, 2026-11-15): 531's refusal waits for
+     the count as 535's and 539's do, one rule for the three partial forms: a store
+     miscounted or cut short is told its end line alone, and the naming lines once the
+     count reads, so the way out is told once. Decision 531's refusal beside a miscount
+     or a cut, pinned whole by RV-28's review, changes by this decision. Neither IEC
+     61131-3 nor Logix has a store a person edits. RV-29 builds it.
+
+545. **The renamed configuration's way out (RV-28),** RV-28's question 3, from its
+     review: a store another configuration wrote, as README's renamed configuration's
+     is, is told "... a renamed configuration starts only cold: start it with start:
+     :cold to start over it", a way out that says nothing of the copy, where the
+     cut-short store's and the naming lines' refusals end with the full one (decision
+     540), and a store refused for a junk line, a digest mistyped or a miscount tells
+     none.
+
+     **Taken: the renamed configuration's made the full way out (b)** (the maintainer,
+     2026-11-15): its refusal ends "start it with start: :cold to start over it, which
+     copies it first to the next `.dropped.<n>` beside it and then writes a new store
+     over it", so every refusal that tells a way out tells the same words; a store
+     refused for what a hand can mend, a junk line, a digest mistyped or a miscount,
+     tells none, so an operator mends it and keeps the count, where a cold start sets it
+     back to its initial value. The renamed configuration's pinned message, README's
+     example of it among its pins, changes by this decision. Neither IEC 61131-3 nor
+     Logix has a store a person edits. RV-29 builds it.
+
 ---
 
 ## 8. Sources, and what is unverified

@@ -28,18 +28,18 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–540.
+Decisions: 1–545.
 
-The first release, carrying every decision §7 records, taken from 2026-09-28 to
-2026-11-14 (provisional: its number, and whether its tag is pushed, are the maintainer's,
-`PLAN.md`'s RV-22, questions 1 and 2). No release came before it, but `mix.exs` has said
-0.1.0 at every commit of `main`, so a host who ran one upgrades from a logex that said the
-same number. For that host, "What changes a running program's outputs" lists each rule §7
-records as replacing one that had landed on `main` and that changed what a running
-program, or the runner under it, writes, found by a pass through §7, oldest first
-(provisional: `PLAN.md`'s RV-22, question 4, its reading (b)); a word newly reserved or a
-form newly refused is told by the compile's own diagnostic, and the host's API is
-README's, so this first entry lists neither apart.
+The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
+(provisional: its number, and whether its tag is pushed, are the maintainer's, `PLAN.md`'s
+RV-22, questions 1 and 2, and no release is planned yet, decision 541). No release came
+before it, but `mix.exs` has said 0.1.0 at every commit of `main`, so a host who ran one
+upgrades from a logex that said the same number. For that host, "What changes a running
+program's outputs" lists each rule §7 records as replacing one that had landed on `main`
+and that changed what a running program, or the runner under it, writes, found by a pass
+through §7, oldest first (provisional: `PLAN.md`'s RV-22, question 4, its reading (b)); a
+word newly reserved or a form newly refused is told by the compile's own diagnostic, and
+the host's API is README's, so this first entry lists neither apart.
 
 ### What changes a running program's outputs
 
@@ -156,7 +156,7 @@ README's, so this first entry lists neither apart.
 - **Retained values and a true warm restart**, Milestone 6 (decisions 266–285 and
   291–346): `retain` and `non_retain`, a warm restart keeping what is marked, the retained
   image as plain data, and the store a runner keeps on the host's disk.
-- **The review of the whole codebase after Milestone 6** (decisions 347–540): every source
+- **The review of the whole codebase after Milestone 6** (decisions 347–545): every source
   text compiling or told why, a rung that writes nothing refused; held outputs that hold;
   each device's write and every file write limited in time; a store cut short refused and a
   fresh start that drops anything keeping a numbered copy; the suite's cost pins bounds
