@@ -41,7 +41,9 @@ and names what still waits, RV-23 to RV-25 and RV-28.)* *(Since RV-28 and the an
 to RV-22's and RV-28's questions, 2026-11-15: it says RV-28 has landed, names decisions
 541–545, and names what still waits, RV-23 to RV-25 and RV-29.)* *(Since the maintainer asked for the
 documentation's new shape, 2026-11-15: it names decisions 546–548 and what they add to
-what waits, DOC-1 and DOC-2.)*
+what waits, DOC-1 and DOC-2.)* *(Since RV-24 and the answers to its questions, 2026-11-15:
+it says RV-24 has landed, names decisions 549–555, and names what still waits, RV-23,
+RV-25, RV-29, RV-30, DOC-1 and DOC-2.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -22052,6 +22054,33 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
 - **DOC-2 — the module text rewritten** (decision 546 (a)). Each module's and function's
   text rewritten by DOC-1's style guide, each sentence the suite pins changed with its
   pin, after RV-24 and RV-25.
+
+**RV-24's questions answered, 2026-11-15** (decisions 549–555). RV-24 landed on `main` at
+`6889ad5`. The maintainer took Dialyzer as the gate's fifth step, where RV-24 built it run
+by hand and in CI (549); `-Wunmatched_returns` on beside the flags as built, the 24 sites
+that drop an answer on purpose written `_ = ...`, `-Werror_handling` left off (550); and
+`Global.new!/3` refusing at once an initial value no global of its type holds (555). Taken
+as built: a warning that is no defect cleared by rewriting the code, no warning silenced
+where it stands (551); a spec on every public function of the host contract's modules
+(552); the resource read inside logex through `Logex.Runtime.fields/1` (553); and the spec
+test holding each value to its spec, a spec wider than its values passing (554). The
+order from here: RV-29 and DOC-1's first step run side by side; RV-30 starts when the
+first of them lands; then DOC-1's second and third steps; then RV-23, which traces the
+marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
+
+- **RV-30 — the answers to RV-24's questions** (decisions 549–555). `scripts/gate.sh`
+  given `scripts/dialyzer.sh` as its fifth step, after the four it has, `GATE-OK` only
+  when all five pass, `scripts_test.exs`'s hold of the gate, `CONTRIBUTING.md`'s "Before
+  you commit", `CLAUDE.md`'s Commands and CI's comment saying five (549);
+  `-Wunmatched_returns` added to the script's flags, each of the 24 sites read again and
+  written `_ = ...` where the answer is dropped on purpose, a dropped answer that is a
+  defect fixed with a test, `scripts_test.exs`'s pinned flags changed so and only so, and
+  a red CI run that shows a dropped `{:error, _}` caught (550); `Global.new!/3` raising at
+  once for an initial value no global of its type holds, its message pinned whole and
+  `Global.t()` true of every struct it gives (555); the marks decisions 549–555 settle
+  made their numbers; and the three real-clock tests seen red once each under load in
+  RV-24's mutation runs, `trip_test.exs:1600`, `:2062` and `:4956`, each root-caused and
+  fixed in the test or the code as its cause says, none given more time.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
