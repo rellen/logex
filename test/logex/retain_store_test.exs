@@ -288,11 +288,42 @@ defmodule Logex.RetainStoreTest do
         "given, with the store's retained values laid over it by name and type"
 
   # Decision 535 (RV-27): what a store of `logex retain 3` that names no program is told
-  # at its first line.
+  # at its first line, and since decision 540 (RV-28) ending with the way out the cut-short
+  # store's ends with (`@way_out`).
+  @way_out "start it with start: :cold to start over it, which copies it first to the next " <>
+             "`.dropped.<n>` beside it and then writes a new store over it"
+
   @names_none "`logex retain 3` heads a store that names the program that wrote it, and the " <>
                 "store names none: a store that names the program that wrote it gives " <>
                 "`resource <digest>` straight after its configuration's line, and then a " <>
-                "`program <type> <digest>` a type"
+                "`program <type> <digest>` a type: " <> @way_out
+
+  # Decision 539 (RV-28): what a store of `logex retain 3` that names its resource and no
+  # program type is told at its `resource` line, the line given, ending with decision
+  # 540's way out.
+  defp names_no_program(resource),
+    do:
+      "`#{resource}` names the resource of the store's writer, and the store names no " <>
+        "program type: a store that names the program that wrote it gives `resource " <>
+        "<digest>` straight after its configuration's line, and then a `program <type> " <>
+        "<digest>` a type: " <> @way_out
+
+  # Decision 531: what a store of `logex retain 3` that names a program type and no
+  # resource is told at its first `program` line, the line given, ending with decision
+  # 540's way out.
+  defp names_no_resource(program),
+    do:
+      "`#{program}` names a program type of the store's writer, and the store names no " <>
+        "resource: a store that names the program that wrote it gives `resource <digest>` " <>
+        "straight after its configuration's line, and then a `program <type> <digest>` a " <>
+        "type: " <> @way_out
+
+  # What a store of `logex retain 3` is told where its last line, `text`, is no end line.
+  defp cut_short(text),
+    do:
+      "`#{text}` is the store's last line, and no end line: a store of `logex retain 3` " <>
+        "ends with `end <count> lines`, its count of lines, so this one was cut short, and " <>
+        "a store cut short is not read: " <> @way_out
 
   describe "the store's text (decision 276)" do
     # Every part of a resource's image among its lines: a retained global, an array global,
@@ -3549,7 +3580,7 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `#{program_end}` names a program type of the store's writer, and the " <>
           "store names no resource: a store that names the program that wrote it gives " <>
           "`resource <digest>` straight after its configuration's line, and then a `program " <>
-          "<type> <digest>` a type",
+          "<type> <digest>` a type: " <> @way_out,
         fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
       )
     end
@@ -3603,7 +3634,7 @@ defmodule Logex.RetainStoreTest do
         "s: line 3: `#{program}` names a program type of the store's writer, and the store " <>
           "names no resource: a store that names the program that wrote it gives `resource " <>
           "<digest>` straight after its configuration's line, and then a `program <type> " <>
-          "<digest>` a type",
+          "<digest>` a type: " <> @way_out,
         fn -> Retain.decoded!(unresourced <> "\nend #{lines - 1} lines\n", {"s", "plant"}) end
       )
 
@@ -3625,8 +3656,8 @@ defmodule Logex.RetainStoreTest do
     # the line starts warm once the lines are put back, or cold, the store copied first to
     # its next `.dropped.<n>` as any store a warm start refuses is (decision 417), the count
     # started at its initial value. One whose end line does not read, cut short or its count
-    # not mended, is told that alone (provisional, `PLAN.md`'s RV-27); and one of `logex
-    # retain 2` or `logex retain 1` naming none is read as ever.
+    # not mended, is told that alone (decision 538); and one of `logex retain 2` or `logex
+    # retain 1` naming none is read as ever.
     test "a store of version 3 that names no program is refused at its header, and a cold " <>
            "start copies it first",
          %{tmp_dir: dir} do
@@ -3759,14 +3790,274 @@ defmodule Logex.RetainStoreTest do
       )
     end
 
-    # RV-27's review (provisional, `PLAN.md`'s RV-27, question 3): a store of `logex
-    # retain 3` with its `resource` line and no `program` line, a hand edit's, as no
-    # configuration the runner runs gives one, every configuration declaring a program, is
-    # read, its resource named and no type, and a warm start from it lays its values over
-    # and warns that each type the start runs is not in the store, as a store naming the
-    # very resource and other types would; its next write names the program whole.
-    test "a store of version 3 that names its resource and no program type is read, and " <>
-           "warns that each type is not in the store",
+    # Decision 538 (RV-27's question 2, as built): a store whose end line does not read is
+    # told that, and the naming lines only once the count reads, for decision 535's
+    # refusal and decision 539's, a cut before the `program` lines taking them with it;
+    # decision 531's, a store that names a program type and no resource, which no cut
+    # makes, the `resource` line coming first, is told beside the count, as built since
+    # RV-21's review (provisional, `PLAN.md`'s RV-28).
+    test "a store whose count does not read is told its naming lines once it does, 531's " <>
+           "beside it" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      miscounted = fn lines -> Enum.join(lines, "\n") <> "\nend 99 lines\n" end
+
+      count = fn lines ->
+        "the store's end line counts 99 lines, and the store has #{length(lines) + 1}"
+      end
+
+      for lines <- [[header, named | values], [header, named, resource | values]] do
+        message = refused(fn -> Retain.decoded!(miscounted.(lines), {"s", "plant"}) end)
+        assert message =~ ~r/\As: line #{length(lines) + 1}: #{count.(lines)}: [^\n]*\z/
+      end
+
+      lines = [header, named, program | values]
+      message = refused(fn -> Retain.decoded!(miscounted.(lines), {"s", "plant"}) end)
+      assert [named_in_part, counted] = String.split(message, "\n")
+
+      assert named_in_part =~
+               ~r/\As: line 3: `#{program}` names a program type of the store's writer/
+
+      assert String.starts_with?(counted, "s: line #{length(lines) + 1}: #{count.(lines)}: ")
+    end
+
+    # RV-28's review: decision 531's refusal told beside an end line that does not read,
+    # each line whole, as built since RV-21's review (provisional, `PLAN.md`'s RV-28,
+    # question 2): beside a count not mended, the count's message, which tells no way out,
+    # and the refusal's way out once; beside a cut, the cut-short store's message, so the
+    # way out told twice, a line each, which only a hand edit and a cut together make.
+    test "decision 531's refusal beside a count that does not read and beside a cut, whole, " <>
+           "each line that tells the way out ending with it" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, _resource, program | rest] = String.split(v3, "\n")
+      lines = [header, named, program | Enum.drop(rest, -2)]
+      n = length(lines) + 1
+
+      miscounted = Enum.join(lines, "\n") <> "\nend 99 lines\n"
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\n" <>
+          "s: line #{n}: the store's end line counts 99 lines, and the store has #{n}: a " <>
+          "line was lost or doubled, or a hand edit added or removed one without changing " <>
+          "the count, which counts every line, the end line among them, and the store is " <>
+          "not read",
+        fn -> Retain.decoded!(miscounted, {"s", "plant"}) end
+      )
+
+      cut = Enum.join(lines, "\n") <> "\n"
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\n" <>
+          "s: line #{n - 1}: #{cut_short(List.last(lines))}",
+        fn -> Retain.decoded!(cut, {"s", "plant"}) end
+      )
+
+      told = refused(fn -> Retain.decoded!(cut, {"s", "plant"}) end)
+      assert length(String.split(told, @way_out)) == 3
+      told = refused(fn -> Retain.decoded!(miscounted, {"s", "plant"}) end)
+      assert length(String.split(told, @way_out)) == 2
+    end
+
+    # RV-28's review: the naming lines wait for the count alone (decision 538), so an empty
+    # line after an end line whose count reads, told as itself (RV-5's review), is told
+    # beside each refusal of the naming lines, 535's, 539's and 531's, where 535's and
+    # 539's waited for the next try; beside a count that does not read, the count and the
+    # empty line are told and 535's and 539's wait, 531's told beside them as ever.
+    test "an empty line after an end line whose count reads is told beside the naming " <>
+           "lines, and beside a count that does not read 535's and 539's wait" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      empty = "an empty line, which a store never holds: its end line is last"
+
+      for {lines, told} <- [
+            {[header, named | values], "s: line 1: #{@names_none}"},
+            {[header, named, resource | values], "s: line 3: #{names_no_program(resource)}"},
+            {[header, named, program | values], "s: line 3: #{names_no_resource(program)}"}
+          ] do
+        n = length(lines) + 1
+        counted = Enum.join(lines, "\n") <> "\nend #{n} lines\n\n"
+
+        raises("#{told}\ns: line #{n + 1}: #{empty}", fn ->
+          Retain.decoded!(counted, {"s", "plant"})
+        end)
+
+        twice = counted <> "\n"
+
+        raises("#{told}\ns: line #{n + 1}: #{empty}\ns: line #{n + 2}: #{empty}", fn ->
+          Retain.decoded!(twice, {"s", "plant"})
+        end)
+      end
+
+      for {lines, told} <- [
+            {[header, named | values], ""},
+            {[header, named, resource | values], ""},
+            {[header, named, program | values], "s: line 3: #{names_no_resource(program)}\n"}
+          ] do
+        n = length(lines) + 1
+        miscounted = Enum.join(lines, "\n") <> "\nend 99 lines\n\n"
+
+        raises(
+          told <>
+            "s: line #{n}: the store's end line counts 99 lines, and the store has #{n}: a " <>
+            "line was lost or doubled, or a hand edit added or removed one without " <>
+            "changing the count, which counts every line, the end line among them, and the " <>
+            "store is not read\ns: line #{n + 1}: #{empty}",
+          fn -> Retain.decoded!(miscounted, {"s", "plant"}) end
+        )
+      end
+    end
+
+    # RV-28's review: a naming line that does not read holds back only the refusal of its
+    # own kind, the line that refusal says is missing perhaps that one mistyped (RV-27's
+    # review, unread_by/2): a second `resource` line that does not read, beside one that
+    # does, is told as itself and decision 539's refusal beside it, since mending it names
+    # no program type; a second `program` line that does not read, beside one that does,
+    # is told as itself and decision 531's beside it. A `program` line that does not read
+    # holds 539's back, and a `resource` line that does not read 531's (the tests above).
+    test "a second naming line that does not read is told beside the refusal of the other " <>
+           "kind" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+      no_digest = "`xyz` is no digest: a store's is 32 lowercase hexadecimal digits"
+
+      raises(
+        "s: line 3: #{names_no_program(resource)}\ns: line 4: #{no_digest}",
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, resource, "resource xyz" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      raises(
+        "s: line 3: #{names_no_resource(program)}\ns: line 4: #{no_digest}",
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, program, "program tally xyz" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # Of the kind missing, the line that does not read told alone.
+      raises("s: line 4: #{no_digest}", fn ->
+        Retain.decoded!(
+          counted.([header, named, resource, "program tally xyz" | values]),
+          {"s", "plant"}
+        )
+      end)
+
+      raises("s: line 3: #{no_digest}", fn ->
+        Retain.decoded!(
+          counted.([header, named, "resource xyz", program | values]),
+          {"s", "plant"}
+        )
+      end)
+    end
+
+    # Decision 540 (RV-28): each refusal of the naming lines, decision 531's, 535's and
+    # 539's, ends as the cut-short store's does, `: ` and the way to start anyway, `start:
+    # :cold`, which copies the store first, one way out for every refused store, where
+    # 531's and 535's named the fault and the shape alone; and a store told several
+    # problems is told within `Logex.Refusal`'s bounds as ever, its first 50 problems and a
+    # count of the rest, each text it quotes at most 60 bytes and each line at most 1,000
+    # bytes after the store's path, a path past 4,096 bytes shown by its last 4,096, the
+    # way out whole in each line that tells it.
+    test "each refusal of the naming lines ends with the cut-short store's way out, within " <>
+           "the refusal's bounds" do
+      config = configured()
+      at = ~U[2026-10-30 14:00:00Z]
+      v3 = Retain.encode(Runtime.retained(Runtime.start(config)), at, Retain.written_by(config))
+      [header, named, resource, program | rest] = String.split(v3, "\n")
+      values = Enum.drop(rest, -2)
+      counted = fn lines -> Enum.join(lines, "\n") <> "\nend #{length(lines) + 1} lines\n" end
+
+      for {text, line} <- [
+            {counted.([header, named | values]), 1},
+            {counted.([header, named, program | values]), 3},
+            {counted.([header, named, resource | values]), 3},
+            {Enum.join([header, named, resource, program | values], "\n") <> "\n",
+             length(values) + 4}
+          ] do
+        message = refused(fn -> Retain.decoded!(text, {"s", "plant"}) end)
+        assert String.starts_with?(message, "s: line #{line}: "), message
+        assert String.ends_with?(message, ": " <> @way_out), message
+        refute message =~ "\n"
+      end
+
+      # 539's refusal among 61 problems: told first, whole, of the 50, the rest counted.
+      doubled = List.duplicate("global total_boxes dint 3", 61)
+
+      message =
+        refused(fn ->
+          Retain.decoded!(counted.([header, named, resource | doubled]), {"s", "plant"})
+        end)
+
+      lines = String.split(message, "\n")
+      assert length(lines) == 51
+      assert hd(lines) == "s: line 3: #{names_no_program(resource)}"
+
+      assert Enum.at(lines, 1) ==
+               "s: line 5: `global total_boxes dint 3` names what line 4 names already"
+
+      assert List.last(lines) == "s: and 11 more problems, not listed"
+
+      # 531's, its type's name past 60 bytes, quoted cut there, the way out whole.
+      long = String.duplicate("t", 200)
+      "program tally " <> digest = program
+
+      raises(
+        "s: line 3: `program #{String.duplicate("t", 52)}…` names a program type of the " <>
+          "store's writer, and the store names no resource: a store that names the program " <>
+          "that wrote it gives `resource <digest>` straight after its configuration's line, " <>
+          "and then a `program <type> <digest>` a type: " <> @way_out,
+        fn ->
+          Retain.decoded!(
+            counted.([header, named, "program #{long} #{digest}" | values]),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # 535's, under a path past 4,096 bytes, shown by its last 4,096, the line whole.
+      wide = "/" <> String.duplicate("e", 5000) <> "/plant.retain"
+      shown = "…" <> binary_part(wide, byte_size(wide) - 4096, 4096)
+
+      raises("#{shown}: line 1: #{@names_none}", fn ->
+        Retain.decoded!(counted.([header, named | values]), {wide, "plant"})
+      end)
+    end
+
+    # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no
+    # `program` line, a hand edit's, as no configuration the runner runs gives one, every
+    # configuration declaring a program, is refused, located at its `resource` line,
+    # wherever it stands, the line that names its program in part (provisional, the line,
+    # `PLAN.md`'s RV-28), as decisions 531 and 535 refuse the other two partial forms,
+    # where RV-27's review read it and a warm start from it warned that each type it runs
+    # was not in the store, a cause no hand edit is; a warm start refused, no device read or
+    # written; a cold start copying it first, byte for byte, to its next `.dropped.<n>`
+    # (decision 417), and starting from the initial values; its `program` line put back, a
+    # warm start reading it. Its count not mended, or the store cut after its `resource`
+    # line, it is told that alone, as 535's is (decision 538); a `program`
+    # line that does not read is told as itself, not as one missing; and one of `logex
+    # retain 2`, its first line so made by hand, or of `logex retain 1` is read as before, a
+    # warm start from it laying its values over and warning that each type is not in the
+    # store, its next write naming the program whole.
+    test "a store of version 3 that names its resource and no program type is refused at " <>
+           "its resource line, and a cold start copies it first",
          %{tmp_dir: dir} do
       rig = rig(dir)
       {:ok, runner} = Runner.start_link(rig.opts)
@@ -3779,17 +4070,107 @@ defmodule Logex.RetainStoreTest do
         String.split(whole, "\n")
 
       count = length(String.split(whole, "\n", trim: true))
+      values = Enum.drop(rest, -2)
 
       unprogrammed =
-        Enum.join([header, named, resource | Enum.drop(rest, -2)], "\n") <>
-          "\nend #{count - 1} lines\n"
+        Enum.join([header, named, resource | values], "\n") <> "\nend #{count - 1} lines\n"
 
       refute unprogrammed =~ program
-      "resource " <> digest = resource
-      assert {_image, _at, by} = Retain.decoded!(unprogrammed, {"s", "plant"})
-      assert by == %{resource: digest, programs: %{}}
 
+      raises("s: line 3: #{names_no_program(resource)}", fn ->
+        Retain.decoded!(unprogrammed, {"s", "plant"})
+      end)
+
+      # Its `resource` line moved after the values, refused at that line.
+      moved = Enum.join([header, named | values] ++ [resource], "\n")
+
+      raises("s: line #{count - 2}: #{names_no_program(resource)}", fn ->
+        Retain.decoded!(moved <> "\nend #{count - 1} lines\n", {"s", "plant"})
+      end)
+
+      # A byte-order mark before it, told too; the count not mended, or the store cut after
+      # its `resource` line, told alone; its `program` line's digest mistyped, that line
+      # told alone.
+      raises(
+        "s: line 1: the store begins with a byte-order mark, `\\xEF\\xBB\\xBF`, as an editor " <>
+          "that saves UTF-8 with one writes it: a store is ASCII and begins `logex retain 3`, " <>
+          "so save it without one\ns: line 3: #{names_no_program(resource)}",
+        fn -> Retain.decoded!("\xEF\xBB\xBF" <> unprogrammed, {"s", "plant"}) end
+      )
+
+      unmended = String.replace(unprogrammed, "end #{count - 1} lines", "end #{count} lines")
+
+      raises(
+        "s: line #{count - 1}: the store's end line counts #{count} lines, and the store has " <>
+          "#{count - 1}: a line was lost or doubled, or a hand edit added or removed one " <>
+          "without changing the count, which counts every line, the end line among them, " <>
+          "and the store is not read",
+        fn -> Retain.decoded!(unmended, {"s", "plant"}) end
+      )
+
+      raises(
+        "s: line 3: `#{resource}` is the store's last line, and no end line: a store of " <>
+          "`logex retain 3` ends with `end <count> lines`, its count of lines, so this one " <>
+          "was cut short, and a store cut short is not read: start it with start: :cold to " <>
+          "start over it, which copies it first to the next `.dropped.<n>` beside it and " <>
+          "then writes a new store over it",
+        fn -> Retain.decoded!(Enum.join([header, named, resource, ""], "\n"), {"s", "plant"}) end
+      )
+
+      mistyped = String.replace(whole, program, "program tally zz")
+
+      raises("s: line 4: `zz` is no digest: a store's is 32 lowercase hexadecimal digits", fn ->
+        Retain.decoded!(mistyped, {"s", "plant"})
+      end)
+
+      # Its version 2 and 1 read as before, its resource named and no type.
+      "resource " <> digest = resource
+      v2 = String.replace(unprogrammed, "logex retain 3", "logex retain 2")
+
+      v1 =
+        String.replace(v2, "logex retain 2", "logex retain 1")
+        |> String.replace(~r/end \d+ lines\n\z/, "")
+
+      for text <- [v2, v1] do
+        assert {_image, _at, by} = Retain.decoded!(text, {"s", "plant"})
+        assert by == %{resource: digest, programs: %{}, bytes: true}
+      end
+
+      # Through the runner: a warm start refused, naming the store, no device read or
+      # written.
       File.write!(rig.store, unprogrammed)
+      opener_down(rig.panel)
+      devices = {Sim.reads(rig.panel), Sim.writes(rig.panel)}
+
+      raises("#{rig.store}: line 3: #{names_no_program(resource)}", fn ->
+        Runner.start_link(rig.opts)
+      end)
+
+      assert {Sim.reads(rig.panel), Sim.writes(rig.panel)} == devices
+      assert File.read!(rig.store) == unprogrammed
+
+      # A cold start copies it, byte for byte, then starts from the initial values.
+      {:ok, runner} = Runner.start_link(rig.opts ++ [start: :cold])
+      copy = rig.store <> ".dropped.1"
+      assert Runner.status(runner).retain.copy == copy
+      assert File.read!(copy) == unprogrammed
+      assert [0, 0 | _lamp_and_shown] = values(runner)
+      assert [2, 2 | _] = kept
+      assert Runner.stop(runner) == :ok
+      assert named(rig.store) == named_by(@tally)
+
+      # Its `program` line put back, the copy starts warm with the values it kept.
+      File.write!(rig.store, whole)
+      opener_down(rig.panel)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: []} = Runner.status(runner).retain
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+
+      # Relabelled `logex retain 2` by hand, its count kept, a warm start reads it as
+      # before: its values laid over, and told that `tally` is not in the store; its next
+      # write names the program whole.
+      File.write!(rig.store, v2)
       opener_down(rig.panel)
       {:ok, runner} = Runner.start_link(rig.opts)
 

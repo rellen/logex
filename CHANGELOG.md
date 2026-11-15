@@ -171,5 +171,4 @@ README's, so this first entry lists neither apart.
   program's text, a version 3 store that names no program refused, and an end line under
   any header that takes none told as one; and RV-28's, decisions 539 and 540, a version 3
   store that names its resource and no program refused, and each refusal of the lines
-  that name a store's program ending with the way to start cold, the release made only
-  once RV-28 is on `main` (provisional).
+  that name a store's program ending with the way to start cold.

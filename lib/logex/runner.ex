@@ -329,11 +329,12 @@ defmodule Logex.Runner do
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
     types' bytes as it was written (decision 534), and one of `logex retain 3` that names
-    none, a hand edit's, refused at its first line (provisional, the line), as one that
-    names it in part is (decision 535, RV-27), where one that names its resource and no
-    program type, which no configuration gives, is read, and warns that each type is not
-    in the store (provisional, RV-27's review), and a naming line that does not read is
-    told as itself; and since decision 355 its end line,
+    none, a hand edit's, refused at its first line (decision 537), as one that names it
+    in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
+    names its resource and no program type, which no configuration gives, refused at its
+    `resource` line (provisional, the line), where it was read and warned that each type
+    was not in the store, and a naming line that does not read is told as itself; and
+    since decision 355 its end line,
     `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
@@ -503,9 +504,14 @@ defmodule Logex.Runner do
     `Logex.Runtime.start/2` refuses, a store of another configuration, which a renamed
     configuration's is, since decision 355 one of `logex retain 2` cut short, its last
     line no end line or its end line's count not its lines', or since decision 535 one of
-    `logex retain 3` that names no program, the host's mistake, one
+    `logex retain 3` that names no program, and since decision 539 one that names its
+    resource and no program type, the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
-    device opened. Since decision 517 (c) (RV-21) a warm fresh start lays the program the
+    device opened, a cut store's line and since decision 540 (RV-28) each refusal of the
+    naming lines, decisions 531's, 535's and 539's, ending with the way out, "start it
+    with start: :cold to start over it, which copies it first to the next `.dropped.<n>`
+    beside it and then writes a new store over it". Since decision 517 (c) (RV-21) a
+    warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
     configuration's own lines or a program type's text as it prints, a type only the store
     has or only the start, warns of it in `status/1`'s `retain`, `warning`, one message
@@ -5734,7 +5740,7 @@ defmodule Logex.Runner do
   # changes nothing else: the image laid over the configuration as decision 277 has it.
   # Since decision 530 (RV-26) a store of version 2 or 1 that names its program, RV-21's,
   # is laid beside the start's program digested by its texts' bytes, as it was written
-  # (`Logex.Retain.compared/3`, provisional), every write naming the program printed.
+  # (`Logex.Retain.compared/3`, decision 534), every write naming the program printed.
   defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
     {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
