@@ -278,8 +278,8 @@ defmodule Logex.Configuration do
     Then the initial value is judged against the type, once the options read (decision
     555, the maintainer, 2026-11-15): one no global of that type holds is refused here,
     an `ArgumentError` of the lines `Logex.Configuration.check/1` gives of the same value
-    in a struct built by hand, by the one judge both read (`Logex.Configuration.Initial`),
-    where until then `new!/3` kept it for `check/1` to refuse. Refused so:
+    in a struct built by hand, by the one judge both read, internal to logex, where until
+    then `new!/3` kept it for `check/1` to refuse. Refused so:
 
     - a value that is no number, `new!("fan_on", :bool, initial: true)`: ``the initial
       value of global `fan_on` must be an integer, found true``, and for a real ``must be
