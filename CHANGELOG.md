@@ -31,13 +31,15 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 Decisions: 1–545.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
-(provisional: its number, and whether its tag is pushed, are the maintainer's, `PLAN.md`'s
-RV-22, questions 1 and 2, and no release is planned yet, decision 541). No release came
+(waiting under decision 541, no release planned: its number, and whether its tag is
+pushed, are put to the maintainer when a release is planned, `PLAN.md`'s RV-22, questions
+1 and 2). No release came
 before it, but `mix.exs` has said 0.1.0 at every commit of `main`, so a host who ran one
 upgrades from a logex that said the same number. For that host, "What changes a running
 program's outputs" lists each rule §7 records as replacing one that had landed on `main`
 and that changed what a running program, or the runner under it, writes, found by a pass
-through §7, oldest first (provisional: `PLAN.md`'s RV-22, question 4, its reading (b)); a
+through §7, oldest first (waiting under decision 541: `PLAN.md`'s RV-22, question 4, its
+reading (b), put to the maintainer when a release is planned); a
 word newly reserved or a form newly refused is told by the compile's own diagnostic, and
 the host's API is README's, so this first entry lists neither apart.
 

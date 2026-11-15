@@ -4787,7 +4787,9 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   next try, the way out once, where it was told beside the count (544); and the renamed
   configuration's refusal ends with the full way out, which copies the store first, the
   way out told once a refusal, at the first line that tells it (provisional, `PLAN.md`'s
-  RV-29), a refusal for what a hand can mend telling none (545).)*
+  RV-29), a refusal for what a hand can mend telling none (545). The marks above are these
+  decisions' numbers, the line decision 539 refuses at, the `resource` line, decision
+  543's, as built.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the

@@ -624,33 +624,37 @@ passed and each taken back in turn.
 - **Between releases.** A commit that records a decision in §7 names it in the newest
   entry, `## Unreleased`, opening one above the newest release where there is none: the
   entry's first line, `Decisions: 541–543.`, names every decision it carries, each once in
-  the file. The suite is red until every decision §7 records is named
-  (`release_test.exs`, provisional: `PLAN.md`'s RV-22, question 3). A change that alters
-  what a running program writes to its outputs gets an item under "What changes a running
-  program's outputs": the rule before and after, a plant that shows it, and how to find a
-  program it reaches, as the changelog's head shows for decision 146; a word newly
-  reserved or a form newly refused, one under "What no longer compiles, loads or starts".
-- **To release**, from `main`, its CI run green, which the release step checks:
+  the file. The suite is red until every decision §7 records is named (`release_test.exs`,
+  decision 542). A change that alters what a running program writes to its outputs gets an
+  item under "What changes a running program's outputs": the rule before and after, a
+  plant that shows it, and how to find a program it reaches, as the changelog's head shows
+  for decision 146; a word newly reserved or a form newly refused, one under "What no
+  longer compiles, loads or starts".
+- **To release**, from `main`, its CI run green, which the release step checks (waiting
+  under decision 541, as the first number and the tag's push are: whether the step reads
+  CI's runs itself is put to the maintainer when a release is planned, `PLAN.md`'s RV-22,
+  question 5):
   1. The version is the maintainer's to give (the first's, and what a number says of the
-     release after it, are `PLAN.md`'s RV-22, question 1). In one commit, `mix.exs`'s
-     `version:` is set to it and `## Unreleased` becomes `## X.Y.Z — YYYY-MM-DD`, the
-     release's day; push it to `main` and read CI's run on it.
+     release after it, wait under decision 541, `PLAN.md`'s RV-22, question 1). In one
+     commit, `mix.exs`'s `version:` is set to it and `## Unreleased` becomes `## X.Y.Z —
+     YYYY-MM-DD`, the release's day; push it to `main` and read CI's run on it.
   2. `scripts/release.sh --dry-run` runs every check, tags nothing, pushes nothing, and
      says what it would tag. Read it.
   3. Either `scripts/release.sh`, which makes the annotated tag `vX.Y.Z` on the commit
      checked out and prints the command that pushes it, `git push origin
      refs/tags/vX.Y.Z`, run by hand; or `scripts/release.sh --push`, in place of the plain
      run, which makes the tag and pushes it (whether a tag is pushed is the maintainer's,
-     `PLAN.md`'s RV-22, question 2). Not one after the other: a run after a plain one is
-     refused, the tag being here already. A push that fails leaves the tag here and
-     prints the command. Each check refuses, a line `refused: ...`, and tags nothing:
-     the tree not clean; the commit not on origin's `main`, fetched as it runs, so that a
-     tag never names a commit only one checkout holds; CI not run on the commit, or a run
-     of `.github/workflows/ci.yml` on it not concluded `success`, read through GitHub's
-     CLI, `gh api`, signed in (`GH_REPO` names the repository where the checkout's remotes
-     do not); the changelog's newest entry not that version, or a decision of §7 no entry
-     names, each once (`elixir scripts/changelog.exs --release`); the tag here or on
-     origin already; the gate red (`scripts/gate.sh`, its log `_build/release-gate.log`).
+     waiting under decision 541, `PLAN.md`'s RV-22, question 2). Not one after the other:
+     a run after a plain one is refused, the tag being here already. A push that fails
+     leaves the tag here and prints the command. Each check refuses, a line `refused:
+     ...`, and tags nothing: the tree not clean; the commit not on origin's `main`,
+     fetched as it runs, so that a tag never names a commit only one checkout holds; CI
+     not run on the commit, or a run of `.github/workflows/ci.yml` on it not concluded
+     `success`, read through GitHub's CLI, `gh api`, signed in (`GH_REPO` names the
+     repository where the checkout's remotes do not); the changelog's newest entry not
+     that version, or a decision of §7 no entry names, each once (`elixir
+     scripts/changelog.exs --release`); the tag here or on origin already; the gate red
+     (`scripts/gate.sh`, its log `_build/release-gate.log`).
   4. A publish, to Hex or anywhere, comes only after the tag, a step of its own.
 
 ---

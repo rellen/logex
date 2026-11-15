@@ -3523,7 +3523,7 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   read as any store of version 2 that names no program is, and warns of nothing. A store
   of `logex retain 3` with its `resource` line and no `program` line, which no
   configuration gives, each declaring a program, is refused too, at its `resource` line
-  (provisional, the line), ``tally.retain: line 3: `resource
+  (decision 543), ``tally.retain: line 3: `resource
   013cc059392445fdcc1e84c9b0de6118` names the resource of the store's writer, and the
   store names no program type: ...`` (decision 539), and starts warm once its `program`
   lines are put back, or `start: :cold`, which copies it first; its first line made

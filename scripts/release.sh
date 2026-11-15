@@ -15,6 +15,11 @@
 #   5. the tag is absent, here and on origin;
 #   6. the gate is green (scripts/gate.sh, its log `_build/release-gate.log`).
 #
+# The first version's number, whether its tag is pushed (`--push`) and check 3, CI's runs
+# read by the step itself, are readings that wait under decision 541, no release planned:
+# each is put to the maintainer when a release is planned (`PLAN.md`'s RV-22, questions 1,
+# 2 and 5), the step kept as built meanwhile and run by its tests.
+#
 # Each check runs whatever another found, and each refusal is a line `refused: ...`; any
 # refusal tags nothing and exits 1. With every check passed it makes the annotated tag
 # here, and with `--push` pushes it to origin too, in place of pushing it by hand; a run

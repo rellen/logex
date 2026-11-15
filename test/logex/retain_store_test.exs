@@ -4279,8 +4279,8 @@ defmodule Logex.RetainStoreTest do
     # Decision 539 (RV-28): a store of `logex retain 3` with its `resource` line and no
     # `program` line, a hand edit's, as no configuration the runner runs gives one, every
     # configuration declaring a program, is refused, located at its `resource` line,
-    # wherever it stands, the line that names its program in part (provisional, the line,
-    # `PLAN.md`'s RV-28), as decisions 531 and 535 refuse the other two partial forms,
+    # wherever it stands, the line that names its program in part (decision 543), as
+    # decisions 531 and 535 refuse the other two partial forms,
     # where RV-27's review read it and a warm start from it warned that each type it runs
     # was not in the store, a cause no hand edit is; a warm start refused, no device read or
     # written; a cold start copying it first, byte for byte, to its next `.dropped.<n>`
