@@ -674,6 +674,13 @@ defmodule Logex.ReadmeTest do
              {at, Examples.comparable(example.expected, example.name)}
   end
 
+  # A block a page shows is its file under `examples/`, byte for byte: a failure names
+  # the page, the line of the block and the file, and shows the two texts.
+  def same(page, line, path, text) do
+    at = "#{page} line #{line}: #{path}"
+    assert {at, File.read(Path.join(Examples.dir(), path))} == {at, {:ok, text}}
+  end
+
   defp said(""), do: ""
   defp said(errors), do: "and on standard error:\n" <> errors
 
@@ -839,9 +846,7 @@ for page <- pages, Logex.ReadmeTest.Examples.wanted?(wanted, page.path) do
 
       shown = Map.merge(held(), Map.new(examples(), &{&1.name, &1.script}))
 
-      for {path, text} <- shown,
-          at = "#{@path} line #{lines[path]}: #{path}",
-          do: assert({at, File.read(Path.join(Examples.dir(), path))} == {at, {:ok, text}})
+      for {path, text} <- shown, do: Logex.ReadmeTest.same(@path, lines[path], path, text)
     end
 
     test "every `$ mix run` #{@path} shows is an example, and every file a mark names is one" do
@@ -1308,8 +1313,9 @@ defmodule Logex.ReadmeTest.Extraction do
              "guides_tutorials_first_program.md"
   end
 
-  test "a failure names the page, its line and the example, for a script that prints " <>
-         "another thing and for one that exits with a failure" do
+  test "a failure names the page, its line and the example or the file, for a script that " <>
+         "prints another thing, for one that exits with a failure and for a block that is " <>
+         "not its file" do
     example = %{page: "guides/a.md", name: "wrong.exs", line: 5, run: :made, files: %{}}
     printed = Map.merge(example, %{script: ~S|IO.puts("b")|, expected: "a\n"})
     error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(printed) end
@@ -1320,6 +1326,17 @@ defmodule Logex.ReadmeTest.Extraction do
     exited = Map.merge(example, %{script: ~S|IO.puts("b"); System.halt(3)|, expected: "b\n"})
     error = assert_raise ExUnit.AssertionError, fn -> Logex.ReadmeTest.check(exited) end
     assert error.message == "guides/a.md line 5: wrong.exs exited 3, printing:\nb\n"
+
+    # A block that is not its file: the page, the line of the block and the file.
+    assert Logex.ReadmeTest.same("guides/a.md", 7, "motor.ld", file("motor.ld"))
+
+    error =
+      assert_raise ExUnit.AssertionError, fn ->
+        Logex.ReadmeTest.same("guides/a.md", 7, "motor.ld", "xic a\n")
+      end
+
+    assert error.left == {"guides/a.md line 7: motor.ld", {:ok, file("motor.ld")}}
+    assert error.right == {"guides/a.md line 7: motor.ld", {:ok, "xic a\n"}}
 
     # A script that stops says why on standard error, which the failure shows.
     stopped = Map.merge(example, %{script: ~S|IO.puts("b"); File.read!("gone.ld")|})
@@ -1386,7 +1403,6 @@ defmodule Logex.ReadmeTest.Extraction do
     assert Enum.sort(Enum.uniq(called)) == [
              continues: 0,
              derived: 0,
-             dir: 0,
              files: 1,
              fragments: 1,
              held: 2,
