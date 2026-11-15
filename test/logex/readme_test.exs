@@ -870,6 +870,10 @@ defmodule Logex.ReadmeTest.Extraction do
       "```console",
       "$ mix run scripts/draw.exs guides/a.md",
       "drawn guides/assets/a.svg",
+      "```",
+      "```console",
+      "$ mix run scripts/draw.exs",
+      "same guides/assets/a.svg",
       "```"
     ]
 

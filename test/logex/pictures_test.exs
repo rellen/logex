@@ -292,6 +292,26 @@ defmodule Logex.PicturesTest do
                 ]}
     end
 
+    test "a mark and a picture inside a code block are a page's text, shown, and not read" do
+      text = """
+      To name a picture, write its mark on the line above it:
+
+      ```markdown
+      <!-- rung: motor.ld -->
+
+      ![A drawing by hand](../assets/hand.png)
+
+      <!-- timing: delay.timing.exs -->
+      ```
+
+      ~~~
+      ![No mark](../assets/hand.svg)
+      ~~~
+      """
+
+      assert Pictures.of("guides/tutorials/a.md", text) == {[], []}
+    end
+
     # The pages the pictures are held on: README and every page that is not a legacy
     # document, as the examples are.
     defp pages do
