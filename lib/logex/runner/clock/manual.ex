@@ -72,8 +72,12 @@ defmodule Logex.Runner.Clock.Manual do
   @spec start_link(keyword) :: {:ok, pid}
   def start_link(opts \\ []) do
     %{now: now, wait: wait} = options!(opts)
-    GenServer.start_link(__MODULE__, {now, wait})
+    started(GenServer.start_link(__MODULE__, {now, wait}))
   end
+
+  # RV-24's review (F2): init/1 never fails nor ignores, so a start is `{:ok, clock}`
+  # alone, which GenServer.start_link/3's spec does not say (`-Wmissing_return`).
+  defp started({:ok, _clock} = started), do: started
 
   @doc """
   Moves the clock on by `ms`, 0 or more, delivering each timer due on the way in time

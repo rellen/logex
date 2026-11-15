@@ -40,8 +40,8 @@ own documentation holds:
   an earlier run's; the scripts delete the manifest before each run.
 - `scripts/dialyzer.sh` — OTP's own dialyzer over the dev build, CI's step after the four
   gates: its PLT of the toolchain's applications under `_build/dialyzer/`, named by the
-  versions, built or checked, its flags named in it, `DIALYZER-OK` or `DIALYZER-FAIL
-  rc=<n>`, red on any warning.
+  versions and the applications, built or checked, its flags named in it, `DIALYZER-OK`
+  or `DIALYZER-FAIL rc=<n>`, red on any warning its flags give.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -210,6 +210,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   surface, every moduledoc held to the host contract, a spec on every function and a
   typedoc on every type of it, the opaque resource and edits, and the checks made where a
   program is first handed in.
+- `test/logex/typespec_test.exs` — every spec of the host contract reached, each value a
+  function gives and each argument it is given held to its spec as `Code.Typespec` reads
+  it, what Dialyzer cannot type among them.
 - `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.

@@ -86,13 +86,14 @@ defmodule Logex.FbType do
     @enforce_keys [:name, :type, :role]
     defstruct [:name, :type, :role, write: false, initial: 0, retain: nil]
 
+    # RV-24's review (F3): a member's type and initial value are a tag's, an array's among
+    # them, its initial list or nil, a real's a float, and a built-in's own `:clock`.
     @type t :: %__MODULE__{
             name: String.t(),
-            type:
-              Logex.Declarations.elementary() | :clock | Logex.FbType.t() | {:block, String.t()},
+            type: Logex.Tag.type() | :clock,
             role: :input | :output | :local | :internal,
             write: boolean,
-            initial: integer | %{String.t() => integer},
+            initial: Logex.Tag.initial(),
             retain: :retain | :non_retain | nil
           }
   end

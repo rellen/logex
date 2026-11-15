@@ -58,9 +58,11 @@ defmodule Logex.Instance do
   @enforce_keys [:type, :env, :now, :first]
   defstruct [:type, :env, :now, :first, ons_blocked: [], switched: false, faults: []]
 
+  # RV-24's review (F3): an instance of a program of no line holds no tag, so `env`'s key is
+  # optional.
   @type t :: %__MODULE__{
           type: String.t() | nil,
-          env: %{String.t() => integer | float | tuple | map},
+          env: %{optional(String.t()) => integer | float | tuple | map},
           now: non_neg_integer,
           first: boolean,
           ons_blocked: [String.t()],

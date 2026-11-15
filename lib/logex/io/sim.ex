@@ -168,7 +168,12 @@ defmodule Logex.IO.Sim do
   """
   @spec start_link() :: {:ok, sim}
   @spec start_link(keyword) :: {:ok, sim}
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
+  def start_link(opts \\ []), do: started(GenServer.start_link(__MODULE__, options!(opts)))
+
+  # RV-24's review (F2): init/1 never fails nor ignores, so a start is `{:ok, sim}` alone,
+  # which GenServer.start_link/3's spec, naming `:ignore` and `{:error, reason}`, does not
+  # say (Dialyzer's `-Wmissing_return`).
+  defp started({:ok, _sim} = started), do: started
 
   @doc """
   Sets the input at `address` to `value`, reporting it where the sim reports and it

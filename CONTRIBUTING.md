@@ -583,8 +583,9 @@ below).
 CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
 exit code, and Dialyzer after them (below), on every push and pull request, on Erlang/OTP
 28 and Elixir 1.20.4 through `erlef/setup-beam`: a red run there is a red commit, whatever
-ran green here, and a work item's report says so. Its test step ends a red run's log with each test that failed,
-`file:line: Module: test name` a line, as `scripts/gate.sh` does here: it deletes ExUnit's
+ran green here, and a work item's report says so. Its test step ends a red run's log with
+each test that failed, `file:line: Module: test name` a line, as `scripts/gate.sh` does
+here: it deletes ExUnit's
 failures manifest, runs `mix test --warnings-as-errors` with its output in the log, and
 then `elixir scripts/failed.exs --exit` with the suite's code, which names the tests a red
 run failed, or says why it names none, and exits with that code, and makes a run that
@@ -609,13 +610,20 @@ exact list of inputs whose meaning changed. If it lists anything you did not int
 change is wrong, not the record.
 
 After the four gates CI runs OTP's own Dialyzer over the dev build, as
-`scripts/dialyzer.sh` runs it here ("Scripts", below), red on any warning: the specs of
-the host contract, every public function of the modules decision 514 and decision 523 name,
-read against the code and against the toolchain's applications (decision 515 (c)). The
-four gates do not run it, and `scripts/gate.sh` does not, so run it yourself before you
-push a commit that changes `lib/` (provisional: `PLAN.md`'s RV-24, question 1); its first
-run builds the PLT, a minute or two, and later runs check the one it kept and take some
-15 s. A warning is fixed in the code, with a test that fails when the fix is reverted where
+`scripts/dialyzer.sh` runs it here ("Scripts", below), red on any warning its flags give:
+the specs of the host contract, every public function of the modules decision 514 and
+decision 523 name, read against the code and against the toolchain's applications
+(decision 515 (c)). Dialyzer holds a spec only where it can type what the function gives:
+it types nothing a call to a process gives back, the runner's, a simulated device's, a
+manual clock's and a compile's own process's, nor a field of a struct, so it passes a
+false spec of those (RV-24's review, F1). `test/logex/typespec_test.exs`, in the suite,
+holds every spec of the contract to the values its function gives and the arguments it is
+given, and each contract function with a spec must be reached there, or the file fails. The
+four gates do not run Dialyzer, and `scripts/gate.sh` does not, so run it yourself before
+you push a commit that changes `lib/` (provisional: `PLAN.md`'s RV-24, question 1); its
+first run builds the PLT, one to two and a half minutes, and later runs check the one it
+kept and take some 10 to 35 s, the analysis most of it, longer on a loaded machine. A
+warning is fixed in the code, with a test that fails when the fix is reverted where
 it is a defect, or, where it is not, the code made to say what it does and the reason
 recorded in `PLAN.md` (provisional: its RV-24, question 3); never silenced by a broader
 spec, a `no_return()`, a `@dialyzer` attribute or a flag dropped without its reason. A
@@ -712,14 +720,15 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
 - **`scripts/dialyzer.sh`** runs OTP's own dialyzer over logex's dev build as CI's step
   does ("Before you commit"), no dependency added: it compiles, reads the toolchain from
   the `elixir` on the path, builds the PLT of the applications logex calls, erts, kernel,
-  stdlib and elixir, under `_build/dialyzer/`, named by the OTP and Elixir versions, or
-  checks the one kept there and builds it again where the check cannot read the files it
-  names, and analyses `_build/dev/lib/logex/ebin` with Dialyzer's default warnings and
-  `-Wextra_return`, `-Wunderspecs` and `-Woverlapping_contract`, reading no Dialyzer
-  configuration file; it prints what Dialyzer prints, then `DIALYZER-OK` or
-  `DIALYZER-FAIL rc=<n>`, and exits with Dialyzer's code, 2 for a warning.
-  `test/logex/scripts_test.exs` runs it as CI's step writes it, over a stand-in
-  `dialyzer`, and holds its flags and its PLT's name, check and build.
+  stdlib and elixir, under `_build/dialyzer/`, named by the OTP and Elixir versions and
+  the applications, or checks the one kept there and builds it again where the check
+  cannot read the files it names, and analyses `_build/dev/lib/logex/ebin` with
+  Dialyzer's default warnings and `-Wextra_return`, `-Wmissing_return`, `-Wunderspecs`,
+  `-Woverlapping_contract` and `-Wopaque_union`, reading no Dialyzer configuration file;
+  it prints what Dialyzer prints, then `DIALYZER-OK` or `DIALYZER-FAIL rc=<n>`, and exits
+  with Dialyzer's code, 2 for a warning. `test/logex/scripts_test.exs` runs it as CI's
+  step writes it, over a stand-in `dialyzer`, and holds its flags and its PLT's name,
+  check and build.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a
   mutation table. Make each mutant as a patch, `git diff > m1.patch` from an edited tree,
   then restore the tree; the script applies each patch in turn (`git apply`), runs the

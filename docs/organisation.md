@@ -14937,7 +14937,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      base, none a defect, were cleared in the code, each recorded; a spec made false is red
      in CI, `backup/rv24-red`. The flags, when a contributor runs it, how a warning that is
      no defect is cleared, the contract's reach and the opacity's reader are `PLAN.md`'s
-     RV-24, questions 1 to 5, provisional.)*
+     RV-24, questions 1 to 5, provisional. Since RV-24's review, the same day: Dialyzer
+     types nothing a call to a process gives back nor a struct's field, so a third of the
+     specs it held to nothing; `test/logex/typespec_test.exs` reaches every spec of the
+     contract and holds each value and argument to it, and made the types of a block's
+     member and the maps a program and an instance hold true; `-Wmissing_return` and
+     `-Wopaque_union` are on, their sites written to say what they do, and the PLT is named
+     and cached by the applications it holds too.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the

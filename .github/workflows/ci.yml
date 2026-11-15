@@ -68,14 +68,16 @@ jobs:
 
       # Decision 515 (c): OTP's own dialyzer over logex's compiled modules, as a contributor
       # runs it, scripts/dialyzer.sh, which names its flags, builds or checks its PLT of
-      # the toolchain's applications and exits with Dialyzer's code, red on any warning.
-      # The PLT, the toolchain's alone, is cached by the versions setup-beam resolved, so
-      # that a toolchain changed builds its own, a saved one only once a run passes.
+      # the toolchain's applications and exits with Dialyzer's code, red on any warning
+      # its flags give. The PLT, the toolchain's alone, is cached by the versions
+      # setup-beam resolved and by the script, which names its applications (RV-24's
+      # review, F5), so that a toolchain or a list changed builds its own, a saved one only
+      # once a run passes, and no other key restored.
       - name: Cache the Dialyzer PLT
         uses: actions/cache@v5
         with:
           path: _build/dialyzer
-          key: plt-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}
+          key: plt-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('scripts/dialyzer.sh') }}
 
       - name: scripts/dialyzer.sh
         run: scripts/dialyzer.sh

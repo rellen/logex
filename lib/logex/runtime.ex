@@ -1386,7 +1386,9 @@ defmodule Logex.Runtime do
   end
 
   defp due_in(nil, _now), do: :infinity
-  defp due_in(next, now), do: next - now
+  # RV-24's review (F2): a due time and `now` are whole milliseconds, which Dialyzer, reading
+  # a task's due time untyped, takes for any number (`-Wmissing_return`).
+  defp due_in(next, now) when is_integer(next) and is_integer(now), do: next - now
 
   @doc """
   Starts the resource again, `:cold` or, since M6-2, `:warm`, which keeps each path an

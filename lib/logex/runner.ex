@@ -1134,7 +1134,11 @@ defmodule Logex.Runner do
   # Decision 356: a file another runner of this VM holds is the host's mistake, found in
   # the runner's init/1, once its name is registered, and raised here, in the caller.
   defp started({:error, {:held, message}}), do: raise(ArgumentError, message)
-  defp started(result), do: result
+  # RV-24's review (F2): init/1 never ignores, so a start is `{:ok, pid}` or
+  # `{:error, reason}` alone, which GenServer.start_link/3's spec, naming `:ignore`, does
+  # not say (Dialyzer's `-Wmissing_return`).
+  defp started({:ok, _pid} = result), do: result
+  defp started({:error, _reason} = result), do: result
 
   @doc """
   The child spec a supervisor starts a runner by, `restart: :temporary` (decision 115),

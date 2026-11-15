@@ -692,13 +692,22 @@ defmodule Logex.ScriptsTest do
     {out, code, File.read!(Path.join(dir, "called")) |> String.split("\n", trim: true)}
   end
 
+  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
+  @apps "-erts-kernel-stdlib-elixir"
+
   describe "CI's Dialyzer step and scripts/dialyzer.sh (decision 515 (c))" do
+    # RV-24's review (F5): the key names the script, whose list of applications names the
+    # PLT, and the step restores no other key, its lines taken whole to the next step's.
     test "the step runs scripts/dialyzer.sh after the suite, its PLT cached by the " <>
-           "toolchain's versions alone, apart from _build's cache" do
+           "toolchain's versions and the script alone, apart from _build's cache" do
       lines = ci_lines()
       cached = Enum.drop_while(lines, &(&1 != "      - name: Cache the Dialyzer PLT"))
 
-      assert {ci_step("scripts/dialyzer.sh"), Enum.take(cached, 5),
+      assert {ci_step("scripts/dialyzer.sh"),
+              [
+                hd(cached)
+                | Enum.take_while(tl(cached), &(not String.starts_with?(&1, "      - ")))
+              ],
               lines
               |> Enum.drop_while(&(&1 != "      - name: Cache deps and _build"))
               |> Enum.at(6)} ==
@@ -709,15 +718,16 @@ defmodule Logex.ScriptsTest do
                   "        with:",
                   "          path: _build/dialyzer",
                   "          key: plt-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}" <>
-                    "-elixir-${{ steps.beam.outputs.elixir-version }}"
+                    "-elixir-${{ steps.beam.outputs.elixir-version }}" <>
+                    "-${{ hashFiles('scripts/dialyzer.sh') }}"
                 ], "            !_build/dialyzer"}
     end
 
-    test "with no PLT it builds one named by the toolchain's versions, of the applications " <>
-           "logex calls, and analyses the dev build with its flags, every one named",
+    test "with no PLT it builds one named by the toolchain's versions and the applications " <>
+           "logex calls, of those, and analyses the dev build with its flags, every one named",
          %{tmp_dir: dir} do
       {otp, elixir, ebin} = toolchain()
-      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}.plt")
+      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
       {out, code, called} = run_dialyzer(dir, %{})
 
       assert {code, String.ends_with?(out, "DIALYZER-OK\n"), called, File.read!(plt)} ==
@@ -727,7 +737,8 @@ defmodule Logex.ScriptsTest do
                   "dialyzer --build_plt --output_plt #{plt}.tmp -pa #{ebin} -Wno_unknown " <>
                     "--apps erts kernel stdlib #{ebin} config=/dev/null",
                   "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath " <>
-                    "-Wextra_return -Wunderspecs -Woverlapping_contract " <>
+                    "-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract " <>
+                    "-Wopaque_union " <>
                     "_build/dev/lib/logex/ebin config=/dev/null"
                 ], "plt\n"}
 
@@ -735,19 +746,25 @@ defmodule Logex.ScriptsTest do
     end
 
     test "a PLT kept is checked against the toolchain's files and used, and one the check " <>
-           "cannot read is built again; another toolchain's is never read",
+           "cannot read is built again; another toolchain's or other applications' is " <>
+           "never read",
          %{tmp_dir: dir} do
       {otp, elixir, ebin} = toolchain()
-      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}.plt")
-      other = Path.join(dir, "_build/dialyzer/logex-otp-27.0-elixir-1.19.0.plt")
+      plt = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
+      other = Path.join(dir, "_build/dialyzer/logex-otp-27.0-elixir-1.19.0#{@apps}.plt")
+      # RV-24's review (F5): a PLT of this toolchain's of other applications, as the script
+      # named it before, unread too.
+      fewer = Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}.plt")
       File.mkdir_p!(Path.dirname(plt))
       File.write!(other, "another toolchain's")
+      File.write!(fewer, "other applications'")
       File.write!(plt, "kept")
       check = "dialyzer --check_plt --plt #{plt} -pa #{ebin} -Wno_unknown config=/dev/null"
 
       analysis =
         "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath -Wextra_return " <>
-          "-Wunderspecs -Woverlapping_contract _build/dev/lib/logex/ebin config=/dev/null"
+          "-Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union " <>
+          "_build/dev/lib/logex/ebin config=/dev/null"
 
       assert {_out, 0, ["mix compile dev", ^check, ^analysis]} = run_dialyzer(dir, %{})
       assert File.read!(plt) == "kept"
@@ -756,7 +773,8 @@ defmodule Logex.ScriptsTest do
       assert {_out, 0, ["mix compile dev", ^check, "dialyzer --build_plt" <> _, ^analysis]} =
                run_dialyzer(dir, %{check_rc: 1})
 
-      assert {File.read!(plt), File.read!(other)} == {"plt\n", "another toolchain's"}
+      assert {File.read!(plt), File.read!(other), File.read!(fewer)} ==
+               {"plt\n", "another toolchain's", "other applications'"}
     end
 
     test "a warning is red: the step exits with Dialyzer's code, after what it printed",

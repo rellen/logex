@@ -398,7 +398,8 @@ RV-22's and RV-28's questions on 2026-11-15, decisions 541–545: no release for
 changelog naming every decision at every commit, and the refusal of a store that names its
 resource and no program told at its resource line. RV-24 has landed (decision 515 (c)):
 typespecs on the host contract, which OTP's own Dialyzer reads in CI after the four
-gates, red on any warning. Waiting: RV-29, a store with no resource line whose count does
+gates, red on any warning its flags give, and the suite holds to every value a function
+gives. Waiting: RV-29, a store with no resource line whose count does
 not read told its count first, and a renamed configuration's refusal ending with the full
 way out; and the runner split by concern. And DOC-1, decisions 546–548: this file made
 short, its details moved into guides built with ExDoc, tutorials, how-to guides, reference
