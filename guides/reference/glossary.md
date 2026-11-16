@@ -177,8 +177,8 @@ The first word of a declaration. It tells where the value of the tag comes from:
 
 ### type
 
-The set of values that a tag can hold. A type is an elementary type, an array of an
-elementary type, or a function block type.
+The set of values that a tag can hold. A type is an elementary type, a function block
+type, or an array of 1 of these 2.
 
 ### elementary type
 
@@ -221,6 +221,13 @@ value.
 ### qualifier
 
 The word `retain` or `non_retain` after the section word of a declaration.
+
+### widen
+
+To put a value of 1 type into a tag of a wider type with no conversion. logex widens a
+type only into a type that holds each value of the first type.
+
+IEC 61131-3: an implicit type conversion.
 
 ### reserved word
 
@@ -302,12 +309,13 @@ A new start of an instance or of a resource.
 
 ### cold restart
 
-A restart that sets each tag to its initial value.
+A restart that sets each tag that is not an input to its initial value. An input keeps
+its value.
 
 ### warm restart
 
-A restart that keeps the value of each tag that has the qualifier `retain`. Each other
-tag starts at its initial value.
+A restart that keeps the value of each tag that has the qualifier `retain`, and of each
+input. Each other tag starts at its initial value.
 
 ### retain
 
