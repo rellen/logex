@@ -230,6 +230,22 @@ and no count. This is true also if its rung becomes true in that scan. Thus a `t
 that the edit adds while its rung is true gives no pulse at the test. It gives a pulse
 at the next [rising edge](../reference/glossary.md#rising-edge) after that scan.
 
+### The entries of a plant
+
+An edit of a [plant](../reference/glossary.md#plant) names each entry of 1 instance by
+its path, for example `{:preset, "b1.boxes", {3, 5}}`. It also has kinds of entry for
+the [configuration](../reference/glossary.md#configuration). The table gives the kinds
+that you find most frequently. [Online edit](../reference/online-edit.md) gives each
+kind. [Edit a running plant](edit-a-running-plant.md) shows such an edit.
+
+| Entry | What it tells you |
+|---|---|
+| `:interval`, `:next_due`, `:priority`, `:watchdog` | A value of a [task](../reference/glossary.md#task) changes. The entry gives the old value and the new value. |
+| `:instance_added` | The new plant adds an instance. The instance starts at its [initial values](../reference/glossary.md#initial-value). |
+| `:instance_stopped` | The new plant does not have this instance. logex keeps its state until the assemble. |
+| `:added` | The new plant adds a [global](../reference/glossary.md#global). The global starts at its initial value. |
+| `:held` | No program of the new plant writes this global, or no rung writes this [output](../reference/glossary.md#output) of an instance. It keeps the value that the entry gives. |
+
 ## If it does not work
 
 | What you see | Cause | What to do |
