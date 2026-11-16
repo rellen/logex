@@ -399,7 +399,7 @@ changelog naming every decision at every commit, and the refusal of a store that
 resource and no program told at its resource line. RV-24 has landed (decision 515 (c)):
 typespecs on the host contract, which OTP's own Dialyzer reads in CI after the four
 gates, red on any warning its flags give, and the suite holds to every value a function
-gives. The maintainer answered RV-24's questions the same day, decisions 549–555: waiting
+gives. The maintainer answered RV-24's questions the same day, decisions 549–555, and RV-30 has landed: built
 with RV-30 are Dialyzer as the gate's fifth step, a call whose answer is thrown away made
 red, and a global's wrong initial value refused where it is declared. RV-29 has landed: a
 store with no resource line whose count does not read told its count first, and a renamed
@@ -3251,7 +3251,13 @@ broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
   `Logex.Tag.new!/5` takes it, `non_retain: true` for `non_retain`, and each mistake in
   its options refused in the same words (decision 304); the struct it gives,
   `%Logex.Configuration.Global{retain: :retain}`, `Logex.Configuration.Text.print/1`
-  prints as the line above.
+  prints as the line above. An initial value no global of its type holds is refused
+  there, at once: `new!("fan_on", :bool, initial: true)` raises ``the initial value of
+  global `fan_on` must be an integer, found true``, and `new!("trim", :sint, initial:
+  300)`, `` `trim` is an sint: `300` is outside -128 to 127 ``, each the line
+  `Logex.Configuration.check/1` gives of the same value in a struct built by hand with
+  no location, which it still refuses (decision 555); a located global's value is
+  judged by its type here and refused by `check/1` for its location.
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision
@@ -5755,10 +5761,11 @@ mix format
 
 CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors`, the same under
-`MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
+`MIX_ENV=test`, `mix test --warnings-as-errors`, and OTP's own Dialyzer over the build,
+`scripts/dialyzer.sh` — on every push and pull request, on
 Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`), a red run's log ending with
 each test that failed, its file, line and name, or why none is named, and a suite cut
-short by a test that halts the VM red; `scripts/gate.sh` runs the same four here, and
+short by a test that halts the VM red; `scripts/gate.sh` runs the same five here, and
 judges the suite the same way. The suite runs every example in this file, each script a
 `$ mix run` block follows, from its file under `examples/`, and compares what it prints with what is
 printed here, each block shown here held to its file; the one `elixir` block shown with

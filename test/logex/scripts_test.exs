@@ -7,7 +7,8 @@ defmodule Logex.ScriptsTest do
   `.github/workflows/ci.yml` and run as GitHub runs it, its shell's flags and all, over a
   stand-in `mix` that prints, writes a manifest and exits as a run would; the workflow's
   keys, so that every push and pull request runs every gate and no step is skipped or its
-  failure let pass; and `scripts/gate.sh` over the same stand-in. And CI's Dialyzer step
+  failure let pass; and `scripts/gate.sh` over the same stand-in, its fifth step,
+  `scripts/dialyzer.sh` (decision 549), over a stand-in `dialyzer`. And CI's Dialyzer step
   (decision 515 (c)), its PLT's cache and `scripts/dialyzer.sh`, run as the step writes it
   over a stand-in `mix` and `dialyzer`, a real run too slow for the suite: its flags, its
   PLT's name, check and build, and its exit code.
@@ -567,15 +568,35 @@ defmodule Logex.ScriptsTest do
   # first on the path: it notes each gate's task and `MIX_ENV`, exits `format_rc` for the
   # format check, 0 for each compile, and for the suite prints a run's last line, puts
   # `manifest` in place, where given, and exits `test_rc`; a manifest an earlier run left
-  # is there before the gate runs.
-  defp run_gate(dir, format_rc, test_rc, manifest) do
+  # is there before the gate runs. Since decision 549 the gate's fifth step is
+  # `scripts/dialyzer.sh`, copied there as it is, over a `dialyzer` of the test's own: it
+  # notes its first argument, writes the PLT a build names, and for the analysis prints
+  # `printed` and exits `dialyzer_rc`. RV-30's review: `knobs` are `args:`, the arguments
+  # given after the log, which go to `mix test`, whose stand-in keeps them in `test-args`;
+  # `err:`, what the `dialyzer` prints on its standard error; and `dialyzer: false`, no
+  # `dialyzer` on the path at all, the machine's own hidden (`without_dialyzer/2`).
+  defp run_gate(dir, format_rc, test_rc, manifest, dialyzer \\ {0, ""}, knobs \\ %{})
+
+  defp run_gate(dir, format_rc, test_rc, manifest, {dialyzer_rc, printed}, knobs) do
     bin = Path.join(dir, "bin")
     File.mkdir_p!(bin)
     File.mkdir_p!(Path.join(dir, "scripts"))
 
-    for script <- ["gate.sh", "failed.exs"] do
+    for script <- ["gate.sh", "failed.exs", "dialyzer.sh"] do
       File.cp!(Path.join(@root, "scripts/#{script}"), Path.join(dir, "scripts/#{script}"))
     end
+
+    stand_in_dialyzer(Map.get(knobs, :dialyzer, true), bin, """
+    #!/usr/bin/env bash
+    echo "dialyzer $1" >> called
+    case "$1" in
+      --check_plt) exit 0 ;;
+      --build_plt) echo plt > "$3"; exit 0 ;;
+    esac
+    printf '%s' '#{printed}'
+    printf '%s' '#{Map.get(knobs, :err, "")}' >&2
+    exit #{dialyzer_rc}
+    """)
 
     path = "_build/test/lib/logex/.mix/.mix_test_failures"
     File.write!(Path.join(dir, "next"), (manifest && :erlang.term_to_binary(manifest)) || "")
@@ -589,6 +610,7 @@ defmodule Logex.ScriptsTest do
       test)
         mkdir -p "$(dirname #{path})"
         [ -s next ] && cp next #{path}
+        echo "$*" > test-args
         echo "Result: 1/3 passed"
         exit #{test_rc} ;;
     esac
@@ -597,22 +619,201 @@ defmodule Logex.ScriptsTest do
     File.chmod!(Path.join(bin, "mix"), 0o755)
 
     {out, code} =
-      System.cmd("bash", ["scripts/gate.sh", "gate.log"],
+      System.cmd("bash", ["scripts/gate.sh", "gate.log" | Map.get(knobs, :args, [])],
         cd: dir,
-        env: [{"PATH", Enum.join([bin, Path.dirname(@elixir), System.get_env("PATH")], ":")}],
+        env: [{"PATH", path(Map.get(knobs, :dialyzer, true), bin, dir)}],
         stderr_to_stdout: true
       )
 
     {out, code, File.read!(Path.join(dir, "called"))}
   end
 
-  describe "scripts/gate.sh" do
-    @gates "format dev\ncompile dev\ncompile test\ntest dev\n"
+  defp stand_in_dialyzer(false, _bin, _script), do: :ok
 
-    test "a green suite is GATE-OK, every gate run in order", %{tmp_dir: dir} do
-      assert run_gate(dir, 0, 0, {1, %{}}) == {"Result: 1/3 passed\nGATE-OK\n", 0, @gates}
+  defp stand_in_dialyzer(true, bin, script) do
+    File.write!(Path.join(bin, "dialyzer"), script)
+    File.chmod!(Path.join(bin, "dialyzer"), 0o755)
+  end
+
+  # The path a script is run with: the test's stand-ins first, then the suite's `elixir`
+  # and the machine's own; or, for a machine with no `dialyzer`, the same with the
+  # machine's hidden.
+  defp path(true, bin, _dir),
+    do: Enum.join([bin, Path.dirname(@elixir), System.get_env("PATH")], ":")
+
+  defp path(false, bin, dir),
+    do: Enum.join([bin | without_dialyzer([Path.dirname(@elixir)], dir)], ":")
+
+  # The machine's path with no `dialyzer` on it: each directory that holds one stood in
+  # for by a directory of the test's own, a script for every other program there that
+  # runs it by its own path, so that `elixir` and `erl` still find themselves.
+  defp without_dialyzer(first, dir) do
+    (first ++ String.split(System.get_env("PATH"), ":", trim: true))
+    |> Enum.uniq()
+    |> Enum.with_index()
+    |> Enum.map(fn {entry, n} ->
+      hidden(File.exists?(Path.join(entry, "dialyzer")), entry, Path.join(dir, "path#{n}"))
+    end)
+  end
+
+  defp hidden(false, entry, _shadow), do: entry
+
+  defp hidden(true, entry, shadow) do
+    File.mkdir_p!(shadow)
+
+    for program <- File.ls!(entry), program != "dialyzer" do
+      File.write!(
+        Path.join(shadow, program),
+        "#!/bin/sh\nexec '#{Path.join(entry, program)}' \"$@\"\n"
+      )
+
+      File.chmod!(Path.join(shadow, program), 0o755)
     end
 
+    shadow
+  end
+
+  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
+  @apps "-erts-kernel-stdlib-elixir"
+
+  # The PLT scripts/dialyzer.sh builds in `dir`, named as it names it.
+  defp plt(dir) do
+    {otp, elixir, _ebin} = toolchain()
+    Path.join(dir, "_build/dialyzer/logex-otp-#{otp}-elixir-#{elixir}#{@apps}.plt")
+  end
+
+  # The first block of lines indented by `indent` after the line `heading`, the indent
+  # taken off.
+  defp indented(lines, heading, indent) do
+    lines
+    |> Enum.drop_while(&(&1 != heading))
+    |> Enum.drop_while(&(not String.starts_with?(&1, indent)))
+    |> Enum.take_while(&String.starts_with?(&1, indent))
+    |> Enum.map(&String.replace_prefix(&1, indent, ""))
+  end
+
+  describe "scripts/gate.sh" do
+    @gates "format dev\ncompile dev\ncompile test\ntest dev\n"
+    # Decision 549: the fifth, scripts/dialyzer.sh, its build of the dev tree, its PLT and
+    # its analysis.
+    @fifth "compile dev\ndialyzer --build_plt\ndialyzer --no_check_plt\n"
+
+    test "a green suite is GATE-OK, every gate run in order", %{tmp_dir: dir} do
+      assert run_gate(dir, 0, 0, {1, %{}}) ==
+               {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                  "DIALYZER-OK\nGATE-OK\n", 0, @gates <> @fifth}
+    end
+
+    # Decision 549: Dialyzer's code is the gate's, 2 for a warning and 1 for a run that
+    # could not be made, the step named after the verdict and every warning in the log.
+    test "a red fifth step alone is GATE-FAIL with Dialyzer's code, the step named and " <>
+           "its warnings kept in the log",
+         %{tmp_dir: tmp} do
+      warning = "lib/logex/runner.ex:4463:13: Expression produces a value of type"
+
+      # RV-30's review (F6): a code other than 2 is no warning, and the step's line says
+      # the step could not run, where it said "its warnings" of a run that gave none.
+      for {rc, told} <- [
+            {2, ": its warnings are in "},
+            {1, ", which could not run: what it printed is in "}
+          ] do
+        dir = Path.join(tmp, "rc#{rc}")
+        log = Path.join(dir, "gate.log")
+
+        assert run_gate(dir, 0, 0, {1, %{}}, {rc, warning <> "\n"}) ==
+                 {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                    "#{warning}\nDIALYZER-FAIL rc=#{rc}\nGATE-FAIL rc=#{rc}\n" <>
+                    "scripts/dialyzer.sh exited #{rc}, the gate's fifth step#{told}#{log}\n", rc,
+                  @gates <> @fifth}
+
+        assert String.ends_with?(File.read!(log), warning <> "\nDIALYZER-FAIL rc=#{rc}\n")
+      end
+    end
+
+    # RV-30's review (its mutant M18): the arguments after the log go to `mix test`, and
+    # the fifth step runs all the same, where a gate that skipped it whenever the suite
+    # was given arguments printed GATE-OK with no Dialyzer.
+    test "a gate given arguments for the suite passes them to mix test and still runs " <>
+           "the fifth step",
+         %{tmp_dir: dir} do
+      assert run_gate(dir, 0, 0, {1, %{}}, {0, ""}, %{args: ["--seed", "0", "test/a_test.exs"]}) ==
+               {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                  "DIALYZER-OK\nGATE-OK\n", 0, @gates <> @fifth}
+
+      assert File.read!(Path.join(dir, "test-args")) ==
+               "test --warnings-as-errors --seed 0 test/a_test.exs\n"
+    end
+
+    # RV-30's review (its mutant M13): everything the fifth step prints is in the log, what
+    # it prints on its standard error too, a PLT that cannot be read or a build's error.
+    test "what the fifth step prints on its standard error is in the log, and the gate's " <>
+           "last lines",
+         %{tmp_dir: dir} do
+      err = "dialyzer: Could not read PLT file"
+      log = Path.join(dir, "gate.log")
+
+      assert run_gate(dir, 0, 0, {1, %{}}, {1, ""}, %{err: err <> "\n"}) ==
+               {"Result: 1/3 passed\ndialyzer: building the PLT #{plt(dir)}\n" <>
+                  "#{err}\nDIALYZER-FAIL rc=1\nGATE-FAIL rc=1\n" <>
+                  "scripts/dialyzer.sh exited 1, the gate's fifth step, which could not run: " <>
+                  "what it printed is in #{log}\n", 1, @gates <> @fifth}
+
+      assert String.ends_with?(File.read!(log), err <> "\nDIALYZER-FAIL rc=1\n")
+    end
+
+    # RV-30's review (F6): a machine with no `dialyzer` is told so, the gate red with the
+    # script's 127 and its line saying the step could not run; nothing of the fifth step
+    # is built.
+    test "with no dialyzer on the path the fifth step says so, and the gate is red with " <>
+           "its code",
+         %{tmp_dir: dir} do
+      log = Path.join(dir, "gate.log")
+
+      assert run_gate(dir, 0, 0, {1, %{}}, {0, ""}, %{dialyzer: false}) ==
+               {"Result: 1/3 passed\n" <>
+                  "dialyzer: no `dialyzer` on the path: it is OTP's own, beside `erl`; " <>
+                  "nothing is built and the PLT is kept\nDIALYZER-FAIL rc=127\n" <>
+                  "GATE-FAIL rc=127\n" <>
+                  "scripts/dialyzer.sh exited 127, the gate's fifth step, which could not " <>
+                  "run: what it printed is in #{log}\n", 127, @gates}
+    end
+
+    # RV-30's review (its mutant M17): the list a contributor reads is the gate's, command
+    # for command, in its order: CONTRIBUTING.md's "Before you commit", the script's own
+    # head, and the commands the script runs.
+    test "CONTRIBUTING.md's \"Before you commit\" lists the gate's five commands, as the " <>
+           "script's head does, each one the script runs" do
+      five = [
+        "mix format --check-formatted",
+        "mix compile --force --warnings-as-errors",
+        "MIX_ENV=test mix compile --force --warnings-as-errors",
+        "mix test --warnings-as-errors",
+        "scripts/dialyzer.sh"
+      ]
+
+      gate = File.read!(Path.join(@root, "scripts/gate.sh"))
+      {head, body} = Enum.split_while(String.split(gate, "\n"), &(&1 != "set -u"))
+
+      assert indented(
+               String.split(File.read!(Path.join(@root, "CONTRIBUTING.md")), "\n"),
+               "## Before you commit",
+               "    "
+             ) == five
+
+      assert head |> indented(hd(head), "#     ") |> Enum.map(&String.replace(&1, " [args]", "")) ==
+               five
+
+      ran =
+        for line <- body,
+            command <- five,
+            String.starts_with?(String.trim_leading(line), [command, "bash " <> command]),
+            do: command
+
+      assert ran == five
+    end
+
+    # The fifth step runs once the four before it are green: after a red suite, a halted
+    # one or a red gate before the suite, the three tests below, no `dialyzer` is called.
     test "a red suite is followed by the tests that failed, each with its line",
          %{tmp_dir: dir} do
       File.mkdir_p!(Path.join(dir, "test"))
@@ -680,20 +881,25 @@ defmodule Logex.ScriptsTest do
     """)
 
     for stand_in <- ["mix", "dialyzer"], do: File.chmod!(Path.join(bin, stand_in), 0o755)
+    absent(Map.get(knobs, :dialyzer, true), Path.join(bin, "dialyzer"))
     File.write!(Path.join(dir, "step.sh"), script)
 
     {out, code} =
       System.cmd("bash", ["-e", "step.sh"],
         cd: dir,
-        env: [{"PATH", Enum.join([bin, Path.dirname(@elixir), System.get_env("PATH")], ":")}],
+        env: [{"PATH", path(Map.get(knobs, :dialyzer, true), bin, dir)}],
         stderr_to_stdout: true
       )
 
-    {out, code, File.read!(Path.join(dir, "called")) |> String.split("\n", trim: true)}
+    {out, code, called(File.read(Path.join(dir, "called")))}
   end
 
-  # The applications scripts/dialyzer.sh's PLT holds, as its name gives them.
-  @apps "-erts-kernel-stdlib-elixir"
+  # `dialyzer: false`: no stand-in, and the machine's own hidden (`path/3`).
+  defp absent(true, _stand_in), do: :ok
+  defp absent(false, stand_in), do: File.rm!(stand_in)
+
+  defp called({:ok, text}), do: String.split(text, "\n", trim: true)
+  defp called({:error, :enoent}), do: []
 
   describe "CI's Dialyzer step and scripts/dialyzer.sh (decision 515 (c))" do
     # RV-24's review (F5): the key names the script, whose list of applications names the
@@ -738,7 +944,7 @@ defmodule Logex.ScriptsTest do
                     "--apps erts kernel stdlib #{ebin} config=/dev/null",
                   "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath " <>
                     "-Wextra_return -Wmissing_return -Wunderspecs -Woverlapping_contract " <>
-                    "-Wopaque_union " <>
+                    "-Wopaque_union -Wunmatched_returns " <>
                     "_build/dev/lib/logex/ebin config=/dev/null"
                 ], "plt\n"}
 
@@ -764,7 +970,7 @@ defmodule Logex.ScriptsTest do
       analysis =
         "dialyzer --no_check_plt --plt #{plt} -pa #{ebin} --fullpath -Wextra_return " <>
           "-Wmissing_return -Wunderspecs -Woverlapping_contract -Wopaque_union " <>
-          "_build/dev/lib/logex/ebin config=/dev/null"
+          "-Wunmatched_returns _build/dev/lib/logex/ebin config=/dev/null"
 
       assert {_out, 0, ["mix compile dev", ^check, ^analysis]} = run_dialyzer(dir, %{})
       assert File.read!(plt) == "kept"
@@ -789,6 +995,23 @@ defmodule Logex.ScriptsTest do
          %{tmp_dir: dir} do
       assert {out, 1, ["mix compile dev"]} = run_dialyzer(dir, %{mix_rc: 1})
       assert String.ends_with?(out, "DIALYZER-FAIL rc=1\n")
+    end
+
+    # RV-30's review (F6): with no `dialyzer` on the path the check of a kept PLT could
+    # not run, was read as a PLT gone stale, and the good PLT was deleted before the build
+    # failed, `command not found`. The script now says so first, 127, building nothing:
+    # the PLT is as it was.
+    test "with no dialyzer on the path it says so and exits 127, nothing built and a " <>
+           "PLT kept untouched",
+         %{tmp_dir: dir} do
+      File.mkdir_p!(Path.dirname(plt(dir)))
+      File.write!(plt(dir), "kept")
+
+      assert run_dialyzer(dir, %{dialyzer: false}) ==
+               {"dialyzer: no `dialyzer` on the path: it is OTP's own, beside `erl`; " <>
+                  "nothing is built and the PLT is kept\nDIALYZER-FAIL rc=127\n", 127, []}
+
+      assert File.read!(plt(dir)) == "kept"
     end
   end
 end

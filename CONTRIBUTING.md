@@ -614,6 +614,20 @@ choice, not an oversight to fix.
   heard-at-each-poll test, which reads `status/1` after its rounds and failed so 1 run in
   50 in RV-18's runs, reads since RV-19 the runner's events up to the round its rule
   ends with as well, and whether it may read them alone is the maintainer's to say.
+- **A plant with a short idle watchdog runs where the VM is otherwise idle.** The runner
+  gives each call to a device the idle watchdog and a poll period of real time, on the
+  manual clock too (decisions 125, 128 and 348): 60 ms where a test needs `idle: 50,
+  poll: 10` for its arithmetic. A device answers within that on a loaded machine, and
+  beside a busy VM, but not with both at once, when it waits its turn behind the
+  suite's other test cases while the machine gives the VM a fraction of its cores: the
+  same start tripped `{:io, "panel", :timeout}` in none of 3,212 runs under 32 busy
+  loops, in none of 2,420 beside 64 spinning processes, and in 6 of 248 with both, and
+  four tests of `trip_test.exs` were red once each in gates run beside another suite
+  (RV-30's review). Such a test's module is not async, which ExUnit runs once every
+  async module is done, as `trip_test.exs` is, and its set-up looks at the runner's
+  status after the start, so that a trip there names itself; never a longer watchdog
+  than the rule under test needs. To see such a failure again, load the VM as well as
+  the machine: the four tests alone under busy loops passed 200 runs.
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input
@@ -629,6 +643,14 @@ choice, not an oversight to fix.
   `Runtime.instance(:motor)` and warns on every run. Pass the bad value through a helper it
   cannot see through, as `runtime_test.exs`'s `opaque/1` does (copy it into another file
   that needs it), rather than living with the warning.
+- **A scratch directory in the machine's temporary directory is named by the VM's OS
+  pid.** Fourteen directories in nine test files were named by the VM's own count alone,
+  `logex-rv2-<n>` from `System.unique_integer/1`, and every VM counts from 1: two suites
+  run at once on one machine, two clones gated side by side, gave their directories one
+  name, and each could write into, read and remove the other's (RV-30; `prose_test.exs`'s
+  file met it first, `563debe`). Name one by `System.pid()` beside the count, or use
+  ExUnit's `:tmp_dir`, which is under the checkout; `scratch_test.exs` reads every test
+  file's syntax tree for it.
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting fold along a rung
   (`series/3` in `Logex.Runtime`) and the sequential `env` threading through parallel
@@ -643,12 +665,14 @@ choice, not an oversight to fix.
     mix compile --force --warnings-as-errors
     MIX_ENV=test mix compile --force --warnings-as-errors
     mix test --warnings-as-errors
+    scripts/dialyzer.sh
 
-All four must pass, judged by exit code; the third builds `lib/` as the suite builds it.
-`scripts/gate.sh` runs the four in order and names the tests that failed ("Scripts",
+All five must pass, judged by exit code; the third builds `lib/` as the suite builds it,
+and the fifth is OTP's own Dialyzer over the dev build (decision 549; below).
+`scripts/gate.sh` runs the five in order and names the tests that failed ("Scripts",
 below).
-CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
-exit code, and Dialyzer after them (below), on every push and pull request, on Erlang/OTP
+CI (`.github/workflows/ci.yml`) runs the same five, each a step of its own judged by its
+exit code, on every push and pull request, on Erlang/OTP
 28 and Elixir 1.20.4 through `erlef/setup-beam`: a red run there is a red commit, whatever
 ran green here, and a work item's report says so. Its test step ends a red run's log with
 each test that failed, `file:line: Module: test name` a line, as `scripts/gate.sh` does
@@ -676,8 +700,9 @@ Apart from the header line, which names the commit the tree was on top of, the d
 exact list of inputs whose meaning changed. If it lists anything you did not intend, the
 change is wrong, not the record.
 
-After the four gates CI runs OTP's own Dialyzer over the dev build, as
-`scripts/dialyzer.sh` runs it here ("Scripts", below), red on any warning its flags give:
+The fifth gate is OTP's own Dialyzer over the dev build, `scripts/dialyzer.sh`
+("Scripts", below), which `scripts/gate.sh` runs once the suite is green and CI runs as
+the step after its suite's, red on any warning its flags give:
 the specs of the host contract, every public function of the modules decision 514 and
 decision 523 name, read against the code and against the toolchain's applications
 (decision 515 (c)). Dialyzer holds a spec only where it can type what the function gives:
@@ -685,19 +710,35 @@ it types nothing a call to a process gives back, the runner's, a simulated devic
 manual clock's and a compile's own process's, nor a field of a struct, so it passes a
 false spec of those (RV-24's review, F1). `test/logex/typespec_test.exs`, in the suite,
 holds every spec of the contract to the values its function gives and the arguments it is
-given, and each contract function with a spec must be reached there, or the file fails. The
-four gates do not run Dialyzer, and `scripts/gate.sh` does not, so run it yourself before
-you push a commit that changes `lib/` (provisional: `PLAN.md`'s RV-24, question 1); its
-first run builds the PLT, one to two and a half minutes, and later runs check the one it
+given, and each contract function with a spec must be reached there, or the file fails.
+Until decision 549 the gate did not run Dialyzer, and a contributor who changed what a
+function gives and forgot its spec learned of it from CI, minutes after the push; the
+gate runs it now, after the suite, so the spec the code breaks is seen before the commit.
+Its first run on a machine builds the PLT, about a minute, two and a half on a loaded
+machine, and later runs check the one it
 kept and take some 10 to 35 s, the analysis most of it, longer on a loaded machine. A
 warning is fixed in the code, with a test that fails when the fix is reverted where
 it is a defect, or, where it is not, the code made to say what it does and the reason
-recorded in `PLAN.md` (provisional: its RV-24, question 3); never silenced by a broader
+recorded in `PLAN.md` (decision 551); never silenced by a broader
 spec, a `no_return()`, a `@dialyzer` attribute or a flag dropped without its reason. A
 spec states the contract the code and its tests already hold, what a host hands in and gets
 back, a host's mistake being its pinned `ArgumentError`, never a narrower or a wider one;
 a public function added to the contract gets one, and a type it hands out a `@typedoc`, or
 `runtime_test.exs` fails.
+
+The gate does not build the site, and the Docs workflow is red on what the gate never
+sees: a commit that changes a module's or a function's text, or a page, runs
+`scripts/docs.sh` here too, to `DOCS-OK`. Two commits of RV-30 passed the gate and were
+red by Docs, a function's text having named a module that has no page (`f4fa1af`,
+`4024fe1`). And a commit's runs are read on that commit: a push runs the workflows on
+the tip it brings, so of commits pushed together all but the last have no run. Push each
+commit as it is made, or to a branch of its own where a later push would cover it; two
+of RV-30's had no run until its review pushed each so (`e3a8c2f`, `f4fa1af`).
+
+A mark that throws an answer away, `_ = ...`, is a line of
+`test/logex/dropped_answers_test.exs` too, beside why the answer may be dropped there:
+Dialyzer is red on a drop left unmarked and passes every marked one, a defect among
+them, so the list is where a marked drop is read (decision 550; RV-30's review).
 
 ---
 
@@ -756,10 +797,17 @@ passed and each taken back in turn.
 each judging what it runs by its exit code, never by its output. Each `mix test` they run
 starts by deleting ExUnit's failures manifest, so the tests they name are that run's.
 
-- **`scripts/gate.sh [log] [mix test args]`** runs the four gates of "Before you commit"
+- **`scripts/gate.sh [log] [mix test args]`** runs the five gates of "Before you commit"
   in order, the first that fails stopping the rest, writes what they print to the log
   (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
-  rc=<n>`, and exits with the gates' code. The suite is judged by `elixir
+  rc=<n>`, and exits with the gates' code. The fifth, `scripts/dialyzer.sh`, runs once the
+  suite is green, whatever arguments the suite was given (decision 549): a red one is
+  `GATE-FAIL` with the script's code, followed by a line that names the step and the log,
+  which keeps everything the script printed, on either stream; 2 is a warning, `its
+  warnings are in <log>`, and any other code a run that could not be made, `which could
+  not run: what it printed is in <log>`. A red suite's code may be 2 too, so read the
+  line after `GATE-FAIL`, which names the tests or the step. `scripts/release.sh`'s gate
+  is this script, so a release is held to the five. The suite is judged by `elixir
   scripts/failed.exs --exit`, as CI's test step judges it ("Before you commit"): a failed
   suite is followed by the tests that failed, `file:line: Module: test name` a line, read
   from ExUnit's failures manifest, since `Result: 2406/2407 passed` names none, and a long
@@ -788,16 +836,20 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   or a manifest of no failure (a warning under `--warnings-as-errors`, for one), exiting
   `N`; and a run that exited 0, silent and 0 where the manifest is there and names no
   failure, red, 1, where there is none.
-- **`scripts/dialyzer.sh`** runs OTP's own dialyzer over logex's dev build as CI's step
-  does ("Before you commit"), no dependency added: it compiles, reads the toolchain from
+- **`scripts/dialyzer.sh`** runs OTP's own dialyzer over logex's dev build as the gate's
+  fifth step and CI's step do ("Before you commit"), no dependency added: it compiles,
+  reads the toolchain from
   the `elixir` on the path, builds the PLT of the applications logex calls, erts, kernel,
   stdlib and elixir, under `_build/dialyzer/`, named by the OTP and Elixir versions and
   the applications, or checks the one kept there and builds it again where the check
   cannot read the files it names, and analyses `_build/dev/lib/logex/ebin` with
   Dialyzer's default warnings and `-Wextra_return`, `-Wmissing_return`, `-Wunderspecs`,
-  `-Woverlapping_contract` and `-Wopaque_union`, reading no Dialyzer configuration file;
+  `-Woverlapping_contract`, `-Wopaque_union` and, since decision 550,
+  `-Wunmatched_returns`, reading no Dialyzer configuration file;
   it prints what Dialyzer prints, then `DIALYZER-OK` or `DIALYZER-FAIL rc=<n>`, and exits
-  with Dialyzer's code, 2 for a warning. `test/logex/scripts_test.exs` runs it as CI's
+  with Dialyzer's code, 2 for a warning and 1 for a run that could not be made; with no
+  `dialyzer` on the path it says so and exits 127, nothing built and a kept PLT left as
+  it is. `test/logex/scripts_test.exs` runs it as CI's
   step writes it, over a stand-in `dialyzer`, and holds its flags and its PLT's name,
   check and build.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a

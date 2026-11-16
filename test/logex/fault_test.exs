@@ -220,7 +220,12 @@ defmodule Logex.FaultTest do
     end
 
     test "a program read from its file names it, as a diagnostic does", %{} do
-      dir = Path.join(System.tmp_dir!(), "logex_fault_#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex_fault_#{System.pid()}_#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       path = Path.join(dir, "rate.ld")
       File.write!(path, "// boxes per minute\n" <> @rate)
@@ -287,7 +292,12 @@ defmodule Logex.FaultTest do
     end
 
     test "in the block's own file, where the loader read it from" do
-      dir = Path.join(System.tmp_dir!(), "logex_fault_fb_#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex_fault_fb_#{System.pid()}_#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
       File.write!(Path.join(dir, "inner.ld"), @inner)

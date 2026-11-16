@@ -174,7 +174,7 @@ defmodule Logex.Configuration do
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
-  alias Logex.Configuration.{Connection, Global, Instance, Text}
+  alias Logex.Configuration.{Connection, Global, Initial, Instance, Text}
   import Logex.Declarations, only: [is_elementary: 1]
   import Logex.Array, only: [is_array: 1]
 
@@ -254,6 +254,14 @@ defmodule Logex.Configuration do
     with none, which is not retained. A located global takes no `:retain`. From Elixir,
     since decision 304, `new!/3` takes the qualifier as `Logex.Tag.new!/5` does, the line's
     own word as an option; the struct built by hand carries the atom, as a tag's does.
+
+    Since decision 555 `new!/3` refuses at once an initial value no global of its type
+    holds, as `Logex.Tag.new!/5` refuses a tag's, so that the struct it gives for a name,
+    a type and a location that are a global's is a `t()`. Those three it keeps as given,
+    a name or a location that is no text and a type that is none among them, the struct
+    then outside `t()` (provisional: `PLAN.md`'s RV-30, question 3); they, and a struct
+    built by hand or changed after, are judged where they always were, by
+    `Logex.Configuration.check/1`, which `Logex.Configuration.new!/1` runs.
     """
     @enforce_keys [:name, :type]
     defstruct [:name, :type, initial: nil, at: nil, line: nil, retain: nil]
@@ -267,10 +275,42 @@ defmodule Logex.Configuration do
     refused in its words, each a line of one `ArgumentError`, before anything else is read:
     options that are no keyword list; an option of another name; a `retain:` or
     `non_retain:` that is neither `true` nor `false`; an option given twice; and both
-    `true`, as a line takes `retain` or `non_retain`, not both. What the global's name,
-    type, initial value and location say is `Logex.Configuration.check/1`'s, which
-    `Logex.Configuration.new!/1` runs, as for a struct built by hand. The struct's `retain`
+    `true`, as a line takes `retain` or `non_retain`, not both. The struct's `retain`
     keeps the atom, `:retain`, `:non_retain` or nil.
+
+    Then the initial value is judged against the type, once the options read (decision
+    555, the maintainer, 2026-11-15): one no global of that type holds is refused here,
+    an `ArgumentError` of the lines `Logex.Configuration.check/1` gives of the same value
+    in a struct built by hand with no location, by the one judge both read, internal to
+    logex, where until then `new!/3` kept it for `check/1` to refuse. Refused so:
+
+    - a value that is no number, `new!("fan_on", :bool, initial: true)`: ``the initial
+      value of global `fan_on` must be an integer, found true``, and for a real ``must be
+      a number``;
+    - a number outside the type, `new!("fan_on", :bool, initial: 2)`: `` `fan_on` is a
+      bool: its initial value must be 0 or 1, found `2` ``; `new!("trim", :sint, initial:
+      300)`: `` `trim` is an sint: `300` is outside -128 to 127 ``, every integer width
+      and bit string by its range; a float in a type that holds integers, `` `g` is a
+      dint: `1.5` is a real, and a dint holds only integers ``; and a real's by the
+      literal rules, a number beyond its range or an integer it does not hold exactly;
+    - -0.0 in a real, which no real holds and no line gives;
+    - an array's that is no list, or a list of anything but numbers, a nested list among
+      them; a list of another length than the array's elements; and each element its
+      type does not hold, named by its element, `` `limits[1]` is an int: `40000` is
+      outside -32768 to 32767 ``, a line each.
+
+    The value is judged against the type alone: the type itself, the name and the
+    location stay `Logex.Configuration.check/1`'s, as for a struct built by hand. So a
+    located global's initial value its type holds is kept, `new!("eye_1", :bool,
+    initial: 1, at: "panel.i.0")`, and refused by `check/1` for its location, a point
+    taking no initial value; and one its type does not hold is refused here by the type's
+    line, `initial: 2`, where `check/1` says of a located global's value only that it
+    takes none, so a host that mends the number is refused again there, for the location
+    (provisional: `PLAN.md`'s RV-30, question 2). A type that is none holds no number to
+    judge by, `new!("g", :float, initial: 5)`, kept; and a name that is no text is shown
+    as Elixir shows it, `` {1, 2} is an sint: `300` is outside -128 to 127 ``. Whatever
+    the three are, `new!/3` gives a struct or raises an `ArgumentError`, nothing else.
+    `new!/2`, with no initial value, is as it was.
     """
     @spec new!(String.t(), type) :: t
     @spec new!(String.t(), type,
@@ -346,12 +386,20 @@ defmodule Logex.Configuration do
       do: raise(ArgumentError, Enum.join(problems, "\n"))
 
     defp chosen(seen, global, []),
-      do: %{
-        global
-        | initial: Map.get(seen, :initial),
-          at: Map.get(seen, :at),
-          retain: qualifier(seen)
-      }
+      do:
+        held!(%{
+          global
+          | initial: Map.get(seen, :initial),
+            at: Map.get(seen, :at),
+            retain: qualifier(seen)
+        })
+
+    # Decision 555 (RV-30): an initial value no global of the type holds is refused at
+    # once, by the lines check/1 gives of it, from the one judge check/1 reads.
+    defp held!(global), do: held!(Logex.Configuration.Initial.refused(global), global)
+
+    defp held!([], global), do: global
+    defp held!(lines, _global), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
     defp qualifier(%{retain: true}), do: :retain
     defp qualifier(%{non_retain: true}), do: :non_retain
@@ -379,6 +427,152 @@ defmodule Logex.Configuration do
             line: pos_integer | nil,
             retain: :retain | :non_retain | nil
           }
+  end
+
+  defmodule Initial do
+    @moduledoc false
+    # Decision 555 (RV-30): the one judge of a global's initial value against its type,
+    # internal, which `Logex.Configuration.check/1` and
+    # `Logex.Configuration.Global.new!/3` both read, so that a value is refused in the same
+    # words wherever it is met. Two kinds of line, as check/1 has them:
+    #
+    # - `said/1`, what no `var_global` line can say, the host's mistake, which check/1
+    #   raises: a value that is no number, an array's that is no list of numbers, and
+    #   -0.0 in a real;
+    # - `unheld/1`, what a line can say and no global of the type holds, which check/1
+    #   gives as a diagnostic at the global's line: a number outside the type, by the
+    #   literal rules (`Logex.Declarations`), and an array's list by `array/1`, the rules
+    #   a declared array's list meets.
+    #
+    # `refused/1` is `new!/3`'s: the host's lines, or with none of those the lines of a
+    # value the type does not hold, as check/1 raises the host's mistakes alone. The
+    # location is not read: a located global's initial value is check/1's to refuse, and
+    # so are the type and the name; check/1 reads `unheld/1` only for a global with no
+    # location, a located one's value being told there as one a point does not take, so
+    # that the two say the same of a value only where there is no location. Each takes a `%Logex.Configuration.Global{}` whose
+    # every field may be anything, and is total: whatever the name, the type and the value
+    # are, it gives its lines and raises nothing (RV-30's review, F1; a walk over names,
+    # types and values that are none holds it, `configuration_test.exs`).
+    alias Logex.Configuration.Global
+    alias Logex.Declarations
+    import Logex.Declarations, only: [is_elementary: 1]
+    import Logex.Array, only: [is_array: 1]
+
+    @reals Logex.Declarations.reals()
+
+    def refused(%Global{} = global), do: refused(said(global), global)
+
+    defp refused([], global), do: unheld(global)
+    defp refused(said, _global), do: said
+
+    def said(%Global{initial: nil}), do: []
+
+    # M5-11 (decision 151): an array global's initial value is a list of its elements'
+    # values, each an integer, or a real's a number, whose length and each value check/1
+    # judges.
+    def said(%Global{type: {:array, _type, _dims}, initial: initial} = global)
+        when is_list(initial),
+        do: array_said(numbers?(initial), global)
+
+    def said(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)}, an array, must be a list of its " <>
+          "elements' values, found #{inspect(initial)}"
+      ]
+
+    def said(%Global{initial: initial}) when is_integer(initial),
+      do: []
+
+    # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
+    # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
+    # array's element told by `Logex.Declarations.array_misfits/3`.
+    def said(%Global{name: name, type: type, initial: initial})
+        when type in @reals and initial === -0.0,
+        do: [minus_zero(name)]
+
+    # M5-10: a real global's initial value may be a float, as its line's real literal is;
+    # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`,
+    # so that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and
+    # a dint holds only integers", where until then check/1 raised it as the host's.
+    def said(%Global{initial: initial}) when is_float(initial), do: []
+
+    def said(%Global{name: name, type: type, initial: initial}) when type in @reals,
+      do: [
+        "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
+      ]
+
+    def said(%Global{name: name, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
+      ]
+
+    def minus_zero(name),
+      do:
+        "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
+          "gives, a line's `-0.0` being 0.0: give 0.0"
+
+    defp array_said(true, _global), do: []
+
+    # Decision 237: an element's value is a number, a float in an integer array judged by
+    # the literal rules, as a line can say one.
+    defp array_said(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)}, an array#{of(type)}, " <>
+          "must be a list of its elements' values, each a number, found " <>
+          inspect(initial)
+      ]
+
+    # RV-30's review (F1): an array whose elements' type is none, `{:array, :ton, [2]}`,
+    # which check/1 refuses for its type, is told as an array, no word being its
+    # elements', where the word looked up raised a `FunctionClauseError` out of check/1,
+    # new!/1 and new!/3.
+    defp of(type) when is_elementary(type), do: " of #{Declarations.word(type)}s"
+    defp of(_none), do: ""
+
+    # A proper list of numbers: an improper one, or one that holds anything else, is not.
+    defp numbers?([]), do: true
+    defp numbers?([element | rest]) when is_number(element), do: numbers?(rest)
+    defp numbers?(_other), do: false
+
+    # A number a global of an elementary type does not hold: since M5-10 by the literal
+    # rules, as a declaration's initial value (decision 147), a real one no integer
+    # type's, and an integer one a real's only exactly.
+    def unheld(%Global{type: type, initial: v} = global)
+        when is_elementary(type) and is_number(v),
+        do: fit(Declarations.holds?(type, v), global)
+
+    # M5-11 (decision 151): an array's list, its length and each element's value, where its
+    # type is an array's; the lines array/1 gives of the list, which are those it gives
+    # with the list and not without.
+    def unheld(%Global{type: type, initial: initial} = global)
+        when is_array(type) and initial != nil,
+        do: array(global) -- array(%{global | initial: nil})
+
+    def unheld(%Global{}), do: []
+
+    # Every rule a declared array meets, its dimensions, sizes and initial list, as
+    # messages (decision 151).
+    def array(%Global{name: name, type: type, initial: initial}),
+      do: Declarations.array_misfits(name, type, initial)
+
+    defp fit(true, _global), do: []
+
+    # RV-30's review (F1): the name through label/1, as every other line names it, so
+    # that one that is no text, `{1, 2}`, which new!/3 keeps for check/1 to refuse, is
+    # shown as Elixir shows it, where its interpolation raised a `Protocol.UndefinedError`.
+    defp fit(false, %Global{name: name, type: type, initial: v}),
+      do: ["#{label(name)} is #{Declarations.a_type(type)}: " <> misfit(type, v)]
+
+    defp misfit(type, v) when is_float(v) or type in @reals,
+      do: Declarations.literal_misfit(type, v, "`#{shown(v)}`")
+
+    defp misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
+
+    defp shown(v) when is_float(v), do: Float.to_string(v)
+    defp shown(v), do: "#{v}"
+
+    defp label(name) when is_binary(name), do: "`#{name}`"
+    defp label(name), do: inspect(name)
   end
 
   defmodule Instance do
@@ -644,7 +838,7 @@ defmodule Logex.Configuration do
           {:ok, t} | {:error, [Diagnostic.t(), ...]}
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
-    checked(configuration_name(name) ++ mistakes, [])
+    _ = checked(configuration_name(name) ++ mistakes, [])
     {read, rounded, spelled, literals} = Text.read_rounded(source)
 
     read
@@ -1362,7 +1556,7 @@ defmodule Logex.Configuration do
     do:
       named(global) ++
         global_type(global) ++
-        global_initial(global) ++ global_at(global) ++ global_retain(global)
+        Initial.said(global) ++ global_at(global) ++ global_retain(global)
 
   defp said(%Instance{type: type, task: task} = instance),
     do:
@@ -1447,63 +1641,8 @@ defmodule Logex.Configuration do
         ":non_retain, or nil for none"
     ]
 
-  defp global_initial(%Global{initial: nil}), do: []
-
-  # M5-11 (decision 151): an array global's initial value is a list of its elements' values,
-  # each an integer, or a real's a number, whose length and each value check/1 judges.
-  defp global_initial(%Global{type: {:array, type, _dims}, initial: initial} = global)
-       when is_list(initial),
-       do: array_initial(Enum.all?(proper_or_not(initial), &element_said?(type, &1)), global)
-
-  defp global_initial(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
-    do: [
-      "the initial value of global #{label(name)}, an array, must be a list of its " <>
-        "elements' values, found #{inspect(initial)}"
-    ]
-
-  defp global_initial(%Global{initial: initial}) when is_integer(initial),
-    do: []
-
-  # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
-  # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
-  # array's element told by `Logex.Declarations.array_misfits/3`.
-  defp global_initial(%Global{name: name, type: type, initial: initial})
-       when type in @reals and initial === -0.0,
-       do: [minus_zero(name)]
-
-  # M5-10: a real global's initial value may be a float, as its line's real literal is;
-  # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`, so
-  # that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and a dint
-  # holds only integers", where until then check/1 raised it as the host's.
-  defp global_initial(%Global{initial: initial}) when is_float(initial), do: []
-
-  defp global_initial(%Global{name: name, type: type, initial: initial}) when type in @reals,
-    do: [
-      "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
-    ]
-
-  defp global_initial(%Global{name: name, initial: initial}),
-    do: [
-      "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
-    ]
-
-  defp minus_zero(name),
-    do:
-      "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
-        "gives, a line's `-0.0` being 0.0: give 0.0"
-
-  defp array_initial(true, _global), do: []
-
-  # Decision 237: an element's value is a number, a float in an integer array judged by the
-  # literal rules, as a line can say one.
-  defp array_initial(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
-    do: [
-      "the initial value of global #{label(name)}, an array of #{Declarations.word(type)}s, " <>
-        "must be a list of its elements' values, each a number, found " <>
-        inspect(initial)
-    ]
-
-  defp element_said?(_type, value), do: is_number(value)
+  # A global's initial value that no `var_global` line can say is `Initial.said/1`'s, the
+  # one judge's, which `Global.new!/3` reads too (decision 555).
 
   defp global_at(%Global{at: nil}), do: []
   defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
@@ -2079,12 +2218,8 @@ defmodule Logex.Configuration do
 
   defp global(%Global{}), do: []
 
-  defp misfits(%Global{type: type} = global),
-    do:
-      Enum.map(
-        Declarations.array_misfits(global.name, type, global.initial),
-        &diagnostic(global.line, &1)
-      )
+  defp misfits(%Global{} = global),
+    do: Enum.map(Initial.array(global), &diagnostic(global.line, &1))
 
   defp located_array(_location, %Global{initial: nil} = global), do: misfits(global)
 
@@ -2173,24 +2308,13 @@ defmodule Logex.Configuration do
     ]
 
   # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
-  # real one is no integer type's, and an integer one a real's only exactly.
-  defp initial(%Global{type: type, name: name, initial: v, line: line}, _location),
-    do: fit(Declarations.holds?(type, v), type, v, "`#{name}`", line)
+  # real one is no integer type's, and an integer one a real's only exactly; the one
+  # judge's (`Initial.unheld/1`), which `Global.new!/3` reads too (decision 555).
+  defp initial(%Global{line: line} = global, _location),
+    do: unheld(Initial.unheld(global), line)
 
-  defp fit(true, _type, _v, _what, _line), do: []
-
-  defp fit(false, type, v, what, line),
-    do: [
-      diagnostic(
-        line,
-        "#{what} is #{Declarations.a_type(type)}: " <> initial_misfit(type, v)
-      )
-    ]
-
-  defp initial_misfit(type, v) when is_float(v) or type in @reals,
-    do: Declarations.literal_misfit(type, v, "`#{shown_number(v)}`")
-
-  defp initial_misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
+  defp unheld([], _line), do: []
+  defp unheld(messages, line), do: Enum.map(messages, &diagnostic(line, &1))
 
   defp shown_number(v) when is_float(v), do: Float.to_string(v)
   defp shown_number(v), do: "#{v}"
@@ -2246,7 +2370,7 @@ defmodule Logex.Configuration do
   # initial/1 gave it.
   def initial(%Global{name: name, type: type, initial: initial})
       when type in @reals and initial === -0.0,
-      do: raise(ArgumentError, minus_zero(name))
+      do: raise(ArgumentError, Initial.minus_zero(name))
 
   # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
   # `real`'s rounded to a single, an integer one as the real it is, one past its range the

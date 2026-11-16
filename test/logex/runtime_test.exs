@@ -2366,12 +2366,12 @@ add e i y",
     end
 
     # Decision 515 (c) (RV-24): typespecs on the host contract, which Dialyzer reads
-    # (`scripts/dialyzer.sh`, CI's step after the four gates). Every public function of a
+    # (`scripts/dialyzer.sh`, the gate's fifth step and CI's). Every public function of a
     # module inside the contract has a spec, but a callback of a behaviour the module
     # implements, which the behaviour's own spec covers (`GenServer`'s, `Logex.IO`'s,
     # `Logex.Runner.Clock`'s), and every type it exports has a typedoc, `@typedoc false`
     # for one internal to logex. The internal functions among them have specs too
-    # (provisional: RV-24's question 4).
+    # (decision 552).
     test "every public function of the host contract has a spec, every type a typedoc" do
       unspecced =
         for module <- @contract ++ @decided,

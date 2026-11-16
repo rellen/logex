@@ -470,8 +470,11 @@ defmodule Logex.Retain do
 
   defp closed(:ok, io), do: :file.close(io)
 
+  # Decision 550: after a write or a sync that failed the close's own answer is dropped on
+  # purpose, the failure it follows being the one the write gives and the runner reports;
+  # a close after a good sync is the write's answer, above.
   defp closed(error, io) do
-    :file.close(io)
+    _ = :file.close(io)
     error
   end
 
@@ -480,8 +483,11 @@ defmodule Logex.Retain do
 
   defp discarded(:ok, _beside), do: :ok
 
+  # Decision 550: the `.tmp` of a write that failed is deleted and the delete's own answer
+  # dropped on purpose: the write gives the failure it follows, and a `.tmp` a failed
+  # delete leaves is never read as a store and is deleted by the next write (made_again/2).
   defp discarded(error, beside) do
-    :file.delete(beside)
+    _ = :file.delete(beside)
     error
   end
 

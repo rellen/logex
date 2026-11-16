@@ -293,7 +293,12 @@ defmodule Logex.LoadingTest do
   end
 
   defp dir! do
-    dir = Path.join(System.tmp_dir!(), "logex-rv2-#{System.unique_integer([:positive])}")
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "logex-rv2-#{System.pid()}-#{System.unique_integer([:positive])}"
+      )
+
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
     dir

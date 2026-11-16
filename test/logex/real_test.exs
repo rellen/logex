@@ -2548,7 +2548,12 @@ defmodule Logex.RealTest do
              ]
 
       # From a file too.
-      dir = Path.join(System.tmp_dir!(), "logex-237-#{System.unique_integer([:positive])}")
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "logex-237-#{System.pid()}-#{System.unique_integer([:positive])}"
+        )
+
       File.mkdir_p!(dir)
       path = Path.join(dir, "plant.logex")
       File.write!(path, "var_global sp lreal 1.0e-400\n")

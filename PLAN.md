@@ -49,6 +49,9 @@ first step and the answers to its questions and RV-29's, 2026-11-16: it says tha
 landed, names decisions 556–574, and names what still waits, RV-23, RV-25, RV-30, DOC-1's
 second and third steps and DOC-2.)*
 
+*(Since RV-30, 2026-11-16: README's paragraph says RV-30 has landed, what it built named
+as it was while it waited.)*
+
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
@@ -22935,6 +22938,731 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   made their numbers; and the three real-clock tests seen red once each under load in
   RV-24's mutation runs, `trip_test.exs:1600`, `:2062` and `:4956`, each root-caused and
   fixed in the test or the code as its cause says, none given more time.
+
+  **RV-30 as built** (2026-11-15 and 16, branch `rv30` over `9d3d696`). Decisions 549,
+  550 and 555 built, each change with a test that fails when it is reverted, judged by
+  the full suite or, for what only Dialyzer reads, by `scripts/dialyzer.sh`'s exit code
+  (the mutation table below); decisions 551 to 554, taken as built, have their marks. No
+  test, walk or oracle was deleted or weakened and no assertion removed; the 27 test
+  lines taken out are listed below, each with its reason. `mix.exs` is untouched, no
+  version is set and no tag made (decision 541). The working files are under
+  `scratchpad/rv/w30/`.
+
+  - *The gate's fifth step* (decision 549, `e3a8c2f`). The four gates were three chained
+    by `&&` and the suite run only once they passed, so the first that fails stopped the
+    rest. `scripts/gate.sh` keeps that and runs `scripts/dialyzer.sh` once the suite is
+    judged green: `GATE-OK` needs all five; a red fifth step is `GATE-FAIL rc=<n>` with
+    Dialyzer's code, 2 for a warning and 1 for a run that could not be made, followed by
+    a line that names the step, `scripts/dialyzer.sh exited 2, the gate's fifth step: its
+    warnings are in <log>`; everything Dialyzer printed is in the log, whose last lines
+    the gate prints as it did. After a red suite, a suite a test halted or a red gate
+    before the suite the fifth is not run, as the four behave. `scripts/release.sh` runs
+    the same script, so a release is held to the five. `scripts_test.exs` holds it over
+    its stand-in `mix` and a stand-in `dialyzer`, the script itself copied as it is: a
+    green run names the five in order, the format check, the two builds, the suite, and
+    the fifth's own build, PLT and analysis; a red fifth step alone, with Dialyzer's 2
+    and its 1, is `GATE-FAIL` with that code, the step named and the warning the log's
+    last lines; and the three older tests of a red suite, a halted suite and a red
+    earlier gate pin, as they did, every call made, among which there is no `dialyzer`.
+    CI keeps its steps, each gate a step and Dialyzer after the suite behind its PLT's
+    cache; its comment, `CONTRIBUTING.md`'s "Before you commit", its Dialyzer passage and
+    its "Scripts", README's line on the gates, `scripts/dialyzer.sh`'s head and
+    `CLAUDE.md`'s Commands say five.
+  - *What the fifth step adds*, measured on this machine while nothing else ran on it
+    (four cores; `w30/base-times.txt`, `tip-times.txt`). At the base the gate of four
+    took 296 s, its suite 272 s of them. At the tip the gate of five took 329 s with no
+    PLT, its suite 254 s, and 283 s with the PLT kept, its suite 248 s: the gate less
+    its suite, 24 s before, 75 s the first time and 34 s after, so the fifth step is some
+    51 s the first time on a machine and 10 s with the PLT kept. The script alone, with
+    its own build of the dev tree, took 59 s cold and 12 to 13 s kept. Decision 549's
+    figures, 20 to 35 s and two minutes, were measured under another session's load.
+  - *`-Wunmatched_returns`* (decision 550, `e3a8c2f`). The flag gave 24 warnings at the
+    base, as RV-24 counted. Each site was read again; each drops its answer on purpose,
+    none is a defect, and each is written `_ = ...`. None is matched on what it must be:
+    in none can a wrong answer arrive that a crash would serve, the five calls made for
+    their raise giving what the caller already holds or never reads, a device's two
+    giving back its own state, the twelve lists holding only the messages sent, a
+    cancel's two answers both right, and the close's and the delete's `{:error,
+    _}` following a failure the write already gives, where a match would put a
+    `MatchError` in the writer's process in place of the write's own reason. No
+    behaviour changes: every pinned message, event and report is the same, and the suite
+    passes with all 24 marks taken away again (`uall`, below), which Dialyzer alone reads.
+
+    | site (at the tip) | the call | the answer dropped | why dropping it is right |
+    |---|---|---|---|
+    | `configuration.ex:816`, `compile/3` | `checked(name's and the programs' mistakes, [])` | `[]`, the diagnostics it was handed | called for its raise of a host's mistake; with none it gives back the empty list |
+    | `configuration/edit.ex:388`, `accept/3` | `candidate!(candidate)`, `Runtime.start/1` | the candidate's resource | started only for `start/1`'s own refusals; the edit plans from the configurations |
+    | `configuration/edit.ex:541`, `runtime!/1` | `Runtime.overlaps(runtime)` | the tasks' overlap counts | called for its check that the term is a resource, and its message |
+    | `configuration/text.ex:1166`, `print/1` | `entries!(entries)` | the entries it was given | called for its raise |
+    | `retain.ex:472`, `closed/2` | `:file.close(io)` after a write or a sync that failed | `:ok` or `{:error, reason}` | the failure it follows is the one the write gives and the runner reports; a close after a good sync is the write's answer, not dropped |
+    | `retain.ex:485`, `discarded/2` | `:file.delete(beside)` after any failure | `:ok` or `{:error, reason}` | the write gives the failure it follows; a `.tmp` a failed delete leaves is never read as a store and is deleted by the next write (`made_again/2`), or told then, `:eexist` or `:eisdir` |
+    | `runner.ex:1948`, `2218`, `2344`, `3693`, `3826`, `3892`, `3912`, `4175`, `4281`, `4297`, `4304`, `4717` | `published(state, events)`, twelve | the list of the messages sent, one a subscriber and event | events are sent, never awaited; a send to a pid gives the message back and cannot fail |
+    | `runner.ex:2707`, `forces_taken/2`; `runner.ex:4464`, `timer_off/1` | `Process.cancel_timer(timer)` | the time left, or `false` for a timer that fired | a limit's message already sent is passed over as stale, by its reference or token |
+    | `runner.ex:5697`, `walled!/3` | `wall!(clock)` | the wall clock's time | called at a fresh start for its raise of a clock that gives no time |
+    | `runner/clock/monotonic.ex:44`, `cancel/2` | `Process.cancel_timer(timer)` | the time left, or `false` | the behaviour's `cancel/2` gives `:ok` whether or not the timer had fired |
+    | `runner/device.ex:451`, `back/2` | `told_back(state)` | the state it was given | it tells the runner the device is back and changes nothing; `back/2` gives the adapter's result |
+    | `runner/device.ex:759`, `terminate/2` | `closed(last_zero(state))` | the device's state, closed | the process is ending; `terminate/2` gives `:ok` |
+
+    The two sites in the store's own code were read as the decision asks, for a dropped
+    `{:error, _}` the host should hear of: there is none. A write, a sync, a good
+    sync's close and a rename each give their answer to the caller, which the runner
+    reports, `{:retain, {:error, reason}}` or `{:forces, {:error, reason}}`; the two
+    dropped follow a failure that is already the write's answer. A good close's answer
+    thrown away, the change the decision is there to catch, is red (`e1`, below).
+    `-Werror_handling` stays off, as decision 550 gives it: its 18 warnings are refusals
+    that raise a host's mistake by design, and a writer's fun that exits by design, which
+    only a `no_return()` spec would pass, a silencer decision 551 does not allow; the
+    script's head says so.
+  - *`Global.new!/3`* (decision 555, `f4fa1af`). `check/1` judged a global's initial
+    value in two places: `global_initial/1`, what no `var_global` line can say, the
+    host's mistake it raises; and `initial/2` and `misfits/1`, what a line can say and
+    the type does not hold, its diagnostics. Both are now `Logex.Configuration.Initial`,
+    internal, a module of `configuration.ex`, since `runtime_test.exs` pins
+    `Logex.Configuration`'s and `Global`'s public functions and the leave does not reach
+    it: `said/1`, the first, moved as it was; `unheld/1`, the second, for a number by
+    `Logex.Declarations.holds?/2` and the literal rules' words, for an array's list by
+    `Logex.Declarations.array_misfits/3`, the lines it gives with the list and not
+    without; `array/1`, every rule a declared array meets. `check/1` reads all three, its
+    lines unchanged, and `new!/3` reads `refused/1`: the host's lines, or with none of
+    those the lines of a value the type does not hold, each line of one `ArgumentError`,
+    after the options' own mistakes, which come first as they did.
+
+    | the value | `Global.new!/3` raises | `check/1` of the same struct built by hand |
+    |---|---|---|
+    | no number, `:bool` with `true`, `:dint` with `"5"`, `:word` with `:on`, `:dint` with `[5]` | ``the initial value of global `g` must be an integer, found true`` | raises the same line |
+    | no number in a real, `:real` with `"1.5"` | ``the initial value of global `g` must be a number, found "1.5"`` | raises the same line |
+    | a number outside a bool, 2 or -1 | `` `g` is a bool: its initial value must be 0 or 1, found `2` `` | the same, a diagnostic |
+    | a number outside an integer type or a bit string, `:sint` with 300, `:uint` with -1, `:byte` with 256, every width at one past each end | `` `g` is an sint: `300` is outside -128 to 127 `` | the same, a diagnostic |
+    | a float in a type that holds integers, `:dint` with 1.5, `:bool` with 1.0 | `` `g` is a dint: `1.5` is a real, and a dint holds only integers `` | the same, a diagnostic |
+    | a real's beyond its range, `:real` with 1.0e39 | `` `g` is a real: `1.0e39` is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38 `` | the same, a diagnostic |
+    | an integer a real does not hold exactly, `:real` with 16777217, `:lreal` with 9007199254740993 | `` `g` is a real: `16777217` is no value of a real, which holds integers exactly only to 2^24: the nearest it holds is 16777216.0 `` | the same, a diagnostic |
+    | -0.0 in a real or an lreal | ``the initial value of global `g` is -0.0, which no real holds and no line gives, a line's `-0.0` being 0.0: give 0.0`` | raises the same line |
+    | an array's that is no list, 5 or `%{}` | ``the initial value of global `g`, an array, must be a list of its elements' values, found 5`` | raises the same line |
+    | an array's list of anything but numbers, nested `[[1, 2], [3, 4]]`, `[1, true, 0]`, improper `[1, 2 \| 3]` | ``the initial value of global `g`, an array of ints, must be a list of its elements' values, each a number, found [[1, 2], [3, 4]]`` | raises the same line |
+    | an array's list of another length | `` `g` is an array of 3 ints: its initial list holds 2 values, and an array's holds one for every element, 3, in the elements' order `` | the same, a diagnostic |
+    | an array's element its type does not hold, each a line | `` `g[1]` is an int: `40000` is outside -32768 to 32767 ``; a float, ``the initial value of `g[1]` must be an integer, found 1.5``; -0.0, `` `g[1]` is a real: its initial value is -0.0, … `` | the same, a diagnostic each |
+
+    A value the type holds is kept, the struct the one built by hand: each integer type
+    and bit string at both ends of its range, a real's integer it holds exactly and its
+    float, an array's list of its length. `new!/2`, and `initial: nil`, are as they
+    were. `configuration_test.exs`'s "Global.new!/3 refuses an initial value its type
+    does not hold (decision 555)", five tests: each kind above pinned whole beside what
+    `check/1` says of it; every integer type and bit string, its range written in the
+    test, its ends kept and one past each refused; a walk over the fifteen elementary
+    types and an array of each, 30 values a scalar and 17 an array, `new!/3` raising
+    exactly where `check/1` refuses the struct built by hand and in its lines, its reach
+    asserted, a value kept, raised and diagnosed for every type; the readings below; and
+    `check/1` and `new!/1` refusing, as they did, a struct built by hand and one changed
+    after `new!/3` gave it. `typespec_test.exs` holds every struct `new!/2,3` gives to
+    `Global.t()`, every type at its ends, and shows the structs `new!/3` kept until now,
+    `initial: true` among them, outside it and refused. The moduledoc, `new!/3`'s doc,
+    README's line on a global from Elixir and the changelog's item under "The host's
+    API" say it.
+  - *The marks.* Made: `CONTRIBUTING.md`'s "run it yourself before you push", RV-24's
+    question 1, now the gate's own step, decision 549; `scripts/dialyzer.sh`'s "the others
+    are left off", question 2, decision 550; `CONTRIBUTING.md`'s rule for a warning that
+    is no defect, question 3, decision 551; `runtime_test.exs`'s "the internal functions
+    among them have specs too", question 4, decision 552; `Logex.Runtime.fields/1`'s
+    comment, question 5, decision 553; `typespec_test.exs`'s "a spec wider than every
+    value its function gives passes here", question 6, decision 554; and §7's note under
+    decision 515, questions 1 to 5, decisions 549 to 553. Question 7 had no mark; decision
+    555 is built. Left as they stand, none of 549–555 settling them, each a reading no
+    question asked, recorded in "RV-24 as built" alone and marked nowhere else: the PLT
+    under `_build/`, named by the versions and the applications; the changelog's item for
+    RV-24 in the review's group; and the PLT's cache in CI saved only by a run that
+    passes.
+  - *Two suites on one machine* (`4024fe1`). Fourteen directories in nine test files were
+    named in the machine's temporary directory by the VM's count alone, `logex-rv2-<n>`
+    (`compile_total_test.exs`, two, `loading_test.exs`, `review_lows_test.exs`),
+    `logex_fault_<n>` and `logex_fault_fb_<n>` (`fault_test.exs`), `logex-237-<n>`
+    (`real_test.exs`), `logex-m12-<n>` (`array_configuration_test.exs`), `logex-rv4-<n>`,
+    two, `logex-rv16-<n>` and `logex-rv11-<n>` (`runner_test.exs`), `logex_tag_bit_<n>`
+    and `logex_tag_subscript_<n>`. Argued from the code and shown in part: two fresh VMs
+    each asked for two such names gave `logex-rv2-1411` and `-1443`, and `logex-rv2-1410`
+    and `-1442`, every VM counting from the same few hundred; a suite takes thousands of
+    counts, so two suites' names meet, and where they do the second's `File.mkdir_p!/1`
+    takes the first's directory as its own, both write `gate.ld` and `main.ld` into it,
+    and whichever test ends first removes it under the other, `File.rm_rf!/1` in its
+    `on_exit`, as `prose_test.exs`'s file was read and removed (`563debe`). Shown side by
+    side at the base too: five of the files, `review_lows_test.exs`, `loading_test.exs`,
+    `fault_test.exs`, `tag_bit_test.exs` and `tag_subscript_test.exs`, run in two clones
+    at once, six times, failed three of the twelve runs, each in `review_lows_test.exs`:
+    one read `/tmp/logex-rv2-707/plant.logex` and found it gone, "cannot be read: no such
+    file or directory" (`:601`), and in one pair both failed at `:570`, one's `mkfifo`
+    refused, a FIFO of that name there already, the other's FIFO gone as it read it. At
+    the tip the same pairs, twelve times, 24 runs: none failed (`w30/side-*.log`).
+    Each is now named by `System.pid()` too, which no two VMs alive on a machine share;
+    no assertion changes. `test/logex/scratch_test.exs`, two tests, holds the rule for
+    every test file, read from its syntax tree: each `Path.join` that takes
+    `System.tmp_dir!/0` or `System.tmp_dir/0` names `System.pid/0` among its arguments,
+    and a use outside a `Path.join` is one it lists, `force_test.exs`'s directory given
+    as a forces path, which makes nothing; its reach is the ten files that name one, and
+    its second test holds the reading itself to sources written there.
+    `CONTRIBUTING.md` has the practice.
+  - *The four real-clock tests seen red under load*: `trip_test.exs:1600`, `:2062` and
+    `:4956`, once each in RV-24's review's mutation runs, and `:1868`, once in a gate of
+    DOC-1's first step at a load of 20 to 40. None is a race in the test's logic and
+    none a defect in the code; none reproduced, and nothing is changed for any of them.
+    *The cause, one for all four*: the runner gives each call it makes to a device the
+    idle watchdog and a poll period to answer, on its clock and as long in real time
+    (decisions 125, 128 and 348), and these tests, which need a poll period of 10 ms and
+    an idle watchdog of 50 or 100 for their arithmetic on the manual clock, so run a
+    plant whose every device call has 60 ms, or 110 ms, of real time. Three failed
+    inside their set-up. `stalled/0` (`:1600`, `:1868`) and `lagged_step/1` (`:2062`)
+    start a runner at `idle: 50, poll: 10`, whose first round, run inside
+    `start_link/1`, writes the panel its outputs: the kept failures are that write
+    unanswered within 60 ms, the runner tripped `{:io, "panel", :timeout}` and the panel
+    killed before the test's first step. `:2062`'s kept status reads `status: :tripped,
+    now: 0, trip: {:io, "panel", :timeout}, rounds: 0, unzeroed: ["panel"]`, where a
+    start that passed leaves `rounds: 1`; `:1868`'s kept output is `%{}`, nothing ever
+    written, and `:1600`'s `%{"panel.q.0" => 0}`, the first write recorded by the sim
+    and its answer late. A probe (`w30/probe/slowwrite.exs`) holds the first write 61 ms
+    in real time, a millisecond past the limit, in both plants, and gets `:2062`'s status
+    field for field and `:1868`'s `%{}`. `:4956` holds the drive's process suspended
+    until the trip's zero waits in its mailbox, and lets it go: the zero has the idle
+    watchdog and a poll period, 110 ms of real time there, from when the runner sent it,
+    in which the test must see it, resume the drive, and the drive handle its poll, its
+    wake and the zero; the kept failure, the drive's last three writes `[0, 1, 1]` where
+    `[1, 0, 1]` is pinned, is the drive killed at that limit before it wrote anything,
+    opened again by the cold restart and written once, each other assertion of the test
+    passing on the way as they do then: a probe of the test's own steps
+    (`w30/probe/zero4956.exs`) with the drive held 150 ms once let go gives exactly that,
+    the restart refused, the trip `{:watchdog, {:device, "panel", 110}}`, the restart
+    after it `:ok`, and `[0, 1, 1]`, and `[1, 0, 1]` with the drive not held. *The
+    runs.* At the base, `9d3d696`, in a clone of its own, `scripts/load.sh` over
+    `test/logex/trip_test.exs:1600:1868:2062:4956`, four busy loops on four cores: 200
+    loaded runs, none red. 32 of them ran with `--repeat-until-failure 100` and 168 with
+    `--repeat-until-failure 10`, more than 4,800 runs of each test, the tip's load run
+    of `runner_test.exs` beside it for a quarter of an hour, eight loops and a load
+    average of 15 to 17, and RV-29's suites beside others; four runs under eight loops
+    before them passed too. None of the four reproduced. A stress
+    of `stalled/0`'s set-up alone, eight tests at once of 150 set-ups each, passed
+    14,400 set-ups under the four loops and 2,400 under 32, a load of 40. The busy
+    loops do not make the hold: a loop takes its share of a core and gives it up to a
+    thread that wakes, where the failures came beside other suites, VMs whose threads
+    sleep and wake as these do, which RV-19 measured holding a whole VM 100 to 215 ms.
+    *What follows.* The rule is right, as RV-19 found of the same 60 ms (its load
+    failure (a)): a device that does not answer within the idle watchdog and a poll
+    period is tripped, whatever held it. The tests are right in what they assert. What
+    remains is that a test of the manual clock's arithmetic runs a plant with a short
+    limit in real time, which a held machine can spend before the test's first step;
+    the practice stands, a red test in a gate beside another suite is judged by its
+    named test run again alone, and question 4 below puts what could change.
+  - *A red Docs run, mended* (`417c2ac`). `new!/3`'s text named the judge it reads,
+    `Logex.Configuration.Initial`, which is internal and has no page: ExDoc warned of a
+    reference to a hidden module, and the site's check, red on a warning not in
+    `docs/site-warnings.txt`, failed. The Docs workflow's run on `4024fe1` was red,
+    43765733278, `scripts/docs.sh` `DOCS-FAIL rc=1`, CI's own run on it green,
+    43765733261: a red commit, though the gate was green, since the gate does not build
+    the site. The text says "the one judge both read, internal to logex". Since then
+    `scripts/docs.sh` is run here before a commit that changes a module's text.
+  - *The red run* (`backup/rv30-red`, `f47920f` over `417c2ac`, on no other branch): the
+    `_ =` taken away from `:file.close(io)` in `Logex.Retain`'s `closed/2`, a file call's
+    answer thrown away as a later change might. CI run 43769901600: the four gates green,
+    3,252 tests, and the Dialyzer step red, its log ending
+    ```
+    dialyzer: the PLT /home/runner/work/logex/logex/_build/dialyzer/logex-otp-28.5.0.8-elixir-1.20.4-erts-kernel-stdlib-elixir.plt
+      Proceeding with analysis...
+    lib/logex/retain.ex:472:11: Expression produces a value of type
+              'ok' | {'error', atom()}, but this value is unmatched
+     done in 0m7.25s
+    done (warnings were emitted)
+    DIALYZER-FAIL rc=2
+    ##[error]Process completed with exit code 2.
+    ```
+    *An observation the run gave.* That branch's own PLT cache missed, "Cache not found
+    for input keys: plt-…", its key new with the script, and so it did on `4024fe1`; yet
+    the step found a PLT, checked it and analysed, 12 s, where a cold build takes 45 s
+    there. The PLT came back with `_build`'s cache: `actions/cache` takes `_build` whole
+    and its `!_build/dialyzer` does not take the directory out of it, so `_build`'s cache,
+    saved at the end of a run that had built the PLT, holds it. It is harmless, the
+    script checking whatever PLT it finds against the toolchain and naming it by the
+    versions and the applications; but the workflow's comment, "Dialyzer's PLT is cached
+    apart", and RV-24's record of it are not what CI does, and the PLT's own cache
+    matters only where `_build`'s misses. Left as it stands, CI's steps being outside
+    this item's leave; question 6 below.
+  - *The mutation table* (`scripts/mutate.sh` in a clone at `417c2ac`, each patch judged
+    by the full suite, 3,252 tests; and `scripts/dialyzer.sh` over the same tree, its
+    PLT kept; patches and logs under `w30/m30/`). `u01` to `u24` take one `_ =` of
+    decision 550 away each, a change only Dialyzer reads; `uall` takes all 24.
+
+    | mutant | what it does | the full suite | `scripts/dialyzer.sh` |
+    |---|---|---|---|
+    | `g1_fifth_dropped` | the gate runs no fifth step | red: `scripts_test.exs` 2 | |
+    | `g2_fifth_code_swallowed` | the fifth step's exit code is not the gate's | red: `scripts_test.exs` 1 | |
+    | `g3_fifth_after_red` | Dialyzer runs after a red gate too | red: `scripts_test.exs` 3 | |
+    | `g4_step_not_named` | a red fifth step is not named | red: `scripts_test.exs` 1 | |
+    | `g5_warnings_not_logged` | Dialyzer's output kept out of the log | red: `scripts_test.exs` 2 | |
+    | `g6_fifth_code_one` | the gate's code 1 whatever Dialyzer's | red: `scripts_test.exs` 1 | |
+    | `f1_unmatched_flag_dropped` | `-Wunmatched_returns` off | red: `scripts_test.exs` 2 | |
+    | `u01` to `u24` | one `_ =` of the 24 taken away, a mutant a site | not run: no behaviour changes | red, `rc=2`, each one warning at its site |
+    | `uall_every_mark_taken_away` | all 24 taken away | green, 3,252: no behaviour changes | red, `rc=2`, 24 warnings |
+    | `e1_close_answer_thrown` | a good write's close answers `:ok` whatever the close gave, its answer left unbound | green, 3,252 | red, `rc=2`, `retain.ex:467` |
+    | `n1_new_keeps_any_value` | `new!/3` judges nothing | red: `configuration_test.exs` 4, `typespec_test.exs` 1 | |
+    | `n2_unheld_not_refused` | a value the type does not hold kept | red: `configuration_test.exs` 4 | |
+    | `n3_said_not_refused` | a value of no kind and -0.0 kept | red: `configuration_test.exs` 3, `readme_test.exs` 1, `typespec_test.exs` 1 | |
+    | `n4_located_not_judged` | a located global's value not judged | red: `configuration_test.exs` 1 | |
+    | `n5_array_list_not_judged` | an array's list not judged | red: `configuration_test.exs` 2 | |
+    | `n6_value_before_options` | the value's lines told with an option's mistake | red: `configuration_test.exs` 1 | |
+    | `n7_check_keeps_no_refusal` | `check/1` raises nothing of a hand-built global's value | red: `configuration_test.exs` 3, `array_configuration_test.exs` 1, `real_test.exs` 1 | |
+    | `n8_first_line_alone` | the first line alone raised | red: `configuration_test.exs` 2 | |
+    | `n9_minus_zero_kept` | -0.0 kept | red: `configuration_test.exs` 1, `real_test.exs` 1 | |
+    | `n10_type_lines_raised` | an array type's own mistakes raised by `new!/3` | red: `configuration_test.exs` 1 | |
+    | `n11_check_diagnoses_nothing` | `check/1` gives no diagnostic of a value | red: 19 tests of eight files, `configuration_test.exs` 9 | |
+    | `s1_dir_by_count_alone` | one directory named by the counter alone again | red: `scratch_test.exs` 1 | |
+    | `s2_rule_passes_any_join` | the rule passes any `Path.join` | red: `scratch_test.exs` 1 | |
+    | `s3_bare_use_unlisted` | a directory made outside `Path.join`, by the counter alone | red: `scratch_test.exs` 1 | |
+
+    None survives both. `e1` is the defect decision 550's flag is for: the suite holds no
+    test of a close that fails after a write and a sync that passed, there being no file
+    here whose close fails, and the mutant is green by it; Dialyzer is red on it as
+    written. Written `_ = :file.close(io)` before the `:ok` it would pass both, as any
+    answer dropped on purpose does: the flag makes the drop a line somebody wrote.
+  - *The cost against the parent* (`9d3d696`; RV-24's script with a store's write and a
+    subscribed round, `w30/cost30.exs`, each count in a process of its own whose heap no
+    collection visits, the least of seven, two runs at each): the compile 8,712 at both;
+    100 scans 44,706; 100 cycles 83,386; a configuration's accept 40,675, test 3,897,
+    untest 3,711 and assemble 2,329; a lone accept 7,310 and test 252, each the same at
+    both, README's plant declaring no global with an initial value, so that `check/1`'s
+    reading of the one judge costs it nothing there. A store's write through
+    `Logex.Retain.written/2`: one that lands 171 at the parent and 171 and 173 at the
+    tip; one that fails at its open, which takes the delete after a failure, 129 at
+    both; one whose `.tmp` cannot be made, 281 at both; a copy refused where a file
+    stands, 203 and 205 at the parent and 203 at the tip. The runner's round 1,715.77
+    and 1,715.68 at the parent and 1,709.28 and 1,711.02 at the tip, and with a
+    subscriber of every kind 1,739.23 and 1,739.16 against 1,733.07 and 1,735.37: its
+    path is unchanged, a call's answer bound to `_` costing what the call cost, and the
+    difference is the schedulers' interleaving, as RV-24 read 1,714.7 against 1,708.3
+    and RV-19 found a round's count moves only upwards with it (its load failure (b)).
+    Every ceiling holds.
+  - *The load runs.* The four runner tests whose scratch directory's name changed,
+    `runner_test.exs:557`, `:603`, `:2615` and `:2759`, the last on the real clock:
+    `scripts/load.sh -n 50`, 0 of 50 runs red, the base's load run above beside it,
+    eight busy loops on four cores and a load average of 15 to 17. No real-clock or
+    runner test is new, and `trip_test.exs` is unchanged.
+  - *The gate*: `GATE-OK` at each commit, `e3a8c2f` 3,244 tests, `f4fa1af` 3,250,
+    `4024fe1` and `417c2ac` 3,252, and at this one. Measured on a quiet machine: the
+    four gates at the parent 295.9 s, 3,243 tests, the suite 271.8 s of it; the five at
+    the tip 328.6 s with no PLT, built in the step, and 282.5 s with it kept, the suite
+    253.8 and 248.2 s of them. The gate less its suite was 24 s and is 75 s the first
+    time and 34 s after: the fifth step adds some 51 s once and some 10 s to every gate
+    after it, as `scripts/dialyzer.sh` alone took at the parent, 59.4 s cold and 12.4
+    and 12.8 s kept; the suite's own time moves more than that between two runs. CI's
+    Dialyzer step, unchanged, takes 12 s on a kept PLT.
+  - *The test lines taken out*, 27, each replaced: fourteen names of a scratch directory,
+    each now holding the pid (nine files); ten in `scripts_test.exs`, the leave's, the
+    gate's pinned output and `run_gate/4`'s head for the fifth step, the two pinned flag
+    lists for the new flag, two comment lines and the moduledoc's sentence reworded, and
+    `@apps` and its comment moved above the gate's tests, which now read it; two lines of
+    `typespec_test.exs`'s moduledoc, for decision 555's sentence and decision 554's mark;
+    and `runtime_test.exs`'s comment, decision 552's mark. The test files changed, lines
+    added and taken out: `configuration_test.exs` +277, `scratch_test.exs` +116, new,
+    `scripts_test.exs` +61 −10, `typespec_test.exs` +60 −2, `runner_test.exs` +26 −4,
+    `compile_total_test.exs` and `fault_test.exs` +12 −2 each,
+    `array_configuration_test.exs`, `loading_test.exs`, `real_test.exs`,
+    `review_lows_test.exs` and `tag_bit_test.exs` +6 −1 each, `tag_subscript_test.exs`
+    +4 −1 and `runtime_test.exs` +1 −1. `release_test.exs`, whose gate is a stand-in, and
+    `trip_test.exs` are unchanged.
+  - *CLAUDE.md*: the Commands' lines for `scripts/gate.sh`, five gates, and
+    `scripts/dialyzer.sh`, the gate's fifth step and CI's; `lib/logex/configuration.ex`'s
+    line names `Initial`; a line for `test/logex/scratch_test.exs`.
+  - *Provisional readings, and questions for the maintainer*, each the closest reading of
+    the record, marked where it stands; each says what an engineer, an operator or a host
+    sees.
+    1. *The words `Global.new!/3` refuses a value in* (decision 555: "as
+       `Logex.Tag.new!/5` does for a tag's, a new message pinned whole"). An engineer
+       writes `Global.new!("fan_on", :bool, initial: true)` and `Logex.Tag.new!("fan_on",
+       :bool, :var, true)`. (a) As built: `new!/3` raises the line `check/1` gives of the
+       same value, ``the initial value of global `fan_on` must be an integer, found
+       true``, one message for a global's wrong value wherever it is met; it is the
+       tag's line word for word wherever `check/1`'s already was, a number outside the
+       type and an array's length and elements, and differs where `check/1`'s does: the
+       word "global", -0.0 told as ``the initial value of global `r` is -0.0`` where a
+       tag's is `` `r` is a real: its initial value is -0.0``, an array's that is no list,
+       and a float in an integer type, which a global's line can say and is told by the
+       literal rules, `` `g` is a dint: `1.5` is a real, and a dint holds only
+       integers``, where a tag's is ``the initial value of `g` must be an integer, found
+       1.5``. (b) The tag's words in `new!/3` wherever the two differ, a global then
+       refused in two wordings, one from `new!/3` and one from `check/1` for the same
+       struct built by hand. (c) Both `new!/3` and `check/1` moved to the tag's words,
+       which changes `check/1`'s pinned lines, outside this decision.
+    2. *A located global's initial value* (decision 555: "an initial value no global of
+       that type holds"). An engineer writes `Global.new!("eye_1", :bool, initial: 1, at:
+       "panel.i.0")`. (a) As built: kept, since 1 is a value a bool holds, and refused by
+       `check/1` for its location, `` `eye_1` is an input point: its value comes from the
+       input image, so it takes no initial value``, as it was; `new!/3` reads the value
+       against the type alone, and with `initial: 2` raises the type's line, located or
+       not. (b) Refused at once too, in `check/1`'s line, `new!/3` then reading the
+       location, and telling a location that is none as well, or leaving that one to
+       `check/1`.
+    3. *The rest of what a global says.* `Global.new!("g", :float, initial: 5)` and
+       `Global.new!("g", {:array, :int, [0]}, initial: [1])` are kept: the type is none,
+       or its sizes none, and no value can be judged against it; `check/1` refuses the
+       type. A name that names nothing, `Global.new!("a b", :bool)`, is kept too.
+       (a) As built: the initial value alone is refused at once, as decision 555 says;
+       (b) every mistake `check/1` raises of the one global, its name, type, location
+       and qualifier, raised by `new!/3` at once, as `Logex.Tag.new!/5` raises a tag's
+       name and type.
+    4. *A plant on the manual clock with a short limit in real time* (the load
+       failures). `trip_test.exs`'s tests of a late wake and a long step start a runner at
+       `idle: 50, poll: 10` on the manual clock; its first write to the panel has 60 ms
+       of real time, and a machine that holds the VM longer trips it before the test's
+       first step, red about once in several hundred suites run beside others. (a) As
+       built: nothing changed, a red run judged by the named test run again alone; (b)
+       the set-up asserts the runner running after its start, so that a recurrence
+       names its cause, `{:io, "panel", :timeout}` at the start, and fixes none; (c)
+       the limit a runner gives a device's call taken from its clock, a manual clock
+       giving its own `wait:`, 5 s, where the machine's gives the idle watchdog and a
+       poll period, a change to `Logex.Runner.Clock`'s behaviour and to every test that
+       pins a hung device killed at 60 ms on the manual clock.
+    5. *`published/2`'s twelve sites* (decision 550: "the 24 sites … are written `_ =
+       ...`"). (a) As built: each call written `_ = published(...)`, and a call added
+       without it is red; (b) `published/2` made to answer `:ok`, no site dropping
+       anything, a round then building one list fewer, its cost a few reductions less,
+       which moves the round's recorded figure.
+    6. *The PLT in `_build`'s cache* (the observation above). (a) As it stands: CI's
+       `_build` cache holds the PLT too, the step taking 12 s wherever either cache
+       hits, and the comment untrue; (b) `_build`'s cache made to leave it out in fact,
+       its paths written `_build/**` with `!_build/dialyzer/**`, so that a changed script
+       or toolchain builds its PLT anew, 45 s once, and the comment is true;
+       `scripts_test.exs` pins the cache's lines, which would change with it.
+
+
+  **RV-30's review** (2026-11-16, of `fe41afa`, the review's clones `rv/review30`,
+  `review30p`, `review30q` and `review30b`, its working files under `rv/r30p/`): the tip
+  green, `scripts/gate.sh` GATE-OK with 3,252 tests, `scripts/docs.sh` DOCS-OK and CI and
+  Docs green on it; decisions 549 and 550 held up, decision 555 had one defect (F1), and
+  two things in "RV-30 as built" were not as stated (F2, F4). Seven findings, each closed
+  below by a fix a test holds or by a document made true. The fixes are `954d972` (F1,
+  F7), `3127fd4` (F3, F5, F6) and `c78248e` (F4), each gated alone, GATE-OK, the site
+  built at the first and the third, DOCS-OK; `main` was then merged in, `9842c44`, and
+  this record is the commit after. The working files are under `scratchpad/rv/w30/fix/`.
+
+  - *F1 (medium): `Global.new!/3` let exceptions other than `ArgumentError` out.* The
+    judge both doors read, `Logex.Configuration.Initial`, said in its head that it is
+    total, and was not. A name that is no text reached the value's line, which
+    interpolated it: `Global.new!({1, 2}, :sint, initial: 300)` raised a
+    `Protocol.UndefinedError`, a map or a bitstring the same, an improper list Elixir's
+    own "cannot convert the given list to a string", and `nil` and an atom were shown
+    wrong, ``"`` is an sint: …"``. And an array whose elements' type is none,
+    `Global.new!("g", {:array, :ton, [2]}, initial: [[1]])`, raised a
+    `FunctionClauseError` where the elements' word was looked up, out of `check/1` and
+    `new!/1` too, as it had before decision 555, which gave that code a second door.
+    Fixed in the judge: the line names the global through `label/1`, as every other line
+    does, `` {1, 2} is an sint: `300` is outside -128 to 127 ``, and an array of no
+    elementary type is told as an array, ``the initial value of global `g`, an array,
+    must be a list of its elements' values, each a number, found [[1]]``, after the
+    type's own line in `check/1` and `new!/1`. `configuration_test.exs`: eleven such
+    calls pinned whole, `check/1` and `new!/1` of the array built by hand; and a walk of
+    13 names, 36 types and 32 values, 14,976 calls of `new!/3` and 2,376 of `check/1`,
+    each giving a struct or its lines or raising an `ArgumentError` and nothing else, its
+    reach each name and each type both kept and refused. What a name that is no text
+    gets is still the value's refusal alone, the name kept for `check/1` where the value
+    is right, as built (question 3).
+  - *F2 (medium, process): a second commit red by Docs, and two commits CI never ran.*
+    "RV-30 as built" said the red Docs run was `4024fe1`'s and that the commits before it
+    were "superseded on the backup branch before its run was read". Neither was so. The
+    reference to the hidden module entered at `f4fa1af`, a commit before, and the first
+    push of the branch was at `4024fe1`, so `e3a8c2f` and `f4fa1af` had no run of either
+    workflow. Each was pushed to a branch of its own for the fix, `backup/rv30-at-e3a8c2f`
+    and `backup/rv30-at-f4fa1af`: `e3a8c2f` CI 43799407646 and Docs 43799407629 green;
+    `f4fa1af` CI 43799407552 green and Docs 43799407545 red, as the review's own
+    `scripts/docs.sh` of it was, `DOCS-FAIL rc=1`. So the branch holds two commits red by
+    Docs, `f4fa1af` and `4024fe1`, mended at `417c2ac`; merged as it is, `main` carries
+    them behind a green tip (question 8). `CONTRIBUTING.md`'s "Before you commit" has the
+    two practices: `scripts/docs.sh` before a commit that changes a module's text or a
+    page, the gate not building the site; and each commit pushed as it is made, a push
+    running the workflows on its tip alone. This review's own commits were each pushed
+    as made, and each has both runs green (the gate and CI, below).
+  - *F3 (medium-low): six mutants of the review's survived the suite and Dialyzer.* Each
+    is red now (the table below): M10, -0.0 in a global that is no real, pinned whole for
+    a dint, a bool and a word, `` `g` is a dint: `-0.0` is a real, and a dint holds only
+    integers ``, at both doors; M21, a long value that is no number, shown whole as
+    `inspect/1` shows it, pinned for a scalar and an array; M18, a gate given arguments
+    for the suite, which passes them to `mix test` and runs the fifth step all the same;
+    M13, what the fifth step prints on its standard error, in the log and the gate's
+    last lines; M17, `CONTRIBUTING.md`'s list of the five held to the script's own head
+    and to the commands it runs, in order; and M20, under F5. M16, a directory named
+    under `$TMPDIR` by the count alone, was red only by `scratch_test.exs`'s count of the
+    names it found: a third test there refuses any text of a test file that begins
+    `/tmp` or `/var/tmp` or is `TMPDIR`, `TMP` or `TEMP`, by its line, the file's own
+    samples apart. M08 was an equivalent mutant that Elixir's type checker warns of,
+    which `readme_test.exs` reads; no flake.
+  - *F4 (medium-low): the load failures' cause was argued, not shown, and part of the
+    argument did not hold.* "RV-30 as built" put the four failures down to a machine
+    "holding a whole VM 100 to 215 ms", and its 200 loaded runs, the four tests alone in
+    an idle VM under four to eight busy loops, showed nothing: the review stopped the
+    whole VM 100 ms at a time through 362 runs, none red, and found the kept signature
+    only by holding the device alone across the 60 ms. *The cause, shown.* The runner's
+    call to a device is a message to the device's process and an answer back, the
+    simulated device's process behind it, and its limit is 60 ms of real time in these
+    plants. The device does not answer in time when two things meet: other processes
+    busy in the same VM, the suite's other test cases, behind which the device waits its
+    turn in the VM's run queue; and a machine that gives the VM's threads a fraction of
+    their cores, so that each turn ahead of it takes many times as long. Neither alone
+    does it. `stalled/0`'s start, again and again for 30 s (`f4-hold.exs`,
+    `f4-hold.sh`), spinning processes in the VM and busy loops on the machine's four
+    cores:
+
+    | spinning processes in the VM | busy loops on the machine | starts | tripped at the start |
+    |---|---|---|---|
+    | 0 | 0 | 12,408 | 0 |
+    | 64 | 0 | 2,420 | 0 |
+    | 200 | 0 | 704 | 0 |
+    | 0 | 32 | 3,212 | 0 |
+    | 16 | 32 | 1,377 | 0 |
+    | 64 | 16 | 381 | 5 |
+    | 64 | 32 | 248 | 6 |
+
+    Each trip is the kept one, field for field: `trip: {:io, "panel", :timeout}, rounds:
+    0, unzeroed: ["panel"]`, the panel's outputs `%{}`, `:1868`'s, or `%{"panel.q.0" =>
+    0}`, `:1600`'s, the first write recorded by the sim and its answer late. One of the
+    VM's scheduler threads pinned to a core thirty loops hold, the rest of the VM free,
+    tripped none of 11,400 starts, the VM moving its work off the held thread; the whole
+    VM on that core none of 15, every thread held alike, as the review's stops were. And
+    in the suite itself: four probe modules that loop the same start beside the whole
+    suite, 32 busy loops, a load average of 40 to 46 (`f4-run1.*`), tripped 36 of 10,783
+    starts in the two that reported before the run was stopped, 15 of 6,039 and 21 of
+    4,744, while a monitor of the VM counted, over the run, 7,514 times a process held a
+    scheduler thread 40 ms or more of real time, 2,441 of them 60 ms or more, in functions
+    that take microseconds: the machine holding the thread. Twelve of the 36 trips had
+    such a hold of 55 ms or more across their start (`f4-correlate.py`); the rest had only
+    the wait behind others. So the busy loops alone "do not make the hold", as the
+    as-built record said, and a held VM does not either; a busy VM on a held machine
+    does, which is a gate beside another gate. *The fix* (`c78248e`).
+    `trip_test.exs` is no longer async. ExUnit runs a module that is not async once every
+    async module is done, one such module at a time, so the devices of its plants wait
+    behind no other test case: the VM's half of the cause, which a test file can take
+    away, the machine's half alone having tripped none of 3,212 starts. And its four
+    set-ups of the 60 ms plants, `stalled/0`, `stalled_with_card/0`, `long_step/1` and
+    `lagged_step/1`, look at the runner's status after the start (`started!/1`), so that a
+    start that trips all the same is red there, the trip named, where the four kept
+    failures were red at whatever the test next looked at. No test is given more time, no
+    bound is wider, nothing is retried or skipped, and no assertion is changed or taken
+    out. The two side by side (`ab.sh`): the file's four describes of those plants, 19
+    tests, beside seven modules of nine spinning processes each, under 32 busy loops.
+    Async, as it was: 1 of 5 runs red, at `started!/1`, `trip: {:io, "panel", :timeout},
+    rounds: 0`, the fifth run cut short by the session's restart, red already. Not async:
+    none of 8, the spinning modules done before it runs, as the suite's async modules are.
+    The cost is the suite's time: the file's 148 tests take 27 s alone, and the suite ran
+    257.1 s with the file async (`3127fd4`'s gate, 162.5 s of async modules and 94.5 s of
+    the others) and 288.3 s with it not (`c78248e`'s, 169.6 and 118.7), on a machine
+    another workflow shared: some 25 s more of modules run one at a time. *What stands.*
+    The rule is right, as RV-19 found of the same 60 ms: a device that does not answer
+    within the idle watchdog and a poll period is tripped, whatever held it. What is
+    changed is where these tests run, not what they assert nor how long anything is given
+    (question 4).
+  - *F5 (low): decision 550's limit, recorded and held.* All 24 marks were read again by
+    the review in place, none dropping an answer a host should have heard; taken away,
+    each of eight is red by Dialyzer and green with the flag off; the red CI run is
+    real. The limit: a drop that is a defect passes Dialyzer once it is written `_ =`,
+    the decision's own example among them, a good write's close answered `:ok` whatever
+    the close gave (the review's M20), and the suite passed it too, no file here making
+    a close fail. `test/logex/dropped_answers_test.exs`, new, reads every `_ = ...` from
+    the syntax trees of `lib/`, each function's `rescue` and `catch` among it, and holds
+    it to a list, its file, its function and the call, beside why the answer may be
+    dropped there: 26, the 24 and two that stood before the flag, `Logex.Retain`'s
+    delete of a leftover `.tmp` and `Logex.Runner.Paths`'s wait in the file server's
+    queue. A mark added, moved to another function or taken away is red until the list
+    says so; M20 is a second mark in `closed/2` and red. The list holds that a mark was
+    read, not that it was read rightly (question 7).
+  - *F6 (low): two defects of the fifth step.* With no `dialyzer` on the path the gate
+    printed `GATE-FAIL rc=127` and "its warnings are in" a log that held none, and
+    `scripts/dialyzer.sh`, RV-24's, read the check that could not run as a PLT gone
+    stale and deleted the good one before its build failed. The script now looks for
+    `dialyzer` first: ``dialyzer: no `dialyzer` on the path: it is OTP's own, beside
+    `erl`; nothing is built and the PLT is kept``, `DIALYZER-FAIL rc=127`. And the gate's
+    line after a red fifth step tells a warning, 2, `its warnings are in <log>`, from
+    any other code, `which could not run: what it printed is in <log>`. A red suite and
+    a red fifth step may both print `rc=2`; the line after says which, and the script's
+    head and `CONTRIBUTING.md` say so. `scripts_test.exs` holds each over a path with
+    the machine's own `dialyzer` hidden, the PLT left as it was. The wording:
+    `runtime_test.exs`'s comment says the gate's fifth step; README's "What has landed"
+    keeps "after the four gates" in its sentence on RV-24, which was so then.
+  - *F7 (low): decision 555's overclaims, and its cost.* The review's 32,000 draws found
+    no value `new!/3` refuses that `check/1` takes, and for a name and a type that are a
+    global's none kept that `check/1` refuses for the value; `check/1` and `new!/1` the
+    same at the tip and the base over 12,000 structs built by hand. Two sentences were
+    not true and are mended in `Global`'s moduledoc, `new!/3`'s text, README, the
+    changelog and decision 555's note. "Every struct it gives is a `t()`": so only where
+    the name, the type and the location are a global's, which `new!/3` keeps as given,
+    `Global.new!("g", :float)`, `Global.new!(:g, :bool)` and `at: 5` each outside `t()`;
+    `typespec_test.exs`'s test is named for what it holds and shows the four kept
+    outside it (question 3). "The lines `check/1` gives of the same value": so for a
+    global with no location; of a located global's value `check/1` says only that a
+    point takes none, so `Global.new!("g", :usint, initial: 300, at: "panel.q.5")` is
+    refused by `new!/3` for the range and, the number mended, by `check/1` for the
+    location (question 2). The cost: a valid array's list costs `new!/3` some 64
+    reductions an element, 131,053 for 2,000 elements and 2,064,345 for 32,000, paid
+    once; a growth test holds it to the list's length, four times the elements under
+    4.4 times the reductions, 4.01 measured. A huge integer is quoted whole, a hundred
+    thousand digits a message as long, as `Logex.Tag.new!/5` quotes a tag's (question
+    9).
+  - *The mutation table* (`scripts/mutate.sh` in a clone at the merge, `9842c44`, each
+    patch judged by the full suite, 3,255 tests and 11 doctests; `scripts/dialyzer.sh`
+    over the mutants that change `lib/`, its own run at the merge DIALYZER-OK; patches
+    and logs under `w30/fix/mut/`). The review's names are given where a mutant is one
+    of its survivors.
+
+    | mutant | what it does | the full suite | `scripts/dialyzer.sh` |
+    |---|---|---|---|
+    | x01 | the value's line names the global by interpolation again, `` `#{name}` `` (F1) | red, 2 failed: `configuration_test.exs` (2) | passes |
+    | x02 | the array's line looks its elements' word up again (F1) | red, 3 failed: `configuration_test.exs` (2), `readme_test.exs` (1) | passes |
+    | x03 | -0.0's own clause taken for any type that is an atom (the review's M10) | red, 1 failed: `configuration_test.exs` (1) | passes |
+    | x04 | a value that is no number shown cut, `inspect(initial, limit: 5)` (M21) | red, 1 failed: `configuration_test.exs` (1) | passes |
+    | x05 | an array's value that is no list of numbers shown cut | red, 1 failed: `configuration_test.exs` (1) | passes |
+    | x06 | `numbers?/1` reads the rest's length at each element, the list judged in its square (F7) | red, 2 failed: `configuration_test.exs` (2) | red, rc=2 |
+    | x07 | the gate passes over the fifth step when the suite is given arguments (M18) | red, 1 failed: `scripts_test.exs` (1) | not read by it |
+    | x08 | the fifth step's standard error thrown away (M13) | red, 1 failed: `scripts_test.exs` (1) | not read by it |
+    | x09 | `scripts/dialyzer.sh` taken out of `CONTRIBUTING.md`'s list of the five (M17) | red, 1 failed: `scripts_test.exs` (1) | not read by it |
+    | x10 | the step's line says "its warnings" for every code (F6) | red, 3 failed: `scripts_test.exs` (3) | not read by it |
+    | x11 | `scripts/dialyzer.sh` does not look for `dialyzer` first (F6) | red, 2 failed: `scripts_test.exs` (2) | not read by it |
+    | x12 | a good write's close answered `:ok` whatever the close gave, written `_ =` (M20) | red, 1 failed: `dropped_answers_test.exs` (1) | passes |
+    | x13 | a mark's call changed, `:file.read_file_info/1` for `:file.read_link_info/1` | red, 1 failed: `dropped_answers_test.exs` (1) | passes |
+    | x14 | a test's directory named under `System.get_env("TMPDIR", "/tmp")` (M16) | red, 2 failed: `scratch_test.exs` (2) | not read by it |
+    | x15 | the gate's own head lists four commands | red, 1 failed: `scripts_test.exs` (1) | not read by it |
+    | x16 | a name under `$TMPDIR` by the count alone added to a test file (M16) | red, 1 failed: `scratch_test.exs` (1) | not read by it |
+
+    None survives: each of the sixteen is red in the full suite, in the tests named, and
+    none on a real-clock test. x02 is red in `readme_test.exs` too, by the warning of a
+    private function left unused, which that test reads; x06's second test is an improper
+    list's, whose length raises. Dialyzer passes seven of the eight that change `lib/`,
+    x12 and x13 among them, a marked drop being what it does not read, so that the list is
+    what holds those two; x06 is red by it as well, the `length(rest) >= 0` it adds being
+    always true.
+  - *The load runs.* `scripts/load.sh -n 50` over `trip_test.exs`'s four describes of the
+    60 ms plants, whose set-ups changed, at the merge: 0 of 50 runs red, 19 tests a run,
+    under four busy loops beside another workflow's work, a load average of 7 to 18
+    (`load-trip.out`). The A/B above is the loaded run of the change itself, and the table
+    of starts the run that shows the cause. No real-clock or runner test is new; the four
+    set-ups are the only runner tests changed.
+  - *The cost against the parent and against `main`* (`w30/cost30.exs`, each count in a
+    process of its own whose heap no collection visits, the least of seven, two runs at
+    each: the parent `fe41afa`, `main` at `d45e68a`, which holds RV-29, and the merge,
+    `9842c44`; one figure where the two runs agree):
+
+    | | the parent | `main` | the merge |
+    |---|---|---|---|
+    | the compile | 8,712 | 8,712 | 8,712 |
+    | 100 scans | 44,706 | 44,706 | 44,706 |
+    | 100 cycles | 83,386 | 83,386 | 83,386 |
+    | a configuration's accept | 40,675 | 40,675 | 40,675 |
+    | its test | 3,897 | 3,897 | 3,897 |
+    | its untest | 3,711 | 3,711 | 3,711 |
+    | its assemble | 2,329 | 2,329 | 2,329 |
+    | a lone accept | 7,310 | 7,310 | 7,310 |
+    | a lone test | 252 | 252 | 252 |
+    | a store's write that lands | 171 and 173 | 171 | 171 |
+    | one that fails at its open | 129 | 129 | 129 |
+    | one whose `.tmp` cannot be made | 281 | 281 | 281 |
+    | a copy refused where a file stands | 203 and 205 | 205 and 203 | 205 and 203 |
+    | the runner's round | 1,710.78 and 1,711.34 | 1,715.69 and 1,715.55 | 1,714.89 and 1,711.14 |
+    | a round with a subscriber of every kind | 1,734.34 and 1,735.38 | 1,740.08 and 1,740.41 | 1,739.10 and 1,735.39 |
+
+    Every count is the same at the three but a store's write that lands and the refused
+    copy, which differ by two between the two runs of one tree, and the round, which moves
+    with the schedulers' interleaving, as "RV-30 as built" found. The review's fixes
+    change `lib/` in the judge of a global's initial value alone, which none of these
+    paths reads, README's plant declaring no global with one; `new!/3`'s own cost has its
+    growth test (F7). Every ceiling holds.
+  - *The gate and CI.* `GATE-OK` at each commit, each fix gated alone with the rest of the
+    work stashed, the fifth step DIALYZER-OK in each: `954d972` 3,244 tests and 11
+    doctests, 346 s; `3127fd4` 3,252, 290 s; `c78248e` 3,252, 324 s; the merge, `9842c44`,
+    3,255, RV-29's among them, 356 s; and the tree of this record's commit, 3,255, its
+    `lib/`, scripts and tests as at the merge but one comment of
+    `dropped_answers_test.exs` made true. `scripts/docs.sh` DOCS-OK at `954d972`,
+    `c78248e`, the merge and this record's tree. CI on `backup/rv30`, each commit pushed
+    as it was made, every run green: `954d972` CI 43807744967 and Docs 43807745446;
+    `3127fd4` CI 43808255829 and Docs 43808255865; `c78248e` CI 43808841992 and Docs
+    43808842011; `9842c44` CI 43809635457 and Docs 43809635360. `mix.exs` and `mix.lock`
+    are untouched, no version is set and no tag made; ExDoc is in no build but the `docs`
+    environment's.
+  - *The test lines taken out*, 19, none an assertion's but one. `scripts_test.exs`, 12:
+    the two helpers that run the gate and CI's Dialyzer step take a map of knobs, the
+    suite's arguments, the `dialyzer`'s standard error and no `dialyzer` at all, so their
+    heads, their stand-in's write and `chmod`, their path and the read of the calls made
+    are written again (10 lines, a comment's among them); and this branch's own test of
+    a red fifth step, written for decision 549, pins the gate's line after `GATE-FAIL`
+    for a code of 1 as ``which could not run: what it printed is in <log>`` where it
+    pinned ``its warnings are in <log>``, F6's change, its line for a code of 2
+    unchanged (2 lines). `typespec_test.exs`, 5: two lines of its moduledoc, two of a
+    comment and a test's name, each saying "every struct `new!/2,3` gives is a `t()`",
+    which F7 found untrue; the test's assertions stand and four are added.
+    `trip_test.exs`, 1: `use ExUnit.Case, async: true`. `runtime_test.exs`, 1: a
+    comment's "CI's step after the four gates". The test files changed by the review's
+    fixes, lines added and taken out: `scripts_test.exs` +184 −12,
+    `configuration_test.exs` +172, `dropped_answers_test.exs` +153, new,
+    `scratch_test.exs` +50, `trip_test.exs` +38 −1, `typespec_test.exs` +21 −5 and
+    `runtime_test.exs` +1 −1. No test, walk or oracle was deleted or weakened.
+  - *CLAUDE.md*: a line for `test/logex/dropped_answers_test.exs`; `scratch_test.exs`'s
+    line says it refuses the other ways of naming the directory too; the Commands' lines
+    for `scripts/gate.sh`, what Dialyzer printed kept in the log, and for
+    `scripts/dialyzer.sh`, 127 with no `dialyzer` on the path.
+  - *RV-29 and the merge.* RV-29 landed on `main` at `2ab16d5` and the answers to DOC-1's
+    first step's questions and RV-29's were recorded at `d45e68a`, decisions 556 to 574,
+    while this review was being answered. `main` was merged into `rv30` at `9842c44`:
+    one conflict, in this file, where both sides had added after RV-30's entry, both
+    kept; RV-29's lines of `retain.ex` and `runner.ex` merged beside decision 550's
+    marks, the list of `dropped_answers_test.exs` still theirs one for one, 26; its two
+    lines of `trip_test.exs`, the test of decision 486's cap near line 2078, beside the
+    set-ups changed here, that test untouched by this work. Decisions 556 to 574 settle
+    nothing of RV-30's.
+  - *README's "What logex is not"*, read again claim by claim at the merge: none is
+    touched by this work, which adds no instruction, type, adapter or forcing and
+    changes no rule of a scan, a round or the store; the sentence on Dialyzer in "What
+    has landed", "reads in CI after the four gates", is true of CI's steps as they are,
+    the gate's fifth step named in the sentence after it.
+  - *Questions for the maintainer.* Questions 1, 5 and 6 of "RV-30 as built" stand as
+    they are put there. The review restates 2, 3 and 4 and adds 7 to 9; each reading
+    taken is the closest to the record, marked where it stands, and none is settled
+    here.
+    2. *A located global's initial value*, restated. An engineer declares a box
+       counter's photo-eye from Elixir, `Global.new!("eye_1", :bool, initial: 2, at:
+       "panel.i.0")`. `new!/3` refuses the 2, a bool's value being 0 or 1; the engineer
+       writes 1, `new!/3` keeps it, and `check/1` then refuses the global, an input
+       point taking no initial value: two refusals in turn for one line. (a) As built,
+       the value judged against the type alone by `new!/3`. (b) `new!/3` refuses any
+       initial value on a located global at once, in `check/1`'s line, reading the
+       location, one refusal; a location that is none stays `check/1`'s.
+    3. *The rest of what a global says*, restated. `Global.new!("conveyor speed",
+       :dint)`, `Global.new!("speed", :float, initial: 5)` and `Global.new!("speed",
+       :dint, at: 5)` are kept, each struct outside `Global.t()`, and `check/1` refuses
+       them later; with a wrong value as well, `Global.new!({1, 2}, :sint, initial:
+       300)`, the value's line is raised, the global named as Elixir shows the name.
+       (a) As built: the value alone is refused at once. (b) Every mistake `check/1`
+       raises of the one global raised by `new!/3`, as `Logex.Tag.new!/5` raises a
+       tag's name and type, every struct `new!/3` gives then a `t()`.
+    4. *Where the tests of a short watchdog run*, restated with the cause shown. (a) As
+       it was: `trip_test.exs` async, a gate run beside another gate red now and then,
+       four seen, each judged by the named test run again alone. (b) As built by this
+       review: the file not async, its 148 tests run once the async modules are done,
+       some 25 s more a suite; its set-ups name a trip at the start. (c) Only the
+       describes of the 60 and 110 ms plants in a module of their own that is not
+       async, a few seconds of the suite in place of the file's 27, which moves tests
+       between files. (d) The runner's limit in real time on a device's call taken from
+       its clock, the manual clock giving its own `wait:`, 5 s: no plant on the manual
+       clock then has a short limit in real time, a host's own tests on it see a hung
+       device killed after 5 s where it is 60 ms, and the tests that pin a hung device
+       killed at 60 ms on the manual clock change. A probe with the runner, its devices,
+       the simulated device and the manual clock at high priority tripped more starts,
+       not fewer, 25 of 202 where 6 of 248 tripped, and is no remedy as tried; why was
+       not found.
+    7. *The list of marks.* A contributor adds `_ = :file.delete(path)` to the store's
+       code. (a) As built: the suite is red until `dropped_answers_test.exs` lists the
+       mark beside its reason, which a reviewer reads. (b) No list, Dialyzer's flag and
+       the review alone, as "RV-30 as built" left it, a marked drop that is a defect
+       passing both. (c) A seam in `Logex.Retain`'s write through which a test makes a
+       close fail, so that the behaviour is held and not the mark: a store's write
+       whose close fails told to the operator as a write that failed.
+    8. *The branch's history.* `f4fa1af` and `4024fe1` are red by Docs. (a) Merged as
+       every item so far, the commits kept, `main`'s tip green and two commits behind it
+       that `scripts/docs.sh` fails on, which a `git bisect` over the site would meet.
+       (b) Squashed into one commit, the hashes this record and the notes of decisions
+       549 to 555 cite then on no branch of `main`.
+    9. *A huge number in a refusal.* `Global.new!("total_boxes", :dint, initial: 10 **
+       100_000)` raises a message of a hundred thousand digits, as `Logex.Tag.new!/5`
+       does of a tag's. (a) As it is, the value quoted whole. (b) Cut, as a compile cuts
+       a long literal it quotes.
 
 **DOC-1's first step's questions and RV-29's answered, 2026-11-16** (decisions 556–574).
 DOC-1's first step landed on `main` at `9d3d696`, its site published at
