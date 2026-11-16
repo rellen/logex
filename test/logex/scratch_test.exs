@@ -12,6 +12,12 @@ defmodule Logex.ScratchTest do
   its arguments, and a use of the temporary directory outside a `Path.join` is one of
   those listed here, which name nothing in it. A test's own directory, ExUnit's
   `:tmp_dir`, is under the checkout and is no such name.
+
+  And a test file names the temporary directory in no other way (RV-30's review, its
+  mutant M16, which named a directory under `$TMPDIR` by the count alone and passed the
+  rule above, red only by its count of the names found): no text in it begins `/tmp` or
+  `/var/tmp`, and none is `TMPDIR`, `TMP` or `TEMP`, the variables `System.tmp_dir!/0`
+  reads, this file's own samples apart.
   """
   use ExUnit.Case, async: true
 
@@ -63,6 +69,29 @@ defmodule Logex.ScratchTest do
   defp counted(true), do: 1
   defp counted(false), do: 0
 
+  # The other ways a source names the temporary directory, `{line, text}` each: a text
+  # that begins `/tmp` or `/var/tmp`, whole or before an interpolation, and one that is a
+  # variable the directory is read from.
+  defp others(source) do
+    tree = Code.string_to_quoted!(source, literal_encoder: &{:ok, {:__block__, &2, [&1]}})
+    {_tree, found} = Macro.prewalk(tree, [], &other/2)
+    Enum.reverse(found)
+  end
+
+  defp other({:__block__, meta, [text]} = node, found) when is_binary(text),
+    do: {node, named(text, meta, found)}
+
+  defp other({:<<>>, meta, [text | _]} = node, found) when is_binary(text),
+    do: {node, named(text, meta, found)}
+
+  defp other(node, found), do: {node, found}
+
+  defp named(text, meta, found),
+    do: named(text in ~w(TMPDIR TMP TEMP) or text =~ ~r{^(/var)?/tmp(/|$)}, text, meta, found)
+
+  defp named(true, text, meta, found), do: [{meta[:line], text} | found]
+  defp named(false, _text, _meta, found), do: found
+
   test "every name a test file makes in the machine's temporary directory holds the " <>
          "VM's OS pid" do
     found =
@@ -83,6 +112,27 @@ defmodule Logex.ScratchTest do
                ~w(array_configuration_test),
              &("test/logex/#{&1}.exs" in named)
            )
+  end
+
+  test "no test file names the temporary directory another way, by its path or by the " <>
+         "variable it is read from" do
+    found =
+      for path <- Enum.sort(Path.wildcard(Path.join(@root, "test/**/*.exs"))),
+          path != __ENV__.file,
+          {line, text} <- others(File.read!(path)),
+          do: "#{Path.relative_to(path, @root)}:#{line}: #{text}"
+
+    assert found == []
+
+    # The reading itself, on sources written here.
+    assert others(~S|dir = "/tmp/logex-rv2-#{System.unique_integer([:positive])}"|) ==
+             [{1, "/tmp/logex-rv2-"}]
+
+    assert others(~S|Path.join(System.get_env("TMPDIR"), "logex-#{n}")|) == [{1, "TMPDIR"}]
+    assert others(~S|File.mkdir_p!("/var/tmp/logex")|) == [{1, "/var/tmp/logex"}]
+    assert others("a = 1\nb = Path.join(\"/tmp\", name)") == [{2, "/tmp"}]
+    assert others(~S|File.write!(~c"/tmp/x", ~S(/tmp/y))|) == [{1, "/tmp/x"}, {1, "/tmp/y"}]
+    assert others(~S|Path.join(dir, "tmp/plant.ld") <> "/tmpfile" <> "TMPDIRS"|) == []
   end
 
   test "the rule reads a name by the count alone as shared, on one line or several, and " <>

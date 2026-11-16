@@ -712,6 +712,20 @@ back, a host's mistake being its pinned `ArgumentError`, never a narrower or a w
 a public function added to the contract gets one, and a type it hands out a `@typedoc`, or
 `runtime_test.exs` fails.
 
+The gate does not build the site, and the Docs workflow is red on what the gate never
+sees: a commit that changes a module's or a function's text, or a page, runs
+`scripts/docs.sh` here too, to `DOCS-OK`. Two commits of RV-30 passed the gate and were
+red by Docs, a function's text having named a module that has no page (`f4fa1af`,
+`4024fe1`). And a commit's runs are read on that commit: a push runs the workflows on
+the tip it brings, so of commits pushed together all but the last have no run. Push each
+commit as it is made, or to a branch of its own where a later push would cover it; two
+of RV-30's had no run until its review pushed each so (`e3a8c2f`, `f4fa1af`).
+
+A mark that throws an answer away, `_ = ...`, is a line of
+`test/logex/dropped_answers_test.exs` too, beside why the answer may be dropped there:
+Dialyzer is red on a drop left unmarked and passes every marked one, a defect among
+them, so the list is where a marked drop is read (decision 550; RV-30's review).
+
 ---
 
 ## Releasing
@@ -769,10 +783,13 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   in order, the first that fails stopping the rest, writes what they print to the log
   (`_build/gate.log` unless given), prints its last lines and `GATE-OK` or `GATE-FAIL
   rc=<n>`, and exits with the gates' code. The fifth, `scripts/dialyzer.sh`, runs once the
-  suite is green (decision 549): a red one is `GATE-FAIL` with Dialyzer's code, 2 for a
-  warning, followed by a line that names the step and the log, which keeps every warning
-  Dialyzer printed; `scripts/release.sh`'s gate is this script, so a release is held to
-  the five. The suite is judged by `elixir
+  suite is green, whatever arguments the suite was given (decision 549): a red one is
+  `GATE-FAIL` with the script's code, followed by a line that names the step and the log,
+  which keeps everything the script printed, on either stream; 2 is a warning, `its
+  warnings are in <log>`, and any other code a run that could not be made, `which could
+  not run: what it printed is in <log>`. A red suite's code may be 2 too, so read the
+  line after `GATE-FAIL`, which names the tests or the step. `scripts/release.sh`'s gate
+  is this script, so a release is held to the five. The suite is judged by `elixir
   scripts/failed.exs --exit`, as CI's test step judges it ("Before you commit"): a failed
   suite is followed by the tests that failed, `file:line: Module: test name` a line, read
   from ExUnit's failures manifest, since `Result: 2406/2407 passed` names none, and a long
@@ -812,7 +829,9 @@ starts by deleting ExUnit's failures manifest, so the tests they name are that r
   `-Woverlapping_contract`, `-Wopaque_union` and, since decision 550,
   `-Wunmatched_returns`, reading no Dialyzer configuration file;
   it prints what Dialyzer prints, then `DIALYZER-OK` or `DIALYZER-FAIL rc=<n>`, and exits
-  with Dialyzer's code, 2 for a warning. `test/logex/scripts_test.exs` runs it as CI's
+  with Dialyzer's code, 2 for a warning and 1 for a run that could not be made; with no
+  `dialyzer` on the path it says so and exits 127, nothing built and a kept PLT left as
+  it is. `test/logex/scripts_test.exs` runs it as CI's
   step writes it, over a stand-in `dialyzer`, and holds its flags and its PLT's name,
   check and build.
 - **`scripts/mutate.sh [-t test_file]... [-N] patch... [-- mix test args]`** is a

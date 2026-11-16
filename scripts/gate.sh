@@ -19,9 +19,13 @@
 # `mix test`, `--seed 0` for one. The fifth gate is OTP's own Dialyzer over the dev build
 # (decision 549), the script CI's step after the suite runs, so that a spec the code
 # breaks, or a call whose answer is thrown away, is seen before the commit: it runs once
-# the suite is green, and a red one is GATE-FAIL with Dialyzer's code, 2 for a warning,
-# followed by a line that names the step and the log, which keeps every warning Dialyzer
-# printed.
+# the suite is green, whatever arguments the suite was given, and a red one is GATE-FAIL
+# with the script's code, followed by a line that names the step and the log, which keeps
+# everything the script printed, on either stream: 2 is a warning, "its warnings are in
+# <log>", and any other code a run that could not be made, 1 for Dialyzer's own, mix's
+# for a build that does not compile and 127 for no `dialyzer` on the path, "which could
+# not run: what it printed is in <log>". A red suite's code may be 2 as well: the line
+# after GATE-FAIL says which gate it was.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 log=${1:-$root/_build/gate.log}
@@ -47,7 +51,11 @@ step=""
 if [ "$rc" -eq 0 ]; then
   bash scripts/dialyzer.sh >> "$log" 2>&1
   rc=$?
-  [ "$rc" -eq 0 ] || step="scripts/dialyzer.sh exited $rc, the gate's fifth step: its warnings are in $log"
+  case "$rc" in
+    0) ;;
+    2) step="scripts/dialyzer.sh exited 2, the gate's fifth step: its warnings are in $log" ;;
+    *) step="scripts/dialyzer.sh exited $rc, the gate's fifth step, which could not run: what it printed is in $log" ;;
+  esac
 fi
 tail -5 "$log"
 if [ "$rc" -eq 0 ]; then

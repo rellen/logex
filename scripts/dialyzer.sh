@@ -49,8 +49,10 @@
 # file is not read (DIALYZER_CONFIG=/dev/null), so that a contributor's own warnings or
 # paths change nothing here. It prints what Dialyzer prints, then DIALYZER-OK or
 # DIALYZER-FAIL rc=<n>, and exits with Dialyzer's code: 2 for a warning, 1 for a run that
-# could not be made; a compile that fails exits with mix's. Run from anywhere in the
-# checkout.
+# could not be made; a compile that fails exits with mix's; and with no `dialyzer` on the
+# path it says so and exits 127 before anything is built, the PLT kept untouched, where a
+# check that could not be run was read as a PLT gone stale and the good one deleted
+# (RV-30's review, F6). Run from anywhere in the checkout.
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root" || exit 1
@@ -62,6 +64,11 @@ apps=(erts kernel stdlib)
 failed() {
   echo "DIALYZER-FAIL rc=$1"
   exit "$1"
+}
+
+command -v dialyzer > /dev/null || {
+  echo "dialyzer: no \`dialyzer\` on the path: it is OTP's own, beside \`erl\`; nothing is built and the PLT is kept"
+  failed 127
 }
 
 MIX_ENV=dev mix compile || failed $?

@@ -42,7 +42,7 @@ own documentation holds:
 - `mix format` — format before a commit; CI runs `mix format --check-formatted`.
 - `scripts/gate.sh [log]` — the five gates of `CONTRIBUTING.md`'s "Before you commit" in
   order, by exit code, the fifth `scripts/dialyzer.sh`, printing `GATE-OK` or `GATE-FAIL
-  rc=<n>` and the tests that failed, or the step, Dialyzer's warnings kept in the log;
+  rc=<n>` and the tests that failed, or the step, what Dialyzer printed kept in the log;
   `elixir scripts/failed.exs` names the failures ExUnit's manifest holds, `file:line:
   Module: test name`, and with `--exit N` judges a run, as CI's test step does; the
   manifest keeps a test's failure until a run passes it, so after runs by hand it may name
@@ -50,7 +50,8 @@ own documentation holds:
 - `scripts/dialyzer.sh` — OTP's own dialyzer over the dev build, the gate's fifth step and
   CI's: its PLT of the toolchain's applications under `_build/dialyzer/`, named by the
   versions and the applications, built or checked, its flags named in it, `DIALYZER-OK`
-  or `DIALYZER-FAIL rc=<n>`, red on any warning its flags give.
+  or `DIALYZER-FAIL rc=<n>`, red on any warning its flags give, and 127 with no
+  `dialyzer` on the path.
 - `scripts/mutate.sh [-t file]... [-N] patch...` — a mutation table: each patch applied,
   the named files and the full suite run, the tree restored, a Markdown row a patch.
 - `scripts/load.sh [-n runs] [-l loops] [mix test args]` — runs under busy loops on every
@@ -336,8 +337,11 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   run's, each picture a page shows held to what its script gives today, one file one
   picture, and `scripts/draw.exs` run as a writer runs it.
 - `test/logex/scratch_test.exs` — every name a test file makes in the machine's temporary
-  directory holds the VM's OS pid, read from each test file's syntax tree, so that two
-  suites on one machine share no scratch directory.
+  directory holds the VM's OS pid, read from each test file's syntax tree, and none names
+  that directory another way, so that two suites on one machine share no scratch
+  directory.
+- `test/logex/dropped_answers_test.exs` — every answer `lib/` throws away on purpose,
+  `_ = ...`, read from its syntax trees and held to a list, each with its reason.
 - `test/logex/claude_md_test.exs` — this file: under its size cap, naming every `lib/` and
   test file, holding no history.
 
