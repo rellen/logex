@@ -1,0 +1,741 @@
+[
+ {
+  "file": "guides/tutorials/timers-and-counters.md",
+  "kind": "tutorial",
+  "job": "Add an on-delay timer and a box counter to a conveyor program; see that the host gives the time. A timing diagram for each.",
+  "slugs": [
+   "tutorials/timers-and-counters"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/tutorials/first-plant.md",
+  "kind": "tutorial",
+  "job": "Put two programs on tasks in a configuration file, connect a simulated device, run the plant with the runner on the manual clock.",
+  "slugs": [
+   "tutorials/first-plant"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/tutorials/change-a-running-program.md",
+  "kind": "tutorial",
+  "job": "Change a running program with an online edit, step by step, and see that its state is kept.",
+  "slugs": [
+   "tutorials/change-a-running-program"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/install-and-run.md",
+  "kind": "howto",
+  "job": "Install the pinned toolchain, add logex to a project, compile and run a first file.",
+  "slugs": [
+   "howto/install-and-run"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/read-diagnostics.md",
+  "kind": "howto",
+  "job": "Read a compile error or a warning: where it points, what it means, how to print it.",
+  "slugs": [
+   "howto/read-diagnostics"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-timers.md",
+  "kind": "howto",
+  "job": "Use ton, tof, tp and rto, and the long timers in nanoseconds.",
+  "slugs": [
+   "howto/use-timers"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-counters.md",
+  "kind": "howto",
+  "job": "Use ctu, ctd and ctud and the typed counters.",
+  "slugs": [
+   "howto/use-counters"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/do-arithmetic.md",
+  "kind": "howto",
+  "job": "Add, subtract, multiply, divide, compare; what happens at a limit.",
+  "slugs": [
+   "howto/do-arithmetic"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/choose-integer-widths-and-convert.md",
+  "kind": "howto",
+  "job": "Choose an integer type and convert between types.",
+  "slugs": [
+   "howto/choose-integer-widths-and-convert"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-bit-strings.md",
+  "kind": "howto",
+  "job": "Use byte, word, dword and lword: masks, shifts, bit access, a bit number in a tag.",
+  "slugs": [
+   "howto/use-bit-strings"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-reals.md",
+  "kind": "howto",
+  "job": "Use real and lreal: literals, arithmetic, sqrt, conversions and truncation.",
+  "slugs": [
+   "howto/use-reals"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-arrays.md",
+  "kind": "howto",
+  "job": "Declare and use arrays, with literal subscripts and subscripts in tags.",
+  "slugs": [
+   "howto/use-arrays"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-arrays-of-instances.md",
+  "kind": "howto",
+  "job": "Use arrays of timers, counters and function blocks.",
+  "slugs": [
+   "howto/use-arrays-of-instances"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-one-shots-and-pulse-coils.md",
+  "kind": "howto",
+  "job": "Use ons, osr and osf to act on an edge.",
+  "slugs": [
+   "howto/use-one-shots-and-pulse-coils"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/jump-over-rungs.md",
+  "kind": "howto",
+  "job": "Skip rungs with jmp and lbl, and know what a skipped rung keeps.",
+  "slugs": [
+   "howto/jump-over-rungs"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/write-a-function-block.md",
+  "kind": "howto",
+  "job": "Write a function block in its own file and call it with cal.",
+  "slugs": [
+   "howto/write-a-function-block"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/keep-values-across-a-restart.md",
+  "kind": "howto",
+  "job": "Mark tags retain and do a warm restart.",
+  "slugs": [
+   "howto/keep-values-across-a-restart"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/write-a-configuration-file.md",
+  "kind": "howto",
+  "job": "Write a .logex file: tasks, program instances, globals, connections.",
+  "slugs": [
+   "howto/write-a-configuration-file"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/build-a-configuration-from-elixir.md",
+  "kind": "howto",
+  "job": "Build the same configuration from Elixir data.",
+  "slugs": [
+   "howto/build-a-configuration-from-elixir"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/share-a-global.md",
+  "kind": "howto",
+  "job": "Share one value between programs with var_global and var_external.",
+  "slugs": [
+   "howto/share-a-global"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/use-an-event-task.md",
+  "kind": "howto",
+  "job": "Run a program when a bool global rises.",
+  "slugs": [
+   "howto/use-an-event-task"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/set-watchdogs.md",
+  "kind": "howto",
+  "job": "Give each task a watchdog, and use the continuous task.",
+  "slugs": [
+   "howto/set-watchdogs"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/run-on-the-clock.md",
+  "kind": "howto",
+  "job": "Start a runner on the real clock with devices.",
+  "slugs": [
+   "howto/run-on-the-clock"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/test-on-the-manual-clock.md",
+  "kind": "howto",
+  "job": "Test a plant with the manual clock and the simulated device.",
+  "slugs": [
+   "howto/test-on-the-manual-clock"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/watch-a-runner.md",
+  "kind": "howto",
+  "job": "Subscribe to a runner's events and read its status.",
+  "slugs": [
+   "howto/watch-a-runner"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/force-inputs.md",
+  "kind": "howto",
+  "job": "Force an input, see the force, remove it; the forces file.",
+  "slugs": [
+   "howto/force-inputs"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/keep-values-on-disk.md",
+  "kind": "howto",
+  "job": "Give a runner a store so retained values survive a crash.",
+  "slugs": [
+   "howto/keep-values-on-disk"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/recover-a-refused-store.md",
+  "kind": "howto",
+  "job": "What to do when a start refuses the store file.",
+  "slugs": [
+   "howto/recover-a-refused-store"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/edit-the-store-by-hand.md",
+  "kind": "howto",
+  "job": "Correct a value in a store file by hand, safely.",
+  "slugs": [
+   "howto/edit-the-store-by-hand"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/take-back-a-deploy.md",
+  "kind": "howto",
+  "job": "Go back to the earlier program after a deploy that was wrong.",
+  "slugs": [
+   "howto/take-back-a-deploy"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/map-io-points.md",
+  "kind": "howto",
+  "job": "Connect tags to device points, located arrays included.",
+  "slugs": [
+   "howto/map-io-points"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/write-a-device-adapter.md",
+  "kind": "howto",
+  "job": "Write an adapter for a real device.",
+  "slugs": [
+   "howto/write-a-device-adapter"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/edit-a-running-program.md",
+  "kind": "howto",
+  "job": "Change one running instance online.",
+  "slugs": [
+   "howto/edit-a-running-program"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/edit-a-running-plant.md",
+  "kind": "howto",
+  "job": "Change a running configuration online, through the runner.",
+  "slugs": [
+   "howto/edit-a-running-plant"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/restart-after-a-trip.md",
+  "kind": "howto",
+  "job": "Find why a plant tripped and restart it, warm or cold.",
+  "slugs": [
+   "howto/restart-after-a-trip"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/howto/port-a-program.md",
+  "kind": "howto",
+  "job": "Port a program from Logix or IEC 61131-3: what behaves differently.",
+  "slugs": [
+   "howto/port-a-program",
+   "explanation/differences-from-logix"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/source-syntax.md",
+  "kind": "reference",
+  "job": "A program file's text: lines, rungs, branches, names, dots, bits and subscripts, case, reserved words, comments, kinds of file.",
+  "slugs": [
+   "reference/source-syntax"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/declarations-and-types.md",
+  "kind": "reference",
+  "job": "Sections, qualifiers, elementary types and their ranges, arrays, instances, initial values, widening.",
+  "slugs": [
+   "reference/declarations-and-types"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/literals.md",
+  "kind": "reference",
+  "job": "Integer, based and real literals, and what fits which slot.",
+  "slugs": [
+   "reference/literals"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/instructions-contacts-and-coils.md",
+  "kind": "reference",
+  "job": "xic, xio, ote, otl, otu, ons, osr, osf: the same sub-headings for each.",
+  "slugs": [
+   "reference/instructions",
+   "reference/cheatsheet"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/instructions-timers-and-counters.md",
+  "kind": "reference",
+  "job": "ton, tof, tp, rto and the long timers; ctu, ctd, ctud and the typed counters.",
+  "slugs": [
+   "reference/instructions",
+   "reference/function-blocks"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/instructions-arithmetic-and-comparison.md",
+  "kind": "reference",
+  "job": "move, add, sub, mul, div and the rest, sqrt, the comparisons.",
+  "slugs": [
+   "reference/instructions",
+   "explanation/types-and-overflow"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/instructions-bitwise.md",
+  "kind": "reference",
+  "job": "The bitwise and shift instructions and bit access.",
+  "slugs": [
+   "reference/instructions"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/instructions-jump-and-call.md",
+  "kind": "reference",
+  "job": "jmp, lbl and cal.",
+  "slugs": [
+   "reference/instructions",
+   "reference/function-blocks"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/conversions.md",
+  "kind": "reference",
+  "job": "The 182 typed conversions and the truncations, as tables.",
+  "slugs": [
+   "reference/conversions"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/function-blocks.md",
+  "kind": "reference",
+  "job": "Built-in timer and counter types and their members; a user block's file; cal; arrays of instances.",
+  "slugs": [
+   "reference/function-blocks"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/configuration-file.md",
+  "kind": "reference",
+  "job": "A .logex file: every word, its grammar and its rules; the same from Elixir data.",
+  "slugs": [
+   "reference/configuration-file"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/execution-model.md",
+  "kind": "reference",
+  "job": "A scan, power flow, a cycle, tasks, order, time, the first scan.",
+  "slugs": [
+   "reference/execution-model"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/faults.md",
+  "kind": "reference",
+  "job": "Minor and major faults: each one, its cause, what the scan and the runner do.",
+  "slugs": [
+   "reference/faults"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/diagnostics.md",
+  "kind": "reference",
+  "job": "Compile errors: their shape, where they point, the families of message.",
+  "slugs": [
+   "reference/diagnostics-and-warnings",
+   "howto/read-diagnostics"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/warnings.md",
+  "kind": "reference",
+  "job": "Every warning, the warnings of two writes to one tag in one place.",
+  "slugs": [
+   "reference/diagnostics-and-warnings",
+   "reference/write-conflict-warnings"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/online-edit.md",
+  "kind": "reference",
+  "job": "The steps, what an edit keeps and starts again, the refusals, every report kind.",
+  "slugs": [
+   "reference/online-edit"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/runner.md",
+  "kind": "reference",
+  "job": "Options, a round, devices, status keys, events, watchdogs, the trip, restart.",
+  "slugs": [
+   "reference/runner"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/forcing.md",
+  "kind": "reference",
+  "job": "Input forcing and the forces file.",
+  "slugs": [
+   "reference/forcing"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/retained-values-and-store.md",
+  "kind": "reference",
+  "job": "retain, warm and cold restart, the retained image, the store file's format and versions, each refusal and each copy.",
+  "slugs": [
+   "reference/retained-values-and-store"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/io-adapters.md",
+  "kind": "reference",
+  "job": "The adapter behaviour, points, addresses, the simulated device.",
+  "slugs": [
+   "reference/io-adapters"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/host-contract.md",
+  "kind": "reference",
+  "job": "The modules a host calls, what each rejects and how.",
+  "slugs": [
+   "reference/host-contract"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/not-supported.md",
+  "kind": "reference",
+  "job": "What logex does not have, as a look-up list.",
+  "slugs": [
+   "reference/not-supported"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/reference/cheatsheet.cheatmd",
+  "kind": "cheatsheet",
+  "job": "The instruction set on one page.",
+  "slugs": [
+   "reference/cheatsheet",
+   "reference/instructions"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/what-logex-is.md",
+  "kind": "explanation",
+  "job": "What logex is, who it is for, what a host does with it.",
+  "slugs": [
+   "explanation/what-logex-is"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/safety-and-limits.md",
+  "kind": "explanation",
+  "job": "What logex is not: every limit, kept as strong as it is.",
+  "slugs": [
+   "explanation/safety-and-limits"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/the-dialect-and-iec.md",
+  "kind": "explanation",
+  "job": "Why logex has its own dialect, how its names were chosen, how it differs from Logix.",
+  "slugs": [
+   "explanation/the-dialect-and-iec",
+   "explanation/differences-from-logix"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/programs-as-data.md",
+  "kind": "explanation",
+  "job": "A program compiles to data that is interpreted; why not BEAM code.",
+  "slugs": [
+   "explanation/programs-as-data"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/scan-cycle-and-time.md",
+  "kind": "explanation",
+  "job": "Power flow, a scan, and time that the host gives.",
+  "slugs": [
+   "explanation/scan-cycle-and-time"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/tasks-and-scheduling.md",
+  "kind": "explanation",
+  "job": "Tasks, periods, events, order and what a cycle does.",
+  "slugs": [
+   "explanation/tasks-and-scheduling"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/trips-and-watchdogs.md",
+  "kind": "explanation",
+  "job": "What a watchdog is for, what a trip does, what it cannot do.",
+  "slugs": [
+   "explanation/trips-and-watchdogs"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/warm-and-cold-restarts.md",
+  "kind": "explanation",
+  "job": "What each restart keeps, and why.",
+  "slugs": [
+   "explanation/warm-and-cold-restarts"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/online-edit-model.md",
+  "kind": "explanation",
+  "job": "How an edit changes a running program and keeps its state.",
+  "slugs": [
+   "explanation/online-edit-model"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/types-and-overflow.md",
+  "kind": "explanation",
+  "job": "The types, what happens past a limit, and why no power passes.",
+  "slugs": [
+   "explanation/types-and-overflow"
+  ],
+  "reader": null
+ },
+ {
+  "file": "guides/explanation/timing-and-capacity.md",
+  "kind": "explanation",
+  "job": "How late a round can be, what a scan costs, how large a plant can be.",
+  "slugs": [
+   "explanation/timing-and-capacity"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/README.md",
+  "kind": "contributor",
+  "job": "A map of every document: what it is for and who reads it.",
+  "slugs": [
+   "contributor/document-map"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/overview.md",
+  "kind": "contributor",
+  "job": "The parts of logex and how data moves through them, with diagrams.",
+  "slugs": [
+   "contributor/architecture-overview"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/compile-pipeline.md",
+  "kind": "contributor",
+  "job": "Lexer, parser, AST, the compiler's stages, the IR, a program.",
+  "slugs": [
+   "contributor/compile-pipeline"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/runtime-and-evaluator.md",
+  "kind": "contributor",
+  "job": "Instances, the evaluator, scans, resources and the scheduler.",
+  "slugs": [
+   "contributor/runtime-and-evaluator"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/runner.md",
+  "kind": "contributor",
+  "job": "The runner's processes, a round, devices, the writer, paths.",
+  "slugs": [
+   "contributor/runner-internals"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/online-edit.md",
+  "kind": "contributor",
+  "job": "Plans, the switch, state across an edit.",
+  "slugs": [
+   "explanation/online-edit-model",
+   "reference/online-edit"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/architecture/store-and-files.md",
+  "kind": "contributor",
+  "job": "The retained image, the store's text, atomic writes, refusals.",
+  "slugs": [
+   "contributor/store-and-files"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/implementation/testing-strategy.md",
+  "kind": "contributor",
+  "job": "Verify by executing: oracles, walks, mutation tables, cost in reductions, load runs.",
+  "slugs": [
+   "contributor/testing-strategy"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/implementation/adding-an-instruction.md",
+  "kind": "contributor",
+  "job": "The naming survey and the steps to add an instruction.",
+  "slugs": [
+   "contributor/adding-an-instruction"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/contributing/toolchain.md",
+  "kind": "contributor",
+  "job": "The pinned versions, nix, asdf, the gates, CI.",
+  "slugs": [
+   "contributor/toolchain"
+  ],
+  "reader": null
+ },
+ {
+  "file": "docs/contributing/project-history.md",
+  "kind": "contributor",
+  "job": "What has landed: milestones and the review, moved from README.",
+  "slugs": [
+   "contributor/project-status-and-history"
+  ],
+  "reader": null
+ }
+]

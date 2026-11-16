@@ -1,0 +1,387 @@
+{
+ "base": "d45e68a",
+ "skeleton": true,
+ "landed": "DOC-1's first step landed at 9d3d696 on 2026-11-15 (ExDoc in the docs environment alone, scripts/docs.sh and the Docs workflow that publishes the site from main to https://rellen.github.io/logex/, the examples' test over every page, scripts/page.exs, prose.exs, site.exs, draw.exs and pictures.exs, the style guide in four pages, the templates, the glossary and the tutorial \"Your first program\"); RV-29 landed at 2ab16d5; the maintainer answered the first step's seventeen questions and RV-29's two on 2026-11-16, each reading taken as built, decisions 556-574 (d45e68a). The suite is 3,246 tests.",
+ "parallel": "Beside you: the other track of this workflow in its own clone, and RV-30 in its clone (branch rv30: Dialyzer as the gate's fifth step, a flag more for scripts/dialyzer.sh, Global.new!/3's refusal, scratch directories of the tests, and load failures of trip_test.exs), which will land on main while you work and which nobody merges into a track: the step's close merges main. RV-30 runs busy loops on all four cores for hours at a time, so a command of yours may take several times as long as the documents say; that is no failure.",
+ "tracks": [
+  {
+   "id": "a1",
+   "pages": [
+    {
+     "file": "guides/reference/source-syntax.md",
+     "kind": "reference",
+     "job": "A program file's text: lines, rungs, branches, names, dots, bits and subscripts, case, reserved words, comments, kinds of file.",
+     "slugs": [
+      "reference/source-syntax"
+     ]
+    },
+    {
+     "file": "guides/reference/declarations-and-types.md",
+     "kind": "reference",
+     "job": "Sections, qualifiers, elementary types and their ranges, arrays, instances, initial values, widening.",
+     "slugs": [
+      "reference/declarations-and-types"
+     ]
+    },
+    {
+     "file": "guides/reference/literals.md",
+     "kind": "reference",
+     "job": "Integer, based and real literals, and what fits which slot.",
+     "slugs": [
+      "reference/literals"
+     ]
+    },
+    {
+     "file": "guides/reference/instructions-contacts-and-coils.md",
+     "kind": "reference",
+     "job": "xic, xio, ote, otl, otu, ons, osr, osf: the same sub-headings for each.",
+     "slugs": [
+      "reference/instructions",
+      "reference/cheatsheet"
+     ]
+    },
+    {
+     "file": "guides/reference/instructions-timers-and-counters.md",
+     "kind": "reference",
+     "job": "ton, tof, tp, rto and the long timers; ctu, ctd, ctud and the typed counters.",
+     "slugs": [
+      "reference/instructions",
+      "reference/function-blocks"
+     ]
+    },
+    {
+     "file": "guides/reference/instructions-arithmetic-and-comparison.md",
+     "kind": "reference",
+     "job": "move, add, sub, mul, div and the rest, sqrt, the comparisons.",
+     "slugs": [
+      "reference/instructions",
+      "explanation/types-and-overflow"
+     ]
+    },
+    {
+     "file": "guides/reference/instructions-bitwise.md",
+     "kind": "reference",
+     "job": "The bitwise and shift instructions and bit access.",
+     "slugs": [
+      "reference/instructions"
+     ]
+    },
+    {
+     "file": "guides/reference/instructions-jump-and-call.md",
+     "kind": "reference",
+     "job": "jmp, lbl and cal.",
+     "slugs": [
+      "reference/instructions",
+      "reference/function-blocks"
+     ]
+    },
+    {
+     "file": "guides/reference/conversions.md",
+     "kind": "reference",
+     "job": "The 182 typed conversions and the truncations, as tables.",
+     "slugs": [
+      "reference/conversions"
+     ]
+    },
+    {
+     "file": "guides/reference/function-blocks.md",
+     "kind": "reference",
+     "job": "Built-in timer and counter types and their members; a user block's file; cal; arrays of instances.",
+     "slugs": [
+      "reference/function-blocks"
+     ]
+    },
+    {
+     "file": "guides/reference/configuration-file.md",
+     "kind": "reference",
+     "job": "A .logex file: every word, its grammar and its rules; the same from Elixir data.",
+     "slugs": [
+      "reference/configuration-file"
+     ]
+    },
+    {
+     "file": "guides/reference/execution-model.md",
+     "kind": "reference",
+     "job": "A scan, power flow, a cycle, tasks, order, time, the first scan.",
+     "slugs": [
+      "reference/execution-model"
+     ]
+    },
+    {
+     "file": "guides/reference/faults.md",
+     "kind": "reference",
+     "job": "Minor and major faults: each one, its cause, what the scan and the runner do.",
+     "slugs": [
+      "reference/faults"
+     ]
+    },
+    {
+     "file": "guides/reference/diagnostics.md",
+     "kind": "reference",
+     "job": "Compile errors: their shape, where they point, the families of message.",
+     "slugs": [
+      "reference/diagnostics-and-warnings",
+      "howto/read-diagnostics"
+     ]
+    },
+    {
+     "file": "guides/reference/warnings.md",
+     "kind": "reference",
+     "job": "Every warning, the warnings of two writes to one tag in one place.",
+     "slugs": [
+      "reference/diagnostics-and-warnings",
+      "reference/write-conflict-warnings"
+     ]
+    },
+    {
+     "file": "guides/reference/online-edit.md",
+     "kind": "reference",
+     "job": "The steps, what an edit keeps and starts again, the refusals, every report kind.",
+     "slugs": [
+      "reference/online-edit"
+     ]
+    },
+    {
+     "file": "guides/reference/runner.md",
+     "kind": "reference",
+     "job": "Options, a round, devices, status keys, events, watchdogs, the trip, restart.",
+     "slugs": [
+      "reference/runner"
+     ]
+    },
+    {
+     "file": "guides/reference/forcing.md",
+     "kind": "reference",
+     "job": "Input forcing and the forces file.",
+     "slugs": [
+      "reference/forcing"
+     ]
+    },
+    {
+     "file": "guides/reference/retained-values-and-store.md",
+     "kind": "reference",
+     "job": "retain, warm and cold restart, the retained image, the store file's format and versions, each refusal and each copy.",
+     "slugs": [
+      "reference/retained-values-and-store"
+     ]
+    },
+    {
+     "file": "guides/reference/io-adapters.md",
+     "kind": "reference",
+     "job": "The adapter behaviour, points, addresses, the simulated device.",
+     "slugs": [
+      "reference/io-adapters"
+     ]
+    },
+    {
+     "file": "guides/reference/host-contract.md",
+     "kind": "reference",
+     "job": "The modules a host calls, what each rejects and how.",
+     "slugs": [
+      "reference/host-contract"
+     ]
+    },
+    {
+     "file": "guides/reference/not-supported.md",
+     "kind": "reference",
+     "job": "What logex does not have, as a look-up list.",
+     "slugs": [
+      "reference/not-supported"
+     ]
+    },
+    {
+     "file": "guides/reference/cheatsheet.cheatmd",
+     "kind": "cheatsheet",
+     "job": "The instruction set on one page.",
+     "slugs": [
+      "reference/cheatsheet",
+      "reference/instructions"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "a2",
+   "pages": [
+    {
+     "file": "guides/explanation/what-logex-is.md",
+     "kind": "explanation",
+     "job": "What logex is, who it is for, what a host does with it.",
+     "slugs": [
+      "explanation/what-logex-is"
+     ]
+    },
+    {
+     "file": "guides/explanation/safety-and-limits.md",
+     "kind": "explanation",
+     "job": "What logex is not: every limit, kept as strong as it is.",
+     "slugs": [
+      "explanation/safety-and-limits"
+     ]
+    },
+    {
+     "file": "guides/explanation/the-dialect-and-iec.md",
+     "kind": "explanation",
+     "job": "Why logex has its own dialect, how its names were chosen, how it differs from Logix.",
+     "slugs": [
+      "explanation/the-dialect-and-iec",
+      "explanation/differences-from-logix"
+     ]
+    },
+    {
+     "file": "guides/explanation/programs-as-data.md",
+     "kind": "explanation",
+     "job": "A program compiles to data that is interpreted; why not BEAM code.",
+     "slugs": [
+      "explanation/programs-as-data"
+     ]
+    },
+    {
+     "file": "guides/explanation/scan-cycle-and-time.md",
+     "kind": "explanation",
+     "job": "Power flow, a scan, and time that the host gives.",
+     "slugs": [
+      "explanation/scan-cycle-and-time"
+     ]
+    },
+    {
+     "file": "guides/explanation/tasks-and-scheduling.md",
+     "kind": "explanation",
+     "job": "Tasks, periods, events, order and what a cycle does.",
+     "slugs": [
+      "explanation/tasks-and-scheduling"
+     ]
+    },
+    {
+     "file": "guides/explanation/trips-and-watchdogs.md",
+     "kind": "explanation",
+     "job": "What a watchdog is for, what a trip does, what it cannot do.",
+     "slugs": [
+      "explanation/trips-and-watchdogs"
+     ]
+    },
+    {
+     "file": "guides/explanation/warm-and-cold-restarts.md",
+     "kind": "explanation",
+     "job": "What each restart keeps, and why.",
+     "slugs": [
+      "explanation/warm-and-cold-restarts"
+     ]
+    },
+    {
+     "file": "guides/explanation/online-edit-model.md",
+     "kind": "explanation",
+     "job": "How an edit changes a running program and keeps its state.",
+     "slugs": [
+      "explanation/online-edit-model"
+     ]
+    },
+    {
+     "file": "guides/explanation/types-and-overflow.md",
+     "kind": "explanation",
+     "job": "The types, what happens past a limit, and why no power passes.",
+     "slugs": [
+      "explanation/types-and-overflow"
+     ]
+    },
+    {
+     "file": "guides/explanation/timing-and-capacity.md",
+     "kind": "explanation",
+     "job": "How late a round can be, what a scan costs, how large a plant can be.",
+     "slugs": [
+      "explanation/timing-and-capacity"
+     ]
+    },
+    {
+     "file": "docs/README.md",
+     "kind": "contributor",
+     "job": "A map of every document: what it is for and who reads it.",
+     "slugs": [
+      "contributor/document-map"
+     ]
+    },
+    {
+     "file": "docs/architecture/overview.md",
+     "kind": "contributor",
+     "job": "The parts of logex and how data moves through them, with diagrams.",
+     "slugs": [
+      "contributor/architecture-overview"
+     ]
+    },
+    {
+     "file": "docs/architecture/compile-pipeline.md",
+     "kind": "contributor",
+     "job": "Lexer, parser, AST, the compiler's stages, the IR, a program.",
+     "slugs": [
+      "contributor/compile-pipeline"
+     ]
+    },
+    {
+     "file": "docs/architecture/runtime-and-evaluator.md",
+     "kind": "contributor",
+     "job": "Instances, the evaluator, scans, resources and the scheduler.",
+     "slugs": [
+      "contributor/runtime-and-evaluator"
+     ]
+    },
+    {
+     "file": "docs/architecture/runner.md",
+     "kind": "contributor",
+     "job": "The runner's processes, a round, devices, the writer, paths.",
+     "slugs": [
+      "contributor/runner-internals"
+     ]
+    },
+    {
+     "file": "docs/architecture/online-edit.md",
+     "kind": "contributor",
+     "job": "Plans, the switch, state across an edit.",
+     "slugs": [
+      "explanation/online-edit-model",
+      "reference/online-edit"
+     ]
+    },
+    {
+     "file": "docs/architecture/store-and-files.md",
+     "kind": "contributor",
+     "job": "The retained image, the store's text, atomic writes, refusals.",
+     "slugs": [
+      "contributor/store-and-files"
+     ]
+    },
+    {
+     "file": "docs/implementation/testing-strategy.md",
+     "kind": "contributor",
+     "job": "Verify by executing: oracles, walks, mutation tables, cost in reductions, load runs.",
+     "slugs": [
+      "contributor/testing-strategy"
+     ]
+    },
+    {
+     "file": "docs/implementation/adding-an-instruction.md",
+     "kind": "contributor",
+     "job": "The naming survey and the steps to add an instruction.",
+     "slugs": [
+      "contributor/adding-an-instruction"
+     ]
+    },
+    {
+     "file": "docs/contributing/toolchain.md",
+     "kind": "contributor",
+     "job": "The pinned versions, nix, asdf, the gates, CI.",
+     "slugs": [
+      "contributor/toolchain"
+     ]
+    },
+    {
+     "file": "docs/contributing/project-history.md",
+     "kind": "contributor",
+     "job": "What has landed: milestones and the review, moved from README.",
+     "slugs": [
+      "contributor/project-status-and-history"
+     ]
+    }
+   ]
+  }
+ ]
+}

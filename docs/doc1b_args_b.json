@@ -1,0 +1,450 @@
+{
+ "base": "d45e68a",
+ "skeleton": false,
+ "landed": "DOC-1's first step landed at 9d3d696 on 2026-11-15 (ExDoc in the docs environment alone, scripts/docs.sh and the Docs workflow that publishes the site from main to https://rellen.github.io/logex/, the examples' test over every page, scripts/page.exs, prose.exs, site.exs, draw.exs and pictures.exs, the style guide in four pages, the templates, the glossary and the tutorial \"Your first program\"); RV-29 landed at 2ab16d5; the maintainer answered the first step's seventeen questions and RV-29's two on 2026-11-16, each reading taken as built, decisions 556-574 (d45e68a). The suite is 3,246 tests. The skeleton is in place (08cb82e, backup/doc2-skel): 105 stubs, every page of the plan and the 23 decision records with their index, each with its line in docs/pages.exs; the first two tracks, a1 (the reference pages) and a2 (the explanation and contributor pages), have been writing since.",
+ "parallel": "Beside you: the other track of this workflow in its own clone, and tracks a1 and a2 of the first workflow in theirs, so up to four agents work at once on four cores and a command of yours may take several times as long as the documents say; that is no failure. RV-30 (Dialyzer as the gate's fifth step, Global.new!/3's refusal, scratch directories of the tests, trip_test.exs not async) is finished and lands on main while you work; nobody merges main into a track: the step's close does.",
+ "tracks": [
+  {
+   "id": "b1",
+   "pages": [
+    {
+     "file": "guides/tutorials/timers-and-counters.md",
+     "kind": "tutorial",
+     "job": "Add an on-delay timer and a box counter to a conveyor program; see that the host gives the time. A timing diagram for each.",
+     "slugs": [
+      "tutorials/timers-and-counters"
+     ]
+    },
+    {
+     "file": "guides/tutorials/first-plant.md",
+     "kind": "tutorial",
+     "job": "Put two programs on tasks in a configuration file, connect a simulated device, run the plant with the runner on the manual clock.",
+     "slugs": [
+      "tutorials/first-plant"
+     ]
+    },
+    {
+     "file": "guides/tutorials/change-a-running-program.md",
+     "kind": "tutorial",
+     "job": "Change a running program with an online edit, step by step, and see that its state is kept.",
+     "slugs": [
+      "tutorials/change-a-running-program"
+     ]
+    },
+    {
+     "file": "guides/howto/install-and-run.md",
+     "kind": "howto",
+     "job": "Install the pinned toolchain, add logex to a project, compile and run a first file.",
+     "slugs": [
+      "howto/install-and-run"
+     ]
+    },
+    {
+     "file": "guides/howto/read-diagnostics.md",
+     "kind": "howto",
+     "job": "Read a compile error or a warning: where it points, what it means, how to print it.",
+     "slugs": [
+      "howto/read-diagnostics"
+     ]
+    },
+    {
+     "file": "guides/howto/use-timers.md",
+     "kind": "howto",
+     "job": "Use ton, tof, tp and rto, and the long timers in nanoseconds.",
+     "slugs": [
+      "howto/use-timers"
+     ]
+    },
+    {
+     "file": "guides/howto/use-counters.md",
+     "kind": "howto",
+     "job": "Use ctu, ctd and ctud and the typed counters.",
+     "slugs": [
+      "howto/use-counters"
+     ]
+    },
+    {
+     "file": "guides/howto/do-arithmetic.md",
+     "kind": "howto",
+     "job": "Add, subtract, multiply, divide, compare; what happens at a limit.",
+     "slugs": [
+      "howto/do-arithmetic"
+     ]
+    },
+    {
+     "file": "guides/howto/choose-integer-widths-and-convert.md",
+     "kind": "howto",
+     "job": "Choose an integer type and convert between types.",
+     "slugs": [
+      "howto/choose-integer-widths-and-convert"
+     ]
+    },
+    {
+     "file": "guides/howto/use-bit-strings.md",
+     "kind": "howto",
+     "job": "Use byte, word, dword and lword: masks, shifts, bit access, a bit number in a tag.",
+     "slugs": [
+      "howto/use-bit-strings"
+     ]
+    },
+    {
+     "file": "guides/howto/use-reals.md",
+     "kind": "howto",
+     "job": "Use real and lreal: literals, arithmetic, sqrt, conversions and truncation.",
+     "slugs": [
+      "howto/use-reals"
+     ]
+    },
+    {
+     "file": "guides/howto/use-arrays.md",
+     "kind": "howto",
+     "job": "Declare and use arrays, with literal subscripts and subscripts in tags.",
+     "slugs": [
+      "howto/use-arrays"
+     ]
+    },
+    {
+     "file": "guides/howto/use-arrays-of-instances.md",
+     "kind": "howto",
+     "job": "Use arrays of timers, counters and function blocks.",
+     "slugs": [
+      "howto/use-arrays-of-instances"
+     ]
+    },
+    {
+     "file": "guides/howto/use-one-shots-and-pulse-coils.md",
+     "kind": "howto",
+     "job": "Use ons, osr and osf to act on an edge.",
+     "slugs": [
+      "howto/use-one-shots-and-pulse-coils"
+     ]
+    },
+    {
+     "file": "guides/howto/jump-over-rungs.md",
+     "kind": "howto",
+     "job": "Skip rungs with jmp and lbl, and know what a skipped rung keeps.",
+     "slugs": [
+      "howto/jump-over-rungs"
+     ]
+    },
+    {
+     "file": "guides/howto/write-a-function-block.md",
+     "kind": "howto",
+     "job": "Write a function block in its own file and call it with cal.",
+     "slugs": [
+      "howto/write-a-function-block"
+     ]
+    },
+    {
+     "file": "guides/howto/keep-values-across-a-restart.md",
+     "kind": "howto",
+     "job": "Mark tags retain and do a warm restart.",
+     "slugs": [
+      "howto/keep-values-across-a-restart"
+     ]
+    },
+    {
+     "file": "guides/howto/write-a-configuration-file.md",
+     "kind": "howto",
+     "job": "Write a .logex file: tasks, program instances, globals, connections.",
+     "slugs": [
+      "howto/write-a-configuration-file"
+     ]
+    },
+    {
+     "file": "guides/howto/build-a-configuration-from-elixir.md",
+     "kind": "howto",
+     "job": "Build the same configuration from Elixir data.",
+     "slugs": [
+      "howto/build-a-configuration-from-elixir"
+     ]
+    },
+    {
+     "file": "guides/howto/share-a-global.md",
+     "kind": "howto",
+     "job": "Share one value between programs with var_global and var_external.",
+     "slugs": [
+      "howto/share-a-global"
+     ]
+    },
+    {
+     "file": "guides/howto/use-an-event-task.md",
+     "kind": "howto",
+     "job": "Run a program when a bool global rises.",
+     "slugs": [
+      "howto/use-an-event-task"
+     ]
+    },
+    {
+     "file": "guides/howto/set-watchdogs.md",
+     "kind": "howto",
+     "job": "Give each task a watchdog, and use the continuous task.",
+     "slugs": [
+      "howto/set-watchdogs"
+     ]
+    },
+    {
+     "file": "guides/howto/run-on-the-clock.md",
+     "kind": "howto",
+     "job": "Start a runner on the real clock with devices.",
+     "slugs": [
+      "howto/run-on-the-clock"
+     ]
+    },
+    {
+     "file": "guides/howto/test-on-the-manual-clock.md",
+     "kind": "howto",
+     "job": "Test a plant with the manual clock and the simulated device.",
+     "slugs": [
+      "howto/test-on-the-manual-clock"
+     ]
+    },
+    {
+     "file": "guides/howto/watch-a-runner.md",
+     "kind": "howto",
+     "job": "Subscribe to a runner's events and read its status.",
+     "slugs": [
+      "howto/watch-a-runner"
+     ]
+    },
+    {
+     "file": "guides/howto/force-inputs.md",
+     "kind": "howto",
+     "job": "Force an input, see the force, remove it; the forces file.",
+     "slugs": [
+      "howto/force-inputs"
+     ]
+    },
+    {
+     "file": "guides/howto/keep-values-on-disk.md",
+     "kind": "howto",
+     "job": "Give a runner a store so retained values survive a crash.",
+     "slugs": [
+      "howto/keep-values-on-disk"
+     ]
+    },
+    {
+     "file": "guides/howto/recover-a-refused-store.md",
+     "kind": "howto",
+     "job": "What to do when a start refuses the store file.",
+     "slugs": [
+      "howto/recover-a-refused-store"
+     ]
+    },
+    {
+     "file": "guides/howto/edit-the-store-by-hand.md",
+     "kind": "howto",
+     "job": "Correct a value in a store file by hand, safely.",
+     "slugs": [
+      "howto/edit-the-store-by-hand"
+     ]
+    },
+    {
+     "file": "guides/howto/take-back-a-deploy.md",
+     "kind": "howto",
+     "job": "Go back to the earlier program after a deploy that was wrong.",
+     "slugs": [
+      "howto/take-back-a-deploy"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "b2",
+   "pages": [
+    {
+     "file": "guides/howto/map-io-points.md",
+     "kind": "howto",
+     "job": "Connect tags to device points, located arrays included.",
+     "slugs": [
+      "howto/map-io-points"
+     ]
+    },
+    {
+     "file": "guides/howto/write-a-device-adapter.md",
+     "kind": "howto",
+     "job": "Write an adapter for a real device.",
+     "slugs": [
+      "howto/write-a-device-adapter"
+     ]
+    },
+    {
+     "file": "guides/howto/edit-a-running-program.md",
+     "kind": "howto",
+     "job": "Change one running instance online.",
+     "slugs": [
+      "howto/edit-a-running-program"
+     ]
+    },
+    {
+     "file": "guides/howto/edit-a-running-plant.md",
+     "kind": "howto",
+     "job": "Change a running configuration online, through the runner.",
+     "slugs": [
+      "howto/edit-a-running-plant"
+     ]
+    },
+    {
+     "file": "guides/howto/restart-after-a-trip.md",
+     "kind": "howto",
+     "job": "Find why a plant tripped and restart it, warm or cold.",
+     "slugs": [
+      "howto/restart-after-a-trip"
+     ]
+    },
+    {
+     "file": "guides/howto/port-a-program.md",
+     "kind": "howto",
+     "job": "Port a program from Logix or IEC 61131-3: what behaves differently.",
+     "slugs": [
+      "howto/port-a-program",
+      "explanation/differences-from-logix"
+     ]
+    },
+    {
+     "file": "docs/adr/0001-a-program-is-data.md",
+     "kind": "adr",
+     "job": "Why is a program compiled to plain data that `Logex.Runtime` interprets, and never to BEAM code? Data can be checked, printed, compared and changed while it runs, where a change through the Elixir compiler was measured too slow and unsafe for a running controller and a back end of generated code disagreed with the interpreter.",
+     "decisions": "15-17 (with PLAN.md \u00a75, 'How does Elixir declare a controller', \u00a76, 'Nothing compiles a user's program to BEAM', and docs/organisation.md \u00a74.9's measurements)"
+    },
+    {
+     "file": "docs/adr/0002-own-dialect-and-names.md",
+     "kind": "adr",
+     "job": "Why does logex have a ladder dialect of its own, and how is a new word chosen? IEC 61131-3 names contacts and coils only as drawings and its fourth edition dropped Instruction List, its one mnemonic language, so a mnemonic ladder language is a dialect by necessity, and each word is surveyed in `docs/naming.md` before its code: IEC's name lowercased where IEC has one, else the clearest vendor mnemonic, never a new word for a thing that has a standard name.",
+     "decisions": "67-68, 80, 83, 144, 148, 155, 162-163, 351, 367, 532, 561 (with PLAN.md \u00a75, 'its own dialect' and 'What the decision settles', and docs/naming.md's rule)"
+    },
+    {
+     "file": "docs/adr/0003-no-dependencies-no-generated-code.md",
+     "kind": "adr",
+     "job": "Why does logex have no dependency and no generated code, with a lexer and a parser written by hand? A parser generator's conflict check could not be made a gate that holds, and the parser libraries tried were slower, silent on grammar mistakes and dependencies, so the golden record, the printer's round trip and the suite hold the grammar instead, and the one dependency, ExDoc, is in the `docs` environment alone.",
+     "decisions": "515, 546 (the choice itself is PLAN.md \u00a76's, 'Keep leex/yecc' reversed in September 2026, before \u00a77 began; 515 and 546 keep to it for Dialyzer and ExDoc)"
+    },
+    {
+     "file": "docs/adr/0004-iec-software-model.md",
+     "kind": "adr",
+     "job": "How is a plant organised, and why so? logex follows IEC 61131-3's software model in its own dialect: a file is a program type or a function block type, state is an instance (a timer and a counter are instances of built-in block types whose inputs rungs write), and a configuration in a file of its own makes the instances, connects them to globals and I/O points and puts them on tasks, with no routines.",
+     "decisions": "1-7, 9, 12, 30, 33-35, 46-49, 53, 84-86, 89-92"
+    },
+    {
+     "file": "docs/adr/0005-every-tag-is-declared.md",
+     "kind": "adr",
+     "job": "Why must a program declare every tag, and why are its words reserved? One declaration line a tag, in IEC's words, gives each tag a section and a type, so a mistyped name or an operand of the wrong type is a located diagnostic and not a rung that does nothing in silence, and a mnemonic, a section, a qualifier and a type word are reserved in any case, each by the kind of file it stands in.",
+     "decisions": "2, 10, 24, 247, 294-296, 298, 300 (with PLAN.md M1-2 and M1-3, and \u00a75's 'Mnemonics are reserved words')"
+    },
+    {
+     "file": "docs/adr/0006-iec-types-and-overflow.md",
+     "kind": "adr",
+     "job": "Which data types does logex have, and what does a value do at its type's limit? IEC's elementary types under IEC's words, in one table: an instruction computes in its destination's type, a source widens only as IEC's Figure 11 allows and every other conversion is written, an integer result outside its type wraps and passes no power in every width, and arrays take Logix's zero-based form.",
+     "decisions": "77, 144-152, 154-156, 158-159, 161-163, 170, 175-177, 204, 206, 214-216, 220-221"
+    },
+    {
+     "file": "docs/adr/0007-the-host-gives-the-time.md",
+     "kind": "adr",
+     "job": "Why does the core read no clock? `Logex.Runtime` is a function of the state, the inputs and the milliseconds the host says have passed, so a run is repeatable and a test moves time itself; each timer keeps the time it last ran, so one that was not run catches up, and only `Logex.Runner` reads a clock, through a behaviour with a manual clock for tests.",
+     "decisions": "8, 13, 56, 82, 118, 122, 131, 282, 322, 444 (with PLAN.md M1-6 and docs/organisation.md \u00a74.6)"
+    },
+    {
+     "file": "docs/adr/0008-source-mistakes-and-host-mistakes.md",
+     "kind": "adr",
+     "job": "How does logex tell its caller of a mistake? A mistake in the source text is a `%Logex.Diagnostic{}`, located and returned with every other of the compile, and a mistake by the host, an argument or a state that no text could give, is an `ArgumentError` raised where it is handed in, its message pinned by a test; nothing else leaves the host contract, and every source text compiles or is told why, within stated bounds.",
+     "decisions": "28, 36, 41-42, 54, 63, 169, 171-174, 182, 184-186, 188, 190, 194, 200, 369-371, 403-404, 429-430, 432, 436, 478, 514, 520, 522-526"
+    },
+    {
+     "file": "docs/adr/0009-clauses-not-conditionals.md",
+     "kind": "adr",
+     "job": "Why is the code written as function clauses with pattern matching in place of `case`, `cond`, `if` and `unless`, and how far does the rule reach? Each rule is then one clause, which a document cites by its head, a mutation table reverts alone and a cost bound measures, and `clauses_test.exs` holds the rule from the syntax trees of `lib/`, the walks' and end-to-end tests' oracles, the examples' harness and the scripts, with the few exceptions it names, a walk's draws among them.",
+     "decisions": "264 (the rule itself is the first CLAUDE.md's, of 2026-02-28, and the record gives no reason for it there: the page states what the rule makes possible, from CONTRIBUTING.md, and invents no motive)"
+    },
+    {
+     "file": "docs/adr/0010-a-fault-does-not-stop-a-scan.md",
+     "kind": "adr",
+     "job": "What happens when a running program divides by zero or indexes past an array's end? The scan runs on, the instruction doing a defined thing (a zero divisor gives 0 and no power, an index out of range does nothing), and the fault is plain data, a `%Logex.Fault{}`, minor or major: after a minor fault the host is told and the plant runs on, and on a major fault the runner trips before it writes the round's outputs.",
+     "decisions": "78, 99, 153, 160, 164-165, 167, 210-211, 233"
+    },
+    {
+     "file": "docs/adr/0011-tasks-and-rounds.md",
+     "kind": "adr",
+     "job": "How is work scheduled? In the core one cycle runs each task that is due, by priority and with no preemption, missed periods joined into one run and counted and an event task run on its trigger's rising edge; `Logex.Runner` makes rounds back to back for the continuous task, as IEC and Logix do, and keeps a share of the time for its own work and the host's calls.",
+     "decisions": "11, 37-39, 50-52, 108, 111-112, 120-123, 350, 375, 396, 442, 471"
+    },
+    {
+     "file": "docs/adr/0012-staged-online-edit.md",
+     "kind": "adr",
+     "job": "How is a running program or plant changed, and what does the change keep? An edit is staged from its first version, accept, test, untest, assemble and cancel, each step returning a report: state moves by name, a type change is refused while running, an output the edit stops driving holds its value, and what a switch will change is in the forecast before it happens.",
+     "decisions": "18-29, 31-32, 40, 43-45, 55-66, 87-88, 95-96, 106, 129, 139, 141, 157, 199, 232, 244, 251, 254, 259, 261, 278, 302, 315, 329-336, 339-341, 343-345, 347, 374, 377, 381, 386-388, 421-424, 428, 513"
+    },
+    {
+     "file": "docs/adr/0013-watchdogs-and-the-trip.md",
+     "kind": "adr",
+     "job": "What does the runner do when a task runs too long, a device fails or a scan meets a major fault? It trips: every output is written 0 once through each device that answers, scheduling stops, the reason is reported and the last state stays readable, and nothing starts again until a person asks for a cold or a warm restart, which reads every device first; each task has a watchdog, and the runner's own work an idle watchdog.",
+     "decisions": "14, 109-110, 113, 115-116, 126, 128, 133, 136, 142, 211, 354, 394, 441, 469-470, 474, 482, 497, 508"
+    },
+    {
+     "file": "docs/adr/0014-devices-are-processes.md",
+     "kind": "adr",
+     "job": "Why is each device a process of its own, with its own deadline? So that a runner that is stuck, or a card that is slow or hung, cannot leave an output on: each refresh from the runner carries a deadline, a device that hears nothing by it writes 0 to its outputs, latches and tells the runner, and each call to a device has a limit of its own, so a trip names the device that was slow.",
+     "decisions": "114, 119-120, 124-125, 130, 132, 134-135, 137, 143, 262, 286-287, 290, 348, 393, 395, 397-398, 438-439, 461, 484-486, 489-492, 503-505, 512"
+    },
+    {
+     "file": "docs/adr/0015-input-forcing.md",
+     "kind": "adr",
+     "job": "Why can a host force inputs only, and why are forces kept in a file? A force changes what the controller reads, which the runner already supplies, so it needs nothing of the core, where output forcing does and is not built; a forced input stays forced across a restart and a crash, in a file the host names, read strictly and written before the force takes effect, and `status/1` always lists what is forced.",
+     "decisions": "117, 127, 138, 140, 218, 226, 248, 255, 445, 466, 472, 501"
+    },
+    {
+     "file": "docs/adr/0016-retained-values-and-starts.md",
+     "kind": "adr",
+     "job": "What comes back after a restart or a power failure? Only what the program marks `retain`, IEC's qualifier, everything else starting at its initial value, so logex needs no pre-scan; a cold restart, a warm restart, a crash and a fresh start each have a row in one table of starts, every start is a first scan in which nothing edge-driven fires, and the time the plant was stopped is not counted.",
+     "decisions": "69, 75-76, 266-275, 279-284, 291-299, 301-306, 313, 316-319, 321-328, 342, 349, 379, 382-383, 385, 420, 427"
+    },
+    {
+     "file": "docs/adr/0017-the-store-on-disk.md",
+     "kind": "adr",
+     "job": "How are retained values kept on disk, and when is a store refused? The store is text a person can read, under a version line and an end line that counts its lines, written whole through a temporary file; a fresh start matches each value by name and type, drops and reports the rest and keeps a numbered copy of the store it dropped from, and a store that is cut short, malformed or another configuration's is refused with the way out, never guessed at.",
+     "decisions": "276-277, 285, 307-312, 320, 355, 360, 378, 389, 409-413, 416-419, 425, 447-454, 456-457, 483, 487, 527-528, 530-531, 533-540, 543-545, 573-574"
+    },
+    {
+     "file": "docs/adr/0018-file-work-with-a-limit.md",
+     "kind": "adr",
+     "job": "Why does the runner do its file work in other processes? A stalled disk, or a long piece of the runner's own work, must not hold a round or the devices' heartbeat, so each file read and write runs in a process of its own under `write_limit:`, rounds run on while a force is written, a write cut off at its limit is reported as not known, one runner of a VM holds a file, and a trip met in the runner's own work names that work.",
+     "decisions": "352-353, 356, 390-392, 400-401, 414-415, 437, 440, 446, 455, 464-465, 467-468, 473, 475, 488, 493-495, 499-500, 502, 506-510, 518"
+    },
+    {
+     "file": "docs/adr/0019-cost-in-reductions.md",
+     "kind": "adr",
+     "job": "How is the cost of a compile, a scan, a cycle and a round held? In reductions, never in time, which a busy machine changes: a growth test compares two sizes, a bound compares a feature with a twin program measured in the same run, and a ceiling holds each stage under twice a figure recorded with it, so neither a toolchain release nor a saving turns a test red with nothing wrong.",
+     "decisions": "190, 197, 357, 458-460, 463, 481"
+    },
+    {
+     "file": "docs/adr/0020-verify-by-executing.md",
+     "kind": "adr",
+     "job": "When is a claim or a fix accepted? When it was executed: a fix needs a test that fails when the fix is reverted, new code a mutation table that reverts each rule the diff adds, a walk asserts how far it reached against an oracle restated from the program's text, a test on the real clock runs under load before it lands, and no test is skipped, disabled or weakened to get a green run.",
+     "decisions": "49, 337, 359, 362-365, 462, 480, 498 (with CONTRIBUTING.md, 'The one rule', 'A fix needs a test that fails when the fix is reverted' and 'Beware of a green suite')"
+    },
+    {
+     "file": "docs/adr/0021-pinned-toolchain-and-gates.md",
+     "kind": "adr",
+     "job": "Why does logex build on one toolchain only, and what must pass before a commit? Elixir 1.20.4 on Erlang/OTP 28 is pinned in every file that names a version, because the code needs it and nothing older is kept working; the gates are judged by exit code, CI names the tests that failed, and a release step holds the changelog to \u00a77's decisions, with no release planned.",
+     "decisions": "337, 359, 515, 541-542 (with PLAN.md \u00a77's B3, B4 and B6, and CONTRIBUTING.md, 'The toolchain' and 'Before you commit')"
+    },
+    {
+     "file": "docs/adr/0022-typespecs-and-dialyzer.md",
+     "kind": "adr",
+     "job": "Where does the host contract end, and what holds its types? The contract is the modules named as the way in, each other module saying it takes logex's own data unguarded; every public function of the contract has a `@spec` and every type a `@typedoc`, held by OTP's own Dialyzer with no dependency added and no warning silenced, the resource kept opaque, and by a test that holds live values to the specs where Dialyzer types nothing.",
+     "decisions": "514, 523, 549-555"
+    },
+    {
+     "file": "docs/adr/0023-documentation-shape.md",
+     "kind": "adr",
+     "job": "How is the documentation organised and written? README is a short first page, a user's page is one of Di\u00e1taxis's four kinds, a contributor's page holds the architecture, these records or a practice, \u00a77 stays the full log of decisions and CLAUDE.md is an index; each page follows the writing rules of Simplified Technical English as the style guide restates them and claims no conformance, every example is run by the suite, and ExDoc builds a site that CI publishes to GitHub Pages.",
+     "decisions": "358, 361, 366, 546-548, 556-572"
+    },
+    {
+     "file": "docs/adr/README.md",
+     "kind": "contributor",
+     "job": "The index of the decision records: what a record is, how it stands beside docs/organisation.md \u00a77, and a table of the records with one line each."
+    }
+   ]
+  }
+ ]
+}

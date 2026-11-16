@@ -1,0 +1,38 @@
+{
+ "rv29.js": {
+  "scriptPath": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/rv/rv29.js",
+  "args": {
+   "base": "0793a86",
+   "landed": "RV-1 to RV-22, RV-8 the close, and RV-26 to RV-28 have landed (RV-22 merged at fdd6082, RV-28 at af6ca31); the maintainer answered RV-22's and RV-28's questions on 2026-11-15, decisions 541-545 (0793a86), and RV-29 builds what they ask.",
+   "parallel": "RV-24 builds at the same time in its own clone (branch rv24): typespecs on the host contract's functions and decision 514's modules, and OTP's own dialyzer run in CI with a script of its own. Keep to the store's refusals in Logex.Retain, the runner's store messages, the three load failures' fixes, README's store passages, CHANGELOG.md's entries for 544 and 545, PLAN's RV-29 entry and section 7's decisions 541-545; touch README's \"What has landed\" only to say RV-29 has landed, so the two merge cleanly. If RV-24 lands on origin/main before your last commit, merge it in and keep its specs true for what you changed."
+  }
+ },
+ "doc1a.js": {
+  "scriptPath": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/docs/doc1a.js",
+  "args": {
+   "base": "6889ad5",
+   "landed": "RV-1 to RV-22, RV-8 the close, RV-24 and RV-26 to RV-28 have landed; decisions 546-548 (b75d8db) record this item, DOC-1, and its three steps in PLAN.md. RV-24 landed at 6889ad5 on 2026-11-15: typespecs on the host contract, scripts/dialyzer.sh run by CI after the four gates (its step and cache pinned whole by scripts_test.exs), and test/logex/typespec_test.exs; the suite is 3,050 tests. Keep scripts/dialyzer.sh DIALYZER-OK at your tip and say so in your report: ExDoc must stay out of the dev build Dialyzer analyses.",
+   "parallel": "RV-29 builds at the same time in its own clone (branch rv29): decisions 544 and 545 in Logex.Retain's refusals and the runner's store messages, README's store passage and its \"What has landed\" paragraph, CHANGELOG.md's item, PLAN's RV-29 entry, and tests in stalled_disk_test.exs, trip_test.exs, retain_store_test.exs and api_contract_test.exs. Keep your edits to README.md, CHANGELOG.md, CONTRIBUTING.md, CLAUDE.md and .github/workflows/ci.yml small and in places of their own so the two merge cleanly; leave every provisional mark to RV-23. If RV-29 lands on origin/main before your last commit, merge it in."
+  }
+ },
+ "rv30": {
+  "run": "wf_3235cdd0-bde",
+  "args": {
+   "base": "9d3d696",
+   "landed": "RV-1 to RV-22, RV-8 the close, RV-24 and RV-26 to RV-28 have landed. RV-24 landed at 6889ad5 (typespecs on the host contract, scripts/dialyzer.sh, CI's Dialyzer step, test/logex/typespec_test.exs); decisions 549-555 and RV-30's entry were recorded at 80d3cdf. DOC-1's first step landed at 9d3d696 on 2026-11-15 (decisions 546 and 548): ExDoc as a dependency of the docs environment alone (mix.exs's deps(:docs), cli/0, mix.lock), scripts/docs.sh (DOCS-OK or DOCS-FAIL) run by a second workflow .github/workflows/docs.yml that test/logex/docs_test.exs holds, scripts/page.exs, prose.exs, site.exs, draw.exs and pictures.exs with their tests (page_test.exs, prose_test.exs, pictures_test.exs, docs_test.exs), readme_test.exs now reading every page of docs/pages.exs, and pages under guides/ and docs/ (the style guide docs/style-guide.md, docs/check-a-page.md, the glossary, the tutorial); the suite is 3,243 tests. Keep scripts/docs.sh DOCS-OK and scripts/dialyzer.sh DIALYZER-OK at your tip and say so in your report; ExDoc stays out of the dev build Dialyzer reads; the documents you change that are pages of docs/pages.exs under a kind other than :legacy must pass elixir scripts/prose.exs. Two things DOC-1's step found join your part 4, each root-caused before any change, as part 4 says: (i) trip_test.exs near line 1868, a test of the runner's lateness (decision 490) on the manual clock, red once in a gate at load 20 to 40, in its setup, where the simulated panel's output was not yet written when the test looked (output kept in scratchpad/docs/gate-tip-first.out and gate-tip-first.log); (ii) older tests name a scratch directory in the machine's temporary directory by the VM's counter alone (logex-rv2-<n>, logex_fault_<n> and others in compile_total_test.exs, fault_test.exs, real_test.exs, review_lows_test.exs, tag_bit_test.exs, tag_subscript_test.exs, array_configuration_test.exs, and any other a grep finds), so two suites on one machine can read and remove each other's files, as prose_test.exs's did before 563debe named its file by the OS pid too: show the collision with two suites side by side or argue it from the code, name each such directory so that two VMs cannot share it, with a test that holds the rule for every test file (a read of the syntax trees or the text, as clauses_test.exs reads lib/), and change no assertion.",
+   "parallel": "RV-29 still builds at the same time in its own clone (branch rv29, its fix stage): decisions 544 and 545 in Logex.Retain's refusals and the runner's store messages, README's store passage and its \"What has landed\" paragraph, CHANGELOG.md's item, PLAN's RV-29 entry, and tests in stalled_disk_test.exs (near 1857 and 2331), trip_test.exs (near 2078, decision 486's cap trip), retain_store_test.exs and api_contract_test.exs. Keep your edits to README.md, CHANGELOG.md, PLAN.md, CLAUDE.md and trip_test.exs small and in places of their own so the two merge cleanly, and do not touch the test near trip_test.exs 2078 that RV-29 fixes. RV-29 runs scripts/load.sh loops on all four cores for hours: a red test in a gate beside it is judged by its named test run again alone, never re-run away, and a load failure not yours is reported with its output. If RV-29 lands on origin/main before your last commit, merge it in."
+  }
+ },
+ "doc1b_lane_a": {
+  "run": "wf_eeb83001-205",
+  "script": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/docs/doc1b.js",
+  "args_file": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/docs/doc1b_args_a.json",
+  "note": "args passed = json.load(args_file) exactly"
+ },
+ "doc1b_lane_b": {
+  "run": "wf_cbc0d3c4-7df",
+  "script": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/docs/doc1b.js",
+  "args_file": "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/docs/doc1b_args_b.json",
+  "note": "args passed = json.load(args_file) exactly (taken from the transcript)"
+ }
+}

@@ -1,0 +1,295 @@
+{
+ "tut": [
+  {
+   "file": "guides/tutorials/timers-and-counters.md",
+   "kind": "tutorial",
+   "job": "Add an on-delay timer and a box counter to a conveyor program; see that the host gives the time. A timing diagram for each.",
+   "slugs": [
+    "tutorials/timers-and-counters"
+   ]
+  },
+  {
+   "file": "guides/tutorials/first-plant.md",
+   "kind": "tutorial",
+   "job": "Put two programs on tasks in a configuration file, connect a simulated device, run the plant with the runner on the manual clock.",
+   "slugs": [
+    "tutorials/first-plant"
+   ]
+  },
+  {
+   "file": "guides/tutorials/change-a-running-program.md",
+   "kind": "tutorial",
+   "job": "Change a running program with an online edit, step by step, and see that its state is kept.",
+   "slugs": [
+    "tutorials/change-a-running-program"
+   ]
+  }
+ ],
+ "how": [
+  {
+   "file": "guides/howto/install-and-run.md",
+   "kind": "howto",
+   "job": "Install the pinned toolchain, add logex to a project, compile and run a first file.",
+   "slugs": [
+    "howto/install-and-run"
+   ]
+  },
+  {
+   "file": "guides/howto/read-diagnostics.md",
+   "kind": "howto",
+   "job": "Read a compile error or a warning: where it points, what it means, how to print it.",
+   "slugs": [
+    "howto/read-diagnostics"
+   ]
+  },
+  {
+   "file": "guides/howto/use-timers.md",
+   "kind": "howto",
+   "job": "Use ton, tof, tp and rto, and the long timers in nanoseconds.",
+   "slugs": [
+    "howto/use-timers"
+   ]
+  },
+  {
+   "file": "guides/howto/use-counters.md",
+   "kind": "howto",
+   "job": "Use ctu, ctd and ctud and the typed counters.",
+   "slugs": [
+    "howto/use-counters"
+   ]
+  },
+  {
+   "file": "guides/howto/do-arithmetic.md",
+   "kind": "howto",
+   "job": "Add, subtract, multiply, divide, compare; what happens at a limit.",
+   "slugs": [
+    "howto/do-arithmetic"
+   ]
+  },
+  {
+   "file": "guides/howto/choose-integer-widths-and-convert.md",
+   "kind": "howto",
+   "job": "Choose an integer type and convert between types.",
+   "slugs": [
+    "howto/choose-integer-widths-and-convert"
+   ]
+  },
+  {
+   "file": "guides/howto/use-bit-strings.md",
+   "kind": "howto",
+   "job": "Use byte, word, dword and lword: masks, shifts, bit access, a bit number in a tag.",
+   "slugs": [
+    "howto/use-bit-strings"
+   ]
+  },
+  {
+   "file": "guides/howto/use-reals.md",
+   "kind": "howto",
+   "job": "Use real and lreal: literals, arithmetic, sqrt, conversions and truncation.",
+   "slugs": [
+    "howto/use-reals"
+   ]
+  },
+  {
+   "file": "guides/howto/use-arrays.md",
+   "kind": "howto",
+   "job": "Declare and use arrays, with literal subscripts and subscripts in tags.",
+   "slugs": [
+    "howto/use-arrays"
+   ]
+  },
+  {
+   "file": "guides/howto/use-arrays-of-instances.md",
+   "kind": "howto",
+   "job": "Use arrays of timers, counters and function blocks.",
+   "slugs": [
+    "howto/use-arrays-of-instances"
+   ]
+  },
+  {
+   "file": "guides/howto/use-one-shots-and-pulse-coils.md",
+   "kind": "howto",
+   "job": "Use ons, osr and osf to act on an edge.",
+   "slugs": [
+    "howto/use-one-shots-and-pulse-coils"
+   ]
+  },
+  {
+   "file": "guides/howto/jump-over-rungs.md",
+   "kind": "howto",
+   "job": "Skip rungs with jmp and lbl, and know what a skipped rung keeps.",
+   "slugs": [
+    "howto/jump-over-rungs"
+   ]
+  },
+  {
+   "file": "guides/howto/write-a-function-block.md",
+   "kind": "howto",
+   "job": "Write a function block in its own file and call it with cal.",
+   "slugs": [
+    "howto/write-a-function-block"
+   ]
+  },
+  {
+   "file": "guides/howto/keep-values-across-a-restart.md",
+   "kind": "howto",
+   "job": "Mark tags retain and do a warm restart.",
+   "slugs": [
+    "howto/keep-values-across-a-restart"
+   ]
+  },
+  {
+   "file": "guides/howto/write-a-configuration-file.md",
+   "kind": "howto",
+   "job": "Write a .logex file: tasks, program instances, globals, connections.",
+   "slugs": [
+    "howto/write-a-configuration-file"
+   ]
+  },
+  {
+   "file": "guides/howto/build-a-configuration-from-elixir.md",
+   "kind": "howto",
+   "job": "Build the same configuration from Elixir data.",
+   "slugs": [
+    "howto/build-a-configuration-from-elixir"
+   ]
+  },
+  {
+   "file": "guides/howto/share-a-global.md",
+   "kind": "howto",
+   "job": "Share one value between programs with var_global and var_external.",
+   "slugs": [
+    "howto/share-a-global"
+   ]
+  },
+  {
+   "file": "guides/howto/use-an-event-task.md",
+   "kind": "howto",
+   "job": "Run a program when a bool global rises.",
+   "slugs": [
+    "howto/use-an-event-task"
+   ]
+  },
+  {
+   "file": "guides/howto/set-watchdogs.md",
+   "kind": "howto",
+   "job": "Give each task a watchdog, and use the continuous task.",
+   "slugs": [
+    "howto/set-watchdogs"
+   ]
+  },
+  {
+   "file": "guides/howto/run-on-the-clock.md",
+   "kind": "howto",
+   "job": "Start a runner on the real clock with devices.",
+   "slugs": [
+    "howto/run-on-the-clock"
+   ]
+  },
+  {
+   "file": "guides/howto/test-on-the-manual-clock.md",
+   "kind": "howto",
+   "job": "Test a plant with the manual clock and the simulated device.",
+   "slugs": [
+    "howto/test-on-the-manual-clock"
+   ]
+  },
+  {
+   "file": "guides/howto/watch-a-runner.md",
+   "kind": "howto",
+   "job": "Subscribe to a runner's events and read its status.",
+   "slugs": [
+    "howto/watch-a-runner"
+   ]
+  },
+  {
+   "file": "guides/howto/force-inputs.md",
+   "kind": "howto",
+   "job": "Force an input, see the force, remove it; the forces file.",
+   "slugs": [
+    "howto/force-inputs"
+   ]
+  },
+  {
+   "file": "guides/howto/keep-values-on-disk.md",
+   "kind": "howto",
+   "job": "Give a runner a store so retained values survive a crash.",
+   "slugs": [
+    "howto/keep-values-on-disk"
+   ]
+  },
+  {
+   "file": "guides/howto/recover-a-refused-store.md",
+   "kind": "howto",
+   "job": "What to do when a start refuses the store file.",
+   "slugs": [
+    "howto/recover-a-refused-store"
+   ]
+  },
+  {
+   "file": "guides/howto/edit-the-store-by-hand.md",
+   "kind": "howto",
+   "job": "Correct a value in a store file by hand, safely.",
+   "slugs": [
+    "howto/edit-the-store-by-hand"
+   ]
+  },
+  {
+   "file": "guides/howto/take-back-a-deploy.md",
+   "kind": "howto",
+   "job": "Go back to the earlier program after a deploy that was wrong.",
+   "slugs": [
+    "howto/take-back-a-deploy"
+   ]
+  },
+  {
+   "file": "guides/howto/map-io-points.md",
+   "kind": "howto",
+   "job": "Connect tags to device points, located arrays included.",
+   "slugs": [
+    "howto/map-io-points"
+   ]
+  },
+  {
+   "file": "guides/howto/write-a-device-adapter.md",
+   "kind": "howto",
+   "job": "Write an adapter for a real device.",
+   "slugs": [
+    "howto/write-a-device-adapter"
+   ]
+  },
+  {
+   "file": "guides/howto/edit-a-running-program.md",
+   "kind": "howto",
+   "job": "Change one running instance online.",
+   "slugs": [
+    "howto/edit-a-running-program"
+   ]
+  },
+  {
+   "file": "guides/howto/edit-a-running-plant.md",
+   "kind": "howto",
+   "job": "Change a running configuration online, through the runner.",
+   "slugs": [
+    "howto/edit-a-running-plant"
+   ]
+  },
+  {
+   "file": "guides/howto/restart-after-a-trip.md",
+   "kind": "howto",
+   "job": "Find why a plant tripped and restart it, warm or cold.",
+   "slugs": [
+    "howto/restart-after-a-trip"
+   ]
+  },
+  {
+   "file": "guides/howto/port-a-program.md",
+   "kind": "howto",
+   "job": "Port a program from Logix or IEC 61131-3: what behaves differently.",
+   "slugs": [
+    "howto/port-a-program",
+    "explanation/differences-from-logix"
+   ]
+  }
+ ]
+}
