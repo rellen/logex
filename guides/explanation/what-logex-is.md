@@ -32,7 +32,8 @@ the [outputs](../reference/glossary.md#output).
 - **A controls engineer** gets a ladder language as text. Where
   [IEC 61131-3](../reference/glossary.md#iec-61131-3) names an operation, the
   [instruction](../reference/glossary.md#instruction) has that name. Start with
-  [The dialect and IEC 61131-3](the-dialect-and-iec.md).
+  [The dialect and IEC 61131-3](the-dialect-and-iec.md). If you know a Logix
+  controller, then read [How logex differs from Logix](differences-from-logix.md).
 
 Know these 4 limits before you start:
 
@@ -199,8 +200,9 @@ host starts, and only the runner reads a clock.
 
 A controls engineer can compare the model of logex with an industrial controller, for
 example a [Logix](../reference/glossary.md#logix) controller.
-[The dialect and IEC 61131-3](the-dialect-and-iec.md) gives each difference of the
-language. These things are the same as in a controller:
+[How logex differs from IEC 61131-3](differences-from-iec.md) and
+[How logex differs from Logix](differences-from-logix.md) give the differences of the
+language and of its behaviour. These things are the same as in a controller:
 
 - A program is a list of rungs, and a scan runs them from the first to the last.
 - An instruction such as `ton` or `ctu` has the name of IEC 61131-3. The

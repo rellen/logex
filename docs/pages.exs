@@ -107,6 +107,8 @@
   {"guides/explanation/what-logex-is.md", :explanation, "Explanation"},
   {"guides/explanation/what-logex-has.md", :explanation, "Explanation"},
   {"guides/explanation/the-dialect-and-iec.md", :explanation, "Explanation"},
+  {"guides/explanation/differences-from-iec.md", :explanation, "Explanation"},
+  {"guides/explanation/differences-from-logix.md", :explanation, "Explanation"},
   {"guides/explanation/programs-as-data.md", :explanation, "Explanation"},
   {"guides/explanation/scan-cycle-and-time.md", :explanation, "Explanation"},
   {"guides/explanation/types-and-overflow.md", :explanation, "Explanation"},
