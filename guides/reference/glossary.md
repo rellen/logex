@@ -147,15 +147,27 @@ A rung that keeps its output on with a contact of the same output.
 
 ### one-shot
 
-An instruction that is true for 1 scan when its input changes: `ons`, `osr` and `osf`.
+An instruction that gives a signal for 1 scan when the power flow to it changes: `ons`,
+`osr` and `osf`. An `ons` passes power for that scan. An `osr` or an `osf` sets its pulse
+bit to 1 for that scan.
 
 ### storage bit
 
-The bool tag in which a one-shot keeps the power flow of its last run.
+The bool in which a one-shot keeps the power flow of its last run. It is a bool tag, an
+element of a bool array or a bit.
 
 ### pulse bit
 
-The bool tag that an `osr` or an `osf` sets to 1 for 1 scan.
+The bool that an `osr` or an `osf` sets to 1 for 1 scan. It is a bool tag, an element of
+a bool array, a bit or a member.
+
+### pulse coil
+
+A coil that is also a one-shot: `osr` and `osf`. It sets its pulse bit to 1 for 1 scan
+when the power flow to it changes.
+
+IEC 61131-3: a transition-sensing coil. Conventional set: OSR, One Shot Rising, and OSF,
+One Shot Falling.
 
 ## Tags and types
 
@@ -268,7 +280,13 @@ instruction on the rung gives it.
 
 ### rising edge
 
-A change of a bool from 0 to 1 between 2 runs of an instruction.
+A change of the power flow to an instruction from false to true, between 2 runs of the
+instruction. For a bool: a change from 0 to 1.
+
+### falling edge
+
+A change of the power flow to an instruction from true to false, between 2 runs of the
+instruction. For a bool: a change from 1 to 0.
 
 ## Runs
 
