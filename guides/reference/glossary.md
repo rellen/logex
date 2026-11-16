@@ -511,6 +511,11 @@ The step of an online edit that makes the new program the only program.
 
 The step of an online edit that removes the new program and keeps the old program.
 
+### forecast
+
+The list of entries that the accept of an online edit returns. A test that the host does
+at that moment returns the same entries in its report.
+
 ## Standards and vendors
 
 ### IEC 61131-3
