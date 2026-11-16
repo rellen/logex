@@ -529,6 +529,12 @@ this vocabulary, as [`docs/naming.md`](../../docs/naming.md) does not.
 A family of industrial controllers. A page can compare the behaviour of logex with the
 behaviour of a Logix controller.
 
+### safety function
+
+A function of a machine that protects persons, for example an emergency stop, a guard
+interlock or a light curtain. A failure of the function can cause an injury. logex must
+not do a safety function.
+
 ## Instruction mnemonics
 
 logex has 40 instructions and 182 typed conversions. For the rules of each instruction,

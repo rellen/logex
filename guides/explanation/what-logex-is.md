@@ -17,11 +17,12 @@ the [outputs](../reference/glossary.md#output).
 
 > #### Warning {: .warning}
 >
-> Do not use logex for a safety function. logex is not a safety controller, and it has no
-> certificate for industrial use. An emergency stop must work while logex does not run:
-> after logex stops, after logex fails, and if logex never starts. Make each safety
-> function with hardwired circuits or with a safety controller. Read
-> [Safety and limits](safety-and-limits.md) before you connect logex to a machine.
+> Do not use logex for a [safety function](../reference/glossary.md#safety-function).
+> logex is not a safety controller, and it has no certificate for industrial use. An
+> emergency stop must work while logex does not run: after logex stops, after logex
+> fails, and if logex never starts. Make each safety function with hardwired circuits or
+> with a safety controller. Read [Safety and limits](safety-and-limits.md) before you
+> connect logex to a machine.
 
 ## Who logex is for
 

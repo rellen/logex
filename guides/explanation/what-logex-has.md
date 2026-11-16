@@ -6,9 +6,10 @@ question: what can a program, a configuration and a runner do in logex?
 
 > #### Warning {: .warning}
 >
-> Do not use logex for a safety function. logex is not a safety controller, and a
-> [trip](../reference/glossary.md#trip) is not a guarantee that each output is off. Read
-> [Safety and limits](safety-and-limits.md) before you connect logex to a machine.
+> Do not use logex for a [safety function](../reference/glossary.md#safety-function).
+> logex is not a safety controller, and a [trip](../reference/glossary.md#trip) is not a
+> guarantee that each output is off. Read [Safety and limits](safety-and-limits.md)
+> before you connect logex to a machine.
 
 ## The parts at each level
 
@@ -172,9 +173,31 @@ and gives each time of a write.
 
 ## What logex does not have
 
-[What logex does not have](../reference/not-supported.md) lists the parts that a
-controller has and that logex does not have. [Safety and limits](safety-and-limits.md)
-explains each limit.
+logex does not have each part of [IEC 61131-3](../reference/glossary.md#iec-61131-3) or
+of a controller. This table lists the parts that logex does not have.
+
+| Area | logex does not have |
+|---|---|
+| Configuration | More than 1 resource |
+| Types | TIME, LTIME, a date and a time of day. Strings and characters. Structures, user-defined types, enumerations, subranges and references |
+| Literals | `T#`, a typed literal such as `int#5`, and octal |
+| Timers | A time of less than 1 ms: each timer counts full ms of the clock, a long timer also |
+| Arrays | More than 3 dimensions. The bounds of IEC, `ARRAY[1..8]`. An expression as a subscript. A copy or a fill of a full array |
+| Bit strings | Access to 1 byte or 1 word, `w.%B1` |
+| Arithmetic | `round`, `ceil` and `floor`. A conversion to or from a bool, BCD or the bit pattern of a real. NaN and infinity |
+| Instructions | `res`, a jump back and a master control zone |
+| Online edit | A change of the type of a tag or of the size of an array |
+| Forces | A force of an output |
+| Restarts | Persistent values, a first-scan bit, a prescan and a hot restart |
+
+A counter and a retentive timer reset through their member `r`, and logex will not get a
+master control zone. A [preset](../reference/glossary.md#preset) is a plain integer, in
+ms or, for a long timer, in ns.
+
+[What logex does not have](../reference/not-supported.md) gives the rule for each part.
+[Safety and limits](safety-and-limits.md) and
+[The limits of retained values](limits-of-retained-values.md) explain the limits that
+matter at a machine.
 
 ## See also
 
