@@ -425,6 +425,14 @@ A global with the word `at` and the address of a point.
 
 IEC 61131-3: a located variable. Conventional set: an alias tag on an I/O member.
 
+### location
+
+The text that names a point in a configuration, for example `panel.i.0`. It has 3
+parts: the name of a device, the letter `i` or `q`, and an address. The letter `i` is
+for an input point, and the letter `q` is for an output point.
+
+IEC 61131-3: a direct representation, such as `%IX1.1`.
+
 ### device
 
 The hardware, or a simulated device, that holds the points of a configuration.
