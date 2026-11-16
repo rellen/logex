@@ -15850,6 +15850,153 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      at its declaration, and Logix's tag editor refuses it as it is typed. RV-30 builds
      it.
 
+556. **Where a reader finds the older documents (DOC-1),** step 1's question 1: the site
+     is the pages ExDoc builds; `CONTRIBUTING.md`, `CHANGELOG.md`, `PLAN.md`, `CLAUDE.md`
+     and five files under `docs/` are read on GitHub, and a site link to one goes there.
+
+     **Taken: as built, on GitHub (a)** (the maintainer, 2026-11-16), until step 2's
+     contributor pages replace them. Not taken: in the site now under "Project", some
+     fifty known warnings more. Most Elixir projects put their changelog in the site and
+     leave their contributing notes on GitHub.
+
+557. **A file two pages use (DOC-1),** step 1's question 2: the tutorial shows `motor.ld`,
+     and README's later examples read it through a sentence that links to the tutorial.
+
+     **Taken: as built, shown or linked (a)** (the maintainer, 2026-11-16): a page shows a
+     file, or says in a sentence with a link which page shows it; a file may be shown on
+     two pages, each block held to the one file. Not taken: one page alone showing a
+     file; a mark the reader does not see in place of the link.
+
+558. **A block the suite does not check (DOC-1),** step 1's question 3: a code block is
+     run or compared with its file unless a comment above it says `unchecked` and why, a
+     message Mix prints for one.
+
+     **Taken: as built, with the mark (a)** (the maintainer, 2026-11-16): the checker
+     counts such blocks and lists them for the reviewer. Not taken: no such mark. Rust's
+     documentation tests have marks of the kind, `ignore` and `no_run`.
+
+559. **A passive verb (DOC-1),** step 1's question 4: "the tag is written by the rung" is
+     passive and "the contact is closed" a state, and a script cannot tell them apart.
+
+     **Taken: as built, counted (a)** (the maintainer, 2026-11-16): the checker lists
+     each such form for the reviewer and fails no page for one. Not taken: every such
+     form refused unless marked. ASD-STE100 requires the active voice in a procedure and
+     asks for it as much as possible in a description.
+
+560. **What "follows ASD-STE100" means (DOC-1),** step 1's question 5: the standard is 53
+     rules and a dictionary of some 900 words, ASD's, which certifies no document; step 1
+     could not read its text.
+
+     **Taken: as built, the rules as the style guide restates them (a)** (the maintainer,
+     2026-11-16): no page is compared with the dictionary and no page claims conformance.
+     Not taken: the maintainer asking ASD for the text and step 3 reading a sample of
+     pages against it.
+
+561. **A vendor's name on a user's page (DOC-1),** step 1's question 6:
+     `CONTRIBUTING.md`'s "Do not restore vendor names" keeps the vendor of the
+     conventional set unnamed, Logix named only to compare behaviour.
+
+     **Taken: as built, the rule on every page (a)** (the maintainer, 2026-11-16): the
+     glossary's row for `xic` says "Conventional set: XIC, Examine If Closed". Not taken:
+     a user's page naming the product beside each word.
+
+562. **Where the site gets Mermaid (DOC-1),** step 1's question 7: Mermaid 11.4.1 is
+     loaded from jsDelivr, held to its hash; a reader with no network sees a diagram's
+     text.
+
+     **Taken: as built, from the network (a)** (the maintainer, 2026-11-16), ExDoc's own
+     recipe; GitHub draws the same blocks itself. Not taken: the 2.6 MB file kept in the
+     repository; no Mermaid.
+
+563. **The site's forms (DOC-1),** step 1's question 8.
+
+     **Taken: as built, HTML alone (a)** (the maintainer, 2026-11-16). Not taken: an EPUB
+     book too, in which no Mermaid diagram is drawn.
+
+564. **A picture in the dark theme (DOC-1),** step 1's question 9.
+
+     **Taken: as built, one file a picture, on a light panel (a)** (the maintainer,
+     2026-11-16), the same on GitHub. Not taken: two files a picture, one a theme.
+
+565. **How the tutorial's reader gets logex (DOC-1),** step 1's question 10: with no
+     release (decision 541), the tutorial's project says `{:logex, github:
+     "rellen/logex"}`, a block the suite parses and cannot run.
+
+     **Taken: as built, from GitHub (a)** (the maintainer, 2026-11-16). Not taken: a path
+     to a clone, a step more for the reader, which the suite could run.
+
+566. **The examples' test's name (DOC-1),** step 1's question 11:
+     `test/logex/readme_test.exs` runs every page's examples now.
+
+     **Taken: the name kept (a)** (the maintainer, 2026-11-16), so that the record's
+     citations stay true; its head and `CLAUDE.md`'s line say what it reads. Not taken:
+     `examples_test.exs` from step 2.
+
+567. **A page's name in the site (DOC-1),** step 1's question 12: the site is one
+     directory, and the plan has `guides/reference/runner.md` and
+     `docs/architecture/runner.md`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): a page under `guides/` is named
+     by its file, `runner.html`, and any other by its whole path,
+     `docs-architecture-runner.html`. Not taken: the file's name alone everywhere, no two
+     files of the repository sharing one.
+
+568. **How README ends (DOC-1),** step 1's question 13: README written again is a user's
+     page under every writing rule.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): it ends with its status and its
+     licence, decision 546's last sections, and is not held to end with "See also". Not
+     taken: "See also" after them.
+
+569. **A word with two senses (DOC-1),** step 1's question 14: the rules give a word one
+     meaning, and a script reads no meaning.
+
+     **Taken: as built, the clear cases passed (a)** (the maintainer, 2026-11-16): "since"
+     of a time, a listed word as a noun after its article and "enable", a glossary term,
+     pass; "whether", "below 10" and "is testing" are refused, each with its way in
+     `docs/check-a-page.md`. Not taken: every form refused, as first built, 36 refusals
+     in 40 correct sentences.
+
+570. **A quotation (DOC-1),** step 1's question 15.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): on a user's page the words
+     between double quotation marks are read by the word rules, and a message logex
+     prints is written as code; a contributor page and a decision record keep the leave,
+     their quotations counted. Not taken: the leave on every page.
+
+571. **The version in the sidebar (DOC-1),** step 1's question 16: `mix.exs` says 0.1.0
+     and no release is planned (decision 541).
+
+     **Taken: as built, hidden (a)** (the maintainer, 2026-11-16); a page's title in the
+     browser's tab still ends "logex v0.1.0", which ExDoc gives no way to change. Not
+     taken: shown.
+
+572. **What a command line shows (DOC-1),** step 1's question 17.
+
+     **Taken: as built, commands alone (a)** (the maintainer, 2026-11-16): a `console`
+     block is compared with nothing, so what a command printed is an example's run, which
+     the suite compares, or a block marked `unchecked` (decision 558). Not taken: any
+     `console` block passed and counted.
+
+573. **The way out of a store refused for two reasons (RV-29),** RV-29's question 1: the
+     box counter `tally` is given the store configuration `line_2` wrote, its `program`
+     lines deleted by hand; the renamed configuration's refusal and the naming refusal
+     each offer the way out (decisions 540 and 545).
+
+     **Taken: as built, once, at the first line that tells it (a)** (the maintainer,
+     2026-11-16): the line of the renamed configuration ends with the way out and the
+     naming line ends at what is missing. Not taken: once at the last line; on every
+     line; the naming lines waiting for the configuration's name as they wait for the
+     count (decision 544). IEC 61131-3 and Logix have no store a person edits.
+
+574. **Two long configuration names in that refusal (RV-29),** RV-29's question 2: a
+     configuration of 61 characters renamed at its end is quoted beside the store's.
+
+     **Taken: as built, each name cut at 60 bytes (a)** (the maintainer, 2026-11-16), as
+     the store's has been since RV-5, so that the line holds the way out whole; two names
+     that differ past the cut read the same. Not taken: both in full, the way out on a
+     line of its own; each cut around the first place they differ.
+
 ---
 
 ## 8. Sources, and what is unverified

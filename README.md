@@ -403,11 +403,13 @@ gives. The maintainer answered RV-24's questions the same day, decisions 549–5
 with RV-30 are Dialyzer as the gate's fifth step, a call whose answer is thrown away made
 red, and a global's wrong initial value refused where it is declared. RV-29 has landed: a
 store with no resource line whose count does not read told its count first, and a renamed
-configuration's refusal ending with the full way out. Waiting: the runner split by
-concern. And DOC-1, decisions 546–548: this file made short, its details moved into guides
-built with ExDoc, tutorials, how-to guides, reference and explanation, and into
-contributor pages with a curated set of decision records, the site published on GitHub
-Pages.
+configuration's refusal ending with the full way out. DOC-1's first step has landed
+(decisions 546 and 548): the documentation's site, built with ExDoc and published on
+GitHub Pages, its checks, and its first pages, the tutorial and the glossary. The
+maintainer answered that step's questions and RV-29's, decisions 556–574, each taken as
+built. Waiting: the runner split by concern. And DOC-1's second and third steps: this
+file made short, its details moved into the site's tutorials, how-to guides, reference
+and explanation, and into contributor pages with a curated set of decision records.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions

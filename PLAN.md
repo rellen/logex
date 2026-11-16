@@ -44,7 +44,10 @@ documentation's new shape, 2026-11-15: it names decisions 546–548 and what the
 what waits, DOC-1 and DOC-2.)* *(Since RV-24 and the answers to its questions, 2026-11-15:
 it says RV-24 has landed, names decisions 549–555, and names what still waits, RV-23,
 RV-25, RV-29, RV-30, DOC-1 and DOC-2.)* *(Since RV-29, 2026-11-15: it says RV-29 has
-landed, and names what still waits, RV-23, RV-25, RV-30, DOC-1 and DOC-2.)*
+landed, and names what still waits, RV-23, RV-25, RV-30, DOC-1 and DOC-2.)* *(Since DOC-1's
+first step and the answers to its questions and RV-29's, 2026-11-16: it says that step has
+landed, names decisions 556–574, and names what still waits, RV-23, RV-25, RV-30, DOC-1's
+second and third steps and DOC-2.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -22932,6 +22935,26 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   made their numbers; and the three real-clock tests seen red once each under load in
   RV-24's mutation runs, `trip_test.exs:1600`, `:2062` and `:4956`, each root-caused and
   fixed in the test or the code as its cause says, none given more time.
+
+**DOC-1's first step's questions and RV-29's answered, 2026-11-16** (decisions 556–574).
+DOC-1's first step landed on `main` at `9d3d696`, its site published at
+<https://rellen.github.io/logex/> by the Docs workflow's first run on `main`, and RV-29 at
+`2ab16d5`. The maintainer took every reading as built. Of the first step's seventeen
+questions: the older documents read on GitHub until the second step's pages replace them
+(556); a file shown on a page or linked from it (557); the `unchecked` mark kept (558); a
+passive verb counted for the reviewer (559); the rules of ASD-STE100 as the style guide
+restates them, no conformance claimed (560); the vendor of the conventional set unnamed on
+every page (561); Mermaid from the network (562); HTML alone (563); a picture on a light
+panel in the dark theme (564); the tutorial's project taking logex from GitHub (565);
+`readme_test.exs` keeping its name (566); a page under `guides/` named by its file and any
+other by its path (567); README ending with its status and licence (568); the checker
+passing the clear cases of a word with two senses (569); quoted words read on a user's
+page (570); no version in the sidebar (571); and a `console` block showing commands alone
+(572). Of RV-29's two: the way out told once, at the first line that tells it (573), and
+two long configuration names each cut at 60 bytes (574). Nothing waits to be built for
+them; the marks they settle are RV-23's, with every other. RV-30 started when the first
+step landed, and DOC-1's second step starts beside it; the order after them is unchanged:
+DOC-1's third step, RV-23, RV-25 alone, and DOC-2 last.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
