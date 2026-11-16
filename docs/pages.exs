@@ -105,6 +105,7 @@
   {"guides/reference/not-supported.md", :reference, "Reference"},
   {"guides/reference/glossary.md", :reference, "Reference"},
   {"guides/explanation/what-logex-is.md", :explanation, "Explanation"},
+  {"guides/explanation/what-logex-has.md", :explanation, "Explanation"},
   {"guides/explanation/the-dialect-and-iec.md", :explanation, "Explanation"},
   {"guides/explanation/programs-as-data.md", :explanation, "Explanation"},
   {"guides/explanation/scan-cycle-and-time.md", :explanation, "Explanation"},
