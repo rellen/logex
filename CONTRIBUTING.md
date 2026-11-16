@@ -614,6 +614,20 @@ choice, not an oversight to fix.
   heard-at-each-poll test, which reads `status/1` after its rounds and failed so 1 run in
   50 in RV-18's runs, reads since RV-19 the runner's events up to the round its rule
   ends with as well, and whether it may read them alone is the maintainer's to say.
+- **A plant with a short idle watchdog runs where the VM is otherwise idle.** The runner
+  gives each call to a device the idle watchdog and a poll period of real time, on the
+  manual clock too (decisions 125, 128 and 348): 60 ms where a test needs `idle: 50,
+  poll: 10` for its arithmetic. A device answers within that on a loaded machine, and
+  beside a busy VM, but not with both at once, when it waits its turn behind the
+  suite's other test cases while the machine gives the VM a fraction of its cores: the
+  same start tripped `{:io, "panel", :timeout}` in none of 3,212 runs under 32 busy
+  loops, in none of 2,420 beside 64 spinning processes, and in 6 of 248 with both, and
+  four tests of `trip_test.exs` were red once each in gates run beside another suite
+  (RV-30's review). Such a test's module is not async, which ExUnit runs once every
+  async module is done, as `trip_test.exs` is, and its set-up looks at the runner's
+  status after the start, so that a trip there names itself; never a longer watchdog
+  than the rule under test needs. To see such a failure again, load the VM as well as
+  the machine: the four tests alone under busy loops passed 200 runs.
 - **A map of 32 keys or fewer iterates its string and integer keys in order.** So a
   missing `Enum.sort` over a map keyed by tag names, or over a list built from one, is
   invisible to every test with a small table. M1-5 hit it twice: the order of the input

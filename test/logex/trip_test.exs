@@ -7,8 +7,18 @@ defmodule Logex.TripTest do
   resource kept for `get/2`, and `restart/2`, cold and warm, with the first round at once
   and the clock not counting the stopped time; each trip's reason; and the hidden seam,
   `steps:`, through which a test reaches `{:internal, message}`.
+
+  Not async (RV-30's review, F4): its plants need a short idle watchdog for their
+  arithmetic on the manual clock, 50 or 100 ms with a poll period of 10, and the runner
+  gives each call to a device that long in real time too. Beside the suite's other test
+  cases a device waits its turn behind their processes, and on a machine that gives the
+  VM a fraction of its cores that wait passed the 60 ms, the runner tripping `{:io,
+  "panel", :timeout}` at its start or at a later write, four tests red once each in
+  loaded gates. ExUnit runs this module once every async module is done, the VM's run
+  queue its own, where no start tripped under the same load (provisional: `PLAN.md`'s
+  RV-30, question 4).
   """
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Logex.Configuration
   alias Logex.IO.Sim
@@ -1537,6 +1547,29 @@ defmodule Logex.TripTest do
   # on time; and the wake's lateness shows in `status/1`'s `latest_wake`, a refresh's as a
   # round's. The task runs once a second, so that the wakes are the refreshes'.
   describe "a runner that wakes late lets its devices run first (decision 461)" do
+    # RV-30's review (F4): these plants need a poll period of 10 ms and an idle watchdog
+    # of 50 for their arithmetic on the manual clock, and the runner gives each call to a
+    # device that long in real time too, 60 ms, whatever its clock reads (decisions 125,
+    # 128 and 348). The start's first round writes the panel inside `start_link/1`: on a
+    # machine so loaded that the panel's process, or the simulated device's behind it, is
+    # kept off a core past the 60 ms, the runner trips there, `{:io, "panel", :timeout}`,
+    # before the test's first step, and the test failed at whatever it next looked at.
+    # The set-up looks at the start, so that such a run names its cause; it changes what
+    # a held machine does to the plant in nothing (provisional: `PLAN.md`'s RV-30,
+    # question 4).
+    defp started!(runner) do
+      status = Runner.status(runner)
+
+      assert %{status: :running, trip: nil} = status,
+             "the runner tripped at its start, #{inspect(status.trip)}, after " <>
+               "#{status.rounds} rounds: its first write to a device has the idle " <>
+               "watchdog and a poll period of real time, 60 ms in this plant, and the " <>
+               "machine held the device longer; run the test again alone " <>
+               "(PLAN.md, RV-30's review, F4)"
+
+      runner
+    end
+
     defp stalled do
       {:ok, clock} = Manual.start_link()
       {:ok, agent} = Agent.start_link(fn -> %{runner: nil, stall: 0, lag: 0} end)
@@ -1551,6 +1584,7 @@ defmodule Logex.TripTest do
           idle: 50
         )
 
+      started!(runner)
       Agent.update(agent, &%{&1 | runner: runner})
       :ok = Runner.subscribe(runner, [:trip])
       Sim.set(panel, "panel.i.0", 1)
@@ -1738,6 +1772,7 @@ defmodule Logex.TripTest do
           idle: 50
         )
 
+      started!(runner)
       Agent.update(agent, &%{&1 | runner: runner})
       :ok = Runner.subscribe(runner, [:trip])
       Sim.set(panel, "panel.i.0", 1)
@@ -2008,6 +2043,7 @@ defmodule Logex.TripTest do
           steps: Slow
         )
 
+      started!(runner)
       :ets.insert(__MODULE__, {runner, clock})
       :ok = Runner.subscribe(runner, [:trip])
       Sim.set(panel, "panel.i.2", ms)
@@ -2031,6 +2067,7 @@ defmodule Logex.TripTest do
           steps: Slow
         )
 
+      started!(runner)
       Agent.update(agent, &%{&1 | runner: runner})
       :ets.insert(__MODULE__, {runner, clock})
       Sim.set(panel, "panel.i.2", ms)
