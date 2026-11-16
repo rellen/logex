@@ -136,8 +136,9 @@ defmodule Logex.DroppedAnswersTest do
            ]
 
     # The change decision 550's flag is for, written so that Dialyzer passes it: a good
-    # write's close answered `:ok` whatever the close gave. It is a mark in a function
-    # the list has none for.
+    # write's close answered `:ok` whatever the close gave. It is a second mark in
+    # `closed/2`, where the list holds one, the close after a failure: one more than the
+    # list, and red in the test above.
     dropped = ~S"""
     defmodule Logex.Retain do
       defp closed(:ok, io) do

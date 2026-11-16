@@ -15788,6 +15788,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      a quiet machine: the fifth step 10 s of a gate with the PLT kept and 51 s the first
      time, a gate of 283 and 329 s where the four took 296 s, the suite's own time 248 to
      272 s of each.)*
+     *(RV-30's review, 2026-11-16: the fifth step runs whatever arguments the suite was
+     given; everything it prints is in the log, its standard error too; a code other
+     than 2 is told as a step that could not run, where every code was told as
+     warnings; and a machine with no `dialyzer` on its path is told so, 127, nothing
+     built and its PLT kept, where the good PLT was deleted first. `scripts_test.exs`
+     holds each, and `CONTRIBUTING.md`'s list of the five to the script.)*
 
 550. **Which of Dialyzer's warnings are held (RV-24),** RV-24's question 2 as its review
      restated it: as built, Dialyzer's defaults and five more, `-Wextra_return`,
@@ -15814,6 +15820,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      behaviour changed. Each mark taken away is red by Dialyzer, and so is a good close's
      answer thrown away; the red run in CI, `backup/rv30-red`, is in `PLAN.md`'s "RV-30
      as built".)*
+     *(RV-30's review, 2026-11-16: a drop that is a defect passes Dialyzer once it is
+     written `_ =`, this decision's own example among them, a good write's close
+     answered `:ok` whatever the close gave, and no file here makes a close fail, so the
+     suite passed it too. `test/logex/dropped_answers_test.exs` reads every mark from
+     `lib/`'s syntax trees and holds it to a list, its file, function and call beside
+     why the answer may be dropped there, 26 with the two that stood before the flag: a
+     mark added, moved or taken away is red until the list says so. Provisional:
+     `PLAN.md`'s "RV-30's review", question 7.)*
 
 551. **A Dialyzer warning that is no defect (RV-24),** RV-24's question 3: twelve of the
      first warnings were no defect, ten of them a refusal raised through a call that
@@ -15896,6 +15910,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      for its location, as it was, and the type and the name stay `check/1`'s; the
      options' mistakes come first; `new!/2` is as it was. Both readings are provisional,
      `PLAN.md`'s "RV-30 as built", questions 1 and 2.)*
+     *(RV-30's review, 2026-11-16: nothing but an `ArgumentError` comes out of `new!/3`
+     whatever it is given, where a name that is no text raised a
+     `Protocol.UndefinedError` out of the value's line and an array of no elementary
+     type a `FunctionClauseError`, the second out of `check/1` and `new!/1` too, as it
+     had before this decision: the name is shown as Elixir shows it, `` {1, 2} is an
+     sint: `300` is outside -128 to 127 ``, and such an array is told as an array. "The
+     lines `check/1` gives of the same value" holds for a global with no location: of a
+     located global's value `check/1` says only that a point takes none, so one
+     `new!/3` refuses for its type is refused again by `check/1` for its location once
+     the number is mended. And the struct `new!/3` gives is a `Global.t()` where its
+     name, type and location are a global's, which it keeps as given. The documents say
+     so; questions 2 and 3 stand.)*
 
 556. **Where a reader finds the older documents (DOC-1),** step 1's question 1: the site
      is the pages ExDoc builds; `CONTRIBUTING.md`, `CHANGELOG.md`, `PLAN.md`, `CLAUDE.md`
