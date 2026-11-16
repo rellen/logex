@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="925" viewBox="0 0 364 925" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of fan_drive.ld</title>
+<desc id="description">8 rungs between two power rails. Rung 1: and status mask code. Rung 2: eq code 2#0000_0101 ote fault. Rung 3: mul hz 60.0 rpm. Rung 4: gt rpm 1.5e3 ote fast. Rung 5: xic fast move -120 trim. Rung 6: xio fast move 0 trim. Rung 7: xic blocked.dn ote jam. Rung 8: xic eye ton blocked 30_000.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="924" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="913"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="913"/>
+<text class="note dim" x="54" y="34">the low byte of the status word is the</text>
+<text class="note dim" x="54" y="48">fault code of the fan drive</text>
+<text class="dim" x="36" y="71" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="67" x2="68" y2="67"/>
+<line class="ink" x1="68" y1="67" x2="252" y2="67"/>
+<line class="ink" x1="324" y1="67" x2="346" y2="67"/>
+<rect class="box" x="252" y="54" width="72" height="86" rx="3"/>
+<line class="ink" x1="252" y1="80" x2="324" y2="80"/>
+<text class="op" x="288" y="71" text-anchor="middle">and</text>
+<text class="tag" x="314" y="94" text-anchor="end">status</text>
+<text class="tag" x="314" y="112" text-anchor="end">mask</text>
+<text class="dim" x="262" y="130">to</text>
+<text class="tag" x="314" y="130" text-anchor="end">code</text>
+<text class="dim" x="36" y="194" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="190" x2="68" y2="190"/>
+<line class="ink" x1="170" y1="190" x2="276" y2="190"/>
+<line class="ink" x1="324" y1="190" x2="346" y2="190"/>
+<rect class="box" x="68" y="177" width="102" height="68" rx="3"/>
+<line class="ink" x1="68" y1="203" x2="170" y2="203"/>
+<text class="op" x="119" y="194" text-anchor="middle">eq</text>
+<text class="tag" x="160" y="217" text-anchor="end">code</text>
+<text class="tag" x="160" y="235" text-anchor="end">2#0000_0101</text>
+<text class="tag" x="322" y="173" text-anchor="end">fault</text>
+<line class="ink" x1="276" y1="190" x2="290" y2="190"/>
+<path class="ink" d="M 295 179 Q 285 190 295 201"/>
+<path class="ink" d="M 307 179 Q 317 190 307 201"/>
+<line class="ink" x1="312" y1="190" x2="324" y2="190"/>
+<text class="note dim" x="54" y="277">the fan turns 60 times in 1 minute for</text>
+<text class="note dim" x="54" y="291">each Hz</text>
+<text class="dim" x="36" y="314" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="310" x2="68" y2="310"/>
+<line class="ink" x1="68" y1="310" x2="260" y2="310"/>
+<line class="ink" x1="324" y1="310" x2="346" y2="310"/>
+<rect class="box" x="260" y="297" width="64" height="86" rx="3"/>
+<line class="ink" x1="260" y1="323" x2="324" y2="323"/>
+<text class="op" x="292" y="314" text-anchor="middle">mul</text>
+<text class="tag" x="314" y="337" text-anchor="end">hz</text>
+<text class="tag" x="314" y="355" text-anchor="end">60.0</text>
+<text class="dim" x="270" y="373">to</text>
+<text class="tag" x="314" y="373" text-anchor="end">rpm</text>
+<text class="dim" x="36" y="437" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="433" x2="68" y2="433"/>
+<line class="ink" x1="128" y1="433" x2="278" y2="433"/>
+<line class="ink" x1="324" y1="433" x2="346" y2="433"/>
+<rect class="box" x="68" y="420" width="60" height="68" rx="3"/>
+<line class="ink" x1="68" y1="446" x2="128" y2="446"/>
+<text class="op" x="98" y="437" text-anchor="middle">gt</text>
+<text class="tag" x="118" y="460" text-anchor="end">rpm</text>
+<text class="tag" x="118" y="478" text-anchor="end">1.5e3</text>
+<text class="tag" x="301" y="416" text-anchor="middle">fast</text>
+<line class="ink" x1="278" y1="433" x2="290" y2="433"/>
+<path class="ink" d="M 295 422 Q 285 433 295 444"/>
+<path class="ink" d="M 307 422 Q 317 433 307 444"/>
+<line class="ink" x1="312" y1="433" x2="324" y2="433"/>
+<text class="dim" x="36" y="542" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="538" x2="68" y2="538"/>
+<line class="ink" x1="114" y1="538" x2="252" y2="538"/>
+<line class="ink" x1="324" y1="538" x2="346" y2="538"/>
+<text class="tag" x="91" y="521" text-anchor="middle">fast</text>
+<line class="ink" x1="68" y1="538" x2="84" y2="538"/>
+<line class="ink" x1="84" y1="527" x2="84" y2="549"/>
+<line class="ink" x1="98" y1="527" x2="98" y2="549"/>
+<line class="ink" x1="98" y1="538" x2="114" y2="538"/>
+<rect class="box" x="252" y="525" width="72" height="68" rx="3"/>
+<line class="ink" x1="252" y1="551" x2="324" y2="551"/>
+<text class="op" x="288" y="542" text-anchor="middle">move</text>
+<text class="tag" x="314" y="565" text-anchor="end">-120</text>
+<text class="dim" x="262" y="583">to</text>
+<text class="tag" x="314" y="583" text-anchor="end">trim</text>
+<text class="dim" x="36" y="647" text-anchor="end">6</text>
+<line class="ink" x1="46" y1="643" x2="68" y2="643"/>
+<line class="ink" x1="114" y1="643" x2="252" y2="643"/>
+<line class="ink" x1="324" y1="643" x2="346" y2="643"/>
+<text class="tag" x="91" y="626" text-anchor="middle">fast</text>
+<line class="ink" x1="68" y1="643" x2="84" y2="643"/>
+<line class="ink" x1="84" y1="632" x2="84" y2="654"/>
+<line class="ink" x1="98" y1="632" x2="98" y2="654"/>
+<line class="ink" x1="98" y1="643" x2="114" y2="643"/>
+<line class="ink" x1="86" y1="652" x2="96" y2="634"/>
+<rect class="box" x="252" y="630" width="72" height="68" rx="3"/>
+<line class="ink" x1="252" y1="656" x2="324" y2="656"/>
+<text class="op" x="288" y="647" text-anchor="middle">move</text>
+<text class="tag" x="314" y="670" text-anchor="end">0</text>
+<text class="dim" x="262" y="688">to</text>
+<text class="tag" x="314" y="688" text-anchor="end">trim</text>
+<text class="note dim" x="54" y="730">a box that stays at the eye for 30 s is a</text>
+<text class="note dim" x="54" y="744">jam</text>
+<text class="dim" x="36" y="784" text-anchor="end">7</text>
+<line class="ink" x1="46" y1="780" x2="68" y2="780"/>
+<line class="ink" x1="154" y1="780" x2="278" y2="780"/>
+<line class="ink" x1="324" y1="780" x2="346" y2="780"/>
+<text class="tag" x="111" y="763" text-anchor="middle">blocked.dn</text>
+<line class="ink" x1="68" y1="780" x2="104" y2="780"/>
+<line class="ink" x1="104" y1="769" x2="104" y2="791"/>
+<line class="ink" x1="118" y1="769" x2="118" y2="791"/>
+<line class="ink" x1="118" y1="780" x2="154" y2="780"/>
+<text class="tag" x="301" y="763" text-anchor="middle">jam</text>
+<line class="ink" x1="278" y1="780" x2="290" y2="780"/>
+<path class="ink" d="M 295 769 Q 285 780 295 791"/>
+<path class="ink" d="M 307 769 Q 317 780 307 791"/>
+<line class="ink" x1="312" y1="780" x2="324" y2="780"/>
+<text class="dim" x="36" y="848" text-anchor="end">8</text>
+<line class="ink" x1="46" y1="844" x2="68" y2="844"/>
+<line class="ink" x1="114" y1="844" x2="210" y2="844"/>
+<line class="ink" x1="324" y1="844" x2="346" y2="844"/>
+<text class="tag" x="91" y="827" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="844" x2="84" y2="844"/>
+<line class="ink" x1="84" y1="833" x2="84" y2="855"/>
+<line class="ink" x1="98" y1="833" x2="98" y2="855"/>
+<line class="ink" x1="98" y1="844" x2="114" y2="844"/>
+<rect class="box" x="210" y="831" width="114" height="68" rx="3"/>
+<line class="ink" x1="210" y1="857" x2="324" y2="857"/>
+<text class="op" x="267" y="848" text-anchor="middle">ton</text>
+<text class="tag" x="314" y="871" text-anchor="end">blocked</text>
+<text class="dim" x="220" y="889">preset</text>
+<text class="tag" x="314" y="889" text-anchor="end">30_000</text>
+</svg>
