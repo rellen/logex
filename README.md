@@ -407,7 +407,10 @@ configuration's refusal ending with the full way out. DOC-1's first step has lan
 (decisions 546 and 548): the documentation's site, built with ExDoc and published on
 GitHub Pages, its checks, and its first pages, the tutorial and the glossary. The
 maintainer answered that step's questions and RV-29's, decisions 556–574, each taken as
-built. Waiting: the runner split by concern. And DOC-1's second and third steps: this
+built, and RV-30's, decisions 575–583: waiting with RV-31 are `Global.new!/3` refusing
+every mistake of a global where it is declared, an initial value on a located global
+among them, and a long number cut in a host's refusal. Waiting: the runner split by
+concern. And DOC-1's second and third steps: this
 file made short, its details moved into the site's tutorials, how-to guides, reference
 and explanation, and into contributor pages with a curated set of decision records.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and

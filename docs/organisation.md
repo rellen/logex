@@ -16070,6 +16070,93 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      that differ past the cut read the same. Not taken: both in full, the way out on a
      line of its own; each cut around the first place they differ.
 
+575. **The words `Global.new!/3` refuses a value in (RV-30),** RV-30's question 1: a host
+     declares a fan's run lamp, `Global.new!("fan_on", :bool, initial: true)`, and is told
+     in the configuration's own line, ``the initial value of global `fan_on` must be an
+     integer, found true``, which differs from a tag's wording in four cases.
+
+     **Taken: as built, the configuration's words (a)** (the maintainer, 2026-11-16): a
+     global has one wording wherever it is refused, by `new!/3` or by `check/1`. Not
+     taken: the tag's words in `new!/3` alone, one global then told in two wordings; both
+     moved to the tag's words, `check/1`'s lines changing under a host that matches them.
+     IEC 61131-3 asks that an initial value be one its type holds and gives no words;
+     Logix's tag editor refuses the value in its own.
+
+576. **An initial value on a located global (RV-30),** RV-30's question 2: a box counter's
+     photo-eye, `Global.new!("eye_1", :bool, initial: 2, at: "panel.i.0")`, is refused for
+     the 2, kept with a 1, and then refused by the configuration, a point taking no
+     initial value: two refusals in turn.
+
+     **Taken: refused at once (b)** (the maintainer, 2026-11-16): `new!/3` refuses any
+     initial value on a located global at the line that declares it, in `check/1`'s
+     words, one refusal. Not taken: as built, the value alone judged at once. In Logix an
+     I/O point's tag is its module's and takes no initial value from the program; that a
+     point takes none is logex's own rule. RV-31 builds it.
+
+577. **What `Global.new!/3` refuses at the line that declares a global (RV-30),** RV-30's
+     question 3: `Global.new!("conveyor speed", :dint)`, `Global.new!("speed", :float,
+     initial: 5)` and `Global.new!("speed", :dint, at: 5)` are kept, and refused later by
+     the configuration.
+
+     **Taken: every mistake of the one global (b)** (the maintainer, 2026-11-16): its
+     name, its type, its location and its value are judged at once, as `Logex.Tag.new!/5`
+     judges a tag's, from the one place `check/1` judges them, in its words, so that every
+     struct `new!/3` gives is a `Global.t()`. What takes the other globals, a program or
+     a device to judge stays `check/1`'s. Not taken: as built, the value alone. IEC checks
+     a declaration whole; Logix's tag editor refuses a bad name or an unknown type as it
+     is typed. RV-31 builds it.
+
+578. **Where the tests of a short watchdog run (RV-30),** RV-30's question 4: the plants
+     of `trip_test.exs` with `idle: 50, poll: 10` give a device call 60 ms of real time,
+     missed only where a busy VM, the suite's other async cases, meets a machine that
+     gives the VM a fraction of its cores.
+
+     **Taken: as built, the file not async (b)** (the maintainer, 2026-11-16): ExUnit runs
+     it once the async modules are done, some 25 s more a suite, and a start that trips
+     names its cause. Not taken: async as it was, a gate beside another red now and then;
+     the short plants alone moved to a module of their own; the runner's limit taken from
+     its clock, which would change what a host on the manual clock sees.
+
+579. **`published/2`'s twelve sites (RV-30),** RV-30's question 5.
+
+     **Taken: as built, each written `_ = published(...)` (a)** (the maintainer,
+     2026-11-16), a new call without the mark red in Dialyzer. Not taken: `published/2`
+     answering `:ok`.
+
+580. **The PLT in CI's two caches (RV-30),** RV-30's question 6: the `_build` cache holds
+     the PLT as the PLT's own cache does, and the workflow's comment says it is cached
+     apart.
+
+     **Taken: the caches as they are, the comment made true** (the maintainer,
+     2026-11-16): a PLT is named by the toolchain's versions and its applications, so a
+     copy from either cache is the right one or is not used. Not taken: the `_build`
+     cache leaving the PLT out. RV-31 corrects the comment.
+
+581. **The list of marks (RV-30),** RV-30's question 7: `dropped_answers_test.exs` holds
+     every `_ = ...` of `lib/` to a list of 26, each with its reason.
+
+     **Taken: as built, the list (a)** (the maintainer, 2026-11-16): a new mark is red
+     until it is listed with its reason. The list shows that a mark was read, not what a
+     failing call does. Not taken: no list; the list and a seam in the store's write for
+     a test of a close that fails.
+
+582. **RV-30's history on `main` (RV-30),** RV-30's question 8: `f4fa1af` and `4024fe1`
+     pass the suite and fail `scripts/docs.sh`, mended at `417c2ac`.
+
+     **Taken: merged, as every item (a)** (the maintainer, 2026-11-16): `main`'s tip is
+     green and each hash the record cites stays on `main`; a bisect of the site's build
+     meets the two and skips them. Not taken: one squashed commit. `CONTRIBUTING.md` asks
+     for `scripts/docs.sh` before a commit that changes a module's text or a page.
+
+583. **A huge number in a host's refusal (RV-30),** RV-30's question 9:
+     `Global.new!("total_boxes", :dint, initial: 10 ** 100_000)` raises a message a
+     hundred thousand digits long, as `Logex.Tag.new!/5` does for a tag.
+
+     **Taken: cut (b)** (the maintainer, 2026-11-16): a refusal of `Global.new!/3`, of
+     `Logex.Tag.new!/5` and of `check/1` quotes a long number cut, as a compile cuts a
+     long literal it quotes, so a host's log stays short. Not taken: quoted whole. RV-31
+     builds it.
+
 ---
 
 ## 8. Sources, and what is unverified

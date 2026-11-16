@@ -50,7 +50,8 @@ landed, names decisions 556–574, and names what still waits, RV-23, RV-25, RV-
 second and third steps and DOC-2.)*
 
 *(Since RV-30, 2026-11-16: README's paragraph says RV-30 has landed, what it built named
-as it was while it waited.)*
+as it was while it waited.)* *(Since the answers to RV-30's questions, 2026-11-16: it names
+decisions 575–583 and what waits with RV-31.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -23683,6 +23684,29 @@ two long configuration names each cut at 60 bytes (574). Nothing waits to be bui
 them; the marks they settle are RV-23's, with every other. RV-30 started when the first
 step landed, and DOC-1's second step starts beside it; the order after them is unchanged:
 DOC-1's third step, RV-23, RV-25 alone, and DOC-2 last.
+
+**RV-30's questions answered, 2026-11-16** (decisions 575–583). RV-30 landed on `main` at
+`565f057`, merged as every item (582). The maintainer took `Global.new!/3` refusing at
+once any initial value on a located global (576) and every other mistake of the one
+global, its name, its type and its location, as `Logex.Tag.new!/5` does a tag's (577); a
+long number cut where a host's refusal quotes it (583); and CI's comment on its two
+caches made true, the caches as they are (580). Taken as built: the configuration's
+words for a global's refusal (575); `trip_test.exs` not async (578); `published/2`'s
+twelve sites each marked (579); and the list of marks (581). DOC-1's second step runs on
+four tracks in two workflows, so RV-31 starts when one of them ends; the order after it
+is unchanged: DOC-1's close and its third step, RV-23, RV-25 alone, and DOC-2 last.
+
+- **RV-31 — the answers to RV-30's questions** (decisions 576, 577, 580 and 583).
+  `Global.new!/3` raising at once for a name that is no global's, a type that is none, a
+  location that is no text, and any initial value beside a location, each in the lines
+  `check/1` gives of the same struct built by hand, from the one judge both read, so that
+  every struct `new!/3` gives is a `Global.t()` and `typespec_test.exs`'s four kept
+  structs outside it are refused; what takes the other globals, a program or a device to
+  judge stays `check/1`'s (576, 577). A long number quoted cut in a refusal of
+  `Global.new!/3`, `Logex.Tag.new!/5` and `check/1`, as a compile cuts one, each pin of
+  a number quoted whole changed so and only so (583). CI's comment on the `_build` cache
+  and the PLT's made true, `scripts_test.exs`'s pin of the workflow changed by the
+  comment alone (580). The marks decisions 575–583 settle made their numbers.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
