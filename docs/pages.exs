@@ -78,6 +78,7 @@
   {"guides/howto/take-back-a-deploy.md", :howto, "How-to guides"},
   {"guides/howto/map-io-points.md", :howto, "How-to guides"},
   {"guides/howto/write-a-device-adapter.md", :howto, "How-to guides"},
+  {"guides/howto/test-a-device-adapter.md", :howto, "How-to guides"},
   {"guides/howto/edit-a-running-program.md", :howto, "How-to guides"},
   {"guides/howto/edit-a-running-plant.md", :howto, "How-to guides"},
   {"guides/reference/source-syntax.md", :reference, "Reference"},
