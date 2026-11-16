@@ -4781,7 +4781,15 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   each (provisional, `PLAN.md`'s RV-28, question 2); and a naming line that does not
   read holds back only the refusal of its own kind, so a second `resource` line that
   does not read, beside one that does, is told beside 539's refusal, and a second
-  `program` line so beside 531's.)*
+  `program` line so beside 531's.)* *(Decisions 541 to 545, RV-29, 2026-11-15: a store
+  that names a type and no resource waits for its count as the other two partial forms
+  do, a store miscounted or cut short told its end line alone and 531's refusal at the
+  next try, the way out once, where it was told beside the count (544); and the renamed
+  configuration's refusal ends with the full way out, which copies the store first, the
+  way out told once a refusal, at the first line that tells it (provisional, `PLAN.md`'s
+  RV-29), a refusal for what a hand can mend telling none (545). The marks above are these
+  decisions' numbers, the line decision 539 refuses at, the `resource` line, decision
+  543's, as built.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -4924,8 +4932,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   count.)*
 - *A store from another configuration* (decision 285): the header names the
   configuration, and a store of another name is the host's mistake at a fresh start, a
-  line naming both, `start: :cold` starting over it and writing a new store at once, so a
-  renamed configuration starts only cold, which the message says.
+  line naming both, `start: :cold` starting over it, copying it first to the next
+  `.dropped.<n>` beside it (decisions 417 and 418) and then writing a new store over it,
+  so a renamed configuration starts only cold, which the message says, with that way out
+  whole (decision 545), each name quoted as a refusal quotes a text, at most 60 bytes.
+  *(RV-29's review, 2026-11-15: this bullet said `start: :cold` wrote a new store at
+  once, of no copy, since decision 417 made one; and this configuration's own name,
+  quoted unbounded, could push the way out past the 1,000 bytes a refusal shows of a
+  line, so that the refusal told it nowhere.)*
 
 **What "What logex is not" will owe** (M6-9) *(owed no more: README says each since
 M6-9, 2026-10-31, in its "Not everything a controller has", "Not battery-backed memory,
@@ -15568,6 +15582,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      alone and was not put. IEC 61131-3 says nothing of how a release is numbered; Logix
      numbers each firmware revision and ships notes with it. RV-29 makes the marks this
      decision's number.
+     *(RV-29, 2026-11-15, `3653611`: the release step's readings are marked as waiting
+     under this decision, not settled: `CHANGELOG.md`'s first entry, its number and tag
+     and what it lists under "What changes a running program's outputs", `CONTRIBUTING.md`'s
+     "To release", the first number, the tag's push and the check of CI's runs, and a
+     comment at `scripts/release.sh`'s head, where the CI check had no mark; `mix.exs`
+     says 0.1.0 and no tag was made or pushed.)*
 
 542. **The changelog held at every commit (RV-22),** RV-22's question 3: as built, the
      suite is red while §7 records a decision no entry of `CHANGELOG.md` names, so a
@@ -15579,6 +15599,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      CLAUDE.md to every file, so no release can leave one out; the commit that records
      this decision names 541–545. IEC 61131-3 has no rule for it; Logix writes its notes
      per firmware revision. RV-29 makes the marks this decision's number.
+     *(RV-29, 2026-11-15, `3653611`: `CONTRIBUTING.md`'s "Between releases" cites this
+     decision where it marked RV-22's question 3; each commit of RV-29 that records or
+     builds a decision keeps it named, 544 and 545 in the first entry's last group.)*
 
 543. **The line a version 3 store with its `resource` line and no `program` line is
      refused at (RV-28),** RV-28's question 1: decision 539 refuses it, and RV-28 located
@@ -15592,6 +15615,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as decision 531 tells its refusal at the first `program` line, decision 537's header
      kept for a store with no naming line at all. Neither IEC 61131-3 nor Logix has a
      store a person edits. RV-29 makes the marks this decision's number.
+     *(RV-29, 2026-11-15, `7a85d7c` and `3653611`: the marks, `Logex.Retain`'s comments at
+     its head and at owed/2, `Logex.Runner`'s moduledoc, README's store passage, the 539
+     test's comment and §4.13's note, are this decision's number; decision 539's note keeps
+     its mark as history.)*
 
 544. **Decision 531's refusal beside a count or a cut that does not read (RV-28),**
      RV-28's question 2, extended by its review: a store whose `program` lines come with
@@ -15607,6 +15634,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      count reads, so the way out is told once. Decision 531's refusal beside a miscount
      or a cut, pinned whole by RV-28's review, changes by this decision. Neither IEC
      61131-3 nor Logix has a store a person edits. RV-29 builds it.
+     *(Landed with RV-29, 2026-11-15, `7a85d7c`: the one place `Logex.Retain` decides when
+     the naming lines wait, naming/3, runs 531's refusal (resourced/1) too, so a store whose
+     `program` lines come with no `resource` line, miscounted or cut short, is told its end
+     line alone, whatever its line ends, and the refusal at the next try, once the count
+     reads, the way out once; a store of `logex retain 2` waits alike, one of `logex retain
+     1`, which has no end line, waits for nothing. RV-28's review's pins of the refusal
+     beside a miscount and a cut changed to the count or the cut told alone and the
+     refusal at the next try; a new test pins it beside a miscount, a cut, CRLF and lone
+     CR line ends and one `program` line of two gone, and through the runner a warm start
+     refused with no device read or written and a cold start copying the store first. The
+     life walk restates it (`:life_unresourced_counted`).)*
 
 545. **The renamed configuration's way out (RV-28),** RV-28's question 3, from its
      review: a store another configuration wrote, as README's renamed configuration's
@@ -15625,6 +15663,22 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      back to its initial value. The renamed configuration's pinned message, README's
      example of it among its pins, changes by this decision. Neither IEC 61131-3 nor
      Logix has a store a person edits. RV-29 builds it.
+     *(Landed with RV-29, 2026-11-15, `dc6fbc4`: the renamed configuration's refusal ends
+     ": start it with start: :cold to start over it, which copies it first to the next
+     `.dropped.<n>` beside it and then writes a new store over it", the way out made in one
+     place, `@way_out`, each refusal that tells it marked (way_out/1) and the way out joined
+     to the first line of a refusal that tells it (told_once/1), so that a store told the
+     renamed configuration beside a naming refusal, or a cut, is told it once, at line 2,
+     or at line 1 where decision 535's refusal comes first (provisional, `PLAN.md`'s
+     RV-29); a junk line, a digest mistyped and a miscount tell none. Its two pinned
+     messages in `retain_store_test.exs` and README's `kept.exs` output changed by the
+     full way out alone. The life walk restates it (`:life_renamed_refused`).)* *(RV-29's
+     review, 2026-11-15: this configuration's own name, interpolated whole, could make
+     the line longer than the 1,000 bytes `Logex.Refusal` shows of one, a name of some 650
+     bytes or more cutting it inside the way out, so that a refusal that told the way out
+     only there told it nowhere; now quoted as the store's is, at most 60 bytes and then
+     `…` (provisional, `PLAN.md`'s RV-29, question 2). The life walk restates the way out
+     once beside a cut too.)*
 
 546. **The README made short, and its details moved into guides (DOC-1).** The maintainer,
      2026-11-15: "The readme is a massive wall of text. We need to move all the details

@@ -31,13 +31,15 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 Decisions: 1–555.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
-(provisional: its number, and whether its tag is pushed, are the maintainer's, `PLAN.md`'s
-RV-22, questions 1 and 2, and no release is planned yet, decision 541). No release came
+(waiting under decision 541, no release planned: its number, and whether its tag is
+pushed, are put to the maintainer when a release is planned, `PLAN.md`'s RV-22, questions
+1 and 2). No release came
 before it, but `mix.exs` has said 0.1.0 at every commit of `main`, so a host who ran one
 upgrades from a logex that said the same number. For that host, "What changes a running
 program's outputs" lists each rule §7 records as replacing one that had landed on `main`
 and that changed what a running program, or the runner under it, writes, found by a pass
-through §7, oldest first (provisional: `PLAN.md`'s RV-22, question 4, its reading (b)); a
+through §7, oldest first (waiting under decision 541: `PLAN.md`'s RV-22, question 4, its
+reading (b), put to the maintainer when a release is planned); a
 word newly reserved or a form newly refused is told by the compile's own diagnostic, and
 the host's API is README's, so this first entry lists neither apart.
 
@@ -171,9 +173,17 @@ the host's API is README's, so this first entry lists neither apart.
   `logex retain 3`; RV-27's, decisions 532, 535 and 536, the words logex reads in any case
   and a bit's number in brackets read as logex reads them before the store compares a
   program's text, a version 3 store that names no program refused, and an end line under
-  any header that takes none told as one; and RV-28's, decisions 539 and 540, a version 3
+  any header that takes none told as one; RV-28's, decisions 539 and 540, a version 3
   store that names its resource and no program refused, and each refusal of the lines
-  that name a store's program ending with the way to start cold.
+  that name a store's program ending with the way to start cold; and RV-29's, decisions
+  544 and 545, a store that names a program type and no resource, its count not mended or
+  the store cut short too, told its count or its cut alone and the missing resource once
+  the count is mended, as a store that names no program or its resource alone is, and a
+  store of a renamed configuration told the full way to start cold, which copies the
+  store first, where it said nothing of the copy, that way out told once a refusal and a
+  store refused for what a hand can mend told none, and the configuration's own name
+  quoted in that refusal as any text a refusal quotes, at most 60 bytes, so that a long
+  name no longer cuts the way out off (RV-29's review).
 - **The documentation as a site**, DOC-1's first step (decisions 546 and 548): added, and
   nothing a program or a host's call did is changed. `mix docs` builds a site of README,
   the pages under `guides/` and each module's text, with ExDoc, a dependency of the `docs`

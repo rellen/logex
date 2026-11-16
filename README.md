@@ -401,12 +401,13 @@ typespecs on the host contract, which OTP's own Dialyzer reads in CI after the f
 gates, red on any warning its flags give, and the suite holds to every value a function
 gives. The maintainer answered RV-24's questions the same day, decisions 549–555: waiting
 with RV-30 are Dialyzer as the gate's fifth step, a call whose answer is thrown away made
-red, and a global's wrong initial value refused where it is declared. Waiting: RV-29, a store with no resource line whose count does
-not read told its count first, and a renamed configuration's refusal ending with the full
-way out; and the runner split by concern. And DOC-1, decisions 546–548: this file made
-short, its details moved into guides built with ExDoc, tutorials, how-to guides, reference
-and explanation, and into contributor pages with a curated set of decision records, the
-site published on GitHub Pages.
+red, and a global's wrong initial value refused where it is declared. RV-29 has landed: a
+store with no resource line whose count does not read told its count first, and a renamed
+configuration's refusal ending with the full way out. Waiting: the runner split by
+concern. And DOC-1, decisions 546–548: this file made short, its details moved into guides
+built with ExDoc, tutorials, how-to guides, reference and explanation, and into
+contributor pages with a curated set of decision records, the site published on GitHub
+Pages.
 Everything else decided so far (see [`docs/naming.md`](docs/naming.md), and
 `PLAN.md` §5) that changes the source language has landed: program organisation, `PLAN.md`'s Milestone 2, whole ("A function block" and "A
 configuration", below), and the wall-clock runner, `PLAN.md`'s Milestone 4 (decisions
@@ -3410,7 +3411,7 @@ fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
 tally.retain: the store was written by another program than the one this start was given: `tally`'s text differs; whether by a deploy of changed files, or an edit tested or assembled online that never reached the files, this start runs the program it was given, with the store's retained values laid over it by name and type
-tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it
+tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 ```
 
 - The store is text a person can read, and edit by hand where a retained value has
@@ -3469,22 +3470,28 @@ tally.retain: line 2: the store is of configuration `line_2`, and this configura
   read as any store of version 2 that names no program is, and warns of nothing. A store
   of `logex retain 3` with its `resource` line and no `program` line, which no
   configuration gives, each declaring a program, is refused too, at its `resource` line
-  (provisional, the line), ``tally.retain: line 3: `resource
+  (decision 543), ``tally.retain: line 3: `resource
   013cc059392445fdcc1e84c9b0de6118` names the resource of the store's writer, and the
   store names no program type: ...`` (decision 539), and starts warm once its `program`
   lines are put back, or `start: :cold`, which copies it first; its first line made
   `logex retain 2` by hand, it is read, and warns that each type the start runs is not in
-  the store. Each of the three refusals, 531's, 535's and 539's, ends as a cut store's
-  does, with the way to start anyway, "start it with start: :cold to start over it, which
+  the store. Each of the three refusals, 531's, 535's and 539's, tells, as a cut store's
+  does, the way to start anyway, "start it with start: :cold to start over it, which
   copies it first to the next `.dropped.<n>` beside it and then writes a new store over
-  it" (decision 540). Where the count of a store that names no program, or its resource
-  alone, does not read either, the count is told alone, and the missing lines once it is
-  mended (decision 538), an empty line an editor left after an end line whose count reads
-  told beside them; one with a `program` line and no `resource` line is told both at
-  once, and cut short too, the way out twice, a line each (provisional). A `resource` or
-  `program` line that does not read, its digest mistyped, is told as itself, not as one
-  missing; beside a good line of its own kind, it is told beside the refusal of the kind
-  that is missing. A logex from
+  it" (decision 540), and so does a store of another configuration's, a renamed
+  configuration's, as `kept.exs` shows above (decision 545); the way out is told once a
+  refusal, at the end of the first line that tells it, and the lines after it end at what
+  they say is missing (provisional), so that a naming refusal told beside a renamed
+  configuration's ends without it; a store refused for what a hand
+  can mend, a junk line, a digest mistyped or a miscount, is told none, so that it is
+  mended and keeps its count, where a cold start sets the count back to its initial value.
+  Where the count of a store that names its program in part or not at all does not read
+  either, its count not mended or the store cut short too, the count or the cut is told
+  alone, and the missing lines once it is mended, one rule for the three, so the way out
+  is told once (decisions 538 and 544), an empty line an editor left after an end line
+  whose count reads told beside them. A `resource` or `program` line that does not read,
+  its digest mistyped, is told as itself, not as one missing; beside a good line of its
+  own kind, it is told beside the refusal of the kind that is missing. A logex from
   before RV-26, put back over a store this one wrote
   after an upgrade went wrong, refuses it at a warm start, its first line told plainly,
   ``tally.retain: line 1: the store is of version 3, which this logex does not read: it

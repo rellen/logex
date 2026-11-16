@@ -2074,12 +2074,16 @@ defmodule Logex.TripTest do
     # round not run. Since decision 490 (RV-19) the look's gap is counted from the end of
     # e1's round, the runner's last, not from its look 211 ms before, so the step names the
     # panel and not the runner's lateness: the step is the runner's own work, timed by its
-    # task's watchdog.
+    # task's watchdog. The trip kills the panel's device inside its report's call
+    # (decision 489), so `Sim.set/2`, which passes over a device that goes down, returns
+    # while the runner is still handling that report; `status/1`, which the runner answers
+    # only once it has, comes first, and the trip, published in that handling, is then in
+    # the mailbox, where the test waited ExUnit's 100 ms for it (RV-29's review).
     test "a device the step left unheard past the cap trips at the next round's look" do
       %{runner: runner, panel: panel} = long_step(211)
       Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 1})
-      assert_receive {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
       assert %{status: :tripped, trip: {:io, "panel", :timeout}} = Runner.status(runner)
+      assert_received {Runner, ^runner, {:trip, {:io, "panel", :timeout}}}
       assert Runner.get!(runner, "hits") == 1
       assert Runner.get!(runner, "y") == 0
     end
