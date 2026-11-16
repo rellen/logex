@@ -170,8 +170,8 @@ defmodule Logex.TypespecTest do
   them, and each test names the functions it reaches and reaches exactly those, and
   together every spec of those modules. A host's mistake, its pinned `ArgumentError`, is
   outside every spec and not called here, but `Global.new!/3`'s of an initial value no
-  global's type holds, refused so that every struct it gives is a `Global.t()` (decision
-  555). A spec wider than every value its function gives
+  global's type holds, refused so that the struct it gives for a global's name, type and
+  location is a `Global.t()` (decision 555). A spec wider than every value its function gives
   passes here, a value never showing it (decision 554).
   """
   use ExUnit.Case, async: true
@@ -550,14 +550,18 @@ defmodule Logex.TypespecTest do
     reaches!(@reach)
   end
 
-  # Decision 555 (RV-30; RV-24's question 7): `Global.t()` is true of every struct
-  # `Global.new!/2,3` gives. Every elementary type at the ends of its range, a real's
+  # Decision 555 (RV-30; RV-24's question 7): `Global.t()` is true of the struct
+  # `Global.new!/2,3` gives for a name, a type and a location that are a global's, which
+  # it keeps as given (RV-30's review, F7: one of those that is none it keeps too, the
+  # struct outside `t()`, shown at the end; provisional, `PLAN.md`'s RV-30, question 3).
+  # Every elementary type at the ends of its range, a real's
   # integer and float, an array's list and a located global, each held to the spec; and
   # the values no global's type holds, which `new!/3` kept until then, its struct outside
   # `t()`: each such struct, built by hand, is outside it, and `new!/3` gives none.
   @reach [{Global, :new!, 2}, {Global, :new!, 3}]
   @reaches @reach
-  test "every struct Global.new!/2,3 gives is a Global.t(), every type at its ends" do
+  test "the struct Global.new!/2,3 gives for a global's name, type and location is a " <>
+         "Global.t(), every type at its ends" do
     for {type, values} <- [
           {:bool, [0, 1]},
           {:sint, [-128, 127]},
@@ -601,6 +605,18 @@ defmodule Logex.TypespecTest do
         ] do
       refute Held.held?(%Global{name: "g", type: type, initial: initial}, t, Global)
       assert_raise ArgumentError, fn -> Global.new!("g", type, initial: initial) end
+    end
+
+    # RV-30's review (F7): what `new!/2,3` keeps as given, check/1's to refuse, is
+    # outside `t()`: a type that is none, a name that is no text and a location that is
+    # none (provisional: question 3).
+    for kept <- [
+          Global.new!("g", :float),
+          Global.new!(:g, :bool),
+          Global.new!("g", :bool, at: 5),
+          Global.new!("g", {:array, :ton, [2]}, initial: [1, 2])
+        ] do
+      refute Held.held?(kept, t, Global), inspect(kept)
     end
 
     reaches!(@reach)

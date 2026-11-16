@@ -256,8 +256,11 @@ defmodule Logex.Configuration do
     own word as an option; the struct built by hand carries the atom, as a tag's does.
 
     Since decision 555 `new!/3` refuses at once an initial value no global of its type
-    holds, as `Logex.Tag.new!/5` refuses a tag's, so that every struct it gives is a `t()`;
-    a struct built by hand, or changed after, is judged where it always was, by
+    holds, as `Logex.Tag.new!/5` refuses a tag's, so that the struct it gives for a name,
+    a type and a location that are a global's is a `t()`. Those three it keeps as given,
+    a name or a location that is no text and a type that is none among them, the struct
+    then outside `t()` (provisional: `PLAN.md`'s RV-30, question 3); they, and a struct
+    built by hand or changed after, are judged where they always were, by
     `Logex.Configuration.check/1`, which `Logex.Configuration.new!/1` runs.
     """
     @enforce_keys [:name, :type]
@@ -278,8 +281,8 @@ defmodule Logex.Configuration do
     Then the initial value is judged against the type, once the options read (decision
     555, the maintainer, 2026-11-15): one no global of that type holds is refused here,
     an `ArgumentError` of the lines `Logex.Configuration.check/1` gives of the same value
-    in a struct built by hand, by the one judge both read, internal to logex, where until
-    then `new!/3` kept it for `check/1` to refuse. Refused so:
+    in a struct built by hand with no location, by the one judge both read, internal to
+    logex, where until then `new!/3` kept it for `check/1` to refuse. Refused so:
 
     - a value that is no number, `new!("fan_on", :bool, initial: true)`: ``the initial
       value of global `fan_on` must be an integer, found true``, and for a real ``must be
@@ -297,9 +300,17 @@ defmodule Logex.Configuration do
       outside -32768 to 32767 ``, a line each.
 
     The value is judged against the type alone: the type itself, the name and the
-    location, and so a located global's initial value, which its location refuses, stay
-    `Logex.Configuration.check/1`'s, as for a struct built by hand. `new!/2`, with no
-    initial value, is as it was.
+    location stay `Logex.Configuration.check/1`'s, as for a struct built by hand. So a
+    located global's initial value its type holds is kept, `new!("eye_1", :bool,
+    initial: 1, at: "panel.i.0")`, and refused by `check/1` for its location, a point
+    taking no initial value; and one its type does not hold is refused here by the type's
+    line, `initial: 2`, where `check/1` says of a located global's value only that it
+    takes none, so a host that mends the number is refused again there, for the location
+    (provisional: `PLAN.md`'s RV-30, question 2). A type that is none holds no number to
+    judge by, `new!("g", :float, initial: 5)`, kept; and a name that is no text is shown
+    as Elixir shows it, `` {1, 2} is an sint: `300` is outside -128 to 127 ``. Whatever
+    the three are, `new!/3` gives a struct or raises an `ArgumentError`, nothing else.
+    `new!/2`, with no initial value, is as it was.
     """
     @spec new!(String.t(), type) :: t
     @spec new!(String.t(), type,
@@ -436,8 +447,12 @@ defmodule Logex.Configuration do
     # `refused/1` is `new!/3`'s: the host's lines, or with none of those the lines of a
     # value the type does not hold, as check/1 raises the host's mistakes alone. The
     # location is not read: a located global's initial value is check/1's to refuse, and
-    # so are the type and the name. Each takes a `%Logex.Configuration.Global{}` whose
-    # every field may be anything, and is total.
+    # so are the type and the name; check/1 reads `unheld/1` only for a global with no
+    # location, a located one's value being told there as one a point does not take, so
+    # that the two say the same of a value only where there is no location. Each takes a `%Logex.Configuration.Global{}` whose
+    # every field may be anything, and is total: whatever the name, the type and the value
+    # are, it gives its lines and raises nothing (RV-30's review, F1; a walk over names,
+    # types and values that are none holds it, `configuration_test.exs`).
     alias Logex.Configuration.Global
     alias Logex.Declarations
     import Logex.Declarations, only: [is_elementary: 1]
@@ -502,10 +517,17 @@ defmodule Logex.Configuration do
     # the literal rules, as a line can say one.
     defp array_said(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
       do: [
-        "the initial value of global #{label(name)}, an array of #{Declarations.word(type)}s, " <>
+        "the initial value of global #{label(name)}, an array#{of(type)}, " <>
           "must be a list of its elements' values, each a number, found " <>
           inspect(initial)
       ]
+
+    # RV-30's review (F1): an array whose elements' type is none, `{:array, :ton, [2]}`,
+    # which check/1 refuses for its type, is told as an array, no word being its
+    # elements', where the word looked up raised a `FunctionClauseError` out of check/1,
+    # new!/1 and new!/3.
+    defp of(type) when is_elementary(type), do: " of #{Declarations.word(type)}s"
+    defp of(_none), do: ""
 
     # A proper list of numbers: an improper one, or one that holds anything else, is not.
     defp numbers?([]), do: true
@@ -535,8 +557,11 @@ defmodule Logex.Configuration do
 
     defp fit(true, _global), do: []
 
+    # RV-30's review (F1): the name through label/1, as every other line names it, so
+    # that one that is no text, `{1, 2}`, which new!/3 keeps for check/1 to refuse, is
+    # shown as Elixir shows it, where its interpolation raised a `Protocol.UndefinedError`.
     defp fit(false, %Global{name: name, type: type, initial: v}),
-      do: ["`#{name}` is #{Declarations.a_type(type)}: " <> misfit(type, v)]
+      do: ["#{label(name)} is #{Declarations.a_type(type)}: " <> misfit(type, v)]
 
     defp misfit(type, v) when is_float(v) or type in @reals,
       do: Declarations.literal_misfit(type, v, "`#{shown(v)}`")

@@ -122,12 +122,17 @@ changed after its last item was written, under "The host's API".
   configuration's refusal. A host that builds a fan's run lamp with `Global.new!("fan_on",
   :bool, initial: true)` is told there, ``the initial value of global `fan_on` must be an
   integer, found true``, and `initial: 300` for an `:sint` is `` `trim` is an sint: `300`
-  is outside -128 to 127 ``: each the line `check/1` gives of the same value, a value
-  that is no number, a number outside the type, -0.0 in a real, and an array's list of
-  another length or with an element its type does not hold among them. `new!/2`, and a
-  value the type holds, are as they were; a struct built by hand, or changed after, is
-  refused where it was, by `check/1` and `new!/1`; a located global's initial value is
-  still refused there too, for its location. Look for: a `rescue` around
+  is outside -128 to 127 ``: each the line `check/1` gives of the same value in a global
+  with no location, a value that is no number, a number outside the type, -0.0 in a
+  real, and an array's list of another length or with an element its type does not hold
+  among them. `new!/2`, and a value the type holds, are as they were; a struct built by
+  hand, or changed after, is refused where it was, by `check/1` and `new!/1`; a located
+  global's initial value is still refused there too, for its location, whatever the
+  value, so one refused by `new!/3` for its type is refused again there once the number
+  is mended. The name, the type and the location are kept as given, for `check/1`: with
+  a name that is no text, `{1, 2}`, a wrong value is refused all the same, the name
+  shown as Elixir shows it, and nothing but an `ArgumentError` comes out of `new!/3`
+  whatever it is given. Look for: a `rescue` around
   `Logex.Configuration.new!/1` or a read of `check/1`'s diagnostics that expected a
   global's wrong initial value there, where the global came from `Global.new!/3`.
 

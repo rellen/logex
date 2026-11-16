@@ -1267,6 +1267,23 @@ defmodule Logex.ConfigurationTest do
             {:lreal, -0.0, :raised,
              "the initial value of global `g` is -0.0, which no real holds and no line " <>
                "gives, a line's `-0.0` being 0.0: give 0.0"},
+            # RV-30's review (its mutant M10): -0.0 is the host's only in a real; in a type
+            # that holds integers it is a float as any other, told by the literal rules.
+            {:dint, -0.0, :diagnostics,
+             "`g` is a dint: `-0.0` is a real, and a dint holds only integers"},
+            {:bool, -0.0, :diagnostics,
+             "`g` is a bool: `-0.0` is a real, and a bool holds only 0 or 1"},
+            {:word, -0.0, :diagnostics,
+             "`g` is a word: `-0.0` is a real, and a word holds only integers"},
+            # RV-30's review (its mutant M21): a long value that is no number is shown as
+            # `inspect/1` shows it, sixty numbers whole.
+            {:dint, Enum.to_list(1..60), :raised,
+             "the initial value of global `g` must be an integer, found [" <>
+               Enum.map_join(1..60, ", ", &Integer.to_string/1) <> "]"},
+            {{:array, :int, [2]}, Enum.to_list(1..59) ++ [:x], :raised,
+             "the initial value of global `g`, an array of ints, must be a list of its " <>
+               "elements' values, each a number, found [" <>
+               Enum.map_join(1..59, ", ", &Integer.to_string/1) <> ", :x]"},
             # An array's: no list, a list of anything but numbers, a nested or an improper
             # one among them, the host's lines.
             {{:array, :int, [3]}, 5, :raised,
@@ -1452,6 +1469,161 @@ defmodule Logex.ConfigurationTest do
       assert Global.new!("g", :bool) == %Global{name: "g", type: :bool}
       assert Global.new!("g", :bool, initial: nil) == %Global{name: "g", type: :bool}
       assert Global.new!("g", :nothing) == %Global{name: "g", type: :nothing}
+    end
+
+    # RV-30's review (F1): the judge is total. A name that is no text and an array whose
+    # elements' type is none, each check/1's to refuse, reached the value's lines and
+    # raised out of them, a `Protocol.UndefinedError` where the name was interpolated and
+    # a `FunctionClauseError` where the elements' word was looked up, the second out of
+    # check/1 and new!/1 too, as it was before decision 555. Each is the host's mistake,
+    # an `ArgumentError` pinned whole.
+    test "a name that is no text and an array of no elementary type are told in an " <>
+           "ArgumentError, pinned whole",
+         %{seal: seal} do
+      for {name, type, initial, message} <- [
+            {{1, 2}, :sint, 300, "{1, 2} is an sint: `300` is outside -128 to 127"},
+            {%{}, :bool, 2, "%{} is a bool: its initial value must be 0 or 1, found `2`"},
+            {<<1::3>>, :bool, 1.5,
+             "<<1::size(3)>> is a bool: `1.5` is a real, and a bool holds only 0 or 1"},
+            {[1 | 2], :real, 1.0e39,
+             "[1 | 2] is a real: `1.0e39` is beyond a real's range, " <>
+               "-3.4028234663852886e38 to 3.4028234663852886e38"},
+            {nil, :sint, 300, "nil is an sint: `300` is outside -128 to 127"},
+            {:g, :sint, 300, ":g is an sint: `300` is outside -128 to 127"},
+            {{1, 2}, :sint, true,
+             "the initial value of global {1, 2} must be an integer, found true"},
+            {{1, 2}, {:array, :int, [2]}, [1],
+             "{1, 2} is an array of 2 ints: its initial list holds 1 value, and an " <>
+               "array's holds one for every element, 2, in the elements' order"},
+            {"g", {:array, :ton, [2]}, [[1]],
+             "the initial value of global `g`, an array, must be a list of its elements' " <>
+               "values, each a number, found [[1]]"},
+            {"g", {:array, :float, [2]}, [:a],
+             "the initial value of global `g`, an array, must be a list of its elements' " <>
+               "values, each a number, found [:a]"},
+            {"g", {:array, Logex.FbType.ton(), [2]}, [true],
+             "the initial value of global `g`, an array, must be a list of its elements' " <>
+               "values, each a number, found [true]"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Global.new!(name, type, initial: initial) end
+      end
+
+      # check/1 and new!/1 of the same array built by hand: the type's own line, then the
+      # value's, where the value's raised a `FunctionClauseError` out of both; new!/1 adds
+      # check/1's diagnostic of the type, as it did for such an array with no value.
+      by_hand = %Global{name: "g", type: {:array, :ton, [2]}, initial: [[1]]}
+      fields = base(seal)
+
+      lines = [
+        "global `g` has type {:array, :ton, [2]}: a global is :bool, :sint, :int, :dint, " <>
+          ":lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or " <>
+          ":lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a " <>
+          "list of one integer a dimension",
+        "the initial value of global `g`, an array, must be a list of its elements' " <>
+          "values, each a number, found [[1]]"
+      ]
+
+      assert of_hand(seal, by_hand) == {:raised, lines}
+
+      assert refused(Keyword.put(fields, :globals, fields[:globals] ++ [by_hand])) ==
+               lines ++
+                 [
+                   "`g` is an array whose elements are of an elementary type, as in " <>
+                     "{:array, :int, [8]}: logex has :bool, :sint, :int, :dint, :lint, " <>
+                     ":usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword " <>
+                     "and :lword, found :ton"
+                 ]
+    end
+
+    # What new!/3 or check/1 did: `:kept`, `:raised` for an ArgumentError, the host's
+    # mistake, or the exception that escaped, which nothing may.
+    defp only_argument_errors(fun) do
+      fun.()
+      :kept
+    rescue
+      ArgumentError -> :raised
+      escaped -> {:escaped, escaped.__struct__}
+    end
+
+    # The rule of the public API over the door decision 555 opened: whatever the name,
+    # the type and the value are, new!/3 gives a struct or raises an ArgumentError, and
+    # check/1 of the same struct built by hand gives diagnostics or raises one. The
+    # walk's reach: each name and each type both kept and raised by new!/3.
+    test "over names, types and values that are none, nothing but an ArgumentError " <>
+           "escapes new!/3 or check/1",
+         %{seal: seal} do
+      names = ["g", "a b", "", <<255>>, :g, nil, 7, 1.5, {1, 2}, %{}, <<1::3>>, [1 | 2], ~c"g"]
+
+      types =
+        Logex.Declarations.elementary() ++
+          [:float, nil, "bool", 5, Logex.FbType.ton(), {:block, "x"}, {:array, :int}] ++
+          [{:array, :int, [2]}, {:array, :real, [2]}, {:array, :bool, [2, 1]}] ++
+          [{:array, :ton, [2]}, {:array, :float, [2]}, {:array, Logex.FbType.ton(), [2]}] ++
+          [{:array, :int, :x}, {:array, :int, [2 | 3]}, {:array, :int, []}] ++
+          [{:array, :int, [0]}, {:array, :int, [2, "2"]}, {:array, :int, [2], 1}] ++
+          [{:array, {:array, :int, [2]}, [2]}, {:array, nil, nil}]
+
+      values =
+        [0, 1, 2, -1, 300, 4_294_967_296, 0.0, 1.5, -0.0, 1.0e39, 16_777_217] ++
+          [true, :one, "1", ~c"1", {1}, %{}, <<1::3>>, self()] ++
+          [[], [0, 1], [0, 2], [1.5, 2], [1, -0.0], [300, 0], [0, 1, 0]] ++
+          [[1, :x], [[0, 1]], [0 | 1], [[1]], [true], [nil, nil]]
+
+      fields = base(seal)
+      config = Configuration.new!(fields)
+
+      reach =
+        for name <- names, type <- types, initial <- values do
+          new = only_argument_errors(fn -> Global.new!(name, type, initial: initial) end)
+
+          assert new in [:kept, :raised],
+                 "new!(#{inspect(name)}, #{inspect(type)}, initial: #{inspect(initial)}) " <>
+                   "let #{inspect(new)} escape"
+
+          {name, type, new}
+        end
+
+      for name <- names do
+        assert Enum.sort(Enum.uniq(for {^name, _type, new} <- reach, do: new)) ==
+                 [:kept, :raised],
+               inspect(name)
+      end
+
+      for type <- types do
+        assert Enum.sort(Enum.uniq(for {_name, ^type, new} <- reach, do: new)) ==
+                 [:kept, :raised],
+               inspect(type)
+      end
+
+      for name <- ["g", {1, 2}], type <- types, initial <- [nil | values] do
+        hand = %Global{name: name, type: type, initial: initial}
+        with_it = %{config | globals: fields[:globals] ++ [hand]}
+        checked = only_argument_errors(fn -> Configuration.check(with_it) end)
+
+        assert checked in [:kept, :raised],
+               "check/1 of #{inspect(hand)} let #{inspect(checked)} escape"
+      end
+    end
+
+    # RV-30's review (F7): the value is judged once, its cost growing with the list's
+    # length and no faster. Counted in reductions, the least of three counts, at two
+    # sizes in the same run.
+    defp reductions_to_build(elements) do
+      list = List.duplicate(7, elements)
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          %Global{} = Global.new!("g", {:array, :int, [elements]}, initial: list)
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "new!/3's judging of an array's list grows with its length and no faster" do
+      ratio = reductions_to_build(8_000) / reductions_to_build(2_000)
+      assert ratio < 4.4, "4x the elements took #{Float.round(ratio, 2)}x the reductions"
     end
 
     test "check/1 and new!/1 keep their refusal for a struct built by hand or changed " <>
