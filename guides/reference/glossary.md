@@ -266,12 +266,27 @@ An instance of a built-in function block type that measures time: `ton`, `tof`, 
 
 IEC 61131-3: a timer function block. Conventional set: a TIMER tag.
 
+### long timer
+
+A timer that measures time in nanoseconds: an instance of `ton_ltime`, `tof_ltime`,
+`tp_ltime` or `rto_ltime`. The preset of a timer of a different type is a time in
+milliseconds.
+
+IEC 61131-3: a timer with the ending `_LTIME`, for example TON_LTIME.
+
 ### counter
 
 An instance of a built-in function block type that counts rising edges: `ctu`, `ctd` or
 `ctud`.
 
 IEC 61131-3: a counter function block. Conventional set: a COUNTER tag.
+
+### typed counter
+
+A counter with a type word that names the integer type of its count, for example
+`ctu_int`. A counter with the type word `ctu`, `ctd` or `ctud` counts in a `dint`.
+
+IEC 61131-3: a counter with the type in its name, for example CTU_INT.
 
 ### preset
 

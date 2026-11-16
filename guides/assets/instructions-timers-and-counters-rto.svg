@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="756" height="340" viewBox="0 0 756 340" role="img" aria-labelledby="title description">
+<title id="title">rto: lube.acc adds the time that motor is on, until greased resets it</title>
+<desc id="description">16 scans, 10 ms a scan. Each signal after each scan, from scan 1: motor: 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0. greased: 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0. lube.acc: 0, 0, 10, 10, 10, 10, 20, 30, 40, 50, 0, 0, 10, 20, 20, 20 (preset 50). lube.tt: 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0. lube.dn: 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="755" height="339" rx="6"/>
+<text class="head" x="14" y="24">rto: lube.acc adds the time that motor is on, until greased resets it</text>
+<text class="dim" x="14" y="314">scan</text>
+<text class="dim" x="14" y="328">time</text>
+<line class="grid" x1="111.5" y1="36" x2="111.5" y2="298"/>
+<line class="grid" x1="150.3" y1="36" x2="150.3" y2="298"/>
+<line class="grid" x1="189" y1="36" x2="189" y2="298"/>
+<line class="grid" x1="227.8" y1="36" x2="227.8" y2="298"/>
+<line class="grid" x1="266.5" y1="36" x2="266.5" y2="298"/>
+<line class="grid" x1="305.3" y1="36" x2="305.3" y2="298"/>
+<line class="grid" x1="344" y1="36" x2="344" y2="298"/>
+<line class="grid" x1="382.8" y1="36" x2="382.8" y2="298"/>
+<line class="grid" x1="421.5" y1="36" x2="421.5" y2="298"/>
+<line class="grid" x1="460.3" y1="36" x2="460.3" y2="298"/>
+<line class="grid" x1="499" y1="36" x2="499" y2="298"/>
+<line class="grid" x1="537.8" y1="36" x2="537.8" y2="298"/>
+<line class="grid" x1="576.5" y1="36" x2="576.5" y2="298"/>
+<line class="grid" x1="615.3" y1="36" x2="615.3" y2="298"/>
+<line class="grid" x1="654" y1="36" x2="654" y2="298"/>
+<line class="grid" x1="692.8" y1="36" x2="692.8" y2="298"/>
+<line class="grid" x1="731.5" y1="36" x2="731.5" y2="298"/>
+<text class="tag" x="14" y="61">motor</text>
+<line class="grid" x1="111.5" y1="70" x2="731.5" y2="70"/>
+<polyline class="wave" points="111.5,70 111.5,70 150.3,70 150.3,44 189,44 189,44 227.8,44 227.8,70 266.5,70 266.5,70 305.3,70 305.3,44 344,44 344,44 382.8,44 382.8,44 421.5,44 421.5,44 460.3,44 460.3,44 499,44 499,44 537.8,44 537.8,44 576.5,44 576.5,44 615.3,44 615.3,44 654,44 654,70 692.8,70 692.8,70 731.5,70"/>
+<text class="tag" x="14" y="109">greased</text>
+<line class="grid" x1="111.5" y1="118" x2="731.5" y2="118"/>
+<polyline class="wave" points="111.5,118 111.5,118 150.3,118 150.3,118 189,118 189,118 227.8,118 227.8,118 266.5,118 266.5,118 305.3,118 305.3,118 344,118 344,118 382.8,118 382.8,118 421.5,118 421.5,118 460.3,118 460.3,118 499,118 499,92 537.8,92 537.8,92 576.5,92 576.5,118 615.3,118 615.3,118 654,118 654,118 692.8,118 692.8,118 731.5,118"/>
+<text class="tag" x="14" y="171">lube.acc</text>
+<line class="grid" x1="111.5" y1="194" x2="731.5" y2="194"/>
+<text class="dim" x="103.5" y="144" text-anchor="end">50</text>
+<text class="dim" x="103.5" y="198" text-anchor="end">0</text>
+<line class="mark" x1="111.5" y1="140" x2="731.5" y2="140"/>
+<text class="marked" x="117.5" y="153">preset 50</text>
+<polyline class="wave" points="111.5,194 111.5,194 150.3,194 150.3,194 189,194 189,183.2 227.8,183.2 227.8,183.2 266.5,183.2 266.5,183.2 305.3,183.2 305.3,183.2 344,183.2 344,172.4 382.8,172.4 382.8,161.6 421.5,161.6 421.5,150.8 460.3,150.8 460.3,140 499,140 499,194 537.8,194 537.8,194 576.5,194 576.5,183.2 615.3,183.2 615.3,172.4 654,172.4 654,172.4 692.8,172.4 692.8,172.4 731.5,172.4"/>
+<text class="tag" x="14" y="233">lube.tt</text>
+<line class="grid" x1="111.5" y1="242" x2="731.5" y2="242"/>
+<polyline class="wave" points="111.5,242 111.5,242 150.3,242 150.3,216 189,216 189,216 227.8,216 227.8,242 266.5,242 266.5,242 305.3,242 305.3,216 344,216 344,216 382.8,216 382.8,216 421.5,216 421.5,216 460.3,216 460.3,242 499,242 499,242 537.8,242 537.8,242 576.5,242 576.5,216 615.3,216 615.3,216 654,216 654,242 692.8,242 692.8,242 731.5,242"/>
+<text class="tag" x="14" y="281">lube.dn</text>
+<line class="grid" x1="111.5" y1="290" x2="731.5" y2="290"/>
+<polyline class="wave" points="111.5,290 111.5,290 150.3,290 150.3,290 189,290 189,290 227.8,290 227.8,290 266.5,290 266.5,290 305.3,290 305.3,290 344,290 344,290 382.8,290 382.8,290 421.5,290 421.5,290 460.3,290 460.3,264 499,264 499,290 537.8,290 537.8,290 576.5,290 576.5,290 615.3,290 615.3,290 654,290 654,290 692.8,290 692.8,290 731.5,290"/>
+<text class="dim" x="150.3" y="314" text-anchor="middle">2</text>
+<text class="dim" x="150.3" y="328" text-anchor="middle">20 ms</text>
+<text class="dim" x="227.8" y="314" text-anchor="middle">4</text>
+<text class="dim" x="227.8" y="328" text-anchor="middle">40 ms</text>
+<text class="dim" x="305.3" y="314" text-anchor="middle">6</text>
+<text class="dim" x="305.3" y="328" text-anchor="middle">60 ms</text>
+<text class="dim" x="382.8" y="314" text-anchor="middle">8</text>
+<text class="dim" x="382.8" y="328" text-anchor="middle">80 ms</text>
+<text class="dim" x="460.3" y="314" text-anchor="middle">10</text>
+<text class="dim" x="460.3" y="328" text-anchor="middle">100 ms</text>
+<text class="dim" x="537.8" y="314" text-anchor="middle">12</text>
+<text class="dim" x="537.8" y="328" text-anchor="middle">120 ms</text>
+<text class="dim" x="615.3" y="314" text-anchor="middle">14</text>
+<text class="dim" x="615.3" y="328" text-anchor="middle">140 ms</text>
+<text class="dim" x="692.8" y="314" text-anchor="middle">16</text>
+<text class="dim" x="692.8" y="328" text-anchor="middle">160 ms</text>
+</svg>
