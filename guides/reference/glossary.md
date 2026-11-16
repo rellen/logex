@@ -31,6 +31,11 @@ A compiled program. A program type holds no values. You make 1 or more instances
 To make a program type from the text of a program. If the text has an error, logex
 returns diagnostics and no program type.
 
+### interpret
+
+To run a program type from its data. For each scan, logex reads each instruction of each
+rung that the scan runs and does its operation. logex makes no code from a program.
+
 ### instance
 
 One copy of a program type or of a function block type that has a state. Each instance
