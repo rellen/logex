@@ -41,8 +41,10 @@ defmodule Logex.Retain do
   # `logex retain 3` that names none, a hand edit's, is refused at its first line, as one
   # that names it in part is (decision 535, RV-27), where it was read as naming none, and
   # since decision 539 (RV-28) one that names its resource and no program type at its
-  # `resource` line, where it was read and warned that each type was not in the store
-  # (naming/3); encode/2, which names no program, writes `logex retain 2`; each retained
+  # `resource` line (decision 543), where it was read and warned that each type was not in
+  # the store, each of the three partial forms told only once its count reads, since
+  # decision 544 (RV-29) decision 531's too (naming/3); encode/2, which names no program,
+  # writes `logex retain 2`; each retained
   # global, `global <name> <type> <value>`; since decision 313 each
   # retained `single`'s last sample, `trigger <name> <sample>`, and since RV-3's review a
   # task's own where it is not its trigger's, `trigger <task> <sample>` (decision 350); and
@@ -99,8 +101,10 @@ defmodule Logex.Retain do
   # writes over it at once, and since decision 417 (RV-13) says that it copies it first,
   # to the next of its numbered copies (decision 418), and then writes over it, as a cold
   # start over any store a fresh start would refuse does (`Logex.Runner`), the way out
-  # every refusal of the naming lines ends with too since decision 540 (RV-28), told from
-  # one place (`@way_out`).
+  # every refusal of the naming lines ends with too since decision 540 (RV-28), and since
+  # decision 545 (RV-29) the renamed configuration's, where it said nothing of the copy,
+  # told from one place (`@way_out`, told_once/1), once a refusal; a refusal for what a hand
+  # can mend, a junk line, a digest mistyped or a miscount, tells none (decision 545).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -114,10 +118,11 @@ defmodule Logex.Retain do
   @headers [@header, @unnamed, "logex retain 1"]
 
   # Decision 417 (RV-13), and since decision 540 (RV-28) from this one place for every
-  # refusal that tells it, the cut-short store's (ending/4) and each of the naming lines'
-  # (unnamed/1): the way to start over a store a fresh start refuses, a cold start, which
-  # copies it first to the next of its numbered copies (decision 418) and then writes a new
-  # store over it.
+  # refusal that tells it, the cut-short store's (ending/4), each of the naming lines'
+  # (unnamed/1) and since decision 545 (RV-29) the renamed configuration's
+  # (configuration/3), each marked by way_out/1 and told by told_once/1: the way to start
+  # over a store a fresh start refuses, a cold start, which copies it first to the next of
+  # its numbered copies (decision 418) and then writes a new store over it.
   @way_out "start it with start: :cold to start over it, which copies it first to the next " <>
              "`.dropped.<n>` beside it and then writes a new store over it"
 
@@ -516,12 +521,28 @@ defmodule Logex.Retain do
       unread_by: %{}
     }
 
-    acc =
-      body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> resourced() |> naming(lines, ending)
+    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> naming(lines, ending)
 
-    refused!(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending ++ trailed, path)
+    refused!(
+      told_once(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending ++ trailed),
+      path
+    )
+
     {acc.image, written_at, versioned(acc.by, lines)}
   end
+
+  # Decisions 538 (RV-27) and 544 (RV-29): the one place the naming lines wait. A store
+  # whose end line does not read, cut short or miscounted, is told that alone (decision
+  # 355), and the lines that name its program only once the count reads, each of the three
+  # partial forms alike, decision 531's refusal among them since decision 544, where it was
+  # told beside the count since RV-21's review: a cut before the configuration's line's
+  # end takes the lines that name its program with it, and a store told cut is not also
+  # told what the cut took, so one rule for the three tells the way out once (told_once/1).
+  # An empty line after an end line whose count reads, told as itself, holds them back no
+  # longer (RV-28's review), the count read, where it held them to the next try. A store of
+  # `logex retain 1`, which has no end line, waits for nothing (ended/1).
+  defp naming(acc, lines, []), do: acc |> resourced() |> owed(lines)
+  defp naming(acc, _lines, _ending), do: acc
 
   # Decision 535 (RV-27): a store of `logex retain 3` is one that names the program that
   # wrote it, as every store the runner writes since decision 530 does, so one that names
@@ -529,16 +550,11 @@ defmodule Logex.Retain do
   # its header, the line that says it names one, the one line that makes the naming lines
   # owed (decision 537), as decision 531 refuses one that names it in part at its first
   # `program` line, where it was read as naming none; a cold start copies it first, as any
-  # refused store (decision 417). A store whose end line does not read, cut short or
-  # miscounted, is told that alone (decision 355), and the naming lines only once the count
-  # reads, since a cut before the configuration's line's end takes the lines that name its
-  # program with it and a store told cut is not also told what the cut took (decision
-  # 538); an empty line after an end line whose count reads, told as itself, holds them
-  # back no longer (RV-28's review), the count read, where it held them to the next try.
-  # A store of `logex retain 2` or `logex retain 1` that names none is read as it was, one
-  # relabelled so by hand among them; and one whose `resource` or `program` line does not
-  # read is told that line, and not that it names none (unread_by/2).
-  defp naming(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest], [])
+  # refused store (decision 417). A store of `logex retain 2` or `logex retain 1` that
+  # names none is read as it was, one relabelled so by hand among them; and one whose
+  # `resource` or `program` line does not read is told that line, and not that it names
+  # none (unread_by/2).
+  defp owed(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest])
        when map_size(unread) == 0,
        do:
          problem(
@@ -557,18 +573,17 @@ defmodule Logex.Retain do
   # it runs was not in the store, a cause no hand edit is; located at its `resource`
   # line, wherever it stands, the line that names the program in part, as decision 531
   # tells its refusal at the first `program` line and decision 537 tells 535's at the
-  # header only where no line names any of it (provisional, the line, `PLAN.md`'s RV-28),
-  # and only once the count reads, as 535's (decision 538), a cut after the `resource`
-  # line taking the `program` lines with it. A `program` line that does not read is told
-  # as itself, and the store not told also that it names no program type (unread_by/2);
-  # a second `resource` line that does not read, beside one that does, is told as itself
-  # and the store told this too, since mending it names no program type (RV-28's review),
-  # as decision 531's refusal is told beside a second `program` line that does not read
-  # (resourced/1), each refusal held back only by a line of the kind it says is missing.
-  defp naming(
+  # header only where no line names any of it (decision 543), and only once the count
+  # reads (naming/3), a cut after the `resource` line taking the `program` lines with it.
+  # A `program` line that does not read is told as itself, and the store not told also
+  # that it names no program type (unread_by/2); a second `resource` line that does not
+  # read, beside one that does, is told as itself and the store told this too, since
+  # mending it names no program type (RV-28's review), as decision 531's refusal is told
+  # beside a second `program` line that does not read (resourced/1), each refusal held
+  # back only by a line of the kind it says is missing.
+  defp owed(
          %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
-         [{@header, 1} | _rest],
-         []
+         [{@header, 1} | _rest]
        )
        when is_binary(resource) and map_size(programs) == 0 and not is_map_key(unread, :program),
        do:
@@ -581,21 +596,47 @@ defmodule Logex.Retain do
            )
          )
 
-  defp naming(acc, _lines, _ending), do: acc
+  defp owed(acc, _lines), do: acc
 
   # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
   # then what a store that names its program gives, and since decision 540 (RV-28) the way
   # to start anyway, `@way_out`, as the cut-short store's ends (ending/4), the one way out
-  # every refused store is told, where 531's and 535's named the fault and the shape alone.
-  # Each refusal that tells it ends with it, so a store told 531's beside its cut, which
-  # only a hand edit and a cut together make, is told it twice, a line each (provisional,
-  # `PLAN.md`'s RV-28, question 2), 535's and 539's waiting for the count (naming/3).
+  # every refused store is told, where 531's and 535's named the fault and the shape alone;
+  # since decision 544 (RV-29) 531's waits for the count as 535's and 539's do (naming/3),
+  # so no store is told one of them beside its cut, where 531's was, the way out twice.
   defp unnamed(missing),
     do:
-      missing <>
-        ": a store that names the program that wrote it gives `resource <digest>` straight " <>
-        "after its configuration's line, and then a `program <type> <digest>` a type: " <>
-        @way_out
+      way_out(
+        missing <>
+          ": a store that names the program that wrote it gives `resource <digest>` " <>
+          "straight after its configuration's line, and then a `program <type> <digest>` a " <>
+          "type"
+      )
+
+  # Decisions 540 (RV-28) and 545 (RV-29): a refusal that tells the way to start over a
+  # store, the cut-short store's (ending/4), each of the naming lines' (unnamed/1) and since
+  # decision 545 the renamed configuration's (configuration/3), where it ended "start it
+  # with start: :cold to start over it" and said nothing of the copy, its text marked here
+  # and the way out, `@way_out`, joined to it by `: ` in told_once/1, the one place it is
+  # told. A refusal for what a hand can mend, a junk line, a digest mistyped or a
+  # miscount, tells none, so that an operator mends it and keeps the count, where a cold
+  # start sets it back to its initial value (decision 545).
+  defp way_out(text), do: {:way_out, text}
+
+  # The way out told once a refusal (provisional, `PLAN.md`'s RV-29): at the first line, in
+  # line order, of the refusal's lines that tell it, so that a store told the renamed
+  # configuration and a naming refusal, or a cut, is told it once, at line 2 or, where
+  # decision 535's refusal comes first, at line 1, the lines after it ending at what they
+  # say is missing or wrong, and the way out shown wherever any line that tells it is,
+  # among `Logex.Refusal`'s first 50: each such line quotes only texts `Logex.Refusal`
+  # bounds, at most 60 bytes each, so that with the way out it stays within the 1,000
+  # bytes a refusal shows of a line (RV-29's review); since decision 544 no other store
+  # has two lines that tell it.
+  defp told_once(problems), do: elem(Enum.map_reduce(problems, :untold, &out_told/2), 0)
+
+  defp out_told({n, {:way_out, text}}, :untold), do: {{n, text <> ": " <> @way_out}, :told}
+  defp out_told({n, {:way_out, text}}, :told), do: {{n, text}, :told}
+  defp out_told(problem, told), do: {problem, told}
 
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
@@ -718,9 +759,11 @@ defmodule Logex.Retain do
   defp ending(_other, text, n, header),
     do: [
       {n,
-       "#{quoted(text)} is the store's last line, and no end line: a store of " <>
-         "`#{header}` ends with `end <count> lines`, its count of lines, so this one was " <>
-         "cut short, and a store cut short is not read: " <> @way_out}
+       way_out(
+         "#{quoted(text)} is the store's last line, and no end line: a store of " <>
+           "`#{header}` ends with `end <count> lines`, its count of lines, so this one was " <>
+           "cut short, and a store cut short is not read"
+       )}
     ]
 
   defp counted({:ok, n}, _text, n), do: []
@@ -795,14 +838,23 @@ defmodule Logex.Retain do
 
   defp configuration(["configuration", name, "written", time], _text, name), do: time_lines(time)
 
+  # Decision 545 (RV-29): a store of another configuration, as a renamed one's is, starts
+  # only cold, its refusal ending with the full way out (way_out/1), the copy among it,
+  # where it ended "start it with start: :cold to start over it". Both names quoted as a
+  # refusal quotes any text, at most 60 bytes (`Logex.Refusal`), this configuration's own
+  # among them since RV-29's review, so that the line keeps the way out within the 1,000
+  # bytes `Logex.Refusal` shows of a line, where a name of some 650 bytes or more, which a
+  # configuration may have, pushed it past them and the refusal told it nowhere
+  # (provisional, the name cut at 60 bytes, `PLAN.md`'s RV-29, question 2).
   defp configuration(["configuration", stored, "written", time], _text, name),
     do:
       [
         {2,
-         "the store is of configuration #{quoted(stored)}, and this configuration is " <>
-           "`#{name}`: " <>
-           "a store starts only the configuration it was written for, so a renamed " <>
-           "configuration starts only cold: start it with start: :cold to start over it"}
+         way_out(
+           "the store is of configuration #{quoted(stored)}, and this configuration is " <>
+             "#{quoted(name)}: a store starts only the configuration it was written for, so a " <>
+             "renamed configuration starts only cold"
+         )}
       ] ++ time_lines(time)
 
   defp configuration(_other, text, _name),
@@ -957,14 +1009,16 @@ defmodule Logex.Retain do
 
   # RV-21's review: a store that names its writer's program types names its resource
   # too, a problem of the first `program` line where it does not, as the reader read it.
-  # The line is the three words the reader took it as, each one space apart. It is told
-  # beside an end line that does not read, as built since RV-21's review, where decision
-  # 538 tells 535's and 539's only once the count reads: a cut keeps the `resource` line,
-  # which comes before every `program` line the runner writes, so only a hand edit makes
-  # this store, and its count may be told with it, beside a cut its way out told twice
-  # (provisional, `PLAN.md`'s RV-28, question 2). A `resource` line that does not read
-  # holds it back, the line it says is missing perhaps that one mistyped; a second
-  # `program` line that does not read, beside one that does, does not (RV-28's review).
+  # The line is the three words the reader took it as, each one space apart. Since
+  # decision 544 (RV-29) it is told only once the count reads, as 535's and 539's are
+  # (naming/3), where it was told beside an end line that does not read since RV-21's
+  # review, the cut-short message beside it so that the way out was told twice: a cut
+  # keeps the `resource` line, which comes before every `program` line the runner writes,
+  # so only a hand edit makes this store, and one rule for the three partial forms tells
+  # a store miscounted or cut short its end line alone, and this refusal at the next try,
+  # once the count reads. A `resource` line that does not read holds it back, the line it
+  # says is missing perhaps that one mistyped; a second `program` line that does not read,
+  # beside one that does, does not (RV-28's review).
   defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc), do: acc
 
   defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do

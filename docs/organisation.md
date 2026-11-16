@@ -4781,7 +4781,15 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   each (provisional, `PLAN.md`'s RV-28, question 2); and a naming line that does not
   read holds back only the refusal of its own kind, so a second `resource` line that
   does not read, beside one that does, is told beside 539's refusal, and a second
-  `program` line so beside 531's.)*
+  `program` line so beside 531's.)* *(Decisions 541 to 545, RV-29, 2026-11-15: a store
+  that names a type and no resource waits for its count as the other two partial forms
+  do, a store miscounted or cut short told its end line alone and 531's refusal at the
+  next try, the way out once, where it was told beside the count (544); and the renamed
+  configuration's refusal ends with the full way out, which copies the store first, the
+  way out told once a refusal, at the first line that tells it (provisional, `PLAN.md`'s
+  RV-29), a refusal for what a hand can mend telling none (545). The marks above are these
+  decisions' numbers, the line decision 539 refuses at, the `resource` line, decision
+  543's, as built.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -4924,8 +4932,14 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   count.)*
 - *A store from another configuration* (decision 285): the header names the
   configuration, and a store of another name is the host's mistake at a fresh start, a
-  line naming both, `start: :cold` starting over it and writing a new store at once, so a
-  renamed configuration starts only cold, which the message says.
+  line naming both, `start: :cold` starting over it, copying it first to the next
+  `.dropped.<n>` beside it (decisions 417 and 418) and then writing a new store over it,
+  so a renamed configuration starts only cold, which the message says, with that way out
+  whole (decision 545), each name quoted as a refusal quotes a text, at most 60 bytes.
+  *(RV-29's review, 2026-11-15: this bullet said `start: :cold` wrote a new store at
+  once, of no copy, since decision 417 made one; and this configuration's own name,
+  quoted unbounded, could push the way out past the 1,000 bytes a refusal shows of a
+  line, so that the refusal told it nowhere.)*
 
 **What "What logex is not" will owe** (M6-9) *(owed no more: README says each since
 M6-9, 2026-10-31, in its "Not everything a controller has", "Not battery-backed memory,
@@ -15572,6 +15586,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      alone and was not put. IEC 61131-3 says nothing of how a release is numbered; Logix
      numbers each firmware revision and ships notes with it. RV-29 makes the marks this
      decision's number.
+     *(RV-29, 2026-11-15, `3653611`: the release step's readings are marked as waiting
+     under this decision, not settled: `CHANGELOG.md`'s first entry, its number and tag
+     and what it lists under "What changes a running program's outputs", `CONTRIBUTING.md`'s
+     "To release", the first number, the tag's push and the check of CI's runs, and a
+     comment at `scripts/release.sh`'s head, where the CI check had no mark; `mix.exs`
+     says 0.1.0 and no tag was made or pushed.)*
 
 542. **The changelog held at every commit (RV-22),** RV-22's question 3: as built, the
      suite is red while §7 records a decision no entry of `CHANGELOG.md` names, so a
@@ -15583,6 +15603,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      CLAUDE.md to every file, so no release can leave one out; the commit that records
      this decision names 541–545. IEC 61131-3 has no rule for it; Logix writes its notes
      per firmware revision. RV-29 makes the marks this decision's number.
+     *(RV-29, 2026-11-15, `3653611`: `CONTRIBUTING.md`'s "Between releases" cites this
+     decision where it marked RV-22's question 3; each commit of RV-29 that records or
+     builds a decision keeps it named, 544 and 545 in the first entry's last group.)*
 
 543. **The line a version 3 store with its `resource` line and no `program` line is
      refused at (RV-28),** RV-28's question 1: decision 539 refuses it, and RV-28 located
@@ -15596,6 +15619,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as decision 531 tells its refusal at the first `program` line, decision 537's header
      kept for a store with no naming line at all. Neither IEC 61131-3 nor Logix has a
      store a person edits. RV-29 makes the marks this decision's number.
+     *(RV-29, 2026-11-15, `7a85d7c` and `3653611`: the marks, `Logex.Retain`'s comments at
+     its head and at owed/2, `Logex.Runner`'s moduledoc, README's store passage, the 539
+     test's comment and §4.13's note, are this decision's number; decision 539's note keeps
+     its mark as history.)*
 
 544. **Decision 531's refusal beside a count or a cut that does not read (RV-28),**
      RV-28's question 2, extended by its review: a store whose `program` lines come with
@@ -15611,6 +15638,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      count reads, so the way out is told once. Decision 531's refusal beside a miscount
      or a cut, pinned whole by RV-28's review, changes by this decision. Neither IEC
      61131-3 nor Logix has a store a person edits. RV-29 builds it.
+     *(Landed with RV-29, 2026-11-15, `7a85d7c`: the one place `Logex.Retain` decides when
+     the naming lines wait, naming/3, runs 531's refusal (resourced/1) too, so a store whose
+     `program` lines come with no `resource` line, miscounted or cut short, is told its end
+     line alone, whatever its line ends, and the refusal at the next try, once the count
+     reads, the way out once; a store of `logex retain 2` waits alike, one of `logex retain
+     1`, which has no end line, waits for nothing. RV-28's review's pins of the refusal
+     beside a miscount and a cut changed to the count or the cut told alone and the
+     refusal at the next try; a new test pins it beside a miscount, a cut, CRLF and lone
+     CR line ends and one `program` line of two gone, and through the runner a warm start
+     refused with no device read or written and a cold start copying the store first. The
+     life walk restates it (`:life_unresourced_counted`).)*
 
 545. **The renamed configuration's way out (RV-28),** RV-28's question 3, from its
      review: a store another configuration wrote, as README's renamed configuration's
@@ -15629,6 +15667,22 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      back to its initial value. The renamed configuration's pinned message, README's
      example of it among its pins, changes by this decision. Neither IEC 61131-3 nor
      Logix has a store a person edits. RV-29 builds it.
+     *(Landed with RV-29, 2026-11-15, `dc6fbc4`: the renamed configuration's refusal ends
+     ": start it with start: :cold to start over it, which copies it first to the next
+     `.dropped.<n>` beside it and then writes a new store over it", the way out made in one
+     place, `@way_out`, each refusal that tells it marked (way_out/1) and the way out joined
+     to the first line of a refusal that tells it (told_once/1), so that a store told the
+     renamed configuration beside a naming refusal, or a cut, is told it once, at line 2,
+     or at line 1 where decision 535's refusal comes first (provisional, `PLAN.md`'s
+     RV-29); a junk line, a digest mistyped and a miscount tell none. Its two pinned
+     messages in `retain_store_test.exs` and README's `kept.exs` output changed by the
+     full way out alone. The life walk restates it (`:life_renamed_refused`).)* *(RV-29's
+     review, 2026-11-15: this configuration's own name, interpolated whole, could make
+     the line longer than the 1,000 bytes `Logex.Refusal` shows of one, a name of some 650
+     bytes or more cutting it inside the way out, so that a refusal that told the way out
+     only there told it nowhere; now quoted as the store's is, at most 60 bytes and then
+     `…` (provisional, `PLAN.md`'s RV-29, question 2). The life walk restates the way out
+     once beside a cut too.)*
 
 546. **The README made short, and its details moved into guides (DOC-1).** The maintainer,
      2026-11-15: "The readme is a massive wall of text. We need to move all the details
@@ -15842,6 +15896,153 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      for its location, as it was, and the type and the name stay `check/1`'s; the
      options' mistakes come first; `new!/2` is as it was. Both readings are provisional,
      `PLAN.md`'s "RV-30 as built", questions 1 and 2.)*
+
+556. **Where a reader finds the older documents (DOC-1),** step 1's question 1: the site
+     is the pages ExDoc builds; `CONTRIBUTING.md`, `CHANGELOG.md`, `PLAN.md`, `CLAUDE.md`
+     and five files under `docs/` are read on GitHub, and a site link to one goes there.
+
+     **Taken: as built, on GitHub (a)** (the maintainer, 2026-11-16), until step 2's
+     contributor pages replace them. Not taken: in the site now under "Project", some
+     fifty known warnings more. Most Elixir projects put their changelog in the site and
+     leave their contributing notes on GitHub.
+
+557. **A file two pages use (DOC-1),** step 1's question 2: the tutorial shows `motor.ld`,
+     and README's later examples read it through a sentence that links to the tutorial.
+
+     **Taken: as built, shown or linked (a)** (the maintainer, 2026-11-16): a page shows a
+     file, or says in a sentence with a link which page shows it; a file may be shown on
+     two pages, each block held to the one file. Not taken: one page alone showing a
+     file; a mark the reader does not see in place of the link.
+
+558. **A block the suite does not check (DOC-1),** step 1's question 3: a code block is
+     run or compared with its file unless a comment above it says `unchecked` and why, a
+     message Mix prints for one.
+
+     **Taken: as built, with the mark (a)** (the maintainer, 2026-11-16): the checker
+     counts such blocks and lists them for the reviewer. Not taken: no such mark. Rust's
+     documentation tests have marks of the kind, `ignore` and `no_run`.
+
+559. **A passive verb (DOC-1),** step 1's question 4: "the tag is written by the rung" is
+     passive and "the contact is closed" a state, and a script cannot tell them apart.
+
+     **Taken: as built, counted (a)** (the maintainer, 2026-11-16): the checker lists
+     each such form for the reviewer and fails no page for one. Not taken: every such
+     form refused unless marked. ASD-STE100 requires the active voice in a procedure and
+     asks for it as much as possible in a description.
+
+560. **What "follows ASD-STE100" means (DOC-1),** step 1's question 5: the standard is 53
+     rules and a dictionary of some 900 words, ASD's, which certifies no document; step 1
+     could not read its text.
+
+     **Taken: as built, the rules as the style guide restates them (a)** (the maintainer,
+     2026-11-16): no page is compared with the dictionary and no page claims conformance.
+     Not taken: the maintainer asking ASD for the text and step 3 reading a sample of
+     pages against it.
+
+561. **A vendor's name on a user's page (DOC-1),** step 1's question 6:
+     `CONTRIBUTING.md`'s "Do not restore vendor names" keeps the vendor of the
+     conventional set unnamed, Logix named only to compare behaviour.
+
+     **Taken: as built, the rule on every page (a)** (the maintainer, 2026-11-16): the
+     glossary's row for `xic` says "Conventional set: XIC, Examine If Closed". Not taken:
+     a user's page naming the product beside each word.
+
+562. **Where the site gets Mermaid (DOC-1),** step 1's question 7: Mermaid 11.4.1 is
+     loaded from jsDelivr, held to its hash; a reader with no network sees a diagram's
+     text.
+
+     **Taken: as built, from the network (a)** (the maintainer, 2026-11-16), ExDoc's own
+     recipe; GitHub draws the same blocks itself. Not taken: the 2.6 MB file kept in the
+     repository; no Mermaid.
+
+563. **The site's forms (DOC-1),** step 1's question 8.
+
+     **Taken: as built, HTML alone (a)** (the maintainer, 2026-11-16). Not taken: an EPUB
+     book too, in which no Mermaid diagram is drawn.
+
+564. **A picture in the dark theme (DOC-1),** step 1's question 9.
+
+     **Taken: as built, one file a picture, on a light panel (a)** (the maintainer,
+     2026-11-16), the same on GitHub. Not taken: two files a picture, one a theme.
+
+565. **How the tutorial's reader gets logex (DOC-1),** step 1's question 10: with no
+     release (decision 541), the tutorial's project says `{:logex, github:
+     "rellen/logex"}`, a block the suite parses and cannot run.
+
+     **Taken: as built, from GitHub (a)** (the maintainer, 2026-11-16). Not taken: a path
+     to a clone, a step more for the reader, which the suite could run.
+
+566. **The examples' test's name (DOC-1),** step 1's question 11:
+     `test/logex/readme_test.exs` runs every page's examples now.
+
+     **Taken: the name kept (a)** (the maintainer, 2026-11-16), so that the record's
+     citations stay true; its head and `CLAUDE.md`'s line say what it reads. Not taken:
+     `examples_test.exs` from step 2.
+
+567. **A page's name in the site (DOC-1),** step 1's question 12: the site is one
+     directory, and the plan has `guides/reference/runner.md` and
+     `docs/architecture/runner.md`.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): a page under `guides/` is named
+     by its file, `runner.html`, and any other by its whole path,
+     `docs-architecture-runner.html`. Not taken: the file's name alone everywhere, no two
+     files of the repository sharing one.
+
+568. **How README ends (DOC-1),** step 1's question 13: README written again is a user's
+     page under every writing rule.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): it ends with its status and its
+     licence, decision 546's last sections, and is not held to end with "See also". Not
+     taken: "See also" after them.
+
+569. **A word with two senses (DOC-1),** step 1's question 14: the rules give a word one
+     meaning, and a script reads no meaning.
+
+     **Taken: as built, the clear cases passed (a)** (the maintainer, 2026-11-16): "since"
+     of a time, a listed word as a noun after its article and "enable", a glossary term,
+     pass; "whether", "below 10" and "is testing" are refused, each with its way in
+     `docs/check-a-page.md`. Not taken: every form refused, as first built, 36 refusals
+     in 40 correct sentences.
+
+570. **A quotation (DOC-1),** step 1's question 15.
+
+     **Taken: as built (a)** (the maintainer, 2026-11-16): on a user's page the words
+     between double quotation marks are read by the word rules, and a message logex
+     prints is written as code; a contributor page and a decision record keep the leave,
+     their quotations counted. Not taken: the leave on every page.
+
+571. **The version in the sidebar (DOC-1),** step 1's question 16: `mix.exs` says 0.1.0
+     and no release is planned (decision 541).
+
+     **Taken: as built, hidden (a)** (the maintainer, 2026-11-16); a page's title in the
+     browser's tab still ends "logex v0.1.0", which ExDoc gives no way to change. Not
+     taken: shown.
+
+572. **What a command line shows (DOC-1),** step 1's question 17.
+
+     **Taken: as built, commands alone (a)** (the maintainer, 2026-11-16): a `console`
+     block is compared with nothing, so what a command printed is an example's run, which
+     the suite compares, or a block marked `unchecked` (decision 558). Not taken: any
+     `console` block passed and counted.
+
+573. **The way out of a store refused for two reasons (RV-29),** RV-29's question 1: the
+     box counter `tally` is given the store configuration `line_2` wrote, its `program`
+     lines deleted by hand; the renamed configuration's refusal and the naming refusal
+     each offer the way out (decisions 540 and 545).
+
+     **Taken: as built, once, at the first line that tells it (a)** (the maintainer,
+     2026-11-16): the line of the renamed configuration ends with the way out and the
+     naming line ends at what is missing. Not taken: once at the last line; on every
+     line; the naming lines waiting for the configuration's name as they wait for the
+     count (decision 544). IEC 61131-3 and Logix have no store a person edits.
+
+574. **Two long configuration names in that refusal (RV-29),** RV-29's question 2: a
+     configuration of 61 characters renamed at its end is quoted beside the store's.
+
+     **Taken: as built, each name cut at 60 bytes (a)** (the maintainer, 2026-11-16), as
+     the store's has been since RV-5, so that the line holds the way out whole; two names
+     that differ past the cut read the same. Not taken: both in full, the way out on a
+     line of its own; each cut around the first place they differ.
 
 ---
 

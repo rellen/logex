@@ -187,6 +187,21 @@ defmodule Logex.StalledDiskTest do
     renaming(server, runner)
   end
 
+  # RV-29: a monitor of `pid` in place before anything is sent that could take it down. A
+  # monitor is a signal of its own, and Erlang orders the signals of one sender to one
+  # receiver alone, so that the exit a kill of the writer's runner sends it through their
+  # link can reach the writer before this process's monitor does, the writer then down
+  # and the monitor told `:noproc` (1 of 206 runs under load at RV-29's parent, and a
+  # bare monitor and kill 11 and 21 of 200,000): the writer's own `monitored_by`, a
+  # request of this process's to the writer sent after the monitor and answered only once
+  # the writer has taken the monitor, holds this process before the kill.
+  defp monitored(pid) do
+    ref = Process.monitor(pid)
+    assert {:monitored_by, by} = Process.info(pid, :monitored_by)
+    assert self() in by
+    ref
+  end
+
   # A call of `kind` waiting in the held file server, `{:called, pid}`, or `:answered`
   # where the task it was awaited from ended first, its write killed at its limit before
   # it made the call.
@@ -1862,7 +1877,7 @@ defmodule Logex.StalledDiskTest do
       server = held()
       force = Task.async(fn -> stop_answer_of(fn -> Runner.force(runner, "level", 7) end) end)
       writer = renaming(server, runner)
-      ref = Process.monitor(writer)
+      ref = monitored(writer)
       Process.exit(runner, :kill)
       assert_receive {:DOWN, ^ref, :process, ^writer, :killed}, @answers
       assert Task.await(force, @answers) == gone_told(runner)
@@ -2327,7 +2342,11 @@ defmodule Logex.StalledDiskTest do
     # a write, and the restart reads the file the write it waited for left, the force
     # written after it; and a second restart asked meanwhile is taken once the first is
     # made, as it was when the wait was the runner's own, and finds the runner running,
-    # refused as decision 133 refuses any.
+    # refused as decision 133 refuses any. The line is seen tripped before the first
+    # restart is asked, and each task taken as calling once it waits in its call, so that
+    # each request comes behind the one before it; red once under load with the first
+    # restart told "the runner is running", its cause not found (RV-29's review, `PLAN.md`),
+    # a trip not yet made now told as itself.
     test "a force asked during the wait is written after the restart, and a second restart " <>
            "finds the line running",
          %{tmp_dir: dir} do
@@ -2338,6 +2357,7 @@ defmodule Logex.StalledDiskTest do
       _writing = waiting_call(server, :rename)
       Sim.fail(rig.panel, :read, {:error, :eio})
       Manual.advance(rig.clock, 10)
+      assert %{status: :tripped, trip: {:io, "panel", {:error, :eio}}} = Runner.status(runner)
       restart = calling(Task.async(fn -> Runner.restart(runner, :warm) end))
       behind = calling(Task.async(fn -> Runner.force(runner, "eye_1", 1) end))
 
@@ -3013,10 +3033,14 @@ defmodule Logex.StalledDiskTest do
   end
 
   # A task once its call has been sent, waiting for the answer, so that a request the test
-  # makes after it comes behind it in the runner's mailbox.
-  defp calling(task), do: in_call(Process.info(task.pid, :current_function), task)
+  # makes after it comes behind it in the runner's mailbox: in `gen:do_call/4` and blocked
+  # in its receive, `:waiting`, which it reaches only after its send, where `do_call/4`
+  # alone was also the moment between its monitor of the runner and its send (RV-29's
+  # review).
+  defp calling(task),
+    do: in_call(Process.info(task.pid, [:current_function, :status]), task)
 
-  defp in_call({:current_function, {:gen, :do_call, 4}}, task), do: task
+  defp in_call([current_function: {:gen, :do_call, 4}, status: :waiting], task), do: task
 
   defp in_call(_elsewhere, task) do
     Process.sleep(1)

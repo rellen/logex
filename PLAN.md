@@ -43,7 +43,11 @@ to RV-22's and RV-28's questions, 2026-11-15: it says RV-28 has landed, names de
 documentation's new shape, 2026-11-15: it names decisions 546–548 and what they add to
 what waits, DOC-1 and DOC-2.)* *(Since RV-24 and the answers to its questions, 2026-11-15:
 it says RV-24 has landed, names decisions 549–555, and names what still waits, RV-23,
-RV-25, RV-29, RV-30, DOC-1 and DOC-2.)*
+RV-25, RV-29, RV-30, DOC-1 and DOC-2.)* *(Since RV-29, 2026-11-15: it says RV-29 has
+landed, and names what still waits, RV-23, RV-25, RV-30, DOC-1 and DOC-2.)* *(Since DOC-1's
+first step and the answers to its questions and RV-29's, 2026-11-16: it says that step has
+landed, names decisions 556–574, and names what still waits, RV-23, RV-25, RV-30, DOC-1's
+second and third steps and DOC-2.)*
 
 *(Since RV-30, 2026-11-16: README's paragraph says RV-30 has landed, what it built named
 as it was while it waited.)*
@@ -22021,6 +22025,452 @@ still runs; and RV-25 last, alone.
   decision 486's cap trip awaited 100 ms on the manual clock. It runs beside RV-24,
   before RV-23 traces the marks.
 
+  **RV-29 as built** (2026-11-15, branch `rv29` over `0793a86`). Each decision that
+  changes what logex does has a test that fails when it is reverted, judged by the full
+  suite (the mutation table below), and the store's life walk restates 544 and 545 in its
+  model. No test, walk or oracle was deleted or weakened; the pins decisions 544 and 545
+  change are named below, each changed so and only so. No version is set and no tag made
+  (decision 541).
+
+  - *Decision 544, decision 531's refusal waits for the count* (`7a85d7c`;
+    `retain_store_test.exs`'s "decision 531's refusal waits for the count as 535's and
+    539's do, and a cold start copies such a store first", and RV-28's review's pins
+    changed): the one place `Logex.Retain` decides when the naming lines wait, naming/3,
+    now runs 531's refusal (resourced/1) as well as 535's and 539's (owed/2, the old
+    naming/3's two clauses), only where the end line's problem is none, so a store whose
+    `program` lines come with no `resource` line, its count not mended or the store cut
+    short too, is told its end line alone and 531's refusal at the next try, where it was
+    told beside the count since RV-21's review and beside a cut the way out twice. The
+    test pins, whole: the store of two program types with the `resource` line and one of
+    its two `program` lines taken away, miscounted (the count alone) and mended (531's
+    refusal at the `program` line left); LF, CRLF and a lone CR, each miscounted, cut
+    short and mended; a store of `logex retain 2`, RV-21's, waiting alike, and one of
+    `logex retain 1`, which has no end line, told 531's refusal as ever; and through the
+    runner, miscounted and then mended, a warm start refused naming the store, each sim's
+    reads and writes as they were and the store as it was, a cold start copying it byte
+    for byte to `plant.retain.dropped.1` and then `.dropped.2`, `status/1`'s `copy`
+    naming it, starting from the initial values and writing the program whole, and the
+    `resource` line put back, a warm start reading the values kept. An empty line after
+    a good end line is told beside 531's refusal as before (RV-28's review's F2 test, its
+    first half unchanged).
+  - *Decision 545, the renamed configuration's way out* (`dc6fbc4`; "the renamed
+    configuration's refusal ends with the full way out, told once, and a refusal for what
+    a hand can mend tells none"): a store of another configuration is told "... so a
+    renamed configuration starts only cold: start it with start: :cold to start over it,
+    which copies it first to the next `.dropped.<n>` beside it and then writes a new
+    store over it", where it ended "start it with start: :cold to start over it". The way
+    out is made in one place, `@way_out`: each refusal that tells it, the cut-short
+    store's (ending/4), each of the naming lines' (unnamed/1) and the renamed
+    configuration's (configuration/3), is marked (way_out/1), and told_once/1 joins it, by
+    the colon decision 540 took, to the first line of a refusal that tells it, so that a
+    store told the renamed configuration beside a naming refusal, or beside a cut, is
+    told it once, at line 2, or at line 1 where decision 535's refusal comes first, the
+    other line ending at what is missing (provisional, question 1 below). The test pins
+    the renamed configuration's refusal whole alone, beside 539's, 531's and 535's
+    refusals and beside a cut, the way out once in each; a junk line, a digest mistyped
+    and a miscount each told no way out; and through the runner a warm start refused, no
+    device read or written, and a cold start copying the store to `.dropped.1` first and
+    starting from the initial values. The two pins of the old ending, "a store that does
+    not read is refused, a line each" and "a store that does not read, or of another
+    configuration, starts nothing", and README's `kept.exs` output each gain the copy's
+    words, so and only so.
+  - *What each form of a version 3 store gives now*, at a warm fresh start and at
+    `start: :cold`: whole, read, a warm start laying its values over the program and a
+    cold start starting from the initial values with no copy; neither naming line,
+    refused at line 1 (535, the line 537's); `program` lines and no `resource` line,
+    refused at the first `program` line (531); the `resource` line and no `program` line,
+    refused at the `resource` line (539, the line 543's); each with the way out, and each
+    a cold start copying it first to the next `.dropped.<n>` and starting from the initial
+    values; any of the three miscounted, told the count alone, which tells no way out,
+    and cut short, told the cut alone, with the way out, the naming lines at the next try
+    (538 and, for 531's, 544), the same cold start; a naming line that does not read told
+    as itself, no way out; a renamed configuration's store refused at line 2 with the
+    full way out (545), the same cold start. A store of `logex retain 2` waits for its
+    count alike before 531's refusal, and one of `logex retain 1` is told it at once.
+  - *The marks* (`3653611`, and `7a85d7c` for `Logex.Retain`'s): decision 543's number
+    where RV-28's question 1 marked the line 539 refuses at, `Logex.Retain`'s comments at
+    its head and at owed/2, `Logex.Runner`'s moduledoc, README's store passage, the 539
+    test's comment and §4.13's note; decision 544's settles RV-28's question 2's marks,
+    `Logex.Retain`'s comments at resourced/1 and unnamed/1, README's store passage, the
+    two tests of 531's refusal beside a count, which this decision rewrote; decision
+    542's at `CONTRIBUTING.md`'s "Between releases", RV-22's question 3; RV-28's question 3
+    left no mark. Marked as waiting under decision 541, not settled: `CHANGELOG.md`'s first
+    entry, its number and tag (RV-22's questions 1 and 2) and what it lists under "What
+    changes a running program's outputs" (question 4, reading (b)); `CONTRIBUTING.md`'s
+    "To release", the first number, the tag's push and the release step's check of CI's
+    runs (question 5); and a comment at `scripts/release.sh`'s head, where the CI check
+    had no mark. §7's notes of decisions 515, 538, 539 and 540 keep their marks as
+    history, dated notes on 541 to 545 saying what each became. None was in
+    `docs/naming.md` or `examples/`. Left as it stands: none of RV-22's or RV-28's.
+  - *The life walk* (`80d2f1b`): of the warm fresh starts that read a version 3 store,
+    one in two, by the store's own text, so that no draw is taken, is first given the
+    store with its `resource` line taken away and its count left, and is told the count
+    alone, then, the count mended, 531's refusal at the first `program` line with the way
+    out (`:life_unresourced_counted`); the other half is given the store renamed, its
+    configuration's line naming `other`, and is told the renamed configuration's refusal
+    with the full way out, then that store with its `resource` line taken away too, the
+    count mended, told both, the way out once, at line 2 (`:life_renamed_refused`); each
+    message restated whole from the text, no device read or written, the store put back.
+    Its time below.
+  - *The three tests seen red under load since RV-22* (`5005e34` for the one that
+    reproduced), each run at the parent `0793a86` under `scripts/load.sh` before anything
+    changed, the three together, 206 runs (196, its batch stopped at its two hours, and
+    10), four busy loops on the machine's four cores, another item's load runs and this
+    item's mutation table beside them for most (load average 11 to 42):
+    - `stalled_disk_test.exs:1857`, "a runner killed while a force's write is out takes
+      the write down with it", red once in 206 (run 58), the writer's monitor told
+      `:noproc` where the test awaited `:killed`. The cause is the test's: Erlang orders
+      the signals of one sender to one receiver alone, and the test's monitor of the
+      writer and the exit the runner's link sends the writer when the test kills the
+      runner are of two senders, so the exit can reach the writer first; a bare monitor
+      and kill in a probe read `:noproc` 11 and 21 times in 200,000, and with
+      `Process.info(writer, :monitored_by)` after the monitor, a request of the test's to
+      the writer, of the same sender, answered only once the monitor is taken, none in
+      200,000. The runner is right: a killed runner takes its write down (decision 437),
+      the DOWN `:killed` once the monitor is in place. The fix, the test's `monitored/1`,
+      asks the writer that before the kill; reverted it is the parent's test, red under
+      load once in 206; fixed, green in 50 of 50 loaded runs and in every gate since.
+    - `stalled_disk_test.exs:2331`, decision 468's second restart, the first told "the
+      runner is running", red in none of the 206 and none of 4,000 iterations of an
+      in-process probe: changed nothing. The cause argued from the code: the test's
+      `calling/1` takes a task as having sent its call once its current function is
+      `gen:do_call/4`, but `do_call/4` sets its monitor of the runner before it sends, so
+      a task can be seen there with its call not yet sent; the test's next request, the
+      `again` restart, from another process, can then reach the runner first and be made,
+      the line running, and the first find it so and be refused. A race of the helper,
+      not of the runner, which takes restarts in the order they reach it (decision 500);
+      a status of `:waiting` in `do_call/4`, its one receive after the send, would close
+      it. *(RV-29's review: unproven, and the helper's sync applied, below.)*
+    - `trip_test.exs:2078`, decision 486's cap trip awaited 100 ms, red in none of the 206:
+      changed nothing. The cause argued from the code: the cap's trip kills the panel's
+      device (decision 489) inside its report's call to the runner, and
+      `Logex.IO.Sim.set/2`, which passes over a device that goes down, returns before the
+      runner has published the trip; a probe under load had the trip in the test's
+      mailbox at `set/2`'s return in 13 of 300, the rest after it, and the 206 runs had it
+      within the 100 ms each time. A
+      `status/1` before the assertion, answered only once the runner has handled the
+      report, would close it. *(RV-29's review: applied, below.)*
+  - *The close* (the commit that records this entry, after `e52eb08`, which merged
+    `origin/main`'s decisions 546–548 and took each side whole): §7's dated notes on
+    decisions 541 to 545; README's "What has landed", which says RV-29 has landed, its
+    waiting list left as it was otherwise; and "What logex is not", checked claim by claim,
+    which needs no change: its store passage's "no checksum or encryption of it beyond its
+    grammar and its count of lines" holds, decisions 544 and 545 changing what a refusal
+    tells, not what it refuses.
+  - *The leave*, lines added and removed against `origin/main` once merged (`git diff
+    --numstat b75d8db`), each changed as decisions 544 and 545 or the load fix say and no
+    other way, `PLAN.md` this entry: `lib/logex/retain.ex` 103 and 56;
+    `lib/logex/runner.ex` 9 and 3, its moduledoc's store passage; `README.md` 20 and 16,
+    its store passage, `kept.exs`'s output and "What has landed"; `CHANGELOG.md` 13 and 5;
+    `CONTRIBUTING.md` 24 and 20, the marks and their reflow; `scripts/release.sh` 5 and 0,
+    a comment; `docs/organisation.md` 43 and 1, §4.13's note and §7's; and the three test
+    files, `test/logex/retain_store_test.exs` 267 and 32,
+    `test/logex/api_contract_test.exs` 116 and 1 and `test/logex/stalled_disk_test.exs` 16
+    and 1. Every test line removed is one the leave names: in `retain_store_test.exs`, the
+    two lines of the renamed configuration's old ending (545); decision 531's pins beside
+    a count and beside a cut, the comments that called them provisional, their names,
+    their loop over the two stores told 531's beside the count, and the assertions of
+    531's refusal and the way out twice beside them, replaced by the count or the cut told
+    alone and 531's refusal at the next try (544); RV-28's review's F2 test's second half,
+    531's entry beside a count that does not read now `""` and its name saying 531's waits
+    too (544); and the 539 test comment's "(provisional, the line, ...)" made decision
+    543's number; in `api_contract_test.exs`, `@life_reach`'s last line, given a comma for
+    the two reach atoms after it; in `stalled_disk_test.exs`, the bare monitor the fix
+    replaces. `CLAUDE.md`, `mix.exs`, `docs/naming.md` and `examples/` untouched.
+  - *The mutation table* (`scratchpad/rv/p29/mutfull/` on `80d2f1b`, `scripts/mutate.sh -t
+    test/logex/retain_store_test.exs`, each mutant judged by the full suite): ten mutants,
+    ten red, none survives.
+
+    | mutant | what it does | full suite |
+    |---|---|---|
+    | m544a | 531's refusal run before the wait, beside the count, as RV-28 built it | red, 5 (store 4, life walk 1; and `retain_image_test.exs:1521`, below) |
+    | m544b | no wait: the naming lines' refusals beside any end line's problem | red, 7 |
+    | m544c | a store of `logex retain 2` told 531's beside its count | red, 1 |
+    | m544d | 531's refusal waits for a cut only, told beside a miscount | red, 5 |
+    | m545a | the renamed configuration's way out the old one, "start it with start: :cold to start over it" | red, 5 (README's `kept.exs` among them) |
+    | m545b | the renamed configuration's refusal no way out | red, 5 |
+    | m545c | the way out on every line that tells it | red, 2 (store 1, life walk 1; and `configuration_test.exs:6116`, below) |
+    | m545d | the way out once, on the last line that tells it | red, 2 |
+    | m545e | a line that is no line of a store told the way out | red, 1 |
+    | m545f | a miscount told the way out | red, 9 |
+
+    Two growth bounds read red beside a mutant they do not reach, at a load average of 24
+    to 42 (another item's load runs and this item's base batch on the same four cores):
+    `retain_image_test.exs:1521`, the matching linear in the instances, 5.13x against 4.6
+    under m544a, and `configuration_test.exs:6116`, 6.13x against 6.0 under m545c; neither
+    start calls `Logex.Retain`, so neither is the mutant's: each green alone under its
+    mutant three runs in three, and at the tip, and left as RV-7's class of
+    scheduler-sensitive bound (decision 357).
+  - *Cost against the parent* (`0793a86`), reductions, the least of several runs, two runs
+    each in turn, the scripts of RV-28's entry (`p21cost/round3.exs` and `store.exs`,
+    `fix21/cost/edit.exs`, `p26/cost527.exs`, `p28/cost/decode.exs`; `p29/cost/cost.txt`),
+    the tip's `lib/` that of `dc6fbc4`, which later commits change in a comment alone: a
+    round of three tasks, 2075.45 to 2075.47 changing and 1771.64 to 1771.65 unchanged at
+    the parent, 2075.47 to 2076.46 and 1771.45 to 1771.47 here; a period's write of 1,000
+    retained counters, 447,208 to 447,209 and 447,209; that store's fresh start, the
+    runner's 155,700 and 155,701, the caller's 6.49 to 6.53 million and 6.49; at 1,000
+    instances of a small type, an edit's test 618.1 to 618.7 thousand and 618.4 to 618.7, an
+    untest 580.9 to 581.5 thousand and 581.3, an accept's caller 6.575 to 6.584 million and
+    6.583 to 6.584, a warm fresh start's caller 11.05 to 11.06 million at both; the box
+    counter's digest 1.90 million at both, its fresh start's caller 6.51 to 6.54 million and
+    6.50, its accept's 5.365 to 5.375 million and 5.36 to 5.365; and the store's read,
+    `decoded!/2` of a 1,000-counter store of 7,007 lines, 708,172 to 709,028 at the parent
+    and 707,914 to 708,022 here, the least 0.04 per cent less, naming/3's one clause for the
+    wait where it had two. The life walk alone at its line, parent and tip in turn, another
+    item's VM beside them (load average 3 to 8): 79.0 and 84.0 s at the parent, 84.5 and
+    79.8 s here, within each other's spread; what this item adds to it, one refused start
+    and a second before half the warm starts that read a version 3 store, the store put
+    back, is below that spread.
+  - *Load runs* (`scripts/load.sh`, four busy loops on four cores; logs
+    `scratchpad/rv/p29/`): the three tests red since RV-22 at the parent, 206 runs, above;
+    the fixed `stalled_disk_test.exs` test alone at `5005e34`, 0 of 50 red
+    (`load_fix1857.log`); and at `5005e34` and the merge `e52eb08`, whose tests are the
+    same, the store's life walk at its line with the three store tests this item wrote or
+    whose pins it changed that start a runner (lines 2436, 3883 and 4201 of
+    `retain_store_test.exs`), 0 of 50 runs red in three batches, 24 and 13
+    (`load_tip_a.log`, `load_tip_b.log`; a twenty-fifth run of the first cut by its batch's
+    two hours, not counted) and 13 one at a time (`loadc/`), another item's VMs beside them
+    (load average 7 to 18; twice while they ran the kernel killed a process for memory, an
+    11 GB VM of another item's beside them, and every run here finished). The walk's own time in the last 13 runs, by `--slowest`, 214.9 to 258.3 s,
+    243.5 s the median, under its own 300 s timeout; the parent's walk run one at a time
+    between them, four runs, 221.7 to 234.9 s, so that what this item adds to the walk, two
+    refused starts and the store written by hand and put back before half the warm starts
+    that read a version 3 store, reads some 12 s, 5 per cent, under load, the mean of each
+    parent run against the tip runs either side of it (+5.5 to +19.6 s), and nothing a quiet
+    machine can tell from the parent's spread (above). The first two batches give the file's
+    time alone, the walk and a 26 s walk ExUnit's line filter takes beside it: 246.8 to
+    317.7 s. A first batch of the walk, started beside the base batch, another item's load
+    runs and the mutation table at once (load average 42, three times what `load.sh`'s one
+    loop a core makes), ran past the walk's 300 s timeout in its first two runs, at
+    `File.read!` through the file server, and was stopped and not counted; nothing was
+    widened.
+  - *CLAUDE.md*: unchanged; no file was added, and `Logex.Retain`'s line, the store's text
+    to its end line, versions 2 and 1 read too, and the lines of `retain_store_test.exs`,
+    `stalled_disk_test.exs`, `trip_test.exs` and `api_contract_test.exs` stay true.
+  - *The changelog*: `CHANGELOG.md`'s first entry, whose first line names 1–545 at `0793a86`
+    and 1–548 since the merge of `b75d8db`, carries RV-29's decisions in its last group, 544
+    and 545 by what they change, the commit that built each adding its words ("Between
+    releases"); none changes what a running program writes, so "What changes a running
+    program's outputs" is as it was.
+  - *Provisional readings, and questions for the maintainer* *(provisional where it stands,
+    the reading closest to the record that could be found; IEC 61131-3 and Logix have no
+    store a person edits)*:
+    1. *Where a store told two refusals that each tell a way out is told it* (decision
+       545, beside 540 and 544). README's box counter, `tally`, is given the store
+       configuration `line_2` wrote, as README's renamed configuration is, and that
+       store's `program` lines were taken away by hand, its count mended: the start is
+       told "line 2: the store is of configuration `line_2`, and this configuration is
+       `tally`: a store starts only the configuration it was written for, so a renamed
+       configuration starts only cold: start it with start: :cold to start over it,
+       which copies it first to the next `.dropped.<n>` beside it and then writes a new
+       store over it" and "line 3: `resource 013cc...` names the resource of the store's
+       writer, and the store names no program type: a store that names the program that
+       wrote it gives `resource <digest>` straight after its configuration's line, and
+       then a `program <type> <digest>` a type", the way out once; the same store cut
+       short, its count lost, is told line 2 so and its last line "... and a store cut
+       short is not read", and a store of another configuration that names no program,
+       line 1 "`logex retain 3` heads a store that names the program that wrote it, and
+       the store names none: ...: start it with start: :cold ..." and line 2 ending "...
+       a renamed configuration starts only cold". (a) As built: once a refusal, at its
+       first line that tells it, so that the operator reads the way out where the store
+       is first told it cannot start warm, and sees it whenever any line that tells it is
+       among the 50 the refusal shows; (b) once, at the last line that tells it, the form
+       RV-28's questions gave a way out told once, "by the last line told", the renamed
+       configuration's line then ending "starts only cold" and the way out told after
+       what is missing; (c) each refusal ending with it, the way out twice in one refusal
+       in the same words, as decision 545 read alone and decision 540's "each refusal
+       ... ends" say; (d) the naming lines waiting for the configuration's name as they
+       wait for the count, a store of another configuration told the renamed
+       configuration alone, which only a cold start or a hand edit of line 2 ends.
+
+
+  **RV-29's review** (2026-11-15, the reviewer's clone at `678dfe0`, its probes, mutants and
+  logs in `scratchpad/rv/r29p/`). Decisions 544 and 545 built as the record says: 739 store
+  texts (15 forms, each whole, miscounted, unreadable in its count, CRLF, a lone CR, a BOM,
+  one and two empty lines after a good end line, no final newline, cut after every line
+  and halfway through each) and every runner start form, no refusal wrong; 13 mutants of
+  its own, each red in the full suite; the gate green at 3,038 and CI green on all seven
+  commits; cost and the life walk's time within the parent's noise. One medium finding and
+  three low, and a nit, none a defect in what a store refuses; each became, in `7b6b4e8`
+  after `d348678`, which merged `origin/main`'s RV-24 and decisions 549–555, and in the
+  commit that records this, which adds the mark on F2's reading and the load runs (the
+  gate green at 3,053, CI green on `d348678` and `7b6b4e8`):
+  - *F1 (medium), two of the three load failures not fixed.* `trip_test.exs:2078` (now
+    2082): `status/1` now comes before the trip is read, and the trip is read with
+    `assert_received`, no wait: the cap's trip kills the panel's device inside its
+    report's call (decision 489), so `Sim.set/2` returns while the runner still handles
+    that report, and the runner answers `status/1` only once it has, the trip published
+    in that handling; the test had waited ExUnit's 100 ms for it. The order reverted, the
+    trip read before `status/1` without a wait, the test is red 5 of 10 runs quiet, and 0
+    of 10 as fixed. `stalled_disk_test.exs:2331` (now 2350): the cause stays unproven.
+    Neither candidate reproduces: the builder's, `calling/1` seeing a task in
+    `gen:do_call/4` between its monitor of the runner and its send, 0 of 4,000 in the
+    builder's probe, 0 of 20,000 in the reviewer's at a load average near 10, and 0 of
+    400,000 in this fix's (`p29/fix/window.exs`, the task's reductions before the call
+    drawn from 1 to 4,000 so that its time slice ends anywhere, on one scheduler and on
+    four, each helper 100,000 times); and the builder's other, the device's fault notice
+    reaching the runner after the restart, which the reviewer's probe of the same shape
+    found reordered 0 of 400,000 times, and which `Logex.Runner.Clock.Manual.advance/2`
+    excludes by construction, the device sending the notice inside the poll that advance
+    waits for. The text "A race of the helper, not of the runner" above is marked
+    unproven. The syncs applied anyway, each a sync, not time: `calling/1` takes a task
+    as calling only once it is `:waiting` in `gen:do_call/4`, its receive, which it
+    reaches only after its send, so the helper's claim holds by construction where it
+    rested on where the VM can end a time slice (and so `retain_store_test.exs`'s
+    `waiting/1`, the same helper); and the test sees the line tripped by `status/1`
+    before it asks the first restart, as the test beside it does, so that a restart that
+    came before the trip, the one way left to the failure seen, is told as itself.
+    `stalled_disk_test.exs:1857`: the reviewer confirmed the cause and the fix.
+  - *F2 (low), a long configuration name lost the way out.* The renamed configuration's
+    line put this configuration's own name in whole, so that a name of some 650 bytes or
+    more, which a configuration may have, pushed the way out past the 1,000 bytes
+    `Logex.Refusal` shows of a line, and the way out, told once a refusal at that line,
+    was told nowhere. The name is now quoted as the store's is and as a refusal quotes any
+    text, at most 60 bytes and then `…` (`Logex.Retain.configuration/3`), so every line
+    that tells the way out quotes only bounded texts and keeps it whole; `told_once/1`'s
+    comment says so. `retain_store_test.exs`'s "a long configuration name is quoted
+    bounded, the way out kept whole" pins the refusal whole for a 700-byte name alone,
+    beside 531's refusal and beside a cut, the way out once and each line within 1,003
+    bytes; reverted, red ("Wrong message"). The reading is provisional, question 2 below,
+    and marked so at `configuration/3`, at the test and in §7's note on 545.
+  - *F3 (low), the life walk did not restate 544's cut half or 545's once beside a cut.*
+    Each draw of `named_refused!` gives the store one more refused start: the store with
+    its `resource` line taken away and cut short after its last line of values, told the
+    cut alone with the way out, where 544's half is drawn; and that store renamed too,
+    told the renamed configuration with the way out and the cut without, where 545's is;
+    neither told 531's refusal. The cut's line restated from the text (`life_cut/1`,
+    quoting as a refusal does). The reviewer's r03, r23 and r25, which passed the walk,
+    each now red in it (`p29/fix/mut/*.walk.log`).
+  - *F4 (low), §4.13's bullet on a store from another configuration* now says a cold start
+    copies the store to the next `.dropped.<n>` first and then writes a new store over it,
+    the way out whole, each name quoted at most 60 bytes, with a dated note.
+  - *The nit*: README's store passage and `Logex.Runner`'s moduledoc now say each refusal of
+    the naming lines and the renamed configuration's *tells* the way out, told once a
+    refusal at the end of the first line that tells it, the lines after it ending at what
+    they say is missing, so that a naming refusal beside a renamed configuration's ends
+    without it, where they said each "ends with" it.
+  - *The changelog*: RV-29's group in `CHANGELOG.md`'s first entry names the quoting (a
+    change to what a store tells, "Between releases"); §7's note on 545 says it too.
+  - *The mutation table* (`scratchpad/rv/p29/fix/mutfull/`, on `7b6b4e8`, `scripts/mutate.sh`,
+    each judged by the full suite):
+
+    | mutant | what it does | full suite |
+    |---|---|---|
+    | f2 | this configuration's name put in whole, as before the fix | red, 1 (`retain_store_test.exs`, the F2 test) |
+    | r03 | the cut tells no way out (the reviewer's) | red, 11 (store 10, life walk 1; and `edit_test.exs:3008`, below) |
+    | r23 | the cut's way out told always, beside any other line that tells it (the reviewer's) | red, 14 (store 13, life walk 1) |
+    | r25 | 531's refusal told beside a cut (the reviewer's) | red, 4 (store 3, life walk 1) |
+
+    r03, r23 and r25 passed the walk at `678dfe0` and each is now red in it. One growth
+    bound read red beside r03 at a load average of 16 (other sessions' suites on the same
+    four cores): `edit_test.exs:3008`, the scan after a switch linear in the one-shots it
+    blocks, 25.5x against 24.4; a scan after an edit's switch calls nothing of
+    `Logex.Retain`, so it is not the mutant's, and it is green alone under r03 three runs in
+    three: RV-7's class of scheduler-sensitive bound (decision 357), left as it is.
+
+  - *Load runs* (`scripts/load.sh`, a busy loop on each of the four cores; logs
+    `scratchpad/rv/p29/fix/`): the changed tests together at `7b6b4e8`, every
+    `stalled_disk_test.exs` test that uses `calling/1` (fourteen, the two fixed among
+    them), `trip_test.exs:2082`, `retain_store_test.exs`'s test that uses `waiting/1`,
+    the F2 test and the store's life walk at its line, 50 runs in three batches, 49 green
+    and one red, other sessions' suites on the same four cores beside most of them:
+    - *33 runs with `--slowest 3`* (`loadC1.log`, 15, a sixteenth cut by the batch's two
+      hours and not counted; `loadC2.log`, 18, a nineteenth cut likewise), 0 red. Read
+      with care: `--slowest` sets `--trace`, which runs one case at a time and lifts
+      every test's timeout, so these runs prove the tests' assertions under load and give
+      the walk's own time, not its timeout. The walk's time: 242.0 to 393.0 s in the
+      first batch, 342.0 s the median, 12 of 15 past 300 s, at a load average of 17 to 34;
+      187.6 to 371.5 s in the second, 261.3 s the median, 5 of 18 past 300 s, at 7 to 35,
+      13.6 the median, its thirteen runs under 300 s 187.6 to 264.8 s.
+    - *17 runs without it* (`loadD.log`, `loadD.sh`), so that ExUnit's timeouts hold as
+      in the gate, 16 green and one red: run 14, the life walk timed out at its 300 s, at
+      `Runner.start_link/1` in a walk's step (`loadD_run14.log`), while other sessions'
+      suites took the load average from 12 to 38 in its six minutes, five to ten VMs
+      beside it (`loadavg.log`, a sample a minute), three to four times what `load.sh`'s
+      one loop a core makes; runs 15 to 17 passed at the same load, so at that load the
+      walk passes or not by chance. Nothing was widened, re-run or left out: the timeout
+      is the walk's as M6-8's review set it, the red run is counted, and its cause is the
+      machine's, as the first batch of RV-29's own walk runs was (above): the parent's
+      walk is as long. *The walk alone under `load.sh`, parent (`d348678`) and tip in
+      turn, four pairs, `--slowest 1`* (`loadP.log`, `loadP_*.log`), the load average 8
+      to 37 from the other sessions: 321.4, 224.1, 268.4 and 201.4 s at the parent,
+      293.2, 264.3, 204.8 and 252.4 s here, the means 253.8 and 253.7 s; the parent's
+      first, at a load average of 28 to 35, was past 300 s itself. *What the fix adds to
+      the walk*, measured in a copy of the tip that times the two calls F3 added and
+      counts them (`probe_cut_loaded.log`), one run under `load.sh` at a load average of
+      9: 126 refused starts, one a draw of the 126 that reach `named_refused!`, 7.13 s
+      of the walk's 230.6 s, 3.1 per cent, 57 ms each under load; RV-29 as built gave
+      each such draw two, so that RV-29's whole share of the walk is 378 refused starts,
+      some 21 s under load, 9 per cent. Left as it is, and for the item that next adds to
+      this walk to know: under `load.sh` and little else the walk runs some 190 to 265 s
+      of its 300, so its margin is 35 s at the least, and a second suite on the same cores
+      takes it.
+    - *One more red run, of a test this item does not touch*: a first batch ran
+      `stalled_disk_test.exs` whole (`loadS1.log`), and its first run, at a load average
+      near 28 from the other sessions, had `stalled_disk_test.exs:1320`, decision 455's
+      "a trip's write is cut off at the limit and reported", refused in its setup: the
+      fresh start that writes its store of 10,000 retained timers, some 300 ms quiet, did
+      not finish within the 5,000 ms of real time `write_limit:` gives it, `{:error,
+      {:retain, :timeout}}`. The limit is the product's and of real time (decision 400),
+      the test uses neither `calling/1` nor anything this item changed, and runs 2 and 3
+      were green; the batch was stopped for its five minutes a run and the changed tests
+      run at their lines instead. Not changed and not re-run away: reported here as a
+      setup that holds a real-time limit, for the item that next works on that file.
+  - *Cost against the parent* (`d348678`), reductions, two runs of each in turn, the
+    scripts of RV-29's entry (`p29/fix/cost/cost.txt`): a round of three tasks, 2075.47 to
+    2076.37 changing and 1771.71 to 1772.32 unchanged at the parent, 2075.53 to 2076.43 and
+    1771.47 to 1771.69 here; a period's write of 1,000 retained counters, 447,209 at both;
+    that store's fresh start, the runner's 155,700 at both, the caller's 6.521 to 6.529
+    million and 6.487 to 6.546;
+    at 1,000 instances of a small type, an edit's test 618.3 to 621.1 thousand and 619.9 to
+    620.2, an untest 579.1 to 580.6 thousand and 580.0 to 581.3, an accept's caller 6.581 to
+    6.604 million and 6.584 to 6.637, a warm fresh start's caller 11.10 to 11.11 million and
+    11.11 to 11.12; the store's read, `decoded!/2` of a 1,000-counter store of 7,007 lines,
+    708,939 to 709,187 and 707,899 to 708,799. Each within the other's spread, the fix's
+    only change on any of these paths none: the name is quoted only in the renamed
+    configuration's refusal.
+  - *The life walk alone, no busy loops*, parent and tip in turn: 72.5 and 87.6 s at the
+    parent, 74.3 and 80.1 s here, other sessions' suites beside them (load average 9 to
+    25): what the fix adds, one refused start more at each warm start that reads a version
+    3 store, is within that spread; under load it is the 7 s above.
+  - *The leave*, against `d348678` (`git diff --numstat`): `lib/logex/retain.ex` 11 and 4,
+    the quoting, two comments and the mark; `lib/logex/runner.ex` 7 and 6, the moduledoc's
+    nit and one line of it rewrapped; `README.md` 6 and 4, the nit; `docs/organisation.md`
+    15 and 3, §4.13's bullet and §7's note on 545; `CHANGELOG.md` 3 and 1; `PLAN.md` this
+    record and the two marks above; and the four test files,
+    `test/logex/retain_store_test.exs` 45 and 3, `test/logex/api_contract_test.exs` 32 and
+    1, `test/logex/stalled_disk_test.exs` 14 and 5 and `test/logex/trip_test.exs` 6 and 2.
+    Every test line removed: three comment lines, each kept and extended (the walk's
+    comment, the 468 test's and the cap trip test's); `calling/1` and `waiting/1` with
+    their first clauses, four lines, replaced by the same helpers that also ask
+    `:waiting`, a stronger hold; and the cap trip test's `assert_receive`, replaced by
+    `status/1` and then `assert_received`, which asserts the trip already there, no wait,
+    a stronger assertion. No test, walk or oracle deleted or weakened.
+  - *Documents*: README's "What logex is not" checked claim by claim again: still true;
+    the fix changes how a refusal quotes a name and what the walk restates, not what any
+    store refuses. `CLAUDE.md`: unchanged, its lines of `Logex.Retain`, `Logex.Runner`
+    and the four test files true. No version set and no tag made (decision 541).
+  - *Questions for the maintainer* *(provisional where it stands)*:
+    2. *A long configuration name in the renamed configuration's refusal* (RV-29's review,
+       F2). A box counter's configuration named
+       `packing_line_3_north_hall_east_conveyor_box_counter_station_a`, 61 characters, is
+       renamed `..._station_b`; its old store is told "the store is of configuration
+       `packing_line_3_north_hall_east_conveyor_box_counter_station_…`, and this
+       configuration is `packing_line_3_north_hall_east_conveyor_box_counter_station_…`:
+       a store starts only the configuration it was written for, so a renamed
+       configuration starts only cold: start it with start: :cold ...", the two names
+       shown alike, each cut at 60 bytes (the store's name was cut so since RV-5; this
+       configuration's own is since this fix). (a) As built: both names quoted as any text
+       a refusal quotes, at most 60 bytes, so that the line always carries the way out
+       whole; the operator reads that the configuration was renamed, and may not see which
+       names differ. (b) Each name shown whole, the way out told on a line of its own after
+       the refusal's lines, so that no name can push it out: the operator sees both names
+       in full and the way out last. (c) Each name cut around the first byte where the two
+       differ, `…_station_a` against `…_station_b`: the operator sees what changed and the
+       way out on the same line. IEC 61131-3 and Logix have no store a person edits and
+       word no such refusal; a Logix controller's name holds at most 40 characters
+       (unverified), so a project of another name would not need the cut there.
+
 **The documentation's new shape, asked for and answered, 2026-11-15** (decisions 546–548).
 The maintainer asked for README's details to move into user pages, built with ExDoc and
 ordered by Diátaxis, and into contributor pages, all in Simplified Technical English, with
@@ -22876,6 +23326,26 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
        its paths written `_build/**` with `!_build/dialyzer/**`, so that a changed script
        or toolchain builds its PLT anew, 45 s once, and the comment is true;
        `scripts_test.exs` pins the cache's lines, which would change with it.
+
+**DOC-1's first step's questions and RV-29's answered, 2026-11-16** (decisions 556–574).
+DOC-1's first step landed on `main` at `9d3d696`, its site published at
+<https://rellen.github.io/logex/> by the Docs workflow's first run on `main`, and RV-29 at
+`2ab16d5`. The maintainer took every reading as built. Of the first step's seventeen
+questions: the older documents read on GitHub until the second step's pages replace them
+(556); a file shown on a page or linked from it (557); the `unchecked` mark kept (558); a
+passive verb counted for the reviewer (559); the rules of ASD-STE100 as the style guide
+restates them, no conformance claimed (560); the vendor of the conventional set unnamed on
+every page (561); Mermaid from the network (562); HTML alone (563); a picture on a light
+panel in the dark theme (564); the tutorial's project taking logex from GitHub (565);
+`readme_test.exs` keeping its name (566); a page under `guides/` named by its file and any
+other by its path (567); README ending with its status and licence (568); the checker
+passing the clear cases of a word with two senses (569); quoted words read on a user's
+page (570); no version in the sidebar (571); and a `console` block showing commands alone
+(572). Of RV-29's two: the way out told once, at the first line that tells it (573), and
+two long configuration names each cut at 60 bytes (574). Nothing waits to be built for
+them; the marks they settle are RV-23's, with every other. RV-30 started when the first
+step landed, and DOC-1's second step starts beside it; the order after them is unchanged:
+DOC-1's third step, RV-23, RV-25 alone, and DOC-2 last.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

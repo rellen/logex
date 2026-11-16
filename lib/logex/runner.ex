@@ -332,8 +332,10 @@ defmodule Logex.Runner do
     none, a hand edit's, refused at its first line (decision 537), as one that names it
     in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
     names its resource and no program type, which no configuration gives, refused at its
-    `resource` line (provisional, the line), where it was read and warned that each type
-    was not in the store, and a naming line that does not read is told as itself; and
+    `resource` line (decision 543), where it was read and warned that each type
+    was not in the store, each of the three told only once the store's count reads, since
+    decision 544 (RV-29) decision 531's too, a store miscounted or cut short told its end
+    line alone, and a naming line that does not read is told as itself; and
     since decision 355 its end line,
     `end 11 lines`,
     its count of lines, the header and the end line among them (the words decision
@@ -508,10 +510,15 @@ defmodule Logex.Runner do
     resource and no program type, the host's mistake, one
     `ArgumentError`, a line each, `<path>: line <n>: ...`, the runner not started and no
     device opened, a cut store's line and since decision 540 (RV-28) each refusal of the
-    naming lines, decisions 531's, 535's and 539's, ending with the way out, "start it
-    with start: :cold to start over it, which copies it first to the next `.dropped.<n>`
-    beside it and then writes a new store over it". Since decision 517 (c) (RV-21) a
-    warm fresh start lays the program the
+    naming lines, decisions 531's, 535's and 539's, telling the way out, "start it with
+    start: :cold to start over it, which copies it first to the next `.dropped.<n>`
+    beside it and then writes a new store over it", and since decision 545 (RV-29) a
+    store of another configuration's, where it ended "start it with start: :cold to start
+    over it"; the way out told once a refusal, at the end of the first line that tells it,
+    the lines after it ending at what they say is missing (provisional), so that a naming
+    refusal beside a renamed configuration's ends without it; and a refusal for what a
+    hand can mend, a junk line, a digest mistyped or a miscount, telling none. Since
+    decision 517 (c) (RV-21) a warm fresh start lays the program the
     store names as its writer beside the one it was given, and where they differ, the
     configuration's own lines or a program type's text as it prints, a type only the store
     has or only the start, warns of it in `status/1`'s `retain`, `warning`, one message
